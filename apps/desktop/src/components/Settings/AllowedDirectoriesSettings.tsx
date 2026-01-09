@@ -9,7 +9,10 @@ import { Label } from '../ui/Label';
 import { ScrollArea } from '../ui/ScrollArea';
 
 export function AllowedDirectoriesSettings() {
-  const { allowedDirectories, addAllowedDirectory, removeAllowedDirectory } = useSettingsStore();
+  // Use individual selectors to prevent re-renders on unrelated state changes
+  const allowedDirectories = useSettingsStore((state) => state.allowedDirectories);
+  const addAllowedDirectory = useSettingsStore((state) => state.addAllowedDirectory);
+  const removeAllowedDirectory = useSettingsStore((state) => state.removeAllowedDirectory);
   const [manualPath, setManualPath] = useState('');
   const [error, setError] = useState<string | null>(null);
 

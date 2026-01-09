@@ -27,13 +27,7 @@ export const DeviceNameSchema = z
   )
   .optional();
 
-export const DeviceTypeSchema = z.enum(['desktop', 'mobile', 'tablet', 'other']).optional();
-
-export const DeviceLinkRequestSchema = z.object({
-  device_id: DeviceIdSchema,
-  device_name: DeviceNameSchema,
-  device_type: DeviceTypeSchema,
-});
+export const DeviceTypeSchema = z.enum(['desktop', 'mobile', 'web']);
 
 export const DeviceFingerprintSchema = z
   .string()
@@ -41,9 +35,16 @@ export const DeviceFingerprintSchema = z
   .max(255, 'device_fingerprint must be 255 characters or less')
   .regex(/^[a-f0-9]+$/, 'device_fingerprint must be a valid hex string');
 
+export const DeviceLinkRequestSchema = z.object({
+  device_id: DeviceIdSchema,
+  device_name: DeviceNameSchema,
+  device_type: DeviceTypeSchema.optional(),
+  device_fingerprint: DeviceFingerprintSchema.optional(),
+});
+
 export const DevicePollRequestSchema = z.object({
   device_id: DeviceIdSchema,
-  device_fingerprint: DeviceFingerprintSchema,
+  device_fingerprint: DeviceFingerprintSchema.optional(),
 });
 
 export type DeviceLinkRequest = z.infer<typeof DeviceLinkRequestSchema>;

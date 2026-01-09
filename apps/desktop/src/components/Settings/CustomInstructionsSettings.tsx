@@ -1,25 +1,30 @@
 import { Info, RotateCcw, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Switch } from '../ui/Switch';
 
 export function CustomInstructionsSettings() {
-  const {
-    globalInstructions,
-    globalInstructionsEnabled,
-    maxInstructionsLength,
-    setGlobalInstructions,
-    setGlobalInstructionsEnabled,
-  } = useCustomInstructionsStore();
+  // Use selectors to prevent unnecessary re-renders
+  const globalInstructions = useCustomInstructionsStore((s) => s.globalInstructions);
+  const globalInstructionsEnabled = useCustomInstructionsStore((s) => s.globalInstructionsEnabled);
+  const maxInstructionsLength = useCustomInstructionsStore((s) => s.maxInstructionsLength);
 
   const [localInstructions, setLocalInstructions] = useState(globalInstructions);
   const [isDirty, setIsDirty] = useState(false);
 
+  // Track if we've initialized to prevent loops during hydration
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    setLocalInstructions(globalInstructions);
-  }, [globalInstructions]);
+    // Only sync from store if not dirty (user hasn't made changes)
+    // This prevents overwriting user's edits during hydration
+    if (!isDirty && (!hasInitialized.current || localInstructions !== globalInstructions)) {
+      hasInitialized.current = true;
+      setLocalInstructions(globalInstructions);
+    }
+  }, [globalInstructions, isDirty, localInstructions]);
 
   const handleInstructionsChange = useCallback(
     (value: string) => {
@@ -30,9 +35,9 @@ export function CustomInstructionsSettings() {
   );
 
   const handleSave = useCallback(() => {
-    setGlobalInstructions(localInstructions);
+    useCustomInstructionsStore.getState().setGlobalInstructions(localInstructions);
     setIsDirty(false);
-  }, [localInstructions, setGlobalInstructions]);
+  }, [localInstructions]);
 
   const handleReset = useCallback(() => {
     setLocalInstructions(globalInstructions);
@@ -41,9 +46,9 @@ export function CustomInstructionsSettings() {
 
   const handleClear = useCallback(() => {
     setLocalInstructions('');
-    setGlobalInstructions('');
+    useCustomInstructionsStore.getState().setGlobalInstructions('');
     setIsDirty(false);
-  }, [setGlobalInstructions]);
+  }, []);
 
   const charCount = localInstructions.length;
   const charPercentage = (charCount / maxInstructionsLength) * 100;
@@ -101,7 +106,9 @@ export function CustomInstructionsSettings() {
           <Switch
             id="enable-global-instructions"
             checked={globalInstructionsEnabled}
-            onCheckedChange={setGlobalInstructionsEnabled}
+            onCheckedChange={(enabled) =>
+              useCustomInstructionsStore.getState().setGlobalInstructionsEnabled(enabled)
+            }
           />
         </div>
 

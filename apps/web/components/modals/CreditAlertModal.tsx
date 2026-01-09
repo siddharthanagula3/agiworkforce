@@ -46,18 +46,30 @@ export function CreditAlertModal({
         body: JSON.stringify({ amount_cents: 10000 }), // $100 top-up
       });
 
+      const data = (await res.json().catch(() => null)) as {
+        url?: string | null;
+        error?: string | { message?: string };
+      } | null;
+
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to create checkout');
+        const message =
+          typeof data?.error === 'string'
+            ? data.error
+            : data?.error && typeof data.error === 'object'
+              ? data.error.message
+              : null;
+        throw new Error(message || 'Failed to create checkout');
       }
 
-      const data = await res.json();
-      if (data.url) {
+      if (data?.url) {
         window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL returned');
       }
     } catch (error) {
       console.error('Top-up error:', error);
       alert(error instanceof Error ? error.message : 'Failed to initiate top-up');
+    } finally {
       setLoading(false);
     }
   };

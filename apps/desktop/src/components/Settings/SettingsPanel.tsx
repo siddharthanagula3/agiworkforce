@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
 
 import {
@@ -43,21 +44,21 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
-  const {
-    llmConfig,
-    windowPreferences,
-    setTemperature,
-    setMaxTokens,
-    setDefaultModel,
-    setTaskRouting,
-    setTheme,
-    setStartupPosition,
-    setDockOnStartup,
-    loadSettings,
-    saveSettings,
-    loading,
-    error,
-  } = useSettingsStore();
+  // Use individual selectors to prevent re-renders on unrelated state changes
+  // Use useShallow for object selectors to prevent re-renders from reference changes
+  const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
+  const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
+  const setTemperature = useSettingsStore((state) => state.setTemperature);
+  const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
+  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
+  const setTaskRouting = useSettingsStore((state) => state.setTaskRouting);
+  const setTheme = useSettingsStore((state) => state.setTheme);
+  const setStartupPosition = useSettingsStore((state) => state.setStartupPosition);
+  const setDockOnStartup = useSettingsStore((state) => state.setDockOnStartup);
+  const loadSettings = useSettingsStore((state) => state.loadSettings);
+  const saveSettings = useSettingsStore((state) => state.saveSettings);
+  const loading = useSettingsStore((state) => state.loading);
+  const error = useSettingsStore((state) => state.error);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();

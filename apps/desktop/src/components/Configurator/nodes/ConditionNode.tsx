@@ -1,10 +1,19 @@
-import { NodeProps, Handle, Position } from 'reactflow';
+import type { NodeProps, Node } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 import { GitBranch, X } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
 import { useConfiguratorStore } from '../../../stores/configuratorStore';
 
-export function ConditionNode({ data, selected, id }: NodeProps) {
+interface ConditionNodeData {
+  label: string;
+  config?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+type ConditionNodeProps = NodeProps<Node<ConditionNodeData>>;
+
+export function ConditionNode({ data, selected, id }: ConditionNodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
   return (

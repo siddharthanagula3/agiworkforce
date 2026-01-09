@@ -115,6 +115,9 @@ export interface ExecutionState {
   setActiveTab: (tab: ExecutionState['activeTab']) => void;
   togglePanel: () => void;
 
+  /** Clean up execution contexts for a completed or failed goal (keeps goal state for UI display) */
+  cleanupGoalContexts: () => void;
+
   reset: () => void;
 }
 
@@ -139,6 +142,25 @@ const initialState = {
     files: { visible: true, size: 50 },
   },
 };
+
+// Stream timeout management
+let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+const STREAM_TIMEOUT_MS = 60000; // 60 seconds timeout for stuck streams
+
+function startStreamTimeout() {
+  clearStreamTimeout();
+  streamTimeoutHandle = setTimeout(() => {
+    console.warn('[ExecutionStore] Stream timeout triggered - clearing stuck streaming state');
+    useExecutionStore.getState().setStreaming(false);
+  }, STREAM_TIMEOUT_MS);
+}
+
+function clearStreamTimeout() {
+  if (streamTimeoutHandle) {
+    clearTimeout(streamTimeoutHandle);
+    streamTimeoutHandle = null;
+  }
+}
 
 export const useExecutionStore = create<ExecutionState>()(
   immer((set) => ({
@@ -268,6 +290,12 @@ export const useExecutionStore = create<ExecutionState>()(
       set((state) => {
         state.isStreaming = streaming;
       });
+      // Manage stream timeout
+      if (streaming) {
+        startStreamTimeout();
+      } else {
+        clearStreamTimeout();
+      }
     },
 
     setPanelVisible: (visible) => {
@@ -288,7 +316,28 @@ export const useExecutionStore = create<ExecutionState>()(
       });
     },
 
+    cleanupGoalContexts: () => {
+      // Clear timeout to prevent memory leaks
+      clearStreamTimeout();
+
+      set((state) => {
+        // Clear execution data but preserve the goal state for UI display
+        state.steps = [];
+        state.terminalLogs = [];
+        state.browserActions = [];
+        state.currentBrowserUrl = null;
+        state.currentScreenshot = null;
+        state.fileChanges = [];
+        state.researchTasks = {};
+        state.currentLLMStream = '';
+        state.isStreaming = false;
+      });
+
+      console.debug('[ExecutionStore] Cleaned up goal execution contexts');
+    },
+
     reset: () => {
+      clearStreamTimeout();
       set(initialState);
     },
   })),
@@ -404,6 +453,11 @@ export async function initializeExecutionListeners() {
             completedSteps: payload.completed_steps,
             progressPercent: 100,
           });
+
+          // Cleanup execution contexts after a delay to allow UI to show completion
+          setTimeout(() => {
+            useExecutionStore.getState().cleanupGoalContexts();
+          }, 5000); // 5 second delay before cleanup
         }
       },
     );
@@ -417,6 +471,11 @@ export async function initializeExecutionListeners() {
           status: 'failed',
           endTime: Date.now(),
         });
+
+        // Cleanup execution contexts after a delay to allow UI to show error
+        setTimeout(() => {
+          useExecutionStore.getState().cleanupGoalContexts();
+        }, 5000); // 5 second delay before cleanup
       }
     });
 

@@ -310,7 +310,7 @@ export const useModelStore = create<ModelState>()(
         },
       },
     ),
-    { name: 'ModelStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'ModelStore', enabled: import.meta.env.DEV },
   ),
 );
 

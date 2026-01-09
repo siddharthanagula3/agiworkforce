@@ -1196,7 +1196,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
               // If message wasn't found in active conversation, search all conversations
               // This handles cases where the message might be in a different conversation
-              if (!updatedInMessages && !convoId) {
+              // Use || to search when EITHER: no active conversation OR message not found in it
+              if (!updatedInMessages || !convoId) {
                 for (const [convId, messages] of Object.entries(state.messagesByConversation)) {
                   if (messages && applyUpdate(messages)) {
                     // Also sync to state.messages if this is now the active conversation
@@ -2249,7 +2250,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         },
       },
     ),
-    { name: 'UnifiedChatStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'UnifiedChatStore', enabled: import.meta.env.DEV },
   ),
 );
 

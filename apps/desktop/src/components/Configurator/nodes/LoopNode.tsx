@@ -1,10 +1,21 @@
-import { NodeProps, Handle, Position } from 'reactflow';
+import type { NodeProps, Node } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 import { Repeat, X } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
 import { useConfiguratorStore } from '../../../stores/configuratorStore';
 
-export function LoopNode({ data, selected, id }: NodeProps) {
+interface LoopNodeData {
+  label: string;
+  config?: {
+    maxIterations?: number;
+  };
+  [key: string]: unknown;
+}
+
+type LoopNodeProps = NodeProps<Node<LoopNodeData>>;
+
+export function LoopNode({ data, selected, id }: LoopNodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
   return (

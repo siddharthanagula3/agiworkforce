@@ -64,7 +64,12 @@ export function UpdateNotifier({ onOpenSettings }: UpdateNotifierProps) {
         }
       } catch (error) {
         // Silently fail on auto-check to avoid annoying users with network errors on startup
-        console.error('Failed to check for updates:', error);
+        // This is expected during development when update endpoint isn't configured
+        if (import.meta.env.DEV) {
+          console.debug('[UpdateNotifier] Update check skipped (dev mode):', error);
+        } else {
+          console.warn('[UpdateNotifier] Failed to check for updates:', error);
+        }
       }
     };
 

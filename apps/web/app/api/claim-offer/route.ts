@@ -60,117 +60,34 @@ async function handleClaimOffer(request: NextRequest) {
       throw createError.validation('Invalid invite code');
     }
 
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      throw createError.validation('This invite code has expired');
-    }
-
-    if ((invite.current_uses ?? 0) >= (invite.max_uses ?? 1)) {
-      throw createError.validation('This invite code has reached its usage limit');
-    }
-
-    // Check if user has already redeemed THIS specific invite code
-    const { data: existingRedemption } = await supabase
-      .from('beta_redemptions')
-      .select('id')
-      .eq('invite_id', invite.id)
-      .eq('user_id', user.id)
-      .single();
-
-    if (existingRedemption) {
-      throw createError.conflict('You have already used this invite code');
-    }
-
-    // Check if user has already claimed ANY offer (prevent multiple claims)
-    const { data: existingSubscription } = await supabase
-      .from('subscriptions')
-      .select('plan_tier, status')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (
-      existingSubscription &&
-      existingSubscription.plan_tier !== 'free' &&
-      ['active', 'trialing', 'past_due'].includes(existingSubscription.status)
-    ) {
-      throw createError.conflict(
-        `You already have an active ${existingSubscription.plan_tier} plan. Please manage your existing subscription instead.`,
-      );
-    }
-
-    // Also check if user has redeemed ANY other invite code
-    const { data: anyRedemption } = await supabase
-      .from('beta_redemptions')
-      .select('id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (anyRedemption) {
-      throw createError.conflict(
-        'You have already claimed an offer. Each user can only claim one offer.',
-      );
-    }
-
-    const { error: redemptionError } = await supabase.from('beta_redemptions').insert({
-      invite_id: invite.id,
-      user_id: user.id,
+    // Atomic claim via RPC (prevents race conditions and enforces one-offer-per-user)
+    const { data: claimResult, error: claimError } = await supabase.rpc('claim_beta_invite', {
+      p_user_id: user.id,
+      p_invite_id: invite.id,
+      p_plan_tier: invite.plan_tier,
     });
 
-    if (redemptionError) {
-      logger.error(
-        {
-          userId: user.id,
-          inviteId: invite.id,
-          error: redemptionError,
-        },
-        'Error recording redemption',
-      );
-      throw createError.internal('Failed to redeem invite code');
+    if (claimError) {
+      logger.error({ userId: user.id, error: claimError }, 'Error calling claim_beta_invite RPC');
+      throw createError.internal('Failed to claim invite code');
     }
 
-    // Update invite code usage count
-    const { error: updateInviteError } = await supabase
-      .from('beta_invites')
-      .update({ current_uses: (invite.current_uses ?? 0) + 1 })
-      .eq('id', invite.id);
+    const result = claimResult as {
+      success?: boolean;
+      error?: string;
+      subscription_id?: string;
+      plan_tier?: string;
+      trial_days?: number;
+      discount_percent?: number;
+    } | null;
 
-    if (updateInviteError) {
-      logger.warn(
-        {
-          userId: user.id,
-          inviteId: invite.id,
-          error: updateInviteError,
-        },
-        'Error updating invite usage count',
-      );
-      // Don't fail the request, but log the error
-    }
-
-    const trialEndDate = new Date(
-      Date.now() + (invite.trial_days ?? 0) * 24 * 60 * 60 * 1000,
-    ).toISOString();
-
-    const { error: subscriptionError } = await supabase.from('subscriptions').upsert(
-      {
-        user_id: user.id,
-        plan_tier: invite.plan_tier,
-        status: 'trialing',
-        current_period_start: new Date().toISOString(),
-        current_period_end: trialEndDate,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    );
-
-    if (subscriptionError) {
-      logger.error(
-        {
-          userId: user.id,
-          error: subscriptionError,
-        },
-        'Error updating subscription',
-      );
-      throw createError.internal('Failed to update subscription');
+    if (!result?.success) {
+      const msg = result?.error || 'Failed to claim invite code';
+      // Map to conflict vs validation
+      if (msg.toLowerCase().includes('already')) {
+        throw createError.conflict(msg);
+      }
+      throw createError.validation(msg);
     }
 
     // Fetch the updated subscription to return to client
@@ -200,7 +117,7 @@ async function handleClaimOffer(request: NextRequest) {
         await SubscriptionService.allocateCreditsForPeriod(
           user.id,
           updatedSubscription.id,
-          invite.plan_tier,
+          updatedSubscription.plan_tier,
           new Date(updatedSubscription.current_period_start),
           new Date(updatedSubscription.current_period_end),
         );
@@ -208,7 +125,7 @@ async function handleClaimOffer(request: NextRequest) {
           {
             userId: user.id,
             subscriptionId: updatedSubscription.id,
-            planTier: invite.plan_tier,
+            planTier: updatedSubscription.plan_tier,
             trialDays: invite.trial_days,
           },
           'Credits allocated for trial subscription',
@@ -231,7 +148,7 @@ async function handleClaimOffer(request: NextRequest) {
       {
         userId: user.id,
         inviteId: invite.id,
-        planTier: invite.plan_tier,
+        planTier: updatedSubscription?.plan_tier || invite.plan_tier,
       },
       'Invite code redeemed successfully',
     );
@@ -239,7 +156,7 @@ async function handleClaimOffer(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        planTier: invite.plan_tier,
+        planTier: updatedSubscription?.plan_tier || invite.plan_tier,
         trialDays: invite.trial_days ?? 0,
         discountPercent: invite.discount_percent ?? 0,
         subscription: updatedSubscription

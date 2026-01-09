@@ -1,7 +1,6 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import { getEnv, requireEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -30,43 +29,47 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.validation('Invalid request body', validationResult.error);
     }
 
-    const { device_id, device_name, device_type } = validationResult.data;
-
-    const cookieStore = await cookies();
+    const { device_id, device_name, device_type, device_fingerprint } = validationResult.data;
+    const resolvedDeviceType = device_type || 'desktop';
 
     // Safe environment variable access
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        flowType: 'pkce', // Use PKCE flow for enhanced security
-      },
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set() {
-          // No-op for server-side
-        },
-        remove() {},
-      },
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
     });
 
     // Generate device code with higher entropy (5 bytes = 10 hex chars = 2^40 possibilities)
     // This makes brute-force attacks infeasible even within the 15-minute window
-    const user_code = randomBytes(5).toString('hex').toUpperCase();
+    const link_code = randomBytes(5).toString('hex').toUpperCase();
     const appUrl = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
-    const verify_url = `${appUrl}/verify?code=${user_code}`;
+    const verify_url = `${appUrl}/verify?code=${link_code}`;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    const { error } = await supabase.from('device_authorization_codes').insert({
-      device_id,
-      device_name: device_name || null,
-      device_type: device_type || null,
-      user_code,
-      status: 'pending',
-      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    });
+    // Upsert by device_id (device_id is unique). This supports re-linking without throwing.
+    const { error } = await supabase.from('device_authorization_codes').upsert(
+      {
+        device_id,
+        device_name: device_name || null,
+        device_type: resolvedDeviceType,
+        device_fingerprint: device_fingerprint || null,
+        user_code: link_code,
+        status: 'pending',
+        user_id: null,
+        user_email: null,
+        user_name: null,
+        access_token: null,
+        refresh_token: null,
+        authorized_at: null,
+        consumed_at: null,
+        denied_at: null,
+        revoked_at: null,
+        expires_at: expiresAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'device_id' },
+    );
 
     if (error) {
       logger.error(
@@ -79,21 +82,13 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.internal('Failed to create device authorization code');
     }
 
-    logger.info(
-      {
-        device_id,
-        device_name,
-        device_type,
-        user_code,
-      },
-      'Device authorization code created',
-    );
-
     return NextResponse.json(
       {
-        user_code,
+        link_code,
+        device_id,
         verify_url,
-        expires_in: 900, // 15 minutes in seconds
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+        qr_code_url: null,
       },
       { status: 200 },
     );

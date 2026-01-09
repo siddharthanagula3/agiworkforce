@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   AreaChart,
   Area,
@@ -31,20 +32,22 @@ import { TimeSeriesData, CategoryData } from '../../types/analytics';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export const UsageDashboard: React.FC = () => {
-  const {
-    systemMetrics,
-    appMetrics,
-    usageStats: analyticsUsageStats,
-    isLoadingMetrics,
-    loadSystemMetrics,
-    loadAppMetrics,
-    loadUsageStats: loadAnalyticsUsageStats,
-    refreshAllMetrics,
-  } = useAnalyticsStore();
+  // Use individual selectors to prevent re-renders on unrelated state changes
+  const systemMetrics = useAnalyticsStore((state) => state.systemMetrics);
+  const appMetrics = useAnalyticsStore((state) => state.appMetrics);
+  const analyticsUsageStats = useAnalyticsStore((state) => state.usageStats);
+  const isLoadingMetrics = useAnalyticsStore((state) => state.isLoadingMetrics);
+  const loadSystemMetrics = useAnalyticsStore((state) => state.loadSystemMetrics);
+  const loadAppMetrics = useAnalyticsStore((state) => state.loadAppMetrics);
+  const loadAnalyticsUsageStats = useAnalyticsStore((state) => state.loadUsageStats);
+  const refreshAllMetrics = useAnalyticsStore((state) => state.refreshAllMetrics);
 
-  const { stats: billingUsageStats, getTokenCost } = useUsageStore();
-  const { subscription } = useBillingStore();
-  const { credits, plan } = useAccountStore((state) => state.account);
+  const billingUsageStats = useUsageStore((state) => state.stats);
+  const getTokenCost = useUsageStore((state) => state.getTokenCost);
+  const subscription = useBillingStore((state) => state.subscription);
+  // Use useShallow for object selectors to prevent re-renders from reference changes
+  const account = useAccountStore(useShallow((state) => state.account));
+  const { credits, plan } = account;
 
   // Calculate monthly credit usage percentage
   const planName = subscription?.plan_name?.toLowerCase() || '';

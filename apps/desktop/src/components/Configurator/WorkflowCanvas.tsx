@@ -1,19 +1,20 @@
 import * as React from 'react';
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
-  Connection,
-  Edge,
-  Node,
   ReactFlowProvider,
-  ReactFlowInstance,
   BackgroundVariant,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+  type Connection,
+  type Edge,
+  type Node,
+  type ReactFlowInstance,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Layout, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useConfiguratorStore } from '../../stores/configuratorStore';

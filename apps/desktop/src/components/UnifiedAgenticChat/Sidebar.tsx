@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
@@ -124,7 +125,6 @@ export function Sidebar({
   const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
   const archiveConversation = useUnifiedChatStore((state) => state.archiveConversation);
   const restoreConversation = useUnifiedChatStore((state) => state.restoreConversation);
-  const getArchivedConversations = useUnifiedChatStore((state) => state.getArchivedConversations);
   const exportConversationToMarkdown = useUnifiedChatStore(
     (state) => state.exportConversationToMarkdown,
   );
@@ -133,11 +133,13 @@ export function Sidebar({
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
   const getConversationStats = useUnifiedChatStore((state) => state.getConversationStats);
 
-  // Get stats for active conversation
+  // Get stats for active conversation - don't include getConversationStats in deps
+  // as it's a stable store function that shouldn't trigger re-computation
   const stats = useMemo(() => {
     if (!activeConversationId) return null;
     return getConversationStats(activeConversationId);
-  }, [activeConversationId, getConversationStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId]);
 
   const handleExportConversation = useCallback(
     (id: string, title: string) => {
@@ -179,8 +181,8 @@ export function Sidebar({
     conversationTitle: string;
   }>({ open: false, conversationId: '', conversationTitle: '' });
 
-  // Get projects for filtering
-  const projects = useProjectStore(selectActiveProjects);
+  // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
+  const projects = useProjectStore(useShallow(selectActiveProjects));
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
 
   // Sync with active project from project store
@@ -190,16 +192,19 @@ export function Sidebar({
     }
   }, [activeProjectId, selectedProjectFilter]);
 
-  // Get archived conversations
-
+  // Get archived conversations - filter directly from conversations array
+  // to avoid dependency on store function which may cause re-render loops
   const archivedConversations = useMemo(
-    () => getArchivedConversations(),
-    [getArchivedConversations],
+    () => conversations.filter((c) => c.archived === true),
+    [conversations],
   );
 
+  // Run once on mount - don't include ensureActiveConversation in deps
+  // as it's a stable store function that shouldn't trigger re-runs
   useEffect(() => {
     ensureActiveConversation();
-  }, [ensureActiveConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();

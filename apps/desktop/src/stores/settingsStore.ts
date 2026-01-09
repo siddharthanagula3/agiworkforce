@@ -11,7 +11,7 @@
  * - Better devtools integration with store name
  * - subscribeWithSelector for granular subscriptions
  */
-import { invoke } from '../lib/tauri-mock';
+import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 
@@ -312,6 +312,14 @@ export const useSettingsStore = create<SettingsState>()(
           set({ loading: true, error: null });
 
           try {
+            // Web development mode: Tauri commands are unavailable.
+            // Use persisted localStorage state + in-memory defaults and skip disk/native calls.
+            if (!isTauriContext()) {
+              set({ loading: false, error: null });
+              get().setTheme(get().windowPreferences.theme);
+              return;
+            }
+
             // Try to load settings from disk first, falling back to in-memory defaults
             let settings: {
               llmConfig: LLMConfig;
@@ -341,7 +349,7 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             if (get().loading === false) {
-              console.warn('[settingsStore] Load cancelled - another operation started');
+              console.debug('[settingsStore] Load cancelled - another operation started');
               return;
             }
 
@@ -378,7 +386,7 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             if (get().loading === false) {
-              console.warn('[settingsStore] Load cancelled before final update');
+              console.debug('[settingsStore] Load cancelled before final update');
               return;
             }
 
@@ -481,6 +489,6 @@ export const useSettingsStore = create<SettingsState>()(
         },
       },
     ),
-    { name: 'SettingsStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'SettingsStore', enabled: import.meta.env.DEV },
   ),
 );

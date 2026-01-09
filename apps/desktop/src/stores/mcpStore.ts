@@ -248,6 +248,6 @@ export const useMcpStore = create<McpState>()(
         set({ error: null });
       },
     })),
-    { name: 'McpStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'McpStore', enabled: import.meta.env.DEV },
   ),
 );

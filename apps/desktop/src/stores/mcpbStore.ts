@@ -207,7 +207,7 @@ export const useMcpbStore = create<McpbState>()(
         set({ installProgress: progress });
       },
     })),
-    { name: 'McpbStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'McpbStore', enabled: import.meta.env.DEV },
   ),
 );
 

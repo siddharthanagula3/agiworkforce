@@ -1,8 +1,8 @@
 import * as Popover from '@radix-ui/react-popover';
-import { CreditCard, MessageSquare, Settings, Coins, LogOut } from 'lucide-react';
+import { CreditCard, MessageSquare, Settings, Coins, LogOut, Loader2 } from 'lucide-react';
 import React from 'react';
 import { cn } from '../../lib/utils';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useAuthStore } from '../../stores/authStore';
 import { openPricingPage } from '../../utils/navigation';
 import { getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
@@ -20,9 +20,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onFeedbackClick,
   collapsed = false,
 }) => {
-  const { displayName, email, avatar, planDisplayName, plan, credits } = useAccountStore(
-    (state) => state.account,
-  );
+  const account = useAccountStore((state) => state.account);
+  const isTierLoading = useAccountStore(selectIsTierLoading);
+
+  const { displayName, email, avatar, planDisplayName, plan, credits } = account;
+
+  // Show "Loading..." when subscription tier is being fetched
+  // This prevents showing "FREE" to paid users during network delays
+  const displayedPlanName = isTierLoading ? 'Loading...' : planDisplayName;
 
   const name = displayName || email?.split('@')[0] || 'Account';
 
@@ -57,8 +62,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-medium text-zinc-100">{name}</div>
-              <div className="mt-0.5 inline-flex items-center rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300">
-                {planDisplayName}
+              <div
+                className={cn(
+                  'mt-0.5 inline-flex items-center rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300',
+                  isTierLoading && 'animate-pulse',
+                )}
+              >
+                {isTierLoading && <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />}
+                {displayedPlanName}
               </div>
             </div>
           )}
@@ -88,8 +99,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate text-sm font-semibold text-zinc-100">{name}</div>
-                <div className="mt-1 inline-flex items-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-300">
-                  {planDisplayName}
+                <div
+                  className={cn(
+                    'mt-1 inline-flex items-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-300',
+                    isTierLoading && 'animate-pulse',
+                  )}
+                >
+                  {isTierLoading && <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />}
+                  {displayedPlanName}
                 </div>
               </div>
             </div>

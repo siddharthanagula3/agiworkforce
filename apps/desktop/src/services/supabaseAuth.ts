@@ -1,4 +1,4 @@
-// Updated: 2026-01-05 - Increased RLS query timeouts to 20s
+// Updated: 2026-01-07 - Non-blocking auth with cold start handling
 import {
   AuthError,
   type AuthResponse,
@@ -14,14 +14,181 @@ import {
   type PlanTier,
   asPlanTier,
 } from '../lib/supabase';
+import { API_BASE_URL } from '../api/client';
 
 // Check if running in Tauri environment
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
+// ============================================================================
+// LocalStorage Cache for Resilience Against Cold Starts
+// ============================================================================
+const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
+const AUTH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface CachedAuthData<T> {
+  data: T;
+  userId: string;
+  cachedAt: number;
+}
+
+function getCachedData<T>(key: string, userId: string): T | null {
+  try {
+    const raw = localStorage.getItem(`${AUTH_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+    const cached: CachedAuthData<T> = JSON.parse(raw);
+    // Validate cache: must be for same user and not expired
+    if (cached.userId !== userId) return null;
+    if (Date.now() - cached.cachedAt > AUTH_CACHE_MAX_AGE_MS) return null;
+    return cached.data;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData<T>(key: string, userId: string, data: T): void {
+  try {
+    const cached: CachedAuthData<T> = { data, userId, cachedAt: Date.now() };
+    localStorage.setItem(`${AUTH_CACHE_PREFIX}${key}`, JSON.stringify(cached));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearAuthCache(): void {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(AUTH_CACHE_PREFIX))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Ignore
+  }
+}
+
+// ============================================================================
+// Database Warm-up for Cold Start Mitigation
+// ============================================================================
+let isWarmingUp = false;
+let warmUpPromise: Promise<boolean> | null = null;
+
+/**
+ * Warm up the Supabase connection to mitigate cold start delays.
+ * On free plan, the database pauses after inactivity. This function
+ * sends a simple query to wake it up before auth queries.
+ */
+async function warmUpDatabase(): Promise<boolean> {
+  // Deduplicate concurrent warm-up calls
+  if (isWarmingUp && warmUpPromise) {
+    return warmUpPromise;
+  }
+
+  isWarmingUp = true;
+  warmUpPromise = (async () => {
+    const supabase = getSupabase();
+    const startTime = Date.now();
+
+    try {
+      // Use a longer timeout for cold start (30s)
+      const pingPromise = supabase.from('profiles').select('id').limit(1);
+      const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ error: { message: 'Warm-up timed out' } }), 30000),
+      );
+
+      const { error } = await Promise.race([pingPromise, timeoutPromise]);
+      const elapsed = Date.now() - startTime;
+
+      if (error) {
+        console.warn(`[Auth] Database warm-up failed after ${elapsed}ms:`, error.message);
+        return false;
+      }
+
+      console.log(`[Auth] Database warm-up completed in ${elapsed}ms`);
+      return true;
+    } catch (err) {
+      console.warn('[Auth] Database warm-up exception:', err);
+      return false;
+    } finally {
+      isWarmingUp = false;
+      warmUpPromise = null;
+    }
+  })();
+
+  return warmUpPromise;
+}
+
+// ============================================================================
+// Web API Fallback for Subscription
+// ============================================================================
+const WEB_APP_URL = import.meta.env['VITE_WEB_APP_URL'] || 'https://agiworkforce.com';
+
+/**
+ * Fetch subscription data from the web API as a fallback when direct Supabase queries fail.
+ * The /api/me endpoint accepts Bearer token auth and returns subscription + credits.
+ */
+async function fetchSubscriptionFromWebAPI(accessToken: string): Promise<Subscription | null> {
+  const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
+
+  try {
+    console.log('[Auth] Trying web API fallback for subscription...');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(`${WEB_APP_URL}/api/me`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`[Auth] Web API fallback failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Transform /api/me response to Subscription format
+    if (!data.plan) {
+      console.log('[Auth] Web API returned no plan (free tier user)');
+      return null;
+    }
+
+    const subscription: Subscription = {
+      id: '', // Not available from /api/me
+      user_id: data.id,
+      stripe_customer_id: null,
+      stripe_subscription_id: null,
+      stripe_price_id: null,
+      plan_tier: data.plan.tier || 'free',
+      status: data.plan.status || 'active',
+      current_period_start: null,
+      current_period_end: data.plan.current_period_end
+        ? new Date(data.plan.current_period_end * 1000).toISOString()
+        : null,
+      cancel_at_period_end: false,
+      canceled_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log('[Auth] Web API fallback succeeded:', subscription.plan_tier);
+    return subscription;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.warn(`[Auth] Web API fallback timed out after ${timeoutMs / 1000}s`);
+    } else {
+      console.warn('[Auth] Web API fallback failed:', err);
+    }
+    return null;
+  }
+}
+
 // Deep link protocol for Tauri desktop app auth redirects
 const TAURI_DEEP_LINK_PROTOCOL = 'agiworkforce://';
-// Web fallback URL for development mode
-const WEB_APP_URL = import.meta.env['VITE_WEB_APP_URL'] || 'https://agiworkforce.com';
 
 // Get the appropriate redirect URL based on environment
 const getAuthRedirectUrl = (path: string = ''): string => {
@@ -84,6 +251,15 @@ class SupabaseAuthService {
   private isHandlingSignIn = false; // Prevent re-entry during handleSignedIn
   private handlingSignInForUser: string | null = null; // Track which user we're handling
 
+  // Deduplication: prevent concurrent subscription fetches
+  private subscriptionFetchInProgress = false;
+  private pendingSubscriptionFetch: Promise<Subscription | null> | null = null;
+
+  // Circuit breaker: stop retrying after consecutive failures
+  private subscriptionFailureCount = 0;
+  private static readonly MAX_CONSECUTIVE_FAILURES = 5;
+  private lastSubscriptionFailure: number = 0;
+
   private constructor() {
     this.initializeAuthListener();
   }
@@ -113,6 +289,7 @@ class SupabaseAuthService {
             try {
               const invoke = await getInvoke();
               if (invoke) {
+                await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
                 await invoke('account_store_access_token', {
                   accessToken: session.access_token,
                 });
@@ -175,6 +352,8 @@ class SupabaseAuthService {
   }
 
   private subscriptionChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
+  private subscriptionChangeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private subscriptionChangesSubscribedUserId: string | null = null;
 
   private async handleSignedIn(session: Session): Promise<void> {
     const user = session.user;
@@ -192,70 +371,95 @@ class SupabaseAuthService {
     }
     this.isHandlingSignIn = true;
     this.handlingSignInForUser = user.id;
-    // Don't notify listeners yet - we'll batch all updates at the end
-    // This prevents race conditions where listeners see incomplete state
-    // Mark subscription as 'fetching' so listeners know data is being loaded
-    this.currentState = {
-      ...this.currentState,
+
+    // =========================================================================
+    // PHASE 1: Immediate UI with cached data (non-blocking)
+    // =========================================================================
+    const cachedProfile = getCachedData<Profile>('profile', user.id);
+    const cachedSubscription = getCachedData<Subscription>('subscription', user.id);
+    const cachedFlags = getCachedData<Record<string, boolean>>('flags', user.id);
+
+    // Show UI immediately with cached data (or defaults)
+    this.updateState({
       user,
       session,
-      isLoading: true,
+      profile: cachedProfile,
+      subscription: cachedSubscription,
+      featureFlags: cachedFlags || {},
+      isLoading: false, // UI is ready!
       error: null,
-      subscriptionFetchStatus: 'fetching',
-    };
+      subscriptionFetchStatus: cachedSubscription ? 'succeeded' : 'fetching',
+    });
 
+    console.log(
+      '[Auth] UI ready with cached data:',
+      cachedSubscription?.plan_tier || 'none',
+      '- fetching fresh data in background...',
+    );
+
+    // =========================================================================
+    // PHASE 2: Background data refresh (non-blocking)
+    // =========================================================================
+    // Run in background - don't await
+    this.refreshDataInBackground(user.id, session).finally(() => {
+      this.isHandlingSignIn = false;
+      this.handlingSignInForUser = null;
+    });
+  }
+
+  /**
+   * Refresh user data in the background without blocking sign-in.
+   * Uses warm-up to handle cold starts gracefully.
+   */
+  private async refreshDataInBackground(userId: string, session: Session): Promise<void> {
     try {
       // Ensure the session is properly set in the Supabase client
-      // Add timeout to prevent hanging in web dev mode
       const supabase = getSupabase();
-      console.log('[Auth] Ensuring session is set in Supabase client...');
-
       const setSessionPromise = supabase.auth.setSession({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       });
-
       const setSessionTimeout = new Promise<{ error: { message: string } }>((resolve) =>
-        setTimeout(() => {
-          console.warn('[Auth] setSession timed out after 5s, proceeding anyway...');
-          resolve({ error: { message: 'setSession timed out' } });
-        }, 5000),
+        setTimeout(() => resolve({ error: { message: 'setSession timed out' } }), 5000),
       );
+      await Promise.race([setSessionPromise, setSessionTimeout]);
 
-      const setSessionResult = await Promise.race([setSessionPromise, setSessionTimeout]);
-      if (setSessionResult.error && !setSessionResult.error.message.includes('timed out')) {
-        console.error('[Auth] Failed to set session:', setSessionResult.error);
-      } else if (!setSessionResult.error) {
-        console.log('[Auth] Session set successfully');
-      }
+      // Warm up the database first (handles cold start)
+      console.log('[Auth] Warming up database connection...');
+      await warmUpDatabase();
 
+      // Now fetch fresh data with shorter timeouts (database should be warm)
+      console.log('[Auth] Fetching fresh user data...');
       const [profile, subscription, featureFlags] = await Promise.all([
-        this.fetchProfile(user.id),
-        this.fetchSubscription(user.id, session), // Pass session to avoid getSession() call
-        this.fetchFeatureFlags(user.id),
+        this.fetchProfile(userId),
+        this.fetchSubscription(userId, session),
+        this.fetchFeatureFlags(userId),
       ]);
 
-      console.log('[Auth] All user data fetched, subscription:', subscription?.plan_tier);
+      // Cache successful fetches
+      if (profile) setCachedData('profile', userId, profile);
+      if (subscription) setCachedData('subscription', userId, subscription);
+      if (featureFlags && Object.keys(featureFlags).length > 0) {
+        setCachedData('flags', userId, featureFlags);
+      }
 
-      // NOW notify listeners with the complete state (including subscription)
+      console.log('[Auth] Fresh data fetched, subscription:', subscription?.plan_tier);
+
+      // Update state with fresh data
       this.updateState({
-        user,
-        session,
-        profile,
-        subscription,
-        featureFlags,
-        isLoading: false,
-        error: null,
+        profile: profile || this.currentState.profile,
+        subscription: subscription || this.currentState.subscription,
+        featureFlags: featureFlags || this.currentState.featureFlags,
         subscriptionFetchStatus: subscription ? 'succeeded' : 'failed',
       });
 
-      this.subscribeToSubscriptionChanges(user.id);
+      this.subscribeToSubscriptionChanges(userId);
     } catch (error) {
-      console.error('[Auth] Error fetching user data:', error);
-      this.updateState({ isLoading: false, subscriptionFetchStatus: 'failed' });
-    } finally {
-      this.isHandlingSignIn = false;
-      this.handlingSignInForUser = null;
+      console.error('[Auth] Background data refresh failed:', error);
+      // Don't update subscriptionFetchStatus to 'failed' if we have cached data
+      if (!this.currentState.subscription) {
+        this.updateState({ subscriptionFetchStatus: 'failed' });
+      }
     }
   }
 
@@ -264,6 +468,10 @@ class SupabaseAuthService {
       this.subscriptionChannel.unsubscribe();
       this.subscriptionChannel = null;
     }
+    this.subscriptionChangesSubscribedUserId = null;
+
+    // Clear auth cache on sign out
+    clearAuthCache();
 
     this.updateState({
       user: null,
@@ -278,9 +486,20 @@ class SupabaseAuthService {
   }
 
   private subscribeToSubscriptionChanges(userId: string): void {
+    // Avoid noisy unsubscribe/subscribe loops when auth state updates for the same user.
+    if (this.subscriptionChannel && this.subscriptionChangesSubscribedUserId === userId) {
+      return;
+    }
+
     // Clean up existing channel if any
     if (this.subscriptionChannel) {
       this.subscriptionChannel.unsubscribe();
+      this.subscriptionChannel = null;
+    }
+    this.subscriptionChangesSubscribedUserId = null;
+    if (this.subscriptionChangeDebounceTimer) {
+      clearTimeout(this.subscriptionChangeDebounceTimer);
+      this.subscriptionChangeDebounceTimer = null;
     }
 
     const supabase = getSupabase();
@@ -296,45 +515,91 @@ class SupabaseAuthService {
           table: 'subscriptions',
           filter: `user_id=eq.${userId}`,
         },
-        async (payload) => {
+        (payload) => {
           console.log('[Auth] Subscription change detected:', payload);
-          const newSubscription = await this.fetchSubscription(userId);
-          this.updateState({ subscription: newSubscription });
+
+          // Debounce: wait 2s before fetching to avoid rapid-fire updates
+          if (this.subscriptionChangeDebounceTimer) {
+            clearTimeout(this.subscriptionChangeDebounceTimer);
+          }
+          this.subscriptionChangeDebounceTimer = setTimeout(async () => {
+            this.subscriptionChangeDebounceTimer = null;
+            try {
+              const newSubscription = await this.fetchSubscription(userId);
+              this.updateState({ subscription: newSubscription });
+            } catch (error) {
+              console.error('[Auth] Error fetching subscription after change:', error);
+            }
+          }, 2000);
         },
       )
       .subscribe();
+    this.subscriptionChangesSubscribedUserId = userId;
   }
 
   private async fetchProfile(userId: string): Promise<Profile | null> {
     const supabase = getSupabase();
-    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow
+    const timeoutMs = 15000; // Reduced to 15s to fail faster to fallback
 
     try {
       // Select specific columns for better performance
-      // Use maybeSingle() to return null instead of 406 error when no profile exists
       const queryPromise = supabase
         .from('profiles')
         .select('id,email,display_name,avatar_url,created_at,updated_at,stripe_customer_id')
         .eq('id', userId)
         .maybeSingle();
-      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
-        setTimeout(() => {
-          console.warn('[Auth] fetchProfile timed out after 20s');
-          resolve({ data: null, error: { message: 'Profile fetch timed out' } });
-        }, timeoutMs),
+
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<{ data: null; error: { message: string; code?: string } }>(
+        (resolve) => {
+          timeoutId = setTimeout(() => {
+            resolve({
+              data: null,
+              error: { message: 'Profile fetch timed out', code: 'TIMEOUT' },
+            });
+          }, timeoutMs);
+        },
       );
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (error) {
-        console.error('[Auth] Error fetching profile:', error);
-        return null;
+        if ((error as any).code === 'TIMEOUT') {
+          console.warn(`[Auth] fetchProfile timed out after ${timeoutMs / 1000}s`);
+        } else {
+          console.warn(`[Auth] Error fetching profile (${error.message}), using fallback`);
+        }
+        // Fallback: Construct a minimal profile from the current user session if available
+        // This ensures the APP DOES NOT HANG even if the profiles table is missing/locked
+        const currentUser = this.currentState.user;
+        if (currentUser && currentUser.id === userId) {
+          const fallbackProfile: Profile = {
+            id: userId,
+            email: currentUser.email || '',
+            display_name:
+              (currentUser.user_metadata?.['full_name'] as string) ||
+              (currentUser.user_metadata?.['name'] as string) ||
+              currentUser.email?.split('@')[0] ||
+              'User',
+            avatar_url: currentUser.user_metadata?.['avatar_url'] as string,
+            created_at: currentUser.created_at,
+            updated_at: currentUser.updated_at || new Date().toISOString(),
+            stripe_customer_id: null,
+            // Add other required fields with defaults
+            credits: null,
+          } as unknown as Profile; // Cast to Profile as we might be missing some fields
+
+          console.log('[Auth] Constructed fallback profile from auth metadata');
+          return fallbackProfile;
+        }
+        return this.currentState.profile;
       }
 
       return data;
     } catch (err) {
       console.error('[Auth] Exception fetching profile:', err);
-      return null;
+      return this.currentState.profile;
     }
   }
 
@@ -343,47 +608,83 @@ class SupabaseAuthService {
     session?: Session | null,
     retryCount = 0,
   ): Promise<Subscription | null> {
-    const supabase = getSupabase();
-    const maxRetries = 3;
-    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow on first connection
+    // Circuit breaker: if we've had too many consecutive failures recently, don't fetch
+    const circuitBreakerCooldown = 60000; // 1 minute cooldown after MAX_CONSECUTIVE_FAILURES
+    if (
+      this.subscriptionFailureCount >= SupabaseAuthService.MAX_CONSECUTIVE_FAILURES &&
+      Date.now() - this.lastSubscriptionFailure < circuitBreakerCooldown
+    ) {
+      console.warn(
+        `[Auth] Circuit breaker active: skipping subscription fetch (${this.subscriptionFailureCount} consecutive failures)`,
+      );
+      return this.currentState.subscription; // Return cached value
+    }
 
-    console.log(
-      '[Auth] Fetching subscription for user:',
-      userId,
-      retryCount > 0 ? `(retry ${retryCount})` : '',
-    );
+    // Deduplication: if a fetch is already in progress, wait for it
+    if (this.subscriptionFetchInProgress && this.pendingSubscriptionFetch) {
+      console.log('[Auth] Subscription fetch already in progress, waiting for existing request...');
+      return this.pendingSubscriptionFetch;
+    }
+
+    // Mark fetch as in progress
+    this.subscriptionFetchInProgress = true;
+
+    // Create the actual fetch promise
+    this.pendingSubscriptionFetch = this.doFetchSubscription(userId, session, retryCount);
 
     try {
-      // Skip session check if session was passed (avoids hanging getSession() call)
-      if (!session) {
-        // Only check session if not passed - with timeout to prevent hanging
-        const sessionCheckPromise = supabase.auth.getSession();
-        const sessionTimeout = new Promise<{ data: { session: null } }>(
-          (resolve) =>
-            setTimeout(() => {
-              console.warn('[Auth] getSession timed out after 10s');
-              resolve({ data: { session: null } });
-            }, 10000), // Increased from 3s to 10s - session checks can be slow
-        );
+      const result = await this.pendingSubscriptionFetch;
 
-        const { data: sessionData } = await Promise.race([sessionCheckPromise, sessionTimeout]);
-        console.log('[Auth] Current session check:', {
-          hasSession: !!sessionData?.session,
-          userId: sessionData?.session?.user?.id,
-        });
-
-        if (!sessionData?.session) {
-          console.error('[Auth] No session available for subscription query');
-          return null;
-        }
-      } else {
-        console.log('[Auth] Using passed session, skipping getSession() call');
+      // Reset failure count on success
+      if (result !== null || this.subscriptionFailureCount > 0) {
+        this.subscriptionFailureCount = 0;
       }
 
-      // Add timeout to prevent hanging
+      return result;
+    } catch (error) {
+      // Track failure for circuit breaker
+      this.subscriptionFailureCount++;
+      this.lastSubscriptionFailure = Date.now();
+      console.error(
+        `[Auth] Subscription fetch failed (failure ${this.subscriptionFailureCount}/${SupabaseAuthService.MAX_CONSECUTIVE_FAILURES}):`,
+        error,
+      );
+      throw error;
+    } finally {
+      // Clear the in-progress flag
+      this.subscriptionFetchInProgress = false;
+      this.pendingSubscriptionFetch = null;
+    }
+  }
+
+  // Reset circuit breaker (call after successful login or manual refresh)
+  resetCircuitBreaker(): void {
+    this.subscriptionFailureCount = 0;
+    this.lastSubscriptionFailure = 0;
+    console.log('[Auth] Circuit breaker reset');
+  }
+
+  private async doFetchSubscription(
+    userId: string,
+    session?: Session | null,
+    _retryCount = 0,
+  ): Promise<Subscription | null> {
+    const supabase = getSupabase();
+    const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
+
+    console.log('[Auth] Fetching subscription for user:', userId);
+
+    // Get access token for web API fallback
+    const accessToken = session?.access_token || this.currentState.session?.access_token;
+
+    // =========================================================================
+    // STEP 1: Try direct Supabase query (fastest when DB is warm)
+    // =========================================================================
+    try {
+      console.log('[Auth] Step 1: Trying direct Supabase query...');
+
       const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
         setTimeout(() => {
-          console.error(`[Auth] Subscription fetch TIMED OUT after ${timeoutMs / 1000}s`);
           resolve({
             data: null,
             error: { message: `Subscription fetch timed out after ${timeoutMs / 1000}s` },
@@ -391,9 +692,6 @@ class SupabaseAuthService {
         }, timeoutMs),
       );
 
-      console.log('[Auth] Creating Supabase query...');
-      // Select specific columns instead of * for better performance (Supabase best practice)
-      // Use maybeSingle() to return null instead of 406 error when no subscription exists (free users)
       const queryPromise = supabase
         .from('subscriptions')
         .select(
@@ -402,55 +700,55 @@ class SupabaseAuthService {
         .eq('user_id', userId)
         .maybeSingle();
 
-      console.log('[Auth] Waiting for query result...');
       const result = await Promise.race([queryPromise, timeoutPromise]);
-      console.log('[Auth] Query result received:', result);
-
       const { data, error } = result;
 
-      if (error) {
-        // Check if it's a "no rows" error (user has no subscription yet) - this is expected for free users
-        if (error.message?.includes('no rows') || (error as any).code === 'PGRST116') {
-          console.log('[Auth] No subscription found for user (free tier)');
-          return null;
-        }
-
-        console.error('[Auth] Error fetching subscription:', error);
-
-        // Retry on timeout or temporary errors
-        if (
-          retryCount < maxRetries &&
-          (error.message?.includes('timed out') || error.message?.includes('network'))
-        ) {
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff: 1s, 2s, 4s (max 5s)
-          console.log(`[Auth] Retrying subscription fetch in ${delay}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return this.fetchSubscription(userId, session, retryCount + 1);
-        }
-
-        return null;
+      if (!error && data) {
+        console.log('[Auth] Direct Supabase query succeeded:', data.plan_tier);
+        return data;
       }
 
-      console.log('[Auth] Fetched subscription successfully:', data);
-      return data;
+      // "No rows" is expected for free users - but we should still try web API to confirm
+      if (error?.message?.includes('no rows') || (error as any)?.code === 'PGRST116') {
+        console.log('[Auth] No subscription in Supabase, trying web API to confirm...');
+      } else if (error) {
+        console.warn('[Auth] Supabase query failed:', error.message);
+      }
     } catch (err) {
-      console.error('[Auth] Exception fetching subscription:', err);
-
-      // Retry on exceptions
-      if (retryCount < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
-        console.log(`[Auth] Retrying subscription fetch in ${delay}ms after exception...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.fetchSubscription(userId, session, retryCount + 1);
-      }
-
-      return null;
+      console.warn('[Auth] Supabase query exception:', err);
     }
+
+    // =========================================================================
+    // STEP 2: Try Web API fallback (works when Supabase is slow/down)
+    // =========================================================================
+    if (accessToken) {
+      try {
+        console.log('[Auth] Step 2: Trying web API fallback...');
+        const webApiResult = await fetchSubscriptionFromWebAPI(accessToken);
+
+        if (webApiResult) {
+          console.log('[Auth] Web API fallback succeeded:', webApiResult.plan_tier);
+          return webApiResult;
+        }
+
+        console.log('[Auth] Web API returned no subscription (confirmed free tier)');
+      } catch (err) {
+        console.warn('[Auth] Web API fallback failed:', err);
+      }
+    } else {
+      console.warn('[Auth] No access token available for web API fallback');
+    }
+
+    // =========================================================================
+    // STEP 3: Both failed - return null (caller handles cache/loading state)
+    // =========================================================================
+    console.warn('[Auth] All subscription fetch methods failed');
+    return null;
   }
 
   private async fetchFeatureFlags(userId: string): Promise<Record<string, boolean>> {
     const supabase = getSupabase();
-    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow
+    const timeoutMs = 15000; // Reduced to 15s
 
     try {
       const queryPromise = supabase
@@ -458,18 +756,30 @@ class SupabaseAuthService {
         .select('flag_name, enabled')
         .eq('user_id', userId);
 
-      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
-        setTimeout(() => {
-          console.warn('[Auth] fetchFeatureFlags timed out after 20s');
-          resolve({ data: null, error: { message: 'Feature flags fetch timed out' } });
-        }, timeoutMs),
-      );
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<{
+        data: null;
+        error: { message: string; code?: string };
+      }>((resolve) => {
+        timeoutId = setTimeout(() => {
+          resolve({
+            data: null,
+            error: { message: 'Feature flags fetch timed out', code: 'TIMEOUT' },
+          });
+        }, timeoutMs);
+      });
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (error) {
-        console.error('[Auth] Error fetching feature flags:', error);
-        return {};
+        if ((error as any).code === 'TIMEOUT') {
+          console.warn(`[Auth] fetchFeatureFlags timed out after ${timeoutMs / 1000}s`);
+        } else {
+          console.warn(`[Auth] Error fetching feature flags (${error.message}), using defaults`);
+        }
+        // Return cached flags if available, otherwise empty object (defaults)
+        return this.currentState.featureFlags || {};
       }
 
       return (data || []).reduce(
@@ -481,7 +791,7 @@ class SupabaseAuthService {
       );
     } catch (err) {
       console.error('[Auth] Exception fetching feature flags:', err);
-      return {};
+      return this.currentState.featureFlags || {};
     }
   }
 
@@ -526,7 +836,7 @@ class SupabaseAuthService {
               data: { user: null, session: null },
               error: { message: 'Sign in timed out' },
             }),
-          10000,
+          30000, // Increased to 30s
         ),
       );
 

@@ -62,24 +62,40 @@
             "type": "string",
             "enum": ["desktop", "mobile", "web"],
             "description": "Type of device"
+          },
+          "device_fingerprint": {
+            "type": "string",
+            "description": "Optional device fingerprint used to prevent unauthorized polling",
+            "maxLength": 255
           }
         }
       },
       "DeviceCode": {
         "type": "object",
+        "required": ["link_code", "device_id", "verify_url", "expires_at"],
         "properties": {
-          "user_code": {
+          "link_code": {
             "type": "string",
-            "description": "The code for user to enter"
+            "description": "The code the user should approve"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Device identifier associated with this code"
           },
           "verify_url": {
             "type": "string",
             "format": "uri",
             "description": "URL where user can verify the device"
           },
-          "expires_in": {
+          "expires_at": {
             "type": "integer",
-            "description": "Seconds until code expires"
+            "description": "Unix timestamp (seconds) when code expires"
+          },
+          "qr_code_url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "Optional QR code URL"
           }
         }
       },
@@ -241,11 +257,23 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": ["pending", "approved", "denied"]
+                      "enum": ["pending", "approved", "denied", "expired"]
                     },
                     "access_token": {
                       "type": "string",
                       "description": "Session token if approved"
+                    },
+                    "refresh_token": {
+                      "type": "string",
+                      "description": "Refresh token if approved"
+                    },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "email": { "type": "string", "format": "email" },
+                        "name": { "type": "string" }
+                      }
                     }
                   }
                 }
@@ -255,6 +283,46 @@
           "403": {
             "description": "Device fingerprint mismatch"
           }
+        }
+      }
+    },
+    "/device/approve": {
+      "post": {
+        "summary": "Approve or deny a device authorization code",
+        "description": "Approve (or deny) a device-link code so the device can retrieve a one-time session token.",
+        "tags": ["Device Authorization"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string" },
+                  "action": { "type": "string", "enum": ["approve", "deny"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device code processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "status": { "type": "string", "enum": ["approved", "denied"] }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "409": { "description": "Code already processed" }
         }
       }
     },

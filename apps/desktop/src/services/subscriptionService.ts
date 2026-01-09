@@ -100,6 +100,7 @@ class SubscriptionService {
   private static instance: SubscriptionService;
   private listeners: Set<(state: SubscriptionState) => void> = new Set();
   private realtimeChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
+  private realtimeSubscribedUserId: string | null = null;
   private state: SubscriptionState = {
     isLoading: false,
     error: null,
@@ -131,8 +132,14 @@ class SubscriptionService {
   }
 
   private subscribeToRealtimeForUser(userId: string) {
+    // Avoid noisy unsubscribe/subscribe loops when auth state updates for the same user.
+    if (this.realtimeChannel && this.realtimeSubscribedUserId === userId) {
+      return;
+    }
+
     // Clean up any existing channel first
     this.unsubscribeRealtime();
+    this.realtimeSubscribedUserId = userId;
 
     const supabase = getSupabase();
     console.log('[Subscription] Subscribing to realtime updates for user:', userId);
@@ -168,6 +175,7 @@ class SubscriptionService {
       getSupabase().removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
+    this.realtimeSubscribedUserId = null;
   }
 
   private async refreshCurrentPlan(): Promise<void> {

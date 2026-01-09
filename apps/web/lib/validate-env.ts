@@ -33,6 +33,11 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_WEBHOOK_SECRET',
     'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     'NEXT_PUBLIC_APP_URL',
+    // Required in production for protected cron + diagnostic endpoints
+    'CRON_SECRET',
+    // Required for desktop auto-updates (Tauri updater hits /api/releases/*)
+    'DESKTOP_GITHUB_OWNER',
+    'DESKTOP_GITHUB_REPO',
   ];
 
   // Stripe price IDs (required for checkout to work)

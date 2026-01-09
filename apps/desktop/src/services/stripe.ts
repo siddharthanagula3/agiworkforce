@@ -212,7 +212,15 @@ export class StripeService {
         periodEnd,
       });
     } catch (error) {
-      console.warn('[StripeService] Error getting usage:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('Billing feature is not enabled')) {
+        // Common in dev/local builds where billing/Stripe integration isn't configured.
+        if (import.meta.env.DEV) {
+          console.debug('[StripeService] Usage unavailable (billing disabled)');
+        }
+      } else {
+        console.warn('[StripeService] Error getting usage:', error);
+      }
       return {
         automations_executed: 0,
         api_calls_made: 0,
@@ -252,6 +260,13 @@ export class StripeService {
         metadata: metadata || null,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('Billing feature is not enabled')) {
+        if (import.meta.env.DEV) {
+          console.debug('[StripeService] Usage tracking skipped (billing disabled)');
+        }
+        return;
+      }
       console.warn('[StripeService] Error tracking usage:', error);
     }
   }

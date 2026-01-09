@@ -77,6 +77,20 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   let stripeCustomerId: string | null = null;
   const stripe = getStripe();
 
+  // If user already has an active subscription, do NOT create a new subscription via Checkout.
+  // Route them to the Billing Portal instead to prevent duplicate subscriptions / double billing.
+  const { data: existingSubscription } = await supabase
+    .from('subscriptions')
+    .select('status, plan_tier, stripe_customer_id, stripe_subscription_id')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+
+  const activeStatuses = new Set(['active', 'trialing', 'past_due']);
+  const hasActiveSubscription =
+    !!existingSubscription &&
+    existingSubscription.plan_tier !== 'free' &&
+    activeStatuses.has(existingSubscription.status);
+
   // First, check if we have a customer ID stored in profiles
   const { data: profile } = await supabase
     .from('profiles')
@@ -89,6 +103,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     logger.info(
       { userId: session.user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from profile',
+    );
+  } else if (existingSubscription?.stripe_customer_id) {
+    stripeCustomerId = existingSubscription.stripe_customer_id;
+    logger.info(
+      { userId: session.user.id, customerId: stripeCustomerId },
+      'Using existing Stripe customer from subscription',
     );
   } else {
     // No customer ID stored - create a new Stripe customer
@@ -117,6 +137,40 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         'Failed to create Stripe customer, proceeding without customer ID',
       );
       // Continue without customer ID - Stripe will create one during checkout
+    }
+  }
+
+  // If the user is already subscribed, open Billing Portal instead of starting a new Checkout.
+  if (hasActiveSubscription) {
+    try {
+      // As a resilience fallback, try to discover the customer by email if still missing.
+      if (!stripeCustomerId && session.user.email) {
+        const customers = await stripe.customers.list({ email: session.user.email, limit: 1 });
+        if (customers.data.length > 0) {
+          stripeCustomerId = customers.data[0].id;
+          await supabase
+            .from('profiles')
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq('id', session.user.id);
+        }
+      }
+
+      if (!stripeCustomerId) {
+        throw createError.internal('Missing Stripe customer ID for billing portal');
+      }
+
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+      });
+
+      return NextResponse.json({ url: portalSession.url });
+    } catch (error) {
+      logger.error(
+        { error, userId: session.user.id },
+        'Failed to create billing portal session for existing subscriber',
+      );
+      throw createError.internal('Failed to open billing portal');
     }
   }
 
