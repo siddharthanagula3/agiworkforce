@@ -1361,12 +1361,159 @@ export async function POST(request: Request) {
         }
         break;
       }
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        const stripeCustomerId = charge.customer as string | null;
+        const refundedAmount = charge.amount_refunded;
+
+        logger.info(
+          { chargeId: charge.id, customerId: stripeCustomerId, refundedAmount },
+          'Processing charge refund',
+        );
+
+        if (supabaseAdmin && stripeCustomerId && refundedAmount > 0) {
+          try {
+            // Find user by stripe_customer_id
+            const { data: profile, error: profileError } = await supabaseAdmin
+              .from('profiles')
+              .select('id')
+              .eq('stripe_customer_id', stripeCustomerId)
+              .maybeSingle();
+
+            if (profileError) {
+              logger.error(
+                { error: profileError, stripeCustomerId },
+                'Failed to find user for refund',
+              );
+              break;
+            }
+
+            if (profile?.id) {
+              // Use the handle_refund database function to revoke credits proportionally
+              const { error: refundError } = await supabaseAdmin.rpc('handle_refund', {
+                p_user_id: profile.id,
+                p_refund_amount_cents: refundedAmount,
+                p_reason: `Refund for charge ${charge.id}`,
+              });
+
+              if (refundError) {
+                logger.error(
+                  { error: refundError, userId: profile.id, refundedAmount },
+                  'Failed to revoke credits for refund',
+                );
+              } else {
+                logger.info(
+                  { userId: profile.id, refundedAmount, chargeId: charge.id },
+                  'Credits revoked for refund successfully',
+                );
+              }
+            } else {
+              logger.warn(
+                { stripeCustomerId, chargeId: charge.id },
+                'No user found for refunded charge - credits not revoked',
+              );
+            }
+          } catch (error) {
+            logger.error({ error, chargeId: charge.id }, 'Error processing charge refund');
+          }
+        }
+        break;
+      }
+      case 'charge.dispute.created': {
+        const dispute = event.data.object as Stripe.Dispute;
+        const chargeId = dispute.charge as string;
+        const amount = dispute.amount;
+        const reason = dispute.reason;
+
+        logger.warn(
+          { disputeId: dispute.id, chargeId, amount, reason },
+          'CRITICAL: Charge dispute created - requires immediate attention',
+        );
+
+        if (supabaseAdmin && stripe) {
+          try {
+            // Get the charge to find the customer
+            const charge = await stripe.charges.retrieve(chargeId);
+            const stripeCustomerId = charge.customer as string | null;
+
+            if (stripeCustomerId) {
+              // Find user by stripe_customer_id
+              const { data: profile, error: profileError } = await supabaseAdmin
+                .from('profiles')
+                .select('id, email')
+                .eq('stripe_customer_id', stripeCustomerId)
+                .maybeSingle();
+
+              if (!profileError && profile?.id) {
+                // Flag the subscription as disputed (use cancel_at_period_end to prevent renewal)
+                const { error: updateError } = await supabaseAdmin
+                  .from('subscriptions')
+                  .update({
+                    status: 'past_due',
+                    cancel_at_period_end: true,
+                  })
+                  .eq('stripe_customer_id', stripeCustomerId);
+
+                if (updateError) {
+                  logger.error(
+                    { error: updateError, stripeCustomerId },
+                    'Failed to update subscription for dispute',
+                  );
+                }
+
+                // Revoke all remaining credits for the disputed user
+                try {
+                  const balance = await CreditService.getBalance(profile.id);
+                  if (balance && balance.credits_remaining_cents > 0) {
+                    await CreditService.deductCredits(
+                      profile.id,
+                      balance.credits_remaining_cents,
+                      `Credits revoked due to charge dispute ${dispute.id}`,
+                      { type: 'dispute', disputeId: dispute.id, reason },
+                    );
+                    logger.info(
+                      {
+                        userId: profile.id,
+                        revokedCents: balance.credits_remaining_cents,
+                        disputeId: dispute.id,
+                      },
+                      'Credits revoked due to dispute',
+                    );
+                  }
+                } catch (creditError) {
+                  logger.error(
+                    { error: creditError, userId: profile.id, disputeId: dispute.id },
+                    'Failed to revoke credits for dispute',
+                  );
+                }
+
+                logger.warn(
+                  {
+                    userId: profile.id,
+                    email: profile.email,
+                    disputeId: dispute.id,
+                    chargeId,
+                    amount,
+                    reason,
+                  },
+                  'ALERT: User subscription flagged due to dispute',
+                );
+              } else {
+                logger.error(
+                  { stripeCustomerId, disputeId: dispute.id },
+                  'Could not find user for disputed charge',
+                );
+              }
+            }
+          } catch (error) {
+            logger.error({ error, disputeId: dispute.id }, 'Error processing charge dispute');
+          }
+        }
+        break;
+      }
       default:
         logger.warn({ eventType: event.type }, 'Unhandled Stripe event type');
     }
-
-    // Event already marked as processed by the idempotency function
-    // No need to insert again
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     logger.error(
@@ -1379,9 +1526,33 @@ export async function POST(request: Request) {
       'Error handling Stripe webhook event',
     );
 
+    // Mark failed so Stripe retries can reprocess this event (retry-safe idempotency)
+    try {
+      await supabaseAdmin.rpc('mark_stripe_event_failed', {
+        p_event_id: event.id,
+        p_error: errorMessage,
+      });
+    } catch (markError) {
+      logger.error(
+        { error: markError, eventId: event.id },
+        'Failed to mark Stripe event as failed',
+      );
+    }
+
     return new NextResponse(JSON.stringify({ error: `Webhook handler failed: ${errorMessage}` }), {
       status: 500,
     });
+  }
+
+  // Mark succeeded so future retries are skipped (retry-safe idempotency)
+  try {
+    await supabaseAdmin.rpc('mark_stripe_event_succeeded', { p_event_id: event.id });
+  } catch (markError) {
+    // Don't fail webhook response; Stripe will retry, and idempotency lock will prevent double work
+    logger.error(
+      { error: markError, eventId: event.id },
+      'Failed to mark Stripe event as succeeded',
+    );
   }
 
   logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');

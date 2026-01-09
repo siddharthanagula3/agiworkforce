@@ -1,9 +1,10 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { invoke } from '../../lib/tauri-mock';
+import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
+  isTauriContext: vi.fn(),
 }));
 
 const buildTaskRouting = (defaults: {
@@ -243,9 +244,14 @@ describe('settingsStore', () => {
           startupPosition: 'remember' as const,
           dockOnStartup: 'left' as const,
         },
+        allowedDirectories: [],
       };
 
+      // Mock isTauriContext to return true so loadSettings executes the Tauri code path
+      vi.mocked(isTauriContext).mockReturnValue(true);
+
       vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'settings_load_from_disk') return Promise.resolve(mockSettings);
         if (cmd === 'settings_load') return Promise.resolve(mockSettings);
         if (cmd === 'settings_get_api_key') return Promise.resolve('');
         if (cmd === 'llm_configure_provider') return Promise.resolve(undefined);
@@ -274,6 +280,8 @@ describe('settingsStore', () => {
     });
 
     it('should handle settings load error', async () => {
+      // Mock isTauriContext to return true so loadSettings executes the Tauri code path
+      vi.mocked(isTauriContext).mockReturnValue(true);
       vi.mocked(invoke).mockRejectedValue(new Error('Load failed'));
 
       await useSettingsStore.getState().loadSettings();
@@ -350,6 +358,9 @@ describe('settingsStore', () => {
 
   describe('Provider Configuration', () => {
     it('should configure Ollama provider during load', async () => {
+      // Mock isTauriContext to return true so loadSettings executes the Tauri code path
+      vi.mocked(isTauriContext).mockReturnValue(true);
+
       // Mock settings_load_from_disk (the primary method)
       vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'settings_load_from_disk') {
@@ -386,6 +397,7 @@ describe('settingsStore', () => {
               startupPosition: 'center' as const,
               dockOnStartup: null,
             },
+            allowedDirectories: [],
           });
         }
         return Promise.resolve(undefined);

@@ -11,7 +11,7 @@
  *
  * Note: This store doesn't use persistence since configurator state is session-based.
  */
-import type { Edge, Node } from 'reactflow';
+import type { Edge, Node } from '@xyflow/react';
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
@@ -537,6 +537,6 @@ export const useConfiguratorStore = create<ConfiguratorState>()(
         });
       },
     })),
-    { name: 'ConfiguratorStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'ConfiguratorStore', enabled: import.meta.env.DEV },
   ),
 );

@@ -20,10 +20,11 @@ export const FloatingChat = () => {
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
-  // Initialize conversation on mount
+  // Initialize conversation on mount - run once, ensureActiveConversation is stable
   useEffect(() => {
     ensureActiveConversation();
-  }, [ensureActiveConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

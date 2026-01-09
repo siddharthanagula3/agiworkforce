@@ -1,13 +1,36 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+
+function verifyDiagnosticSecret(request: NextRequest): boolean {
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+
+  // In production, CRON_SECRET is required
+  if (!cronSecret) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction) {
+      logger.error('CRON_SECRET not set in production - denying diagnostic request');
+      return false;
+    }
+    return true;
+  }
+
+  return authHeader === `Bearer ${cronSecret}`;
+}
 
 /**
  * Validation endpoint to check webhook configuration
  * This endpoint helps verify that all required environment variables are set
  * and the webhook is properly configured
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!verifyDiagnosticSecret(request)) {
+    logger.warn('Unauthorized validate-webhook request');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const checks = {
       stripeSecretKey: !!process.env.STRIPE_SECRET_KEY,

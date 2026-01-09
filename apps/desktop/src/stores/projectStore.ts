@@ -373,7 +373,7 @@ export const useProjectStore = create<ProjectState>()(
         },
       },
     ),
-    { name: 'ProjectStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'ProjectStore', enabled: import.meta.env.DEV },
   ),
 );
 

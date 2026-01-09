@@ -67,7 +67,7 @@ export const UnifiedAgenticChat: React.FC<{
   const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
   const budget = useTokenBudgetStore(selectBudget);
   const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
-  const { loadOverview } = useCostStore();
+  const loadOverview = useCostStore((state) => state.loadOverview);
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const abortControllerRef = useRef<AbortController | null>(null);

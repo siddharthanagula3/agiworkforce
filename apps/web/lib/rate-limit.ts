@@ -20,6 +20,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 5 requests per minute
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  'credit-topup': {
+    limit: 5,
+    window: '1 m', // 5 top-up checkout sessions per minute
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
   'device-link': {
     limit: 10,
     window: '1 m', // 10 device codes per minute (prevents abuse)

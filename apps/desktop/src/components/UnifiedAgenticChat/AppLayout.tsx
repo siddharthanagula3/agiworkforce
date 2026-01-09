@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { CustomInstructionsDialog } from '../CustomInstructionsDialog';
@@ -28,7 +29,8 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     setCustomInstructionsOpen(true);
   }, []);
 
-  const sidecarState = useUnifiedChatStore((state) => state.sidecar);
+  // Use useShallow to prevent re-renders from object reference changes
+  const sidecarState = useUnifiedChatStore(useShallow((state) => state.sidecar));
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
   const setSidecarWidth = useUnifiedChatStore((state) => state.setSidecarWidth);
   const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);

@@ -151,7 +151,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     onSuggestionChange: handleSuggestionChange,
   });
 
-  const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
+  // Move the || [] inside the selector to maintain stable reference
+  const activeContext = useUnifiedChatStore((state) => state.activeContext ?? []);
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
@@ -173,7 +174,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const thinkingModeEnabled = useModelStore((state) => state.thinkingModeEnabled);
   const availableModels = useModelStore((state) => state.availableModels);
-  const { account: _account, isPro: _isPro } = useAccountStore();
   const prefersReducedMotion = useReducedMotion();
 
   // Voice transcription state
@@ -841,8 +841,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       ? Math.min((tokenUsage.current / tokenUsage.max) * 100, 100)
       : 0;
 
-  const { getTokenCost } = useUsageStore();
-  const { subscription } = useBillingStore();
+  // Use individual selectors to avoid re-renders on unrelated state changes
+  const getTokenCost = useUsageStore((state) => state.getTokenCost);
+  const subscription = useBillingStore((state) => state.subscription);
   const monthlyCost = getTokenCost();
 
   const planName = subscription?.plan_name?.toLowerCase() || '';
@@ -914,17 +915,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       <motion.div
         className={cn(
           'fixed z-40 w-full px-4',
-          isEmptyState
-            ? 'bottom-1/2 translate-y-1/2 max-w-2xl left-1/2 -translate-x-1/2'
-            : 'bottom-6 max-w-5xl left-1/2 -translate-x-1/2',
+          isEmptyState ? 'max-w-2xl' : 'max-w-5xl',
           className,
         )}
         initial={false}
         animate={{
           bottom: isEmptyState ? '50%' : '24px',
           left: sidecarOpen
-            ? `calc(50% + ${(sidebarCollapsed ? 64 : sidebarWidth) / 2}px - ${sidecarWidth / 2}px)`
-            : `calc(50% + ${(sidebarCollapsed ? 64 : sidebarWidth) / 2}px)`,
+            ? `calc(${sidebarCollapsed ? 64 : sidebarWidth}px + (100% - ${sidebarCollapsed ? 64 : sidebarWidth}px - ${sidecarWidth}px) / 2)`
+            : `calc(${sidebarCollapsed ? 64 : sidebarWidth}px + (100% - ${sidebarCollapsed ? 64 : sidebarWidth}px) / 2)`,
           x: '-50%',
           y: isEmptyState ? '50%' : '0%',
           maxWidth: isEmptyState ? '42rem' : '64rem',

@@ -185,7 +185,7 @@ export const useBillingStore = create<BillingStore>()(
         },
       },
     ),
-    { name: 'BillingStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'BillingStore', enabled: import.meta.env.DEV },
   ),
 );
 

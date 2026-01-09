@@ -6,18 +6,28 @@ export function useDeepLink() {
   useEffect(() => {
     if (!isTauri) return;
 
-    let unlisten: (() => void) | undefined;
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
 
     const setupListener = async () => {
       try {
         console.log('[DeepLink] Setting up listener...');
-        unlisten = await onOpenUrl((urls) => {
+        const unlisten = await onOpenUrl((urls) => {
+          if (!isMounted) return; // Guard against unmounted callbacks
           console.log('[DeepLink] Received URLs:', urls);
           for (const url of urls) {
             handleDeepLink(url);
           }
         });
-        console.log('[DeepLink] Listener setup success');
+
+        // Only store unlisten if we're still mounted
+        if (isMounted) {
+          unlistenFn = unlisten;
+          console.log('[DeepLink] Listener setup success');
+        } else {
+          // Component unmounted while setting up - cleanup immediately
+          unlisten();
+        }
       } catch (error) {
         console.error('[DeepLink] Failed to setup listener:', error);
       }
@@ -26,9 +36,11 @@ export function useDeepLink() {
     setupListener();
 
     return () => {
-      if (unlisten) {
+      isMounted = false;
+      if (unlistenFn) {
         console.log('[DeepLink] Cleaning up listener');
-        unlisten();
+        unlistenFn();
+        unlistenFn = null;
       }
     };
   }, []);
