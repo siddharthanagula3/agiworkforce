@@ -43,15 +43,15 @@ jobs:
         run: pnpm exec playwright install --with-deps
         working-directory: apps/desktop
 
-      - name: Build desktop app
-        run: pnpm build:desktop
+      - name: Build desktop web frontend
+        run: pnpm build:web
         working-directory: apps/desktop
         env:
           CI: true
 
-      - name: Start app server (background)
+      - name: Start Vite dev server (background)
         run: |
-          pnpm dev:desktop > app.log 2>&1 &
+          VITE_DEV_PORT=5175 pnpm dev:vite > app.log 2>&1 &
           echo $! > app.pid
           sleep 10
         working-directory: apps/desktop
@@ -60,7 +60,7 @@ jobs:
       - name: Wait for app to be ready
         run: |
           for i in {1..20}; do
-            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            if curl -f http://localhost:5175 > /dev/null 2>&1; then
               echo "App is ready"
               exit 0
             fi
