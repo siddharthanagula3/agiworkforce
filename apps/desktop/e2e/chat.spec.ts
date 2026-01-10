@@ -208,7 +208,7 @@ test.describe('Chat Workflow', () => {
 
     // Wait for page to fully load first
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
 
     // Check if chat input is available
     const chatInputVisible = await chatInput.isVisible({ timeout: 5000 }).catch(() => false);
