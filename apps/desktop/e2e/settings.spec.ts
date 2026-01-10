@@ -24,8 +24,8 @@ test.describe('Settings and Configuration', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Don't wait for networkidle as it can timeout - wait for body to be visible instead
-    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+    // Wait for React root to be attached instead of body visibility (headless CI compatibility)
+    await page.locator('#root').waitFor({ state: 'attached', timeout: 10000 });
 
     // Initialize empty snapshot - capture will happen in individual tests if needed
     settingsSnapshot = {};

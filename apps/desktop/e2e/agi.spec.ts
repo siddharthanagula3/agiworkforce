@@ -329,7 +329,7 @@ test.describe('AGI Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('#root').waitFor({ state: 'attached', timeout: 10000 });
 
     const settingsLink = page
       .locator('a[href*="settings"], button[aria-label*="Settings"]')
