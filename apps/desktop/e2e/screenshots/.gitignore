@@ -1,0 +1,10 @@
+# Ignore all generated screenshots
+*-[0-9]*.png
+
+# Ignore diffs and failures directories
+diffs/
+failures/
+
+# Keep baseline directory
+!baseline/
+!baseline/*.png
