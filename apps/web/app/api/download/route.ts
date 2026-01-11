@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-
-export const runtime = 'edge';
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from '@/lib/rate-limit';
 
 const REPO_OWNER = process.env.DESKTOP_GITHUB_OWNER || 'siddharthanagula3';
 const REPO_NAME = process.env.DESKTOP_GITHUB_REPO || 'agiworkforce-desktop-app';
@@ -12,12 +11,17 @@ const REPO_NAME = process.env.DESKTOP_GITHUB_REPO || 'agiworkforce-desktop-app';
  * 1. Desktop app downloads should be publicly accessible to encourage adoption
  * 2. The download files are already publicly hosted on GitHub releases
  * 3. Authentication happens within the desktop app after installation
- * 4. Rate limiting is handled by GitHub's API and CDN infrastructure
+ * 4. Rate limiting is applied at 30 requests/minute per IP to prevent abuse
  *
  * If download access needs to be restricted in the future (e.g., for beta builds),
  * add authentication by importing createSupabaseServerClient and checking user session.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Rate limiting: 30 requests per minute per IP to prevent abuse
+  const rateLimitResponse = await withRateLimit(request, 'download');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform');
 

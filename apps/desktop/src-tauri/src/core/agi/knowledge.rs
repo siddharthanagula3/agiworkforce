@@ -223,79 +223,45 @@ impl KnowledgeBase {
             self._memory_limit_mb
         );
 
+        // Only prune if over limit - single lock acquisition to avoid deadlock
         if file_size_mb > self._memory_limit_mb {
             tracing::warn!(
-                "Knowledge base size ({} MB) exceeds limit ({} MB), pruning entries",
+                "[Knowledge] Database size ({}MB) exceeds limit ({}MB), pruning entries",
                 file_size_mb,
                 self._memory_limit_mb
             );
 
+            // Single lock scope for all database operations
             let conn = self.lock_db()?;
-
-            conn.execute("VACUUM", [])?;
 
             let count: i64 =
                 conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
-            let keep_count = (count as f64 * 0.8) as i64;
 
-            conn.execute(
-                "DELETE FROM knowledge
-                 WHERE id NOT IN (
-                     SELECT id FROM knowledge
-                     ORDER BY importance DESC, timestamp DESC
-                     LIMIT ?
-                 )",
-                params![keep_count],
-            )?;
+            if count > 0 {
+                // Calculate how many entries to keep based on size ratio
+                let avg_entry_size = (file_size_mb * 1024 * 1024) / count as u64;
+                let target_count = (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
+                let keep_count = ((target_count * 80 / 100) as i64).max(100);
 
-            conn.execute("VACUUM", [])?;
-
-            tracing::info!("Knowledge base pruned to {} entries", keep_count);
-        }
-
-        let conn = self.lock_db()?;
-        let _count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
-
-        if let Ok(metadata) = std::fs::metadata(&db_path) {
-            let file_size_mb = metadata.len() / 1024 / 1024;
-
-            if file_size_mb > self._memory_limit_mb {
-                tracing::warn!(
-                    "[Knowledge] Database size ({}MB) exceeds limit ({}MB), pruning entries",
-                    file_size_mb,
-                    self._memory_limit_mb
+                tracing::info!(
+                    "[Knowledge] Keeping top {} entries (out of {})",
+                    keep_count,
+                    count
                 );
 
-                let conn = self.lock_db()?;
+                conn.execute(
+                    "DELETE FROM knowledge
+                     WHERE id NOT IN (
+                         SELECT id FROM knowledge
+                         ORDER BY importance DESC, timestamp DESC
+                         LIMIT ?1
+                     )",
+                    params![keep_count],
+                )?;
 
-                let count: i64 =
-                    conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+                conn.execute("VACUUM", [])?;
 
-                if count > 0 {
-                    let avg_entry_size = file_size_mb * 1024 * 1024 / count as u64;
-                    let target_count =
-                        (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
-
-                    let keep_count = (target_count * 80 / 100).max(100);
-
-                    tracing::info!(
-                        "[Knowledge] Keeping top {} entries (out of {})",
-                        keep_count,
-                        count
-                    );
-
-                    conn.execute(
-                        "DELETE FROM knowledge
-                         WHERE id NOT IN (
-                             SELECT id FROM knowledge
-                             ORDER BY importance DESC, timestamp DESC
-                             LIMIT ?1
-                         )",
-                        params![keep_count],
-                    )?;
-
-                    conn.execute("VACUUM", [])?;
-                }
+                tracing::info!("[Knowledge] Database pruned successfully");
             }
         }
 

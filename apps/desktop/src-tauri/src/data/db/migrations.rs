@@ -1,6 +1,192 @@
 use rusqlite::{Connection, Result};
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
 const CURRENT_VERSION: i32 = 45;
+
+// =============================================================================
+// SQL INJECTION PREVENTION
+// =============================================================================
+// All table names that are valid targets for schema operations.
+// This whitelist prevents SQL injection via dynamic table/column names.
+// Any table not in this list will be rejected by ensure_column().
+static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        // Core tables
+        "schema_version",
+        "conversations",
+        "messages",
+        "settings",
+        "settings_v2",
+        // Automation & history
+        "automation_history",
+        "overlay_events",
+        "command_history",
+        "clipboard_history",
+        // Calendar & email
+        "calendar_accounts",
+        "email_accounts",
+        "emails",
+        "email_attachments",
+        "contacts",
+        // Captures & OCR
+        "captures",
+        "ocr_results",
+        // Security & audit
+        "permissions",
+        "audit_log",
+        "audit_events",
+        "approval_requests",
+        "approval_rules",
+        // Cache & browser
+        "cache_entries",
+        "browser_sessions",
+        "browser_tabs",
+        "browser_automation_history",
+        // Context & MCP
+        "context_items",
+        "mcp_servers",
+        "mcp_tools_cache",
+        // Autonomous & AI
+        "autonomous_sessions",
+        "autonomous_task_logs",
+        "ai_employees",
+        "user_employees",
+        "employee_tasks",
+        // Checkpoints & onboarding
+        "conversation_checkpoints",
+        "checkpoint_restore_history",
+        "onboarding_progress",
+        "user_preferences",
+        "user_sessions",
+        // Sync & codebase
+        "offline_operations_queue",
+        "codebase_cache",
+        // Billing
+        "billing_customers",
+        "billing_subscriptions",
+        "billing_invoices",
+        "billing_usage",
+        "billing_payment_methods",
+        "billing_webhook_events",
+        // Workflows
+        "workflow_definitions",
+        "workflow_executions",
+        "workflow_execution_logs",
+        "published_workflows",
+        "workflow_clones",
+        "workflow_ratings",
+        "workflow_favorites",
+        "workflow_comments",
+        // Templates
+        "process_templates",
+        "agent_templates",
+        "template_installs",
+        "outcome_tracking",
+        // Teams
+        "teams",
+        "team_members",
+        "team_invitations",
+        "team_resources",
+        "team_activity",
+        "team_billing",
+        // Analytics & metrics
+        "analytics_snapshots",
+        "process_benchmarks",
+        "roi_configurations",
+        "realtime_metrics",
+        "user_milestones",
+        "metrics_daily_cache",
+        "automation_benchmarks",
+        // Tutorials & help
+        "tutorial_progress",
+        "tutorial_step_views",
+        "user_rewards",
+        "tutorial_feedback",
+        "help_sessions",
+        // Collaboration
+        "user_presence",
+        "collaboration_sessions",
+        // Computer use
+        "computer_use_sessions",
+        "computer_use_actions",
+        // Messaging
+        "messaging_connections",
+        "messaging_history",
+        // First run & demos
+        "first_run_sessions",
+        "demo_runs",
+        // Auth (local)
+        "users",
+        "auth_sessions",
+        "oauth_providers",
+        "role_permissions",
+        "user_permissions",
+        "api_keys",
+        "auth_audit_log",
+        // Tasks
+        "tasks",
+        // FTS tables (virtual)
+        "messages_fts",
+        "conversations_fts",
+    ])
+});
+
+/// Validates that a SQL identifier (table or column name) is safe.
+/// Only allows alphanumeric characters and underscores.
+/// Returns an error if the identifier contains potentially dangerous characters.
+fn validate_sql_identifier(identifier: &str, identifier_type: &str) -> Result<()> {
+    if identifier.is_empty() {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "{} name cannot be empty",
+            identifier_type
+        )));
+    }
+
+    // Must start with a letter or underscore
+    let first_char = identifier.chars().next().unwrap();
+    if !first_char.is_ascii_alphabetic() && first_char != '_' {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "{} name '{}' must start with a letter or underscore",
+            identifier_type, identifier
+        )));
+    }
+
+    // All characters must be alphanumeric or underscore
+    for c in identifier.chars() {
+        if !c.is_ascii_alphanumeric() && c != '_' {
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "{} name '{}' contains invalid character '{}'. Only alphanumeric and underscore allowed.",
+                identifier_type, identifier, c
+            )));
+        }
+    }
+
+    // Length check to prevent buffer issues
+    if identifier.len() > 128 {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "{} name '{}' exceeds maximum length of 128 characters",
+            identifier_type, identifier
+        )));
+    }
+
+    Ok(())
+}
+
+/// Validates that a table name is in the allowed whitelist.
+/// This provides defense-in-depth against SQL injection.
+fn validate_table_name(table: &str) -> Result<()> {
+    validate_sql_identifier(table, "Table")?;
+
+    if !ALLOWED_TABLES.contains(table) {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "Table '{}' is not in the allowed tables whitelist. Add it to ALLOWED_TABLES if this is a new table.",
+            table
+        )));
+    }
+
+    Ok(())
+}
 
 /// Run a migration within a transaction for atomicity.
 /// If the migration fails, the transaction is rolled back and the database remains unchanged.
@@ -431,26 +617,100 @@ fn apply_migration_v42(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Safely adds a column to a table if it doesn't exist.
+///
+/// # Security
+/// This function implements defense-in-depth against SQL injection:
+/// 1. Table name must be in the ALLOWED_TABLES whitelist
+/// 2. Column name must match safe identifier pattern (alphanumeric + underscore)
+/// 3. Column definition is validated for safe characters
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `table` - Table name (must be in ALLOWED_TABLES)
+/// * `column` - Column name to add (alphanumeric + underscore only)
+/// * `column_def` - Full column definition including type and constraints
+///
+/// # Errors
+/// Returns an error if:
+/// - Table name is not in the whitelist
+/// - Column name contains invalid characters
+/// - Column definition contains dangerous characters
+/// - Database operation fails
 fn ensure_column(conn: &Connection, table: &str, column: &str, column_def: &str) -> Result<()> {
+    // === SECURITY VALIDATION ===
+    // Validate table name against whitelist
+    validate_table_name(table)?;
+
+    // Validate column name for safe characters
+    validate_sql_identifier(column, "Column")?;
+
+    // Validate column_def doesn't contain SQL injection vectors
+    // Allow: alphanumeric, underscore, space, parentheses, comma, single quotes,
+    // and common SQL keywords/operators for constraints
+    for c in column_def.chars() {
+        if !c.is_ascii_alphanumeric()
+            && c != '_'
+            && c != ' '
+            && c != '('
+            && c != ')'
+            && c != ','
+            && c != '\''
+            && c != '.'
+        {
+            // Check for semicolon which could allow statement injection
+            if c == ';' || c == '-' {
+                return Err(rusqlite::Error::InvalidParameterName(format!(
+                    "Column definition '{}' contains potentially dangerous character '{}'. SQL injection attempt blocked.",
+                    column_def, c
+                )));
+            }
+        }
+    }
+
+    // Verify column_def starts with the column name (prevents injection via column_def)
+    if !column_def.starts_with(column) {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "Column definition '{}' must start with column name '{}' for safety",
+            column_def, column
+        )));
+    }
+
+    // === CHECK COLUMN EXISTENCE ===
+    // Now safe to use format! since table name is validated and whitelisted
     let pragma_sql = format!("PRAGMA table_info({})", table);
     let mut stmt = conn.prepare(&pragma_sql)?;
-    let _column_exists = stmt.exists(rusqlite::params![])?; // This is wrong use of exists on pragma?
 
-    // Correct way to check column existence
+    // Check if column already exists
     let mut rows = stmt.query([])?;
-    let mut exists = false;
+    let mut column_exists = false;
     while let Some(row) = rows.next()? {
         let name: String = row.get(1)?;
         if name == column {
-            exists = true;
+            column_exists = true;
             break;
         }
     }
 
-    if !exists {
+    // === ADD COLUMN IF NEEDED ===
+    if !column_exists {
+        // Safe to use format! - all inputs validated
         let alter_sql = format!("ALTER TABLE {} ADD COLUMN {}", table, column_def);
+
+        // Log the operation for debugging (in debug builds)
+        #[cfg(debug_assertions)]
+        tracing::debug!("Adding column: {}", alter_sql);
+
         conn.execute(&alter_sql, [])?;
+
+        #[cfg(debug_assertions)]
+        tracing::info!(
+            "Successfully added column '{}' to table '{}'",
+            column,
+            table
+        );
     }
+
     Ok(())
 }
 

@@ -1,7 +1,22 @@
+/**
+ * @file Signaling Server for WebRTC Pairing
+ * @security
+ * - Rate limiting: Applied to HTTP endpoints to prevent abuse
+ * - Input validation: Zod schemas validate all WebSocket messages
+ * - Message size limits: MAX_MESSAGE_SIZE_BYTES prevents DoS
+ * - Session expiry: Automatic cleanup of expired sessions
+ *
+ * Rate limit rationale (OWASP compliant):
+ * - POST /pairings: 10/min - strict to prevent enumeration attacks
+ * - GET /pairings/:code: 60/min - lookups are read-only
+ * - DELETE /pairings/:code: 10/min - destructive operation
+ */
+
 import 'dotenv/config';
 
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { randomBytes } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -31,6 +46,7 @@ interface ConnectedClient {
 }
 
 const DEFAULT_TTL_SECONDS = Number(process.env['SIGNALING_PAIRING_TTL'] ?? 300);
+const MAX_MESSAGE_SIZE_BYTES = 64 * 1024; // 64KB max message size (SDPs can be large with many candidates)
 const host = process.env['SIGNALING_HOST'] ?? '0.0.0.0';
 const port = Number(process.env['PORT'] ?? process.env['SIGNALING_PORT'] ?? 4000);
 const wsPath = process.env['SIGNALING_WS_PATH'] ?? '/ws';
@@ -61,6 +77,54 @@ app.use(
 );
 app.use(express.json());
 
+// SECURITY: Rate limiters for pairing endpoints
+// Pairing creation - strict to prevent enumeration attacks (10/min)
+const pairingCreateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many pairing requests. Please try again after 60 seconds.',
+    retryAfter: 60,
+  },
+});
+
+// Pairing lookup - read-only operations (60/min)
+const pairingLookupLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many lookup requests. Please try again after 60 seconds.',
+    retryAfter: 60,
+  },
+});
+
+// Pairing deletion - destructive operation (10/min)
+const pairingDeleteLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many delete requests. Please try again after 60 seconds.',
+    retryAfter: 60,
+  },
+});
+
+// Health check - lenient for monitoring (100/min)
+const healthLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: wsPath });
 
@@ -83,6 +147,12 @@ const wss = new WebSocketServer({ server, path: wsPath });
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
 
+// Pending session rehydrations to prevent race conditions.
+// When multiple clients connect simultaneously with the same code before
+// the session is in activeSessions, we need to ensure only one rehydration
+// occurs and all clients use the same session instance.
+const pendingRehydrations = new Map<string, Promise<Session | null>>();
+
 const pairingRequestSchema = z.object({
   ttlSeconds: z.number().min(30).max(900).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -95,11 +165,48 @@ const registerMessageSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+// WebRTC SDP payload validation (offer/answer)
+const sdpPayloadSchema = z.object({
+  type: z.enum(['offer', 'answer']),
+  sdp: z.string().max(100000), // SDP can be large but bounded
+});
+
+// WebRTC ICE candidate payload validation
+const icePayloadSchema = z.object({
+  candidate: z.string().max(500).nullable().optional(),
+  sdpMid: z.string().max(50).nullable().optional(),
+  sdpMLineIndex: z.number().int().min(0).max(100).nullable().optional(),
+  usernameFragment: z.string().max(100).nullable().optional(),
+});
+
+// Control message payload (limited structure)
+const controlPayloadSchema = z
+  .object({
+    action: z.string().max(50),
+    data: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine((val) => JSON.stringify(val).length <= 4096, { message: 'Control payload too large' });
+
 const signalMessageSchema = z.object({
   type: z.literal('signal'),
   kind: z.union([z.literal('offer'), z.literal('answer'), z.literal('ice'), z.literal('control')]),
-  payload: z.unknown(),
+  payload: z.unknown(), // Validated per-kind below
 });
+
+// Validate payload based on signal kind
+function validateSignalPayload(kind: string, payload: unknown): boolean {
+  switch (kind) {
+    case 'offer':
+    case 'answer':
+      return sdpPayloadSchema.safeParse(payload).success;
+    case 'ice':
+      return icePayloadSchema.safeParse(payload).success;
+    case 'control':
+      return controlPayloadSchema.safeParse(payload).success;
+    default:
+      return false;
+  }
+}
 
 const heartbeatMessageSchema = z.object({
   type: z.literal('heartbeat'),
@@ -108,11 +215,13 @@ const heartbeatMessageSchema = z.object({
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
-app.get('/health', (_req, res) => {
+// SECURITY: Rate limited to 100/min for monitoring
+app.get('/health', healthLimiter, (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/pairings', async (req, res) => {
+// SECURITY: Rate limited to 10/min to prevent enumeration attacks
+app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   const parseResult = pairingRequestSchema.safeParse(req.body ?? {});
 
   if (!parseResult.success) {
@@ -150,7 +259,8 @@ app.post('/pairings', async (req, res) => {
   });
 });
 
-app.get('/pairings/:code', async (req, res) => {
+// SECURITY: Rate limited to 60/min - read-only operations
+app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
   const code = req.params['code'];
   // Check DB
   const { data: sessionData } = await supabase
@@ -180,7 +290,8 @@ app.get('/pairings/:code', async (req, res) => {
   });
 });
 
-app.delete('/pairings/:code', async (req, res) => {
+// SECURITY: Rate limited to 10/min - destructive operation
+app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
   const code = req.params['code'];
 
   // Cleanup active connections
@@ -202,9 +313,17 @@ app.delete('/pairings/:code', async (req, res) => {
 
 wss.on('connection', (socket) => {
   socket.on('message', (raw) => {
+    const rawStr = raw.toString();
+
+    // Check message size before parsing to prevent DoS
+    if (rawStr.length > MAX_MESSAGE_SIZE_BYTES) {
+      socket.send(JSON.stringify({ type: 'error', error: 'message_too_large' }));
+      return;
+    }
+
     let data: unknown;
     try {
-      data = JSON.parse(raw.toString());
+      data = JSON.parse(rawStr);
     } catch {
       socket.send(JSON.stringify({ type: 'error', error: 'invalid_json' }));
       return;
@@ -220,8 +339,15 @@ wss.on('connection', (socket) => {
       return;
     }
 
-    if (signalMessageSchema.safeParse(data).success) {
-      handleSignal(socket, data as SignalMessage);
+    const signalParsed = signalMessageSchema.safeParse(data);
+    if (signalParsed.success) {
+      const signalData = signalParsed.data;
+      // Validate payload structure based on signal kind
+      if (!validateSignalPayload(signalData.kind, signalData.payload)) {
+        socket.send(JSON.stringify({ type: 'error', error: 'invalid_signal_payload' }));
+        return;
+      }
+      handleSignal(socket, signalData);
       return;
     }
 
@@ -290,34 +416,74 @@ async function handleRegister(socket: WebSocket, message: RegisterMessage) {
   let session = activeSessions.get(message.code);
 
   if (!session) {
-    // Check DB
-    const { data: dbSession } = await supabase
-      .from('signaling_sessions')
-      .select('*')
-      .eq('code', message.code)
-      .single();
+    // Check if there's a pending rehydration for this code (race condition prevention)
+    // This ensures that if two clients connect simultaneously with the same code,
+    // they both wait for and use the same rehydrated session instance.
+    let pendingRehydration = pendingRehydrations.get(message.code);
 
-    if (!dbSession) {
-      socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    if (!pendingRehydration) {
+      // No pending rehydration, start one
+      pendingRehydration = (async (): Promise<Session | null> => {
+        // Double-check activeSessions in case it was set while we were waiting
+        const existingSession = activeSessions.get(message.code);
+        if (existingSession) {
+          return existingSession;
+        }
+
+        // Check DB
+        const { data: dbSession } = await supabase
+          .from('signaling_sessions')
+          .select('*')
+          .eq('code', message.code)
+          .single();
+
+        if (!dbSession) {
+          return null;
+        }
+
+        if (dbSession.expires_at <= Date.now()) {
+          return null;
+        }
+
+        // Rehydrate session
+        const rehydratedSession: Session = {
+          code: dbSession.code,
+          createdAt: dbSession.created_at,
+          expiresAt: dbSession.expires_at,
+          participants: {},
+          metadata: dbSession.metadata,
+        };
+        activeSessions.set(message.code, rehydratedSession);
+        return rehydratedSession;
+      })();
+
+      pendingRehydrations.set(message.code, pendingRehydration);
+
+      // Clean up pending map after rehydration completes
+      pendingRehydration.finally(() => {
+        pendingRehydrations.delete(message.code);
+      });
+    }
+
+    // Wait for rehydration to complete (convert null to undefined for type compatibility)
+    session = (await pendingRehydration) ?? undefined;
+
+    if (!session) {
+      // Session not found or expired - check DB one more time to distinguish errors
+      const { data: dbSession } = await supabase
+        .from('signaling_sessions')
+        .select('expires_at')
+        .eq('code', message.code)
+        .single();
+
+      if (!dbSession) {
+        socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+      } else {
+        socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
+      }
       socket.close();
       return;
     }
-
-    if (dbSession.expires_at <= Date.now()) {
-      socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
-      socket.close();
-      return;
-    }
-
-    // Rehydrate session
-    session = {
-      code: dbSession.code,
-      createdAt: dbSession.created_at,
-      expiresAt: dbSession.expires_at,
-      participants: {},
-      metadata: dbSession.metadata,
-    };
-    activeSessions.set(message.code, session);
   }
 
   if (isSessionExpired(session)) {

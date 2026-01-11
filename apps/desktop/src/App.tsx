@@ -129,8 +129,11 @@ const DesktopShell = () => {
     void initializeAgentStatusListener();
 
     void (async () => {
-      // Initialize settings first (syncs with backend and configures providers)
-      const { useSettingsStore } = await import('./stores/settingsStore');
+      // Wait for settings store hydration from localStorage before loading from backend
+      const { useSettingsStore, waitForSettingsHydration } = await import('./stores/settingsStore');
+      await waitForSettingsHydration();
+
+      // Initialize settings (syncs with backend and configures providers)
       await useSettingsStore.getState().loadSettings();
 
       // Apply window preferences on startup (dock/position)
@@ -166,12 +169,17 @@ const DesktopShell = () => {
       if (isTauri) {
         try {
           const { supabaseAuth } = await import('./services/supabaseAuth');
-          const authState = supabaseAuth.getState();
+          const { waitForAuthReady } = await import('./stores/authStore');
           const { invoke } = await import('@tauri-apps/api/core');
 
           // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
           await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
 
+          // Wait for auth state to be ready before accessing session data
+          // This prevents race conditions where we read stale/empty state
+          await waitForAuthReady();
+
+          const authState = supabaseAuth.getState();
           if (authState.session?.access_token) {
             await invoke('account_store_access_token', {
               accessToken: authState.session.access_token,

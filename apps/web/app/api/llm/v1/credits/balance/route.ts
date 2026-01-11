@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
@@ -28,6 +29,12 @@ async function handleGetBalance(request: NextRequest) {
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     });
+  }
+
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'credits-balance');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   // Authentication required

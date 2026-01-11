@@ -1,36 +1,65 @@
+/**
+ * @file Credits API Routes
+ * @security
+ * - Rate limiting: Applied per-endpoint based on financial sensitivity
+ * - Input validation: Zod schemas with .strict() to reject unexpected fields
+ * - Authentication: JWT required for all endpoints
+ *
+ * Rate limit rationale (OWASP compliant):
+ * - GET /balance: 10/min - read operation, moderate limit
+ * - POST /check: 10/min - read operation, moderate limit
+ * - POST /deduct: 5/min - financial write operation, strictest limit
+ */
+
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
+import { createRateLimiter } from '../middleware/rateLimit';
 
 const router: Router = Router();
 
 router.use(authenticateToken);
 
-// Schema for deducting credits
-const deductCreditsSchema = z.object({
-  amount_cents: z.number().int().positive(),
-  description: z.string().optional(),
-  metadata: z
-    .object({
-      model: z.string().optional(),
-      provider: z.string().optional(),
-      input_tokens: z.number().optional(),
-      output_tokens: z.number().optional(),
-      conversation_id: z.string().optional(),
-    })
-    .passthrough()
-    .optional(),
-});
+// Schema for checking credits - SECURITY: .strict() rejects unexpected fields
+const checkCreditsSchema = z
+  .object({
+    amount_cents: z.number().int().positive(),
+  })
+  .strict();
+
+// Schema for deducting credits - SECURITY: .strict() rejects unexpected fields
+// Note: metadata uses .passthrough() for flexibility, but outer object is strict
+const deductCreditsSchema = z
+  .object({
+    amount_cents: z.number().int().positive(),
+    description: z.string().max(500).optional(),
+    metadata: z
+      .object({
+        model: z.string().max(100).optional(),
+        provider: z.string().max(50).optional(),
+        input_tokens: z.number().int().nonnegative().optional(),
+        output_tokens: z.number().int().nonnegative().optional(),
+        conversation_id: z.string().max(100).optional(),
+      })
+      .passthrough()
+      .optional(),
+    // Idempotency key to prevent duplicate deductions on retry
+    idempotency_key: z.string().max(256).optional(),
+  })
+  .strict();
 
 /**
  * GET /api/credits/balance
  * Get current credit balance for the authenticated user
+ *
+ * SECURITY: Rate limited to 10 requests/minute per user
  */
 router.get(
   '/balance',
+  createRateLimiter('credits-balance'),
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
@@ -84,18 +113,20 @@ router.get(
 /**
  * POST /api/credits/check
  * Check if user has enough credits for a given amount
+ *
+ * SECURITY: Rate limited to 10 requests/minute per user
  */
 router.post(
   '/check',
+  createRateLimiter('credits-check'),
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
 
-    const { amount_cents } = z
-      .object({ amount_cents: z.number().int().positive() })
-      .parse(req.body);
+    // SECURITY: Use strict schema to reject unexpected fields
+    const { amount_cents } = checkCreditsSchema.parse(req.body);
 
     const { data, error } = await supabase.rpc('check_credits_available', {
       p_user_id: user.userId,
@@ -118,22 +149,28 @@ router.post(
  * POST /api/credits/deduct
  * Deduct credits from the authenticated user's account
  * This should be called after each LLM usage from the desktop app
+ *
+ * SECURITY: Rate limited to 5 requests/minute per user (strictest - financial)
  */
 router.post(
   '/deduct',
+  createRateLimiter('credits-deduct'),
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
 
-    const { amount_cents, description, metadata } = deductCreditsSchema.parse(req.body);
+    const { amount_cents, description, metadata, idempotency_key } = deductCreditsSchema.parse(
+      req.body,
+    );
 
     const { data, error } = await supabase.rpc('deduct_credits', {
       p_user_id: user.userId,
       p_amount_cents: amount_cents,
       p_description: description || `LLM usage: ${metadata?.model || 'unknown model'}`,
       p_metadata: metadata || {},
+      p_idempotency_key: idempotency_key || null,
     });
 
     if (error) {
