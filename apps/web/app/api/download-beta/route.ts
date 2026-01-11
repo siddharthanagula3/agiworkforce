@@ -1,7 +1,10 @@
+import 'server-only';
+
 import { readFile } from 'fs/promises';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { withRateLimit } from '@/lib/rate-limit';
 
 const DOWNLOAD_INFO: Record<string, { filename: string; contentType: string; envVar: string }> = {
   mac: {
@@ -27,7 +30,13 @@ const FILE_PATHS: Record<string, string> = {
   linux: 'agi-workforce-linux.AppImage',
 };
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'download-beta');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform') || 'mac';
 
