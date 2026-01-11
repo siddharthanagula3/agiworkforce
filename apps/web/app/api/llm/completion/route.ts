@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import { requireEnv } from '@/utils/env';
 import { LLMCompletionRequestSchema } from '@/lib/validations/llm';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -195,6 +196,9 @@ async function handleLLMCompletion(request: NextRequest) {
     throw createError.unauthorized('Invalid authentication token');
   }
 
+  // Generate unique request ID for idempotency (prevents duplicate charges on retry)
+  const requestId = randomUUID();
+
   // Get subscription
   const subscription = await SubscriptionService.getSubscription(user.id);
 
@@ -365,6 +369,7 @@ async function handleLLMCompletion(request: NextRequest) {
   // This prevents race conditions where concurrent requests could exceed limits
   // After the request completes, we reconcile by adjusting for actual usage
   const reservationDescription = `Credit reservation: ${provider}/${llmRequest.model}`;
+  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     user.id,
     estimatedCostCents,
@@ -375,7 +380,9 @@ async function handleLLMCompletion(request: NextRequest) {
       type: 'reservation',
       estimatedPromptTokens,
       estimatedMaxTokens: llmRequest.max_tokens || 1000,
+      requestId,
     },
+    reservationKey,
   );
 
   if (!reserveResult.success) {
@@ -482,16 +489,28 @@ async function handleLLMCompletion(request: NextRequest) {
                   ? `Additional charge (streaming): ${providerUsed}/${modelUsed}`
                   : `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`;
 
-              await CreditService.deductCredits(userId, costDifference, adjustmentDescription, {
-                provider: providerUsed,
-                model: modelUsed,
-                type: 'streaming_reconciliation',
-                estimatedCostCents,
-                actualCostCents,
-                promptTokens: inputTokens,
-                completionTokens: outputTokens,
-                totalTokens,
-              });
+              const reconciliationKey = CreditService.generateIdempotencyKey(
+                userId,
+                'reconciliation',
+                requestId,
+              );
+              await CreditService.deductCredits(
+                userId,
+                costDifference,
+                adjustmentDescription,
+                {
+                  provider: providerUsed,
+                  model: modelUsed,
+                  type: 'streaming_reconciliation',
+                  estimatedCostCents,
+                  actualCostCents,
+                  promptTokens: inputTokens,
+                  completionTokens: outputTokens,
+                  totalTokens,
+                  requestId,
+                },
+                reconciliationKey,
+              );
 
               logger.info(
                 {
@@ -526,16 +545,18 @@ async function handleLLMCompletion(request: NextRequest) {
         },
       });
     } catch (error) {
-      // Refund the reserved credits on failure
+      // Refund the reserved credits on failure with idempotency key
       logger.info(
         { userId: user.id, estimatedCostCents },
         'Refunding reserved credits after stream failure',
       );
+      const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
         user.id,
         -estimatedCostCents, // Negative amount = refund
         `Refund for failed streaming request: ${provider}/${llmRequest.model}`,
-        { type: 'refund', reason: 'streaming_failure' },
+        { type: 'refund', reason: 'streaming_failure', requestId },
+        refundKey,
       );
       logger.error(
         {
@@ -556,16 +577,18 @@ async function handleLLMCompletion(request: NextRequest) {
   try {
     llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
   } catch (error) {
-    // Refund the reserved credits on failure
+    // Refund the reserved credits on failure with idempotency key
     logger.info(
       { userId: user.id, estimatedCostCents },
       'Refunding reserved credits after request failure',
     );
+    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
       user.id,
       -estimatedCostCents, // Negative amount = refund
       `Refund for failed request: ${provider}/${llmRequest.model}`,
-      { type: 'refund', reason: 'request_failure' },
+      { type: 'refund', reason: 'request_failure', requestId },
+      refundKey,
     );
     logger.error(
       {
@@ -600,6 +623,11 @@ async function handleLLMCompletion(request: NextRequest) {
         ? `Additional charge: ${provider}/${llmResponse.model} (actual exceeded estimate)`
         : `Credit adjustment: ${provider}/${llmResponse.model} (actual less than estimate)`;
 
+    const reconciliationKey = CreditService.generateIdempotencyKey(
+      user.id,
+      'reconciliation',
+      requestId,
+    );
     const adjustmentResult = await CreditService.deductCredits(
       user.id,
       costDifference, // Positive = additional charge, negative = refund
@@ -613,7 +641,9 @@ async function handleLLMCompletion(request: NextRequest) {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,
         totalTokens: llmResponse.totalTokens,
+        requestId,
       },
+      reconciliationKey,
     );
 
     if (!adjustmentResult.success && costDifference > 0) {

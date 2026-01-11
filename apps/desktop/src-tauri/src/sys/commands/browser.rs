@@ -4,19 +4,166 @@ use tauri::{command, State};
 use crate::automation::browser::playwright_bridge::{BrowserOptions, BrowserType};
 use crate::automation::browser::BrowserState;
 
-pub struct BrowserStateWrapper(pub BrowserState);
+// =============================================================================
+// BROWSER STATE WRAPPER WITH GRACEFUL DEGRADATION
+// =============================================================================
+// This wrapper handles the case where browser automation initialization fails.
+// Instead of leaving no state managed (which would cause panics), we manage
+// a degraded state that returns clear error messages to the frontend.
+
+/// Error message returned when browser automation is unavailable
+const BROWSER_UNAVAILABLE_ERROR: &str =
+    "Browser automation is not available. The browser subsystem failed to initialize. \
+     Please restart the application or check system requirements (Playwright/Chromium).";
+
+/// Wrapper for browser automation state with graceful degradation support.
+///
+/// # Design
+/// - Wraps `Option<BrowserState>` to handle initialization failures
+/// - Commands that need browser access call `get()` and receive clear errors
+/// - Commands that are stubs (don't use state) continue to work in degraded mode
+/// - Initialization error is captured for diagnostics
+pub struct BrowserStateWrapper {
+    /// The browser state, None if initialization failed
+    inner: Option<BrowserState>,
+    /// The error that occurred during initialization, if any
+    init_error: Option<String>,
+}
 
 impl BrowserStateWrapper {
+    /// Creates a new browser state wrapper with full functionality.
+    ///
+    /// # Errors
+    /// Returns an error if BrowserState::new() fails, but this error
+    /// should be caught and `new_degraded()` should be used instead.
     pub async fn new() -> Result<Self, String> {
-        Ok(Self(BrowserState::new().await.map_err(|e| e.to_string())?))
+        match BrowserState::new().await {
+            Ok(state) => {
+                tracing::info!("BrowserState initialized successfully");
+                Ok(Self {
+                    inner: Some(state),
+                    init_error: None,
+                })
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                tracing::error!("BrowserState initialization failed: {}", error_msg);
+                Err(error_msg)
+            }
+        }
+    }
+
+    /// Creates a degraded browser state wrapper when initialization fails.
+    ///
+    /// This ensures Tauri always has a state to manage, preventing panics
+    /// when commands try to access State<'_, BrowserStateWrapper>.
+    ///
+    /// # Arguments
+    /// * `error` - The error message from the failed initialization
+    pub fn new_degraded(error: String) -> Self {
+        tracing::warn!(
+            "BrowserStateWrapper created in DEGRADED mode. Browser automation unavailable. \
+             Original error: {}",
+            error
+        );
+        Self {
+            inner: None,
+            init_error: Some(error),
+        }
+    }
+
+    /// Returns whether browser automation is available.
+    pub fn is_available(&self) -> bool {
+        self.inner.is_some()
+    }
+
+    /// Returns the initialization error, if any.
+    pub fn init_error(&self) -> Option<&str> {
+        self.init_error.as_deref()
+    }
+
+    /// Gets a reference to the inner BrowserState.
+    ///
+    /// # Errors
+    /// Returns an error with a descriptive message if browser automation
+    /// is not available due to initialization failure.
+    pub fn get(&self) -> Result<&BrowserState, String> {
+        self.inner.as_ref().ok_or_else(|| {
+            if let Some(ref err) = self.init_error {
+                format!("{} Original error: {}", BROWSER_UNAVAILABLE_ERROR, err)
+            } else {
+                BROWSER_UNAVAILABLE_ERROR.to_string()
+            }
+        })
+    }
+
+    /// Gets a reference to the BrowserState for operations that can gracefully
+    /// handle missing browser functionality.
+    ///
+    /// Returns None if browser is unavailable, allowing commands to return
+    /// default/empty values instead of errors.
+    pub fn get_optional(&self) -> Option<&BrowserState> {
+        self.inner.as_ref()
+    }
+
+    /// Returns the error message for when browser is unavailable.
+    /// Use this instead of `get().unwrap_err()` to avoid Debug trait requirements.
+    pub fn get_error_message(&self) -> String {
+        if let Some(ref err) = self.init_error {
+            format!("{} Original error: {}", BROWSER_UNAVAILABLE_ERROR, err)
+        } else {
+            BROWSER_UNAVAILABLE_ERROR.to_string()
+        }
+    }
+
+    /// Gets the tab manager, returning an error if browser is unavailable.
+    ///
+    /// This is a convenience method that provides access to the tab_manager
+    /// with proper error handling for graceful degradation.
+    pub fn get_tab_manager(
+        &self,
+    ) -> Result<&std::sync::Arc<tokio::sync::Mutex<crate::automation::browser::TabManager>>, String>
+    {
+        self.get().map(|state| &state.tab_manager)
+    }
+
+    /// Gets the CDP client for a specific tab, returning an error if browser is unavailable.
+    ///
+    /// This is a convenience method that provides access to CDP client creation
+    /// with proper error handling for graceful degradation.
+    pub async fn get_cdp_client_for_tab(
+        &self,
+        tab_id: &str,
+    ) -> Result<std::sync::Arc<crate::automation::browser::CdpClient>, String> {
+        let state = self.get()?;
+        state
+            .get_cdp_client(tab_id)
+            .await
+            .map_err(|e| format!("Failed to get CDP client: {}", e))
     }
 }
 
 // Browser Automation Commands
 
+/// Initialize browser automation and return status.
+/// Returns Ok(()) if browser automation is available, Err with details if not.
 #[command]
-pub async fn browser_init(_state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
-    Ok(())
+pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+    if state.is_available() {
+        Ok(())
+    } else {
+        Err(state.get_error_message())
+    }
+}
+
+/// Check if browser automation is available without throwing an error.
+/// Returns a JSON object with availability status and any error message.
+#[command]
+pub async fn browser_check_status(state: State<'_, BrowserStateWrapper>) -> Result<Value, String> {
+    Ok(serde_json::json!({
+        "available": state.is_available(),
+        "error": state.init_error(),
+    }))
 }
 
 #[command]
@@ -24,6 +171,9 @@ pub async fn browser_launch(
     state: State<'_, BrowserStateWrapper>,
     options: Option<Value>,
 ) -> Result<String, String> {
+    // Get browser state, returning clear error if unavailable
+    let browser_state = state.get()?;
+
     let mut browser_options = BrowserOptions::default();
 
     if let Some(opts) = options {
@@ -32,8 +182,7 @@ pub async fn browser_launch(
         }
     }
 
-    let handle = state
-        .0
+    let handle = browser_state
         .playwright
         .lock()
         .await
@@ -57,52 +206,22 @@ pub async fn browser_close_tab(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
 ) -> Result<(), String> {
-    // For now, if no tab_id is provided or if we treat this as "close browser" context
-    // we can close the browser. But the name is close_tab.
-    // The previous plan mentioned implementing browser_quit or similar.
-    // Let's implement a specific browser_quit command if it doesn't exist, or overload this?
-    // The previous stub was close_tab.
-    // Let's implement a simpler "close browser" if tab_id matches a browser ID or if we just want to close "the" browser.
+    // If no tab_id provided, nothing to close
+    let Some(id) = tab_id else {
+        return Ok(());
+    };
 
-    // Actually, looking at the plan: "Implement browser_close_tab or browser_quit for cleanup".
-    // I will implement a proper browser_quit command and expose it if needed, but for now
-    // let's try to infer from tab_id if it's a browser ID (since we don't have real tabs yet in this bridge).
-    // The PlaywrightBridge has close_browser(handle).
+    // Get browser state, returning clear error if unavailable
+    let browser_state = state.get()?;
 
-    // Let's check tab_manager.rs later for tab logic.
-    // For now, let's assume tab_id might be the browser_id in this simplified context
-    // OR we just leave close_tab as a stub for actual tabs and implement a new browser_quit associated with browser_launch.
+    // Close the browser/tab by ID
+    let playwright = browser_state.playwright.lock().await;
+    playwright
+        .close_browser_by_id(&id)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    // Wait, the user wants "browser launch" implementation.
-    // Let's stick to implementing browser_launch correctly first.
-    // And maybe browser_close specifically for the browser handle.
-    // But since I can't add new commands easily without updating lib.rs invoke handler (which is huge),
-    // I should check if there is a browser_quit or similar.
-    // List of commands in lib.rs includes: browser_init, browser_launch, browser_open_tab...
-    // No explicit browser_quit or browser_close.
-    // So browser_close_tab might be misused or I need to add one.
-    // Or I can use `browser_close_tab` to close the browser if the ID matches.
-
-    // Let's implement a `browser_close` command in this file and assume I'll add it to lib.rs,
-    // OR just use `browser_close_tab` to close the browser for now if it matches a browser handle.
-
-    // BETTER: Just implement `browser_launch` for now as requested.
-    // I will leave `browser_close_tab` alone or implement it if I see `tab_manager` logic.
-    // Let's look at `tab_manager`.
-
-    // Re-reading task: "Implement browser_close_tab or browser_quit for cleanup"
-    // I'll implementation logic to close the browser if the id exists in the bridge.
-
-    if let Some(id) = tab_id {
-        let playwright = state.0.playwright.lock().await;
-        playwright
-            .close_browser_by_id(&id)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
 
 #[command]
