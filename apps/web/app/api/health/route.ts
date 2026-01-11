@@ -20,7 +20,8 @@ interface HealthCheck {
     };
     environment: {
       status: 'healthy' | 'unhealthy';
-      missing: string[];
+      // Security: Don't expose which env vars are missing (information disclosure risk)
+      missingCount?: number;
     };
   };
 }
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
   const checks: HealthCheck['checks'] = {
     database: { status: 'unhealthy' },
     stripe: { status: 'unhealthy' },
-    environment: { status: 'unhealthy', missing: [] },
+    environment: { status: 'unhealthy' },
   };
 
   // Check environment variables
@@ -49,7 +50,10 @@ export async function GET(request: NextRequest) {
   if (missingEnvVars.length === 0) {
     checks.environment.status = 'healthy';
   } else {
-    checks.environment.missing = missingEnvVars;
+    // Security: Only expose count, not names (prevents information disclosure)
+    checks.environment.missingCount = missingEnvVars.length;
+    // Log the actual missing vars server-side for debugging
+    logger.warn({ missingEnvVars }, 'Health check: missing environment variables');
   }
 
   // Check database connectivity
