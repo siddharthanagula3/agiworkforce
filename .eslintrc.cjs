@@ -1,0 +1,97 @@
+/* eslint-env node */
+module.exports = {
+  root: true,
+  env: { browser: true, node: true, es2021: true },
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 'latest',
+    sourceType: 'module',
+    ecmaFeatures: { jsx: true },
+  },
+  settings: {
+    react: { version: '18.2' },
+    'import/resolver': {
+      typescript: {
+        // Root config plus per-package configs for path aliases
+        project: ['./tsconfig.base.json', './apps/desktop/tsconfig.json'],
+      },
+    },
+  },
+  plugins: ['@typescript-eslint', 'react', 'react-hooks', 'import'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:react/recommended',
+    'plugin:react-hooks/recommended',
+    'plugin:import/recommended',
+    'plugin:import/typescript',
+    'prettier',
+  ],
+  ignorePatterns: [
+    'dist',
+    'build',
+    'out',
+    'node_modules',
+    '**/node_modules/**',
+    '**/src-tauri/**',
+    'target',
+    'examples/**',
+    'apps/_future_mobile/**',
+  ],
+  rules: {
+    'react/react-in-jsx-scope': 'off',
+    'react/prop-types': 'off',
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+      },
+    ],
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-namespace': 'off',
+    'no-useless-catch': 'off',
+    'import/no-named-as-default': 'off',
+    'import/no-duplicates': 'off',
+    'import/default': 'off',
+    'import/no-named-as-default-member': 'off',
+    'react-hooks/exhaustive-deps': 'warn',
+    'react/no-unescaped-entities': 'off',
+    'prefer-const': 'off',
+  },
+  overrides: [
+    {
+      files: ['apps/desktop/**/*.{ts,tsx,js,jsx}'],
+      settings: {
+        'import/resolver': {
+          typescript: {
+            project: ['./apps/desktop/tsconfig.json'],
+          },
+        },
+      },
+    },
+    {
+      files: ['apps/web/**/*.{ts,tsx,js,jsx}'],
+      settings: {
+        'import/resolver': {
+          typescript: {
+            project: ['./apps/web/tsconfig.json'],
+          },
+        },
+      },
+    },
+    {
+      files: ['apps/extension/src/**/*.js'],
+      globals: {
+        chrome: 'readonly',
+      },
+    },
+    {
+      files: ['**/*.config.ts', '**/*.config.js', '**/*.config.cjs'],
+      rules: {
+        'import/no-unresolved': 'off',
+      },
+    },
+  ],
+};
