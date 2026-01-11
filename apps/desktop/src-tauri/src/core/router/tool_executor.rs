@@ -1210,7 +1210,17 @@ impl ToolExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = browser_state.0.tab_manager.lock().await;
+                    let tab_manager = match browser_state.get_tab_manager() {
+                        Ok(tm) => tm.lock().await,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(e),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
 
                     match tab_manager.list_tabs().await {
                         Ok(tabs) => {

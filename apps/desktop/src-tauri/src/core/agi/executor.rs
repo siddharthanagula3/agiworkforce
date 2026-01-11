@@ -573,7 +573,11 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = browser_state.0.tab_manager.lock().await;
+                    let tab_manager = browser_state
+                        .get_tab_manager()
+                        .map_err(|e| anyhow!("{}", e))?
+                        .lock()
+                        .await;
 
                     let tabs = tab_manager
                         .list_tabs()
@@ -612,7 +616,11 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = browser_state.0.tab_manager.lock().await;
+                    let tab_manager = browser_state
+                        .get_tab_manager()
+                        .map_err(|e| anyhow!("{}", e))?
+                        .lock()
+                        .await;
 
                     let target_tab_id = if let Some(tid) = tab_id {
                         tid.to_string()
@@ -628,10 +636,9 @@ impl AGIExecutor {
                     };
 
                     let cdp_client = browser_state
-                        .0
-                        .get_cdp_client(&target_tab_id)
+                        .get_cdp_client_for_tab(&target_tab_id)
                         .await
-                        .map_err(|e| anyhow!("Failed to get CDP client: {}", e))?;
+                        .map_err(|e| anyhow!("{}", e))?;
 
                     let options = ClickOptions::default();
                     DomOperations::click_with_cdp(cdp_client, selector, options)
@@ -665,7 +672,11 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = browser_state.0.tab_manager.lock().await;
+                    let tab_manager = browser_state
+                        .get_tab_manager()
+                        .map_err(|e| anyhow!("{}", e))?
+                        .lock()
+                        .await;
 
                     let target_tab_id = if let Some(tid) = tab_id {
                         tid.to_string()

@@ -58,6 +58,8 @@ vi.mock('@/lib/services/credit-service', () => ({
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
+    generateIdempotencyKey: (userId: string, operationType: string, requestId: string) =>
+      `${userId}:${operationType}:${requestId}`,
   },
 }));
 
@@ -592,6 +594,7 @@ describe('POST /api/llm/completion', () => {
         expect.any(Number), // First call is reservation (positive)
         expect.any(String),
         expect.any(Object),
+        expect.any(String), // idempotency key
       );
       // Second call should be refund (negative)
       const refundCall = mockDeductCredits.mock.calls.find((call) => call[1] < 0);
@@ -781,12 +784,13 @@ describe('POST /api/llm/completion', () => {
 
       await POST(request);
 
-      // First deductCredits call should be reservation
+      // First deductCredits call should be reservation (with 5 args including idempotency key)
       expect(mockDeductCredits).toHaveBeenCalledWith(
         'test-user-id',
         expect.any(Number),
         expect.stringContaining('reservation'),
         expect.objectContaining({ type: 'reservation' }),
+        expect.stringContaining(':reservation:'), // idempotency key
       );
     });
 

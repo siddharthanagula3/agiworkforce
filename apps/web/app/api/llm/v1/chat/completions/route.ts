@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -243,6 +244,9 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
+  // Generate unique request ID for idempotency (prevents duplicate charges on retry)
+  const requestId = randomUUID();
+
   // Get subscription
   const subscription = await SubscriptionService.getSubscription(user.id);
 
@@ -421,7 +425,8 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
-  // Reserve credits
+  // Reserve credits with idempotency key (prevents double-charging on retry)
+  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     user.id,
     estimatedCostCents,
@@ -432,7 +437,9 @@ async function handleChatCompletions(request: NextRequest) {
       type: 'reservation',
       estimatedPromptTokens,
       estimatedMaxTokens: maxTokens,
+      requestId,
     },
+    reservationKey,
   );
 
   if (!reserveResult.success) {
@@ -524,6 +531,12 @@ async function handleChatCompletions(request: NextRequest) {
             const costDifference = actualCostCents - estimatedCostCents;
 
             if (costDifference !== 0) {
+              // Use idempotency key for reconciliation to prevent duplicate adjustments
+              const reconciliationKey = CreditService.generateIdempotencyKey(
+                userId,
+                'reconciliation',
+                requestId,
+              );
               await CreditService.deductCredits(
                 userId,
                 costDifference,
@@ -537,7 +550,9 @@ async function handleChatCompletions(request: NextRequest) {
                   promptTokens: inputTokens,
                   completionTokens: outputTokens,
                   totalTokens,
+                  requestId,
                 },
+                reconciliationKey,
               );
             }
           }
@@ -555,12 +570,14 @@ async function handleChatCompletions(request: NextRequest) {
         },
       });
     } catch (error) {
-      // Refund on failure
+      // Refund on failure with idempotency key to prevent duplicate refunds
+      const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
         user.id,
         -estimatedCostCents,
         `Refund for failed streaming request: ${provider}/${chatRequest.model}`,
-        { type: 'refund', reason: 'streaming_failure' },
+        { type: 'refund', reason: 'streaming_failure', requestId },
+        refundKey,
       );
 
       logger.error({ error, provider, model: chatRequest.model }, 'Streaming request failed');
@@ -582,12 +599,14 @@ async function handleChatCompletions(request: NextRequest) {
   try {
     llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
   } catch (error) {
-    // Refund on failure
+    // Refund on failure with idempotency key to prevent duplicate refunds
+    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
       user.id,
       -estimatedCostCents,
       `Refund for failed request: ${provider}/${chatRequest.model}`,
-      { type: 'refund', reason: 'request_failure' },
+      { type: 'refund', reason: 'request_failure', requestId },
+      refundKey,
     );
 
     logger.error({ error, provider, model: chatRequest.model }, 'LLM request failed');
@@ -613,6 +632,12 @@ async function handleChatCompletions(request: NextRequest) {
   const costDifference = actualCostCents - estimatedCostCents;
 
   if (costDifference !== 0) {
+    // Use idempotency key for reconciliation to prevent duplicate adjustments
+    const reconciliationKey = CreditService.generateIdempotencyKey(
+      user.id,
+      'reconciliation',
+      requestId,
+    );
     await CreditService.deductCredits(
       user.id,
       costDifference,
@@ -628,7 +653,9 @@ async function handleChatCompletions(request: NextRequest) {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,
         totalTokens: llmResponse.totalTokens,
+        requestId,
       },
+      reconciliationKey,
     );
   }
 

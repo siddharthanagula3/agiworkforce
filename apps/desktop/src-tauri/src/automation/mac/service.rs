@@ -33,6 +33,15 @@ const K_AXVALUE_CGSIZE_TYPE: u32 = 2;
 #[derive(Debug, Clone)]
 pub struct AXElement(pub AXUIElementRef);
 
+// SAFETY: AXUIElementRef is not officially documented as thread-safe by Apple.
+// The Accessibility API should ideally be accessed from the main thread.
+//
+// CURRENT WORKAROUND: In practice, this is mitigated by:
+// 1. The MacAutomationService is created once in AppState
+// 2. All automation commands are serialized through Tauri's command system
+// 3. We use CFRetain/CFRelease for proper reference counting
+//
+// TODO(SAFETY): For full correctness, use a dedicated automation thread with channels.
 unsafe impl Send for AXElement {}
 unsafe impl Sync for AXElement {}
 
