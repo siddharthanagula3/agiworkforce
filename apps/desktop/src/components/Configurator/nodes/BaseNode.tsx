@@ -51,7 +51,7 @@ export function BaseNode({
         statusStyles[status],
       )}
     >
-      {}
+      {/* Target Handle (Top) */}
       {showTargetHandle && (
         <Handle
           type="target"
@@ -60,15 +60,17 @@ export function BaseNode({
         />
       )}
 
-      {}
+      {/* Node Content */}
       <div className="flex items-center gap-2">
-        <div className={cn('shrink-0', variant === 'ai' && 'text-purple-600')}>{data.icon}</div>
+        <div className={cn('flex-shrink-0', variant === 'ai' && 'text-purple-600')}>
+          {data.icon}
+        </div>
         <div className="flex-1 truncate text-sm font-medium text-gray-900">{data.label}</div>
         {selected && onDelete && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 shrink-0"
+            className="h-5 w-5 flex-shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -79,7 +81,7 @@ export function BaseNode({
         )}
       </div>
 
-      {}
+      {/* Status Indicator */}
       {status !== 'idle' && (
         <div className="absolute -right-1 -top-1">
           <Circle
@@ -93,7 +95,7 @@ export function BaseNode({
         </div>
       )}
 
-      {}
+      {/* Source Handle (Bottom) */}
       {showSourceHandle && (
         <Handle
           type="source"

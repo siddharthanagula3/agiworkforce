@@ -1,6 +1,17 @@
 import React from 'react';
-import { CheckCircle2, Zap, Eye, Wrench, FileJson, Star, TrendingUp, Clock } from 'lucide-react';
+import {
+  CheckCircle2,
+  Zap,
+  Eye,
+  Wrench,
+  FileJson,
+  Star,
+  TrendingUp,
+  Clock,
+  DollarSign,
+} from 'lucide-react';
 import type { ModelMetadata } from '../../constants/llm';
+import { formatCost } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 
 interface ModelCardProps {
@@ -52,7 +63,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         onClick={onClick}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="shrink-0">{speedIcons[model.speed]}</div>
+          <div className="flex-shrink-0">{speedIcons[model.speed]}</div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm truncate">{model.name}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">{model.provider}</div>
@@ -61,13 +72,10 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         {onToggleFavorite && (
           <button
             onClick={handleFavoriteClick}
-            className="shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
             <Star
-              className={cn(
-                'h-4 w-4',
-                favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400',
-              )}
+              className={cn('h-4 w-4', favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400')}
             />
           </button>
         )}
@@ -81,12 +89,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         'p-4 rounded-lg border-2 cursor-pointer transition-all',
         'hover:shadow-md hover:scale-[1.02]',
         selected && 'border-blue-500 bg-blue-50 dark:bg-blue-900/20',
-        !selected &&
-          'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+        !selected && 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
       )}
       onClick={onClick}
     >
-      {}
+      {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -105,9 +112,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               </button>
             )}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-            {model.provider}
-          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">{model.provider}</div>
         </div>
         <div className="flex items-center gap-1">
           {speedIcons[model.speed]}
@@ -117,7 +122,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       </div>
 
-      {}
+      {/* Context Window & Cost */}
       <div className="space-y-2 mb-3">
         <div className="flex items-center gap-2 text-sm">
           <TrendingUp className="h-4 w-4 text-gray-500" />
@@ -125,9 +130,15 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             Context: {(model.contextWindow / 1000).toFixed(0)}K tokens
           </span>
         </div>
+        <div className="flex items-center gap-2 text-sm">
+          <DollarSign className="h-4 w-4 text-gray-500" />
+          <span className="text-gray-700 dark:text-gray-300">
+            {formatCost(model.inputCost, model.outputCost)}
+          </span>
+        </div>
       </div>
 
-      {}
+      {/* Capabilities */}
       <div className="flex flex-wrap gap-2 mb-3">
         {model.capabilities.streaming && (
           <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/20 rounded text-xs">
@@ -155,7 +166,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         )}
       </div>
 
-      {}
+      {/* Benchmarks */}
       {showBenchmarks && model.benchmarks && (
         <div className="space-y-1 mb-3 p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
@@ -188,16 +199,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       )}
 
-      {}
+      {/* Best For */}
       <div className="text-xs text-gray-600 dark:text-gray-400">
         <span className="font-semibold">Best for:</span> {model.bestFor.join(', ')}
       </div>
 
-      {}
+      {/* Release Date */}
       {model.released && (
-        <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-          Released {model.released}
-        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">Released {model.released}</div>
       )}
     </div>
   );

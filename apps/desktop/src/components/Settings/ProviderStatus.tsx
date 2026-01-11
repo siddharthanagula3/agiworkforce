@@ -24,6 +24,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
+    // Check all providers on mount
     void checkAllProviders();
   }, [checkAllProviders]);
 
@@ -75,8 +76,8 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {}
-      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      {/* Header */}
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Server className="h-5 w-5" />
@@ -96,11 +97,12 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
         </p>
       </div>
 
-      {}
+      {/* Provider List */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3">
           {PROVIDERS_IN_ORDER.map((provider) => {
             const status = providerStatuses[provider];
+            const hasApiKey = status?.available === true;
             const statusColor = getStatusColor(provider);
 
             return (
@@ -146,29 +148,22 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
                   </div>
                 </div>
 
-                {}
+                {/* API Key Status */}
                 <div className="flex items-center gap-2 mb-2">
                   <Key className="h-4 w-4 text-gray-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">
+                    API Key:{' '}
                     {provider === 'ollama' ? (
-                      <>
-                        Local LLM:{' '}
-                        <span className="text-blue-600 dark:text-blue-400">
-                          No API key required
-                        </span>
-                      </>
+                      <span className="text-blue-600 dark:text-blue-400">Not required (local)</span>
+                    ) : hasApiKey ? (
+                      <span className="text-green-600 dark:text-green-400">Configured</span>
                     ) : (
-                      <>
-                        Cloud Credits:{' '}
-                        <span className="text-green-600 dark:text-green-400">
-                          Using subscription
-                        </span>
-                      </>
+                      <span className="text-red-600 dark:text-red-400">Not configured</span>
                     )}
                   </span>
                 </div>
 
-                {}
+                {/* Rate Limits (if available) */}
                 {status?.rateLimitRemaining !== undefined && (
                   <div className="flex items-center gap-2 mb-2">
                     <Gauge className="h-4 w-4 text-gray-500" />
@@ -181,14 +176,14 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
                   </div>
                 )}
 
-                {}
+                {/* Rate Limit Reset (if available) */}
                 {status?.rateLimitReset && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 ml-6">
                     Resets: {new Date(status.rateLimitReset).toLocaleString()}
                   </div>
                 )}
 
-                {}
+                {/* Ollama-specific status */}
                 {provider === 'ollama' && status?.ollamaRunning !== undefined && (
                   <div className="flex items-center gap-2 mt-2 p-2 bg-gray-100 dark:bg-gray-900 rounded">
                     <Server className="h-4 w-4 text-gray-500" />
@@ -207,11 +202,21 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
                   </div>
                 )}
 
-                {}
+                {/* Error Message */}
                 {status?.error && statusColor === 'red' && (
                   <div className="mt-3 p-2 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
                     <strong>Error:</strong> {status.error}
                   </div>
+                )}
+
+                {/* Quick Actions */}
+                {!status?.configured && provider !== 'ollama' && (
+                  <button
+                    onClick={() => onConfigure?.(provider)}
+                    className="mt-3 w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    Configure API Key
+                  </button>
                 )}
 
                 {provider === 'ollama' && !status?.ollamaRunning && (
@@ -225,7 +230,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
           })}
         </div>
 
-        {}
+        {/* Overall Status Summary */}
         <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Summary</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
@@ -243,7 +248,9 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
               <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                 {
                   PROVIDERS_IN_ORDER.filter(
-                    (p) => providerStatuses[p]?.configured && !providerStatuses[p]?.available,
+                    (p) =>
+                      providerStatuses[p]?.configured &&
+                      !providerStatuses[p]?.available,
                   ).length
                 }
               </div>

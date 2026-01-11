@@ -80,7 +80,7 @@ export function ROIDashboardPage() {
     try {
       await fetchStats();
       toast.success('Dashboard refreshed');
-    } catch (err) {
+    } catch {
       toast.error('Failed to refresh dashboard');
     }
   };
