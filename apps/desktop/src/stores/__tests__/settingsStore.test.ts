@@ -64,7 +64,7 @@ describe('settingsStore', () => {
   it('should initialize with default settings', () => {
     const state = useSettingsStore.getState();
 
-    expect(state.llmConfig.defaultProvider).toBe('anthropic');
+    expect(state.llmConfig.defaultProvider).toBe('managed_cloud');
     expect(state.llmConfig.temperature).toBe(0.7);
     expect(state.llmConfig.maxTokens).toBe(4096);
     expect(state.windowPreferences.theme).toBe('system');
@@ -200,7 +200,8 @@ describe('settingsStore', () => {
       settings: {
         llmConfig: expect.any(Object),
         windowPreferences: expect.any(Object),
-        allowedDirectories: expect.any(Object),
+        chatPreferences: expect.any(Object),
+        allowedDirectories: expect.any(Array),
       },
     });
     expect(useSettingsStore.getState().loading).toBe(false);
