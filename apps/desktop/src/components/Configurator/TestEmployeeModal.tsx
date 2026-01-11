@@ -1,13 +1,5 @@
 import * as React from 'react';
-import {
-  Play,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Clock,
-  TrendingUp,
-  AlertTriangle,
-} from 'lucide-react';
+import { Play, Loader2, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,7 +24,7 @@ interface StatCardProps {
 function StatCard({ label, value, icon }: StatCardProps) {
   return (
     <div className="flex items-center gap-3 rounded-md border p-3">
-      <div className="shrink-0 text-muted-foreground">{icon}</div>
+      <div className="flex-shrink-0 text-muted-foreground">{icon}</div>
       <div className="flex-1">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="text-lg font-semibold">{value}</div>
@@ -86,6 +78,7 @@ export function TestEmployeeModal() {
         </DialogHeader>
 
         {!isTestRunning && !testResult ? (
+          // Input form
           <>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -114,15 +107,17 @@ export function TestEmployeeModal() {
             </DialogFooter>
           </>
         ) : isTestRunning ? (
+          // Running state
           <div className="py-8 text-center">
             <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-500" />
             <p className="text-lg font-semibold">Running test...</p>
             <p className="text-sm text-muted-foreground">Processing your input</p>
           </div>
         ) : testResult ? (
+          // Results
           <>
             <div className="space-y-4 py-4">
-              {}
+              {/* Status Badge */}
               <div className="flex items-center gap-2">
                 {testResult.success ? (
                   <>
@@ -141,7 +136,7 @@ export function TestEmployeeModal() {
                 )}
               </div>
 
-              {}
+              {/* Output */}
               <div className="space-y-2">
                 <Label>Output</Label>
                 <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-sm">
@@ -149,7 +144,7 @@ export function TestEmployeeModal() {
                 </pre>
               </div>
 
-              {}
+              {/* Stats */}
               <div className="grid grid-cols-2 gap-4">
                 <StatCard
                   label="Execution Time"
@@ -163,7 +158,7 @@ export function TestEmployeeModal() {
                 />
               </div>
 
-              {}
+              {/* Steps Executed */}
               {testResult.stepsExecuted > 0 && (
                 <div className="rounded-md bg-blue-50 p-3">
                   <p className="text-sm text-blue-900">
@@ -172,7 +167,7 @@ export function TestEmployeeModal() {
                 </div>
               )}
 
-              {}
+              {/* Errors */}
               {testResult.errors && testResult.errors.length > 0 && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
@@ -187,7 +182,7 @@ export function TestEmployeeModal() {
                 </Alert>
               )}
 
-              {}
+              {/* Warnings */}
               {testResult.warnings && testResult.warnings.length > 0 && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
@@ -202,7 +197,7 @@ export function TestEmployeeModal() {
                 </Alert>
               )}
 
-              {}
+              {/* Success Tips */}
               {testResult.success && (
                 <div className="rounded-md bg-green-50 p-3">
                   <p className="text-sm font-medium text-green-900">Next Steps</p>

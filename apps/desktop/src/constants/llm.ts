@@ -847,3 +847,15 @@ export function getAllModels(): ModelMetadata[] {
 export function getProviderModels(provider: Provider): ModelMetadata[] {
   return getAllModels().filter((model) => model.provider === provider);
 }
+
+export function formatCost(inputCost?: number, outputCost?: number): string {
+  if (inputCost === undefined && outputCost === undefined) {
+    return 'N/A';
+  }
+  if (inputCost === 0 && outputCost === 0) {
+    return 'Free';
+  }
+  const input = inputCost !== undefined ? `$${inputCost.toFixed(2)}` : 'N/A';
+  const output = outputCost !== undefined ? `$${outputCost.toFixed(2)}` : 'N/A';
+  return `${input}/${output} per 1M tokens`;
+}
