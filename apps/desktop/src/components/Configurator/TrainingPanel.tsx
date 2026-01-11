@@ -28,18 +28,20 @@ export function TrainingPanel() {
           <span className="font-semibold">Training Examples</span>
           <Badge variant="secondary">{trainingExamples.length}</Badge>
         </div>
-        <ChevronDown className={cn('h-4 w-4 transition-transform', trainingOpen && 'rotate-180')} />
+        <ChevronDown
+          className={cn('h-4 w-4 transition-transform', trainingOpen && 'rotate-180')}
+        />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="border-t">
         <div className="space-y-4 p-4" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          {}
+          {/* Add Example Button */}
           <Button variant="outline" className="w-full" onClick={handleAddExample}>
             <Plus className="mr-2 h-4 w-4" />
             Add Training Example
           </Button>
 
-          {}
+          {/* Training Examples Info */}
           {trainingExamples.length === 0 && (
             <div className="rounded-md bg-muted/50 p-4 text-center">
               <p className="text-sm text-muted-foreground">
@@ -49,7 +51,7 @@ export function TrainingPanel() {
             </div>
           )}
 
-          {}
+          {/* Example List */}
           {trainingExamples.map((example, index) => (
             <Card key={example.id}>
               <CardHeader className="pb-2">
@@ -91,7 +93,7 @@ export function TrainingPanel() {
             </Card>
           ))}
 
-          {}
+          {/* Training Tips */}
           {trainingExamples.length > 0 && (
             <div className="rounded-md bg-blue-50 p-3">
               <p className="text-xs font-medium text-blue-900">Training Tips</p>

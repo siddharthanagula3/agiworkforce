@@ -125,7 +125,6 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
 
         return (
           <div className="relative group">
-            {/* @ts-expect-error - SyntaxHighlighter type incompatibility with React 18 */}
             <SyntaxHighlighter
               style={oneDark as SyntaxHighlighterProps['style']}
               language={language}

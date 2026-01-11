@@ -26,19 +26,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
-  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore();
+  const {
+    selectedModel,
+    favorites,
+    recentModels,
+    selectModel,
+    toggleFavorite,
+  } = useModelStore();
 
   const allModels = useMemo(() => getAllModels(), []);
 
+  // Filter models based on search, provider filter, and mode
   const filteredModels = useMemo(() => {
     let models = allModels;
 
+    // Apply filter mode
     if (filterMode === 'favorites') {
       models = models.filter((m) => favorites.includes(m.id));
     } else if (filterMode === 'recent') {
       models = models.filter((m) => recentModels.includes(m.id));
     }
 
+    // Apply search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       models = models.filter(
@@ -49,6 +58,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       );
     }
 
+    // Apply provider filter
     if (selectedProviders.size > 0) {
       models = models.filter((m) => selectedProviders.has(m.provider));
     }
@@ -56,6 +66,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     return models;
   }, [allModels, searchQuery, selectedProviders, filterMode, favorites, recentModels]);
 
+  // Group models by provider
   const modelsByProvider = useMemo(() => {
     const grouped: Record<Provider, ModelMetadata[]> = {
       openai: [],
@@ -101,8 +112,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {}
-      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      {/* Search Bar */}
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -125,7 +136,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             )}
           </div>
 
-          {}
+          {/* View Mode Toggle */}
           <div className="flex border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
@@ -152,7 +163,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </div>
         </div>
 
-        {}
+        {/* Filter Mode Tabs */}
         <div className="flex gap-2 mb-3">
           <button
             onClick={() => setFilterMode('all')}
@@ -192,7 +203,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </button>
         </div>
 
-        {}
+        {/* Provider Filters */}
         <div className="flex flex-wrap gap-2">
           {PROVIDERS_IN_ORDER.map((provider) => (
             <button
@@ -219,7 +230,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </div>
       </div>
 
-      {}
+      {/* Models List */}
       <div className="flex-1 overflow-y-auto p-4">
         {filteredModels.length === 0 ? (
           <div className="text-center py-12">
@@ -271,8 +282,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         )}
       </div>
 
-      {}
-      <div className="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+      {/* Footer with Model Count */}
+      <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
           Showing {filteredModels.length} of {allModels.length} models
           {selectedModel && (
