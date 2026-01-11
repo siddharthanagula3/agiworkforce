@@ -151,18 +151,25 @@ pub fn run() {
             app.manage(LLMState::new());
 
 
-            match tauri::async_runtime::block_on(BrowserStateWrapper::new()) {
+            // Initialize browser automation with graceful degradation.
+            // If initialization fails, we still manage a degraded state so commands
+            // can return meaningful errors instead of panicking on state retrieval.
+            let browser_state = match tauri::async_runtime::block_on(BrowserStateWrapper::new()) {
                 Ok(state) => {
-                    app.manage(state);
+                    tracing::info!("Browser automation initialized successfully");
+                    state
                 }
                 Err(e) => {
-                    tracing::error!("Failed to initialize BrowserState: {}", e);
-                    // Manage a dummy state or handle failure?
-                    // For now, let's just log implementation.
-                    // Ideally we should probably manage a dummy or broken state to avoid panics on retrieval,
-                    // but BrowserState::new() failing is critical for browser features.
+                    tracing::warn!(
+                        "Browser automation failed to initialize. Commands will return errors. \
+                         Reason: {}. This may be due to missing Playwright/Chromium dependencies.",
+                        e
+                    );
+                    // Create a degraded state that will return clear errors to the frontend
+                    BrowserStateWrapper::new_degraded(e)
                 }
-            }
+            };
+            app.manage(browser_state);
 
             // Native Messaging state for browser extension communication
             app.manage(NativeMessagingStateWrapper::new());
@@ -628,6 +635,7 @@ pub fn run() {
 
 
             crate::sys::commands::browser_init,
+            crate::sys::commands::browser_check_status,
             crate::sys::commands::browser_launch,
             crate::sys::commands::browser_open_tab,
             crate::sys::commands::browser_close_tab,

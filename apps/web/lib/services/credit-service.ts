@@ -98,13 +98,17 @@ export class CreditService {
   }
 
   /**
-   * Deduct credits atomically
+   * Deduct credits atomically with optional idempotency key.
+   * When an idempotency key is provided, duplicate requests with the same key
+   * will return the cached result instead of deducting credits again.
+   * Keys are valid for 24 hours.
    */
   static async deductCredits(
     userId: string,
     amountCents: number,
     description?: string,
     metadata?: Record<string, unknown>,
+    idempotencyKey?: string,
   ): Promise<DeductCreditsResult> {
     try {
       const supabase = getSupabaseClient();
@@ -113,21 +117,36 @@ export class CreditService {
         p_amount_cents: amountCents,
         p_description: description || null,
         p_metadata: metadata || {},
+        p_idempotency_key: idempotencyKey || null,
       });
 
       if (error) {
-        logger.error({ error, userId, amountCents }, 'Failed to deduct credits');
+        logger.error({ error, userId, amountCents, idempotencyKey }, 'Failed to deduct credits');
         throw error;
       }
 
-      return data as DeductCreditsResult;
+      // RPC returns array, get first row
+      const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
+      return result as DeductCreditsResult;
     } catch (error) {
-      logger.error({ error, userId, amountCents }, 'Error in deductCredits');
+      logger.error({ error, userId, amountCents, idempotencyKey }, 'Error in deductCredits');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  /**
+   * Generate an idempotency key for a credit operation.
+   * Format: {userId}:{operationType}:{uniqueIdentifier}:{timestamp}
+   */
+  static generateIdempotencyKey(
+    userId: string,
+    operationType: 'reservation' | 'reconciliation' | 'refund',
+    requestId: string,
+  ): string {
+    return `${userId}:${operationType}:${requestId}`;
   }
 
   /**

@@ -217,6 +217,7 @@ describe('CreditService', () => {
         p_amount_cents: 100,
         p_description: 'API call: claude-sonnet-4-5',
         p_metadata: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+        p_idempotency_key: null,
       });
       expect(result).toEqual(mockResult);
     });
@@ -315,6 +316,7 @@ describe('CreditService', () => {
         p_amount_cents: 100,
         p_description: null,
         p_metadata: {},
+        p_idempotency_key: null,
       });
     });
   });

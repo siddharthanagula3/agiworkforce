@@ -90,6 +90,10 @@ interface SettingsState {
 
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
+
+  // Hydration tracking for persist middleware
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
 }
 
 const defaultSettings: Pick<
@@ -182,6 +186,11 @@ export const useSettingsStore = create<SettingsState>()(
         ...defaultSettings,
         loading: false,
         error: null,
+        _hasHydrated: false,
+
+        setHasHydrated: (state: boolean) => {
+          set({ _hasHydrated: state });
+        },
 
         setDefaultProvider: async (provider: Provider) => {
           try {
@@ -487,8 +496,35 @@ export const useSettingsStore = create<SettingsState>()(
           }
           return persistedState as SettingsState;
         },
+        // Called when rehydration finishes (with or without errors)
+        onRehydrateStorage: () => (state) => {
+          if (state) {
+            state.setHasHydrated(true);
+            console.log('[SettingsStore] Rehydration complete');
+          }
+        },
       },
     ),
     { name: 'SettingsStore', enabled: import.meta.env.DEV },
   ),
 );
+
+/**
+ * Wait for settings store to finish hydrating from localStorage.
+ * Use this before accessing settings that depend on persisted values.
+ */
+export function waitForSettingsHydration(): Promise<void> {
+  return new Promise((resolve) => {
+    const state = useSettingsStore.getState();
+    if (state._hasHydrated) {
+      resolve();
+      return;
+    }
+    const unsub = useSettingsStore.subscribe((s) => {
+      if (s._hasHydrated) {
+        unsub();
+        resolve();
+      }
+    });
+  });
+}

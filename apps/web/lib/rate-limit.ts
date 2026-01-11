@@ -45,6 +45,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 requests per minute
     failClosed: false,
   },
+  'credits-balance': {
+    limit: 60,
+    window: '1 m', // 60 requests per minute (same as /me endpoint)
+    failClosed: false,
+  },
   'sync-subscription': {
     limit: 10,
     window: '1 m', // 10 requests per minute (increased for payment success polling)
@@ -60,6 +65,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 requests per minute to prevent enumeration
     failClosed: false,
   },
+  download: {
+    limit: 30,
+    window: '1 m', // 30 download requests per minute per IP
+    failClosed: false,
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
@@ -69,6 +79,20 @@ export const rateLimitConfigs = {
 
 // In-memory rate limit store for fallback (not suitable for distributed systems)
 const inMemoryStore = new Map<string, { count: number; resetTime: number }>();
+
+// Configuration for in-memory store limits
+const IN_MEMORY_MAX_ENTRIES = 10000; // Prevent unbounded memory growth under attack
+const IN_MEMORY_CLEANUP_INTERVAL_MS = 60000; // Clean up every minute
+let lastCleanupTime = Date.now();
+
+// Log warning at startup if Redis is not configured in production
+if (process.env.NODE_ENV === 'production' && !redis) {
+  console.error(
+    '[SECURITY WARNING] Redis not configured in production environment. ' +
+      'In-memory rate limiting is NOT effective in serverless/distributed deployments. ' +
+      'Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.',
+  );
+}
 
 /**
  * Parse window string to milliseconds
@@ -93,6 +117,41 @@ function parseWindow(window: string): number {
 }
 
 /**
+ * Clean up expired entries from the in-memory store.
+ * Also enforces max entries limit to prevent memory exhaustion.
+ */
+function cleanupInMemoryStore(): void {
+  const now = Date.now();
+
+  // Remove expired entries (use Array.from for ES5 compatibility)
+  const entries = Array.from(inMemoryStore.entries());
+  for (const [k, v] of entries) {
+    if (v.resetTime < now) {
+      inMemoryStore.delete(k);
+    }
+  }
+
+  // If still over limit after cleanup, remove oldest entries
+  if (inMemoryStore.size > IN_MEMORY_MAX_ENTRIES) {
+    const sortedEntries = Array.from(inMemoryStore.entries()).sort(
+      (a, b) => a[1].resetTime - b[1].resetTime,
+    );
+
+    const toRemove = sortedEntries.length - IN_MEMORY_MAX_ENTRIES;
+    for (let i = 0; i < toRemove; i++) {
+      inMemoryStore.delete(sortedEntries[i][0]);
+    }
+
+    logger.warn(
+      { removed: toRemove, remaining: inMemoryStore.size },
+      'In-memory rate limit store exceeded max entries, removed oldest entries',
+    );
+  }
+
+  lastCleanupTime = now;
+}
+
+/**
  * In-memory rate limiter for development/fallback
  * Note: This is per-process and won't work correctly in distributed deployments
  */
@@ -105,13 +164,9 @@ function inMemoryRateLimit(
   const key = id;
   const entry = inMemoryStore.get(key);
 
-  // Clean up expired entries periodically
-  if (Math.random() < 0.01) {
-    for (const [k, v] of inMemoryStore.entries()) {
-      if (v.resetTime < now) {
-        inMemoryStore.delete(k);
-      }
-    }
+  // Perform periodic cleanup (deterministic, time-based instead of random)
+  if (now - lastCleanupTime > IN_MEMORY_CLEANUP_INTERVAL_MS) {
+    cleanupInMemoryStore();
   }
 
   if (!entry || entry.resetTime < now) {
@@ -199,8 +254,32 @@ export async function checkRateLimit(
 
   // Use in-memory rate limiting if Redis is not configured
   if (!redis) {
-    if (process.env.NODE_ENV === 'production') {
-      logger.warn({ key }, 'Redis not configured in production, using in-memory rate limiting');
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (isProduction) {
+      logger.error(
+        { key, failClosed: config.failClosed },
+        'SECURITY: Redis not configured in production - in-memory rate limiting is ineffective in distributed deployments',
+      );
+
+      // For security-sensitive endpoints, fail closed when Redis isn't available in production
+      // In-memory rate limiting doesn't work across serverless instances/edge functions
+      if (config.failClosed) {
+        logger.warn(
+          { key, identifier },
+          'Blocking request to security-sensitive endpoint - Redis not configured in production',
+        );
+        return {
+          success: false,
+          limit: config.limit,
+          remaining: 0,
+          reset: Date.now() + 60000,
+          headers: {
+            'Retry-After': '60',
+            'X-RateLimit-Error': 'rate-limiter-unavailable',
+          },
+        };
+      }
     }
 
     const windowMs = parseWindow(config.window);

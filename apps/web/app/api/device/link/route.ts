@@ -40,9 +40,9 @@ async function handleDeviceLink(request: NextRequest) {
       auth: { persistSession: false },
     });
 
-    // Generate device code with higher entropy (5 bytes = 10 hex chars = 2^40 possibilities)
-    // This makes brute-force attacks infeasible even within the 15-minute window
-    const link_code = randomBytes(5).toString('hex').toUpperCase();
+    // Generate device code with 64-bit entropy (8 bytes = 16 hex chars = 2^64 possibilities)
+    // This makes brute-force attacks computationally infeasible even within the 15-minute window
+    const link_code = randomBytes(8).toString('hex').toUpperCase();
     const appUrl = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
     const verify_url = `${appUrl}/verify?code=${link_code}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);

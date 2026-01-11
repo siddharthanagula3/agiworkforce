@@ -214,11 +214,13 @@ impl AuthManager {
             .find(|u| u.email == email)
             .ok_or("Invalid email or password")?;
 
-        if user.is_locked() {
-            return Err(format!(
-                "Account locked until {}",
-                user.locked_until.unwrap().format("%Y-%m-%d %H:%M:%S")
-            ));
+        if let Some(locked_until) = user.locked_until {
+            if Utc::now() < locked_until {
+                return Err(format!(
+                    "Account locked until {}",
+                    locked_until.format("%Y-%m-%d %H:%M:%S")
+                ));
+            }
         }
 
         if !user.verify_password(password)? {

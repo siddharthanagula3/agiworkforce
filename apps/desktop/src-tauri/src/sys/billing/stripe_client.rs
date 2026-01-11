@@ -179,7 +179,9 @@ impl StripeService {
         plan_name: &str,
         billing_interval: &str,
     ) -> Result<SubscriptionInfo> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
 
         let mut params = CreateSubscription::new(customer_id.clone());
         params.items = Some(vec![stripe::CreateSubscriptionItems {
@@ -267,7 +269,9 @@ impl StripeService {
     }
 
     pub async fn get_subscription(self, stripe_subscription_id: &str) -> Result<SubscriptionInfo> {
-        let subscription_id: SubscriptionId = stripe_subscription_id.parse().unwrap();
+        let subscription_id: SubscriptionId = stripe_subscription_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe subscription ID: {}", stripe_subscription_id))?;
         let subscription =
             stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
 
@@ -342,7 +346,9 @@ impl StripeService {
         new_price_id: &str,
         new_plan_name: &str,
     ) -> Result<SubscriptionInfo> {
-        let subscription_id: SubscriptionId = stripe_subscription_id.parse().unwrap();
+        let subscription_id: SubscriptionId = stripe_subscription_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe subscription ID: {}", stripe_subscription_id))?;
         let mut subscription =
             stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
 
@@ -393,7 +399,9 @@ impl StripeService {
     }
 
     pub async fn cancel_subscription(self, stripe_subscription_id: &str) -> Result<()> {
-        let subscription_id: SubscriptionId = stripe_subscription_id.parse().unwrap();
+        let subscription_id: SubscriptionId = stripe_subscription_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe subscription ID: {}", stripe_subscription_id))?;
         stripe::Subscription::cancel(&self.client, &subscription_id, Default::default()).await?;
 
         let db = self
@@ -416,7 +424,9 @@ impl StripeService {
     }
 
     pub async fn get_invoices(self, customer_stripe_id: &str) -> Result<Vec<InvoiceInfo>> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
 
         let mut list_params = stripe::ListInvoices::new();
         list_params.customer = Some(customer_id.clone());
@@ -594,7 +604,9 @@ impl StripeService {
         customer_stripe_id: &str,
         return_url: &str,
     ) -> Result<String> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
 
         let mut params = stripe::CreateBillingPortalSession::new(customer_id);
         params.return_url = Some(return_url);
@@ -698,7 +710,9 @@ impl StripeService {
         self,
         customer_stripe_id: &str,
     ) -> Result<Vec<PaymentMethodInfo>> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
 
         let mut list_params = stripe::ListPaymentMethods::new();
         list_params.customer = Some(customer_id.clone());
@@ -801,8 +815,12 @@ impl StripeService {
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<PaymentMethodInfo> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
-        let pm_id: PaymentMethodId = payment_method_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
+        let pm_id: PaymentMethodId = payment_method_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe payment method ID: {}", payment_method_id))?;
 
         let attach_params = stripe::AttachPaymentMethod {
             customer: customer_id.clone(),
@@ -877,8 +895,12 @@ impl StripeService {
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<()> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
-        let pm_id: PaymentMethodId = payment_method_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
+        let pm_id: PaymentMethodId = payment_method_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe payment method ID: {}", payment_method_id))?;
 
         let mut update_params = stripe::UpdateCustomer::new();
         update_params.invoice_settings = Some(stripe::CustomerInvoiceSettings {
@@ -916,7 +938,9 @@ impl StripeService {
     }
 
     pub async fn create_setup_intent(self, customer_stripe_id: &str) -> Result<String> {
-        let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
+        let customer_id: CustomerId = customer_stripe_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe customer ID: {}", customer_stripe_id))?;
 
         let mut params = CreateSetupIntent::new();
         params.customer = Some(customer_id);
@@ -929,7 +953,9 @@ impl StripeService {
     }
 
     pub async fn detach_payment_method(self, payment_method_id: &str) -> Result<()> {
-        let pm_id: PaymentMethodId = payment_method_id.parse().unwrap();
+        let pm_id: PaymentMethodId = payment_method_id
+            .parse()
+            .map_err(|_| anyhow!("Invalid Stripe payment method ID: {}", payment_method_id))?;
 
         PaymentMethod::detach(&self.client, &pm_id).await?;
 

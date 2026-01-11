@@ -1,3 +1,13 @@
+/**
+ * @file API Gateway Entry Point
+ * @security
+ * - Helmet: Security headers (XSS protection, content-type sniffing, etc.)
+ * - CORS: Configured allowed origins
+ * - Rate limiting: Applied per-route (see individual route files)
+ * - Content-Type validation: Enforces application/json
+ * - Security header monitoring: Logs suspicious headers in production
+ */
+
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,6 +21,8 @@ import { creditsRouter } from './routes/credits';
 import { setupWebSocket } from './websocket';
 import { mobileRouter } from './routes/mobile';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
+import { createRateLimiter } from './middleware/rateLimit';
 
 if (!process.env['JWT_SECRET']) {
   console.error('FATAL: JWT_SECRET environment variable is required but not set.');
@@ -63,13 +75,18 @@ app.use(
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// SECURITY: Request validation middleware (Content-Type and security headers)
+app.use(validateContentType);
+app.use(validateSecurityHeaders);
+
 app.use('/api/auth', authRouter);
 app.use('/api/desktop', desktopRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/mobile', mobileRouter);
 app.use('/api/credits', creditsRouter);
 
-app.get('/health', (_req: Request, res: Response) => {
+// SECURITY: Rate limited to 100/min for monitoring endpoints
+app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 

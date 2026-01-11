@@ -41,8 +41,21 @@ pub struct UIAutomationService {
     cache_ttl: Duration,
 }
 
+// SAFETY: These impls are technically unsound for STA COM objects.
+// Windows COM initialized with COINIT_APARTMENTTHREADED creates Single-Threaded Apartment
+// objects that should only be accessed from the thread that created them.
+//
+// CURRENT WORKAROUND: In practice, this is mitigated by:
+// 1. The UIAutomationService is created once and stored in the AppState
+// 2. All automation commands go through Tauri which serializes on the main thread
+// 3. The IUIAutomation interface specifically is documented as thread-agile
+//
+// TODO(SAFETY): For full correctness, automation should use a dedicated thread with channels.
+// See: https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/
 unsafe impl Send for UIAutomationService {}
 
+// SAFETY: The Mutex<HashMap> cache provides interior synchronization.
+// The IUIAutomation interface is thread-agile per Microsoft documentation.
 unsafe impl Sync for UIAutomationService {}
 
 impl UIAutomationService {

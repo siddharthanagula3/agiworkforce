@@ -1,4 +1,5 @@
 use anyhow::Result;
+use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -52,19 +53,27 @@ pub struct SyncQueueItem {
     pub error: Option<String>,
 }
 
+/// Sync queue for tracking changes to sync with remote.
+///
+/// Uses a cached database connection to avoid repeated open/close overhead.
+/// This is the recommended pattern for SQLite access - cache the connection
+/// and protect with Mutex for thread-safe access.
 pub struct SyncQueue {
-    db_path: PathBuf,
+    conn: Mutex<Connection>,
 }
 
 impl SyncQueue {
     pub fn new(db_path: PathBuf) -> Result<Self> {
-        let queue = Self { db_path };
+        let conn = Connection::open(&db_path)?;
+        let queue = Self {
+            conn: Mutex::new(conn),
+        };
         queue.init_database()?;
         Ok(queue)
     }
 
     fn init_database(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sync_queue (
@@ -97,7 +106,7 @@ impl SyncQueue {
     }
 
     pub fn enqueue(&self, item: SyncQueueItem) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         conn.execute(
             "INSERT INTO sync_queue (id, entity_type, entity_id, action, data, timestamp, retry_count, synced, error)
@@ -125,7 +134,7 @@ impl SyncQueue {
     }
 
     pub fn get_pending(&self, limit: usize) -> Result<Vec<SyncQueueItem>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         let mut stmt = conn.prepare(
             "SELECT id, entity_type, entity_id, action, data, timestamp, retry_count, synced, error
@@ -171,7 +180,7 @@ impl SyncQueue {
     }
 
     pub fn mark_synced(&self, id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         conn.execute(
             "UPDATE sync_queue SET synced = 1, error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
@@ -182,7 +191,7 @@ impl SyncQueue {
     }
 
     pub fn mark_failed(&self, id: &str, error: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         conn.execute(
             "UPDATE sync_queue SET retry_count = retry_count + 1, error = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
@@ -193,7 +202,7 @@ impl SyncQueue {
     }
 
     pub fn get_count(&self) -> Result<usize> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM sync_queue WHERE synced = 0",
@@ -205,7 +214,7 @@ impl SyncQueue {
     }
 
     pub fn clear_synced(&self, older_than_days: u32) -> Result<usize> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         let deleted = conn.execute(
             "DELETE FROM sync_queue WHERE synced = 1 AND created_at < datetime('now', '-' || ?1 || ' days')",
@@ -220,7 +229,7 @@ impl SyncQueue {
         entity_type: SyncEntity,
         entity_id: &str,
     ) -> Result<Vec<SyncQueueItem>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = self.conn.lock();
 
         let mut stmt = conn.prepare(
             "SELECT id, entity_type, entity_id, action, data, timestamp, retry_count, synced, error
