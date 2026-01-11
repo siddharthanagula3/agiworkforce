@@ -11,7 +11,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type TooltipProps,
 } from 'recharts';
 import {
   Card,
@@ -27,7 +26,13 @@ interface CostSavedChartProps {
   loading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value?: number; payload?: EmployeeChartData }>;
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
