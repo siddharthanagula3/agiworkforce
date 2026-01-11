@@ -1,4 +1,4 @@
-// Updated Nov 16, 2025: Fixed test to actually test settingsStore instead of JavaScript primitives
+// Updated Jan 11, 2026: Fixed test to match current settingsStore structure
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   createDefaultLLMConfig,
@@ -27,7 +27,7 @@ Object.defineProperty(window, 'localStorage', {
 });
 
 type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
-type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+type InvokeMock = Mock<TauriInvoke>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('@tauri-apps/api/core');
@@ -46,26 +46,16 @@ describe('settingsStore', () => {
     // Reset Tauri invoke mock
     invokeMock = await getInvokeMock();
     invokeMock.mockReset();
-    invokeMock.mockImplementation(async (cmd: string) => {
-      if (cmd === 'settings_get_api_key') return '';
+    invokeMock.mockImplementation(async () => {
       return undefined;
     });
 
     // Reset store to defaults
     useSettingsStore.setState({
-      apiKeys: {
-        openai: '',
-        anthropic: '',
-        google: '',
-        ollama: '',
-        xai: '',
-        deepseek: '',
-        qwen: '',
-        mistral: '',
-        moonshot: '',
-      },
       llmConfig: createDefaultLLMConfig(),
       windowPreferences: createDefaultWindowPreferences(),
+      chatPreferences: { promptCompletionEnabled: true },
+      allowedDirectories: [],
       loading: false,
       error: null,
     });
@@ -175,75 +165,6 @@ describe('settingsStore', () => {
     const updatedFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
     expect(updatedFavorites).not.toContain(modelToRemove);
     expect(updatedFavorites.length).toBe(favorites.length - 1);
-  });
-
-  it('should set API key and configure provider', async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    const { setAPIKey } = useSettingsStore.getState();
-    const apiKey = 'test-api-key-123';
-
-    await setAPIKey('openai', apiKey);
-
-    const state = useSettingsStore.getState();
-    expect(state.apiKeys.openai).toBe(apiKey);
-    expect(state.loading).toBe(false);
-    expect(invokeMock).toHaveBeenCalledWith('settings_save_api_key', {
-      provider: 'openai',
-      key: apiKey,
-    });
-    expect(invokeMock).toHaveBeenCalledWith('llm_configure_provider', {
-      provider: 'openai',
-      apiKey,
-      baseUrl: null,
-    });
-  });
-
-  it('should handle Ollama provider specially (no API key)', async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    const { setAPIKey } = useSettingsStore.getState();
-    await setAPIKey('ollama', '');
-
-    expect(invokeMock).toHaveBeenCalledWith('llm_configure_provider', {
-      provider: 'ollama',
-      apiKey: null,
-      baseUrl: 'http://localhost:11434',
-    });
-  });
-
-  it('should test API key', async () => {
-    invokeMock.mockImplementation(async (cmd: string) => {
-      if (cmd === 'settings_get_api_key') return 'sk-test';
-      if (cmd === 'llm_configure_provider') return undefined;
-      if (cmd === 'llm_send_message') return { success: true };
-      return undefined;
-    });
-
-    const { testAPIKey } = useSettingsStore.getState();
-    const result = await testAPIKey('anthropic');
-
-    expect(result).toBe(true);
-    expect(useSettingsStore.getState().loading).toBe(false);
-    expect(useSettingsStore.getState().error).toBeNull();
-  });
-
-  it('should handle API key test failure', async () => {
-    invokeMock.mockImplementation(async (cmd: string) => {
-      if (cmd === 'settings_get_api_key') return 'sk-test';
-      if (cmd === 'llm_configure_provider') return undefined;
-      if (cmd === 'llm_send_message') {
-        throw new Error('Invalid API key');
-      }
-      return undefined;
-    });
-
-    const { testAPIKey } = useSettingsStore.getState();
-    const result = await testAPIKey('anthropic');
-
-    expect(result).toBe(false);
-    expect(useSettingsStore.getState().loading).toBe(false);
-    expect(useSettingsStore.getState().error).toBe('Invalid API key');
   });
 
   it('should update startup position', () => {

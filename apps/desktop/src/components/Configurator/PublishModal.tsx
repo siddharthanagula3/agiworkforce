@@ -70,7 +70,7 @@ export function PublishModal() {
         {!publishSuccess ? (
           <>
             <div className="space-y-4 py-4">
-              {}
+              {/* Preview */}
               <div className="rounded-md border p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="font-semibold">{employeeName}</h3>
@@ -81,7 +81,7 @@ export function PublishModal() {
                 </p>
               </div>
 
-              {}
+              {/* Category */}
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -101,7 +101,7 @@ export function PublishModal() {
                 </Select>
               </div>
 
-              {}
+              {/* Tags */}
               <div className="space-y-2">
                 <Label htmlFor="tags">Tags</Label>
                 <Input
@@ -115,7 +115,7 @@ export function PublishModal() {
                 </p>
               </div>
 
-              {}
+              {/* Price */}
               <div className="space-y-2">
                 <Label htmlFor="price">Monthly Price (USD)</Label>
                 <Input
@@ -132,7 +132,7 @@ export function PublishModal() {
                 </p>
               </div>
 
-              {}
+              {/* Publishing Guidelines */}
               <Alert>
                 <AlertDescription>
                   <p className="mb-2 font-medium">Publishing Guidelines:</p>
@@ -145,7 +145,7 @@ export function PublishModal() {
                 </AlertDescription>
               </Alert>
 
-              {}
+              {/* Error */}
               {publishError && (
                 <Alert variant="destructive">
                   <AlertDescription>{publishError}</AlertDescription>
@@ -173,6 +173,7 @@ export function PublishModal() {
             </DialogFooter>
           </>
         ) : (
+          // Success state
           <>
             <div className="py-8 text-center">
               <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />

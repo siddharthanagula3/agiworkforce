@@ -64,7 +64,7 @@ export function ConfiguratorHeader() {
 
   return (
     <div className="flex items-center justify-between border-b p-4">
-      {}
+      {/* Left: Employee Info */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={handleGoBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -83,7 +83,7 @@ export function ConfiguratorHeader() {
         )}
       </div>
 
-      {}
+      {/* Right: Actions */}
       <div className="flex items-center gap-2">
         <Button variant="outline" onClick={handleSave} disabled={isSaving || !isDirty}>
           {isSaving ? (

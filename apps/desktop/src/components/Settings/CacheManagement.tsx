@@ -1,3 +1,10 @@
+/**
+ * Cache Management Component
+ *
+ * UI component for managing cache in the Settings panel.
+ * Displays cache statistics and provides controls for clearing cache.
+ */
+
 import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
 import type { CacheStats, CacheAnalytics } from '../../types/cache';
@@ -8,6 +15,7 @@ export const CacheManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load cache statistics on component mount
   useEffect(() => {
     loadStats();
   }, []);
@@ -38,7 +46,7 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearAll();
-      await loadStats();
+      await loadStats(); // Reload stats
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear cache');
       console.error('Error clearing cache:', err);
@@ -51,7 +59,7 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearByType(type);
-      await loadStats();
+      await loadStats(); // Reload stats
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to clear ${type} cache`);
       console.error(`Error clearing ${type} cache:`, err);
@@ -65,7 +73,7 @@ export const CacheManagement: React.FC = () => {
       setLoading(true);
       const pruned = await CacheService.pruneExpired();
       alert(`Pruned ${pruned} expired cache entries`);
-      await loadStats();
+      await loadStats(); // Reload stats
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to prune expired cache');
       console.error('Error pruning cache:', err);
@@ -79,6 +87,7 @@ export const CacheManagement: React.FC = () => {
       setLoading(true);
       const exportData = await CacheService.export();
 
+      // Download as JSON file
       const blob = new Blob([exportData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -127,18 +136,18 @@ export const CacheManagement: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">{error}</div>
+        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+          {error}
+        </div>
       )}
 
-      {}
+      {/* Overall Statistics */}
       <div className="bg-white border rounded-lg p-4 shadow-sm">
         <h3 className="text-lg font-semibold mb-4">Overall Statistics</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-600">Total Cache Size</p>
-            <p className="text-2xl font-bold">
-              {stats ? formatMB(stats.total_size_mb) : '0.00'} MB
-            </p>
+            <p className="text-2xl font-bold">{stats ? formatMB(stats.total_size_mb) : '0.00'} MB</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Total Cost Savings</p>
@@ -149,7 +158,7 @@ export const CacheManagement: React.FC = () => {
         </div>
       </div>
 
-      {}
+      {/* LLM Cache */}
       {stats && (
         <div className="bg-white border rounded-lg p-4 shadow-sm">
           <div className="flex justify-between items-center mb-4">
@@ -181,7 +190,7 @@ export const CacheManagement: React.FC = () => {
         </div>
       )}
 
-      {}
+      {/* Analytics */}
       {analytics && analytics.most_cached_queries.length > 0 && (
         <div className="bg-white border rounded-lg p-4 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Most Cached Queries</h3>
@@ -206,7 +215,7 @@ export const CacheManagement: React.FC = () => {
         </div>
       )}
 
-      {}
+      {/* Provider Breakdown */}
       {analytics && analytics.provider_breakdown.length > 0 && (
         <div className="bg-white border rounded-lg p-4 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Cache by Provider</h3>
@@ -234,7 +243,7 @@ export const CacheManagement: React.FC = () => {
         </div>
       )}
 
-      {}
+      {/* Actions */}
       <div className="bg-white border rounded-lg p-4 shadow-sm">
         <h3 className="text-lg font-semibold mb-4">Cache Actions</h3>
         <div className="flex flex-wrap gap-2">

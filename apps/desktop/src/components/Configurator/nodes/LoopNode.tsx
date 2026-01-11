@@ -1,22 +1,13 @@
-import type { NodeProps, Node } from '@xyflow/react';
-import { Handle, Position } from '@xyflow/react';
+import { NodeProps, Handle, Position } from '@xyflow/react';
 import { Repeat, X } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
 import { useConfiguratorStore } from '../../../stores/configuratorStore';
 
-interface LoopNodeData {
-  label: string;
-  config?: {
-    maxIterations?: number;
-  };
-  [key: string]: unknown;
-}
-
-type LoopNodeProps = NodeProps<Node<LoopNodeData>>;
-
-export function LoopNode({ data, selected, id }: LoopNodeProps) {
+export function LoopNode({ data, selected, id }: NodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
+  const config = data['config'] as Record<string, unknown> | undefined;
+  const maxIterations = config?.['maxIterations'] as string | undefined;
 
   return (
     <div
@@ -25,24 +16,24 @@ export function LoopNode({ data, selected, id }: LoopNodeProps) {
         selected && 'ring-2 ring-blue-500',
       )}
     >
-      {}
+      {/* Target Handle (Top) */}
       <Handle
         type="target"
         position={Position.Top}
         className="!h-3 !w-3 !border-2 !border-gray-400 !bg-white"
       />
 
-      {}
+      {/* Node Content */}
       <div className="flex items-center gap-2">
-        <div className="shrink-0 text-yellow-600">
+        <div className="flex-shrink-0 text-yellow-600">
           <Repeat className="h-4 w-4" />
         </div>
-        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data.label}</div>
+        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data['label'] as string}</div>
         {selected && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 shrink-0"
+            className="h-5 w-5 flex-shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               deleteNode(id);
@@ -53,12 +44,12 @@ export function LoopNode({ data, selected, id }: LoopNodeProps) {
         )}
       </div>
 
-      {}
-      {data.config?.maxIterations && (
-        <div className="mt-1 text-xs text-gray-500">Max: {data.config.maxIterations}</div>
+      {/* Loop info */}
+      {maxIterations && (
+        <div className="mt-1 text-xs text-gray-500">Max: {maxIterations}</div>
       )}
 
-      {}
+      {/* Source Handle for loop body */}
       <Handle
         type="source"
         position={Position.Right}
@@ -66,7 +57,7 @@ export function LoopNode({ data, selected, id }: LoopNodeProps) {
         className="!right-0 !top-1/2 !h-3 !w-3 !-translate-y-1/2 !border-2 !border-yellow-600 !bg-yellow-100"
       />
 
-      {}
+      {/* Source Handle for continuation */}
       <Handle
         type="source"
         position={Position.Bottom}

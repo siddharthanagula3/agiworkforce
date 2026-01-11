@@ -40,7 +40,7 @@ function CapabilityItem({ capability, onDragStart }: CapabilityItemProps) {
         categoryColors[capability.category],
       )}
     >
-      <IconComponent className="h-4 w-4 shrink-0" />
+      <IconComponent className="h-4 w-4 flex-shrink-0" />
       <div className="flex-1 overflow-hidden">
         <div className="truncate text-sm font-medium">{capability.name}</div>
         <div className="truncate text-xs text-muted-foreground">{capability.description}</div>
@@ -64,6 +64,7 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
     }
   }, [capabilities.length, fetchCapabilities]);
 
+  // Filter capabilities by search
   const filteredCapabilities = React.useMemo(() => {
     if (!search.trim()) return capabilities;
 
@@ -76,6 +77,7 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
     );
   }, [capabilities, search]);
 
+  // Group capabilities by category
   const groupedCapabilities = React.useMemo(() => {
     const groups: Record<string, Capability[]> = {
       data: [],
@@ -105,7 +107,7 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
 
   return (
     <div className={cn('flex flex-col border-r bg-muted/10', className)}>
-      {}
+      {/* Header */}
       <div className="border-b p-3">
         <h2 className="mb-2 text-sm font-semibold">Capability Library</h2>
         <div className="relative">
@@ -119,13 +121,9 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
         </div>
       </div>
 
-      {}
+      {/* Capabilities List */}
       <ScrollArea className="flex-1">
-        <Accordion
-          type="multiple"
-          defaultValue={['data', 'logic', 'actions', 'ai']}
-          className="px-2"
-        >
+        <Accordion type="multiple" defaultValue={['data', 'logic', 'actions', 'ai']} className="px-2">
           {Object.entries(categoryLabels).map(([category, label]) => {
             const items = groupedCapabilities[category as keyof typeof groupedCapabilities];
             if (!items || items.length === 0) return null;
@@ -158,7 +156,7 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
         )}
       </ScrollArea>
 
-      {}
+      {/* Footer */}
       <div className="border-t p-3">
         <div className="text-xs text-muted-foreground">
           Drag capabilities to the canvas to build your workflow
