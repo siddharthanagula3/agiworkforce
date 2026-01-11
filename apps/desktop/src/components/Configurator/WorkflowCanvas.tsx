@@ -9,11 +9,8 @@ import {
   useEdgesState,
   ReactFlowProvider,
   BackgroundVariant,
-  type Connection,
-  type Edge,
-  type Node,
-  type ReactFlowInstance,
 } from '@xyflow/react';
+import type { Connection, Edge, Node, ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Layout, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -53,13 +50,15 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
   const [nodes, setLocalNodes, onNodesChange] = useNodesState(workflowNodes);
   const [edges, setLocalEdges, onEdgesChange] = useEdgesState(workflowEdges);
 
+  // Updated Nov 16, 2025: Fixed circular dependency with proper synchronization
   const syncingRef = React.useRef(false);
 
+  // Sync local state with store (only when store changes externally)
   React.useEffect(() => {
     if (!syncingRef.current) {
       syncingRef.current = true;
       setLocalNodes(workflowNodes);
-
+      // Use setTimeout to break out of the sync cycle
       setTimeout(() => {
         syncingRef.current = false;
       }, 0);
@@ -76,6 +75,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
     }
   }, [workflowEdges, setLocalEdges]);
 
+  // Update store when nodes change (with debouncing to prevent rapid updates)
   const nodesChanged = React.useRef(false);
   React.useEffect(() => {
     if (nodesChanged.current && !syncingRef.current) {
@@ -88,6 +88,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
     return undefined;
   }, [nodes, setNodes]);
 
+  // Update store when edges change (with debouncing to prevent rapid updates)
   const edgesChanged = React.useRef(false);
   React.useEffect(() => {
     if (edgesChanged.current && !syncingRef.current) {
@@ -109,7 +110,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
         sourceHandle: params.sourceHandle,
         targetHandle: params.targetHandle,
       };
-      setLocalEdges((eds) => addEdge(params, eds));
+      setLocalEdges((eds: Edge[]) => addEdge(params, eds));
       addEdgeToStore(newEdge);
       edgesChanged.current = true;
     },
@@ -147,7 +148,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
         },
       };
 
-      setLocalNodes((nds) => nds.concat(newNode));
+      setLocalNodes((nds: Node[]) => nds.concat(newNode));
       setNodes([...nodes, newNode]);
       nodesChanged.current = true;
     },
@@ -200,23 +201,23 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
           nodeColor={(node) => {
             switch (node.type) {
               case 'trigger':
-                return '#f97316';
+                return '#f97316'; // orange
               case 'action':
-                return '#22c55e';
+                return '#22c55e'; // green
               case 'condition':
-                return '#eab308';
+                return '#eab308'; // yellow
               case 'loop':
-                return '#eab308';
+                return '#eab308'; // yellow
               case 'ai':
-                return '#a855f7';
+                return '#a855f7'; // purple
               default:
-                return '#6b7280';
+                return '#6b7280'; // gray
             }
           }}
           maskColor="rgb(240, 240, 240, 0.6)"
         />
 
-        {}
+        {/* Canvas Toolbar */}
         <div className="absolute left-4 top-4 z-10 flex gap-2">
           <Button variant="outline" size="sm" onClick={handleAutoLayout}>
             <Layout className="mr-2 h-4 w-4" />
@@ -228,7 +229,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
           </Button>
         </div>
 
-        {}
+        {/* Empty State */}
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">

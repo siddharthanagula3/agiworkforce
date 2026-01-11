@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  DollarSign,
   TrendingUp,
   TrendingDown,
   Calendar,
@@ -22,6 +23,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
+    // Load stats on mount
     void refreshUsageStats();
   }, [refreshUsageStats]);
 
@@ -47,27 +49,33 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
     byModel: {},
   };
 
+  // Calculate monthly projection (assuming current usage is for current month)
   const currentDate = new Date();
   const dayOfMonth = currentDate.getDate();
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const projectedMonthlyCost = (stats.totalCost / dayOfMonth) * daysInMonth;
 
+  // Calculate average cost per message
+  const avgCostPerMessage = stats.messageCount > 0 ? stats.totalCost / stats.messageCount : 0;
+
+  // Get top models by usage
   const topModels = Object.entries(stats.byModel ?? {})
-    .sort(([, a], [, b]) => b.tokens - a.tokens)
+    .sort(([, a], [, b]) => b.cost - a.cost)
     .slice(0, 5);
 
+  // Get provider breakdown
   const providerBreakdown = Object.entries(stats.byProvider ?? {})
-    .filter(([, data]) => data.tokens > 0)
-    .sort(([, a], [, b]) => b.tokens - a.tokens);
+    .filter(([, data]) => data.cost > 0)
+    .sort(([, a], [, b]) => b.cost - a.cost);
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {}
-      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      {/* Header */}
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Usage Tracking
+            Usage & Cost Tracking
           </h2>
           <button
             onClick={handleRefresh}
@@ -78,32 +86,32 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </button>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Track your LLM API usage across all providers and models
+          Track your LLM API usage and estimated costs across all providers and models
         </p>
       </div>
 
-      {}
+      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {}
+        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {}
-          <div className="p-4 bg-linear-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          {/* Total Cost */}
+          <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                Total Usage
+                Total Spent
               </span>
-              <BarChart3 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-              {stats.totalTokens.toLocaleString()}
+              ${stats.totalCost.toFixed(4)}
             </div>
             <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              Total tokens processed
+              {stats.totalTokens.toLocaleString()} tokens
             </div>
           </div>
 
-          {}
-          <div className="p-4 bg-linear-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-800">
+          {/* Monthly Projection */}
+          <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-green-700 dark:text-green-300">
                 Monthly Projection
@@ -111,7 +119,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
               <Calendar className="h-4 w-4 text-green-600 dark:text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-900 dark:text-green-100">
-              {Math.round((stats.totalTokens / dayOfMonth) * daysInMonth).toLocaleString()}
+              ${projectedMonthlyCost.toFixed(2)}
             </div>
             <div className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
               {projectedMonthlyCost > stats.totalCost ? (
@@ -119,12 +127,12 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
               ) : (
                 <TrendingDown className="h-3 w-3" />
               )}
-              Projected tokens (day {dayOfMonth}/{daysInMonth})
+              Based on day {dayOfMonth}/{daysInMonth}
             </div>
           </div>
 
-          {}
-          <div className="p-4 bg-linear-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-800">
+          {/* Avg Cost per Message */}
+          <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                 Avg per Message
@@ -132,9 +140,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
               <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-              {stats.messageCount > 0
-                ? Math.round(stats.totalTokens / stats.messageCount).toLocaleString()
-                : '0'}
+              ${avgCostPerMessage.toFixed(4)}
             </div>
             <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
               {stats.messageCount} messages
@@ -142,16 +148,15 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
         </div>
 
-        {}
+        {/* Provider Breakdown */}
         {providerBreakdown.length > 0 && (
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-              Usage by Provider
+              Cost by Provider
             </h3>
             <div className="space-y-2">
               {providerBreakdown.map(([provider, data]) => {
-                const percentage =
-                  stats.totalTokens > 0 ? (data.tokens / stats.totalTokens) * 100 : 0;
+                const percentage = stats.totalCost > 0 ? (data.cost / stats.totalCost) * 100 : 0;
                 return (
                   <div
                     key={provider}
@@ -167,7 +172,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
                         </span>
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">
-                        {percentage.toFixed(1)}%
+                        ${data.cost.toFixed(4)}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -187,16 +192,15 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
         )}
 
-        {}
+        {/* Top Models */}
         {topModels.length > 0 && (
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-              Top Models by Usage
+              Top Models by Cost
             </h3>
             <div className="space-y-2">
               {topModels.map(([modelId, data], index) => {
-                const percentage =
-                  stats.totalTokens > 0 ? (data.tokens / stats.totalTokens) * 100 : 0;
+                const percentage = stats.totalCost > 0 ? (data.cost / stats.totalCost) * 100 : 0;
                 return (
                   <div
                     key={modelId}
@@ -204,7 +208,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
                           {index + 1}
                         </span>
                         <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -215,12 +219,12 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
                         </span>
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">
-                        {percentage.toFixed(1)}%
+                        ${data.cost.toFixed(4)}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
-                        className="bg-linear-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
+                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -235,10 +239,10 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
         )}
 
-        {}
-        {stats.totalTokens === 0 && (
+        {/* Empty State */}
+        {stats.totalCost === 0 && (
           <div className="text-center py-12">
-            <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+            <DollarSign className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
             <p className="text-lg font-medium text-gray-500 dark:text-gray-400">No usage yet</p>
             <p className="text-sm text-gray-400 dark:text-gray-500">
               Start chatting to see your usage statistics
@@ -246,18 +250,18 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
         )}
 
-        {}
-        {stats.totalTokens > 0 && (
+        {/* Cost Optimization Tips */}
+        {stats.totalCost > 0 && (
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2 flex items-center gap-2">
               <TrendingDown className="h-4 w-4" />
-              Usage Optimization Tips
+              Cost Optimization Tips
             </h4>
             <ul className="space-y-1 text-sm text-yellow-800 dark:text-yellow-200">
-              <li>• Use Claude Haiku 4.5 for simple tasks (faster responses)</li>
-              <li>• Use local models via Ollama for unlimited local inference</li>
+              <li>• Use Claude Haiku 4.5 for simple tasks (4x faster, 1/3 cost of Sonnet)</li>
+              <li>• Use local models via Ollama for zero-cost inference</li>
               <li>• Enable response caching to reduce redundant API calls</li>
-              <li>• Set a token budget limit in settings to control usage</li>
+              <li>• Set a token budget limit in settings to control spending</li>
             </ul>
           </div>
         )}

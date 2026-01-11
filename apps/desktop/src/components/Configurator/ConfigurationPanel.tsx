@@ -8,7 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ScrollArea } from '../ui/ScrollArea';
 import { cn } from '../../lib/utils';
 import { useConfiguratorStore } from '../../stores/configuratorStore';
-import type { ConfigField } from '../../types/configurator';
+import type { ConfigField, NodeConfig } from '../../types/configurator';
+
+// Type for workflow node data
+interface WorkflowNodeData extends Record<string, unknown> {
+  capabilityId?: string;
+  label?: string;
+  config?: NodeConfig;
+}
 
 interface ConfigurationPanelProps {
   className?: string;
@@ -30,24 +37,28 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
   const updateNode = useConfiguratorStore((state) => state.updateNode);
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
+  // Get the capability for the selected node
   const selectedCapability = React.useMemo(() => {
     if (!selectedNode) return null;
-    const capabilityId = selectedNode.data['capabilityId'] as string | undefined;
+    const nodeData = selectedNode.data as WorkflowNodeData;
+    const capabilityId = nodeData.capabilityId;
     return capabilities.find((cap) => cap.id === capabilityId);
   }, [selectedNode, capabilities]);
 
+  // Get previous nodes for variable selection
   const previousNodes = React.useMemo(() => {
     if (!selectedNode) return [];
     const selectedIndex = workflowNodes.findIndex((n) => n.id === selectedNode.id);
     return workflowNodes.slice(0, selectedIndex);
   }, [selectedNode, workflowNodes]);
 
-  const handleConfigChange = (fieldName: string, value: any) => {
+  const handleConfigChange = (fieldName: string, value: unknown) => {
     if (!selectedNode) return;
-    const existingConfig = (selectedNode.data['config'] as Record<string, unknown>) || {};
+    const nodeData = selectedNode.data as WorkflowNodeData;
+    const currentConfig = nodeData.config ?? {};
     updateNode(selectedNode.id, {
       config: {
-        ...existingConfig,
+        ...currentConfig,
         [fieldName]: value,
       },
     });
@@ -61,15 +72,18 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
   };
 
   const renderConfigField = (field: ConfigField) => {
-    const nodeConfig = (selectedNode?.data['config'] as Record<string, unknown>) || {};
-    const value = nodeConfig[field.name] ?? field.defaultValue ?? '';
+    const nodeData = selectedNode?.data as WorkflowNodeData | undefined;
+    const configValue = nodeData?.config?.[field.name];
+    const rawValue = configValue ?? field.defaultValue ?? '';
+    // Cast to string for string-based inputs
+    const stringValue = String(rawValue);
 
     switch (field.type) {
       case 'text':
         return (
           <Input
             placeholder={field.placeholder}
-            value={value}
+            value={stringValue}
             onChange={(e) => handleConfigChange(field.name, e.target.value)}
           />
         );
@@ -78,7 +92,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
         return (
           <Textarea
             placeholder={field.placeholder}
-            value={value}
+            value={stringValue}
             onChange={(e) => handleConfigChange(field.name, e.target.value)}
             rows={4}
           />
@@ -89,7 +103,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
           <Input
             type="number"
             placeholder={field.placeholder}
-            value={value}
+            value={stringValue}
             onChange={(e) => handleConfigChange(field.name, parseFloat(e.target.value))}
           />
         );
@@ -97,7 +111,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
       case 'boolean':
         return (
           <Select
-            value={value ? 'true' : 'false'}
+            value={rawValue ? 'true' : 'false'}
             onValueChange={(v) => handleConfigChange(field.name, v === 'true')}
           >
             <SelectTrigger>
@@ -112,7 +126,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
 
       case 'select':
         return (
-          <Select value={value} onValueChange={(v) => handleConfigChange(field.name, v)}>
+          <Select value={stringValue} onValueChange={(v) => handleConfigChange(field.name, v)}>
             <SelectTrigger>
               <SelectValue placeholder={field.placeholder} />
             </SelectTrigger>
@@ -130,7 +144,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
         return (
           <Textarea
             placeholder={field.placeholder}
-            value={value}
+            value={stringValue}
             onChange={(e) => handleConfigChange(field.name, e.target.value)}
             rows={6}
             className="font-mono text-xs"
@@ -139,16 +153,19 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
 
       case 'variable':
         return (
-          <Select value={value} onValueChange={(v) => handleConfigChange(field.name, v)}>
+          <Select value={stringValue} onValueChange={(v) => handleConfigChange(field.name, v)}>
             <SelectTrigger>
               <SelectValue placeholder="Select a variable..." />
             </SelectTrigger>
             <SelectContent>
-              {previousNodes.map((node) => (
-                <SelectItem key={node.id} value={node.id}>
-                  {node.data['label'] as string} output
-                </SelectItem>
-              ))}
+              {previousNodes.map((node) => {
+                const prevNodeData = node.data as WorkflowNodeData;
+                return (
+                  <SelectItem key={node.id} value={node.id}>
+                    {String(prevNodeData.label ?? '')} output
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         );
@@ -161,6 +178,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
   return (
     <div className={cn('flex flex-col border-l bg-background', className)}>
       {!selectedNode ? (
+        // Employee-level settings
         <ScrollArea className="flex-1">
           <div className="space-y-4 p-4">
             <div>
@@ -220,10 +238,13 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
           </div>
         </ScrollArea>
       ) : (
+        // Node-specific settings
         <ScrollArea className="flex-1">
           <div className="space-y-4 p-4">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{selectedNode.data['label'] as string}</h3>
+              <h3 className="text-lg font-semibold">
+                {String((selectedNode.data as WorkflowNodeData).label ?? '')}
+              </h3>
               <Button variant="ghost" size="icon" onClick={handleDeleteNode}>
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -258,11 +279,14 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
                     <SelectValue placeholder="Select a previous node..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {previousNodes.map((node) => (
-                      <SelectItem key={node.id} value={node.id}>
-                        {node.data['label'] as string} output
-                      </SelectItem>
-                    ))}
+                    {previousNodes.map((node) => {
+                      const prevNodeData = node.data as WorkflowNodeData;
+                      return (
+                        <SelectItem key={node.id} value={node.id}>
+                          {String(prevNodeData.label ?? '')} output
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

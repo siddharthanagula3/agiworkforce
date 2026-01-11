@@ -1,19 +1,10 @@
-import type { NodeProps, Node } from '@xyflow/react';
-import { Handle, Position } from '@xyflow/react';
+import { NodeProps, Handle, Position } from '@xyflow/react';
 import { GitBranch, X } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
 import { useConfiguratorStore } from '../../../stores/configuratorStore';
 
-interface ConditionNodeData {
-  label: string;
-  config?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-type ConditionNodeProps = NodeProps<Node<ConditionNodeData>>;
-
-export function ConditionNode({ data, selected, id }: ConditionNodeProps) {
+export function ConditionNode({ data, selected, id }: NodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
   return (
@@ -23,24 +14,24 @@ export function ConditionNode({ data, selected, id }: ConditionNodeProps) {
         selected && 'ring-2 ring-blue-500',
       )}
     >
-      {}
+      {/* Target Handle (Top) */}
       <Handle
         type="target"
         position={Position.Top}
         className="!h-3 !w-3 !border-2 !border-gray-400 !bg-white"
       />
 
-      {}
+      {/* Node Content */}
       <div className="flex items-center gap-2">
-        <div className="shrink-0 text-yellow-600">
+        <div className="flex-shrink-0 text-yellow-600">
           <GitBranch className="h-4 w-4" />
         </div>
-        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data.label}</div>
+        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data['label'] as string}</div>
         {selected && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 shrink-0"
+            className="h-5 w-5 flex-shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               deleteNode(id);
@@ -51,7 +42,7 @@ export function ConditionNode({ data, selected, id }: ConditionNodeProps) {
         )}
       </div>
 
-      {}
+      {/* Two source handles for true/false branches */}
       <Handle
         type="source"
         position={Position.Bottom}
@@ -65,7 +56,7 @@ export function ConditionNode({ data, selected, id }: ConditionNodeProps) {
         className="!-bottom-2 !left-3/4 !h-3 !w-3 !border-2 !border-red-500 !bg-red-100"
       />
 
-      {}
+      {/* Labels for branches */}
       <div className="mt-2 flex justify-between text-xs text-gray-500">
         <span className="text-green-600">True</span>
         <span className="text-red-600">False</span>
