@@ -70,6 +70,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 download requests per minute per IP
     failClosed: false,
   },
+  'download-beta': {
+    limit: 10,
+    window: '1 m', // 10 beta download requests per minute per IP
+    failClosed: false,
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
