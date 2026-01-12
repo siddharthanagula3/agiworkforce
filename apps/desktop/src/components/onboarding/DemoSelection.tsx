@@ -1,8 +1,3 @@
-/**
- * Demo Selection Component
- * Shows available demos for the selected role
- */
-
 import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
@@ -36,13 +31,11 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-8 px-4">
-      {/* Header */}
+      {}
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-2 text-3xl">
           <span>{roleOption?.icon}</span>
-          <h2 className="text-4xl font-bold tracking-tight">
-            See AGI Workforce in Action
-          </h2>
+          <h2 className="text-4xl font-bold tracking-tight">See AGI Workforce in Action</h2>
         </div>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           Choose a quick demo tailored to <span className="font-semibold">{roleOption?.title}</span>
@@ -52,7 +45,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
         </p>
       </div>
 
-      {/* Demo cards */}
+      {}
       <div className="space-y-4">
         {demos.map((demo) => {
           const isSelected = selectedDemoId === demo.id;
@@ -81,25 +74,18 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
                       {demo.isPopular && (
                         <Badge
                           variant="default"
-                          className="bg-gradient-to-r from-amber-500 to-orange-500 border-none"
+                          className="bg-linear-to-r from-amber-500 to-orange-500 border-none"
                         >
                           <Sparkles className="h-3 w-3 mr-1" />
                           Popular
                         </Badge>
                       )}
                     </div>
-                    <CardDescription className="text-base">
-                      {demo.description}
-                    </CardDescription>
+                    <CardDescription className="text-base">{demo.description}</CardDescription>
                   </div>
 
-                  {/* Action button */}
-                  <Button
-                    size="lg"
-                    className={`min-w-[120px] ${
-                      isSelected ? 'bg-primary' : ''
-                    }`}
-                  >
+                  {}
+                  <Button size="lg" className={`min-w-[120px] ${isSelected ? 'bg-primary' : ''}`}>
                     <Play className="h-4 w-4 mr-2" />
                     Try Demo
                   </Button>
@@ -107,38 +93,38 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
               </CardHeader>
 
               <CardContent>
-                {/* Metrics grid */}
+                {}
                 <div className="grid grid-cols-4 gap-4">
-                  {/* Duration */}
+                  {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">{demo.estimatedTimeSeconds}s</div>
                       <div className="text-xs text-muted-foreground">Demo Time</div>
                     </div>
                   </div>
 
-                  {/* Time saved */}
+                  {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <TrendingUp className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                    <TrendingUp className="h-4 w-4 text-purple-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">{demo.valueSavedMinutes} min</div>
                       <div className="text-xs text-muted-foreground">Time Saved</div>
                     </div>
                   </div>
 
-                  {/* Cost saved per run */}
+                  {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <DollarSign className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <DollarSign className="h-4 w-4 text-green-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">${demo.valueSavedUsd}</div>
                       <div className="text-xs text-muted-foreground">Per Run</div>
                     </div>
                   </div>
 
-                  {/* Monthly projection */}
+                  {}
                   <div className="flex items-center gap-2 bg-primary/10 rounded-lg p-3 border border-primary/20">
-                    <DollarSign className="h-4 w-4 text-primary flex-shrink-0" />
+                    <DollarSign className="h-4 w-4 text-primary shrink-0" />
                     <div>
                       <div className="text-sm font-bold text-primary">
                         ${monthlySavings.toFixed(0)}
@@ -148,7 +134,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
                   </div>
                 </div>
 
-                {/* Monthly projection note */}
+                {}
                 <div className="mt-3 text-xs text-muted-foreground text-center">
                   * Projected savings if run daily (30x per month)
                 </div>
@@ -158,13 +144,11 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
         })}
       </div>
 
-      {/* Info callout */}
-      <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+      {}
+      <Card className="bg-linear-to-br from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-6">
           <div className="text-center space-y-2">
-            <p className="text-sm font-semibold">
-              💡 All demos use sample data and run instantly
-            </p>
+            <p className="text-sm font-semibold">💡 All demos use sample data and run instantly</p>
             <p className="text-xs text-muted-foreground">
               No setup required • See results in seconds • Real ROI calculations
             </p>

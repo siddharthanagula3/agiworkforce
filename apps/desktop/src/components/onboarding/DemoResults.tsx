@@ -25,8 +25,8 @@ interface DemoResultsProps {
 export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTryAnother }) => {
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 py-8 px-4">
-      {/* Success Header with Animation */}
-      <Card className="border-green-500/50 bg-gradient-to-br from-green-500/10 to-green-500/5 shadow-xl">
+      {}
+      <Card className="border-green-500/50 bg-linear-to-br from-green-500/10 to-green-500/5 shadow-xl">
         <CardContent className="pt-6">
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="animate-bounce">
@@ -48,7 +48,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
         </CardContent>
       </Card>
 
-      {/* Metrics Grid */}
+      {}
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -90,7 +90,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
         </Card>
       </div>
 
-      {/* Before & After */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle>Transformation</CardTitle>
@@ -112,7 +112,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
         </CardContent>
       </Card>
 
-      {/* Actions Taken */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle>What {results.demoName} Did</CardTitle>
@@ -121,7 +121,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
           <ul className="space-y-3">
             {results.actionsTaken.map((action, i) => (
               <li key={i} className="flex items-start gap-3">
-                <Check className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                <Check className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
                 <span className="text-sm">{action}</span>
               </li>
             ))}
@@ -129,7 +129,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
         </CardContent>
       </Card>
 
-      {/* ROI Calculation */}
+      {}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="pt-6">
           <div className="text-center space-y-2">
@@ -147,11 +147,11 @@ export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTry
         </CardContent>
       </Card>
 
-      {/* CTA Buttons */}
+      {}
       <div className="space-y-4">
         <Button
           size="lg"
-          className="w-full text-lg h-14 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+          className="w-full text-lg h-14 bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
           onClick={onHire}
         >
           <CheckCircle className="mr-2 h-5 w-5" />

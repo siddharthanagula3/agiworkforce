@@ -1,10 +1,3 @@
-/**
- * Interactive Terminal Component
- *
- * Claude Code-style interactive terminal with command input,
- * command history (up/down arrows), and AI command suggestions.
- */
-
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -75,7 +68,6 @@ export function InteractiveTerminal({
       const newIndex = Math.max(-1, Math.min(commandHistory.length - 1, historyIndex + direction));
 
       if (newIndex !== historyIndex) {
-        // Clear current line
         terminal.write('\r\x1b[K');
         writePrompt(terminal);
 
@@ -104,7 +96,6 @@ export function InteractiveTerminal({
     const command = currentCommand.trim();
     terminal.writeln('');
 
-    // Add to history
     setCommandHistory((prev) => [...prev, command]);
     setHistoryIndex(-1);
     setCurrentCommand('');
@@ -115,10 +106,9 @@ export function InteractiveTerminal({
       const result = await invoke<ExecuteResult>('execute_terminal_command', {
         command,
         cwd: workingDirectory,
-        shell: null, // Use default shell
+        shell: null,
       });
 
-      // Write output
       if (result.stdout) {
         result.stdout.split('\n').forEach((line) => {
           terminal.writeln(line);
@@ -130,7 +120,6 @@ export function InteractiveTerminal({
         });
       }
 
-      // Write exit code if non-zero
       if (result.exitCode !== 0 && result.exitCode !== null) {
         terminal.writeln(`\x1b[90m[exit: ${result.exitCode}]\x1b[0m`);
       }
@@ -165,15 +154,14 @@ export function InteractiveTerminal({
 
       setAiSuggestion(suggestion);
 
-      // Apply suggestion to terminal
       const terminal = xtermRef.current;
       if (terminal) {
-        // Clear current line
         terminal.write('\r\x1b[K');
         writePrompt(terminal);
         terminal.write(suggestion);
         setCurrentCommand(suggestion);
       }
+      setIsGettingSuggestion(false);
     } catch (error) {
       toast.error(`Failed to get suggestion: ${error}`);
       setIsGettingSuggestion(false);
@@ -205,7 +193,6 @@ export function InteractiveTerminal({
     }
   };
 
-  // Initialize xterm.js with interactive input
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) {
       return;
@@ -240,7 +227,7 @@ export function InteractiveTerminal({
         brightWhite: '#ffffff',
       },
       allowProposedApi: true,
-      disableStdin: false, // Enable input!
+      disableStdin: false,
     });
 
     const fitAddon = new FitAddon();
@@ -258,7 +245,6 @@ export function InteractiveTerminal({
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    // Write welcome message
     terminal.writeln('\x1b[1;36m╭──────────────────────────────────────────╮\x1b[0m');
     terminal.writeln(
       '\x1b[1;36m│  \x1b[1;32m✨ AGI Workforce Interactive Terminal\x1b[1;36m   │\x1b[0m',
@@ -270,7 +256,6 @@ export function InteractiveTerminal({
     terminal.writeln('');
     writePrompt(terminal);
 
-    // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
     });
@@ -288,7 +273,6 @@ export function InteractiveTerminal({
     };
   }, [writePrompt]);
 
-  // Handle keyboard input
   useEffect(() => {
     const terminal = xtermRef.current;
     if (!terminal) return;
@@ -296,35 +280,27 @@ export function InteractiveTerminal({
     const disposable = terminal.onData((data) => {
       if (isExecuting) return;
 
-      // Handle special keys
       if (data === '\r' || data === '\n') {
-        // Enter - execute command
         handleExecute();
       } else if (data === '\x7f' || data === '\b') {
-        // Backspace
         if (currentCommand.length > 0) {
           setCurrentCommand((prev) => prev.slice(0, -1));
           terminal.write('\b \b');
         }
       } else if (data === '\x1b[A') {
-        // Up arrow - history
         navigateHistory(-1);
       } else if (data === '\x1b[B') {
-        // Down arrow - history
         navigateHistory(1);
       } else if (data === '\x1b[C' || data === '\x1b[D') {
-        // Left/Right arrows - ignore for now
+        // ignore arrows for now
       } else if (data === '\x03') {
-        // Ctrl+C - cancel
         terminal.writeln('^C');
         setCurrentCommand('');
         writePrompt(terminal);
       } else if (data === '\x0c') {
-        // Ctrl+L - clear
         terminal.clear();
         writePrompt(terminal);
       } else if (data.charCodeAt(0) >= 32) {
-        // Printable characters
         setCurrentCommand((prev) => prev + data);
         terminal.write(data);
       }
@@ -349,7 +325,7 @@ export function InteractiveTerminal({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2 bg-gradient-to-r from-gray-900 to-gray-950">
+      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2 bg-linear-to-r from-gray-900 to-gray-950">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-emerald-400" />
           <h3 className="text-sm font-semibold text-gray-200">Interactive Terminal</h3>
@@ -362,7 +338,7 @@ export function InteractiveTerminal({
         </div>
 
         <div className="flex items-center gap-1">
-          {/* AI Suggest */}
+          {/* Suggestion Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -378,7 +354,7 @@ export function InteractiveTerminal({
             )}
           </Button>
 
-          {/* Search toggle */}
+          {/* Search Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -389,7 +365,7 @@ export function InteractiveTerminal({
             <Search className="h-4 w-4" />
           </Button>
 
-          {/* Copy selection */}
+          {/* Copy Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -400,7 +376,7 @@ export function InteractiveTerminal({
             <Copy className="h-4 w-4" />
           </Button>
 
-          {/* Scroll lock toggle */}
+          {/* Scroll Lock Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -411,7 +387,7 @@ export function InteractiveTerminal({
             {scrollLock ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           </Button>
 
-          {/* Clear */}
+          {/* Clear Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -440,7 +416,7 @@ export function InteractiveTerminal({
         </div>
       )}
 
-      {/* Search bar */}
+      {/* Search Filter */}
       {searchVisible && (
         <div className="border-b border-gray-800 px-4 py-2 bg-gray-900/50">
           <div className="flex items-center gap-2">
@@ -454,7 +430,7 @@ export function InteractiveTerminal({
                 }
               }}
               placeholder="Search terminal output..."
-              className="flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50"
             />
             <Button
               size="sm"
@@ -467,12 +443,12 @@ export function InteractiveTerminal({
         </div>
       )}
 
-      {/* Terminal */}
+      {/* Terminal Viewport */}
       <div className="flex-1 overflow-hidden p-2">
         <div ref={terminalRef} className="h-full w-full" />
       </div>
 
-      {/* Footer with hints */}
+      {/* Footer Status */}
       <div className="px-4 py-1.5 bg-gray-900/50 border-t border-gray-800 text-[10px] text-gray-500 flex items-center gap-4">
         <span>↑↓ History</span>
         <span>Ctrl+C Cancel</span>
