@@ -262,6 +262,9 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 // SECURITY: Rate limited to 60/min - read-only operations
 app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
   const code = req.params['code'];
+  if (!code) {
+    return res.status(400).json({ error: 'missing_code' });
+  }
   // Check DB
   const { data: sessionData } = await supabase
     .from('signaling_sessions')
@@ -293,6 +296,9 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 // SECURITY: Rate limited to 10/min - destructive operation
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
   const code = req.params['code'];
+  if (!code) {
+    return res.status(400).json({ error: 'missing_code' });
+  }
 
   // Cleanup active connections
   const active = activeSessions.get(code);
