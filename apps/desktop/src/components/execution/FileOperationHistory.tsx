@@ -1,10 +1,3 @@
-/**
- * File Operation History Component
- *
- * Displays file operation history with undo/redo capabilities.
- * Similar to Claude Code's file change tracking.
- */
-
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
@@ -40,7 +33,6 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [undoingId, setUndoingId] = useState<string | null>(null);
 
-  // Sort by timestamp descending (most recent first)
   const sortedChanges = [...fileChanges]
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, maxItems);
@@ -92,16 +84,13 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
   const handleUndo = async (change: (typeof fileChanges)[0]) => {
     setUndoingId(change.id);
     try {
-      // Determine undo action based on operation type
       if (change.operation === 'create') {
-        // Undo create = delete the file
         await invoke('undo_file_operation', {
           operation: 'delete',
           path: change.path,
         });
         toast.success(`Deleted ${change.path.split('/').pop()}`);
       } else if (change.operation === 'modify' && change.oldContent !== undefined) {
-        // Undo modify = restore old content
         await invoke('undo_file_operation', {
           operation: 'restore',
           path: change.path,
@@ -109,7 +98,6 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
         });
         toast.success(`Restored ${change.path.split('/').pop()}`);
       } else if (change.operation === 'delete' && change.oldContent !== undefined) {
-        // Undo delete = recreate the file
         await invoke('undo_file_operation', {
           operation: 'create',
           path: change.path,
@@ -118,7 +106,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
         toast.success(`Restored ${change.path.split('/').pop()}`);
       }
 
-      updateFileChange(change.id, false); // Mark as rejected/undone
+      updateFileChange(change.id, false);
     } catch (error) {
       toast.error(`Failed to undo: ${error}`);
     } finally {
@@ -151,7 +139,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
         toast.success(`Deleted ${change.path.split('/').pop()}`);
       }
 
-      updateFileChange(change.id, true); // Mark as accepted
+      updateFileChange(change.id, true);
     } catch (error) {
       toast.error(`Failed to redo: ${error}`);
     } finally {
@@ -173,7 +161,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
 
   return (
     <div className={cn('flex flex-col', className)}>
-      {/* Header */}
+      {}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-gray-400" />
@@ -193,7 +181,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
         </Button>
       </div>
 
-      {/* File Changes List */}
+      {}
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence>
           {sortedChanges.map((change) => (
@@ -207,7 +195,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
                 change.accepted === false && 'opacity-50',
               )}
             >
-              {/* Main Row */}
+              {}
               <div
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
                 onClick={() => setExpandedId(expandedId === change.id ? null : change.id)}
@@ -252,7 +240,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
                 </div>
               </div>
 
-              {/* Expanded Details */}
+              {}
               <AnimatePresence>
                 {expandedId === change.id && (
                   <motion.div
@@ -262,7 +250,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
                     className="overflow-hidden bg-gray-50 dark:bg-gray-900/50"
                   >
                     <div className="px-4 py-3 space-y-3">
-                      {/* Content Preview */}
+                      {}
                       {change.operation === 'modify' && change.oldContent && change.newContent && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -282,7 +270,7 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
                         </div>
                       )}
 
-                      {/* Actions */}
+                      {}
                       <div className="flex items-center gap-2">
                         {change.accepted !== false ? (
                           <Button

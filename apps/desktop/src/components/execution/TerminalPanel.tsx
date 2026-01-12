@@ -1,10 +1,3 @@
-/**
- * Terminal Panel Component
- *
- * Shows real-time command execution output using xterm.js.
- * Displays commands and their results with syntax highlighting.
- */
-
 import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -38,7 +31,6 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const searchAddonRef = useRef<SearchAddon | null>(null);
 
-  // Initialize xterm.js
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) {
       return;
@@ -70,7 +62,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
         brightWhite: '#e5e5e5',
       },
       allowProposedApi: true,
-      disableStdin: true, // Read-only terminal
+      disableStdin: true,
     });
 
     const fitAddon = new FitAddon();
@@ -88,7 +80,6 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
     });
@@ -106,24 +97,19 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
     };
   }, []);
 
-  // Update terminal with new logs
   useEffect(() => {
     const terminal = xtermRef.current;
     if (!terminal) {
       return;
     }
 
-    // Clear terminal
     terminal.clear();
 
-    // Write all logs
     terminalLogs.forEach((log) => {
-      // Command header
       if (log.command) {
         terminal.writeln(`\x1b[1;36m$ ${log.command}\x1b[0m`);
       }
 
-      // Output
       if (log.output) {
         const lines = log.output.split('\n');
         lines.forEach((line) => {
@@ -135,7 +121,6 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
         });
       }
 
-      // Exit code
       if (log.exitCode !== undefined) {
         if (log.exitCode === 0) {
           terminal.writeln(`\x1b[1;32m[Exit code: ${log.exitCode}]\x1b[0m`);
@@ -144,16 +129,14 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
         }
       }
 
-      terminal.writeln(''); // Blank line separator
+      terminal.writeln('');
     });
 
-    // Auto-scroll to bottom if not locked
     if (!scrollLock) {
       terminal.scrollToBottom();
     }
   }, [terminalLogs, scrollLock]);
 
-  // Handle search
   const handleSearch = () => {
     if (searchAddonRef.current && searchQuery) {
       searchAddonRef.current.findNext(searchQuery, { incremental: true });
@@ -177,9 +160,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
       <div className={cn('flex h-full items-center justify-center', className)}>
         <div className="text-center">
           <p className="text-sm text-muted-foreground">No active execution</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Terminal output will appear here
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Terminal output will appear here</p>
         </div>
       </div>
     );
@@ -187,7 +168,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      {/* Header */}
+      {}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-foreground">Terminal Output</h3>
@@ -197,7 +178,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Search toggle */}
+          {}
           <Button
             size="sm"
             variant="ghost"
@@ -207,12 +188,12 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
             <Search className="h-4 w-4" />
           </Button>
 
-          {/* Copy selection */}
+          {}
           <Button size="sm" variant="ghost" onClick={handleCopy} title="Copy selection">
             <Copy className="h-4 w-4" />
           </Button>
 
-          {/* Scroll lock toggle */}
+          {}
           <Button
             size="sm"
             variant="ghost"
@@ -222,14 +203,14 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
             {scrollLock ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           </Button>
 
-          {/* Clear logs */}
+          {}
           <Button size="sm" variant="ghost" onClick={clearLogs} title="Clear output">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Search bar */}
+      {}
       {searchVisible && (
         <div className="border-b border-border px-4 py-2">
           <div className="flex items-center gap-2">
@@ -243,7 +224,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
                 }
               }}
               placeholder="Search terminal output..."
-              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
             <Button size="sm" onClick={handleSearch}>
               Search
@@ -252,7 +233,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
         </div>
       )}
 
-      {/* Terminal */}
+      {}
       <div className="flex-1 overflow-hidden p-2">
         {terminalLogs.length === 0 ? (
           <div className="flex h-full items-center justify-center">

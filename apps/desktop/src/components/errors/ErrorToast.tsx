@@ -134,10 +134,7 @@ interface ErrorToastContainerProps {
   onRetry?: (error: AppError) => void;
 }
 
-export function ErrorToastContainer({
-  position = 'top-right',
-  onRetry,
-}: ErrorToastContainerProps) {
+export function ErrorToastContainer({ position = 'top-right', onRetry }: ErrorToastContainerProps) {
   const { toasts, dismissError } = useErrorStore();
 
   const positionClasses = {
@@ -171,9 +168,6 @@ export function ErrorToastContainer({
   );
 }
 
-/**
- * Hook to easily add errors from components
- */
 export function useErrorToast() {
   const addError = useErrorStore((state) => state.addError);
 
@@ -194,7 +188,12 @@ export function useErrorToast() {
         details,
       });
     },
-    showError: (type: string, message: string, details?: string, context?: Record<string, unknown>) => {
+    showError: (
+      type: string,
+      message: string,
+      details?: string,
+      context?: Record<string, unknown>,
+    ) => {
       addError({
         type,
         severity: 'error',
@@ -208,7 +207,7 @@ export function useErrorToast() {
       message: string,
       details?: string,
       stack?: string,
-      context?: Record<string, unknown>
+      context?: Record<string, unknown>,
     ) => {
       addError({
         type,

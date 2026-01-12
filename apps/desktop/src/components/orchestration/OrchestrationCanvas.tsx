@@ -28,7 +28,6 @@ export const OrchestrationCanvas: React.FC<OrchestrationCanvasProps> = ({
     updateNode,
   } = useOrchestrationStore();
 
-  // Convert workflow nodes/edges to React Flow format
   const convertToReactFlowNodes = (nodes: WorkflowNode[]) => {
     return nodes.map((node) => ({
       id: node.id,
@@ -57,7 +56,6 @@ export const OrchestrationCanvas: React.FC<OrchestrationCanvasProps> = ({
     convertToReactFlowEdges(storeEdges) as any,
   );
 
-  // Update React Flow nodes/edges when store changes
   useEffect(() => {
     setNodes(convertToReactFlowNodes(storeNodes) as any);
     setEdges(convertToReactFlowEdges(storeEdges) as any);
