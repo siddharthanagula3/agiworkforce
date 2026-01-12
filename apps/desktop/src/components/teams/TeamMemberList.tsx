@@ -1,4 +1,3 @@
-// Updated Nov 16, 2025: Added React.memo and performance optimizations
 import React, { useState, useCallback, memo } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -13,7 +12,6 @@ interface TeamMemberListProps {
   isLoading: boolean;
 }
 
-// Updated Nov 16, 2025: Memoized component to prevent unnecessary re-renders
 const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
   members,
   currentTeam,
@@ -26,7 +24,6 @@ const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
   const currentUserMember = members.find((m) => m.userId === currentUserId);
   const currentUserRole = currentUserMember?.role || ('viewer' as TeamRole);
 
-  // Updated Nov 16, 2025: Wrapped handlers in useCallback to prevent re-renders
   const handleRemoveMember = useCallback(
     async (userId: string) => {
       if (!confirm('Are you sure you want to remove this member?')) return;
@@ -51,7 +48,6 @@ const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
     [updateMemberRole, currentTeam.id, currentUserId],
   );
 
-  // Updated Nov 16, 2025: Wrapped in useCallback to prevent re-renders
   const getRoleBadgeColor = useCallback((role: TeamRole) => {
     switch (role) {
       case 'owner':

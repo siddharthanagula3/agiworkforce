@@ -18,10 +18,7 @@ interface SendMessageResponse {
   platform: string;
 }
 
-export const MessageComposer: React.FC<MessageComposerProps> = ({
-  connections,
-  onMessageSent,
-}) => {
+export const MessageComposer: React.FC<MessageComposerProps> = ({ connections, onMessageSent }) => {
   const [selectedConnection, setSelectedConnection] = useState('');
   const [channelId, setChannelId] = useState('');
   const [message, setMessage] = useState('');
@@ -102,10 +99,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Platform</label>
-          <Select
-            value={selectedConnection}
-            onValueChange={setSelectedConnection}
-          >
+          <Select value={selectedConnection} onValueChange={setSelectedConnection}>
             <option value="">Select a platform</option>
             {connections.map((conn) => (
               <option key={conn.id} value={conn.id}>
@@ -123,7 +117,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
             placeholder={getChannelPlaceholder()}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-gray-500 mt-1">
             Enter the channel ID, phone number, or recipient identifier
@@ -137,11 +131,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message here..."
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
           />
-          <p className="text-xs text-gray-500 mt-1">
-            {message.length} characters
-          </p>
+          <p className="text-xs text-gray-500 mt-1">{message.length} characters</p>
         </div>
 
         <div className="flex gap-2 justify-end">

@@ -174,7 +174,7 @@ export const PendingApprovals: React.FC<PendingApprovalsProps> = ({ requests, is
           </div>
         )}
 
-        {/* All Requests History */}
+        {}
         {requests.filter((r) => r.status !== 'pending').length > 0 && (
           <div className="mt-8">
             <h2 className="text-xl font-semibold mb-4">Request History</h2>

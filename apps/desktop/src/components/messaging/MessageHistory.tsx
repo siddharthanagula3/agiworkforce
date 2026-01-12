@@ -86,10 +86,7 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
 
       <div className="flex gap-3 mb-4">
         <div className="flex-1">
-          <Select
-            value={selectedConnection}
-            onValueChange={setSelectedConnection}
-          >
+          <Select value={selectedConnection} onValueChange={setSelectedConnection}>
             <option value="">Select a platform</option>
             {connections.map((conn) => (
               <option key={conn.id} value={conn.id}>
@@ -105,7 +102,7 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
             placeholder="Channel / Recipient ID"
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <Button onClick={handleLoadHistory} disabled={loading}>
@@ -115,7 +112,9 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
 
       {messages.length === 0 ? (
         <div className="text-center text-gray-500 py-8">
-          {loading ? 'Loading messages...' : 'No messages to display. Load history to see messages.'}
+          {loading
+            ? 'Loading messages...'
+            : 'No messages to display. Load history to see messages.'}
         </div>
       ) : (
         <div className="space-y-3 max-h-[500px] overflow-y-auto">
@@ -125,18 +124,12 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
                 <div className="font-medium text-sm">
                   {message.sender_name || message.sender_id}
                 </div>
-                <div className="text-xs text-gray-500">
-                  {formatTimestamp(message.timestamp)}
-                </div>
+                <div className="text-xs text-gray-500">{formatTimestamp(message.timestamp)}</div>
               </div>
               <div className="text-gray-700">{message.text}</div>
               <div className="flex gap-2 mt-2">
-                <span className="text-xs px-2 py-1 bg-gray-100 rounded">
-                  {message.platform}
-                </span>
-                <span className="text-xs px-2 py-1 bg-gray-100 rounded">
-                  {message.channel_id}
-                </span>
+                <span className="text-xs px-2 py-1 bg-gray-100 rounded">{message.platform}</span>
+                <span className="text-xs px-2 py-1 bg-gray-100 rounded">{message.channel_id}</span>
               </div>
             </Card>
           ))}

@@ -46,7 +46,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+        {}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
             {action === 'approve' ? (
@@ -69,9 +69,9 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
           </button>
         </div>
 
-        {/* Content */}
+        {}
         <div className="p-6 space-y-4">
-          {/* Request Details */}
+          {}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-3">
             <div>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -139,7 +139,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
             </div>
           </div>
 
-          {/* Notes/Reason */}
+          {}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -155,7 +155,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
                     ? 'Add any notes about this approval...'
                     : 'Explain why this request is being rejected...'
                 }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -165,7 +165,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
               </div>
             )}
 
-            {/* Actions */}
+            {}
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
                 Cancel

@@ -31,7 +31,6 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
     setSaving(true);
     try {
       await updateTeam(currentTeam.id, name, description || null);
-      // Note: Settings update would require a separate backend endpoint
     } catch (error) {
       console.error('Failed to update team:', error);
     } finally {
@@ -56,7 +55,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
 
   return (
     <div className="space-y-6">
-      {/* Basic Information */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-xl font-semibold mb-4">Basic Information</h2>
         <form onSubmit={handleSave} className="space-y-4">
@@ -69,7 +68,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -80,7 +79,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <Button type="submit" disabled={saving}>
@@ -90,7 +89,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
         </form>
       </div>
 
-      {/* Team Settings */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-xl font-semibold mb-4">Team Settings</h2>
         <div className="space-y-4">
@@ -101,7 +100,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
             <select
               value={defaultMemberRole}
               onChange={(e) => setDefaultMemberRole(e.target.value as any)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <option value="viewer">Viewer</option>
               <option value="editor">Editor</option>
@@ -185,7 +184,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
         </div>
       </div>
 
-      {/* Danger Zone */}
+      {}
       <div className="bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 p-6">
         <h2 className="text-xl font-semibold text-red-900 dark:text-red-300 mb-4">Danger Zone</h2>
         <div className="flex items-center justify-between">
