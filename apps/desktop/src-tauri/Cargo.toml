@@ -120,7 +120,7 @@ url = "2.5"
 
 uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = "0.8"
+chrono-tz = "0.10"
 cron = "0.12"
 
 
