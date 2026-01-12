@@ -71,14 +71,14 @@ export const WorkflowBuilder: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Toolbar */}
+      {}
       <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <input
             type="text"
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
-            className="text-xl font-semibold border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2"
+            className="text-xl font-semibold border-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded px-2"
             placeholder="Workflow Name"
           />
           <button
@@ -109,7 +109,7 @@ export const WorkflowBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* Settings Panel */}
+      {}
       {showSettings && (
         <div className="bg-gray-50 border-b border-gray-200 p-4">
           <div className="max-w-2xl">
@@ -117,7 +117,7 @@ export const WorkflowBuilder: React.FC = () => {
             <textarea
               value={workflowDescription}
               onChange={(e) => setWorkflowDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               rows={3}
               placeholder="Enter workflow description"
             />
@@ -125,7 +125,7 @@ export const WorkflowBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Error Display */}
+      {}
       {error && (
         <div className="bg-red-50 border-b border-red-200 p-3">
           <div className="flex items-center justify-between">
@@ -137,7 +137,7 @@ export const WorkflowBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content */}
+      {}
       <div className="flex flex-1 overflow-hidden">
         <NodeLibrary />
         <div className="flex-1">

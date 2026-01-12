@@ -182,7 +182,6 @@ function formatProcessType(processType: string): string {
 }
 
 function formatValue(value: number, metricName: string): string {
-  // Format based on metric type
   if (metricName.includes('time')) {
     return `${value.toFixed(1)}s`;
   } else if (

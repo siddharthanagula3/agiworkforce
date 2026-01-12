@@ -11,7 +11,6 @@ import type {
   ToolNodeData,
 } from '../../../types/workflow';
 
-// Base node styles
 const nodeBaseClass = 'px-4 py-3 rounded-lg border-2 shadow-lg bg-white min-w-[200px]';
 const handleClass = 'w-3 h-3 !bg-blue-500 border-2 border-white';
 

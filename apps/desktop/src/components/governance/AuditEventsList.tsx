@@ -49,7 +49,7 @@ export const AuditEventsList: React.FC<AuditEventsListProps> = ({ events, isLoad
 
   return (
     <div className="space-y-4">
-      {/* Search and Filters */}
+      {}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -58,7 +58,7 @@ export const AuditEventsList: React.FC<AuditEventsListProps> = ({ events, isLoad
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search events..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ export const AuditEventsList: React.FC<AuditEventsListProps> = ({ events, isLoad
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Status</option>
             <option value="success">Success</option>
@@ -77,7 +77,7 @@ export const AuditEventsList: React.FC<AuditEventsListProps> = ({ events, isLoad
         </div>
       </div>
 
-      {/* Events Table */}
+      {}
       {filteredEvents.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
           <FileText className="h-12 w-12 mx-auto mb-3 text-gray-400" />
@@ -142,7 +142,7 @@ export const AuditEventsList: React.FC<AuditEventsListProps> = ({ events, isLoad
         </div>
       )}
 
-      {/* Pagination Info */}
+      {}
       {filteredEvents.length > 0 && (
         <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
           Showing {filteredEvents.length} of {events.length} events

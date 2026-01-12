@@ -40,11 +40,9 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
   };
 
   const copyInviteLink = async (token: string) => {
-    // Updated Nov 16, 2025: Added URL validation for security
     const baseUrl = window.location.origin;
     const inviteUrl = `${baseUrl}/accept-invitation?token=${encodeURIComponent(token)}`;
 
-    // Validate the generated URL
     const validation = validateUrl(inviteUrl);
     if (!validation.valid) {
       console.error('Invalid invite URL generated:', validation.error);
@@ -73,7 +71,7 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Invite Form */}
+      {}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-xl font-semibold mb-4">Invite New Member</h2>
         <form onSubmit={handleInvite} className="space-y-4">
@@ -87,7 +85,7 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@example.com"
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -97,7 +95,7 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <option value="viewer">Viewer - Can view resources</option>
               <option value="editor">Editor - Can create and modify resources</option>
@@ -111,7 +109,7 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
         </form>
       </div>
 
-      {/* Pending Invitations */}
+      {}
       <div>
         <h2 className="text-xl font-semibold mb-4">
           Pending Invitations ({pendingInvitations.length})

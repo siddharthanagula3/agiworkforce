@@ -1,8 +1,3 @@
-/**
- * Quick Setup Component
- * Fast configuration of essential settings before starting
- */
-
 import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
@@ -17,10 +12,7 @@ interface QuickSetupProps {
   onComplete: (settings: OnboardingSettings) => void;
 }
 
-export const QuickSetup: React.FC<QuickSetupProps> = ({
-  initialSettings,
-  onComplete,
-}) => {
+export const QuickSetup: React.FC<QuickSetupProps> = ({ initialSettings, onComplete }) => {
   const [settings, setSettings] = useState<OnboardingSettings>(initialSettings);
 
   const handleProviderSelect = (provider: OnboardingSettings['llmProvider']) => {
@@ -76,22 +68,20 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-8 px-4">
-      {/* Header */}
+      {}
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center">
           <div className="bg-primary/10 rounded-full p-3">
             <Sparkles className="h-8 w-8 text-primary" />
           </div>
         </div>
-        <h2 className="text-4xl font-bold tracking-tight">
-          You're Almost Ready!
-        </h2>
+        <h2 className="text-4xl font-bold tracking-tight">You're Almost Ready!</h2>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           Quick setup to optimize your experience
         </p>
       </div>
 
-      {/* LLM Provider Selection */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -120,34 +110,28 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
-                        {/* Icon */}
+                        {}
                         <div className="text-3xl">{provider.icon}</div>
 
-                        {/* Info */}
+                        {}
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold">{provider.name}</h3>
                             {provider.recommended && (
                               <Badge
                                 variant="default"
-                                className="bg-gradient-to-r from-green-500 to-emerald-500 border-none"
+                                className="bg-linear-to-r from-green-500 to-emerald-500 border-none"
                               >
                                 {provider.badge}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {provider.description}
-                          </p>
+                          <p className="text-sm text-muted-foreground">{provider.description}</p>
 
-                          {/* Pros */}
+                          {}
                           <div className="flex flex-wrap gap-2 pt-2">
                             {provider.pros.map((pro, index) => (
-                              <Badge
-                                key={index}
-                                variant="secondary"
-                                className="text-xs"
-                              >
+                              <Badge key={index} variant="secondary" className="text-xs">
                                 ✓ {pro}
                               </Badge>
                             ))}
@@ -155,8 +139,8 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
                         </div>
                       </div>
 
-                      {/* Selection indicator */}
-                      <div className="flex-shrink-0">
+                      {}
+                      <div className="shrink-0">
                         {isSelected ? (
                           <div className="bg-primary rounded-full p-1">
                             <Check className="h-4 w-4 text-primary-foreground" />
@@ -174,19 +158,17 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
         </CardContent>
       </Card>
 
-      {/* Preferences */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
             Preferences
           </CardTitle>
-          <CardDescription>
-            Customize how AGI Workforce works for you
-          </CardDescription>
+          <CardDescription>Customize how AGI Workforce works for you</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Notifications */}
+          {}
           <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-border">
             <div className="flex items-start gap-3 flex-1">
               <Bell className="h-5 w-5 text-muted-foreground mt-1" />
@@ -206,7 +188,7 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
             />
           </div>
 
-          {/* Auto-approve */}
+          {}
           <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-border">
             <div className="flex items-start gap-3 flex-1">
               <Zap className="h-5 w-5 text-muted-foreground mt-1" />
@@ -239,7 +221,7 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
         </CardContent>
       </Card>
 
-      {/* Progress indicator */}
+      {}
       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
         <div className="flex items-center gap-1">
           <Check className="h-4 w-4 text-green-500" />
@@ -254,19 +236,15 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({
         <span className="font-semibold text-foreground">All Set!</span>
       </div>
 
-      {/* Complete button */}
+      {}
       <div className="flex justify-center pt-4">
-        <Button
-          size="lg"
-          onClick={handleComplete}
-          className="min-w-[280px] text-lg h-14"
-        >
+        <Button size="lg" onClick={handleComplete} className="min-w-[280px] text-lg h-14">
           <Sparkles className="h-5 w-5 mr-2" />
           Start Using AGI Workforce
         </Button>
       </div>
 
-      {/* Help text */}
+      {}
       <div className="text-center text-sm text-muted-foreground">
         <p>You can change these settings anytime from the Settings page</p>
       </div>
