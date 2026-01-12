@@ -133,16 +133,4 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
   return rateLimit(options);
 }
 
-/**
- * Type augmentation for Express Request to include user from JWT
- */
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        userId: string;
-        email?: string;
-      };
-    }
-  }
-}
+// Note: Express Request.user type is declared in auth.ts via AuthenticatedUser
