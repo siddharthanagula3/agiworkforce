@@ -91,7 +91,7 @@ export const TeamDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4">
@@ -110,7 +110,7 @@ export const TeamDashboard: React.FC = () => {
                   const team = teams.find((t) => t.id === e.target.value);
                   if (team) setCurrentTeam(team);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
@@ -121,7 +121,7 @@ export const TeamDashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Tabs */}
+          {}
           <div className="flex space-x-1 border-b border-gray-200 dark:border-gray-700">
             {tabs.map((tab) => (
               <button
@@ -141,7 +141,7 @@ export const TeamDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Error Message */}
+      {}
       {error && (
         <div className="max-w-7xl mx-auto px-6 py-4 w-full">
           <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative">
@@ -153,7 +153,7 @@ export const TeamDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Content */}
+      {}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-6">
           {activeTab === 'members' && (

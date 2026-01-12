@@ -17,8 +17,8 @@ import { Input } from '../ui/Input';
 import { Dialog } from '../ui/Dialog';
 import { Badge } from '../ui/Badge';
 import { ScrollArea } from '../ui/ScrollArea';
-import * as api from '../../api/automation-enhanced';
-import type { RecordedAction, Recording } from '../../types/automation-enhanced';
+import * as api from '../../api/automationEnhanced';
+import type { RecordedAction, Recording } from '../../types/automationEnhanced';
 
 interface ActionRecorderProps {
   onSaveScript?: (scriptId: string) => void;
@@ -34,7 +34,6 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
   const [scriptTags, setScriptTags] = useState('');
   const [currentRecording, setCurrentRecording] = useState<Recording | null>(null);
 
-  // Update duration every second while recording
   useEffect(() => {
     if (!isRecording) return;
 
@@ -45,7 +44,6 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  // Listen for recorded actions
   useEffect(() => {
     const unlisten = listen<RecordedAction>('automation:action_recorded', (event) => {
       setRecordedActions((prev) => [...prev, event.payload]);
@@ -158,7 +156,7 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Action Recorder</h2>
@@ -189,16 +187,14 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
         </div>
       </div>
 
-      {/* Actions List */}
+      {}
       <Card>
         <ScrollArea className="h-[500px] p-4">
           {recordedActions.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center text-gray-500">
               <Play className="mb-4 h-12 w-12 opacity-50" />
               <p className="mb-2 text-lg font-medium">No actions recorded yet</p>
-              <p className="text-sm">
-                Click "Start Recording" and perform actions on your desktop
-              </p>
+              <p className="text-sm">Click "Start Recording" and perform actions on your desktop</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -227,7 +223,8 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
                       </div>
                       {action.target && action.target.boundingRect && (
                         <div className="text-xs text-gray-500">
-                          Position: ({action.target.boundingRect.left}, {action.target.boundingRect.top})
+                          Position: ({action.target.boundingRect.left},{' '}
+                          {action.target.boundingRect.top})
                         </div>
                       )}
                     </div>
@@ -236,11 +233,7 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
                     <span className="text-xs text-gray-500">
                       {formatDuration(action.timestampMs)}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteAction(action.id)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteAction(action.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -251,14 +244,12 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
         </ScrollArea>
       </Card>
 
-      {/* Save Dialog */}
+      {}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <div className="space-y-4 p-6">
           <div>
             <h3 className="mb-2 text-lg font-semibold">Save Recording as Script</h3>
-            <p className="text-sm text-gray-500">
-              Give your automation a name and description
-            </p>
+            <p className="text-sm text-gray-500">Give your automation a name and description</p>
           </div>
 
           <div className="space-y-4">

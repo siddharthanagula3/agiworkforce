@@ -1,10 +1,3 @@
-/**
- * Files Panel Component
- *
- * Shows file changes with Monaco diff editor.
- * Allows accepting/rejecting individual changes.
- */
-
 import { useState, useEffect } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import { File, FilePlus, FileEdit, FileX, Check, X, AlertCircle } from 'lucide-react';
@@ -28,7 +21,6 @@ export function FilesPanel({ className }: FilesPanelProps) {
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  // Auto-select first pending file
   useEffect(() => {
     if (!selectedFile && fileChanges.length > 0) {
       const firstPending = fileChanges.find((f) => f.accepted === null);
@@ -53,14 +45,14 @@ export function FilesPanel({ className }: FilesPanelProps) {
 
   const handleAccept = (fileChange: FileChange) => {
     updateFileChange(fileChange.id, true);
-    // Move to next pending file
+
     const nextPending = fileChanges.find((f) => f.id !== fileChange.id && f.accepted === null);
     setSelectedFile(nextPending || null);
   };
 
   const handleReject = (fileChange: FileChange) => {
     updateFileChange(fileChange.id, false);
-    // Move to next pending file
+
     const nextPending = fileChanges.find((f) => f.id !== fileChange.id && f.accepted === null);
     setSelectedFile(nextPending || null);
   };
@@ -83,9 +75,9 @@ export function FilesPanel({ className }: FilesPanelProps) {
 
   return (
     <div className={cn('flex h-full', className)}>
-      {/* File list sidebar */}
+      {}
       <div className="w-80 border-r border-border">
-        {/* Header */}
+        {}
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-sm font-semibold text-foreground">File Changes</h3>
           <div className="mt-2 flex items-center gap-4 text-xs">
@@ -101,7 +93,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
           </div>
         </div>
 
-        {/* File list */}
+        {}
         <div className="overflow-y-auto" style={{ height: 'calc(100% - 73px)' }}>
           {fileChanges.length === 0 ? (
             <div className="flex h-full items-center justify-center p-4">
@@ -124,11 +116,11 @@ export function FilesPanel({ className }: FilesPanelProps) {
         </div>
       </div>
 
-      {/* Diff viewer */}
+      {}
       <div className="flex-1">
         {selectedFile ? (
           <div className="flex h-full flex-col">
-            {/* File header */}
+            {}
             <div className="border-b border-border px-4 py-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -142,7 +134,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
                   </p>
                 </div>
 
-                {/* Action buttons */}
+                {}
                 {selectedFile.accepted === null && (
                   <div className="flex items-center gap-2">
                     <Button
@@ -186,7 +178,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
               </div>
             </div>
 
-            {/* Monaco diff editor */}
+            {}
             <div className="flex-1">
               {selectedFile.operation === 'delete' ? (
                 <div className="flex h-full flex-col items-center justify-center bg-muted p-8 text-center">
@@ -226,10 +218,6 @@ export function FilesPanel({ className }: FilesPanelProps) {
   );
 }
 
-// ========================================
-// File List Item Component
-// ========================================
-
 interface FileListItemProps {
   file: FileChange;
   isSelected: boolean;
@@ -257,7 +245,7 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
       onClick={onSelect}
     >
       <div className="flex items-start gap-2">
-        {/* Operation icon */}
+        {}
         <div
           className={cn(
             'mt-0.5 flex h-5 w-5 items-center justify-center rounded',
@@ -267,15 +255,15 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
           <OperationIcon className={cn('h-3 w-3', operationConfig.iconColor)} />
         </div>
 
-        {/* File info */}
+        {}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
           {filePath && <p className="mt-0.5 truncate text-xs text-muted-foreground">{filePath}</p>}
         </div>
 
-        {/* Status indicator */}
+        {}
         {file.accepted !== null && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {file.accepted ? (
               <Check className="h-4 w-4 text-green-500" />
             ) : (
@@ -287,10 +275,6 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
     </div>
   );
 }
-
-// ========================================
-// Helper Functions
-// ========================================
 
 function getOperationConfig(operation: FileChange['operation']) {
   switch (operation) {

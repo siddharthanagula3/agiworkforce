@@ -1,11 +1,3 @@
-/**
- * Execution Dashboard Component
- *
- * Main dashboard component that combines all execution panels.
- * Provides tabbed interface for Thinking, Terminal, Browser, and Files views.
- * Similar to Cursor Composer's execution transparency.
- */
-
 import { useEffect, useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -59,37 +51,31 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + Shift + E - Toggle panel
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'E') {
         e.preventDefault();
         togglePanel();
       }
 
-      // Cmd/Ctrl + Shift + T - Thinking tab
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'T') {
         e.preventDefault();
         setActiveTab('thinking');
         setPanelVisible(true);
       }
 
-      // Cmd/Ctrl + Shift + R - Terminal tab
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'R') {
         e.preventDefault();
         setActiveTab('terminal');
         setPanelVisible(true);
       }
 
-      // Cmd/Ctrl + Shift + B - Browser tab
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'B') {
         e.preventDefault();
         setActiveTab('browser');
         setPanelVisible(true);
       }
 
-      // Cmd/Ctrl + Shift + F - Files tab
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
         e.preventDefault();
         setActiveTab('files');
@@ -101,14 +87,12 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePanel, setActiveTab, setPanelVisible]);
 
-  // Auto-show panel when goal starts
   useEffect(() => {
     if (activeGoal && !panelVisible) {
       setPanelVisible(true);
     }
   }, [activeGoal, panelVisible, setPanelVisible]);
 
-  // Get badge counts for tabs
   const activeStepCount = steps.filter((s) => s.status === 'in-progress').length;
   const terminalCount = terminalLogs.length;
   const browserCount = browserActions.length;
@@ -132,7 +116,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
           className,
         )}
       >
-        {/* Header */}
+        {}
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold text-foreground">Execution Dashboard</h2>
@@ -149,7 +133,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Collapse/Expand */}
+            {}
             <Button
               size="sm"
               variant="ghost"
@@ -163,7 +147,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
               )}
             </Button>
 
-            {/* Maximize/Minimize */}
+            {}
             {!isCollapsed && (
               <Button
                 size="sm"
@@ -179,7 +163,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
               </Button>
             )}
 
-            {/* Close */}
+            {}
             <Button
               size="sm"
               variant="ghost"
@@ -191,14 +175,14 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
           </div>
         </div>
 
-        {/* Tabs */}
+        {}
         {!isCollapsed && (
           <Tabs.Root
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as typeof activeTab)}
             className="flex flex-1 flex-col overflow-hidden"
           >
-            {/* Tab list */}
+            {}
             <Tabs.List className="flex border-b border-border bg-muted/30 px-4">
               <Tabs.Trigger
                 value="thinking"
@@ -270,7 +254,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
               </Tabs.Trigger>
             </Tabs.List>
 
-            {/* Tab content */}
+            {}
             <div className="flex-1 overflow-hidden">
               <Tabs.Content value="thinking" className="h-full">
                 <ThinkingPanel />
@@ -291,7 +275,7 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
           </Tabs.Root>
         )}
 
-        {/* Keyboard shortcuts hint */}
+        {}
         {!isCollapsed && (
           <div className="border-t border-border bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground">
             <kbd className="rounded bg-background px-1.5 py-0.5">Cmd+Shift+E</kbd> Toggle •

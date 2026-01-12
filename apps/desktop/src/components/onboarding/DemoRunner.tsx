@@ -1,8 +1,3 @@
-/**
- * Demo Runner Component
- * Shows real-time execution of a demo with progress and actions
- */
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Progress } from '../ui/Progress';
@@ -30,7 +25,6 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
     filesProcessed: 0,
   });
 
-  // Update action log based on progress
   useEffect(() => {
     if (progress && progress.currentStep < demo.steps.length) {
       const currentStepData = demo.steps[progress.currentStep];
@@ -47,7 +41,6 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
       }
     }
 
-    // Mark previous steps as completed
     if (progress && progress.currentStep > 0) {
       setActionLog((prev) =>
         prev.map((action, index) => ({
@@ -57,13 +50,11 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
       );
     }
 
-    // Mark all completed if done
     if (progress?.completed) {
       setActionLog((prev) => prev.map((action) => ({ ...action, completed: true })));
     }
   }, [progress, demo.steps, actionLog]);
 
-  // Animate metrics counting up
   useEffect(() => {
     if (!isRunning) return;
 
@@ -84,8 +75,8 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 py-8 px-4">
-      {/* Header */}
-      <Card className="border-2 border-primary bg-gradient-to-br from-primary/5 to-primary/10">
+      {}
+      <Card className="border-2 border-primary bg-linear-to-br from-primary/5 to-primary/10">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -103,7 +94,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Progress bar */}
+          {}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium">
@@ -120,7 +111,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
             />
           </div>
 
-          {/* Current action */}
+          {}
           <div className="bg-background/60 rounded-lg p-4 border border-primary/20">
             <p className="text-sm font-medium text-muted-foreground mb-1">Current Action:</p>
             <p className="text-base font-semibold flex items-center gap-2">
@@ -129,7 +120,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
             </p>
           </div>
 
-          {/* Live metrics */}
+          {}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-background/60 rounded-lg p-3 border border-border">
               <div className="text-xs text-muted-foreground mb-1">Time Saved</div>
@@ -158,7 +149,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
         </CardContent>
       </Card>
 
-      {/* Action log */}
+      {}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Live Action Log</CardTitle>
@@ -182,8 +173,8 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
                         : 'bg-secondary/50 border border-border'
                   }`}
                 >
-                  {/* Icon */}
-                  <div className="flex-shrink-0 mt-0.5">
+                  {}
+                  <div className="shrink-0 mt-0.5">
                     {action.completed ? (
                       <div className="bg-green-500 rounded-full p-1">
                         <Check className="h-3 w-3 text-white" />
@@ -195,7 +186,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
                     )}
                   </div>
 
-                  {/* Description */}
+                  {}
                   <div className="flex-1">
                     <p
                       className={`text-sm font-medium ${
@@ -209,8 +200,8 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
                     )}
                   </div>
 
-                  {/* Timestamp */}
-                  <div className="text-xs text-muted-foreground flex-shrink-0">
+                  {}
+                  <div className="text-xs text-muted-foreground shrink-0">
                     {new Date(action.timestamp).toLocaleTimeString()}
                   </div>
                 </div>
@@ -220,7 +211,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
         </CardContent>
       </Card>
 
-      {/* Info */}
+      {}
       <div className="text-center text-sm text-muted-foreground">
         <p>Demo running with sample data • Results are simulated for demonstration</p>
       </div>
