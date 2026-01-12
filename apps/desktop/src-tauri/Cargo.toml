@@ -101,7 +101,7 @@ hex = "0.4"
 
 
 image = { version = "0.25", features = ["png", "jpeg", "webp"] }
-imageproc = "0.25"
+imageproc = "0.26"
 
 
 tracing = "0.1"
