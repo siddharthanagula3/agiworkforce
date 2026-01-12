@@ -1,8 +1,3 @@
-/**
- * Progress Indicator Component
- * Shows step progress at the top of the onboarding wizard
- */
-
 import React from 'react';
 import { Button } from '../ui/Button';
 import { ChevronLeft, X } from 'lucide-react';
@@ -30,9 +25,9 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
   return (
     <div className="w-full space-y-4">
-      {/* Top bar with back and skip */}
+      {}
       <div className="flex items-center justify-between">
-        {/* Back button */}
+        {}
         <div className="w-24">
           {showBack && currentStep > 0 && onBack ? (
             <Button
@@ -50,7 +45,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           )}
         </div>
 
-        {/* Step counter */}
+        {}
         <div className="text-center">
           <span
             className="text-sm font-medium text-muted-foreground"
@@ -60,7 +55,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           </span>
         </div>
 
-        {/* Skip button */}
+        {}
         <div className="w-24 flex justify-end">
           {showSkip && onSkip ? (
             <Button
@@ -79,7 +74,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         </div>
       </div>
 
-      {/* Progress dots */}
+      {}
       <div className="flex items-center justify-center gap-2">
         {Array.from({ length: totalSteps }).map((_, index) => {
           const isCompleted = index < currentStep;
@@ -111,7 +106,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         })}
       </div>
 
-      {/* Progress bar */}
+      {}
       <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
         <div
           className="h-full bg-primary transition-all duration-500 ease-out"
@@ -119,7 +114,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         />
       </div>
 
-      {/* Current step label */}
+      {}
       <div className="text-center">
         <p className="text-sm font-medium text-foreground">
           {stepLabels[currentStep] || `Step ${currentStep + 1}`}

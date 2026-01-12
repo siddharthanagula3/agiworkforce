@@ -2,9 +2,9 @@ import { Loader2, Send } from 'lucide-react';
 import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
-import { Input } from '../ui/Input'; // Assuming exist
-import { Textarea } from '../ui/Textarea'; // Assuming exist
-import { getSupabase } from '../../lib/supabase';
+import { Input } from '../ui/Input';
+import { Textarea } from '../ui/Textarea';
+import { invoke } from '@tauri-apps/api/core';
 import { supabaseAuth } from '../../services/supabaseAuth';
 
 interface FeedbackDialogProps {
@@ -25,31 +25,23 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     setIsSending(true);
 
     try {
-      const user = supabaseAuth.getUser();
-      const supabase = getSupabase();
+      const user = await supabaseAuth.getUser();
 
-      // Attempt to save to Supabase
-      const { error } = await supabase.from('feedback').insert({
-        user_id: user?.id,
+      await invoke('submit_feedback', {
         subject,
         message,
+        userId: user?.id,
         metadata: {
           platform: 'desktop',
-          version: '5.0.0', // Should come from config
+          version: '5.0.0',
           user_agent: navigator.userAgent,
         },
       });
-
-      if (error) {
-        console.warn('Failed to save feedback to database, falling back to log:', error);
-        // Fallback for beta if table doesn't exist
-        console.log('Feedback payload:', { subject, message, userId: user?.id });
-      }
     } catch (err) {
       console.error('Error submitting feedback:', err);
+      // Optionally show error state here
     }
 
-    // Simulate network delay for UX
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     setSuccess(true);

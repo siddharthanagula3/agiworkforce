@@ -68,7 +68,7 @@ export const ExecutionViewer: React.FC<ExecutionViewerProps> = ({ executionId })
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Header */}
+      {}
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Workflow Execution</h2>
@@ -137,7 +137,7 @@ export const ExecutionViewer: React.FC<ExecutionViewerProps> = ({ executionId })
         )}
       </div>
 
-      {/* Execution Logs */}
+      {}
       <div className="flex-1 overflow-y-auto p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Execution Logs</h3>
         {executionLogs.length === 0 ? (

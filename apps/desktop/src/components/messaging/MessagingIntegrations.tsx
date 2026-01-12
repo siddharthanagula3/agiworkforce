@@ -49,18 +49,15 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
 
-  // Slack form state
   const [slackBotToken, setSlackBotToken] = useState('');
   const [slackAppToken, setSlackAppToken] = useState('');
   const [slackSigningSecret, setSlackSigningSecret] = useState('');
   const [slackWorkspaceName, setSlackWorkspaceName] = useState('');
 
-  // WhatsApp form state
   const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState('');
   const [whatsappAccessToken, setWhatsappAccessToken] = useState('');
   const [whatsappVerifyToken, setWhatsappVerifyToken] = useState('');
 
-  // Teams form state
   const [teamsTenantId, setTeamsTenantId] = useState('');
   const [teamsClientId, setTeamsClientId] = useState('');
   const [teamsClientSecret, setTeamsClientSecret] = useState('');
@@ -97,14 +94,12 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
 
       await invoke<MessagingConnection>('connect_slack', { request });
 
-      // Reset form and close modal
       setSlackBotToken('');
       setSlackAppToken('');
       setSlackSigningSecret('');
       setSlackWorkspaceName('');
       setShowSlackModal(false);
 
-      // Reload connections
       await loadConnections();
     } catch (err) {
       setError(err as string);
@@ -197,18 +192,14 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700">
-          {error}
-        </div>
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700">{error}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">💬</div>
           <h3 className="font-semibold mb-2">Slack</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Connect to Slack workspaces and channels
-          </p>
+          <p className="text-sm text-gray-600 mb-4">Connect to Slack workspaces and channels</p>
           <Button onClick={() => setShowSlackModal(true)} className="w-full">
             Connect Slack
           </Button>
@@ -217,9 +208,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">📱</div>
           <h3 className="font-semibold mb-2">WhatsApp</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Connect WhatsApp Business API
-          </p>
+          <p className="text-sm text-gray-600 mb-4">Connect WhatsApp Business API</p>
           <Button onClick={() => setShowWhatsAppModal(true)} className="w-full">
             Connect WhatsApp
           </Button>
@@ -228,9 +217,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">👥</div>
           <h3 className="font-semibold mb-2">Microsoft Teams</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Connect to Microsoft Teams
-          </p>
+          <p className="text-sm text-gray-600 mb-4">Connect to Microsoft Teams</p>
           <Button onClick={() => setShowTeamsModal(true)} className="w-full">
             Connect Teams
           </Button>
@@ -240,9 +227,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Connected Platforms</h2>
         {connections.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            No messaging platforms connected yet
-          </div>
+          <div className="text-center text-gray-500 py-8">No messaging platforms connected yet</div>
         ) : (
           <div className="space-y-3">
             {connections.map((connection) => (
@@ -283,7 +268,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         )}
       </div>
 
-      {/* Slack Modal */}
+      {}
       <Dialog open={showSlackModal} onOpenChange={setShowSlackModal}>
         <DialogContent>
           <DialogHeader>
@@ -318,9 +303,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Workspace Name (optional)
-              </label>
+              <label className="block text-sm font-medium mb-1">Workspace Name (optional)</label>
               <Input
                 value={slackWorkspaceName}
                 onChange={(e) => setSlackWorkspaceName(e.target.value)}
@@ -337,7 +320,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         </DialogContent>
       </Dialog>
 
-      {/* WhatsApp Modal */}
+      {}
       <Dialog open={showWhatsAppModal} onOpenChange={setShowWhatsAppModal}>
         <DialogContent>
           <DialogHeader>
@@ -380,7 +363,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         </DialogContent>
       </Dialog>
 
-      {/* Teams Modal */}
+      {}
       <Dialog open={showTeamsModal} onOpenChange={setShowTeamsModal}>
         <DialogContent>
           <DialogHeader>
@@ -413,9 +396,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Workspace Name (optional)
-              </label>
+              <label className="block text-sm font-medium mb-1">Workspace Name (optional)</label>
               <Input
                 value={teamsWorkspaceName}
                 onChange={(e) => setTeamsWorkspaceName(e.target.value)}

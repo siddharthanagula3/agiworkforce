@@ -39,7 +39,6 @@ export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ reso
           return next;
         });
 
-        // Remove cursor after 5 seconds of inactivity
         setTimeout(() => {
           setCursors((prev) => {
             const next = new Map(prev);
@@ -59,7 +58,6 @@ export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ reso
   };
 
   const getUserName = (userId: string): string => {
-    // In a real implementation, fetch user name from a user service
     return userId.substring(0, 8);
   };
 
@@ -93,7 +91,7 @@ const Cursor: React.FC<CursorProps> = ({ position, color, label }) => {
         transform: 'translate(-2px, -2px)',
       }}
     >
-      {/* Cursor SVG */}
+      {}
       <svg
         width="24"
         height="24"
@@ -106,7 +104,7 @@ const Cursor: React.FC<CursorProps> = ({ position, color, label }) => {
         <path d="M4.5 5.11803L12.545 20.4615L11.6341 10.1551L4.5 5.11803Z" fill={color} />
       </svg>
 
-      {/* User label */}
+      {}
       <div
         className="absolute left-6 top-0 px-2 py-1 rounded text-xs text-white whitespace-nowrap font-medium"
         style={{

@@ -1,10 +1,3 @@
-/**
- * Browser Panel Component
- *
- * Shows browser automation preview with screenshots and action log.
- * Displays current URL, screenshots, and a timeline of browser actions.
- */
-
 import { useEffect, useRef, useState } from 'react';
 import {
   Globe,
@@ -39,7 +32,6 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
   const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
   const screenshotRef = useRef<HTMLDivElement>(null);
 
-  // Auto-expand latest action
   useEffect(() => {
     if (browserActions.length > 0) {
       const latestAction = browserActions[browserActions.length - 1];
@@ -67,9 +59,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
         <div className="text-center">
           <Globe className="mx-auto h-12 w-12 text-muted-foreground" />
           <p className="mt-2 text-sm text-muted-foreground">No active execution</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Browser automation will appear here
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Browser automation will appear here</p>
         </div>
       </div>
     );
@@ -77,7 +67,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      {/* Header */}
+      {}
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
@@ -92,7 +82,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
                   className="flex items-center gap-1 text-xs text-primary hover:underline"
                 >
                   <span className="truncate">{currentUrl}</span>
-                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               </div>
             )}
@@ -104,7 +94,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Screenshot preview */}
+        {}
         {currentScreenshot && (
           <div className="border-b border-border">
             <div
@@ -121,7 +111,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
           </div>
         )}
 
-        {/* Actions timeline */}
+        {}
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {browserActions.length === 0 ? (
             <div className="flex h-full items-center justify-center">
@@ -147,10 +137,6 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
   );
 }
 
-// ========================================
-// Action Card Component
-// ========================================
-
 interface ActionCardProps {
   action: BrowserAction;
   isLast: boolean;
@@ -167,12 +153,10 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
 
   return (
     <div className="relative">
-      {/* Timeline line */}
-      {!isLast && (
-        <div className="absolute left-[11px] top-10 h-full w-0.5 bg-border" />
-      )}
+      {}
+      {!isLast && <div className="absolute left-[11px] top-10 h-full w-0.5 bg-border" />}
 
-      {/* Action header */}
+      {}
       <div
         className={cn(
           'relative flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50',
@@ -181,8 +165,8 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
         )}
         onClick={onToggleExpand}
       >
-        {/* Icon */}
-        <div className="relative flex-shrink-0">
+        {}
+        <div className="relative shrink-0">
           <div
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded-full',
@@ -190,13 +174,10 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             )}
           >
             <ActionIcon
-              className={cn(
-                'h-3.5 w-3.5',
-                action.success ? 'text-primary' : 'text-destructive',
-              )}
+              className={cn('h-3.5 w-3.5', action.success ? 'text-primary' : 'text-destructive')}
             />
           </div>
-          {/* Success/failure badge */}
+          {}
           <div
             className={cn(
               'absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full border border-background',
@@ -211,7 +192,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
           </div>
         </div>
 
-        {/* Content */}
+        {}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -226,7 +207,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             {hasDetails && (
               <button
                 type="button"
-                className="flex-shrink-0 text-muted-foreground transition-transform hover:text-foreground"
+                className="shrink-0 text-muted-foreground transition-transform hover:text-foreground"
                 style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
               >
                 <ChevronDown className="h-4 w-4" />
@@ -234,7 +215,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             )}
           </div>
 
-          {/* Error message */}
+          {}
           {action.error && (
             <div className="mt-2 rounded-md bg-destructive/10 px-2 py-1.5">
               <p className="text-xs text-destructive">{action.error}</p>
@@ -243,10 +224,10 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
         </div>
       </div>
 
-      {/* Expanded details */}
+      {}
       {isExpanded && hasDetails && (
         <div className="ml-9 mt-2 space-y-3 rounded-lg border border-border bg-card p-3">
-          {/* Selector */}
+          {}
           {action.selector && (
             <div>
               <p className="text-xs font-medium text-muted-foreground">Selector</p>
@@ -256,7 +237,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             </div>
           )}
 
-          {/* Value */}
+          {}
           {action.value && (
             <div>
               <p className="text-xs font-medium text-muted-foreground">Value</p>
@@ -266,7 +247,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             </div>
           )}
 
-          {/* Screenshot */}
+          {}
           {action.screenshotData && (
             <div>
               <p className="text-xs font-medium text-muted-foreground">Screenshot</p>
@@ -282,10 +263,6 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
     </div>
   );
 }
-
-// ========================================
-// Helper Functions
-// ========================================
 
 function getActionConfig(type: BrowserAction['type']) {
   switch (type) {

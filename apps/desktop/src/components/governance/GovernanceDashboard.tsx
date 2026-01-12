@@ -43,7 +43,7 @@ export const GovernanceDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center mb-4">
@@ -58,7 +58,7 @@ export const GovernanceDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Statistics Cards */}
+          {}
           {approvalStatistics && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -90,7 +90,7 @@ export const GovernanceDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Tabs */}
+          {}
           <div className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 mt-6">
             {tabs.map((tab) => (
               <button
@@ -115,7 +115,7 @@ export const GovernanceDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Error Message */}
+      {}
       {error && (
         <div className="max-w-7xl mx-auto px-6 py-4 w-full">
           <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded">
@@ -124,7 +124,7 @@ export const GovernanceDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Content */}
+      {}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-6">
           {activeTab === 'audit' && (
