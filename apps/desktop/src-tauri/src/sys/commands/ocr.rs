@@ -90,7 +90,6 @@ fn preprocess_image(image_path: &str) -> Result<String, String> {
 }
 
 #[cfg(feature = "ocr")]
-#[cfg(feature = "ocr")]
 fn detect_languages(image_path: &str) -> Result<Vec<LanguageDetection>, String> {
     use tesseract::PageSegMode;
 

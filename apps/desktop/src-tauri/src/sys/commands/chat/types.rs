@@ -334,7 +334,7 @@ fn is_safe_path(path: &str) -> bool {
     if cfg!(windows) && path.contains(':') && !path.starts_with("C:") && !path.starts_with("D:") {
         // Allow drive letters but not ADS
         let colon_count = path.matches(':').count();
-        if colon_count > 1 || (!path.chars().nth(1).map_or(false, |c| c == ':')) {
+        if colon_count > 1 || path.chars().nth(1) != Some(':') {
             return false;
         }
     }
