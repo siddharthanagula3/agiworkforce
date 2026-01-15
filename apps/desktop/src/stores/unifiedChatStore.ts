@@ -35,7 +35,9 @@ export interface MessageMetadata {
   duration?: number;
   streaming?: boolean;
   artifacts?: Artifact[];
-  type?: 'reasoning' | 'response';
+  type?: 'reasoning' | 'response' | 'deep-research-task';
+  /** Task ID for deep research messages */
+  taskId?: string;
   /** Indicates this message was edited by the user */
   edited?: boolean;
   /** Timestamp of when the message was last edited */

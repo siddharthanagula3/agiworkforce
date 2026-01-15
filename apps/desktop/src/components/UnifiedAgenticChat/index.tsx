@@ -23,7 +23,9 @@ import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useBillingStore } from '../../stores/billingStore';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
+import { useExecutionStore } from '../../stores/executionStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
+import type { ResearchTask } from '../../types/chat';
 import { useSimpleModeStore } from '../../stores/simpleModeStore';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { AppLayout } from './AppLayout';
@@ -425,6 +427,135 @@ export const UnifiedAgenticChat: React.FC<{
           }
         }),
       );
+
+      // Deep Research event listeners
+      registerListener(
+        listen<{
+          task_id: string;
+          step_id: string;
+          step_index: number;
+          description: string;
+        }>('research:step_started', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Research step started:', payload);
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            // Update the step status
+            const updatedSteps = task.steps.map((step, index) => {
+              if (index === payload.step_index || step.id === payload.step_id) {
+                return { ...step, status: 'running' as const, timestamp: Date.now() };
+              }
+              return step;
+            });
+            executionStore.updateResearchTask(payload.task_id, {
+              steps: updatedSteps,
+              progress: Math.round((payload.step_index / task.steps.length) * 100),
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          task_id: string;
+          step_id: string;
+          step_index: number;
+          success: boolean;
+          details?: string;
+        }>('research:step_completed', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Research step completed:', payload);
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            const updatedSteps = task.steps.map((step, index) => {
+              if (index === payload.step_index || step.id === payload.step_id) {
+                return {
+                  ...step,
+                  status: payload.success ? ('completed' as const) : ('failed' as const),
+                  details: payload.details,
+                };
+              }
+              return step;
+            });
+            const completedCount = updatedSteps.filter((s) => s.status === 'completed').length;
+            executionStore.updateResearchTask(payload.task_id, {
+              steps: updatedSteps,
+              progress: Math.round((completedCount / task.steps.length) * 100),
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          task_id: string;
+          finding: string;
+        }>('research:finding_added', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Research finding added:', payload);
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            executionStore.updateResearchTask(payload.task_id, {
+              findings: [...task.findings, payload.finding],
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          task_id: string;
+          source: { title: string; url: string; domain?: string };
+        }>('research:source_added', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Research source added:', payload);
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            executionStore.updateResearchTask(payload.task_id, {
+              sources: [...task.sources, payload.source],
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          task_id: string;
+          success: boolean;
+          time_elapsed?: string;
+        }>('research:completed', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Research completed:', payload);
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            const updatedSteps = task.steps.map((step) => ({
+              ...step,
+              status: payload.success ? ('completed' as const) : step.status,
+            }));
+            executionStore.updateResearchTask(payload.task_id, {
+              status: payload.success ? 'completed' : 'failed',
+              progress: 100,
+              steps: updatedSteps,
+              timeElapsed: payload.time_elapsed,
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          task_id: string;
+          time_elapsed: string;
+        }>('research:progress', ({ payload }) => {
+          const executionStore = useExecutionStore.getState();
+          const task = executionStore.researchTasks[payload.task_id];
+          if (task) {
+            executionStore.updateResearchTask(payload.task_id, {
+              timeElapsed: payload.time_elapsed,
+            });
+          }
+        }),
+      );
     };
 
     // Start setting up listeners
@@ -753,10 +884,67 @@ export const UnifiedAgenticChat: React.FC<{
 
     addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
+    // Handle deep-research focus mode: create research task and set special metadata
+    const isDeepResearchMode = enrichedOptions.focusMode === 'deep-research';
+    let researchTaskId: string | undefined;
+
+    if (isDeepResearchMode) {
+      // Generate a unique task ID for the research task
+      researchTaskId = `research-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+      // Create initial research task in ExecutionStore
+      const initialResearchTask: ResearchTask = {
+        id: researchTaskId,
+        query: content,
+        progress: 0,
+        status: 'running',
+        steps: [
+          {
+            id: `${researchTaskId}-step-1`,
+            description: 'Analyzing query and planning research strategy',
+            status: 'running',
+            timestamp: Date.now(),
+          },
+          {
+            id: `${researchTaskId}-step-2`,
+            description: 'Searching for relevant sources',
+            status: 'pending',
+          },
+          {
+            id: `${researchTaskId}-step-3`,
+            description: 'Extracting key information',
+            status: 'pending',
+          },
+          {
+            id: `${researchTaskId}-step-4`,
+            description: 'Synthesizing findings',
+            status: 'pending',
+          },
+          {
+            id: `${researchTaskId}-step-5`,
+            description: 'Compiling final report',
+            status: 'pending',
+          },
+        ],
+        findings: [],
+        sources: [],
+        timeElapsed: '0s',
+      };
+
+      useExecutionStore.getState().addResearchTask(initialResearchTask);
+    }
+
+    // Create assistant message with deep-research metadata if applicable
     const assistantMessageId = addMessage({
       role: 'assistant',
-      content: '',
-      metadata: { streaming: true },
+      content: isDeepResearchMode ? '' : '',
+      metadata: {
+        streaming: true,
+        ...(isDeepResearchMode && {
+          type: 'deep-research-task',
+          taskId: researchTaskId,
+        }),
+      },
     });
 
     setIsLoading(true);
@@ -811,6 +999,8 @@ export const UnifiedAgenticChat: React.FC<{
             preferCloudCredits: true,
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
+            // Pass research task ID for deep research mode
+            researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
           },
         });
 

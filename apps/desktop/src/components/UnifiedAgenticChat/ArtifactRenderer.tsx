@@ -1,6 +1,7 @@
 import { invoke } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
 import {
+  AlertTriangle,
   BarChart3,
   Check,
   ChevronDown,
@@ -10,12 +11,18 @@ import {
   FileSpreadsheet,
   FileText,
   FileUp,
+  Globe,
   Image as ImageIcon,
+  Maximize2,
+  Minimize2,
   Network,
+  Play,
   Presentation,
+  RefreshCw,
+  Square,
   Table2,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
@@ -416,6 +423,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         return <FileSpreadsheet className="h-4 w-4" />;
       case 'presentation':
         return <Presentation className="h-4 w-4" />;
+      case 'html':
+        return <Globe className="h-4 w-4" />;
       default:
         return <Code2 className="h-4 w-4" />;
     }
@@ -561,6 +570,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
             <SpreadsheetArtifact artifact={artifact} />
           ) : artifact.type === 'presentation' ? (
             <PresentationArtifact artifact={artifact} />
+          ) : artifact.type === 'html' ? (
+            <HtmlArtifact artifact={artifact} />
           ) : (
             <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
           )}
@@ -869,6 +880,518 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
       ) : (
         <div className="text-zinc-500 text-sm animate-pulse">Rendering diagram...</div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sandboxed iframe-based runtime for HTML/JavaScript artifacts.
+ * Provides a CodePen/JSFiddle-like live preview experience.
+ *
+ * Security measures:
+ * - Uses strict sandbox attributes to prevent:
+ *   - Top-level navigation (allow-top-navigation disabled)
+ *   - Form submissions to external URLs (allow-forms disabled by default)
+ *   - Access to parent window (allow-same-origin disabled)
+ *   - Popups and modal dialogs (allow-popups disabled)
+ * - CSP meta tag injected into the HTML to restrict external resources
+ * - Console output is captured and displayed for debugging
+ * - Errors are caught and displayed gracefully
+ */
+function HtmlArtifact({ artifact }: { artifact: Artifact }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [isRunning, setIsRunning] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showCode, setShowCode] = useState(false);
+  const [consoleOutput, setConsoleOutput] = useState<
+    Array<{ type: 'log' | 'error' | 'warn' | 'info'; message: string; timestamp: number }>
+  >([]);
+  const [error, setError] = useState<string | null>(null);
+  const consoleRef = useRef<HTMLDivElement>(null);
+
+  // Generate a unique ID for message channel security
+  const channelId = useRef(crypto.randomUUID());
+
+  // Build the sandboxed HTML document with security headers and console capture
+  const buildSandboxedHtml = useCallback((content: string): string => {
+    // Extract or detect if content is a full HTML document or just a snippet
+    const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
+
+    // Content Security Policy to restrict what the iframe can do
+    // - default-src 'self' blob: data: - allows same-origin, blobs, and data URIs
+    // - script-src 'unsafe-inline' 'unsafe-eval' - needed for inline scripts
+    // - style-src 'unsafe-inline' - needed for inline styles
+    // - img-src * data: blob: - allows images from anywhere (common use case)
+    // - font-src * data: - allows fonts
+    // - connect-src 'none' - blocks fetch/XHR to prevent data exfiltration
+    // - frame-src 'none' - blocks nested iframes
+    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
+
+    // Console capture script that forwards console output to parent
+    const consoleCapture = `
+<script>
+(function() {
+  const channelId = '${channelId.current}';
+  const originalConsole = {
+    log: console.log.bind(console),
+    error: console.error.bind(console),
+    warn: console.warn.bind(console),
+    info: console.info.bind(console)
+  };
+
+  function sendToParent(type, args) {
+    try {
+      const message = args.map(arg => {
+        try {
+          if (arg === undefined) return 'undefined';
+          if (arg === null) return 'null';
+          if (typeof arg === 'function') return '[Function]';
+          if (typeof arg === 'symbol') return arg.toString();
+          if (arg instanceof Error) return arg.stack || arg.message;
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg, null, 2);
+            } catch {
+              return '[Circular Object]';
+            }
+          }
+          return String(arg);
+        } catch {
+          return '[Unserializable]';
+        }
+      }).join(' ');
+
+      window.parent.postMessage({
+        type: 'sandbox-console',
+        channelId: channelId,
+        consoleType: type,
+        message: message,
+        timestamp: Date.now()
+      }, '*');
+    } catch (e) {
+      // Silently fail if we can't communicate
+    }
+  }
+
+  console.log = function(...args) {
+    originalConsole.log(...args);
+    sendToParent('log', args);
+  };
+
+  console.error = function(...args) {
+    originalConsole.error(...args);
+    sendToParent('error', args);
+  };
+
+  console.warn = function(...args) {
+    originalConsole.warn(...args);
+    sendToParent('warn', args);
+  };
+
+  console.info = function(...args) {
+    originalConsole.info(...args);
+    sendToParent('info', args);
+  };
+
+  // Catch unhandled errors
+  window.onerror = function(message, source, lineno, colno, error) {
+    sendToParent('error', ['Uncaught Error: ' + message + ' at line ' + lineno + ':' + colno]);
+    return true;
+  };
+
+  // Catch unhandled promise rejections
+  window.onunhandledrejection = function(event) {
+    sendToParent('error', ['Unhandled Promise Rejection: ' + (event.reason?.message || event.reason || 'Unknown')]);
+  };
+
+  // Signal that the sandbox is ready
+  window.parent.postMessage({
+    type: 'sandbox-ready',
+    channelId: channelId
+  }, '*');
+})();
+</script>`;
+
+    // Base styles for better default appearance
+    const baseStyles = `
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #e4e4e7;
+    background: #18181b;
+    min-height: 100vh;
+  }
+  a { color: #60a5fa; }
+  pre, code {
+    background: #27272a;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+  }
+  pre { padding: 12px; overflow-x: auto; }
+  pre code { padding: 0; background: none; }
+  button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+  }
+  button {
+    cursor: pointer;
+    background: #3f3f46;
+    border: 1px solid #52525b;
+    color: #e4e4e7;
+    padding: 8px 16px;
+    border-radius: 6px;
+  }
+  button:hover { background: #52525b; }
+  input, textarea, select {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #e4e4e7;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: #60a5fa;
+  }
+</style>`;
+
+    if (isFullDocument) {
+      // For full HTML documents, inject our security headers and console capture into <head>
+      let modifiedContent = content;
+
+      // Add CSP if not present
+      if (!/<meta[^>]*content-security-policy/i.test(content)) {
+        modifiedContent = modifiedContent.replace(/<head([^>]*)>/i, `<head$1>\n${cspMeta}`);
+      }
+
+      // Add console capture script at the beginning of head
+      modifiedContent = modifiedContent.replace(/<head([^>]*)>/i, `<head$1>\n${consoleCapture}`);
+
+      return modifiedContent;
+    } else {
+      // For HTML snippets, wrap in a full document
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${cspMeta}
+  ${consoleCapture}
+  ${baseStyles}
+</head>
+<body>
+${content}
+</body>
+</html>`;
+    }
+  }, []);
+
+  // Listen for messages from the iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Validate the message is from our sandbox
+      if (event.data?.channelId !== channelId.current) return;
+
+      if (event.data.type === 'sandbox-console') {
+        setConsoleOutput((prev) => [
+          ...prev.slice(-99), // Keep last 100 messages
+          {
+            type: event.data.consoleType,
+            message: event.data.message,
+            timestamp: event.data.timestamp,
+          },
+        ]);
+      } else if (event.data.type === 'sandbox-ready') {
+        setError(null);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Auto-scroll console to bottom
+  useEffect(() => {
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    }
+  }, [consoleOutput]);
+
+  // Build the iframe srcDoc
+  const srcDoc = useMemo(() => {
+    if (!isRunning) return '';
+    try {
+      return buildSandboxedHtml(artifact.content);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to build sandbox');
+      return '';
+    }
+  }, [artifact.content, buildSandboxedHtml, isRunning]);
+
+  const handleReload = useCallback(() => {
+    setConsoleOutput([]);
+    setError(null);
+    setIsRunning(false);
+    // Small delay to ensure iframe is destroyed before recreating
+    setTimeout(() => setIsRunning(true), 50);
+  }, []);
+
+  const handleStop = useCallback(() => {
+    setIsRunning(false);
+    setConsoleOutput((prev) => [
+      ...prev,
+      { type: 'info', message: 'Execution stopped', timestamp: Date.now() },
+    ]);
+  }, []);
+
+  const handleRun = useCallback(() => {
+    setConsoleOutput([]);
+    setError(null);
+    setIsRunning(true);
+  }, []);
+
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded((prev) => !prev);
+  }, []);
+
+  const getConsoleTypeColor = (type: 'log' | 'error' | 'warn' | 'info') => {
+    switch (type) {
+      case 'error':
+        return 'text-red-400';
+      case 'warn':
+        return 'text-yellow-400';
+      case 'info':
+        return 'text-blue-400';
+      default:
+        return 'text-zinc-300';
+    }
+  };
+
+  const getConsoleTypeIcon = (type: 'log' | 'error' | 'warn' | 'info') => {
+    switch (type) {
+      case 'error':
+        return <AlertTriangle className="h-3 w-3 text-red-400" />;
+      case 'warn':
+        return <AlertTriangle className="h-3 w-3 text-yellow-400" />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        'flex flex-col',
+        isExpanded && 'fixed inset-4 z-50 bg-zinc-900 rounded-lg shadow-2xl',
+      )}
+    >
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/50 bg-zinc-800/50">
+        <div className="flex items-center gap-1">
+          {isRunning ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleStop}
+                  aria-label="Stop execution"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Stop</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleRun}
+                  aria-label="Run code"
+                >
+                  <Play className="h-3 w-3 fill-current" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Run</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleReload}
+                aria-label="Reload"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reload</TooltipContent>
+          </Tooltip>
+        </div>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={() => setShowCode((prev) => !prev)}
+          className={cn(
+            'px-2 py-1 text-xs rounded transition-colors',
+            showCode
+              ? 'bg-zinc-700 text-zinc-200'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50',
+          )}
+        >
+          {showCode ? 'Preview' : 'Code'}
+        </button>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={toggleExpanded}
+              aria-label={isExpanded ? 'Minimize' : 'Maximize'}
+            >
+              {isExpanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isExpanded ? 'Minimize' : 'Maximize'}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Main content area */}
+      <div className={cn('flex flex-col', isExpanded ? 'flex-1 min-h-0' : 'h-[400px]')}>
+        {showCode ? (
+          /* Code view */
+          <div className="flex-1 overflow-auto bg-gray-950">
+            <SyntaxHighlighter
+              language="html"
+              style={oneDark}
+              customStyle={{
+                margin: 0,
+                padding: '1rem',
+                background: 'transparent',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                height: '100%',
+              }}
+              showLineNumbers
+              lineNumberStyle={{
+                minWidth: '2.5em',
+                paddingRight: '1em',
+                color: '#4b5563',
+                userSelect: 'none',
+              }}
+              wrapLongLines={false}
+            >
+              {artifact.content}
+            </SyntaxHighlighter>
+          </div>
+        ) : (
+          /* Preview view */
+          <div className="flex flex-col flex-1 min-h-0">
+            {/* Iframe container */}
+            <div className="flex-1 min-h-0 relative bg-zinc-900">
+              {error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-red-900/20 p-4">
+                  <div className="text-center">
+                    <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+                    <p className="text-sm text-red-300">{error}</p>
+                  </div>
+                </div>
+              )}
+              {isRunning && srcDoc && (
+                <iframe
+                  ref={iframeRef}
+                  srcDoc={srcDoc}
+                  title={artifact.title || 'HTML Preview'}
+                  className="w-full h-full border-0"
+                  // Security: Sandbox attribute restricts iframe capabilities
+                  // - allow-scripts: Allow JavaScript execution (required for interactivity)
+                  // - allow-modals: Allow alert(), confirm(), prompt() dialogs
+                  // NOT included (blocked):
+                  // - allow-same-origin: Prevents access to parent window and storage
+                  // - allow-top-navigation: Prevents navigation of parent page
+                  // - allow-forms: Prevents form submissions
+                  // - allow-popups: Prevents window.open()
+                  // - allow-pointer-lock: Prevents pointer lock API
+                  // - allow-orientation-lock: Prevents orientation lock
+                  // - allow-presentation: Prevents presentation mode
+                  // - allow-downloads: Prevents file downloads
+                  sandbox="allow-scripts allow-modals"
+                  // Additional security: referrer policy
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              {!isRunning && (
+                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+                  <div className="text-center">
+                    <Square className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
+                    <p className="text-sm text-zinc-400">Execution stopped</p>
+                    <button
+                      onClick={handleRun}
+                      className="mt-2 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 transition-colors"
+                    >
+                      Run again
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Console output */}
+            <div className="border-t border-zinc-700/50">
+              <div className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50 border-b border-zinc-700/50 flex items-center justify-between">
+                <span>Console</span>
+                {consoleOutput.length > 0 && (
+                  <button
+                    onClick={() => setConsoleOutput([])}
+                    className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div
+                ref={consoleRef}
+                className="h-[100px] overflow-auto bg-zinc-950 font-mono text-xs"
+              >
+                {consoleOutput.length === 0 ? (
+                  <div className="p-3 text-zinc-500">No console output</div>
+                ) : (
+                  consoleOutput.map((entry, i) => (
+                    <div
+                      key={`${entry.timestamp}-${i}`}
+                      className={cn(
+                        'px-3 py-1 border-b border-zinc-800/50 flex items-start gap-2',
+                        getConsoleTypeColor(entry.type),
+                      )}
+                    >
+                      {getConsoleTypeIcon(entry.type)}
+                      <pre className="whitespace-pre-wrap break-all flex-1 m-0 bg-transparent p-0">
+                        {entry.message}
+                      </pre>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+use super::transport::TransportConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,17 +14,59 @@ const OAUTH_PLACEHOLDER_PREFIX: &str = "<from_oauth:";
 /// Legacy credential manager placeholder
 const CREDENTIAL_PLACEHOLDER: &str = "<from_credential_manager>";
 
+/// Configuration for an MCP server
+///
+/// Supports two transport modes:
+/// - STDIO (default): Local process spawned with command/args
+/// - HTTP/SSE: Remote server accessed via HTTP with Server-Sent Events
+///
+/// # Examples
+///
+/// ## STDIO transport (local process)
+/// ```json
+/// {
+///   "command": "npx",
+///   "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+///   "enabled": true
+/// }
+/// ```
+///
+/// ## HTTP/SSE transport (remote server)
+/// ```json
+/// {
+///   "transport": {
+///     "type": "http",
+///     "url": "https://mcp.example.com",
+///     "bearer_token": "your-api-token",
+///     "timeout_secs": 30
+///   },
+///   "enabled": true
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
+    /// Command to execute (required for STDIO transport)
+    #[serde(default)]
     pub command: String,
 
+    /// Arguments for the command (required for STDIO transport)
+    #[serde(default)]
     pub args: Vec<String>,
 
+    /// Environment variables for the process (STDIO transport only)
     #[serde(default)]
     pub env: HashMap<String, String>,
 
+    /// Whether the server is enabled
     #[serde(default = "default_true")]
     pub enabled: bool,
+
+    /// Transport configuration (defaults to STDIO if not specified)
+    ///
+    /// When set to HTTP, the command/args/env fields are ignored and
+    /// the server is accessed via HTTP/SSE instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<TransportConfig>,
 }
 
 fn default_true() -> bool {
@@ -90,6 +133,7 @@ impl McpServersConfig {
                 ],
                 env: HashMap::new(),
                 enabled: true,
+                transport: None,
             },
         );
 
@@ -111,6 +155,7 @@ impl McpServersConfig {
                     env
                 },
                 enabled: false,
+                transport: None,
             },
         );
 
@@ -132,6 +177,7 @@ impl McpServersConfig {
                     env
                 },
                 enabled: false,
+                transport: None,
             },
         );
 
@@ -153,6 +199,7 @@ impl McpServersConfig {
                     env
                 },
                 enabled: false,
+                transport: None,
             },
         );
 
@@ -173,6 +220,7 @@ impl McpServersConfig {
                     env
                 },
                 enabled: false,
+                transport: None,
             },
         );
 

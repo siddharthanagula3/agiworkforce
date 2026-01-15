@@ -429,6 +429,13 @@ pub fn run() {
             crate::sys::commands::agi_cancel_goal,
             crate::sys::commands::start_agent_task,
 
+            // Reflection Engine
+            crate::sys::commands::agi_get_reflection_insights,
+            crate::sys::commands::agi_get_failure_patterns,
+            crate::sys::commands::agi_get_suggested_corrections,
+            crate::sys::commands::agi_get_sub_goals,
+            crate::sys::commands::agi_get_recommendations,
+
             crate::sys::commands::auth_store_session,
             crate::sys::commands::auth_retrieve_session,
             crate::sys::commands::auth_remove_session,
