@@ -3,22 +3,112 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getEnv } from './utils/env';
 import { logger } from './lib/logger';
 
+// Rate limiting tracking for brute-force protection
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim() || 'unknown';
+  }
+  return request.headers.get('x-real-ip') || 'unknown';
+}
+
+function checkLoginRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+
+  if (!record) {
+    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+    return true;
+  }
+
+  if (now - record.firstAttempt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+    return true;
+  }
+
+  if (record.count >= MAX_LOGIN_ATTEMPTS) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
+// Periodic cleanup of old entries
+let lastCleanup = Date.now();
+function cleanupOldEntries(): void {
+  const now = Date.now();
+  if (now - lastCleanup < 60000) return;
+
+  const expiredTime = now - LOGIN_WINDOW_MS;
+  for (const [ip, record] of loginAttempts.entries()) {
+    if (record.firstAttempt < expiredTime) {
+      loginAttempts.delete(ip);
+    }
+  }
+  lastCleanup = now;
+}
+
 /**
- * Proxy for request-level authentication and authorization checks.
+ * Proxy for request-level authentication, authorization, and security checks.
  * Validates:
+ * - Security: Blocked paths, path traversal, login rate limiting
  * - User session (Supabase authentication)
  * - Active subscription status
  * - Subscription grace period (7 days past due)
- *
- * This uses Next.js proxy convention which is appropriate for
- * request-level security checks that must run on every request.
  */
 export async function proxy(request: NextRequest) {
+  // Periodic cleanup
+  cleanupOldEntries();
+
+  const pathname = request.nextUrl.pathname.toLowerCase();
+
+  // Block access to sensitive paths
+  const blockedPaths = [
+    '/.env',
+    '/.git',
+    '/wp-admin',
+    '/wp-login',
+    '/xmlrpc.php',
+    '/admin',
+    '/.htaccess',
+  ];
+
+  if (blockedPaths.some((blocked) => pathname.startsWith(blocked))) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  // Check for path traversal attempts
+  if (pathname.includes('..') || pathname.includes('%2e%2e')) {
+    return new NextResponse('Bad Request', { status: 400 });
+  }
+
+  // Rate limit login attempts
+  if (pathname === '/login' && request.method === 'POST') {
+    const ip = getClientIp(request);
+    if (!checkLoginRateLimit(ip)) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many login attempts. Please try again later.' }),
+        {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '900' },
+        },
+      );
+    }
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
+
+  // Add security headers
+  response.headers.set('X-Request-ID', crypto.randomUUID());
 
   const protectedRoutes = ['/dashboard', '/download'];
   const protectedApiRoutes = ['/api/download', '/api/download-beta', '/api/portal'];
