@@ -219,7 +219,7 @@ cocoa = "0.25"
 
 
 [features]
-default = []
+default = ["ocr"]
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]

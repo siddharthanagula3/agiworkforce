@@ -1,7 +1,48 @@
-use crate::sys::api::{ApiRequest, AuthType, HttpMethod};
+use crate::sys::api::{ApiRequest, ApiResponse, AuthType, HttpMethod};
 use crate::sys::commands::ApiState;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::State;
+
+/// Parse a JSON response with proper Content-Type validation.
+/// Returns a helpful error message if the server returned HTML instead of JSON.
+fn parse_json_response<T: DeserializeOwned>(response: &ApiResponse) -> Result<T, String> {
+    // Check Content-Type header
+    let content_type = response
+        .headers
+        .get("content-type")
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    // If we got HTML back, the server likely crashed or returned an error page
+    if content_type.contains("text/html") {
+        return Err(format!(
+            "Server returned HTML instead of JSON (status {}). \
+             This usually means the API server crashed or is misconfigured. \
+             Check that your VITE_AGI_API_URL matches your Supabase project.",
+            response.status
+        ));
+    }
+
+    // Check if response body looks like HTML (fallback check)
+    let body_trimmed = response.body.trim();
+    if body_trimmed.starts_with("<!DOCTYPE") || body_trimmed.starts_with("<html") {
+        return Err(format!(
+            "Server returned an HTML error page (status {}). \
+             The API may be down or misconfigured. Response: {}",
+            response.status,
+            &response.body[..response.body.len().min(200)]
+        ));
+    }
+
+    // Try to parse as JSON with a helpful error message
+    serde_json::from_str(&response.body).map_err(|e| {
+        let preview = &response.body[..response.body.len().min(100)];
+        format!(
+            "Failed to parse API response as JSON: {}. Response preview: {}",
+            e, preview
+        )
+    })
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceLinkRequest {
@@ -105,7 +146,7 @@ pub async fn device_link_initiate(
         return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    serde_json::from_str(&response.body).map_err(|e| format!("Failed to parse response: {}", e))
+    parse_json_response(&response)
 }
 
 #[tauri::command]
@@ -141,13 +182,9 @@ pub async fn device_link_poll(
         return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    let resp: DevicePollResponse = serde_json::from_str(&response.body)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
     // Note: We no longer store tokens here. The frontend receives the response
     // and should update the Supabase session, which triggers auth_store_session.
-
-    Ok(resp)
+    parse_json_response(&response)
 }
 
 #[tauri::command]
@@ -175,10 +212,20 @@ pub async fn fetch_user_profile(
         .map_err(|e| format!("Profile fetch failed: {}", e))?;
 
     if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
+        // Provide more context for common error codes
+        let hint = match response.status {
+            401 => " (Token may be expired or from a different Supabase project)",
+            500 => " (Server crashed - check API logs)",
+            502 | 503 => " (API server is down or restarting)",
+            _ => "",
+        };
+        return Err(format!(
+            "API error {}{}: {}",
+            response.status, hint, response.body
+        ));
     }
 
-    serde_json::from_str(&response.body).map_err(|e| format!("Failed to parse response: {}", e))
+    parse_json_response(&response)
 }
 
 #[tauri::command]
@@ -213,12 +260,8 @@ pub async fn oauth_refresh(
         return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    let result: serde_json::Value = serde_json::from_str(&response.body)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
     // Note: We no longer manually store tokens. Frontend should handle the result.
-
-    Ok(result)
+    parse_json_response(&response)
 }
 
 use std::sync::RwLock;
@@ -350,11 +393,20 @@ pub async fn fetch_credit_balance(
         .map_err(|e| format!("Failed to fetch credit balance: {}", e))?;
 
     if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
+        // Provide more context for common error codes
+        let hint = match response.status {
+            401 => " (Token may be expired or from a different Supabase project)",
+            500 => " (Server crashed - check API logs)",
+            502 | 503 => " (API server is down or restarting)",
+            _ => "",
+        };
+        return Err(format!(
+            "API error {}{}: {}",
+            response.status, hint, response.body
+        ));
     }
 
-    serde_json::from_str(&response.body)
-        .map_err(|e| format!("Failed to parse credit balance response: {}", e))
+    parse_json_response(&response)
 }
 
 /// Deduct credits request
@@ -424,14 +476,22 @@ pub async fn report_llm_usage(
 
     // 402 is expected when credits are exhausted
     if response.status == 402 {
-        return serde_json::from_str(&response.body)
-            .map_err(|e| format!("Failed to parse credit error response: {}", e));
+        return parse_json_response(&response);
     }
 
     if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
+        // Provide more context for common error codes
+        let hint = match response.status {
+            401 => " (Token may be expired or from a different Supabase project)",
+            500 => " (Server crashed - check API logs)",
+            502 | 503 => " (API server is down or restarting)",
+            _ => "",
+        };
+        return Err(format!(
+            "API error {}{}: {}",
+            response.status, hint, response.body
+        ));
     }
 
-    serde_json::from_str(&response.body)
-        .map_err(|e| format!("Failed to parse deduct credits response: {}", e))
+    parse_json_response(&response)
 }
