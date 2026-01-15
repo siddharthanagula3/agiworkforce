@@ -54,10 +54,8 @@ impl VisionAutomation {
                 {
                     matches.push((960, 540, ocr_result.text.clone()));
                 }
-            } else {
-                if ocr_result.text.contains(query) {
-                    matches.push((960, 540, ocr_result.text.clone()));
-                }
+            } else if ocr_result.text.contains(query) {
+                matches.push((960, 540, ocr_result.text.clone()));
             }
             Ok(matches)
         }
