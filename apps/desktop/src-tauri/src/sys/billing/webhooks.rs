@@ -91,9 +91,13 @@ impl WebhookHandler {
 
     fn validate_timestamp_freshness(&self, timestamp_str: &str) -> Result<()> {
         // MEDIUM-003 fix: Preserve original error context
-        let webhook_timestamp: i64 = timestamp_str
-            .parse()
-            .map_err(|e| anyhow!("Invalid timestamp format '{}' in webhook signature: {}", timestamp_str, e))?;
+        let webhook_timestamp: i64 = timestamp_str.parse().map_err(|e| {
+            anyhow!(
+                "Invalid timestamp format '{}' in webhook signature: {}",
+                timestamp_str,
+                e
+            )
+        })?;
 
         let now = Utc::now().timestamp();
         let time_diff = (now - webhook_timestamp).abs();

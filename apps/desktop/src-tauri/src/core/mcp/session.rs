@@ -72,10 +72,7 @@ impl McpSession {
     ///
     /// Use this when you want to explicitly specify the transport type
     /// rather than relying on configuration.
-    pub async fn connect_with_transport(
-        name: String,
-        transport: Transport,
-    ) -> McpResult<Self> {
+    pub async fn connect_with_transport(name: String, transport: Transport) -> McpResult<Self> {
         tracing::info!(
             "[MCP Session] Connecting to server '{}' with explicit transport",
             name
@@ -329,8 +326,8 @@ impl McpSession {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::transport::TransportConfig;
+    use super::*;
 
     #[test]
     fn test_client_capabilities() {
