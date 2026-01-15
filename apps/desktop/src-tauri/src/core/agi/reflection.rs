@@ -5,7 +5,7 @@
 //! improve future planning through iterative learning loops.
 
 use super::*;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1000,7 +1000,7 @@ mod tests {
     }
 
     fn create_test_engine() -> ReflectionEngine {
-        use crate::core::router::LLMRouter;
+        use crate::core::llm::LLMRouter;
 
         // Create minimal dependencies for testing
         let router = Arc::new(RwLock::new(LLMRouter::new()));

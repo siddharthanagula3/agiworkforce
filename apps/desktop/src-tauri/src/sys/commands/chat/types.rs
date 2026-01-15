@@ -3,6 +3,39 @@ use crate::data::db::models::{
     ProviderCostBreakdown,
 };
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+// === MEDIUM-001 fix: Input validation constants ===
+/// Maximum content length for chat messages (1MB)
+pub const MAX_CONTENT_LENGTH: usize = 1024 * 1024;
+/// Maximum title length for conversations
+pub const MAX_TITLE_LENGTH: usize = 500;
+/// Maximum number of attachments per message
+pub const MAX_ATTACHMENTS: usize = 20;
+/// Maximum custom instructions length
+pub const MAX_CUSTOM_INSTRUCTIONS_LENGTH: usize = 50_000;
+/// Maximum user ID length
+pub const MAX_USER_ID_LENGTH: usize = 256;
+
+/// MEDIUM-001 fix: Validation error type
+#[derive(Debug, Clone)]
+pub struct ValidationError {
+    pub field: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.field, self.message)
+    }
+}
+
+impl std::error::Error for ValidationError {}
+
+/// MEDIUM-001 fix: Validation trait for request types
+pub trait Validate {
+    fn validate(&self) -> Result<(), ValidationError>;
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
@@ -114,7 +147,7 @@ pub struct ChatSendMessageResponse {
     pub assistant_message: Message,
     pub stats: ConversationStats,
     pub last_message: Option<String>,
-    pub credits: Option<crate::core::router::CreditsInfo>,
+    pub credits: Option<crate::core::llm::CreditsInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -137,4 +170,183 @@ pub struct CostAnalyticsResponse {
     pub timeseries: Vec<CostTimeseriesPoint>,
     pub providers: Vec<ProviderCostBreakdown>,
     pub top_conversations: Vec<ConversationCostBreakdown>,
+}
+
+// === MEDIUM-001 fix: Validation implementations ===
+
+impl Validate for CreateConversationRequest {
+    fn validate(&self) -> Result<(), ValidationError> {
+        if self.title.is_empty() {
+            return Err(ValidationError {
+                field: "title".to_string(),
+                message: "Title cannot be empty".to_string(),
+            });
+        }
+        if self.title.len() > MAX_TITLE_LENGTH {
+            return Err(ValidationError {
+                field: "title".to_string(),
+                message: format!("Title exceeds maximum length of {} characters", MAX_TITLE_LENGTH),
+            });
+        }
+        if self.user_id.is_empty() {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: "User ID cannot be empty".to_string(),
+            });
+        }
+        if self.user_id.len() > MAX_USER_ID_LENGTH {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: format!("User ID exceeds maximum length of {} characters", MAX_USER_ID_LENGTH),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Validate for ChatSendMessageRequest {
+    fn validate(&self) -> Result<(), ValidationError> {
+        // Validate user_id
+        if self.user_id.is_empty() {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: "User ID cannot be empty".to_string(),
+            });
+        }
+        if self.user_id.len() > MAX_USER_ID_LENGTH {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: format!("User ID exceeds maximum length of {} characters", MAX_USER_ID_LENGTH),
+            });
+        }
+
+        // Validate content
+        if self.content.len() > MAX_CONTENT_LENGTH {
+            return Err(ValidationError {
+                field: "content".to_string(),
+                message: format!("Content exceeds maximum length of {} bytes", MAX_CONTENT_LENGTH),
+            });
+        }
+
+        // Validate custom instructions
+        if let Some(ref instructions) = self.custom_instructions {
+            if instructions.len() > MAX_CUSTOM_INSTRUCTIONS_LENGTH {
+                return Err(ValidationError {
+                    field: "custom_instructions".to_string(),
+                    message: format!(
+                        "Custom instructions exceed maximum length of {} characters",
+                        MAX_CUSTOM_INSTRUCTIONS_LENGTH
+                    ),
+                });
+            }
+        }
+
+        // Validate attachments
+        if let Some(ref attachments) = self.attachments {
+            if attachments.len() > MAX_ATTACHMENTS {
+                return Err(ValidationError {
+                    field: "attachments".to_string(),
+                    message: format!("Too many attachments (max: {})", MAX_ATTACHMENTS),
+                });
+            }
+            for (i, attachment) in attachments.iter().enumerate() {
+                attachment.validate().map_err(|e| ValidationError {
+                    field: format!("attachments[{}].{}", i, e.field),
+                    message: e.message,
+                })?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Validate for ChatAttachment {
+    fn validate(&self) -> Result<(), ValidationError> {
+        // Validate ID
+        if self.id.is_empty() {
+            return Err(ValidationError {
+                field: "id".to_string(),
+                message: "Attachment ID cannot be empty".to_string(),
+            });
+        }
+
+        // Validate name (no path traversal)
+        if self.name.contains("..") || self.name.contains('/') || self.name.contains('\\') {
+            return Err(ValidationError {
+                field: "name".to_string(),
+                message: "Attachment name contains invalid characters".to_string(),
+            });
+        }
+
+        // MEDIUM-011 fix: Validate path for traversal attacks
+        if let Some(ref path) = self.path {
+            if !is_safe_path(path) {
+                return Err(ValidationError {
+                    field: "path".to_string(),
+                    message: "Path contains potentially unsafe traversal patterns".to_string(),
+                });
+            }
+        }
+
+        // Validate attachment type
+        let valid_types = ["file", "image", "document", "code", "url"];
+        if !valid_types.contains(&self.attachment_type.as_str()) {
+            return Err(ValidationError {
+                field: "type".to_string(),
+                message: format!(
+                    "Invalid attachment type '{}'. Valid types: {:?}",
+                    self.attachment_type, valid_types
+                ),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/// MEDIUM-011 fix: Check if a path is safe (no traversal attacks).
+/// Returns false if the path contains suspicious patterns.
+fn is_safe_path(path: &str) -> bool {
+    // Check for obvious traversal patterns
+    if path.contains("..") {
+        return false;
+    }
+
+    // Check for null bytes (can be used to bypass checks)
+    if path.contains('\0') {
+        return false;
+    }
+
+    // On Windows, check for alternate data streams
+    if cfg!(windows) && path.contains(':') && !path.starts_with("C:") && !path.starts_with("D:") {
+        // Allow drive letters but not ADS
+        let colon_count = path.matches(':').count();
+        if colon_count > 1 || (!path.chars().nth(1).map_or(false, |c| c == ':')) {
+            return false;
+        }
+    }
+
+    // Normalize and check the path doesn't escape
+    let path_obj = Path::new(path);
+
+    // Check each component for suspicious patterns
+    for component in path_obj.components() {
+        match component {
+            std::path::Component::ParentDir => return false, // ".." component
+            std::path::Component::Normal(s) => {
+                let s_str = s.to_string_lossy();
+                // Check for hidden files starting with . followed by suspicious patterns
+                if s_str.starts_with('.') && s_str.len() > 1 {
+                    let rest = &s_str[1..];
+                    if rest.starts_with('.') || rest.is_empty() {
+                        return false;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    true
 }

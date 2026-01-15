@@ -1,14 +1,39 @@
 {
   "name": "@agiworkforce/extension",
-  "version": "0.0.0",
+  "version": "1.1.0",
+  "description": "Intelligent browser automation extension for AGI Workforce desktop application",
   "private": true,
   "type": "module",
+  "author": "AGI Workforce",
+  "license": "MIT",
+  "homepage": "https://agiworkforce.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/agiworkforce.git",
+    "directory": "apps/extension"
+  },
+  "keywords": [
+    "browser-automation",
+    "chrome-extension",
+    "desktop-integration",
+    "accessibility",
+    "native-messaging",
+    "manifest-v3"
+  ],
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vite build"
+    "build": "vite build",
+    "clean": "rm -rf dist",
+    "package": "pnpm build && cd dist && zip -r ../extension.zip .",
+    "lint": "eslint src --ext .js",
+    "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "devDependencies": {
     "vite": "^7.3.1",
     "vite-plugin-static-copy": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=9.15.3"
   }
 }

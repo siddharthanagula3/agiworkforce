@@ -539,14 +539,33 @@ fn map_overlay_event(row: &Row) -> Result<OverlayEvent> {
     })
 }
 
+/// HIGH-007 fix: Log warnings instead of silently corrupting timestamps.
+/// Returns Utc::now() as fallback but logs the parsing failure for debugging.
 fn parse_datetime(s: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| {
-            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-                .map(|dt| dt.and_utc())
-                .unwrap_or_else(|_| Utc::now())
-        })
+    // Try RFC3339 format first (preferred)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return dt.with_timezone(&Utc);
+    }
+
+    // Try SQLite format
+    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+        return dt.and_utc();
+    }
+
+    // Try date-only format (common in SQLite)
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        if let Some(dt) = date.and_hms_opt(0, 0, 0) {
+            return dt.and_utc();
+        }
+    }
+
+    // HIGH-007 fix: Log warning instead of silent failure
+    tracing::warn!(
+        "Failed to parse datetime '{}', using current time as fallback. \
+         Supported formats: RFC3339, 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DD'",
+        s
+    );
+    Utc::now()
 }
 
 fn to_sqlite_timestamp(dt: DateTime<Utc>) -> String {

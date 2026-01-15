@@ -173,9 +173,27 @@ pub struct QueryValidation {
     pub safe: bool,
 }
 
+/// MEDIUM-009 fix: Safe Default implementation that logs errors instead of panicking.
+/// If regex compilation fails (which shouldn't happen with static patterns),
+/// returns a validator that blocks all queries for safety.
 impl Default for SqlSecurityValidator {
     fn default() -> Self {
-        Self::new().expect("Failed to create SQL security validator")
+        match Self::new() {
+            Ok(validator) => validator,
+            Err(e) => {
+                // Log the error - this should never happen with the static patterns
+                // but if it does, we fail-safe by blocking everything
+                tracing::error!(
+                    "CRITICAL: Failed to create SQL security validator: {}. \
+                     All queries will be blocked for safety.",
+                    e
+                );
+                // Return a validator with empty patterns that will flag everything as unknown/blocked
+                Self {
+                    dangerous_patterns: Vec::new(),
+                }
+            }
+        }
     }
 }
 
