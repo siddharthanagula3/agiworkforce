@@ -14,10 +14,8 @@ import ErrorToastContainer from './components/Errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
-import { initializeAccountStore } from './stores/accountStore';
-import { initializeAuthStore, useAuthStore } from './stores/authStore';
-import { initializeBillingStore } from './stores/billingStore';
-import { initializeUsageStore } from './stores/usageStore';
+import { useAuthStore } from './stores/authStore';
+import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore from './stores/errorStore';
 
 const VisualizationLayer = lazy(() =>
@@ -160,6 +158,12 @@ const DesktopShell = () => {
 
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
       await initializeModelStoreFromSettings();
+
+      // Initialize Ollama health service for graceful degradation of local models
+      if (isTauri) {
+        const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
+        initializeOllamaHealthService();
+      }
 
       // Load custom instructions from backend (syncs with stored data)
       const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
@@ -427,10 +431,9 @@ const DesktopShell = () => {
 
 const App = () => {
   useEffect(() => {
-    const unsubscribeAuth = initializeAuthStore();
-    const unsubscribeAccount = initializeAccountStore();
-    const unsubscribeBilling = initializeBillingStore();
-    const unsubscribeUsage = initializeUsageStore();
+    // Single consolidated auth orchestrator - replaces individual store initializers
+    // This prevents race conditions from multiple auth listeners firing simultaneously
+    const unsubscribeOrchestrator = initializeAuthOrchestrator();
 
     // Force sync account data after store hydration is complete
     let cancelled = false;
@@ -451,18 +454,7 @@ const App = () => {
 
     return () => {
       cancelled = true;
-      if (typeof unsubscribeAuth === 'function') {
-        unsubscribeAuth();
-      }
-      if (typeof unsubscribeAccount === 'function') {
-        unsubscribeAccount();
-      }
-      if (typeof unsubscribeBilling === 'function') {
-        unsubscribeBilling();
-      }
-      if (typeof unsubscribeUsage === 'function') {
-        unsubscribeUsage();
-      }
+      unsubscribeOrchestrator();
     };
   }, []);
 
