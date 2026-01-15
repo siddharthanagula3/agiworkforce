@@ -274,13 +274,14 @@ describe('modelStore', () => {
 
 describe('LLM Constants', () => {
   describe('getModelMetadata', () => {
-    it('should return metadata for valid model IDs', async () => {
+    it('should return metadata for auto model (subscription-only)', async () => {
       const { getModelMetadata } = await import('../constants/llm');
 
-      const gptMetadata = getModelMetadata('gpt-5.2');
-      expect(gptMetadata).not.toBeNull();
-      expect(gptMetadata?.provider).toBe('openai');
-      expect(gptMetadata?.name).toBe('GPT-5.2');
+      // For subscription-only model, 'auto' is the primary model
+      const autoMetadata = getModelMetadata('auto');
+      expect(autoMetadata).not.toBeNull();
+      expect(autoMetadata?.provider).toBe('managed_cloud');
+      expect(autoMetadata?.name).toBe('Auto (Best Available)');
     });
 
     it('should return null for invalid model IDs', async () => {
@@ -290,23 +291,21 @@ describe('LLM Constants', () => {
       expect(result).toBeNull();
     });
 
-    it('should include correct capabilities', async () => {
+    it('should include correct capabilities for auto model', async () => {
       const { getModelMetadata } = await import('../constants/llm');
 
-      const opusMetadata = getModelMetadata('claude-opus-4-5');
-      expect(opusMetadata?.capabilities.thinking).toBe(true);
-      expect(opusMetadata?.capabilities.computerUse).toBe(true);
-      expect(opusMetadata?.capabilities.agentic).toBe(true);
+      // Auto model should have full capabilities
+      const autoMetadata = getModelMetadata('auto');
+      expect(autoMetadata?.capabilities.streaming).toBe(true);
+      expect(autoMetadata?.capabilities.tools).toBe(true);
+      expect(autoMetadata?.capabilities.agentic).toBe(true);
     });
 
-    it('should have correct context window sizes', async () => {
+    it('should have correct context window for auto model', async () => {
       const { getModelMetadata } = await import('../constants/llm');
 
-      const geminiPro = getModelMetadata('gemini-3-pro');
-      expect(geminiPro?.contextWindow).toBe(1_000_000);
-
-      const gpt52 = getModelMetadata('gpt-5.2');
-      expect(gpt52?.contextWindow).toBe(400_000);
+      const autoMetadata = getModelMetadata('auto');
+      expect(autoMetadata?.contextWindow).toBe(128_000);
     });
   });
 
@@ -318,15 +317,14 @@ describe('LLM Constants', () => {
       expect(allModels.length).toBeGreaterThan(0);
     });
 
-    it('should include models from all providers', async () => {
+    it('should include only managed_cloud for subscription-only model', async () => {
       const { getAllModels } = await import('../constants/llm');
 
       const allModels = getAllModels();
       const providers = new Set(allModels.map((m) => m.provider));
 
-      expect(providers.has('openai')).toBe(true);
-      expect(providers.has('anthropic')).toBe(true);
-      expect(providers.has('google')).toBe(true);
+      // For subscription-only model, only managed_cloud has models
+      expect(providers.has('managed_cloud')).toBe(true);
     });
 
     it('should have valid model types', async () => {
@@ -342,76 +340,51 @@ describe('LLM Constants', () => {
   });
 
   describe('THINKING_MODEL_VARIANTS', () => {
-    it('should map base models to thinking variants', async () => {
+    it('should be empty for subscription-only model', async () => {
       const { THINKING_MODEL_VARIANTS } = await import('../constants/llm');
 
-      expect(THINKING_MODEL_VARIANTS['gpt-5.2']).toBe('gpt-5.2-pro');
-      expect(THINKING_MODEL_VARIANTS['claude-sonnet-4-5']).toBe('claude-opus-4-5');
-      expect(THINKING_MODEL_VARIANTS['gemini-3-pro']).toBe('gemini-3-deep-think');
-    });
-
-    it('should have mostly valid target models', async () => {
-      const { THINKING_MODEL_VARIANTS, getModelMetadata } = await import('../constants/llm');
-
-      const targetModels = Object.values(THINKING_MODEL_VARIANTS);
-      const validModels = targetModels.filter(
-        (targetModel) => getModelMetadata(targetModel) !== null,
-      );
-
-      // Most thinking variants should exist in MODEL_METADATA (allow some to be missing for future models)
-      expect(validModels.length).toBeGreaterThan(targetModels.length * 0.5);
-
-      // Specifically verify key models exist
-      expect(getModelMetadata('gpt-5.2-pro')).not.toBeNull();
-      expect(getModelMetadata('claude-opus-4-5')).not.toBeNull();
-      expect(getModelMetadata('gemini-3-deep-think')).not.toBeNull();
-    });
-
-    it('should only map to models with thinking capability', async () => {
-      const { getModelMetadata } = await import('../constants/llm');
-
-      // Most thinking variants should have thinking capability
-      const thinkingModels = ['gpt-5.2-pro', 'claude-opus-4-5', 'gemini-3-deep-think'];
-      thinkingModels.forEach((modelId) => {
-        const metadata = getModelMetadata(modelId);
-        expect(metadata?.capabilities.thinking).toBe(true);
-      });
+      // For subscription-only model, thinking variants are not used
+      // Managed cloud handles model selection automatically
+      expect(Object.keys(THINKING_MODEL_VARIANTS).length).toBe(0);
     });
   });
 
   describe('getProviderModels', () => {
-    it('should return only models for specified provider', async () => {
+    it('should return models for managed_cloud provider', async () => {
       const { getProviderModels } = await import('../constants/llm');
 
-      const anthropicModels = getProviderModels('anthropic');
-      anthropicModels.forEach((model) => {
-        expect(model.provider).toBe('anthropic');
+      const managedCloudModels = getProviderModels('managed_cloud');
+      managedCloudModels.forEach((model) => {
+        expect(model.provider).toBe('managed_cloud');
       });
+      // Should have at least the 'auto' model
+      expect(managedCloudModels.length).toBeGreaterThan(0);
     });
 
-    it('should return empty array for providers with no models', async () => {
+    it('should return empty array for legacy providers', async () => {
       const { getProviderModels } = await import('../constants/llm');
 
-      // All defined providers should have at least one model
+      // Legacy providers have no models in subscription-only mode
       const ollamaModels = getProviderModels('ollama');
-      expect(ollamaModels.length).toBeGreaterThan(0);
+      // Ollama models are loaded dynamically, so static list may be empty
+      expect(Array.isArray(ollamaModels)).toBe(true);
     });
   });
 
   describe('MODEL_CONTEXT_WINDOWS', () => {
-    it('should have context window for all major models', async () => {
+    it('should have context window for auto model (subscription-only)', async () => {
       const { MODEL_CONTEXT_WINDOWS } = await import('../constants/llm');
 
-      expect(MODEL_CONTEXT_WINDOWS['gpt-5.2']).toBe(400_000);
-      expect(MODEL_CONTEXT_WINDOWS['claude-opus-4-5']).toBe(200_000);
-      expect(MODEL_CONTEXT_WINDOWS['gemini-3-pro']).toBe(1_000_000);
+      // For subscription-only model, only 'auto' is defined
+      expect(MODEL_CONTEXT_WINDOWS['auto']).toBe(128_000);
     });
 
     it('should have getModelContextWindow fallback', async () => {
       const { getModelContextWindow } = await import('../constants/llm');
 
-      expect(getModelContextWindow('unknown-model')).toBe(4096);
-      expect(getModelContextWindow('gpt-5.2')).toBe(400_000);
+      // Default context window is 128_000 for all models (including unknown)
+      expect(getModelContextWindow('unknown-model')).toBe(128_000);
+      expect(getModelContextWindow('auto')).toBe(128_000);
     });
   });
 });
@@ -1546,11 +1519,12 @@ describe('unifiedChatStore - Extended Tests', () => {
 describe('modelStore selectors', () => {
   beforeEach(async () => {
     const { useModelStore } = await import('../stores/modelStore');
+    // For subscription-only model, use 'auto' with managed_cloud provider
     useModelStore.setState({
-      selectedModel: 'gpt-5.2',
-      selectedProvider: 'openai',
-      favorites: ['claude-opus-4-5', 'gemini-3-pro'],
-      recentModels: ['gpt-5.2', 'claude-sonnet-4-5'],
+      selectedModel: 'auto',
+      selectedProvider: 'managed_cloud',
+      favorites: [], // Empty favorites for subscription-only model
+      recentModels: [], // Empty recent models - populated dynamically
       thinkingModeEnabled: false,
       loading: false,
       error: null,
@@ -1570,43 +1544,47 @@ describe('modelStore selectors', () => {
     });
   });
 
-  it('selectFavoriteModelsMetadata should return metadata for favorites', async () => {
+  it('selectFavoriteModelsMetadata should return empty array for subscription model', async () => {
     const { useModelStore, selectFavoriteModelsMetadata } = await import('../stores/modelStore');
     const state = useModelStore.getState();
 
     const favoriteMetadata = selectFavoriteModelsMetadata(state);
 
-    expect(favoriteMetadata).toHaveLength(2);
-    expect(favoriteMetadata.map((m) => m.id)).toContain('claude-opus-4-5');
-    expect(favoriteMetadata.map((m) => m.id)).toContain('gemini-3-pro');
+    // For subscription-only model, favorites are empty by default
+    expect(favoriteMetadata).toHaveLength(0);
   });
 
-  it('selectRecentModelsMetadata should return metadata for recent models', async () => {
+  it('selectRecentModelsMetadata should return empty array initially', async () => {
     const { useModelStore, selectRecentModelsMetadata } = await import('../stores/modelStore');
     const state = useModelStore.getState();
 
     const recentMetadata = selectRecentModelsMetadata(state);
 
-    expect(recentMetadata).toHaveLength(2);
-    expect(recentMetadata[0]?.id).toBe('gpt-5.2');
+    // Initially empty, populated as user uses models
+    expect(recentMetadata).toHaveLength(0);
   });
 
-  it('selectSelectedModelMetadata should return current model metadata', async () => {
+  it('selectSelectedModelMetadata should return null when model not in registry', async () => {
     const { useModelStore, selectSelectedModelMetadata } = await import('../stores/modelStore');
+
+    // Set a model that doesn't exist in registry
+    useModelStore.setState({ selectedModel: 'non-existent-model' });
     const state = useModelStore.getState();
 
     const selectedMetadata = selectSelectedModelMetadata(state);
 
-    expect(selectedMetadata).not.toBeNull();
-    expect(selectedMetadata?.id).toBe('gpt-5.2');
-    expect(selectedMetadata?.provider).toBe('openai');
+    // Model not in registry returns null
+    expect(selectedMetadata).toBeNull();
   });
 
   it('selectIsModelFavorite should check if model is favorited', async () => {
     const { useModelStore, selectIsModelFavorite } = await import('../stores/modelStore');
+
+    // Add a favorite using toggleFavorite
+    useModelStore.getState().toggleFavorite('test-model');
     const state = useModelStore.getState();
 
-    expect(selectIsModelFavorite('claude-opus-4-5')(state)).toBe(true);
-    expect(selectIsModelFavorite('gpt-5.2')(state)).toBe(false);
+    expect(selectIsModelFavorite('test-model')(state)).toBe(true);
+    expect(selectIsModelFavorite('non-favorite')(state)).toBe(false);
   });
 });

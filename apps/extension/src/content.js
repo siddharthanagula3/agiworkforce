@@ -937,16 +937,66 @@ function getElementInfo(element) {
 // LOCAL STORAGE HANDLERS
 // ============================================
 
+// ============================================
+// SECURITY: localStorage key restrictions
+// ============================================
+
+// Keys that are NEVER allowed to be accessed (sensitive data)
+const BLOCKED_STORAGE_KEYS = [
+  // Auth tokens and credentials
+  /token/i,
+  /auth/i,
+  /session/i,
+  /password/i,
+  /secret/i,
+  /api.?key/i,
+  /credential/i,
+  /bearer/i,
+  /jwt/i,
+  // Payment info
+  /payment/i,
+  /credit/i,
+  /card/i,
+  /stripe/i,
+  // Personal info
+  /ssn/i,
+  /social.?security/i,
+  /private/i,
+];
+
+/**
+ * Check if a localStorage key is allowed to be accessed
+ */
+function isStorageKeyAllowed(key) {
+  if (!key || typeof key !== 'string') return false;
+
+  // Check against blocked patterns
+  for (const pattern of BLOCKED_STORAGE_KEYS) {
+    if (pattern.test(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function handleGetLocalStorage(message, sendResponse) {
   try {
     const key = message.key;
 
     if (key) {
+      // SECURITY: Validate key is allowed
+      if (!isStorageKeyAllowed(key)) {
+        sendResponse({ success: false, error: 'Access to this storage key is not allowed' });
+        return;
+      }
       const value = localStorage.getItem(key);
       sendResponse({ success: true, data: value });
     } else {
-      const allItems = { ...localStorage };
-      sendResponse({ success: true, data: allItems });
+      // SECURITY: Getting all items is disabled - must specify a key
+      sendResponse({
+        success: false,
+        error: 'Must specify a key. Getting all localStorage items is disabled for security.',
+      });
     }
   } catch (error) {
     console.error('Get local storage failed:', error);
@@ -956,7 +1006,15 @@ function handleGetLocalStorage(message, sendResponse) {
 
 function handleSetLocalStorage(message, sendResponse) {
   try {
-    localStorage.setItem(message.key, message.value);
+    const key = message.key;
+
+    // SECURITY: Validate key is allowed
+    if (!isStorageKeyAllowed(key)) {
+      sendResponse({ success: false, error: 'Setting this storage key is not allowed' });
+      return;
+    }
+
+    localStorage.setItem(key, message.value);
     sendResponse({ success: true });
   } catch (error) {
     console.error('Set local storage failed:', error);
@@ -965,13 +1023,13 @@ function handleSetLocalStorage(message, sendResponse) {
 }
 
 function handleClearLocalStorage(sendResponse) {
-  try {
-    localStorage.clear();
-    sendResponse({ success: true });
-  } catch (error) {
-    console.error('Clear local storage failed:', error);
-    sendResponse({ success: false, error: error.message });
-  }
+  // SECURITY: Clearing all localStorage is disabled
+  // This could destroy user data and is a common attack vector
+  sendResponse({
+    success: false,
+    error:
+      'Clearing all localStorage is disabled for security. Use SET_LOCAL_STORAGE to remove specific keys.',
+  });
 }
 
 // ============================================

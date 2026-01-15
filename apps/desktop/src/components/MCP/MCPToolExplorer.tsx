@@ -275,10 +275,9 @@ export function MCPToolExplorer() {
 
   const toolsByServer = tools.reduce(
     (acc, tool) => {
-      if (!acc[tool.server]) {
-        acc[tool.server] = [];
-      }
-      acc[tool.server]!.push(tool);
+      const serverTools = acc[tool.server] ?? [];
+      serverTools.push(tool);
+      acc[tool.server] = serverTools;
       return acc;
     },
     {} as Record<string, McpToolInfo[]>,

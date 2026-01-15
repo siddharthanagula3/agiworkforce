@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { supabaseAuth } from '../services/supabaseAuth';
+import { cleanupAllStoresOnLogout, clearPersistedUserData } from './logoutCleanup';
 
 interface User {
   id: string;
@@ -138,14 +139,27 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
           try {
             await supabaseAuth.signOut();
+
+            // Clean up all stores after successful sign out
+            // This ensures no user data remains in memory or persisted storage
+            cleanupAllStoresOnLogout();
+            clearPersistedUserData();
           } catch (error) {
             console.error('[AuthStore] Sign out error:', error);
+            // Still attempt cleanup even if sign out fails
+            try {
+              cleanupAllStoresOnLogout();
+              clearPersistedUserData();
+            } catch (cleanupError) {
+              console.error('[AuthStore] Store cleanup error:', cleanupError);
+            }
           } finally {
             set({
               user: null,
               isAuthenticated: false,
               isLoading: false,
               error: null,
+              sessionValidated: true, // Session is validated as "no session" after signout
             });
           }
         },

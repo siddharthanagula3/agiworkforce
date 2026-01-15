@@ -1,9 +1,10 @@
-import { AlertTriangle, CheckCircle, Clock, Info, Shield, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Info, Shield, X, XCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useErrorToast } from '../Errors/ErrorToast';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
 import { Button } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import {
@@ -23,6 +24,7 @@ export const ApprovalModal = () => {
   const pendingApprovals = useUnifiedChatStore((s) => s.pendingApprovals);
   const { resolveApproval } = useApprovalActions();
   const { showError } = useErrorToast();
+  const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -82,6 +84,12 @@ export const ApprovalModal = () => {
       await resolveApproval(currentApproval, 'reject', {
         reason: 'Approval request timed out',
       });
+      // Notify the user that the request was auto-rejected due to timeout
+      showError(
+        'APPROVAL_TIMEOUT',
+        'Request automatically rejected',
+        'The approval request timed out and was automatically rejected. The agent will not proceed with this operation.',
+      );
     } catch (error) {
       console.error('[ApprovalModal] Timeout rejection failed:', error);
     } finally {
@@ -173,13 +181,24 @@ export const ApprovalModal = () => {
   return (
     <Dialog open={!!currentApproval} onOpenChange={() => {}}>
       <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+        <DialogHeader className="relative">
+          {/* Close button for accessibility */}
+          <button
+            onClick={handleReject}
+            disabled={isRejecting || isApproving}
+            className="absolute right-0 top-0 p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Close and reject"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <DialogTitle className="flex items-center gap-3 pr-8">
             <Shield className="h-5 w-5 text-orange-500" />
-            Agent Approval Required
+            {isSimpleMode ? 'Permission Needed' : 'Agent Approval Required'}
           </DialogTitle>
           <DialogDescription>
-            The agent needs your permission to perform a potentially dangerous operation.
+            {isSimpleMode
+              ? 'The assistant wants to perform an action that needs your approval first.'
+              : 'The agent needs your permission to perform this operation.'}
           </DialogDescription>
         </DialogHeader>
 

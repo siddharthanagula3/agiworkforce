@@ -9,13 +9,115 @@ const JWT_SECRET = requireEnv('JWT_SECRET');
 // Maximum message size in bytes (64KB default)
 const MAX_MESSAGE_SIZE = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
 
+// Authentication timeout - close connection if not authenticated within this time
+const AUTH_TIMEOUT_MS = Number(process.env['WS_AUTH_TIMEOUT_MS'] ?? 30000); // 30 seconds default
+
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   deviceId?: string;
   isAlive?: boolean;
+  authTimeout?: ReturnType<typeof setTimeout>;
 }
 
 const clients = new Map<string, Set<AuthenticatedWebSocket>>();
+
+// Pending commands queue for offline desktops (in-memory, limited to 100 per user/device)
+const pendingCommands = new Map<
+  string,
+  Array<{ commandId: string; type: string; payload: unknown; timestamp: number }>
+>();
+const MAX_PENDING_COMMANDS = 100;
+const PENDING_COMMAND_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Send a command to a specific desktop device via WebSocket
+ * Returns true if delivered, false if queued for later delivery
+ */
+export function sendCommandToDesktop(
+  userId: string,
+  desktopId: string,
+  commandId: string,
+  type: string,
+  payload: unknown,
+): { delivered: boolean; queued: boolean } {
+  const userClients = clients.get(userId);
+  let delivered = false;
+
+  if (userClients) {
+    for (const client of userClients) {
+      if (client.deviceId === desktopId && client.readyState === WebSocket.OPEN) {
+        client.send(
+          JSON.stringify({
+            type: 'command',
+            commandId,
+            commandType: type,
+            payload,
+            timestamp: Date.now(),
+          }),
+        );
+        delivered = true;
+        break;
+      }
+    }
+  }
+
+  if (!delivered) {
+    // Queue command for later delivery
+    const queueKey = `${userId}:${desktopId}`;
+    if (!pendingCommands.has(queueKey)) {
+      pendingCommands.set(queueKey, []);
+    }
+    const queue = pendingCommands.get(queueKey)!;
+
+    // Remove expired commands
+    const now = Date.now();
+    const validCommands = queue.filter((cmd) => now - cmd.timestamp < PENDING_COMMAND_TTL);
+
+    // Enforce max queue size
+    if (validCommands.length >= MAX_PENDING_COMMANDS) {
+      validCommands.shift(); // Remove oldest
+    }
+
+    validCommands.push({ commandId, type, payload, timestamp: now });
+    pendingCommands.set(queueKey, validCommands);
+
+    return { delivered: false, queued: true };
+  }
+
+  return { delivered: true, queued: false };
+}
+
+/**
+ * Flush pending commands to a newly connected desktop
+ */
+function flushPendingCommands(ws: AuthenticatedWebSocket) {
+  if (!ws.userId || !ws.deviceId) return;
+
+  const queueKey = `${ws.userId}:${ws.deviceId}`;
+  const queue = pendingCommands.get(queueKey);
+
+  if (queue && queue.length > 0) {
+    const now = Date.now();
+    const validCommands = queue.filter((cmd) => now - cmd.timestamp < PENDING_COMMAND_TTL);
+
+    for (const cmd of validCommands) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'command',
+            commandId: cmd.commandId,
+            commandType: cmd.type,
+            payload: cmd.payload,
+            timestamp: cmd.timestamp,
+          }),
+        );
+      }
+    }
+
+    pendingCommands.delete(queueKey);
+    console.log(`Flushed ${validCommands.length} pending commands to device ${ws.deviceId}`);
+  }
+}
 
 const authMessageSchema = z.object({
   type: z.literal('auth'),
@@ -44,10 +146,40 @@ type AuthMessage = z.infer<typeof authMessageSchema>;
 type NonAuthMessage = z.infer<typeof nonAuthMessageSchema>;
 
 export function setupWebSocket(wss: WebSocketServer) {
+  // Handle WebSocket server errors
+  wss.on('error', (error) => {
+    console.error('WebSocketServer error:', error);
+  });
+
   wss.on('connection', (ws: AuthenticatedWebSocket) => {
     console.log('New WebSocket connection');
 
     ws.isAlive = true;
+
+    // Handle individual socket errors to prevent unhandled exceptions
+    ws.on('error', (error) => {
+      console.error('WebSocket client error:', error.message);
+      // Clean up auth timeout if exists
+      if (ws.authTimeout) {
+        clearTimeout(ws.authTimeout);
+        ws.authTimeout = undefined;
+      }
+      // The 'close' event will handle cleanup of client from the clients map
+    });
+
+    // Set authentication timeout - close connection if not authenticated in time
+    ws.authTimeout = setTimeout(() => {
+      if (!ws.userId) {
+        console.log('WebSocket connection closed due to authentication timeout');
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            error: 'Authentication timeout. Please authenticate within 30 seconds.',
+          }),
+        );
+        ws.close(4001, 'Authentication timeout');
+      }
+    }, AUTH_TIMEOUT_MS);
 
     ws.on('pong', () => {
       ws.isAlive = true;
@@ -111,6 +243,11 @@ export function setupWebSocket(wss: WebSocketServer) {
     });
 
     ws.on('close', () => {
+      // Clear auth timeout on disconnect
+      if (ws.authTimeout) {
+        clearTimeout(ws.authTimeout);
+      }
+
       if (ws.userId) {
         const userClients = clients.get(ws.userId);
         if (userClients) {
@@ -188,6 +325,12 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
       delete ws.deviceId;
     }
 
+    // Clear auth timeout on successful authentication
+    if (ws.authTimeout) {
+      clearTimeout(ws.authTimeout);
+      ws.authTimeout = undefined;
+    }
+
     if (!clients.has(userId)) {
       clients.set(userId, new Set());
     }
@@ -201,6 +344,9 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
     );
 
     console.log(`User ${userId} authenticated via WebSocket`);
+
+    // Flush any pending commands for this device
+    flushPendingCommands(ws);
   } catch {
     ws.send(
       JSON.stringify({

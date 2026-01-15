@@ -6,11 +6,8 @@ use crate::api_integrations::veo3::{
     Veo3Client, VideoGenerationRequest, VideoResolution, VideoStatus,
 };
 use crate::api_integrations::{APIError, RequestConfig};
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
-
-const KEYRING_SERVICE: &str = "AGIWorkforce";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -257,13 +254,63 @@ fn resolve_api_key(provider: &str) -> Result<String, APIError> {
         }
     }
 
-    // Fallback to keyring (shared with settings module)
-    let entry = Entry::new(KEYRING_SERVICE, &format!("api_key_{}", provider))
-        .map_err(|e| APIError::APIError(format!("Keyring unavailable: {}", e)))?;
+    // Fallback to encrypted database storage
+    let app_data = dirs::data_dir()
+        .ok_or_else(|| APIError::APIError("Failed to get app data directory".to_string()))?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
 
-    entry
-        .get_password()
-        .map_err(|_| APIError::MissingAPIKey(provider.to_string()))
+    if db_path.exists() {
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            let api_key_key = format!("api_key_{}", provider);
+            if let Ok(encrypted_value) = conn.query_row(
+                "SELECT value FROM settings_v2 WHERE key = ?1 AND encrypted = 1",
+                rusqlite::params![api_key_key],
+                |row| row.get::<_, String>(0),
+            ) {
+                // Decrypt using machine-derived key
+                if let Some(decrypted) = decrypt_api_key(&encrypted_value) {
+                    return Ok(decrypted);
+                }
+            }
+        }
+    }
+
+    Err(APIError::MissingAPIKey(provider.to_string()))
+}
+
+/// Decrypt an API key using machine-derived keys
+fn decrypt_api_key(encrypted: &str) -> Option<String> {
+    use crate::security::machine_key::{derive_key, KeyPurpose};
+    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+    use base64::{engine::general_purpose, Engine as _};
+
+    let key = derive_key(KeyPurpose::DatabaseEncryption);
+    let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
+
+    // Decode from base64
+    let combined = general_purpose::STANDARD.decode(encrypted).ok()?;
+
+    if combined.len() < 12 {
+        return None;
+    }
+
+    // Split nonce and ciphertext
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    // Decrypt
+    let plaintext = cipher.decrypt(nonce, ciphertext).ok()?;
+
+    // Parse the JSON string value
+    if let Ok(value) = String::from_utf8(plaintext) {
+        // The value is stored as a JSON string, so we need to parse it
+        if let Ok(parsed) = serde_json::from_str::<String>(&value) {
+            return Some(parsed);
+        }
+        // If not valid JSON, return as-is
+        return Some(value);
+    }
+    None
 }
 
 fn estimate_image_cost(provider: &ImageProvider, count: u32) -> Option<f64> {

@@ -7,6 +7,7 @@ pub mod auth_db;
 pub mod encryption;
 pub mod guardrails;
 pub mod injection_detector;
+pub mod machine_key;
 pub mod oauth;
 pub mod permissions;
 pub mod policy;
@@ -51,6 +52,7 @@ pub use policy_integration::{
 pub use prompt_injection::{PromptInjectionDetector, SecurityAnalysis, SecurityRecommendation};
 pub use rate_limit::{RateLimitConfig, RateLimiter};
 pub use rbac::{Permission, RBACManager};
+pub use machine_key::{derive_key, derive_key_base64, get_machine_id_hash, KeyPurpose};
 pub use secret_manager::{SecretError, SecretManager};
 pub use storage::{decrypt_file, encrypt_file, EncryptedData, SecureStorage};
 pub use tool_guard::{SecurityError, ToolExecutionGuard, ToolPolicy};

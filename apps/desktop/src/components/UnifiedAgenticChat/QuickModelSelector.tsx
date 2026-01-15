@@ -8,7 +8,6 @@ import {
   THINKING_MODEL_VARIANTS,
   type ModelMetadata,
 } from '../../constants/llm';
-import { canUseModel } from '../../constants/planModels';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
@@ -102,12 +101,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     });
 
     availableModels.forEach((model) => {
-      // Filter models based on user's plan
-      const planTier = userPlanTier as any;
-      if (model.provider !== 'ollama' && !canUseModel(planTier, model.id)) {
-        return; // Skip models not available for this plan, but always allow local Ollama
-      }
-
+      // All models are accessible through managed cloud - backend handles access control
       const group = groups[model.provider];
       if (group) {
         let metadata = getModelMetadata(model.id);
@@ -294,7 +288,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               className={cn(
                 'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
                 isSelected
-                  ? 'border-primary bg-linear-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
+                  ? 'border-amber-500 bg-linear-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-sm dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
                   : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
               )}
             >
@@ -388,20 +382,6 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                 {models.map((model) => {
                   const isActive = model.id === selectedModel;
 
-                  // Determine which plan tier(s) this model requires
-                  const getModelTierTag = (modelId: string): string => {
-                    const hobbySafe = canUseModel('hobby' as any, modelId);
-                    const proSafe = canUseModel('pro' as any, modelId);
-                    const maxSafe = canUseModel('max' as any, modelId);
-
-                    if (maxSafe && !proSafe) return 'Max Only';
-                    if (proSafe && !hobbySafe) return 'Pro+';
-                    if (hobbySafe) return 'Hobby+';
-                    return '';
-                  };
-
-                  const tierTag = getModelTierTag(model.id);
-
                   return (
                     <button
                       key={model.id}
@@ -413,23 +393,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                           : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="truncate">{model.name}</span>
-                        {tierTag && !isActive && (
-                          <span
-                            className={cn(
-                              'text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0',
-                              tierTag === 'Max Only'
-                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                : tierTag === 'Pro+'
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-                            )}
-                          >
-                            {tierTag}
-                          </span>
-                        )}
-                      </div>
+                      <span className="truncate">{model.name}</span>
                       {isActive ? (
                         <Check size={14} className="text-primary shrink-0" />
                       ) : (
@@ -449,24 +413,6 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             </div>
           );
         })}
-
-        {/* Locked Models Info */}
-        {(userPlanTier === 'free' || userPlanTier === 'hobby') && (
-          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-[8px] text-gray-600 dark:text-gray-500 px-1">
-              🔒 <span className="font-semibold">Premium models locked:</span> Claude Opus,
-              GPT-5.2-Pro, GPT-5.1-Thinking and 10+ others require Pro/Max plan.
-            </p>
-          </div>
-        )}
-        {userPlanTier === 'pro' && (
-          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-[8px] text-gray-600 dark:text-gray-500 px-1">
-              🔒 <span className="font-semibold">Enterprise models locked:</span> Claude Opus
-              ($15/$75), GPT-5.2-Pro ($10/$30) require Max plan.
-            </p>
-          </div>
-        )}
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
@@ -507,7 +453,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               className={cn(
                 'flex w-full items-center justify-between rounded-lg px-2 py-1 text-[10px] transition-colors',
                 thinkingModeEnabled
-                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                   : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-charcoal-800',
                 isDisabled && 'opacity-50 cursor-not-allowed',
               )}
@@ -519,7 +465,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <div
                 className={cn(
                   'h-3.5 w-6 rounded-full p-0.5 transition-colors',
-                  thinkingModeEnabled ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600',
+                  thinkingModeEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600',
                 )}
               >
                 <div

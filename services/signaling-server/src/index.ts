@@ -151,7 +151,12 @@ const clients = new WeakMap<WebSocket, ConnectedClient>();
 // When multiple clients connect simultaneously with the same code before
 // the session is in activeSessions, we need to ensure only one rehydration
 // occurs and all clients use the same session instance.
-const pendingRehydrations = new Map<string, Promise<Session | null>>();
+const pendingRehydrations = new Map<
+  string,
+  { promise: Promise<Session | null>; createdAt: number }
+>();
+const MAX_PENDING_REHYDRATIONS = 1000; // Maximum pending entries
+const PENDING_REHYDRATION_TTL = 30_000; // 30 seconds TTL for pending entries
 
 const pairingRequestSchema = z.object({
   ttlSeconds: z.number().min(30).max(900).optional(),
@@ -230,22 +235,14 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 
   const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata } = parseResult.data;
 
-  const code = await generateUniqueCode();
-  const now = Date.now();
-  const expiresAt = now + ttlSeconds * 1000;
+  // Insert session with atomic code generation (uses DB unique constraint to prevent race conditions)
+  const result = await insertSessionWithRetry(ttlSeconds, metadata);
 
-  // Persist to DB
-  const { error } = await supabase.from('signaling_sessions').insert({
-    code,
-    created_at: now,
-    expires_at: expiresAt,
-    metadata: metadata ?? {},
-  });
-
-  if (error) {
-    console.error('DB Insert Error', error);
-    return res.status(500).json({ error: 'database_error' });
+  if ('error' in result) {
+    return res.status(500).json({ error: result.error });
   }
+
+  const { code, expiresAt } = result;
 
   // We don't need to put it in activeSessions until someone connects.
 
@@ -318,6 +315,21 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 });
 
 wss.on('connection', (socket) => {
+  // Handle WebSocket errors to prevent unhandled exceptions
+  socket.on('error', (error) => {
+    console.error('[signaling] WebSocket error:', error.message);
+    // Clean up client if registered
+    const client = clients.get(socket);
+    if (client) {
+      const session = activeSessions.get(client.code);
+      if (session && session.participants[client.role]?.socket === socket) {
+        delete session.participants[client.role];
+        notifyPeer(session, client.role, { type: 'peer_left', role: client.role, reason: 'error' });
+      }
+      clients.delete(socket);
+    }
+  });
+
   socket.on('message', (raw) => {
     const rawStr = raw.toString();
 
@@ -425,11 +437,27 @@ async function handleRegister(socket: WebSocket, message: RegisterMessage) {
     // Check if there's a pending rehydration for this code (race condition prevention)
     // This ensures that if two clients connect simultaneously with the same code,
     // they both wait for and use the same rehydrated session instance.
-    let pendingRehydration = pendingRehydrations.get(message.code);
+    let pendingEntry = pendingRehydrations.get(message.code);
 
-    if (!pendingRehydration) {
+    // Clean up stale pending entries before adding new ones (memory leak protection)
+    if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
+      const now = Date.now();
+      for (const [code, entry] of pendingRehydrations.entries()) {
+        if (now - entry.createdAt > PENDING_REHYDRATION_TTL) {
+          pendingRehydrations.delete(code);
+        }
+      }
+      // If still over limit after cleanup, reject new connections
+      if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
+        socket.send(JSON.stringify({ type: 'error', error: 'server_overloaded' }));
+        socket.close();
+        return;
+      }
+    }
+
+    if (!pendingEntry) {
       // No pending rehydration, start one
-      pendingRehydration = (async (): Promise<Session | null> => {
+      const rehydrationPromise = (async (): Promise<Session | null> => {
         // Double-check activeSessions in case it was set while we were waiting
         const existingSession = activeSessions.get(message.code);
         if (existingSession) {
@@ -463,16 +491,17 @@ async function handleRegister(socket: WebSocket, message: RegisterMessage) {
         return rehydratedSession;
       })();
 
-      pendingRehydrations.set(message.code, pendingRehydration);
+      pendingEntry = { promise: rehydrationPromise, createdAt: Date.now() };
+      pendingRehydrations.set(message.code, pendingEntry);
 
       // Clean up pending map after rehydration completes
-      pendingRehydration.finally(() => {
+      rehydrationPromise.finally(() => {
         pendingRehydrations.delete(message.code);
       });
     }
 
     // Wait for rehydration to complete (convert null to undefined for type compatibility)
-    session = (await pendingRehydration) ?? undefined;
+    session = (await pendingEntry.promise) ?? undefined;
 
     if (!session) {
       // Session not found or expired - check DB one more time to distinguish errors
@@ -589,32 +618,54 @@ function isSessionExpired(session: Session): boolean {
 
 // Generate a unique 8-character alphanumeric code with cryptographically secure randomness
 // Uses base64url encoding for higher entropy (~48 bits vs ~20 bits for 6 digits)
-async function generateUniqueCode(): Promise<string> {
+function generateCode(): string {
+  // Generate 6 random bytes and encode as base64url, take first 8 characters
+  // This provides ~48 bits of entropy (vs ~20 bits for 6 digits = 1M combinations)
+  return randomBytes(6).toString('base64url').substring(0, 8).toUpperCase();
+}
+
+// Insert session with collision retry (uses DB unique constraint for atomicity)
+async function insertSessionWithRetry(
+  ttlSeconds: number,
+  metadata: Record<string, unknown> | undefined,
+): Promise<{ code: string; expiresAt: number } | { error: string }> {
   const MAX_ATTEMPTS = 10;
+  const now = Date.now();
+  const expiresAt = now + ttlSeconds * 1000;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    // Generate 6 random bytes and encode as base64url, take first 8 characters
-    // This provides ~48 bits of entropy (vs ~20 bits for 6 digits = 1M combinations)
-    const code = randomBytes(6).toString('base64url').substring(0, 8).toUpperCase();
+    const code = generateCode();
 
-    // Check if code already exists in active sessions
+    // Skip if already in active memory sessions
     if (activeSessions.has(code)) {
       continue;
     }
 
-    // Check if code exists in database
-    const { data: existing } = await supabase
-      .from('signaling_sessions')
-      .select('code')
-      .eq('code', code)
-      .single();
+    // Attempt insert - will fail with unique constraint violation if code exists
+    const { error } = await supabase.from('signaling_sessions').insert({
+      code,
+      created_at: now,
+      expires_at: expiresAt,
+      metadata: metadata ?? {},
+    });
 
-    if (!existing) {
-      return code;
+    if (!error) {
+      return { code, expiresAt };
     }
+
+    // Check if it's a unique constraint violation (code 23505 in PostgreSQL)
+    if (error.code === '23505') {
+      // Code collision, try again with a new code
+      console.log(`[signaling] Code collision on attempt ${attempt + 1}, retrying...`);
+      continue;
+    }
+
+    // Some other database error
+    console.error('DB Insert Error', error);
+    return { error: 'database_error' };
   }
 
-  throw new Error('Failed to generate unique pairing code after maximum attempts');
+  return { error: 'failed_to_generate_code' };
 }
 
 function disconnectParticipants(

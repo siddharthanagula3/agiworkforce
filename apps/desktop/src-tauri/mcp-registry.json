@@ -151,32 +151,6 @@
       }
     },
     {
-      "id": "brave-search",
-      "name": "Brave Search",
-      "version": "1.0.0",
-      "category": "search",
-      "description": "Web search using Brave Search API. Get up-to-date information from the web with privacy-focused search.",
-      "author": "Anthropic",
-      "npm_package": "@modelcontextprotocol/server-brave-search",
-      "github": "https://github.com/modelcontextprotocol/servers",
-      "rating": 4.6,
-      "downloads": 9876,
-      "tools": [
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search"
-        },
-        {
-          "name": "local_search",
-          "description": "Search for local businesses and places"
-        }
-      ],
-      "configuration": {
-        "required": ["BRAVE_API_KEY"],
-        "optional": ["default_country", "safe_search"]
-      }
-    },
-    {
       "id": "postgres",
       "name": "PostgreSQL Database",
       "version": "1.0.0",

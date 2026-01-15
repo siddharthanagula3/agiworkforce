@@ -169,6 +169,8 @@ export function useVoiceTranscription(
         configureImpl({ provider: 'openai' as const }).catch(() => {});
       });
     }
+    // configureImpl is stable and doesn't need to be in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferLocal, availableLocalWhisper]);
 
   // Configure language when it changes
@@ -176,6 +178,8 @@ export function useVoiceTranscription(
     if (language) {
       configureImpl({ language }).catch(() => {});
     }
+    // configureImpl is stable and doesn't need to be in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
   /**
@@ -317,7 +321,9 @@ export function useVoiceTranscription(
       }));
 
       // Notify backend that recording started (for logging)
-      invoke('voice_start_recording').catch(() => {});
+      invoke('voice_start_recording').catch((err) => {
+        console.warn('[VoiceTranscription] Failed to notify backend of recording start:', err);
+      });
 
       onRecordingStart?.();
     } catch (err) {
@@ -350,7 +356,9 @@ export function useVoiceTranscription(
         }
 
         // Notify backend that recording stopped
-        invoke('voice_stop_recording').catch(() => {});
+        invoke('voice_stop_recording').catch((err) => {
+          console.warn('[VoiceTranscription] Failed to notify backend of recording stop:', err);
+        });
 
         onRecordingStop?.();
 
@@ -448,14 +456,16 @@ export function useVoiceTranscription(
    */
   const configure = useCallback(async (settings: Partial<VoiceSettings>): Promise<void> => {
     await configureImpl(settings);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // configureImpl is stable
 
   /**
    * Public API for getting voice settings
    */
   const getSettings = useCallback(async (): Promise<VoiceSettings> => {
     return getSettingsImpl();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // getSettingsImpl is stable
 
   /**
    * Public API for checking local Whisper availability

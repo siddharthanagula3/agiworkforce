@@ -1,31 +1,33 @@
+//! Secure secret management for JWT and other cryptographic keys
+//!
+//! This module provides a secure way to generate, store, and retrieve secrets
+//! using machine-derived encryption keys and SQLite storage.
+//!
+//! # Security Features
+//! - Cryptographically secure random secret generation
+//! - Machine-derived encryption keys (no keyring permission prompts)
+//! - Database storage with AES-256-GCM encryption
+//! - Automatic secret rotation support
+//! - No secrets logged or exposed in error messages
+
 use super::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
+use super::machine_key::{self, KeyPurpose};
 use base64::{engine::general_purpose, Engine as _};
-#[cfg(not(test))]
-use keyring::Entry;
 use rand::RngCore;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
-#[allow(dead_code)]
-const JWT_SECRET_KEY: &str = "agiworkforce.jwt_secret";
 const JWT_SECRET_DB_KEY: &str = "jwt_secret";
-#[allow(dead_code)]
-const DB_ENCRYPTION_KEY_NAME: &str = "agiworkforce.db_encryption_key";
-const SERVICE_NAME: &str = "AGI Workforce";
-const SECRET_LENGTH: usize = 64;
-const ENCRYPTION_KEY_LENGTH: usize = 32;
+const DB_ENCRYPTION_KEY_DB_KEY: &str = "db_encryption_key";
+const SECRET_LENGTH: usize = 64; // 512 bits for JWT secret
+const ENCRYPTION_KEY_LENGTH: usize = 32; // 256 bits for AES-256
 
+/// Error types for secret management operations
 #[derive(Debug, thiserror::Error)]
 pub enum SecretError {
     #[error("Failed to generate secret")]
     GenerationError,
-
-    #[error("Failed to store secret in keyring")]
-    KeyringStoreError(#[source] keyring::Error),
-
-    #[error("Failed to retrieve secret from keyring")]
-    KeyringRetrieveError(#[source] keyring::Error),
 
     #[error("Failed to store secret in database")]
     DatabaseStoreError(#[source] rusqlite::Error),
@@ -43,176 +45,100 @@ pub enum SecretError {
     EncryptionError(String),
 }
 
+/// Manages cryptographic secrets with secure storage
 pub struct SecretManager {
     db_conn: Arc<Mutex<Connection>>,
-    #[allow(dead_code)]
-    service_name: String,
 }
 
 impl SecretManager {
+    /// Create a new SecretManager with database connection
     pub fn new(db_conn: Arc<Mutex<Connection>>) -> Self {
-        Self {
-            db_conn,
-            service_name: SERVICE_NAME.to_string(),
-        }
+        Self { db_conn }
     }
 
-    #[cfg(test)]
-    pub fn new_with_service_name(db_conn: Arc<Mutex<Connection>>, service_name: String) -> Self {
-        Self {
-            db_conn,
-            service_name,
-        }
-    }
-
+    /// Get or create the JWT secret
+    ///
+    /// This method will:
+    /// 1. Try to retrieve from database (encrypted)
+    /// 2. If not found, generate new secret and store it
+    ///
+    /// # Security Notes
+    /// - Secret is never logged
+    /// - Errors are sanitized to prevent secret leakage
     pub fn get_or_create_jwt_secret(&self) -> Result<String, SecretError> {
         debug!("Attempting to retrieve JWT secret");
 
-        match self.get_secret_from_keyring() {
+        // Try database
+        match self.get_secret_from_database(JWT_SECRET_DB_KEY) {
             Ok(secret) => {
-                info!("JWT secret retrieved from OS keyring");
+                info!("JWT secret retrieved from database");
                 return Ok(secret);
             }
             Err(e) => {
-                warn!("Failed to retrieve from keyring: {}", sanitize_error(&e));
+                debug!("No JWT secret found in database: {}", sanitize_error(&e));
             }
         }
 
-        match self.get_secret_from_database() {
-            Ok(secret) => {
-                info!("JWT secret retrieved from database (fallback)");
-
-                if let Err(e) = self.store_secret_in_keyring(&secret) {
-                    warn!(
-                        "Failed to migrate secret to keyring: {}",
-                        sanitize_error(&e)
-                    );
-                } else {
-                    info!("Successfully migrated secret to keyring");
-                }
-                return Ok(secret);
-            }
-            Err(e) => {
-                debug!("No secret found in database: {}", sanitize_error(&e));
-            }
-        }
-
+        // Generate new secret if not found
         info!("Generating new JWT secret");
         let secret = self.generate_secret()?;
 
-        let mut stored = false;
-
-        if let Err(e) = self.store_secret_in_keyring(&secret) {
-            warn!("Failed to store in keyring: {}", sanitize_error(&e));
-        } else {
-            info!("JWT secret stored in OS keyring");
-            stored = true;
+        // Store in database
+        if let Err(e) = self.store_secret_in_database(JWT_SECRET_DB_KEY, &secret) {
+            error!(
+                "Failed to store JWT secret in database: {}",
+                sanitize_error(&e)
+            );
+            return Err(e);
         }
 
-        if let Err(e) = self.store_secret_in_database(&secret) {
-            error!("Failed to store in database: {}", sanitize_error(&e));
-            if !stored {
-                return Err(e);
-            }
-        } else {
-            info!("JWT secret stored in database");
-            stored = true;
-        }
-
-        if stored {
-            Ok(secret)
-        } else {
-            Err(SecretError::GenerationError)
-        }
+        info!("JWT secret stored in database");
+        Ok(secret)
     }
 
+    /// Rotate the JWT secret (generate and store a new one)
+    ///
+    /// # Warning
+    /// This will invalidate all existing JWT tokens. Only call this if you
+    /// want to force all users to re-authenticate.
     pub fn rotate_jwt_secret(&self) -> Result<String, SecretError> {
         info!("Rotating JWT secret - all existing tokens will be invalidated");
 
         let new_secret = self.generate_secret()?;
 
-        let mut stored = false;
-
-        if let Err(e) = self.store_secret_in_keyring(&new_secret) {
-            warn!(
-                "Failed to store rotated secret in keyring: {}",
-                sanitize_error(&e)
-            );
-        } else {
-            stored = true;
-        }
-
-        if let Err(e) = self.store_secret_in_database(&new_secret) {
+        if let Err(e) = self.store_secret_in_database(JWT_SECRET_DB_KEY, &new_secret) {
             error!(
                 "Failed to store rotated secret in database: {}",
                 sanitize_error(&e)
             );
-            if !stored {
-                return Err(e);
-            }
-        } else {
-            stored = true;
+            return Err(e);
         }
 
-        if stored {
-            info!("JWT secret rotation completed successfully");
-            Ok(new_secret)
-        } else {
-            error!("Failed to store rotated secret in any storage");
-            Err(SecretError::GenerationError)
-        }
+        info!("JWT secret rotation completed successfully");
+        Ok(new_secret)
     }
 
+    /// Generate a cryptographically secure random secret
     fn generate_secret(&self) -> Result<String, SecretError> {
         let mut secret_bytes = vec![0u8; SECRET_LENGTH];
         rand::thread_rng()
             .try_fill_bytes(&mut secret_bytes)
             .map_err(|_| SecretError::GenerationError)?;
 
+        // Use base64 URL-safe encoding without padding
         Ok(general_purpose::URL_SAFE_NO_PAD.encode(secret_bytes))
     }
 
-    fn store_secret_in_keyring(&self, secret: &str) -> Result<(), SecretError> {
-        #[cfg(test)]
-        {
-            let _ = secret;
-            Ok(())
-        }
+    /// Store secret in database with AES-256-GCM encryption
+    fn store_secret_in_database(&self, key: &str, secret: &str) -> Result<(), SecretError> {
+        // Get encryption key from machine-derived keys
+        let encryption_key = self.get_db_encryption_key();
 
-        #[cfg(not(test))]
-        {
-            let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
-                .map_err(SecretError::KeyringStoreError)?;
-
-            entry
-                .set_password(secret)
-                .map_err(SecretError::KeyringStoreError)?;
-
-            Ok(())
-        }
-    }
-
-    fn get_secret_from_keyring(&self) -> Result<String, SecretError> {
-        #[cfg(test)]
-        return Err(SecretError::SecretNotFound);
-
-        #[cfg(not(test))]
-        {
-            let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
-                .map_err(SecretError::KeyringRetrieveError)?;
-
-            entry
-                .get_password()
-                .map_err(SecretError::KeyringRetrieveError)
-        }
-    }
-
-    fn store_secret_in_database(&self, secret: &str) -> Result<(), SecretError> {
-        let encryption_key = self.get_or_create_db_encryption_key()?;
-
+        // Encrypt the secret
         let encrypted =
             encrypt_secret(&encryption_key, secret).map_err(SecretError::EncryptionError)?;
 
+        // Serialize the encrypted secret to JSON
         let encrypted_json = serde_json::to_string(&encrypted)
             .map_err(|e| SecretError::EncryptionError(format!("Failed to serialize: {}", e)))?;
 
@@ -220,20 +146,21 @@ impl SecretManager {
 
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES (?1, ?2, 1)",
-            rusqlite::params![JWT_SECRET_DB_KEY, encrypted_json],
+            rusqlite::params![key, encrypted_json],
         )
         .map_err(SecretError::DatabaseStoreError)?;
 
         Ok(())
     }
 
-    fn get_secret_from_database(&self) -> Result<String, SecretError> {
+    /// Retrieve and decrypt secret from database
+    fn get_secret_from_database(&self, key: &str) -> Result<String, SecretError> {
         let conn = self.db_conn.lock().unwrap_or_else(|e| e.into_inner());
 
         let encrypted_json: String = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = ?1 AND encrypted = 1",
-                rusqlite::params![JWT_SECRET_DB_KEY],
+                rusqlite::params![key],
                 |row| row.get(0),
             )
             .map_err(SecretError::DatabaseRetrieveError)?;
@@ -242,70 +169,56 @@ impl SecretManager {
             return Err(SecretError::SecretNotFound);
         }
 
+        // Drop the lock before getting the encryption key
         drop(conn);
 
-        let encryption_key = self.get_db_encryption_key()?;
+        // Get the database encryption key
+        let encryption_key = self.get_db_encryption_key();
 
+        // Deserialize the encrypted secret from JSON
         let encrypted: EncryptedSecret = serde_json::from_str(&encrypted_json)
             .map_err(|e| SecretError::EncryptionError(format!("Failed to deserialize: {}", e)))?;
 
+        // Decrypt the secret
         decrypt_secret(&encryption_key, &encrypted).map_err(SecretError::EncryptionError)
     }
 
-    fn get_or_create_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
-        #[cfg(test)]
-        return Ok(vec![1u8; ENCRYPTION_KEY_LENGTH]);
-
-        #[cfg(not(test))]
-        {
-            if let Ok(key) = self.get_db_encryption_key() {
-                return Ok(key);
-            }
-
-            let mut key_bytes = vec![0u8; ENCRYPTION_KEY_LENGTH];
-            rand::thread_rng()
-                .try_fill_bytes(&mut key_bytes)
-                .map_err(|_| SecretError::GenerationError)?;
-
-            let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
-                .map_err(SecretError::KeyringStoreError)?;
-
-            let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
-            entry
-                .set_password(&key_base64)
-                .map_err(SecretError::KeyringStoreError)?;
-
-            info!("Generated new database encryption key");
-            Ok(key_bytes)
-        }
+    /// Get the database encryption key derived from machine identifiers
+    fn get_db_encryption_key(&self) -> Vec<u8> {
+        machine_key::derive_key(KeyPurpose::DatabaseEncryption)
     }
 
-    fn get_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
-        #[cfg(test)]
-        return Ok(vec![1u8; ENCRYPTION_KEY_LENGTH]);
-
-        #[cfg(not(test))]
-        {
-            let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
-                .map_err(SecretError::KeyringRetrieveError)?;
-
-            let key_base64 = entry
-                .get_password()
-                .map_err(SecretError::KeyringRetrieveError)?;
-
-            general_purpose::STANDARD
-                .decode(&key_base64)
-                .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)))
+    /// Get or create a secondary encryption key (stored encrypted in database)
+    /// This is used for additional layered encryption if needed
+    pub fn get_or_create_secondary_key(&self) -> Result<Vec<u8>, SecretError> {
+        // Try to get existing key
+        if let Ok(key_b64) = self.get_secret_from_database(DB_ENCRYPTION_KEY_DB_KEY) {
+            return general_purpose::STANDARD
+                .decode(&key_b64)
+                .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)));
         }
+
+        // Generate a new key
+        let mut key_bytes = vec![0u8; ENCRYPTION_KEY_LENGTH];
+        rand::thread_rng()
+            .try_fill_bytes(&mut key_bytes)
+            .map_err(|_| SecretError::GenerationError)?;
+
+        // Store it in database (encrypted with machine-derived key)
+        let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
+        self.store_secret_in_database(DB_ENCRYPTION_KEY_DB_KEY, &key_base64)?;
+
+        info!("Generated new secondary encryption key");
+        Ok(key_bytes)
     }
 
+    /// Delete secret from database
+    ///
+    /// # Warning
+    /// This is a destructive operation. Only use for testing or when
+    /// you need to completely reset the application's security state.
     #[cfg(test)]
     pub fn delete_jwt_secret(&self) -> Result<(), SecretError> {
-        // In tests, we don't actually touch the keyring
-        // if let Ok(entry) = Entry::new(&self.service_name, JWT_SECRET_KEY) {
-        //     let _ = entry.delete_password();
-        // }
-
         let conn = self.db_conn.lock().unwrap();
         let _ = conn.execute(
             "DELETE FROM settings WHERE key = ?1",
@@ -316,10 +229,9 @@ impl SecretManager {
     }
 }
 
+/// Sanitize error messages to prevent secret leakage
 fn sanitize_error(error: &SecretError) -> String {
     match error {
-        SecretError::KeyringRetrieveError(_) => "Keyring access error".to_string(),
-        SecretError::KeyringStoreError(_) => "Keyring storage error".to_string(),
         SecretError::DatabaseRetrieveError(_) => "Database access error".to_string(),
         SecretError::DatabaseStoreError(_) => "Database storage error".to_string(),
         _ => error.to_string(),
@@ -334,6 +246,7 @@ mod tests {
     fn create_test_manager() -> SecretManager {
         let conn = Connection::open_in_memory().unwrap();
 
+        // Create settings table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -344,11 +257,7 @@ mod tests {
         )
         .unwrap();
 
-        use rand::Rng;
-        let random_suffix: u32 = rand::thread_rng().gen();
-        let service_name = format!("AGI_Workforce_Test_{}", random_suffix);
-
-        SecretManager::new_with_service_name(Arc::new(Mutex::new(conn)), service_name)
+        SecretManager::new(Arc::new(Mutex::new(conn)))
     }
 
     #[test]
@@ -356,8 +265,10 @@ mod tests {
         let manager = create_test_manager();
         let secret = manager.generate_secret().unwrap();
 
+        // Check length (base64 encoded 64 bytes is roughly 86 characters)
         assert!(secret.len() > 80);
 
+        // Check it's valid base64
         assert!(general_purpose::URL_SAFE_NO_PAD.decode(&secret).is_ok());
     }
 
@@ -367,6 +278,7 @@ mod tests {
         let secret1 = manager.generate_secret().unwrap();
         let secret2 = manager.generate_secret().unwrap();
 
+        // Each generated secret should be unique
         assert_ne!(secret1, secret2);
     }
 
@@ -375,8 +287,10 @@ mod tests {
         let manager = create_test_manager();
         let secret = "test_secret_12345".to_string();
 
-        manager.store_secret_in_database(&secret).unwrap();
-        let retrieved = manager.get_secret_from_database().unwrap();
+        manager
+            .store_secret_in_database("test_key", &secret)
+            .unwrap();
+        let retrieved = manager.get_secret_from_database("test_key").unwrap();
 
         assert_eq!(secret, retrieved);
     }
@@ -385,11 +299,14 @@ mod tests {
     fn test_get_or_create_jwt_secret() {
         let manager = create_test_manager();
 
+        // Ensure clean state
         let _ = manager.delete_jwt_secret();
 
+        // First call should create a new secret
         let secret1 = manager.get_or_create_jwt_secret().unwrap();
         assert!(!secret1.is_empty());
 
+        // Second call should return the same secret
         let secret2 = manager.get_or_create_jwt_secret().unwrap();
         assert_eq!(secret1, secret2);
     }
@@ -398,12 +315,16 @@ mod tests {
     fn test_rotate_jwt_secret() {
         let manager = create_test_manager();
 
+        // Create initial secret
         let secret1 = manager.get_or_create_jwt_secret().unwrap();
 
+        // Rotate to new secret
         let secret2 = manager.rotate_jwt_secret().unwrap();
 
+        // Should be different
         assert_ne!(secret1, secret2);
 
+        // Subsequent retrieval should get the new secret
         let secret3 = manager.get_or_create_jwt_secret().unwrap();
         assert_eq!(secret2, secret3);
     }
@@ -412,11 +333,27 @@ mod tests {
     fn test_delete_jwt_secret() {
         let manager = create_test_manager();
 
+        // Create a secret
         let _secret = manager.get_or_create_jwt_secret().unwrap();
 
+        // Delete it
         manager.delete_jwt_secret().unwrap();
 
+        // Next call should create a new secret
         let new_secret = manager.get_or_create_jwt_secret().unwrap();
         assert!(!new_secret.is_empty());
+    }
+
+    #[test]
+    fn test_secondary_key() {
+        let manager = create_test_manager();
+
+        // Get or create secondary key
+        let key1 = manager.get_or_create_secondary_key().unwrap();
+        assert_eq!(key1.len(), 32); // AES-256 key
+
+        // Should return the same key on second call
+        let key2 = manager.get_or_create_secondary_key().unwrap();
+        assert_eq!(key1, key2);
     }
 }

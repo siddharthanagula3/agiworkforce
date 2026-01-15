@@ -263,8 +263,12 @@ impl LLMProvider for QwenProvider {
             .await?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(format!("Qwen API error: {}", error_text).into());
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Qwen API error {}: {}", status, error_text).into());
         }
 
         let qwen_response: QwenResponse = response.json().await?;

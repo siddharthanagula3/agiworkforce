@@ -51,7 +51,16 @@ export const MediaGallery: React.FC = () => {
         </div>
         <div className="text-xs text-zinc-400">
           Active jobs:{' '}
-          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-200">1 running</span>
+          {(() => {
+            const processingCount = items.filter((m) => m.status === 'processing').length;
+            return processingCount > 0 ? (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-200">
+                {processingCount} running
+              </span>
+            ) : (
+              <span className="text-zinc-500">None</span>
+            );
+          })()}
         </div>
       </div>
 

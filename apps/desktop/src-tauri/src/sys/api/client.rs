@@ -519,7 +519,8 @@ mod tests {
     async fn test_get_request() {
         let client = ApiClient::new().expect("Failed to create ApiClient for test");
 
-        let result = client.get("https://api.agiworkforce.com");
+        // Use httpbin.org for reliable API testing
+        let result = client.get("https://httpbin.org/get");
 
         match result.await {
             Ok(response) => {

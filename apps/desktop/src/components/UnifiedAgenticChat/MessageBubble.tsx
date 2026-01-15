@@ -43,6 +43,8 @@ import { SourcesFooter } from './SourcesFooter';
 import { StatusTrail } from './StatusTrail';
 
 import { useExecutionStore } from '../../stores/executionStore';
+import { useSimpleModeStore } from '../../stores/simpleModeStore';
+import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { DeepResearchPanel } from './DeepResearchPanel';
 import { CodeBlock } from './Visualizations/CodeBlock';
 import { ImageLightbox } from './ImageLightbox';
@@ -110,6 +112,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   );
 
   const researchTasks = useExecutionStore((state) => state.researchTasks);
+  const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
 
   React.useEffect(() => {
     if (!sidecar.autoTrigger || sidecar.isOpen) return;
@@ -126,7 +129,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isAssistant = message.role === 'assistant';
 
   const avatarBg = useMemo(
-    () => (isUser ? 'bg-blue-600' : isSystem ? 'bg-zinc-600' : 'bg-purple-600'),
+    () =>
+      isUser
+        ? 'bg-blue-600'
+        : isSystem
+          ? 'bg-zinc-600'
+          : 'bg-gradient-to-br from-amber-500 to-orange-600',
     [isUser, isSystem],
   );
 
@@ -332,14 +340,26 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   const renderToolCard = () => {
     const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
+    const isCompleted = toolStatus === 'success' || toolStatus === 'completed';
     const statusIcon =
-      toolStatus === 'success' || toolStatus === 'completed' || approvalState === 'approved' ? (
+      isCompleted || approvalState === 'approved' ? (
         <CheckCircle2 className="h-4 w-4 text-emerald-400" />
       ) : isExecuting ? (
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
       ) : (
         <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
       );
+
+    // Get user-friendly tool display info for simple mode
+    const toolDisplayInfo = getToolDisplayInfo(toolName);
+    const displayToolName = isSimpleMode ? toolDisplayInfo.displayName : toolName || 'Tool call';
+    const displayStatus = isSimpleMode
+      ? isCompleted
+        ? toolDisplayInfo.completedForm
+        : isExecuting
+          ? toolDisplayInfo.activeForm
+          : 'Working...'
+      : toolStatus || 'running';
 
     const lowerTool = (toolName || '').toString().toLowerCase();
     const targetTab: SidecarMode = lowerTool.includes('browser')
@@ -417,10 +437,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-sm text-zinc-100">
             {icon}
-            <span className="font-semibold">{toolName || 'Tool call'}</span>
+            <span className="font-semibold">{displayToolName}</span>
             <span className="inline-flex items-center gap-1 rounded-full border border-white/5 px-2 py-0.5 text-[11px] text-zinc-300">
               {statusIcon}
-              <span className="capitalize">{statusLabel}</span>
+              <span className={isSimpleMode ? '' : 'capitalize'}>
+                {isSimpleMode ? displayStatus : statusLabel}
+              </span>
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -461,9 +483,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             )}
           </div>
         </div>
-        <p className="mt-2 truncate text-sm text-zinc-300" title={toolCommand}>
-          {toolCommand}
-        </p>
+        {/* Hide raw command in simple mode - only show for advanced users */}
+        {!isSimpleMode && (
+          <p className="mt-2 truncate text-sm text-zinc-300" title={toolCommand}>
+            {toolCommand}
+          </p>
+        )}
       </div>
     );
   };
@@ -521,7 +546,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           onMouseLeave={() => setShowActions(false)}
         >
           {showAvatar && (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-700 text-white text-sm font-medium">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white text-sm font-medium">
               AI
             </div>
           )}
@@ -797,17 +822,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </span>
             )}
             {message.metadata?.streaming && !message.pending && (
-              <span className="inline-flex items-center gap-1.5 message-meta text-purple-400">
+              <span className="inline-flex items-center gap-1.5 message-meta text-amber-500 dark:text-amber-400">
                 <span className="flex gap-0.5">
                   {[0, 1, 2].map((i) => (
                     <span
                       key={i}
-                      className="w-1 h-1 rounded-full bg-purple-400 animate-bounce"
+                      className="w-1 h-1 rounded-full bg-amber-400 animate-bounce"
                       style={{ animationDelay: `${i * 0.1}s`, animationDuration: '0.6s' }}
                     />
                   ))}
                 </span>
-                <span className="text-xs">Generating</span>
+                <span className="text-xs">
+                  {isSimpleMode ? 'Writing response...' : 'Generating'}
+                </span>
               </span>
             )}
           </div>
@@ -899,7 +926,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 {/* Streaming cursor */}
                 {message.metadata?.streaming && (
                   <span
-                    className="inline-block w-2 h-4 ml-0.5 bg-purple-400 animate-pulse rounded-sm"
+                    className="inline-block w-2 h-4 ml-0.5 bg-amber-400 animate-pulse rounded-sm"
                     style={{ animationDuration: '0.5s' }}
                   />
                 )}

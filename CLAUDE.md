@@ -113,7 +113,7 @@ agiworkforce/
 │   │   ├── src-tauri/      # Rust backend with system integrations
 │   │   ├── e2e/            # Playwright E2E tests
 │   │   └── vite.config.ts  # Frontend build configuration
-│   ├── web/                # Next.js 15 SaaS platform
+│   ├── web/                # Next.js 16 SaaS platform
 │   │   ├── app/            # React 19 Server Components
 │   │   ├── app/api/        # API routes (Stripe webhook, checkout, device linking)
 │   │   ├── lib/services/   # Business logic (subscription, credit, audit, API key)

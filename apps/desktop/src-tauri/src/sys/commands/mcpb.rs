@@ -28,7 +28,7 @@ use tokio::process::Command;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BundleTool {
-    /// Tool name (e.g., "read_file", "brave_web_search")
+    /// Tool name (e.g., "read_file", "search_code")
     pub name: String,
     /// Human-readable description
     pub description: String,
@@ -82,7 +82,7 @@ pub struct McpConfigTemplate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpBundle {
-    /// Unique identifier (e.g., "mcp-filesystem", "mcp-brave-search")
+    /// Unique identifier (e.g., "mcp-filesystem", "mcp-github")
     pub id: String,
     /// Human-readable name
     pub name: String,
@@ -384,78 +384,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             verified: true,
             featured: true,
             tags: vec!["files".to_string(), "filesystem".to_string(), "io".to_string(), "storage".to_string()],
-            installed: false,
-            installed_version: None,
-            update_available: false,
-        },
-
-        // Brave Search
-        McpBundle {
-            id: "mcp-brave-search".to_string(),
-            name: "Brave Search".to_string(),
-            version: "0.6.2".to_string(),
-            description: "Web and local search capabilities powered by the Brave Search API. Includes web search, local business search, and news results.".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "search".to_string(),
-            icon_url: Some("https://raw.githubusercontent.com/modelcontextprotocol/servers/main/assets/brave.svg".to_string()),
-            npm_package: Some("@modelcontextprotocol/server-brave-search".to_string()),
-            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search".to_string()),
-            documentation_url: Some("https://modelcontextprotocol.io/docs/servers/brave-search".to_string()),
-            tools: vec![
-                BundleTool {
-                    name: "brave_web_search".to_string(),
-                    description: "Search the web using Brave Search".to_string(),
-                    parameters: vec![
-                        BundleToolParameter {
-                            name: "query".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Search query".to_string(),
-                        },
-                        BundleToolParameter {
-                            name: "count".to_string(),
-                            param_type: "number".to_string(),
-                            required: false,
-                            description: "Number of results (1-20)".to_string(),
-                        },
-                    ],
-                },
-                BundleTool {
-                    name: "brave_local_search".to_string(),
-                    description: "Search for local businesses and places".to_string(),
-                    parameters: vec![
-                        BundleToolParameter {
-                            name: "query".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Search query for local places".to_string(),
-                        },
-                    ],
-                },
-            ],
-            config_template: McpConfigTemplate {
-                command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@modelcontextprotocol/server-brave-search".to_string()],
-                env: {
-                    let mut env = HashMap::new();
-                    env.insert("BRAVE_API_KEY".to_string(), "<from_credential_manager>".to_string());
-                    env
-                },
-            },
-            required_credentials: vec![
-                RequiredCredential {
-                    env_var: "BRAVE_API_KEY".to_string(),
-                    display_name: "Brave Search API Key".to_string(),
-                    description: "API key for accessing Brave Search. Get one from the Brave Search API dashboard.".to_string(),
-                    help_url: Some("https://brave.com/search/api/".to_string()),
-                    required: true,
-                },
-            ],
-            rating: 4.8,
-            downloads: 89000,
-            verified: true,
-            featured: true,
-            tags: vec!["search".to_string(), "web".to_string(), "brave".to_string(), "internet".to_string()],
             installed: false,
             installed_version: None,
             update_available: false,

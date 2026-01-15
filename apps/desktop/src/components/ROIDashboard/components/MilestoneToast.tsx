@@ -77,7 +77,7 @@ export function MilestoneToast() {
               copyToClipboard(shareText);
             });
         } else {
-          const twitterUrl = `https://api.agiworkforce.com`;
+          const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
           window.open(twitterUrl, '_blank');
         }
 
