@@ -26,9 +26,31 @@
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_credential_manager>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_oauth:github>"
       },
       "enabled": true
+    },
+    "google-drive": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gdrive"
+      ],
+      "env": {
+        "GOOGLE_ACCESS_TOKEN": "<from_oauth:google>"
+      },
+      "enabled": false
+    },
+    "slack": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-slack"
+      ],
+      "env": {
+        "SLACK_BOT_TOKEN": "<from_oauth:slack>"
+      },
+      "enabled": false
     },
     "terminal": {
       "command": "npx",

@@ -50,6 +50,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/AlertDialog';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
+import { SimpleModeToggle } from '../SimpleModeToggle';
 
 interface SidebarProps {
   className?: string;
@@ -119,6 +121,9 @@ export function Sidebar({
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const activeView = useUnifiedChatStore((state) => state.activeView);
+
+  // Simple mode state - hide advanced features
+  const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
   const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
   const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
@@ -418,77 +423,82 @@ export function Sidebar({
             )}
           </button>
 
-          {/* Conversation action buttons */}
+          {/* Conversation action buttons - simplified in simple mode */}
           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenCustomInstructions?.(conv.id);
-              }}
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-6 w-6 text-gray-400 hover:text-purple-500',
-                conv.customInstructions && 'text-purple-500',
-              )}
-              title={
-                conv.customInstructions ? 'Edit custom instructions' : 'Add custom instructions'
-              }
-            >
-              <Sparkles className="h-3 w-3" />
-            </Button>
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePinnedConversation(conv.id);
-              }}
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-gray-400 hover:text-teal-500"
-              title={conv.pinned ? 'Unpin' : 'Pin'}
-            >
-              {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
-            </Button>
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExportConversation(conv.id, conv.title || 'Untitled');
-              }}
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-gray-400 hover:text-blue-500"
-              title="Export to Markdown"
-            >
-              <Download className="h-3 w-3" />
-            </Button>
-            {showArchived ? (
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  restoreConversation(conv.id);
-                  toast.success('Conversation restored');
-                }}
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-emerald-500"
-                title="Restore from archive"
-              >
-                <ArchiveRestore className="h-3 w-3" />
-              </Button>
-            ) : (
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  archiveConversation(conv.id);
-                  toast.success('Conversation archived');
-                }}
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-amber-500"
-                title="Archive"
-              >
-                <Archive className="h-3 w-3" />
-              </Button>
+            {/* Only show delete in simple mode, show all actions in advanced mode */}
+            {!isSimpleMode && (
+              <>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenCustomInstructions?.(conv.id);
+                  }}
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-6 w-6 text-gray-400 hover:text-amber-500',
+                    conv.customInstructions && 'text-amber-500',
+                  )}
+                  title={
+                    conv.customInstructions ? 'Edit custom instructions' : 'Add custom instructions'
+                  }
+                >
+                  <Sparkles className="h-3 w-3" />
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePinnedConversation(conv.id);
+                  }}
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-gray-400 hover:text-teal-500"
+                  title={conv.pinned ? 'Unpin' : 'Pin'}
+                >
+                  {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleExportConversation(conv.id, conv.title || 'Untitled');
+                  }}
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-gray-400 hover:text-blue-500"
+                  title="Export to Markdown"
+                >
+                  <Download className="h-3 w-3" />
+                </Button>
+                {showArchived ? (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      restoreConversation(conv.id);
+                      toast.success('Conversation restored');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-emerald-500"
+                    title="Restore from archive"
+                  >
+                    <ArchiveRestore className="h-3 w-3" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      archiveConversation(conv.id);
+                      toast.success('Conversation archived');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-amber-500"
+                    title="Archive"
+                  >
+                    <Archive className="h-3 w-3" />
+                  </Button>
+                )}
+              </>
             )}
             <Button
               onClick={(e) => {
@@ -498,7 +508,7 @@ export function Sidebar({
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-gray-400 hover:text-red-500"
-              title="Delete permanently"
+              title="Delete"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -616,7 +626,7 @@ export function Sidebar({
                       >
                         <div className="font-medium text-sm">{conv.title}</div>
                         {conv.lastMessage && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
+                          <div className="text-xs text-gray-600 dark:text-gray-300 truncate mt-1">
                             {conv.lastMessage}
                           </div>
                         )}
@@ -667,7 +677,7 @@ export function Sidebar({
           </div>
           <button
             onClick={() => setShowSearch(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Search className="h-4 w-4" />
             <span>Search</span>
@@ -678,8 +688,8 @@ export function Sidebar({
           </button>
         </div>
 
-        {}
-        {!collapsed && (
+        {/* Navigation - hide projects section in simple mode */}
+        {!collapsed && !isSimpleMode && (
           <div className="px-3 py-2 space-y-1">
             <button
               onClick={() => setActiveView('projects')}
@@ -779,8 +789,8 @@ export function Sidebar({
           </div>
         )}
 
-        {/* Archive toggle */}
-        {!collapsed && archivedConversations.length > 0 && (
+        {/* Archive toggle - hidden in simple mode */}
+        {!collapsed && !isSimpleMode && archivedConversations.length > 0 && (
           <div className="px-3 py-1">
             <button
               onClick={() => setShowArchived(!showArchived)}
@@ -867,8 +877,8 @@ export function Sidebar({
           </div>
         </ScrollArea>
 
-        {/* Conversation Stats */}
-        {!collapsed && stats && stats.messageCount > 0 && (
+        {/* Conversation Stats - hidden in simple mode */}
+        {!collapsed && !isSimpleMode && stats && stats.messageCount > 0 && (
           <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <BarChart3 className="h-3.5 w-3.5 text-zinc-400" />
@@ -894,6 +904,13 @@ export function Sidebar({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Simple Mode Toggle - shown at the bottom */}
+        {!collapsed && (
+          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+            <SimpleModeToggle />
           </div>
         )}
 

@@ -45,12 +45,27 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
   }, [isRecording]);
 
   useEffect(() => {
-    const unlisten = listen<RecordedAction>('automation:action_recorded', (event) => {
-      setRecordedActions((prev) => [...prev, event.payload]);
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen<RecordedAction>('automation:action_recorded', (event) => {
+      if (isMounted) {
+        setRecordedActions((prev) => [...prev, event.payload]);
+      }
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        // Component unmounted before listener was set up, clean up immediately
+        fn();
+      }
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+      }
     };
   }, []);
 

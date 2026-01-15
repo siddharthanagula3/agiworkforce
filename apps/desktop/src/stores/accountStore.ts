@@ -297,10 +297,15 @@ export const useAccountStore = create<AccountState>()(
         },
 
         logout: async () => {
+          // Clear sync lock before signOut to prevent any in-progress sync from updating state
+          syncInProgress = false;
+          pendingSyncPromise = null;
+
           await supabaseAuth.signOut();
 
-          // Clear subscription cache and retry state on logout
+          // Clear subscription cache, credits cache, and retry state on logout
           clearCachedSubscription();
+          clearCreditsCache();
           resetRetryCount();
 
           set({
@@ -312,131 +317,145 @@ export const useAccountStore = create<AccountState>()(
         },
 
         syncWithBackend: async () => {
-          console.log('[Account] Starting syncWithBackend...');
-          await supabaseAuth.refreshUserData();
-
-          const authState = supabaseAuth.getState();
-          console.log('[Account] Auth state after refresh:', {
-            hasUser: !!authState.user,
-            hasSession: !!authState.session,
-            subscription: authState.subscription,
-            planTier: authState.subscription?.plan_tier,
-            subscriptionFetchStatus: authState.subscriptionFetchStatus,
-          });
-
-          if (!authState.user) {
-            console.warn('[Account] No authenticated user - skipping sync');
-            return;
+          // Prevent concurrent sync calls - wait for existing if in progress
+          if (syncInProgress && pendingSyncPromise) {
+            console.log('[Account] Sync already in progress, waiting for existing sync...');
+            return pendingSyncPromise;
           }
 
-          try {
-            // Determine plan tier - use fetched data with cache fallback
-            // CRITICAL: Never default to 'free' when fetch fails - this blocks paid users
-            let planTier: PlanTier | null;
-            let fetchStatus: SubscriptionFetchStatus;
-            let subscriptionStatus: SubscriptionStatus = 'none';
-            const userId = authState.user?.id;
+          syncInProgress = true;
+          pendingSyncPromise = (async () => {
+            try {
+              console.log('[Account] Starting syncWithBackend...');
+              await supabaseAuth.refreshUserData();
 
-            if (authState.subscription?.plan_tier) {
-              planTier = asPlanTier(authState.subscription.plan_tier);
-              subscriptionStatus =
-                (authState.subscription.status as SubscriptionStatus) || 'active';
-              fetchStatus = 'succeeded';
-
-              // Cache successful subscription data for resilience
-              if (userId) {
-                setCachedSubscription(userId, planTier, subscriptionStatus);
-                resetRetryCount();
-              }
-              console.log('[Account] syncWithBackend - Using fetched plan tier:', planTier);
-            } else if (userId && authState.subscriptionFetchStatus === 'failed') {
-              // Fetch failed - try cache fallback, but DON'T default to 'free'
-              const cached = getCachedSubscription(userId);
-              if (cached) {
-                planTier = cached.planTier;
-                subscriptionStatus = cached.subscriptionStatus;
-                fetchStatus = 'succeeded'; // Using cache is like success
-                console.log('[Account] syncWithBackend - Using cached plan tier:', planTier);
-              } else {
-                // CRITICAL FIX: Do NOT default to 'free' - keep as null
-                // This ensures paid users aren't blocked from their models
-                planTier = null;
-                fetchStatus = 'failed';
-                console.log(
-                  '[Account] syncWithBackend - Fetch failed, no cache - showing loading state',
-                );
-              }
-            } else if (userId && authState.subscriptionFetchStatus === 'succeeded') {
-              // Fetch succeeded but no subscription found = genuinely free tier
-              planTier = 'free';
-              fetchStatus = 'succeeded';
-              clearCachedSubscription();
-              resetRetryCount();
-              console.log(
-                '[Account] syncWithBackend - Setting plan to free (confirmed no subscription)',
-              );
-            } else {
-              // No user ID or still loading - keep as null
-              planTier = null;
-              fetchStatus = 'fetching';
-              console.log('[Account] syncWithBackend - Plan unknown, showing loading state');
-            }
-
-            // Fetch credits from API if we have a session
-            let credits: CreditBalance | null = null;
-            if (authState.session) {
-              try {
-                credits = await fetchCreditsWithCache(authState.session.access_token);
-              } catch {
-                // Continue without credits - not critical
-              }
-            }
-
-            set((state) => ({
-              account: {
-                ...state.account,
-                id: authState.user?.id || null,
-                email: authState.user?.email || null,
-                displayName: authState.profile?.display_name || null,
-                avatar: authState.profile?.avatar_url || null,
-                plan: planTier,
-                planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
-                subscriptionStatus:
-                  (authState.subscription?.status as SubscriptionStatus) || 'none',
-                subscriptionFetchStatus: fetchStatus,
-                currentPeriodEnd: authState.subscription?.current_period_end
-                  ? new Date(authState.subscription.current_period_end).getTime()
-                  : null,
-                stripeCustomerId: authState.subscription?.stripe_customer_id || null,
-                featureFlags: authState.featureFlags,
-                credits,
-                lastSyncedAt: Date.now(),
-              },
-              isAuthenticated: true,
-              // When plan is null (loading/unknown), don't grant pro/enterprise access
-              isPro:
-                planTier !== null &&
-                (planTier === 'pro' ||
-                  planTier === 'max' ||
-                  planTier === 'enterprise' ||
-                  planTier === 'hobby'),
-              isEnterprise: planTier === 'enterprise',
-            }));
-
-            // Sync credits to billing store for pre-flight credit checks
-            if (credits) {
-              const { useBillingStore } = await import('./billingStore');
-              useBillingStore.getState().updateCredits({
-                remaining_cents: credits.remaining_cents ?? 0,
-                daily_used: credits.daily_used_cents,
-                daily_limit: credits.daily_limit_cents,
-                daily_reset_at: credits.daily_reset_at,
+              const authState = supabaseAuth.getState();
+              console.log('[Account] Auth state after refresh:', {
+                hasUser: !!authState.user,
+                hasSession: !!authState.session,
+                subscription: authState.subscription,
+                planTier: authState.subscription?.plan_tier,
+                subscriptionFetchStatus: authState.subscriptionFetchStatus,
               });
-              console.log('[Account] Synced credits to billing store:', credits.remaining_cents);
+
+              if (!authState.user) {
+                console.warn('[Account] No authenticated user - skipping sync');
+                return;
+              }
+
+              // Determine plan tier - use fetched data with cache fallback
+              // CRITICAL: Never default to 'free' when fetch fails - this blocks paid users
+              let planTier: PlanTier | null;
+              let fetchStatus: SubscriptionFetchStatus;
+              let subscriptionStatus: SubscriptionStatus = 'none';
+              const userId = authState.user?.id;
+
+              if (authState.subscription?.plan_tier) {
+                planTier = asPlanTier(authState.subscription.plan_tier);
+                subscriptionStatus =
+                  (authState.subscription.status as SubscriptionStatus) || 'active';
+                fetchStatus = 'succeeded';
+
+                // Cache successful subscription data for resilience
+                if (userId) {
+                  setCachedSubscription(userId, planTier, subscriptionStatus);
+                  resetRetryCount();
+                }
+                console.log('[Account] syncWithBackend - Using fetched plan tier:', planTier);
+              } else if (userId && authState.subscriptionFetchStatus === 'failed') {
+                // Fetch failed - try cache fallback, but DON'T default to 'free'
+                const cached = getCachedSubscription(userId);
+                if (cached) {
+                  planTier = cached.planTier;
+                  subscriptionStatus = cached.subscriptionStatus;
+                  fetchStatus = 'succeeded'; // Using cache is like success
+                  console.log('[Account] syncWithBackend - Using cached plan tier:', planTier);
+                } else {
+                  // CRITICAL FIX: Do NOT default to 'free' - keep as null
+                  // This ensures paid users aren't blocked from their models
+                  planTier = null;
+                  fetchStatus = 'failed';
+                  console.log(
+                    '[Account] syncWithBackend - Fetch failed, no cache - showing loading state',
+                  );
+                }
+              } else if (userId && authState.subscriptionFetchStatus === 'succeeded') {
+                // Fetch succeeded but no subscription found = genuinely free tier
+                planTier = 'free';
+                fetchStatus = 'succeeded';
+                clearCachedSubscription();
+                resetRetryCount();
+                console.log(
+                  '[Account] syncWithBackend - Setting plan to free (confirmed no subscription)',
+                );
+              } else {
+                // No user ID or still loading - keep as null
+                planTier = null;
+                fetchStatus = 'fetching';
+                console.log('[Account] syncWithBackend - Plan unknown, showing loading state');
+              }
+
+              // Fetch credits from API if we have a session
+              let credits: CreditBalance | null = null;
+              if (authState.session) {
+                try {
+                  credits = await fetchCreditsWithCache(authState.session.access_token);
+                } catch {
+                  // Continue without credits - not critical
+                }
+              }
+
+              set((state) => ({
+                account: {
+                  ...state.account,
+                  id: authState.user?.id || null,
+                  email: authState.user?.email || null,
+                  displayName: authState.profile?.display_name || null,
+                  avatar: authState.profile?.avatar_url || null,
+                  plan: planTier,
+                  planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
+                  subscriptionStatus:
+                    (authState.subscription?.status as SubscriptionStatus) || 'none',
+                  subscriptionFetchStatus: fetchStatus,
+                  currentPeriodEnd: authState.subscription?.current_period_end
+                    ? new Date(authState.subscription.current_period_end).getTime()
+                    : null,
+                  stripeCustomerId: authState.subscription?.stripe_customer_id || null,
+                  featureFlags: authState.featureFlags,
+                  credits,
+                  lastSyncedAt: Date.now(),
+                },
+                isAuthenticated: true,
+                // When plan is null (loading/unknown), don't grant pro/enterprise access
+                isPro:
+                  planTier !== null &&
+                  (planTier === 'pro' ||
+                    planTier === 'max' ||
+                    planTier === 'enterprise' ||
+                    planTier === 'hobby'),
+                isEnterprise: planTier === 'enterprise',
+              }));
+
+              // Sync credits to billing store for pre-flight credit checks
+              if (credits) {
+                const { useBillingStore } = await import('./billingStore');
+                useBillingStore.getState().updateCredits({
+                  remaining_cents: credits.remaining_cents ?? 0,
+                  daily_used: credits.daily_used_cents,
+                  daily_limit: credits.daily_limit_cents,
+                  daily_reset_at: credits.daily_reset_at,
+                });
+                console.log('[Account] Synced credits to billing store:', credits.remaining_cents);
+              }
+            } catch (error) {
+              console.error('Failed to sync with backend:', error);
+            } finally {
+              syncInProgress = false;
+              pendingSyncPromise = null;
             }
-          } catch (error) {
-            console.error('Failed to sync with backend:', error);
-          }
+          })();
+
+          return pendingSyncPromise;
         },
 
         simulatePlan: (plan: PlanTier) => {
@@ -556,6 +575,16 @@ let credits401Cache: {
   accessToken: string;
   at: number;
 } | null = null;
+
+// Clear credits cache - call on logout
+function clearCreditsCache(): void {
+  creditsCache = null;
+  credits401Cache = null;
+}
+
+// Sync lock to prevent concurrent syncWithBackend calls
+let syncInProgress = false;
+let pendingSyncPromise: Promise<void> | null = null;
 
 async function fetchCreditsWithCache(accessToken: string): Promise<CreditBalance | null> {
   const now = Date.now();
@@ -856,4 +885,18 @@ export function initializeAccountStore(): () => void {
   });
 
   return unsubscribe;
+}
+
+/**
+ * Cleanup function for the account store.
+ * Clears retry timeouts, cache state, and sync lock to prevent memory leaks.
+ * Called during logout cleanup.
+ */
+export function cleanupAccountStore(): void {
+  resetRetryCount();
+  clearCachedSubscription();
+  clearCreditsCache();
+  // Clear sync lock
+  syncInProgress = false;
+  pendingSyncPromise = null;
 }

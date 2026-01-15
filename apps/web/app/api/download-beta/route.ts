@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { withRateLimit } from '@/lib/rate-limit';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError } from '@/lib/errors';
 
 const DOWNLOAD_INFO: Record<string, { filename: string; contentType: string; envVar: string }> = {
   mac: {
@@ -30,7 +32,7 @@ const FILE_PATHS: Record<string, string> = {
   linux: 'agi-workforce-linux.AppImage',
 };
 
-export async function GET(request: NextRequest) {
+async function handleDownloadBeta(request: NextRequest) {
   // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'download-beta');
   if (rateLimitResponse) {
@@ -41,10 +43,7 @@ export async function GET(request: NextRequest) {
   const platform = searchParams.get('platform') || 'mac';
 
   if (!['mac', 'windows', 'linux'].includes(platform)) {
-    return NextResponse.json(
-      { error: 'Invalid platform. Must be mac, windows, or linux.' },
-      { status: 400 },
-    );
+    throw createError.validation('Invalid platform. Must be mac, windows, or linux.');
   }
 
   const supabase = await createSupabaseServerClient();
@@ -53,7 +52,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return NextResponse.json({ error: 'Authentication required to download.' }, { status: 401 });
+    throw createError.unauthorized('Authentication required to download.');
   }
 
   const { data: subscription } = await supabase
@@ -66,10 +65,7 @@ export async function GET(request: NextRequest) {
   const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
 
   if (!hasActiveSubscription) {
-    return NextResponse.json(
-      { error: 'Active subscription required to download.' },
-      { status: 403 },
-    );
+    throw createError.forbidden('Active subscription required to download.');
   }
 
   const info = DOWNLOAD_INFO[platform];
@@ -93,9 +89,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch {
-    return NextResponse.json(
-      { error: `Download for ${platform} is currently unavailable.` },
-      { status: 404 },
-    );
+    throw createError.notFound(`Download for ${platform} is currently unavailable.`);
   }
 }
+
+export const GET = withErrorHandler(handleDownloadBeta);

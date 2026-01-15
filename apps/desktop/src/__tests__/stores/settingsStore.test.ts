@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 
@@ -7,37 +7,23 @@ vi.mock('../../lib/tauri-mock', () => ({
   isTauriContext: vi.fn(),
 }));
 
-const buildTaskRouting = (defaults: {
-  openai: string;
-  anthropic: string;
-  google: string;
-  ollama: string;
-  xai: string;
-  deepseek: string;
-  qwen: string;
-  moonshot: string;
-}) => ({
-  search: { provider: 'openai' as Provider, model: defaults.openai },
-  code: { provider: 'anthropic' as Provider, model: defaults.anthropic },
-  docs: { provider: 'anthropic' as Provider, model: defaults.anthropic },
-  chat: { provider: 'openai' as Provider, model: defaults.openai },
-  vision: { provider: 'openai' as Provider, model: defaults.openai },
-  image: { provider: 'google' as Provider, model: defaults.google },
-  video: { provider: 'google' as Provider, model: defaults.google },
+// Simplified taskRouting for subscription-only model
+const buildTaskRouting = () => ({
+  search: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  code: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  docs: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  chat: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  vision: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  image: { provider: 'managed_cloud' as Provider, model: 'auto' },
+  video: { provider: 'managed_cloud' as Provider, model: 'auto' },
 });
 
 describe('settingsStore', () => {
   beforeEach(() => {
+    // Simplified defaultModels for subscription-only model
     const defaultModels = {
-      openai: 'gpt-5.1',
-      anthropic: 'claude-sonnet-4-5',
-      google: 'gemini-3-pro',
-      ollama: 'llama4-maverick',
-      xai: 'grok-4.1',
-      deepseek: '',
-      qwen: 'qwen3-max',
-      moonshot: 'kimi-k2-thinking',
       managed_cloud: 'auto',
+      ollama: '',
     };
 
     useSettingsStore.setState({
@@ -46,7 +32,7 @@ describe('settingsStore', () => {
         temperature: 0.7,
         maxTokens: 4096,
         defaultModels,
-        taskRouting: buildTaskRouting(defaultModels),
+        taskRouting: buildTaskRouting(),
         favoriteModels: [],
       },
       windowPreferences: {
@@ -79,28 +65,28 @@ describe('settingsStore', () => {
       expect(state.error).toBeNull();
     });
 
-    it('should have correct default models', () => {
+    it('should have correct default models (subscription-only)', () => {
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1');
-      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-sonnet-4-5');
-      expect(state.llmConfig.defaultModels.google).toBe('gemini-3-pro');
-      expect(state.llmConfig.defaultModels.ollama).toBe('llama4-maverick');
-      expect(state.llmConfig.defaultModels.xai).toBe('grok-4.1');
-      expect(state.llmConfig.defaultModels.deepseek).toBe('');
-      expect(state.llmConfig.defaultModels.qwen).toBe('qwen3-max');
+      expect(state.llmConfig.defaultModels.managed_cloud).toBe('auto');
+      expect(state.llmConfig.defaultModels.ollama).toBe('');
+    });
+
+    it('should have empty favorite models by default', () => {
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig.favoriteModels).toEqual([]);
     });
   });
 
   describe('LLM Configuration', () => {
     it('should set default provider', async () => {
-      await useSettingsStore.getState().setDefaultProvider('anthropic');
+      await useSettingsStore.getState().setDefaultProvider('managed_cloud');
 
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_set_default_provider', {
-        provider: 'anthropic',
+        provider: 'managed_cloud',
       });
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultProvider).toBe('anthropic');
+      expect(state.llmConfig.defaultProvider).toBe('managed_cloud');
     });
 
     it('should handle set default provider error', async () => {
@@ -108,7 +94,7 @@ describe('settingsStore', () => {
         throw new Error('Provider error');
       });
 
-      await expect(useSettingsStore.getState().setDefaultProvider('anthropic')).rejects.toThrow();
+      await expect(useSettingsStore.getState().setDefaultProvider('ollama')).rejects.toThrow();
 
       const state = useSettingsStore.getState();
       expect(state.error).toBe('Error: Provider error');
@@ -128,19 +114,18 @@ describe('settingsStore', () => {
       expect(state.llmConfig.maxTokens).toBe(8192);
     });
 
-    it('should set default model for provider', () => {
-      useSettingsStore.getState().setDefaultModel('openai', 'gpt-5.1-thinking');
+    it('should set default model for managed_cloud provider', () => {
+      useSettingsStore.getState().setDefaultModel('managed_cloud', 'auto');
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1-thinking');
+      expect(state.llmConfig.defaultModels.managed_cloud).toBe('auto');
     });
 
-    it('should preserve other models when setting one', () => {
-      useSettingsStore.getState().setDefaultModel('anthropic', 'claude-opus-4-5');
+    it('should set default model for ollama provider', () => {
+      useSettingsStore.getState().setDefaultModel('ollama', 'llama3');
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-opus-4-5');
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1');
+      expect(state.llmConfig.defaultModels.ollama).toBe('llama3');
     });
   });
 
@@ -213,30 +198,14 @@ describe('settingsStore', () => {
     it('should load settings from backend', async () => {
       const mockSettings = {
         llmConfig: {
-          defaultProvider: 'anthropic' as Provider,
+          defaultProvider: 'managed_cloud' as Provider,
           temperature: 0.8,
           maxTokens: 8192,
           defaultModels: {
-            openai: 'gpt-5.1',
-            anthropic: 'claude-opus-4-5',
-            google: 'gemini-3-pro',
-            ollama: 'llama4-maverick',
-            xai: 'grok-4.1',
-            deepseek: '',
-            qwen: 'qwen3-max',
-            moonshot: 'kimi-k2-thinking',
             managed_cloud: 'auto',
+            ollama: 'llama3',
           },
-          taskRouting: buildTaskRouting({
-            openai: 'gpt-5.1',
-            anthropic: 'claude-opus-4-5',
-            google: 'gemini-3-pro',
-            ollama: 'llama4-maverick',
-            xai: 'grok-4.1',
-            deepseek: '',
-            qwen: 'qwen3-max',
-            moonshot: 'kimi-k2-thinking',
-          }),
+          taskRouting: buildTaskRouting(),
           favoriteModels: [],
         },
         windowPreferences: {
@@ -271,7 +240,7 @@ describe('settingsStore', () => {
       await useSettingsStore.getState().loadSettings();
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultProvider).toBe('anthropic');
+      expect(state.llmConfig.defaultProvider).toBe('managed_cloud');
       expect(state.llmConfig.temperature).toBe(0.8);
       expect(state.llmConfig.maxTokens).toBe(8192);
       expect(state.windowPreferences.theme).toBe('dark');
@@ -294,30 +263,14 @@ describe('settingsStore', () => {
     it('should save settings to backend', async () => {
       useSettingsStore.setState({
         llmConfig: {
-          defaultProvider: 'anthropic',
+          defaultProvider: 'managed_cloud',
           temperature: 0.8,
           maxTokens: 8192,
           defaultModels: {
-            openai: 'gpt-5.1',
-            anthropic: 'claude-opus-4-5',
-            google: 'gemini-3-pro',
-            ollama: 'llama4-maverick',
-            xai: 'grok-4.1',
-            deepseek: '',
-            qwen: 'qwen3-max',
-            moonshot: 'kimi-k2-thinking',
             managed_cloud: 'auto',
+            ollama: 'llama3',
           },
-          taskRouting: buildTaskRouting({
-            openai: 'gpt-5.1',
-            anthropic: 'claude-opus-4-5',
-            google: 'gemini-3-pro',
-            ollama: 'llama4-maverick',
-            xai: 'grok-4.1',
-            deepseek: '',
-            qwen: 'qwen3-max',
-            moonshot: 'kimi-k2-thinking',
-          }),
+          taskRouting: buildTaskRouting(),
           favoriteModels: [],
         },
         windowPreferences: {
@@ -366,30 +319,14 @@ describe('settingsStore', () => {
         if (cmd === 'settings_load_from_disk') {
           return Promise.resolve({
             llmConfig: {
-              defaultProvider: 'openai' as Provider,
+              defaultProvider: 'managed_cloud' as Provider,
               temperature: 0.7,
               maxTokens: 4096,
               defaultModels: {
-                openai: 'gpt-5.1',
-                anthropic: 'claude-sonnet-4-5',
-                google: 'gemini-3-flash',
-                ollama: 'llama3',
-                xai: 'grok-beta',
-                deepseek: 'deepseek-chat',
-                qwen: 'qwen-turbo',
-                moonshot: 'moonshot-v1',
                 managed_cloud: 'auto',
-              },
-              taskRouting: buildTaskRouting({
-                openai: 'gpt-5.1',
-                anthropic: 'claude-sonnet-4-5',
-                google: 'gemini-3-flash',
                 ollama: 'llama3',
-                xai: 'grok-beta',
-                deepseek: 'deepseek-chat',
-                qwen: 'qwen-turbo',
-                moonshot: 'kimi-k2-thinking',
-              }),
+              },
+              taskRouting: buildTaskRouting(),
               favoriteModels: [],
             },
             windowPreferences: {
@@ -419,6 +356,32 @@ describe('settingsStore', () => {
         provider: 'ollama',
         apiKey: null,
         baseUrl: 'http://localhost:11434',
+      });
+    });
+  });
+
+  describe('Task Routing', () => {
+    it('should set task routing for a category', () => {
+      useSettingsStore.getState().setTaskRouting('code', 'managed_cloud', 'auto');
+
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig.taskRouting.code).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
+    });
+
+    it('should preserve other task routing when updating one', () => {
+      useSettingsStore.getState().setTaskRouting('search', 'managed_cloud', 'auto');
+
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig.taskRouting.search).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
+      });
+      expect(state.llmConfig.taskRouting.code).toEqual({
+        provider: 'managed_cloud',
+        model: 'auto',
       });
     });
   });

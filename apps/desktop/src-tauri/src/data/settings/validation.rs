@@ -262,7 +262,7 @@ mod tests {
     #[test]
     fn test_validate_url() {
         assert!(validate_url("").is_ok());
-        assert!(validate_url("https://api.agiworkforce.com").is_ok());
+        assert!(validate_url("https://example.com").is_ok());
         assert!(validate_url("http://localhost:3000").is_ok());
 
         assert!(validate_url("example.com").is_err());

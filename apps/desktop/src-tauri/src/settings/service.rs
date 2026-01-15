@@ -1,3 +1,8 @@
+//! Settings service with encryption and caching
+//!
+//! Uses machine-derived keys for encryption instead of OS keyring.
+
+use crate::security::machine_key::{self, KeyPurpose};
 use crate::settings::{
     models::{AppSettings, Setting, SettingCategory, SettingValue},
     repository,
@@ -8,15 +13,11 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
-use keyring::Entry;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-
-const SERVICE_NAME: &str = "AGIWorkforce";
-const ENCRYPTION_KEY_NAME: &str = "encryption_master_key";
 
 /// Settings service error types
 #[derive(Debug, Error)]
@@ -32,9 +33,6 @@ pub enum SettingsServiceError {
 
     #[error("Encryption error: {0}")]
     Encryption(String),
-
-    #[error("Keyring error: {0}")]
-    Keyring(String),
 
     #[error("Setting not found: {0}")]
     NotFound(String),
@@ -53,8 +51,8 @@ pub struct SettingsService {
 impl SettingsService {
     /// Create a new settings service
     pub fn new(conn: Arc<Mutex<Connection>>) -> Result<Self, SettingsServiceError> {
-        // Get or create encryption key
-        let master_key = Self::get_or_create_master_key()?;
+        // Get encryption key from machine-derived keys
+        let master_key = machine_key::derive_key(KeyPurpose::DatabaseEncryption);
         let key_bytes: [u8; 32] = master_key
             .as_slice()
             .try_into()
@@ -67,35 +65,6 @@ impl SettingsService {
             cipher: Arc::new(Mutex::new(cipher)),
             cache: Arc::new(Mutex::new(HashMap::new())),
         })
-    }
-
-    /// Get or create master encryption key in system keyring
-    fn get_or_create_master_key() -> Result<Vec<u8>, SettingsServiceError> {
-        let entry = Entry::new(SERVICE_NAME, ENCRYPTION_KEY_NAME).map_err(|e| {
-            SettingsServiceError::Keyring(format!("Failed to access keyring: {}", e))
-        })?;
-
-        match entry.get_password() {
-            Ok(key_b64) => {
-                // Decode existing key
-                general_purpose::STANDARD.decode(key_b64).map_err(|e| {
-                    SettingsServiceError::Encryption(format!("Invalid key format: {}", e))
-                })
-            }
-            Err(_) => {
-                // Generate new key
-                let mut key = vec![0u8; 32];
-                use rand::RngCore;
-                OsRng.fill_bytes(&mut key);
-
-                let key_b64 = general_purpose::STANDARD.encode(&key);
-                entry.set_password(&key_b64).map_err(|e| {
-                    SettingsServiceError::Keyring(format!("Failed to store key: {}", e))
-                })?;
-
-                Ok(key)
-            }
-        }
     }
 
     /// Encrypt a value
@@ -336,30 +305,25 @@ impl SettingsService {
         Ok(())
     }
 
-    /// Save API key to keyring (legacy support)
+    /// Save API key to database (encrypted)
     pub fn save_api_key(&self, provider: &str, key: &str) -> Result<(), SettingsServiceError> {
         validation::validate_api_key(provider, key)?;
 
-        let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider)).map_err(|e| {
-            SettingsServiceError::Keyring(format!("Failed to access keyring: {}", e))
-        })?;
-
-        entry
-            .set_password(key)
-            .map_err(|e| SettingsServiceError::Keyring(format!("Failed to save API key: {}", e)))?;
-
-        Ok(())
+        self.set(
+            format!("api_key_{}", provider),
+            SettingValue::String(key.to_string()),
+            SettingCategory::Security,
+            true, // Always encrypt API keys
+        )
     }
 
-    /// Get API key from keyring (legacy support)
+    /// Get API key from database (decrypted)
     pub fn get_api_key(&self, provider: &str) -> Result<String, SettingsServiceError> {
-        let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider)).map_err(|e| {
-            SettingsServiceError::Keyring(format!("Failed to access keyring: {}", e))
-        })?;
-
-        entry
-            .get_password()
-            .map_err(|e| SettingsServiceError::Keyring(format!("Failed to get API key: {}", e)))
+        let value = self.get(&format!("api_key_{}", provider))?;
+        value
+            .as_string()
+            .map(|s| s.to_string())
+            .ok_or_else(|| SettingsServiceError::InvalidType(format!("api_key_{}", provider)))
     }
 
     /// Load complete application settings

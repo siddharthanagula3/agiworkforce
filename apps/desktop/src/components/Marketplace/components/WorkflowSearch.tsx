@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/Select';
+import type { MarketplaceFilters } from '../../../types/marketplace';
 import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 
@@ -15,12 +16,12 @@ export function WorkflowSearch() {
   const { filters, setFilter, resetFilters, applyFilters } = useMarketplaceStore();
 
   const handleSortChange = (value: string) => {
-    setFilter('sortBy', value);
+    setFilter('sortBy', value as MarketplaceFilters['sortBy']);
     applyFilters();
   };
 
   const handleCategoryChange = (value: string) => {
-    setFilter('category', value);
+    setFilter('category', value as MarketplaceFilters['category']);
     applyFilters();
   };
 

@@ -87,23 +87,6 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
     // Mock registry data
     let registry = vec![
         RegistryPackage {
-            id: "mcp-brave-search".to_string(),
-            name: "Brave Search".to_string(),
-            version: "0.1.0".to_string(),
-            description: "Web search capabilities using Brave Search API".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "search".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-brave-search".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "brave_web_search".to_string(),
-                "brave_local_search".to_string(),
-            ],
-            rating: 4.8,
-            downloads: 12500,
-            installed: installed_servers.contains("brave-search"),
-        },
-        RegistryPackage {
             id: "mcp-filesystem".to_string(),
             name: "Filesystem".to_string(),
             version: "0.2.0".to_string(),
@@ -586,20 +569,43 @@ pub async fn mcp_get_server_logs(
     Ok(crate::core::mcp::logs::get_server_logs(&serverName, lines))
 }
 
+/// Store a credential in encrypted database storage
 #[tauri::command]
 pub async fn mcp_store_credential(
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
-    let service = format!("agiworkforce-mcp-{}", server_name);
-    let entry = keyring::Entry::new(&service, &key)
-        .map_err(|e| format!("Failed to create credential entry: {}", e))?;
+    use crate::core::mcp::config::encrypt_mcp_credential;
 
-    entry
-        .set_password(&value)
-        .map_err(|e| format!("Failed to store credential: {}", e))?;
+    // Encrypt the credential
+    let encrypted =
+        encrypt_mcp_credential(&value).ok_or_else(|| "Failed to encrypt credential".to_string())?;
 
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Store in database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, 'mcp_credentials', 1, ?3, ?3)",
+        rusqlite::params![cred_key, encrypted, now],
+    )
+    .map_err(|e| format!("Failed to store credential: {}", e))?;
+
+    tracing::info!(
+        "Credential stored for MCP server: {} / {}",
+        server_name,
+        key
+    );
     Ok(format!("Credential stored for {} / {}", server_name, key))
 }
 
@@ -624,20 +630,37 @@ pub async fn mcp_check_server_health(
     Ok(health)
 }
 
-/// Set a credential for an MCP server (stores in OS keyring)
+/// Set a credential for an MCP server (stores in encrypted database)
 #[tauri::command]
 pub async fn mcp_set_credential(
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
-    let service = format!("agiworkforce-mcp-{}", server_name);
-    let entry = keyring::Entry::new(&service, &key)
-        .map_err(|e| format!("Failed to create credential entry: {}", e))?;
+    use crate::core::mcp::config::encrypt_mcp_credential;
 
-    entry
-        .set_password(&value)
-        .map_err(|e| format!("Failed to store credential: {}", e))?;
+    // Encrypt the credential
+    let encrypted =
+        encrypt_mcp_credential(&value).ok_or_else(|| "Failed to encrypt credential".to_string())?;
+
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Store in database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, 'mcp_credentials', 1, ?3, ?3)",
+        rusqlite::params![cred_key, encrypted, now],
+    )
+    .map_err(|e| format!("Failed to store credential: {}", e))?;
 
     tracing::info!(
         "Credential stored for MCP server: {} / {}",
@@ -647,16 +670,25 @@ pub async fn mcp_set_credential(
     Ok(format!("Credential stored for {} / {}", server_name, key))
 }
 
-/// Delete a credential for an MCP server from OS keyring
+/// Delete a credential for an MCP server from encrypted database
 #[tauri::command]
 pub async fn mcp_delete_credential(server_name: String, key: String) -> Result<String, String> {
-    let service = format!("agiworkforce-mcp-{}", server_name);
-    let entry = keyring::Entry::new(&service, &key)
-        .map_err(|e| format!("Failed to access credential entry: {}", e))?;
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
 
-    entry
-        .delete_password()
-        .map_err(|e| format!("Failed to delete credential: {}", e))?;
+    // Delete from database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+
+    conn.execute(
+        "DELETE FROM settings_v2 WHERE key = ?1",
+        rusqlite::params![cred_key],
+    )
+    .map_err(|e| format!("Failed to delete credential: {}", e))?;
 
     tracing::info!(
         "Credential deleted for MCP server: {} / {}",

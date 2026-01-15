@@ -4,11 +4,13 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Activity,
   Check,
+  Cloud,
   Database,
   Download,
   Github,
   Loader2,
   Monitor,
+  Server,
   Settings2,
   Shield,
   Sparkles,
@@ -16,15 +18,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
 
 import {
   createDefaultLLMConfig,
   createDefaultWindowPreferences,
   useSettingsStore,
-  type Provider,
-  type TaskCategory,
 } from '../../stores/settingsStore';
+import { useModelStore } from '../../stores/modelStore';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
@@ -32,11 +32,11 @@ import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import { FavoriteModelsSelector } from './FavoriteModelsSelector';
+import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
 import { UpdateSettings } from './UpdateSettings';
-import { GitHubTokenConfig } from './GitHubTokenConfig';
+import MCPCredentialManager from '../MCP/MCPCredentialManager';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -50,8 +50,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const setTemperature = useSettingsStore((state) => state.setTemperature);
   const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
-  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
-  const setTaskRouting = useSettingsStore((state) => state.setTaskRouting);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setStartupPosition = useSettingsStore((state) => state.setStartupPosition);
   const setDockOnStartup = useSettingsStore((state) => state.setDockOnStartup);
@@ -60,16 +58,50 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const loading = useSettingsStore((state) => state.loading);
   const error = useSettingsStore((state) => state.error);
 
+  // Ollama status from model store
+  const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
+  const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
+  const [checkingOllama, setCheckingOllama] = useState(false);
+
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+
+  const ollamaStatus = providerStatuses.ollama;
+  const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
+
+  // Suppress unused variable warnings - these are used in the JSX
+  void ollamaEnabled;
+  void ollamaModels;
+  void checkingOllama;
+  void isOllamaAvailable;
 
   useEffect(() => {
     if (open) {
       loadSettings().catch((err) => {
         console.error('Failed to load settings:', err);
       });
+      // Check Ollama status when panel opens
+      setCheckingOllama(true);
+      checkProviderStatus('ollama')
+        .then(() => {
+          // Try to get available Ollama models
+          invoke<string[]>('llm_get_ollama_models')
+            .then((models) => {
+              setOllamaModels(models || []);
+              if (models && models.length > 0 && !selectedOllamaModel) {
+                setSelectedOllamaModel(models[0] || '');
+              }
+            })
+            .catch(() => {
+              setOllamaModels([]);
+            });
+        })
+        .finally(() => setCheckingOllama(false));
     }
-  }, [open, loadSettings]);
+  }, [open, loadSettings, checkProviderStatus, selectedOllamaModel]);
 
   const handleSaveSettings = async () => {
     try {
@@ -136,167 +168,149 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="llm-config" className="space-y-6 pt-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
+                  <h3 className="text-lg font-semibold mb-4">AI Provider</h3>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Configure default settings for language model interactions
+                    Your AI requests are handled through your subscription plan
                   </p>
 
                   <div className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="defaultProvider">Default Provider</Label>
-                      <Select value="managed_cloud" disabled={true} onValueChange={() => {}}>
-                        <SelectTrigger id="defaultProvider">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="managed_cloud">Managed Cloud (Vercel/Pro)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        All models are managed via the cloud infrastructure (Vercel Env)
-                      </p>
+                    {/* Managed Cloud Card */}
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="rounded-md bg-primary/10 p-3">
+                          <Cloud className="h-6 w-6 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold mb-2">Managed Cloud</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            All AI requests are handled through your subscription. We automatically
+                            route your requests to the best available model based on the task type.
+                          </p>
+                          <ul className="space-y-1 text-xs text-muted-foreground">
+                            <li className="flex items-center gap-2">
+                              <Check className="h-3 w-3 text-green-500" />
+                              <span>Automatic model selection for optimal results</span>
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <Check className="h-3 w-3 text-green-500" />
+                              <span>Access to latest AI models included in your plan</span>
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <Check className="h-3 w-3 text-green-500" />
+                              <span>No API keys needed - everything is managed for you</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="managedModel">Primary Model</Label>
-                      <Select
-                        value={
-                          resolvedLLMConfig.defaultModels.managed_cloud || 'managed-cloud-auto'
-                        }
-                        onValueChange={(value) => setDefaultModel('managed_cloud', value)}
-                      >
-                        <SelectTrigger id="managedModel">
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px]">
-                          <SelectItem value="managed-cloud-auto">Auto (Best Model)</SelectItem>
-                          {Object.entries(MODEL_PRESETS).map(([provider, models]) => {
-                            if (provider === 'managed_cloud' || provider === 'ollama') return null;
-                            return (
-                              <div key={provider}>
-                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground opacity-50">
-                                  {PROVIDER_LABELS[provider as Provider]}
+                    {/* Ollama Local Option */}
+                    <div className="rounded-lg border border-border bg-card p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="rounded-md bg-muted p-3">
+                            <Server className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold mb-2">Local Ollama (Offline Mode)</h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Use Ollama for offline AI processing. Models run locally on your
+                              machine for complete privacy and no internet required.
+                            </p>
+                            {checkingOllama ? (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>Checking Ollama status...</span>
+                              </div>
+                            ) : isOllamaAvailable ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-xs text-green-600">
+                                  <Check className="h-3 w-3" />
+                                  <span>Ollama is running and available</span>
                                 </div>
-                                {models.map((model) => (
-                                  <SelectItem key={model.value} value={model.value}>
-                                    {model.label}
-                                  </SelectItem>
-                                ))}
+                                {ollamaEnabled && ollamaModels.length > 0 && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="ollamaModel" className="text-xs">
+                                      Select Model
+                                    </Label>
+                                    <Select
+                                      value={selectedOllamaModel}
+                                      onValueChange={setSelectedOllamaModel}
+                                    >
+                                      <SelectTrigger id="ollamaModel" className="h-8 text-xs">
+                                        <SelectValue placeholder="Select an Ollama model" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {ollamaModels.map((model) => (
+                                          <SelectItem key={model} value={model} className="text-xs">
+                                            {model}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
                               </div>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Choose which model to use via the Managed Cloud.
-                      </p>
-                    </div>
-
-                    <div className="space-y-3 rounded-lg border border-muted/30 p-4">
-                      <div>
-                        <h4 className="text-sm font-semibold">Task-aware routing</h4>
-                        <p className="text-xs text-muted-foreground">
-                          Choose defaults per task type. You can override per request in chat.
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {(
-                          [
-                            'search',
-                            'code',
-                            'docs',
-                            'chat',
-                            'vision',
-                            'image',
-                            'video',
-                          ] as TaskCategory[]
-                        ).map((category) => {
-                          const routing = resolvedLLMConfig.taskRouting?.[category];
-                          const currentModel =
-                            routing?.model ||
-                            resolvedLLMConfig.defaultModels.managed_cloud ||
-                            'managed-cloud-auto';
-
-                          return (
-                            <div key={category} className="space-y-2">
-                              <Label className="capitalize">{category}</Label>
-                              <div className="flex gap-2">
-                                {/* Hidden Provider Selector - Always Managed Cloud */}
-                                <Select
-                                  value={currentModel}
-                                  onValueChange={(value) =>
-                                    setTaskRouting(category, 'managed_cloud', value)
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select model" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-[300px]">
-                                    <SelectItem value="managed-cloud-auto">Auto</SelectItem>
-                                    {Object.entries(MODEL_PRESETS).map(([provider, models]) => {
-                                      if (provider === 'managed_cloud' || provider === 'ollama')
-                                        return null;
-                                      return (
-                                        <div key={provider}>
-                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground opacity-50">
-                                            {PROVIDER_LABELS[provider as Provider]}
-                                          </div>
-                                          {models.map((model) => (
-                                            <SelectItem key={model.value} value={model.value}>
-                                              {model.label}
-                                            </SelectItem>
-                                          ))}
-                                        </div>
-                                      );
-                                    })}
-                                  </SelectContent>
-                                </Select>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <X className="h-3 w-3 text-orange-500" />
+                                <span>
+                                  Ollama not detected. Install from ollama.ai to use local models.
+                                </span>
                               </div>
-                            </div>
-                          );
-                        })}
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <Switch
+                            checked={ollamaEnabled}
+                            onCheckedChange={setOllamaEnabled}
+                            disabled={!isOllamaAvailable}
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="temperature">
-                        Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
-                      </Label>
-                      <input
-                        id="temperature"
-                        type="range"
-                        min="0"
-                        max="2"
-                        step="0.1"
-                        value={resolvedLLMConfig.temperature}
-                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Lower values are more focused and deterministic. Higher values are more
-                        creative.
-                      </p>
-                    </div>
+                    {/* Generation Settings */}
+                    <div className="rounded-lg border border-border bg-card p-6">
+                      <h4 className="font-semibold mb-4">Generation Settings</h4>
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="temperature">
+                            Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
+                          </Label>
+                          <input
+                            id="temperature"
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={resolvedLLMConfig.temperature}
+                            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                            className="w-full accent-primary"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Lower values are more focused and deterministic. Higher values are more
+                            creative.
+                          </p>
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="maxTokens">Max Tokens</Label>
-                      <Input
-                        id="maxTokens"
-                        type="number"
-                        min="256"
-                        max="32768"
-                        step="256"
-                        value={resolvedLLMConfig.maxTokens}
-                        onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Maximum number of tokens to generate in responses
-                      </p>
-                    </div>
-
-                    {}
-                    <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                      <FavoriteModelsSelector />
+                        <div className="space-y-2">
+                          <Label htmlFor="maxTokens">Max Tokens</Label>
+                          <Input
+                            id="maxTokens"
+                            type="number"
+                            min="256"
+                            max="32768"
+                            step="256"
+                            value={resolvedLLMConfig.maxTokens}
+                            onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Maximum number of tokens to generate in responses
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -314,9 +328,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Integrations</h3>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Configure external service integrations and credentials
+                    Connect your accounts for enhanced MCP tool capabilities
                   </p>
-                  <GitHubTokenConfig />
+                  <MCPCredentialManager servers={[]} />
                 </div>
               </TabsContent>
 
@@ -576,8 +590,8 @@ function DataPrivacyTab() {
               : '~/.local/share/agi-workforce/'}
           </code>
           <p className="text-xs text-muted-foreground mt-2">
-            Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely in
-            your system keyring, separate from the database.
+            Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely in an
+            encrypted local database.
           </p>
         </div>
 
@@ -631,7 +645,7 @@ function DataPrivacyTab() {
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <span>Integration credentials are encrypted and stored in your system keyring</span>
+              <span>Integration credentials are encrypted and stored locally on your device</span>
             </li>
           </ul>
         </div>

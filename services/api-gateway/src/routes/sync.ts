@@ -123,6 +123,16 @@ router.post(
           const existingTime = new Date(existingEntry.created_at).getTime();
           const itemTime = new Date(item.timestamp).getTime();
 
+          // Validate timestamps are valid numbers
+          if (Number.isNaN(existingTime) || Number.isNaN(itemTime)) {
+            console.error('[Sync] Invalid timestamp detected:', {
+              existingTime: existingEntry.created_at,
+              itemTime: item.timestamp,
+            });
+            failedIds.push(item.id);
+            continue;
+          }
+
           // If remote is newer, it's a conflict
           if (existingTime > itemTime) {
             conflicts.push({
@@ -138,11 +148,22 @@ router.post(
         }
 
         // Insert the sync item
+        let parsedData = {};
+        if (item.data) {
+          try {
+            parsedData = JSON.parse(item.data);
+          } catch (parseError) {
+            console.error('[Sync] Failed to parse item data:', parseError);
+            failedIds.push(item.id);
+            continue;
+          }
+        }
+
         const { error } = await supabase.from('sync_data').insert({
           user_id: user.userId,
           device_id: deviceId ?? batch.device_id,
           sync_type: item.entity_type,
-          data: item.data ? JSON.parse(item.data) : {},
+          data: parsedData,
         });
 
         if (error) {
@@ -429,7 +450,11 @@ router.get(
     }
 
     const sinceRaw = req.query['since'];
-    const since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
+    let since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
+    // Validate the timestamp is a valid number
+    if (Number.isNaN(since) || since < 0) {
+      since = 0;
+    }
     const deviceIdParam = req.query['deviceId'];
     const deviceId = typeof deviceIdParam === 'string' ? deviceIdParam : undefined;
 

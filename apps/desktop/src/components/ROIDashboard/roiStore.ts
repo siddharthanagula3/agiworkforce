@@ -187,7 +187,11 @@ export const useROIStore = create<ROIState>()(
     },
 
     subscribeToLiveUpdates: () => {
-      const unsubscribe = listen<MetricsUpdate>('metrics:updated', (event) => {
+      let isMounted = true;
+
+      listen<MetricsUpdate>('metrics:updated', (event) => {
+        if (!isMounted) return;
+
         set((state) => {
           state.todayStats = event.payload.newStats;
           state.lastUpdate = Date.now();
@@ -201,11 +205,20 @@ export const useROIStore = create<ROIState>()(
         });
 
         get().fetchRecentActivity();
+      }).then((unlisten) => {
+        if (isMounted) {
+          set((state) => {
+            state.isConnected = true;
+            state.unsubscribeFn = unlisten;
+          });
+        } else {
+          unlisten();
+        }
       });
 
+      // Set initial state synchronously
       set((state) => {
         state.isConnected = true;
-        state.unsubscribeFn = unsubscribe as unknown as UnlistenFn;
       });
     },
 

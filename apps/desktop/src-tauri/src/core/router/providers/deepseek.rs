@@ -261,8 +261,12 @@ impl LLMProvider for DeepSeekProvider {
             .await?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(format!("DeepSeek API error: {}", error_text).into());
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("DeepSeek API error {}: {}", status, error_text).into());
         }
 
         let deepseek_response: DeepSeekResponse = response.json().await?;
@@ -306,6 +310,11 @@ impl LLMProvider for DeepSeekProvider {
 
     fn name(&self) -> &str {
         "deepseek"
+    }
+
+    fn supports_vision(&self) -> bool {
+        // DeepSeek does not currently support vision/image inputs
+        false
     }
 
     fn supports_function_calling(&self) -> bool {

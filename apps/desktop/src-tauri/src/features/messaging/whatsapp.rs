@@ -37,7 +37,10 @@ impl WhatsAppClient {
         to: &str,
         message: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let payload = json!({
             "messaging_product": "whatsapp",
@@ -80,7 +83,10 @@ impl WhatsAppClient {
         to: &str,
         template: WhatsAppTemplate,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let payload = json!({
             "messaging_product": "whatsapp",
@@ -126,7 +132,10 @@ impl WhatsAppClient {
         to: &str,
         interactive: WhatsAppInteractive,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let payload = json!({
             "messaging_product": "whatsapp",
@@ -168,7 +177,10 @@ impl WhatsAppClient {
         image_url: &str,
         caption: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let mut image_obj = json!({
             "link": image_url,
@@ -219,7 +231,10 @@ impl WhatsAppClient {
         filename: Option<&str>,
         caption: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let mut document_obj = json!({
             "link": document_url,
@@ -268,7 +283,10 @@ impl WhatsAppClient {
     }
 
     pub async fn mark_as_read(&self, message_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.phone_number_id);
+        let url = format!(
+            "https://graph.facebook.com/v18.0/{}/messages",
+            self.phone_number_id
+        );
 
         let payload = json!({
             "messaging_product": "whatsapp",
@@ -327,9 +345,9 @@ impl WhatsAppClient {
 
     pub async fn get_media_url(
         &self,
-        _media_id: &str,
+        media_id: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com".to_string();
+        let url = format!("https://graph.facebook.com/v18.0/{}", media_id);
 
         let response = self
             .client

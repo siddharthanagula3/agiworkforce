@@ -296,9 +296,9 @@ mod tests {
         let config = OAuth2Config {
             client_id: "test_client".to_string(),
             client_secret: None,
-            auth_url: "https://api.agiworkforce.com".to_string(),
+            auth_url: "https://example.com/oauth/authorize".to_string(),
 
-            token_url: "https://api.agiworkforce.com".to_string(),
+            token_url: "https://example.com/oauth/token".to_string(),
 
             redirect_uri: "http://localhost:3000".to_string(),
 

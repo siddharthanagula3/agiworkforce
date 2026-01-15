@@ -6,11 +6,11 @@ use crate::features::calendar::event_types::*;
 use crate::sys::api::oauth::{OAuth2Client, OAuth2Config, PkceChallenge, TokenResponse};
 use crate::sys::error::{Error, Result};
 
-const MICROSOFT_AUTH_URL: &str = "https://api.agiworkforce.com";
+const MICROSOFT_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 
-const MICROSOFT_TOKEN_URL: &str = "https://api.agiworkforce.com";
+const MICROSOFT_TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 
-const GRAPH_API_BASE: &str = "https://api.agiworkforce.com";
+const GRAPH_API_BASE: &str = "https://graph.microsoft.com/v1.0";
 
 const CALENDAR_READ_SCOPE: &str = "Calendars.Read";
 const CALENDAR_READWRITE_SCOPE: &str = "Calendars.ReadWrite";

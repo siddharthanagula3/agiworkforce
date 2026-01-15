@@ -196,8 +196,8 @@ export interface TerminalCommand {
 export interface ToolExecution {
   id: string;
   toolName: string;
-  input: any;
-  output?: any;
+  input: Record<string, unknown>;
+  output?: unknown;
   error?: string;
   duration: number;
   timestamp: Date;
@@ -695,6 +695,8 @@ export interface UnifiedChatState {
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
   linkConversationId: (uuid: string, dbId: number) => void;
+  /** Reset all store state on logout. Clears conversations, messages, operations, and pending state. */
+  resetOnLogout: () => void;
 
   // Tool streaming state and actions
   activeToolStreams: Map<string, ToolStreamStateEntry>;
@@ -2217,6 +2219,85 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
               exportedAt: new Date().toISOString(),
             };
             return JSON.stringify(conversationData, null, 2);
+          },
+
+          /**
+           * Reset store to initial state on logout.
+           * Clears all conversations, messages, operations, and pending state.
+           * Call this when user logs out to ensure clean state for next session.
+           */
+          resetOnLogout: () => {
+            // Clean up fade timers before resetting to prevent memory leaks
+            const currentFadeTimers = get().fadeTimers;
+            currentFadeTimers.forEach((timerId) => clearTimeout(timerId));
+
+            // Clean up tool streams
+            const activeStreams = get().activeToolStreams;
+            activeStreams.clear();
+
+            set((state) => {
+              // Reset all state to initial values
+              state.conversations = [];
+              state.activeConversationId = null;
+              state.messagesByConversation = {};
+              state.messages = [];
+              state.isLoading = false;
+              state.isStreaming = false;
+              state.currentStreamingMessageId = null;
+              state.pendingMessages = [];
+              state.fileOperations = [];
+              state.terminalCommands = [];
+              state.toolExecutions = [];
+              state.screenshots = [];
+              state.actionLog = [];
+              state.agents = [];
+              state.agentStatus = null;
+              state.backgroundTasks = [];
+              state.pendingApprovals = [];
+              state.trustedWorkflows = {};
+              state.activeContext = [];
+              state.workflowContext = null;
+              state.plan = null;
+              state.conversationMode = 'safe';
+              state.sidecarOpen = false;
+              state.sidecarSection = 'operations';
+              state.sidecarUserSelected = false;
+              state.isAutonomousMode = false;
+              state.missionControlOpen = false;
+              state.selectedMessage = null;
+              state.activeView = 'chat';
+              state.focusMode = null;
+              state.sidecar = {
+                isOpen: false,
+                activeMode: 'code',
+                contextId: null,
+                autoTrigger: false,
+              };
+              state.actionTrail = [];
+              state.fadeTimers = new Map();
+              state.tokenUsage = {
+                current: 0,
+                inputTokens: 0,
+                outputTokens: 0,
+                max: 128000,
+                percentage: 0,
+                estimatedCost: 0,
+              };
+              state.citations = [];
+              state.draftContent = '';
+              state.editingMessageId = null;
+              state.activeToolStreams = new Map();
+            });
+
+            // Clear persisted ID mappings
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.removeItem('id-mappings');
+              } catch {
+                // Ignore localStorage errors
+              }
+            }
+            idMappings = { dbIdToUuid: {}, uuidToDbId: {} };
           },
         })),
       ),

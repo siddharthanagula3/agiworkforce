@@ -35,6 +35,9 @@ interface BillingState {
   dailyUsage_cents: number | null;
   dailyLimit_cents: number | null;
   dailyResetAt: string | null;
+
+  // Hydration tracking - set to true once persist middleware has finished loading
+  _hasHydrated: boolean;
 }
 
 interface BillingActions {
@@ -58,6 +61,9 @@ interface BillingActions {
 
   setError: (error: string | null) => void;
   clearError: () => void;
+
+  // Hydration setter for persist middleware callback
+  setHasHydrated: (state: boolean) => void;
 }
 
 type BillingStore = BillingState & BillingActions;
@@ -91,6 +97,7 @@ export const useBillingStore = create<BillingStore>()(
         dailyUsage_cents: null,
         dailyLimit_cents: null,
         dailyResetAt: null,
+        _hasHydrated: false,
 
         initialize: async (stripeApiKey: string, webhookSecret: string) => {
           try {
@@ -162,6 +169,10 @@ export const useBillingStore = create<BillingStore>()(
 
         setError: (error) => set({ error }),
         clearError: () => set({ error: null }),
+
+        setHasHydrated: (state: boolean) => {
+          set({ _hasHydrated: state });
+        },
       })),
       {
         name: 'billing-storage',
@@ -175,7 +186,14 @@ export const useBillingStore = create<BillingStore>()(
           // Note: `initialized` is intentionally NOT persisted - it must be false on cold start
           // to ensure proper re-initialization of the Stripe service
           creditBalance_cents: state.creditBalance_cents, // Persist credits for offline/restart continuity
+          // Note: _hasHydrated is NOT persisted - it's set by onRehydrateStorage callback
         }),
+        onRehydrateStorage: () => (state) => {
+          // Mark that hydration is complete
+          if (state) {
+            state.setHasHydrated(true);
+          }
+        },
         migrate: (persistedState: unknown, version: number) => {
           // Migration logic for future schema changes
           if (version === 0) {
@@ -264,4 +282,30 @@ export function initializeBillingStore(): () => void {
   });
 
   return unsubscribe;
+}
+
+// Selectors for optimized component subscriptions
+export const selectCustomer = (state: BillingStore) => state.customer;
+export const selectSubscription = (state: BillingStore) => state.subscription;
+export const selectCreditBalance = (state: BillingStore) => state.creditBalance_cents;
+export const selectIsHydrated = (state: BillingStore) => state._hasHydrated;
+
+/**
+ * Wait for billing store to be hydrated from localStorage.
+ * Use this before accessing billing state in async initialization code.
+ */
+export function waitForBillingHydration(): Promise<void> {
+  return new Promise((resolve) => {
+    const state = useBillingStore.getState();
+    if (state._hasHydrated) {
+      resolve();
+      return;
+    }
+    const unsub = useBillingStore.subscribe((s) => {
+      if (s._hasHydrated) {
+        unsub();
+        resolve();
+      }
+    });
+  });
 }

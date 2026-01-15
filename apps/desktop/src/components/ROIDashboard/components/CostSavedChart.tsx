@@ -13,12 +13,24 @@ interface CostSavedChartProps {
   loading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+// Recharts tooltip props interface
+interface TooltipPayloadItem {
+  value?: number;
+  payload?: EmployeeChartData;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
 
-  const data = payload[0]?.payload as EmployeeChartData | undefined;
+  const data = payload[0]?.payload;
 
   return (
     <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-lg border border-border">

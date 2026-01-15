@@ -439,7 +439,7 @@ impl TutorialManager {
                     component: "browser-console".to_string(),
                     action_required: ActionType::Input {
                         field: "url-input".to_string(),
-                        value: Some("https://api.agiworkforce.com".to_string()),
+                        value: Some("https://www.agiworkforce.com".to_string()),
                         placeholder: Some("Enter URL...".to_string()),
                     },
                     help_text: "You can navigate to any URL. The browser supports JavaScript, cookies, and modern web features.".to_string(),

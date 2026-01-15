@@ -262,7 +262,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "search_web".to_string(),
             name: "Web Search".to_string(),
-            description: "Search the web for information and return structured results with titles, URLs, snippets, and favicons. Uses Brave Search (if API key available) or DuckDuckGo as fallback.".to_string(),
+            description: "Search the web for information and return structured results with titles, URLs, snippets, and favicons. Uses DuckDuckGo.".to_string(),
             capabilities: vec![
                 ToolCapability::NetworkOperation,
                 ToolCapability::DataAnalysis,

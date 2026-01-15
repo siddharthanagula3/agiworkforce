@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import {
   automationOcr,
   automationScreenshot,
@@ -119,145 +120,9 @@ interface AutomationState {
   handleShortcutUnregistered: (shortcutId: string) => void;
 }
 
-export const useAutomationStore = create<AutomationState>((set, get) => ({
-  windows: [],
-  elements: [],
-  loadingWindows: false,
-  loadingElements: false,
-  runningAction: false,
-  error: null,
-  lastScreenshot: null,
-  lastOcr: null,
-
-  isRecording: false,
-  currentRecording: null,
-  recordings: [],
-
-  scripts: [],
-  selectedScript: null,
-  loadingScripts: false,
-
-  isExecuting: false,
-  executionProgress: 0,
-  executionHistory: [],
-  currentExecution: null,
-
-  inspector: {
-    isActive: false,
-  },
-
-  shortcuts: [],
-  lastTriggeredShortcut: null,
-
-  async loadWindows() {
-    set({ loadingWindows: true, error: null });
-    try {
-      const windows = await listAutomationWindows();
-      set({ windows, loadingWindows: false });
-    } catch (error) {
-      console.error('Failed to load automation windows:', error);
-      set({ error: String(error), loadingWindows: false, windows: [] });
-      throw error;
-    }
-  },
-
-  async searchElements(query) {
-    set({ loadingElements: true, error: null });
-    try {
-      const elements = await findAutomationElements(query);
-      set({ elements, loadingElements: false });
-    } catch (error) {
-      console.error('Failed to find automation elements:', error);
-      set({ error: String(error), loadingElements: false, elements: [] });
-    }
-  },
-
-  async click(request) {
-    set({ runningAction: true, error: null });
-    try {
-      await clickAutomation(request);
-      set({ runningAction: false });
-    } catch (error) {
-      console.error('Automation click failed:', error);
-      set({ error: String(error), runningAction: false });
-      throw error;
-    }
-  },
-
-  async typeText(text, options) {
-    set({ runningAction: true, error: null });
-    try {
-      await sendKeys(text, options);
-      set({ runningAction: false });
-    } catch (error) {
-      console.error('Automation type failed:', error);
-      set({ error: String(error), runningAction: false });
-      throw error;
-    }
-  },
-
-  async hotkey(key, modifiers) {
-    set({ runningAction: true, error: null });
-    try {
-      await sendHotkey(key, modifiers);
-      set({ runningAction: false });
-    } catch (error) {
-      console.error('Automation hotkey failed:', error);
-      set({ error: String(error), runningAction: false });
-      throw error;
-    }
-  },
-
-  async screenshot(options) {
-    set({ runningAction: true, error: null });
-    try {
-      const capture = await automationScreenshot(options ?? {});
-      set({ lastScreenshot: capture, runningAction: false });
-      return capture;
-    } catch (error) {
-      console.error('Automation screenshot failed:', error);
-      set({ error: String(error), runningAction: false, lastScreenshot: null });
-      throw error;
-    }
-  },
-
-  async ocr(imagePath) {
-    set({ runningAction: true, error: null });
-    try {
-      const result = await automationOcr(imagePath);
-      set({ lastOcr: result, runningAction: false });
-      return result;
-    } catch (error) {
-      console.error('Automation OCR failed:', error);
-      set({ error: String(error), runningAction: false, lastOcr: null });
-      throw error;
-    }
-  },
-
-  async emitOverlayClick(payload) {
-    await emitOverlayClick(payload);
-  },
-
-  async emitOverlayType(payload) {
-    await emitOverlayType(payload);
-  },
-
-  async emitOverlayRegion(payload) {
-    await emitOverlayRegion(payload);
-  },
-
-  async replayOverlay(limit) {
-    await replayOverlayEvents(limit);
-  },
-
-  clearError() {
-    if (get().error) {
-      set({ error: null });
-    }
-  },
-
-  reset() {
-    set({
+export const useAutomationStore = create<AutomationState>()(
+  devtools(
+    subscribeWithSelector((set, get) => ({
       windows: [],
       elements: [],
       loadingWindows: false,
@@ -266,129 +131,270 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       error: null,
       lastScreenshot: null,
       lastOcr: null,
+
       isRecording: false,
       currentRecording: null,
       recordings: [],
+
       scripts: [],
       selectedScript: null,
       loadingScripts: false,
+
       isExecuting: false,
       executionProgress: 0,
       executionHistory: [],
       currentExecution: null,
+
       inspector: {
         isActive: false,
       },
+
       shortcuts: [],
       lastTriggeredShortcut: null,
-    });
-  },
 
-  startRecording: async () => {
-    set({ isRecording: true, currentRecording: null });
-  },
+      async loadWindows() {
+        set({ loadingWindows: true, error: null });
+        try {
+          const windows = await listAutomationWindows();
+          set({ windows, loadingWindows: false });
+        } catch (error) {
+          console.error('Failed to load automation windows:', error);
+          set({ error: String(error), loadingWindows: false, windows: [] });
+          throw error;
+        }
+      },
 
-  stopRecording: async () => {
-    set({ isRecording: false });
-    return null;
-  },
+      async searchElements(query) {
+        set({ loadingElements: true, error: null });
+        try {
+          const elements = await findAutomationElements(query);
+          set({ elements, loadingElements: false });
+        } catch (error) {
+          console.error('Failed to find automation elements:', error);
+          set({ error: String(error), loadingElements: false, elements: [] });
+        }
+      },
 
-  saveRecordingAsScript: async () => {
-    return null;
-  },
+      async click(request) {
+        set({ runningAction: true, error: null });
+        try {
+          await clickAutomation(request);
+          set({ runningAction: false });
+        } catch (error) {
+          console.error('Automation click failed:', error);
+          set({ error: String(error), runningAction: false });
+          throw error;
+        }
+      },
 
-  loadScripts: async () => {
-    set({ loadingScripts: true, error: null });
-    try {
-      set({ scripts: [], loadingScripts: false });
-    } catch (error) {
-      console.error('Failed to load scripts:', error);
-      set({ error: String(error), loadingScripts: false, scripts: [] });
-      throw error;
-    }
-  },
+      async typeText(text, options) {
+        set({ runningAction: true, error: null });
+        try {
+          await sendKeys(text, options);
+          set({ runningAction: false });
+        } catch (error) {
+          console.error('Automation type failed:', error);
+          set({ error: String(error), runningAction: false });
+          throw error;
+        }
+      },
 
-  saveScript: async () => {},
+      async hotkey(key, modifiers) {
+        set({ runningAction: true, error: null });
+        try {
+          await sendHotkey(key, modifiers);
+          set({ runningAction: false });
+        } catch (error) {
+          console.error('Automation hotkey failed:', error);
+          set({ error: String(error), runningAction: false });
+          throw error;
+        }
+      },
 
-  deleteScript: async () => {},
+      async screenshot(options) {
+        set({ runningAction: true, error: null });
+        try {
+          const capture = await automationScreenshot(options ?? {});
+          set({ lastScreenshot: capture, runningAction: false });
+          return capture;
+        } catch (error) {
+          console.error('Automation screenshot failed:', error);
+          set({ error: String(error), runningAction: false, lastScreenshot: null });
+          throw error;
+        }
+      },
 
-  selectScript: (script) => {
-    set({ selectedScript: script });
-  },
+      async ocr(imagePath) {
+        set({ runningAction: true, error: null });
+        try {
+          const result = await automationOcr(imagePath);
+          set({ lastOcr: result, runningAction: false });
+          return result;
+        } catch (error) {
+          console.error('Automation OCR failed:', error);
+          set({ error: String(error), runningAction: false, lastOcr: null });
+          throw error;
+        }
+      },
 
-  executeScript: async () => {
-    return null;
-  },
+      async emitOverlayClick(payload) {
+        await emitOverlayClick(payload);
+      },
 
-  stopExecution: () => {
-    set({ isExecuting: false });
-  },
+      async emitOverlayType(payload) {
+        await emitOverlayType(payload);
+      },
 
-  activateInspector: () => {
-    set((state) => ({
-      inspector: { ...state.inspector, isActive: true },
-    }));
-  },
+      async emitOverlayRegion(payload) {
+        await emitOverlayRegion(payload);
+      },
 
-  deactivateInspector: () => {
-    set((state) => ({
-      inspector: { ...state.inspector, isActive: false },
-    }));
-  },
+      async replayOverlay(limit) {
+        await replayOverlayEvents(limit);
+      },
 
-  inspectElementAt: async () => {},
+      clearError() {
+        if (get().error) {
+          set({ error: null });
+        }
+      },
 
-  handleRecordingStarted: (session) => {
-    const recordingSession: RecordingSession = {
-      sessionId: session.sessionId,
-      startTime: session.startTime,
-      isRecording: session.isRecording,
-    };
-    set({
-      isRecording: true,
-      currentRecording: recordingSession,
-    });
-  },
+      reset() {
+        set({
+          windows: [],
+          elements: [],
+          loadingWindows: false,
+          loadingElements: false,
+          runningAction: false,
+          error: null,
+          lastScreenshot: null,
+          lastOcr: null,
+          isRecording: false,
+          currentRecording: null,
+          recordings: [],
+          scripts: [],
+          selectedScript: null,
+          loadingScripts: false,
+          isExecuting: false,
+          executionProgress: 0,
+          executionHistory: [],
+          currentExecution: null,
+          inspector: {
+            isActive: false,
+          },
+          shortcuts: [],
+          lastTriggeredShortcut: null,
+        });
+      },
 
-  handleRecordingStopped: (recording) => {
-    set((state) => ({
-      isRecording: false,
-      currentRecording: null,
-      recordings: [recording, ...state.recordings],
-    }));
-  },
+      startRecording: async () => {
+        set({ isRecording: true, currentRecording: null });
+      },
 
-  handleActionRecorded: (_action) => {
-    set((state) => {
-      if (!state.currentRecording) {
-        console.warn('[AutomationStore] Action recorded but no active recording session');
-        return state;
-      }
+      stopRecording: async () => {
+        set({ isRecording: false });
+        return null;
+      },
 
-      return state;
-    });
-  },
+      saveRecordingAsScript: async () => {
+        return null;
+      },
 
-  handleShortcutAction: (action) => {
-    set({ lastTriggeredShortcut: action });
-  },
+      loadScripts: async () => {
+        set({ loadingScripts: true, error: null });
+        try {
+          set({ scripts: [], loadingScripts: false });
+        } catch (error) {
+          console.error('Failed to load scripts:', error);
+          set({ error: String(error), loadingScripts: false, scripts: [] });
+          throw error;
+        }
+      },
 
-  handleShortcutRegistered: (shortcut) => {
-    set((state) => {
-      const existingIndex = state.shortcuts.findIndex((s) => s.id === shortcut.id);
-      if (existingIndex >= 0) {
-        const updatedShortcuts = [...state.shortcuts];
-        updatedShortcuts[existingIndex] = shortcut;
-        return { shortcuts: updatedShortcuts };
-      } else {
-        return { shortcuts: [...state.shortcuts, shortcut] };
-      }
-    });
-  },
+      saveScript: async () => {},
 
-  handleShortcutUnregistered: (shortcutId) => {
-    set((state) => ({
-      shortcuts: state.shortcuts.filter((s) => s.id !== shortcutId),
-    }));
-  },
-}));
+      deleteScript: async () => {},
+
+      selectScript: (script) => {
+        set({ selectedScript: script });
+      },
+
+      executeScript: async () => {
+        return null;
+      },
+
+      stopExecution: () => {
+        set({ isExecuting: false });
+      },
+
+      activateInspector: () => {
+        set((state) => ({
+          inspector: { ...state.inspector, isActive: true },
+        }));
+      },
+
+      deactivateInspector: () => {
+        set((state) => ({
+          inspector: { ...state.inspector, isActive: false },
+        }));
+      },
+
+      inspectElementAt: async () => {},
+
+      handleRecordingStarted: (session) => {
+        const recordingSession: RecordingSession = {
+          sessionId: session.sessionId,
+          startTime: session.startTime,
+          isRecording: session.isRecording,
+        };
+        set({
+          isRecording: true,
+          currentRecording: recordingSession,
+        });
+      },
+
+      handleRecordingStopped: (recording) => {
+        set((state) => ({
+          isRecording: false,
+          currentRecording: null,
+          recordings: [recording, ...state.recordings],
+        }));
+      },
+
+      handleActionRecorded: (_action) => {
+        set((state) => {
+          if (!state.currentRecording) {
+            console.warn('[AutomationStore] Action recorded but no active recording session');
+            return state;
+          }
+
+          return state;
+        });
+      },
+
+      handleShortcutAction: (action) => {
+        set({ lastTriggeredShortcut: action });
+      },
+
+      handleShortcutRegistered: (shortcut) => {
+        set((state) => {
+          const existingIndex = state.shortcuts.findIndex((s) => s.id === shortcut.id);
+          if (existingIndex >= 0) {
+            const updatedShortcuts = [...state.shortcuts];
+            updatedShortcuts[existingIndex] = shortcut;
+            return { shortcuts: updatedShortcuts };
+          } else {
+            return { shortcuts: [...state.shortcuts, shortcut] };
+          }
+        });
+      },
+
+      handleShortcutUnregistered: (shortcutId) => {
+        set((state) => ({
+          shortcuts: state.shortcuts.filter((s) => s.id !== shortcutId),
+        }));
+      },
+    })),
+    { name: 'AutomationStore', enabled: import.meta.env.DEV },
+  ),
+);

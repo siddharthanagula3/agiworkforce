@@ -4,6 +4,7 @@ import { Brain, ChevronDown, Clock, Layers, Loader2, Sparkles } from 'lucide-rea
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '../../lib/utils';
+import { useSimpleModeStore } from '../../stores/simpleModeStore';
 
 interface ReasoningAccordionProps {
   content: string;
@@ -30,18 +31,25 @@ export function ReasoningAccordion({
   autoExpandOnStream = true,
   showPreview = true,
 }: ReasoningAccordionProps) {
+  const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
   const [isOpen, setIsOpen] = useState(false);
   const [hasUserCollapsed, setHasUserCollapsed] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const prevStreamingRef = useRef(isStreaming);
 
-  // Auto-expand when streaming starts (unless user manually collapsed)
+  // Auto-expand when streaming starts (unless user manually collapsed or in simple mode)
   useEffect(() => {
-    if (autoExpandOnStream && isStreaming && !prevStreamingRef.current && !hasUserCollapsed) {
+    if (
+      autoExpandOnStream &&
+      isStreaming &&
+      !prevStreamingRef.current &&
+      !hasUserCollapsed &&
+      !isSimpleMode
+    ) {
       setIsOpen(true);
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, autoExpandOnStream, hasUserCollapsed]);
+  }, [isStreaming, autoExpandOnStream, hasUserCollapsed, isSimpleMode]);
 
   // Auto-scroll to bottom when content updates during streaming
   useEffect(() => {
@@ -61,6 +69,12 @@ export function ReasoningAccordion({
 
   // Generate an intelligent summary from thinking content
   const displaySummary = useMemo(() => {
+    // In simple mode, show user-friendly text instead of technical thinking content
+    if (isSimpleMode) {
+      if (isStreaming) return 'Thinking about your request...';
+      return 'Thought about this';
+    }
+
     if (summary) return summary;
 
     // Don't generate summary while actively streaming
@@ -99,7 +113,7 @@ export function ReasoningAccordion({
     }
 
     return 'Analyzing and reasoning...';
-  }, [content, summary, isStreaming]);
+  }, [content, summary, isStreaming, isSimpleMode]);
 
   const stats = useMemo(() => {
     const lines = content.split('\n').filter((line) => line.trim().length > 0);
@@ -169,8 +183,10 @@ export function ReasoningAccordion({
               {isStreaming ? (
                 <span className="flex items-center gap-1 text-agent-thinking/70">
                   <Sparkles className="w-3 h-3" />
-                  Reasoning in progress...
+                  {isSimpleMode ? 'Thinking...' : 'Reasoning in progress...'}
                 </span>
+              ) : isSimpleMode ? (
+                <span className="text-zinc-400">Done thinking</span>
               ) : (
                 <>
                   <span className="flex items-center gap-1">
@@ -187,8 +203,8 @@ export function ReasoningAccordion({
                 </>
               )}
             </div>
-            {/* Streaming preview when collapsed */}
-            {streamingPreview && !isOpen && (
+            {/* Streaming preview when collapsed (hidden in simple mode) */}
+            {streamingPreview && !isOpen && !isSimpleMode && (
               <div className="mt-1.5 text-xs text-zinc-500 font-mono truncate max-w-md opacity-70">
                 {streamingPreview}
                 <span className="inline-block w-1.5 h-3 bg-agent-thinking/70 ml-0.5 animate-pulse" />

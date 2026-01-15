@@ -1,6 +1,6 @@
 import type { PlanTier, SubscriptionStatus } from '../stores/accountStore';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://agiworkforce.com';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.agiworkforce.com';
 
 export const API_ENDPOINTS = {
   deviceLink: '/api/device/link',

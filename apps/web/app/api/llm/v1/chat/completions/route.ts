@@ -311,11 +311,15 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Check model access
   if (!checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
-    const requiredTiers = MODEL_TIER_REQUIREMENTS[chatRequest.model.toLowerCase()];
+    const modelKey = chatRequest.model.toLowerCase();
+    const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
+    // Safely get the first required tier, defaulting to 'PRO' if not found
+    const requiredTier =
+      requiredTiers && requiredTiers.length > 0 ? requiredTiers[0].toUpperCase() : 'PRO';
     return NextResponse.json(
       {
         error: {
-          message: `Model ${chatRequest.model} requires ${requiredTiers?.[0]?.toUpperCase() || 'PRO'} subscription or higher.`,
+          message: `Model ${chatRequest.model} requires ${requiredTier} subscription or higher.`,
           type: 'invalid_request_error',
           code: 'model_not_available',
         },

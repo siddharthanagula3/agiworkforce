@@ -188,14 +188,15 @@ export class SubscriptionService {
 
     // Log warning for unmapped price IDs (helps debug configuration issues)
     if (priceId && !tier) {
-      logger.warn(
+      logger.error(
         { priceId },
-        'Price ID not found in tier mapping. Check STRIPE_PRICE_* environment variables.',
+        'CRITICAL: Price ID not found in tier mapping. User may be incorrectly downgraded to free tier. Check STRIPE_PRICE_* environment variables and PRICE_ID_OVERRIDES.',
       );
+      // Throw error instead of silently downgrading - better to fail loudly than corrupt data
+      throw new Error(`Price ID ${priceId} not found in tier mapping. Cannot determine plan tier.`);
     }
 
-    // IMPORTANT: Return null-like value to force caller to handle missing tier
-    // This is safer than silently defaulting to 'pro'
+    // Only return 'free' if there's genuinely no price ID (e.g., new user without subscription)
     return 'free';
   }
 
