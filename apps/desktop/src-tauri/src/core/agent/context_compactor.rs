@@ -1,4 +1,4 @@
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use crate::data::db::models::{Message, MessageRole};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

@@ -1,7 +1,7 @@
-use crate::core::router::providers::{
+use crate::core::llm::providers::{
     managed_cloud_provider::ManagedCloudProvider, ollama::OllamaProvider,
 };
-use crate::core::router::{
+use crate::core::llm::{
     cache_manager::CacheManager,
     llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
     ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider,
@@ -160,7 +160,7 @@ pub async fn llm_send_message(
 
             // Create a fallback candidate for Managed Cloud
             // We use "managed-cloud-auto" or pass the requested model as a hint if compatible
-            let fallback_candidate = crate::core::router::llm_router::RouteCandidate {
+            let fallback_candidate = crate::core::llm::llm_router::RouteCandidate {
                 provider: Provider::ManagedCloud,
                 model: request
                     .model

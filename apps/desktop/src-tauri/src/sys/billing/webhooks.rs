@@ -1,14 +1,34 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use stripe::{Event, EventObject, EventType};
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
+
+/// MEDIUM-003 fix: Helper to acquire database lock with better error context.
+/// Recovers from poisoned mutex and logs the error context.
+fn acquire_db_lock<'a>(
+    db: &'a Mutex<Connection>,
+    operation: &str,
+) -> Result<MutexGuard<'a, Connection>> {
+    db.lock().map_err(|e| {
+        // Log the actual error for debugging
+        tracing::error!(
+            "Database mutex poisoned during {}: {}. A thread panicked while holding the lock.",
+            operation,
+            e
+        );
+        anyhow!(
+            "Failed to acquire database lock for {}: mutex poisoned (prior thread panic)",
+            operation
+        )
+    })
+}
 
 #[derive(Clone)]
 pub struct WebhookHandler {
@@ -70,9 +90,10 @@ impl WebhookHandler {
     }
 
     fn validate_timestamp_freshness(&self, timestamp_str: &str) -> Result<()> {
+        // MEDIUM-003 fix: Preserve original error context
         let webhook_timestamp: i64 = timestamp_str
             .parse()
-            .map_err(|_| anyhow!("Invalid timestamp format in webhook signature"))?;
+            .map_err(|e| anyhow!("Invalid timestamp format '{}' in webhook signature: {}", timestamp_str, e))?;
 
         let now = Utc::now().timestamp();
         let time_diff = (now - webhook_timestamp).abs();
@@ -146,10 +167,8 @@ impl WebhookHandler {
     }
 
     fn is_event_processed(&self, stripe_event_id: &str) -> Result<bool> {
-        let db = self
-            .db
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock database"))?;
+        // MEDIUM-003 fix: Use helper with better error context
+        let db = acquire_db_lock(&self.db, "is_event_processed")?;
 
         let count: i64 = db.query_row(
             "SELECT COUNT(*) FROM billing_webhook_events WHERE stripe_event_id = ?1 AND processed = 1",
@@ -161,10 +180,8 @@ impl WebhookHandler {
     }
 
     fn store_event(&self, event: &Event, payload: &str) -> Result<()> {
-        let db = self
-            .db
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock database"))?;
+        // MEDIUM-003 fix: Use helper with better error context
+        let db = acquire_db_lock(&self.db, "store_event")?;
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();

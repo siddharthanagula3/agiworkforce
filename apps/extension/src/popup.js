@@ -1,26 +1,58 @@
+// State management
+let sessionStartTime = Date.now();
+let actionCount = 0;
+
+// Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
-  await updateStatus();
-  await updateTabInfo();
+  await initializePopup();
+  setupEventListeners();
+  startSessionTimer();
 });
+
+async function initializePopup() {
+  await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
+}
+
+function setupEventListeners() {
+  // Capture page button
+  document.getElementById('captureBtn').addEventListener('click', handleCapturePage);
+
+  // Refresh button
+  document.getElementById('refreshBtn').addEventListener('click', handleRefresh);
+
+  // Listen for storage changes
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.connectedToDesktop) {
+      updateStatus();
+    }
+    if (changes.actionCount) {
+      actionCount = changes.actionCount.newValue || 0;
+      updateStats();
+    }
+  });
+}
 
 async function updateStatus() {
   try {
     const { connectedToDesktop } = await chrome.storage.local.get('connectedToDesktop');
 
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
+    const statusCard = document.getElementById('statusCard');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusSubtitle = document.getElementById('statusSubtitle');
 
     if (connectedToDesktop) {
-      statusDot.classList.add('connected');
-      statusDot.classList.remove('disconnected');
-      statusText.textContent = 'Connected to AGI Workforce Desktop';
+      statusCard.classList.add('connected');
+      statusTitle.textContent = 'Connected';
+      statusSubtitle.textContent = 'Desktop app is active';
     } else {
-      statusDot.classList.add('disconnected');
-      statusDot.classList.remove('connected');
-      statusText.textContent = 'Not connected to desktop';
+      statusCard.classList.remove('connected');
+      statusTitle.textContent = 'Disconnected';
+      statusSubtitle.textContent = 'Desktop app not detected';
     }
   } catch (error) {
     console.error('Failed to update status:', error);
+    document.getElementById('statusTitle').textContent = 'Error';
+    document.getElementById('statusSubtitle').textContent = 'Failed to check status';
   }
 }
 
@@ -29,14 +61,133 @@ async function updateTabInfo() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (tab) {
-      document.getElementById('tabId').textContent = tab.id;
+      document.getElementById('tabId').textContent = tab.id || '-';
 
-      const url = new URL(tab.url);
-      const displayUrl = url.hostname + url.pathname;
-      document.getElementById('currentUrl').textContent =
-        displayUrl.length > 30 ? displayUrl.substring(0, 30) + '...' : displayUrl;
+      if (tab.url) {
+        try {
+          const url = new URL(tab.url);
+          const displayUrl = `${url.hostname}${url.pathname}`;
+          const currentUrlElement = document.getElementById('currentUrl');
+          currentUrlElement.textContent =
+            displayUrl.length > 25 ? displayUrl.substring(0, 25) + '...' : displayUrl;
+          currentUrlElement.title = tab.url;
+        } catch {
+          document.getElementById('currentUrl').textContent = 'Invalid URL';
+          document.getElementById('currentUrl').title = '';
+        }
+      } else {
+        document.getElementById('currentUrl').textContent = 'No URL';
+      }
     }
   } catch (error) {
     console.error('Failed to update tab info:', error);
+    document.getElementById('tabId').textContent = 'Error';
+    document.getElementById('currentUrl').textContent = 'Error';
   }
 }
+
+async function updateStats() {
+  try {
+    // Update tab count
+    const tabs = await chrome.tabs.query({});
+    document.getElementById('tabCount').textContent = tabs.length;
+
+    // Update action count
+    const { actionCount: storedCount } = await chrome.storage.local.get('actionCount');
+    actionCount = storedCount || 0;
+    document.getElementById('actionCount').textContent = actionCount;
+  } catch (error) {
+    console.error('Failed to update stats:', error);
+  }
+}
+
+function startSessionTimer() {
+  // Update session time every second
+  setInterval(() => {
+    const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('sessionTime').textContent =
+      `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }, 1000);
+}
+
+async function handleCapturePage() {
+  const button = document.getElementById('captureBtn');
+  const originalText = button.innerHTML;
+
+  try {
+    button.innerHTML = '⏳ Capturing...';
+    button.disabled = true;
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (!tab) {
+      throw new Error('No active tab found');
+    }
+
+    // Send message to background to capture screenshot
+    const response = await chrome.runtime.sendMessage({
+      type: 'CAPTURE_SCREENSHOT',
+      format: 'png',
+      quality: 90,
+    });
+
+    if (response.success) {
+      button.innerHTML = '✅ Captured!';
+      incrementActionCount();
+
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+      }, 2000);
+    } else {
+      throw new Error(response.error || 'Screenshot failed');
+    }
+  } catch (error) {
+    console.error('Capture failed:', error);
+    button.innerHTML = '❌ Failed';
+    setTimeout(() => {
+      button.innerHTML = originalText;
+      button.disabled = false;
+    }, 2000);
+  }
+}
+
+async function handleRefresh() {
+  const button = document.getElementById('refreshBtn');
+  const originalText = button.innerHTML;
+
+  button.innerHTML = '⏳ Refreshing...';
+  button.disabled = true;
+
+  await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
+
+  button.innerHTML = '✅ Refreshed';
+  setTimeout(() => {
+    button.innerHTML = originalText;
+    button.disabled = false;
+  }, 1000);
+}
+
+async function incrementActionCount() {
+  actionCount++;
+  await chrome.storage.local.set({ actionCount });
+  document.getElementById('actionCount').textContent = actionCount;
+}
+
+// Handle keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Cmd/Ctrl + R to refresh
+  if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+    e.preventDefault();
+    handleRefresh();
+  }
+
+  // Cmd/Ctrl + C to capture
+  if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+    e.preventDefault();
+    handleCapturePage();
+  }
+});

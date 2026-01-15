@@ -1,4 +1,4 @@
-use crate::core::router::{LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -33,7 +33,7 @@ pub async fn get_code_completion(
     };
 
     let llm_request = LLMRequest {
-        messages: vec![crate::core::router::ChatMessage {
+        messages: vec![crate::core::llm::ChatMessage {
             role: "user".to_string(),
             content: request.prompt,
             tool_calls: None,
@@ -116,7 +116,7 @@ pub async fn get_inline_completion(
     };
 
     let llm_request = LLMRequest {
-        messages: vec![crate::core::router::ChatMessage {
+        messages: vec![crate::core::llm::ChatMessage {
             role: "user".to_string(),
             content: prompt,
             tool_calls: None,
@@ -214,14 +214,14 @@ Rules:
 
     let llm_request = LLMRequest {
         messages: vec![
-            crate::core::router::ChatMessage {
+            crate::core::llm::ChatMessage {
                 role: "system".to_string(),
                 content: system_prompt.to_string(),
                 tool_calls: None,
                 tool_call_id: None,
                 multimodal_content: None,
             },
-            crate::core::router::ChatMessage {
+            crate::core::llm::ChatMessage {
                 role: "user".to_string(),
                 content: user_prompt,
                 tool_calls: None,
