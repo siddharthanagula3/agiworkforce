@@ -3,9 +3,11 @@ export { ThinkingPanel } from './ThinkingPanel';
 export * from './TerminalPanel';
 export { BrowserPanel } from './BrowserPanel';
 export { FilesPanel } from './FilesPanel';
+export { ReflectionPanel } from './ReflectionPanel';
 
 export type { ExecutionDashboardProps } from './ExecutionDashboard';
 export type { ThinkingPanelProps } from './ThinkingPanel';
 
 export type { BrowserPanelProps } from './BrowserPanel';
 export type { FilesPanelProps } from './FilesPanel';
+export type { ReflectionPanelProps } from './ReflectionPanel';

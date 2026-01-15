@@ -1,7 +1,27 @@
 import { invoke } from '../lib/tauri-mock';
-import type { McpServerConfig, McpServerInfo, McpServersConfig, McpToolInfo } from '../types/mcp';
+import type {
+  McpServerConfig,
+  McpServerInfo,
+  McpServersConfig,
+  McpToolInfo,
+  McpOAuthProvider,
+  McpOAuthStartResponse,
+  McpOAuthTokenResponse,
+  McpOAuthConnectionStatus,
+  McpOAuthProviderConfig,
+} from '../types/mcp';
 
-export type { McpServerConfig, McpServerInfo, McpServersConfig, McpToolInfo };
+export type {
+  McpServerConfig,
+  McpServerInfo,
+  McpServersConfig,
+  McpToolInfo,
+  McpOAuthProvider,
+  McpOAuthStartResponse,
+  McpOAuthTokenResponse,
+  McpOAuthConnectionStatus,
+  McpOAuthProviderConfig,
+};
 
 const MCP_TIMEOUT_MS = 30000;
 const MCP_TOOL_CALL_TIMEOUT_MS = 120000;
@@ -223,6 +243,252 @@ export async function mcpGetToolSchemas(): Promise<unknown[]> {
   }
 }
 
+// ============================================================================
+// MCP OAuth Functions
+// ============================================================================
+
+const MCP_OAUTH_TIMEOUT_MS = 60000;
+
+/**
+ * Available OAuth providers with their display configuration
+ */
+export const MCP_OAUTH_PROVIDERS: McpOAuthProviderConfig[] = [
+  {
+    id: 'github',
+    name: 'GitHub',
+    description: 'Connect to GitHub for repository access, issues, and pull requests',
+    icon: 'github',
+    scopes: ['repo', 'read:user', 'read:org'],
+  },
+  {
+    id: 'google_drive',
+    name: 'Google Drive',
+    description: 'Connect to Google Drive for file access and management',
+    icon: 'google-drive',
+    scopes: ['drive.readonly', 'drive.file'],
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    description: 'Connect to Slack for messaging and channel management',
+    icon: 'slack',
+    scopes: ['channels:read', 'chat:write', 'users:read', 'files:read'],
+  },
+];
+
+/**
+ * Start an OAuth flow for a provider.
+ * Opens the browser with the authorization URL and returns the state for verification.
+ *
+ * @param provider - The OAuth provider ('github', 'google_drive', or 'slack')
+ * @returns Promise resolving to the auth URL and state parameter
+ */
+export async function mcpOAuthStart(provider: McpOAuthProvider): Promise<McpOAuthStartResponse> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    const result = await invokeWithTimeout<{ auth_url: string; state: string }>(
+      'mcp_oauth_start',
+      { provider },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
+    return {
+      authUrl: result.auth_url,
+      state: result.state,
+    };
+  } catch (error) {
+    throw new Error(`Failed to start OAuth flow for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Handle OAuth callback with authorization code.
+ * Exchanges the code for access tokens and stores them securely.
+ *
+ * @param provider - The OAuth provider
+ * @param code - The authorization code from the callback
+ * @param callbackState - The state parameter from the callback (for CSRF verification)
+ * @returns Promise resolving to the token response
+ */
+export async function mcpOAuthCallback(
+  provider: McpOAuthProvider,
+  code: string,
+  callbackState: string,
+): Promise<McpOAuthTokenResponse> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    validateNonEmpty(code, 'authorization code');
+    validateNonEmpty(callbackState, 'callback state');
+    const result = await invokeWithTimeout<{
+      provider: string;
+      connected: boolean;
+      expires_at: number | null;
+    }>(
+      'mcp_oauth_callback',
+      { provider, code, callback_state: callbackState },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
+    return {
+      provider: result.provider,
+      connected: result.connected,
+      expiresAt: result.expires_at,
+    };
+  } catch (error) {
+    throw new Error(`Failed to complete OAuth callback for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Check the connection status for a provider.
+ *
+ * @param provider - The OAuth provider
+ * @returns Promise resolving to the connection status
+ */
+export async function mcpOAuthStatus(
+  provider: McpOAuthProvider,
+): Promise<McpOAuthConnectionStatus> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    const result = await invokeWithTimeout<{
+      connected: boolean;
+      user_info: {
+        id: string;
+        name: string | null;
+        email: string | null;
+        avatar_url: string | null;
+      } | null;
+      expires_at: number | null;
+    }>('mcp_oauth_status', { provider });
+    return {
+      connected: result.connected,
+      userInfo: result.user_info
+        ? {
+            id: result.user_info.id,
+            name: result.user_info.name,
+            email: result.user_info.email,
+            avatarUrl: result.user_info.avatar_url,
+          }
+        : null,
+      expiresAt: result.expires_at,
+    };
+  } catch (error) {
+    throw new Error(`Failed to get OAuth status for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Disconnect a provider by removing stored tokens.
+ *
+ * @param provider - The OAuth provider to disconnect
+ */
+export async function mcpOAuthDisconnect(provider: McpOAuthProvider): Promise<void> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    await invokeWithTimeout<void>('mcp_oauth_disconnect', { provider });
+  } catch (error) {
+    throw new Error(`Failed to disconnect OAuth for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Refresh expired tokens for a provider.
+ *
+ * @param provider - The OAuth provider
+ * @returns Promise resolving to the refreshed token response
+ */
+export async function mcpOAuthRefresh(provider: McpOAuthProvider): Promise<McpOAuthTokenResponse> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    const result = await invokeWithTimeout<{
+      provider: string;
+      connected: boolean;
+      expires_at: number | null;
+    }>('mcp_oauth_refresh', { provider }, MCP_OAUTH_TIMEOUT_MS);
+    return {
+      provider: result.provider,
+      connected: result.connected,
+      expiresAt: result.expires_at,
+    };
+  } catch (error) {
+    throw new Error(`Failed to refresh OAuth tokens for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Store client credentials for a provider (client ID and secret).
+ * Use this to configure OAuth credentials without environment variables.
+ *
+ * @param provider - The OAuth provider
+ * @param clientId - The OAuth client ID
+ * @param clientSecret - The OAuth client secret
+ */
+export async function mcpOAuthSetCredentials(
+  provider: McpOAuthProvider,
+  clientId: string,
+  clientSecret: string,
+): Promise<void> {
+  try {
+    validateNonEmpty(provider, 'provider');
+    validateNonEmpty(clientId, 'client ID');
+    validateNonEmpty(clientSecret, 'client secret');
+    await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
+      provider,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+  } catch (error) {
+    throw new Error(`Failed to set OAuth credentials for ${provider}: ${error}`);
+  }
+}
+
+/**
+ * Get the status of all OAuth providers.
+ *
+ * @returns Promise resolving to a map of provider statuses
+ */
+export async function mcpOAuthGetAllStatuses(): Promise<
+  Record<McpOAuthProvider, McpOAuthConnectionStatus>
+> {
+  const providers: McpOAuthProvider[] = ['github', 'google_drive', 'slack'];
+  const statuses: Record<string, McpOAuthConnectionStatus> = {};
+
+  await Promise.all(
+    providers.map(async (provider) => {
+      try {
+        statuses[provider] = await mcpOAuthStatus(provider);
+      } catch {
+        // If status check fails, mark as disconnected
+        statuses[provider] = {
+          connected: false,
+          userInfo: null,
+          expiresAt: null,
+        };
+      }
+    }),
+  );
+
+  return statuses as Record<McpOAuthProvider, McpOAuthConnectionStatus>;
+}
+
+/**
+ * Check if a provider's tokens are expired or about to expire (within 5 minutes).
+ *
+ * @param provider - The OAuth provider
+ * @returns Promise resolving to true if tokens need refreshing
+ */
+export async function mcpOAuthNeedsRefresh(provider: McpOAuthProvider): Promise<boolean> {
+  try {
+    const status = await mcpOAuthStatus(provider);
+    if (!status.connected || !status.expiresAt) {
+      return false;
+    }
+    // Check if token expires within 5 minutes
+    const fiveMinutesFromNow = Date.now() / 1000 + 300;
+    return status.expiresAt < fiveMinutesFromNow;
+  } catch {
+    return false;
+  }
+}
+
 export class McpClient {
   static async initialize(): Promise<string> {
     return mcpInitialize();
@@ -278,6 +544,81 @@ export class McpClient {
 
   static async getToolSchemas(): Promise<unknown[]> {
     return mcpGetToolSchemas();
+  }
+
+  // ============================================================================
+  // OAuth Methods
+  // ============================================================================
+
+  /**
+   * Get available OAuth providers configuration
+   */
+  static getOAuthProviders(): McpOAuthProviderConfig[] {
+    return MCP_OAUTH_PROVIDERS;
+  }
+
+  /**
+   * Start an OAuth flow for a provider
+   */
+  static async oauthStart(provider: McpOAuthProvider): Promise<McpOAuthStartResponse> {
+    return mcpOAuthStart(provider);
+  }
+
+  /**
+   * Handle OAuth callback with authorization code
+   */
+  static async oauthCallback(
+    provider: McpOAuthProvider,
+    code: string,
+    callbackState: string,
+  ): Promise<McpOAuthTokenResponse> {
+    return mcpOAuthCallback(provider, code, callbackState);
+  }
+
+  /**
+   * Check connection status for a provider
+   */
+  static async oauthStatus(provider: McpOAuthProvider): Promise<McpOAuthConnectionStatus> {
+    return mcpOAuthStatus(provider);
+  }
+
+  /**
+   * Disconnect a provider
+   */
+  static async oauthDisconnect(provider: McpOAuthProvider): Promise<void> {
+    return mcpOAuthDisconnect(provider);
+  }
+
+  /**
+   * Refresh tokens for a provider
+   */
+  static async oauthRefresh(provider: McpOAuthProvider): Promise<McpOAuthTokenResponse> {
+    return mcpOAuthRefresh(provider);
+  }
+
+  /**
+   * Set OAuth client credentials for a provider
+   */
+  static async oauthSetCredentials(
+    provider: McpOAuthProvider,
+    clientId: string,
+    clientSecret: string,
+  ): Promise<void> {
+    return mcpOAuthSetCredentials(provider, clientId, clientSecret);
+  }
+
+  /**
+   * Get status of all OAuth providers
+   */
+  static async oauthGetAllStatuses(): Promise<Record<McpOAuthProvider, McpOAuthConnectionStatus>> {
+    return mcpOAuthGetAllStatuses();
+  }
+
+  /**
+   * Check if a provider needs token refresh
+   */
+  static async oauthNeedsRefresh(provider: McpOAuthProvider): Promise<boolean> {
+    return mcpOAuthNeedsRefresh(provider);
   }
 }
 
