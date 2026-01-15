@@ -1,7 +1,7 @@
 use crate::core::agent::context_manager::{Constraint, ContextManager};
 use crate::core::agent::intelligent_file_access::IntelligentFileAccess;
-use crate::core::mcp::McpToolRegistry;
 use crate::core::llm::LLMRouter;
+use crate::core::mcp::McpToolRegistry;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

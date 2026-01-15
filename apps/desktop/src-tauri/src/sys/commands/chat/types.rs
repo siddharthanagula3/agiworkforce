@@ -185,7 +185,10 @@ impl Validate for CreateConversationRequest {
         if self.title.len() > MAX_TITLE_LENGTH {
             return Err(ValidationError {
                 field: "title".to_string(),
-                message: format!("Title exceeds maximum length of {} characters", MAX_TITLE_LENGTH),
+                message: format!(
+                    "Title exceeds maximum length of {} characters",
+                    MAX_TITLE_LENGTH
+                ),
             });
         }
         if self.user_id.is_empty() {
@@ -197,7 +200,10 @@ impl Validate for CreateConversationRequest {
         if self.user_id.len() > MAX_USER_ID_LENGTH {
             return Err(ValidationError {
                 field: "user_id".to_string(),
-                message: format!("User ID exceeds maximum length of {} characters", MAX_USER_ID_LENGTH),
+                message: format!(
+                    "User ID exceeds maximum length of {} characters",
+                    MAX_USER_ID_LENGTH
+                ),
             });
         }
         Ok(())
@@ -216,7 +222,10 @@ impl Validate for ChatSendMessageRequest {
         if self.user_id.len() > MAX_USER_ID_LENGTH {
             return Err(ValidationError {
                 field: "user_id".to_string(),
-                message: format!("User ID exceeds maximum length of {} characters", MAX_USER_ID_LENGTH),
+                message: format!(
+                    "User ID exceeds maximum length of {} characters",
+                    MAX_USER_ID_LENGTH
+                ),
             });
         }
 
@@ -224,7 +233,10 @@ impl Validate for ChatSendMessageRequest {
         if self.content.len() > MAX_CONTENT_LENGTH {
             return Err(ValidationError {
                 field: "content".to_string(),
-                message: format!("Content exceeds maximum length of {} bytes", MAX_CONTENT_LENGTH),
+                message: format!(
+                    "Content exceeds maximum length of {} bytes",
+                    MAX_CONTENT_LENGTH
+                ),
             });
         }
 

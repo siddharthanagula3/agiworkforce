@@ -172,10 +172,12 @@ impl ActionPlanner {
         let llm_future = router.invoke_candidate(&candidates[0], &request);
         let outcome = timeout(VISION_LLM_TIMEOUT, llm_future)
             .await
-            .map_err(|_| anyhow::anyhow!(
-                "Vision LLM request timed out after {} seconds",
-                VISION_LLM_TIMEOUT.as_secs()
-            ))?
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Vision LLM request timed out after {} seconds",
+                    VISION_LLM_TIMEOUT.as_secs()
+                )
+            })?
             .context("Vision LLM request failed")?;
 
         Ok(outcome.response.content)
@@ -232,11 +234,10 @@ impl ActionPlanner {
         }
 
         // Parse with size awareness
-        let plan: ActionPlan = serde_json::from_str(json_str)
-            .context(format!(
-                "Failed to parse action plan from: {}",
-                &response[..response.len().min(500)] // Truncate error message
-            ))?;
+        let plan: ActionPlan = serde_json::from_str(json_str).context(format!(
+            "Failed to parse action plan from: {}",
+            &response[..response.len().min(500)] // Truncate error message
+        ))?;
 
         // CRITICAL-002 fix: Validate action count to prevent runaway plans
         if plan.actions.len() > MAX_ACTIONS {
