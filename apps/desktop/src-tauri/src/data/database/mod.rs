@@ -8,6 +8,7 @@ pub mod query_builder;
 pub mod redis_client;
 pub mod security;
 pub mod sql_client;
+pub mod sqlite_pool;
 
 pub use connection::{ConnectionConfig, DatabaseType, SslConfig};
 pub use mysql_client::MySqlClient;
@@ -18,3 +19,6 @@ pub use query_builder::{DeleteQuery, InsertQuery, QueryBuilder, SelectQuery, Upd
 pub use redis_client::RedisClient;
 pub use security::{ApprovalLevel, QueryType, QueryValidation, SqlSecurityValidator};
 pub use sql_client::{QueryResult, SqlClient};
+pub use sqlite_pool::{
+    ConnectionGuard, PoolStats as SqlitePoolStats, SqlitePool, SqlitePoolConfig, SqlitePoolState,
+};

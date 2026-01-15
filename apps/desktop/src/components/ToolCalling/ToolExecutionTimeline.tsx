@@ -34,12 +34,7 @@ interface ToolExecutionTimelineProps {
 function TimelineConnector({ active = false }: { active?: boolean }) {
   return (
     <div className="flex flex-col items-center py-1">
-      <div
-        className={cn(
-          'w-0.5 h-full',
-          active ? 'bg-primary' : 'bg-border',
-        )}
-      />
+      <div className={cn('w-0.5 h-full', active ? 'bg-primary' : 'bg-border')} />
     </div>
   );
 }
@@ -88,7 +83,11 @@ function TimelineStep({
 
         {/* Connector */}
         {!isLast && (
-          <TimelineConnector active={step.tool_call.status === 'completed' || step.tool_call.status === 'in_progress'} />
+          <TimelineConnector
+            active={
+              step.tool_call.status === 'completed' || step.tool_call.status === 'in_progress'
+            }
+          />
         )}
       </div>
 
@@ -100,7 +99,9 @@ function TimelineStep({
           onCancel={onCancelTool}
           onApprove={onApproveTool}
           onReject={onRejectTool}
-          defaultExpanded={step.tool_call.status === 'in_progress' || step.tool_call.status === 'awaiting_approval'}
+          defaultExpanded={
+            step.tool_call.status === 'in_progress' || step.tool_call.status === 'awaiting_approval'
+          }
         />
 
         {/* Tool Result */}
@@ -260,16 +261,12 @@ export function ToolExecutionTimeline({
             <div>
               <span className="text-muted-foreground">Started:</span>
               <span className="ml-2 font-mono">
-                {workflow.started_at
-                  ? new Date(workflow.started_at).toLocaleTimeString()
-                  : '-'}
+                {workflow.started_at ? new Date(workflow.started_at).toLocaleTimeString() : '-'}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground">Duration:</span>
-              <span className="ml-2 font-mono">
-                {formatDuration(workflow.total_duration_ms)}
-              </span>
+              <span className="ml-2 font-mono">{formatDuration(workflow.total_duration_ms)}</span>
             </div>
             {workflow.completed_at && (
               <div>

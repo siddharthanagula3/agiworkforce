@@ -2,6 +2,22 @@ import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 
 type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
 
+/**
+ * Error with a code property for categorization.
+ */
+interface CodedError extends Error {
+  code: string;
+}
+
+/**
+ * Creates an error with a code property.
+ */
+function createCodedError(message: string, code: string): CodedError {
+  const error = new Error(message) as CodedError;
+  error.code = code;
+  return error;
+}
+
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const WINDOW_MS = 1000;
 const MAX_REQS_PER_WINDOW = 30;
@@ -53,9 +69,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      const err = new Error(`Operation '${operation}' timed out after ${timeoutMs}ms`);
-      (err as any).code = 'TIMEOUT';
-      reject(err);
+      reject(
+        createCodedError(`Operation '${operation}' timed out after ${timeoutMs}ms`, 'TIMEOUT'),
+      );
     }, timeoutMs);
   });
 
@@ -72,11 +88,10 @@ export function validateResponse<T>(
   command: string,
 ): T {
   if (!validator(response)) {
-    const err = new Error(
+    throw createCodedError(
       `Invalid response from '${command}': expected valid structure but got ${JSON.stringify(response)?.substring(0, 100)}`,
+      'INVALID_RESPONSE',
     );
-    (err as any).code = 'INVALID_RESPONSE';
-    throw err;
   }
   return response;
 }
@@ -111,10 +126,18 @@ export const TypeGuards = {
   },
 };
 
+/**
+ * Type guard to check if an error has a code property.
+ */
+function isCodedError(error: unknown): error is CodedError {
+  return (
+    error instanceof Error && 'code' in error && typeof (error as CodedError).code === 'string'
+  );
+}
+
 function isRetryableError(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as any).code;
-    return RETRYABLE_ERROR_CODES.has(code);
+  if (isCodedError(error)) {
+    return RETRYABLE_ERROR_CODES.has(error.code);
   }
 
   if (error instanceof Error) {
@@ -180,10 +203,7 @@ async function rateLimit(key: string): Promise<void> {
 
     if (pruned.length >= MAX_REQS_PER_WINDOW) {
       const retry = WINDOW_MS - (now - (pruned[0] ?? now));
-      const err = new Error(`Rate limit exceeded for ${key}. Retry in ${retry}ms`);
-
-      (err as any).code = 'RATE_LIMIT';
-      throw err;
+      throw createCodedError(`Rate limit exceeded for ${key}. Retry in ${retry}ms`, 'RATE_LIMIT');
     }
 
     pruned.push(now);
@@ -201,9 +221,10 @@ export async function invoke<T = unknown>(command: string, args?: Json): Promise
 
   const size = byteLength(args);
   if (size > MAX_PAYLOAD_BYTES) {
-    const err = new Error(`Payload too large: ${size} bytes (max ${MAX_PAYLOAD_BYTES})`);
-    (err as any).code = 'PAYLOAD_TOO_LARGE';
-    throw err;
+    throw createCodedError(
+      `Payload too large: ${size} bytes (max ${MAX_PAYLOAD_BYTES})`,
+      'PAYLOAD_TOO_LARGE',
+    );
   }
 
   return withRetry(async () => {

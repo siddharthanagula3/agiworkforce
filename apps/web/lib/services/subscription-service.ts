@@ -38,13 +38,16 @@ export interface SubscriptionInfo {
 export class SubscriptionService {
   /**
    * Get subscription for a user
+   * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    */
   static async getSubscription(userId: string): Promise<SubscriptionInfo | null> {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('subscriptions')
-        .select('*')
+        .select(
+          'id, user_id, plan_tier, status, current_period_start, current_period_end, stripe_subscription_id',
+        )
         .eq('user_id', userId)
         .single();
 

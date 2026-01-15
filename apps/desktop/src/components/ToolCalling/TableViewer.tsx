@@ -184,9 +184,19 @@ export function TableViewer({
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleCopyTable} className="h-7 px-2">
-            {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleExportCSV} className="h-7 px-2" title="Export CSV">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExportCSV}
+            className="h-7 px-2"
+            title="Export CSV"
+          >
             <Download className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -224,7 +234,10 @@ export function TableViewer({
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={data.columns.length} className="text-center py-8 text-muted-foreground">
+                <td
+                  colSpan={data.columns.length}
+                  className="text-center py-8 text-muted-foreground"
+                >
                   No data found
                 </td>
               </tr>

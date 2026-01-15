@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 
 export function sanitizeHtml(
   html: string,
@@ -8,7 +8,14 @@ export function sanitizeHtml(
     allowLinks?: boolean;
   },
 ): string {
-  const config: any = {
+  // Default allowed attributes as a flat array
+  const defaultAllowedAttrs = ['class', 'id'];
+  // If custom attributes are provided, flatten them into a single array
+  const allowedAttrs = options?.allowedAttributes
+    ? Object.values(options.allowedAttributes).flat()
+    : defaultAllowedAttrs;
+
+  const config: DOMPurifyConfig = {
     ALLOWED_TAGS: options?.allowedTags || [
       'p',
       'br',
@@ -36,7 +43,7 @@ export function sanitizeHtml(
       'div',
       'span',
     ],
-    ALLOWED_ATTR: options?.allowedAttributes || ['class', 'id'],
+    ALLOWED_ATTR: allowedAttrs,
     ALLOW_DATA_ATTR: false,
     ALLOW_UNKNOWN_PROTOCOLS: false,
     SAFE_FOR_TEMPLATES: true,
@@ -63,11 +70,11 @@ export function sanitizeHtml(
     });
   }
 
-  return DOMPurify.sanitize(html, config) as unknown as string;
+  return DOMPurify.sanitize(html, config);
 }
 
 export function sanitizeEmailHtml(html: string): string {
-  const config: any = {
+  const config: DOMPurifyConfig = {
     ALLOWED_TAGS: [
       'p',
       'br',
@@ -129,11 +136,11 @@ export function sanitizeEmailHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config) as unknown as string;
+  return DOMPurify.sanitize(html, config);
 }
 
 export function sanitizeMarkdownHtml(html: string): string {
-  const config: any = {
+  const config: DOMPurifyConfig = {
     ALLOWED_TAGS: [
       'p',
       'br',
@@ -182,7 +189,7 @@ export function sanitizeMarkdownHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config) as unknown as string;
+  return DOMPurify.sanitize(html, config);
 }
 
 // Security hooks for enhanced XSS protection - initialized on module load
@@ -409,24 +416,31 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
 
 export const CSP_CONFIG = {
   'default-src': ["'self'"],
-  'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+  // SECURITY: 'unsafe-inline' is required for React inline styles
+  // 'wasm-unsafe-eval' allows WebAssembly without full 'unsafe-eval'
+  'script-src': ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"],
   'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-  'font-src': ["'self'", 'https://fonts.gstatic.com'],
-  'img-src': ["'self'", 'data:', 'https://*', 'blob:'],
+  'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
+  'img-src': ["'self'", 'data:', 'https:', 'blob:'],
   'connect-src': [
     "'self'",
     'https://agiworkforce.com',
     'https://*.agiworkforce.com',
     'https://api.openai.com',
     'https://api.anthropic.com',
-    'http://localhost:*',
+    'https://generativelanguage.googleapis.com',
+    'https://*.supabase.co',
+    'wss://*.supabase.co',
   ],
   'media-src': ["'self'", 'blob:'],
   'object-src': ["'none'"],
   'base-uri': ["'self'"],
   'form-action': ["'self'"],
   'frame-ancestors': ["'none'"],
+  'frame-src': ["'self'"],
+  'worker-src': ["'self'", 'blob:'],
   'upgrade-insecure-requests': [],
+  'block-all-mixed-content': [],
 };
 
 export function generateCspHeader(): string {

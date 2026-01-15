@@ -1,0 +1,608 @@
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.5)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      channel:
+        description: 'Release channel'
+        required: false
+        type: choice
+        options:
+          - stable
+          - beta
+          - nightly
+        default: stable
+
+permissions:
+  contents: write
+
+env:
+  RUST_VERSION: '1.90.0'
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.11.0'
+
+jobs:
+  # ==========================================================================
+  # Prepare Release - Extract version, generate changelog, create draft release
+  # ==========================================================================
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create-release.outputs.release_id }}
+      version: ${{ steps.get-version.outputs.version }}
+      tag: ${{ steps.get-version.outputs.tag }}
+      channel: ${{ steps.get-version.outputs.channel }}
+      prerelease: ${{ steps.get-version.outputs.prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version info
+        id: get-version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+            CHANNEL="${{ inputs.channel }}"
+            PRERELEASE="${{ inputs.prerelease }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            CHANNEL="stable"
+            PRERELEASE="false"
+
+            # Check if version contains pre-release identifiers
+            if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
+              PRERELEASE="true"
+              CHANNEL="beta"
+            elif [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-nightly"* ]]; then
+              PRERELEASE="true"
+              CHANNEL="nightly"
+            fi
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "channel=${CHANNEL}" >> $GITHUB_OUTPUT
+          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+
+          echo "Version: ${VERSION}"
+          echo "Tag: ${TAG}"
+          echo "Channel: ${CHANNEL}"
+          echo "Pre-release: ${PRERELEASE}"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG="Initial release"
+          else
+            # Generate changelog from commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD -- apps/desktop/ | head -50)
+
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG="Bug fixes and improvements"
+            fi
+          fi
+
+          # Escape for GitHub Actions
+          CHANGELOG="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+
+          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+
+      - name: Create draft release
+        id: create-release
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.get-version.outputs.version }}
+          TAG: ${{ steps.get-version.outputs.tag }}
+          PRERELEASE: ${{ steps.get-version.outputs.prerelease }}
+          CHANNEL: ${{ steps.get-version.outputs.channel }}
+        with:
+          script: |
+            const version = process.env.VERSION;
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const channel = process.env.CHANNEL;
+
+            const channelBadge = channel !== 'stable' ? ` [${channel.toUpperCase()}]` : '';
+
+            const releaseBody = `## AGI Workforce ${version}${channelBadge}
+
+            ### What's New
+
+            ${decodeURIComponent('${{ steps.changelog.outputs.changelog }}').replace(/%0A/g, '\n')}
+
+            ### Downloads
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | macOS | Apple Silicon (M1/M2/M3) | \`AGI.Workforce_${version}_aarch64.dmg\` |
+            | macOS | Intel | \`AGI.Workforce_${version}_x64.dmg\` |
+            | macOS | Universal | \`AGI.Workforce_${version}_universal.dmg\` |
+            | Windows | x64 | \`AGI.Workforce_${version}_x64-setup.exe\` |
+            | Linux | x64 | \`AGI.Workforce_${version}_amd64.AppImage\` |
+
+            ### Installation
+
+            **macOS:** Download the \`.dmg\` file, open it, and drag AGI Workforce to your Applications folder.
+
+            **Windows:** Download and run the \`.exe\` installer.
+
+            **Linux:** Download the \`.AppImage\`, make it executable (\`chmod +x\`), and run it.
+
+            ### Auto-Updates
+
+            Existing installations will automatically update to this version.
+
+            ---
+
+            **Full Changelog:** https://github.com/${context.repo.owner}/${context.repo.repo}/compare/v${version}...HEAD
+            `;
+
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `AGI Workforce v${version}${channelBadge}`,
+              body: releaseBody,
+              draft: true,
+              prerelease: prerelease
+            });
+
+            core.setOutput('release_id', data.id);
+            return data.id;
+
+  # ==========================================================================
+  # Build macOS - Universal binary (aarch64 + x86_64)
+  # ==========================================================================
+  build-macos:
+    name: Build macOS
+    needs: prepare-release
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: universal-apple-darwin
+            arch: universal
+          - target: aarch64-apple-darwin
+            arch: aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Rust targets
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Import signing certificate
+        if: env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Allow codesign to access keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          args: --target ${{ matrix.target }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-artifacts
+          path: |
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+          retention-days: 7
+
+  # ==========================================================================
+  # Build Windows - x86_64 with code signing
+  # ==========================================================================
+  build-windows:
+    name: Build Windows
+    needs: prepare-release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-artifacts
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+          retention-days: 7
+
+  # ==========================================================================
+  # Build Linux - x86_64 AppImage
+  # ==========================================================================
+  build-linux:
+    name: Build Linux
+    needs: prepare-release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            pkg-config \
+            libleptonica-dev \
+            libpng-dev \
+            libjpeg-dev \
+            libtiff-dev \
+            zlib1g-dev \
+            libwebp-dev
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-artifacts
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+          retention-days: 7
+
+  # ==========================================================================
+  # Update Release Database - Store release info in Supabase
+  # ==========================================================================
+  update-database:
+    name: Update Release Database
+    needs: [prepare-release, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update release database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          CHANNEL: ${{ needs.prepare-release.outputs.channel }}
+          PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          # Install dependencies
+          npm install @supabase/supabase-js
+
+          # Create update script
+          cat > update-releases.mjs << 'SCRIPT'
+          import { createClient } from '@supabase/supabase-js';
+          import { readFileSync, readdirSync, statSync } from 'fs';
+          import { join } from 'path';
+
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          const version = process.env.VERSION;
+          const channel = process.env.CHANNEL || 'stable';
+          const isPrerelease = process.env.PRERELEASE === 'true';
+          const repo = process.env.GITHUB_REPO;
+          const baseUrl = `https://github.com/${repo}/releases/download/v${version}`;
+
+          // Platform mapping
+          const platforms = [
+            { dir: 'macos-universal-artifacts', platform: 'darwin-universal', ext: '.app.tar.gz' },
+            { dir: 'macos-aarch64-artifacts', platform: 'darwin-aarch64', ext: '.app.tar.gz' },
+            { dir: 'macos-x86_64-artifacts', platform: 'darwin-x86_64', ext: '.app.tar.gz' },
+            { dir: 'windows-x64-artifacts', platform: 'windows-x86_64', ext: '.nsis.zip' },
+            { dir: 'linux-x64-artifacts', platform: 'linux-x86_64', ext: '.AppImage.tar.gz' },
+          ];
+
+          async function updateReleases() {
+            const pubDate = new Date().toISOString();
+
+            for (const { dir, platform, ext } of platforms) {
+              try {
+                const artifactPath = join('artifacts', dir);
+
+                // Find files recursively
+                function findFiles(dirPath, extension) {
+                  let results = [];
+                  try {
+                    const items = readdirSync(dirPath);
+                    for (const item of items) {
+                      const fullPath = join(dirPath, item);
+                      const stat = statSync(fullPath);
+                      if (stat.isDirectory()) {
+                        results = results.concat(findFiles(fullPath, extension));
+                      } else if (item.endsWith(extension) && !item.endsWith('.sig')) {
+                        results.push({ path: fullPath, name: item });
+                      }
+                    }
+                  } catch (e) {
+                    // Directory doesn't exist or can't be read
+                  }
+                  return results;
+                }
+
+                const files = findFiles(artifactPath, ext);
+                if (files.length === 0) {
+                  console.log(`No artifacts found for ${platform}`);
+                  continue;
+                }
+
+                const { path: filePath, name: fileName } = files[0];
+                const sigPath = `${filePath}.sig`;
+
+                let signature = '';
+                try {
+                  signature = readFileSync(sigPath, 'utf8').trim();
+                } catch (e) {
+                  console.warn(`Signature not found for ${platform}: ${sigPath}`);
+                  continue;
+                }
+
+                const fileSize = statSync(filePath).size;
+                const downloadUrl = `${baseUrl}/${fileName}`;
+
+                // Upsert release
+                const { data, error } = await supabase.rpc('upsert_release', {
+                  p_version: version,
+                  p_platform: platform,
+                  p_download_url: downloadUrl,
+                  p_signature: signature,
+                  p_notes: null, // Will be updated from GitHub release body
+                  p_pub_date: pubDate,
+                  p_file_size_bytes: fileSize,
+                  p_is_prerelease: isPrerelease,
+                  p_is_critical: false,
+                  p_channel: channel,
+                });
+
+                if (error) {
+                  console.error(`Failed to upsert release for ${platform}:`, error);
+                } else {
+                  console.log(`Updated release for ${platform}: ${version}`);
+                }
+              } catch (error) {
+                console.error(`Error processing ${platform}:`, error);
+              }
+            }
+          }
+
+          updateReleases().catch(console.error);
+          SCRIPT
+
+          # Run update script
+          node update-releases.mjs
+
+  # ==========================================================================
+  # Publish Release - Make the release public
+  # ==========================================================================
+  publish-release:
+    name: Publish Release
+    needs: [prepare-release, build-macos, build-windows, build-linux, update-database]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.prepare-release.outputs.release_id }},
+              draft: false
+            });
+
+            console.log('Release published successfully!');
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Release v${{ needs.prepare-release.outputs.version }} published successfully!"
+          echo "Channel: ${{ needs.prepare-release.outputs.channel }}"
+          echo "Pre-release: ${{ needs.prepare-release.outputs.prerelease }}"
+
+  # ==========================================================================
+  # Cleanup on Failure
+  # ==========================================================================
+  cleanup-on-failure:
+    name: Cleanup Failed Release
+    needs: [prepare-release, build-macos, build-windows, build-linux]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete draft release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releaseId = ${{ needs.prepare-release.outputs.release_id }};
+
+            if (releaseId) {
+              try {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: releaseId
+                });
+                console.log('Draft release deleted due to build failure');
+              } catch (error) {
+                console.warn('Failed to delete draft release:', error.message);
+              }
+            }
+
+      - name: Notify on failure
+        run: |
+          echo "Release build failed for v${{ needs.prepare-release.outputs.version }}"
+          echo "Draft release has been cleaned up"

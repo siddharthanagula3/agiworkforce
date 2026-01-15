@@ -26,7 +26,9 @@ export function ConditionNode({ data, selected, id }: NodeProps) {
         <div className="flex-shrink-0 text-yellow-600">
           <GitBranch className="h-4 w-4" />
         </div>
-        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data['label'] as string}</div>
+        <div className="flex-1 truncate text-sm font-medium text-gray-900">
+          {data['label'] as string}
+        </div>
         {selected && (
           <Button
             variant="ghost"

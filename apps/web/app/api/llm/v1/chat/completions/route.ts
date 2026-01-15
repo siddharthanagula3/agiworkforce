@@ -13,6 +13,7 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
+import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -185,16 +186,10 @@ function extractTextContent(
 }
 
 async function handleChatCompletions(request: NextRequest) {
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+  // Handle CORS preflight with proper origin validation
+  const preflightResponse = handleCorsPreflightRequest(request);
+  if (preflightResponse) {
+    return preflightResponse;
   }
 
   // Rate limiting
@@ -570,7 +565,8 @@ async function handleChatCompletions(request: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
         },
       });
     } catch (error) {
@@ -717,7 +713,8 @@ async function handleChatCompletions(request: NextRequest) {
     },
     {
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
       },
     },
   );
