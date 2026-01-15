@@ -39,12 +39,26 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-const extractNotionTitle = (page: any): string | null => {
+// Notion page property types for type-safe extraction
+interface NotionTitleItem {
+  plain_text?: string;
+}
+
+interface NotionPropertyValue {
+  type?: string;
+  title?: NotionTitleItem[];
+}
+
+interface NotionPage {
+  properties?: Record<string, NotionPropertyValue>;
+}
+
+const extractNotionTitle = (page: NotionPage | null | undefined): string | null => {
   const properties = page?.properties;
   if (!properties) return null;
-  for (const value of Object.values<any>(properties)) {
+  for (const value of Object.values(properties)) {
     if (value?.type === 'title' && Array.isArray(value.title)) {
-      const text = value.title.find((item: any) => item?.plain_text)?.plain_text;
+      const text = value.title.find((item) => item?.plain_text)?.plain_text;
       if (text) {
         return text;
       }

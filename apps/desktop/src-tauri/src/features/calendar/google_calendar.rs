@@ -6,17 +6,17 @@ use crate::features::calendar::event_types::*;
 use crate::sys::api::oauth::{OAuth2Client, OAuth2Config, PkceChallenge, TokenResponse};
 use crate::sys::error::{Error, Result};
 
-const GOOGLE_AUTH_URL: &str = "https://api.agiworkforce.com";
+const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 
-const GOOGLE_TOKEN_URL: &str = "https://api.agiworkforce.com";
+const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 
-const GOOGLE_CALENDAR_API_BASE: &str = "https://api.agiworkforce.com";
+const GOOGLE_CALENDAR_API_BASE: &str = "https://www.googleapis.com/calendar/v3";
 
-const CALENDAR_READONLY_SCOPE: &str = "https://api.agiworkforce.com";
+const CALENDAR_READONLY_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
 
-const CALENDAR_EVENTS_SCOPE: &str = "https://api.agiworkforce.com";
+const CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 
-const CALENDAR_SCOPE: &str = "https://api.agiworkforce.com";
+const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
 
 #[derive(Clone)]
 pub struct GoogleCalendarClient {

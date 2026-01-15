@@ -37,6 +37,7 @@ class ErrorReportingService {
   private systemInfo: SystemInfo | null = null;
   private userActions: Array<{ action: string; timestamp: number }> = [];
   private maxUserActions = 20;
+  private isSending = false; // Prevents concurrent sends
 
   private options: ErrorReportingOptions = {
     enabled: true,
@@ -153,10 +154,12 @@ class ErrorReportingService {
   }
 
   private async sendBatch(): Promise<void> {
-    if (this.queue.length === 0) {
+    // Prevent concurrent sends - if already sending, new errors will be queued
+    if (this.queue.length === 0 || this.isSending) {
       return;
     }
 
+    this.isSending = true;
     const errors = [...this.queue];
     this.queue = [];
 
@@ -187,12 +190,15 @@ class ErrorReportingService {
     } catch (error) {
       console.error('Failed to send error batch:', error);
 
+      // Re-queue failed errors along with any new ones that came in during the send
       const combined = [...errors, ...this.queue];
       if (combined.length > 50) {
         const droppedCount = combined.length - 50;
         console.warn(`[ErrorReporting] Queue full, dropping ${droppedCount} oldest error(s)`);
       }
       this.queue = combined.slice(0, 50);
+    } finally {
+      this.isSending = false;
     }
   }
 

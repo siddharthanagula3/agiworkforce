@@ -1,13 +1,20 @@
+//! Secure storage with AES-256-GCM encryption
+//!
+//! This module provides secure storage functionality using machine-derived
+//! encryption keys instead of OS keyring. This eliminates permission prompts
+//! while maintaining strong encryption.
+
+use super::machine_key::{self, KeyPurpose};
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
-use keyring::Entry;
 use pbkdf2::pbkdf2_hmac_array;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex, RwLock};
 
 const NONCE_SIZE: usize = 12;
 const PBKDF2_ITERATIONS: u32 = 600_000; // OWASP recommended for PBKDF2-HMAC-SHA256
@@ -27,18 +34,27 @@ pub struct SecureKeyMaterial {
     salt: Vec<u8>,
 }
 
-/// Secure storage manager with AES-256-GCM encryption and PBKDF2 key derivation
+/// Secure storage manager with AES-256-GCM encryption
+/// Uses machine-derived keys instead of OS keyring
 pub struct SecureStorage {
-    service_name: String,
     master_key: RwLock<Option<Vec<u8>>>,
+    db_conn: Option<Arc<Mutex<Connection>>>,
 }
 
 impl SecureStorage {
     /// Create a new secure storage instance
-    pub fn new(service_name: &str) -> Self {
+    pub fn new(_service_name: &str) -> Self {
         Self {
-            service_name: service_name.to_string(),
             master_key: RwLock::new(None),
+            db_conn: None,
+        }
+    }
+
+    /// Create a new secure storage instance with database connection
+    pub fn with_database(db_conn: Arc<Mutex<Connection>>) -> Self {
+        Self {
+            master_key: RwLock::new(None),
+            db_conn: Some(db_conn),
         }
     }
 
@@ -50,17 +66,32 @@ impl SecureStorage {
         let mut master = self.master_key.write().unwrap();
         *master = Some(key);
 
-        // Store salt in system keyring for later retrieval
-        self.store_salt_in_keyring(&salt)?;
+        // Store salt in database if available
+        if let Some(ref db) = self.db_conn {
+            self.store_salt_in_database(db, &salt)?;
+        }
 
+        Ok(())
+    }
+
+    /// Initialize with machine-derived key (no password required)
+    pub fn init_with_machine_key(&self) -> Result<(), String> {
+        let key = machine_key::derive_key(KeyPurpose::MasterEncryption);
+        let mut master = self.master_key.write().unwrap();
+        *master = Some(key);
         Ok(())
     }
 
     /// Unlock storage with password
     pub fn unlock(&self, password: &str) -> Result<(), String> {
-        let salt = self.retrieve_salt_from_keyring()?;
-        let key = derive_key_from_password(password, &salt);
+        let salt = if let Some(ref db) = self.db_conn {
+            self.retrieve_salt_from_database(db)?
+        } else {
+            // Use machine-derived salt as fallback
+            machine_key::derive_key(KeyPurpose::MasterEncryption)[..SALT_SIZE].to_vec()
+        };
 
+        let key = derive_key_from_password(password, &salt);
         let mut master = self.master_key.write().unwrap();
         *master = Some(key);
 
@@ -88,7 +119,7 @@ impl SecureStorage {
         let master = self.master_key.read().unwrap();
         let key = master
             .as_ref()
-            .ok_or("Storage is locked. Call unlock() first")?;
+            .ok_or("Storage is locked. Call unlock() or init_with_machine_key() first")?;
 
         let cipher = Aes256Gcm::new_from_slice(key)
             .map_err(|e| format!("Failed to create cipher: {}", e))?;
@@ -117,7 +148,7 @@ impl SecureStorage {
         let master = self.master_key.read().unwrap();
         let key = master
             .as_ref()
-            .ok_or("Storage is locked. Call unlock() first")?;
+            .ok_or("Storage is locked. Call unlock() or init_with_machine_key() first")?;
 
         let cipher = Aes256Gcm::new_from_slice(key)
             .map_err(|e| format!("Failed to create cipher: {}", e))?;
@@ -137,58 +168,89 @@ impl SecureStorage {
             .map_err(|e| format!("Decryption failed: {}", e))
     }
 
-    /// Store API key in system keyring
+    /// Store API key in database (encrypted)
     pub fn store_api_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        // Initialize with machine key if not already unlocked
+        if !self.is_unlocked() {
+            self.init_with_machine_key()?;
+        }
 
-        entry
-            .set_password(api_key)
+        let encrypted = self.encrypt(api_key.as_bytes())?;
+        let encrypted_json = serde_json::to_string(&encrypted)
+            .map_err(|e| format!("Failed to serialize: {}", e))?;
+
+        if let Some(ref db) = self.db_conn {
+            let conn = db.lock().unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO api_keys (provider, encrypted_key) VALUES (?1, ?2)",
+                rusqlite::params![provider, encrypted_json],
+            )
             .map_err(|e| format!("Failed to store API key: {}", e))?;
+        }
 
         Ok(())
     }
 
-    /// Retrieve API key from system keyring
+    /// Retrieve API key from database (decrypted)
     pub fn retrieve_api_key(&self, provider: &str) -> Result<String, String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        // Initialize with machine key if not already unlocked
+        if !self.is_unlocked() {
+            self.init_with_machine_key()?;
+        }
 
-        entry
-            .get_password()
-            .map_err(|e| format!("Failed to retrieve API key: {}", e))
+        let encrypted_json = if let Some(ref db) = self.db_conn {
+            let conn = db.lock().unwrap();
+            conn.query_row(
+                "SELECT encrypted_key FROM api_keys WHERE provider = ?1",
+                rusqlite::params![provider],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|e| format!("Failed to retrieve API key: {}", e))?
+        } else {
+            return Err("No database connection".to_string());
+        };
+
+        let encrypted: EncryptedData = serde_json::from_str(&encrypted_json)
+            .map_err(|e| format!("Failed to deserialize: {}", e))?;
+
+        let decrypted = self.decrypt(&encrypted)?;
+        String::from_utf8(decrypted).map_err(|e| format!("Invalid UTF-8: {}", e))
     }
 
-    /// Delete API key from system keyring
+    /// Delete API key from database
     pub fn delete_api_key(&self, provider: &str) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-        entry
-            .delete_password()
-            .map_err(|e| format!("Failed to delete API key: {}", e))
-    }
-
-    /// Store salt in keyring
-    fn store_salt_in_keyring(&self, salt: &[u8]) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, "master_salt")
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-        let salt_b64 = general_purpose::STANDARD.encode(salt);
-        entry
-            .set_password(&salt_b64)
-            .map_err(|e| format!("Failed to store salt: {}", e))?;
-
+        if let Some(ref db) = self.db_conn {
+            let conn = db.lock().unwrap();
+            conn.execute(
+                "DELETE FROM api_keys WHERE provider = ?1",
+                rusqlite::params![provider],
+            )
+            .map_err(|e| format!("Failed to delete API key: {}", e))?;
+        }
         Ok(())
     }
 
-    /// Retrieve salt from keyring
-    fn retrieve_salt_from_keyring(&self) -> Result<Vec<u8>, String> {
-        let entry = Entry::new(&self.service_name, "master_salt")
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+    /// Store salt in database
+    fn store_salt_in_database(&self, db: &Arc<Mutex<Connection>>, salt: &[u8]) -> Result<(), String> {
+        let conn = db.lock().unwrap();
+        let salt_b64 = general_purpose::STANDARD.encode(salt);
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES ('master_salt', ?1, 0)",
+            rusqlite::params![salt_b64],
+        )
+        .map_err(|e| format!("Failed to store salt: {}", e))?;
+        Ok(())
+    }
 
-        let salt_b64 = entry
-            .get_password()
+    /// Retrieve salt from database
+    fn retrieve_salt_from_database(&self, db: &Arc<Mutex<Connection>>) -> Result<Vec<u8>, String> {
+        let conn = db.lock().unwrap();
+        let salt_b64: String = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'master_salt'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(|e| format!("Failed to retrieve salt: {}", e))?;
 
         general_purpose::STANDARD
@@ -306,7 +368,24 @@ mod tests {
     }
 
     #[test]
-    fn test_secure_storage() {
+    fn test_secure_storage_with_machine_key() {
+        let storage = SecureStorage::new("test_service");
+        storage.init_with_machine_key().unwrap();
+
+        assert!(storage.is_unlocked());
+
+        let plaintext = b"secret data";
+        let encrypted = storage.encrypt(plaintext).unwrap();
+        let decrypted = storage.decrypt(&encrypted).unwrap();
+
+        assert_eq!(plaintext, decrypted.as_slice());
+
+        storage.lock();
+        assert!(!storage.is_unlocked());
+    }
+
+    #[test]
+    fn test_secure_storage_with_password() {
         let storage = SecureStorage::new("test_service");
         storage.init_with_password("my_secure_password").ok();
 

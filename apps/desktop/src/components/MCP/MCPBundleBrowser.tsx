@@ -581,7 +581,12 @@ export function MCPBundleBrowser() {
 
   // Listen for MCPB events from Tauri
   useEffect(() => {
-    const unlistenPromise = listen<McpbEventPayload>('mcpb:event', (event) => {
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    listen<McpbEventPayload>('mcpb:event', (event) => {
+      if (!isMounted) return;
+
       const payload = event.payload;
 
       if (payload.type === 'install_started') {
@@ -616,10 +621,19 @@ export function MCPBundleBrowser() {
           error: payload.error,
         });
       }
+    }).then((fn) => {
+      if (isMounted) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
     });
 
     return () => {
-      unlistenPromise.then((unlisten) => unlisten());
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+      }
     };
   }, [fetchRegistry, setInstallProgress]);
 

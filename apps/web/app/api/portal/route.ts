@@ -56,18 +56,40 @@ function getValidatedOrigin(request: Request): string {
     return requestOrigin;
   }
 
-  // If no valid origin found, use the first allowed origin or a safe default
-  const fallbackOrigin = process.env.NEXT_PUBLIC_APP_URL || allowedOrigins[0];
+  // If no valid origin found, use a fallback from the allowed list only
+  // SECURITY: Never use NEXT_PUBLIC_APP_URL directly as fallback without validation
+  const fallbackOrigin = allowedOrigins[0];
+
   if (!fallbackOrigin) {
-    logger.error('No valid origin found and no fallback configured');
-    throw createError.validation('Invalid origin');
+    logger.error(
+      { headerOrigin, requestOrigin },
+      'No valid origin found and no allowed origins configured',
+    );
+    throw createError.validation('Invalid origin - no allowed origins configured');
+  }
+
+  // Validate fallback is a proper URL with https (or http for localhost)
+  try {
+    const fallbackUrl = new URL(fallbackOrigin);
+    const isLocalhost =
+      fallbackUrl.hostname === 'localhost' || fallbackUrl.hostname === '127.0.0.1';
+    if (fallbackUrl.protocol !== 'https:' && !isLocalhost) {
+      logger.error({ fallbackOrigin }, 'Fallback origin must use HTTPS (except localhost)');
+      throw createError.validation('Invalid fallback origin - must use HTTPS');
+    }
+  } catch (urlError) {
+    if (urlError instanceof Error && urlError.message.includes('Invalid')) {
+      throw urlError;
+    }
+    logger.error({ fallbackOrigin, error: urlError }, 'Fallback origin is not a valid URL');
+    throw createError.validation('Invalid fallback origin');
   }
 
   logger.warn(
     {
       headerOrigin,
       requestOrigin,
-      allowedOrigins,
+      allowedOrigins: allowedOrigins.length,
       fallbackOrigin,
     },
     'Origin not in whitelist, using fallback',

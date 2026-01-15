@@ -79,12 +79,13 @@ impl Veo3Client {
         &self,
         request: &VideoGenerationRequest,
     ) -> Result<VideoGenerationResponse> {
-        let url = format!("{}/videos:generate?key={}", self.base_url, self.api_key);
+        let url = format!("{}/videos:generate", self.base_url);
 
         let response = self
             .client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("x-goog-api-key", &self.api_key)
             .json(request)
             .send()
             .await
@@ -110,11 +111,12 @@ impl Veo3Client {
     }
 
     pub async fn check_status(&self, video_id: &str) -> Result<VideoGenerationResponse> {
-        let url = format!("{}/videos/{}?key={}", self.base_url, video_id, self.api_key);
+        let url = format!("{}/videos/{}", self.base_url, video_id);
 
         let response = self
             .client
             .get(&url)
+            .header("x-goog-api-key", &self.api_key)
             .send()
             .await
             .map_err(APIError::HttpError)?;

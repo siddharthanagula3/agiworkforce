@@ -1,4 +1,5 @@
 import { invoke } from '../lib/tauri-mock';
+import { calculateDelay } from '../lib/retry';
 
 export interface RealtimeEvent {
   type: string;
@@ -69,6 +70,17 @@ export class WebSocketClient {
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // Notify error handlers about the connection error
+        const errorHandlers = this.eventHandlers.get('error');
+        if (errorHandlers) {
+          errorHandlers.forEach((handler) => {
+            try {
+              handler({ type: 'error', error: 'WebSocket connection error' });
+            } catch (handlerError) {
+              console.error('Error in WebSocket error handler:', handlerError);
+            }
+          });
+        }
       };
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
@@ -92,11 +104,37 @@ export class WebSocketClient {
     this.reconnectAttempts = 0;
   }
 
-  send(event: RealtimeEvent): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+  send(event: RealtimeEvent): boolean {
+    if (!this.ws) {
+      console.warn('WebSocket not initialized, cannot send event:', event.type);
+      return false;
+    }
+
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      console.warn(
+        `WebSocket not connected (state: ${this.ws.readyState}), cannot send event:`,
+        event.type,
+      );
+      return false;
+    }
+
+    try {
       this.ws.send(JSON.stringify(event));
-    } else {
-      console.warn('WebSocket not connected, cannot send event:', event);
+      return true;
+    } catch (error) {
+      console.error('Failed to send WebSocket event:', error);
+      // Notify error handlers about the send failure
+      const errorHandlers = this.eventHandlers.get('error');
+      if (errorHandlers) {
+        errorHandlers.forEach((handler) => {
+          try {
+            handler({ type: 'error', error: 'Failed to send WebSocket message', event });
+          } catch (handlerError) {
+            console.error('Error in WebSocket error handler:', handlerError);
+          }
+        });
+      }
+      return false;
     }
   }
 
@@ -145,7 +183,18 @@ export class WebSocketClient {
     if (this.reconnectAttempts < this.maxReconnectAttempts && this.userId) {
       this.reconnectAttempts++;
 
-      const delay = Math.min(2000 * this.reconnectAttempts, 30000);
+      // Use exponential backoff with jitter to prevent thundering herd
+      const delay = calculateDelay(this.reconnectAttempts, {
+        initialDelayMs: 1000,
+        maxDelayMs: 30000,
+        backoffMultiplier: 2,
+        jitter: true,
+        jitterFactor: 0.25,
+      });
+
+      console.log(
+        `WebSocket reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`,
+      );
 
       this.reconnectTimeout = setTimeout(() => {
         if (this.userId) {
@@ -156,6 +205,21 @@ export class WebSocketClient {
       }, delay);
     } else {
       console.error('Max reconnection attempts reached');
+      // Notify subscribers about connection failure
+      const errorHandlers = this.eventHandlers.get('error');
+      if (errorHandlers) {
+        errorHandlers.forEach((handler) => {
+          try {
+            handler({
+              type: 'error',
+              error: 'Max reconnection attempts reached',
+              fatal: true,
+            });
+          } catch (handlerError) {
+            console.error('Error in WebSocket error handler:', handlerError);
+          }
+        });
+      }
     }
   }
 

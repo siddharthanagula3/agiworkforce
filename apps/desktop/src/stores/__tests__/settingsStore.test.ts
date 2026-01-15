@@ -1,4 +1,4 @@
-// Updated Jan 11, 2026: Fixed test to match current settingsStore structure
+// Updated for subscription-only model: Simplified defaultModels structure
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   createDefaultLLMConfig,
@@ -72,6 +72,20 @@ describe('settingsStore', () => {
     expect(state.windowPreferences.dockOnStartup).toBeNull();
   });
 
+  it('should have simplified default models for subscription-only', () => {
+    const state = useSettingsStore.getState();
+
+    // Only managed_cloud and ollama should be present
+    expect(state.llmConfig.defaultModels.managed_cloud).toBe('auto');
+    expect(state.llmConfig.defaultModels.ollama).toBe('');
+    expect(Object.keys(state.llmConfig.defaultModels)).toEqual(['managed_cloud', 'ollama']);
+  });
+
+  it('should have empty favorite models by default', () => {
+    const state = useSettingsStore.getState();
+    expect(state.llmConfig.favoriteModels).toEqual([]);
+  });
+
   it('should update theme', () => {
     const { setTheme } = useSettingsStore.getState();
 
@@ -86,10 +100,12 @@ describe('settingsStore', () => {
     invokeMock.mockResolvedValue(undefined);
 
     const { setDefaultProvider } = useSettingsStore.getState();
-    await setDefaultProvider('openai');
+    await setDefaultProvider('managed_cloud');
 
-    expect(useSettingsStore.getState().llmConfig.defaultProvider).toBe('openai');
-    expect(invokeMock).toHaveBeenCalledWith('llm_set_default_provider', { provider: 'openai' });
+    expect(useSettingsStore.getState().llmConfig.defaultProvider).toBe('managed_cloud');
+    expect(invokeMock).toHaveBeenCalledWith('llm_set_default_provider', {
+      provider: 'managed_cloud',
+    });
   });
 
   it('should handle provider setting errors', async () => {
@@ -119,31 +135,33 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().llmConfig.maxTokens).toBe(2048);
   });
 
-  it('should set default model for provider', () => {
+  it('should set default model for managed_cloud provider', () => {
     const { setDefaultModel } = useSettingsStore.getState();
 
-    setDefaultModel('openai', 'gpt-5.1-thinking');
-    expect(useSettingsStore.getState().llmConfig.defaultModels.openai).toBe('gpt-5.1-thinking');
+    setDefaultModel('managed_cloud', 'auto');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.managed_cloud).toBe('auto');
+  });
 
-    setDefaultModel('anthropic', 'claude-opus-4-5');
-    expect(useSettingsStore.getState().llmConfig.defaultModels.anthropic).toBe('claude-opus-4-5');
+  it('should set default model for ollama provider', () => {
+    const { setDefaultModel } = useSettingsStore.getState();
+
+    setDefaultModel('ollama', 'llama3');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.ollama).toBe('llama3');
   });
 
   it('should add favorite model', () => {
     const { addFavoriteModel } = useSettingsStore.getState();
-    const initialFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    const newModel = 'openai/gpt-5.1-thinking';
+    const newModel = 'managed_cloud/auto';
 
     addFavoriteModel(newModel);
 
     const favorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    expect(favorites.length).toBeGreaterThanOrEqual(initialFavorites.length);
     expect(favorites).toContain(newModel);
   });
 
   it('should not add duplicate favorite models', () => {
     const { addFavoriteModel } = useSettingsStore.getState();
-    const model = 'openai/gpt-5.1';
+    const model = 'managed_cloud/auto';
 
     addFavoriteModel(model);
     const lengthAfterFirst = useSettingsStore.getState().llmConfig.favoriteModels.length;
@@ -155,16 +173,14 @@ describe('settingsStore', () => {
   });
 
   it('should remove favorite model', () => {
-    const { removeFavoriteModel } = useSettingsStore.getState();
-    const favorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    const modelToRemove = favorites[0];
+    const { addFavoriteModel, removeFavoriteModel } = useSettingsStore.getState();
+    const model = 'managed_cloud/auto';
 
-    expect(modelToRemove).toBeDefined();
-    removeFavoriteModel(modelToRemove!);
+    addFavoriteModel(model);
+    expect(useSettingsStore.getState().llmConfig.favoriteModels).toContain(model);
 
-    const updatedFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    expect(updatedFavorites).not.toContain(modelToRemove);
-    expect(updatedFavorites.length).toBe(favorites.length - 1);
+    removeFavoriteModel(model);
+    expect(useSettingsStore.getState().llmConfig.favoriteModels).not.toContain(model);
   });
 
   it('should update startup position', () => {
@@ -216,5 +232,30 @@ describe('settingsStore', () => {
 
     expect(useSettingsStore.getState().loading).toBe(false);
     expect(useSettingsStore.getState().error).toBe(`Error: ${errorMessage}`);
+  });
+
+  it('should set task routing for managed_cloud', () => {
+    const { setTaskRouting } = useSettingsStore.getState();
+
+    setTaskRouting('code', 'managed_cloud', 'auto');
+
+    const state = useSettingsStore.getState();
+    expect(state.llmConfig.taskRouting.code).toEqual({
+      provider: 'managed_cloud',
+      model: 'auto',
+    });
+  });
+
+  it('should have all task routes default to managed_cloud', () => {
+    const state = useSettingsStore.getState();
+    const { taskRouting } = state.llmConfig;
+
+    expect(taskRouting.search.provider).toBe('managed_cloud');
+    expect(taskRouting.code.provider).toBe('managed_cloud');
+    expect(taskRouting.docs.provider).toBe('managed_cloud');
+    expect(taskRouting.chat.provider).toBe('managed_cloud');
+    expect(taskRouting.vision.provider).toBe('managed_cloud');
+    expect(taskRouting.image.provider).toBe('managed_cloud');
+    expect(taskRouting.video.provider).toBe('managed_cloud');
   });
 });

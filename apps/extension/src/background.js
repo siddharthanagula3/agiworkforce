@@ -8,6 +8,77 @@ const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 // Pending requests waiting for native responses
 const pendingRequests = new Map();
 
+// ============================================
+// SECURITY: Rate limiting and origin validation
+// ============================================
+
+// Rate limiting configuration
+const RATE_LIMIT_CONFIG = {
+  maxRequestsPerMinute: 120, // Max requests per minute per tab
+  screenshotCooldownMs: 500, // Min time between screenshots
+};
+
+// Rate limit tracking per tab
+const rateLimitState = new Map(); // tabId -> { count, resetTime, lastScreenshot }
+
+/**
+ * Check if a message sender is valid (from our own extension)
+ */
+function isValidSender(sender) {
+  // Must have sender info
+  if (!sender) return false;
+
+  // Accept messages from our own extension pages
+  if (sender.id === chrome.runtime.id) return true;
+
+  // Reject if no tab info (could be from injected script)
+  if (!sender.tab) return false;
+
+  // Accept content scripts from any tab (they're injected by us)
+  // Additional URL validation could be added here if needed
+  return true;
+}
+
+/**
+ * Check rate limits for a tab
+ */
+function checkRateLimit(tabId, messageType) {
+  const now = Date.now();
+
+  if (!rateLimitState.has(tabId)) {
+    rateLimitState.set(tabId, { count: 0, resetTime: now + 60000, lastScreenshot: 0 });
+  }
+
+  const state = rateLimitState.get(tabId);
+
+  // Reset counter if minute has passed
+  if (now > state.resetTime) {
+    state.count = 0;
+    state.resetTime = now + 60000;
+  }
+
+  // Special handling for screenshot (expensive operation)
+  if (messageType === 'CAPTURE_SCREENSHOT') {
+    if (now - state.lastScreenshot < RATE_LIMIT_CONFIG.screenshotCooldownMs) {
+      return { allowed: false, reason: 'Screenshot cooldown not elapsed' };
+    }
+    state.lastScreenshot = now;
+  }
+
+  // Check general rate limit
+  state.count++;
+  if (state.count > RATE_LIMIT_CONFIG.maxRequestsPerMinute) {
+    return { allowed: false, reason: 'Rate limit exceeded' };
+  }
+
+  return { allowed: true };
+}
+
+// Clean up rate limit state when tabs close
+chrome.tabs.onRemoved.addListener((tabId) => {
+  rateLimitState.delete(tabId);
+});
+
 // Initialize extension
 chrome.runtime.onInstalled.addListener(() => {
   console.log('AGI Workforce extension installed');
@@ -23,7 +94,26 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Background received message:', message);
+  // SECURITY: Validate sender origin
+  if (!isValidSender(sender)) {
+    console.warn('Rejected message from invalid sender:', sender);
+    sendResponse({ success: false, error: 'Invalid sender' });
+    return;
+  }
+
+  // SECURITY: Check rate limits (skip for some harmless operations)
+  const exemptFromRateLimit = ['PING', 'GET_CONNECTION_STATUS'];
+  if (!exemptFromRateLimit.includes(message.type)) {
+    const tabId = sender.tab?.id || 0;
+    const rateCheck = checkRateLimit(tabId, message.type);
+    if (!rateCheck.allowed) {
+      console.warn('Rate limit exceeded for tab:', tabId, rateCheck.reason);
+      sendResponse({ success: false, error: rateCheck.reason });
+      return;
+    }
+  }
+
+  console.log('Background received message:', message.type);
 
   switch (message.type) {
     case 'PING':
@@ -198,11 +288,67 @@ async function handleNativeMessage(message, sendResponse) {
   }
 }
 
+// ============================================
+// SECURITY: Cookie domain restrictions
+// ============================================
+
+// Domains where cookie operations are BLOCKED (sensitive sites)
+const BLOCKED_COOKIE_DOMAINS = [
+  // Banking and financial
+  /bank/i,
+  /paypal/i,
+  /venmo/i,
+  /chase/i,
+  /wellsfargo/i,
+  /citibank/i,
+  // Government
+  /\.gov$/i,
+  // Healthcare
+  /healthcare/i,
+  /medical/i,
+  /health\.com/i,
+];
+
+/**
+ * Check if cookie operations are allowed for a URL/domain
+ */
+function isCookieDomainAllowed(urlOrDomain) {
+  if (!urlOrDomain) return false;
+
+  const domain = urlOrDomain.replace(/^https?:\/\//, '').split('/')[0];
+
+  for (const pattern of BLOCKED_COOKIE_DOMAINS) {
+    if (pattern.test(domain)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Cookie handlers
 async function handleGetCookies(message, sendResponse) {
   try {
-    const url = message.url || undefined;
-    const cookies = url ? await chrome.cookies.getAll({ url }) : await chrome.cookies.getAll({});
+    const url = message.url;
+
+    // SECURITY: Must specify a URL, can't get ALL cookies
+    if (!url) {
+      sendResponse({
+        success: false,
+        error: 'Must specify a URL. Getting all cookies is disabled for security.',
+      });
+      return;
+    }
+
+    // SECURITY: Check if domain is allowed
+    if (!isCookieDomainAllowed(url)) {
+      sendResponse({
+        success: false,
+        error: 'Cookie access for this domain is blocked for security.',
+      });
+      return;
+    }
+
+    const cookies = await chrome.cookies.getAll({ url });
     sendResponse({ success: true, data: cookies });
   } catch (error) {
     console.error('Failed to get cookies:', error);
@@ -213,8 +359,19 @@ async function handleGetCookies(message, sendResponse) {
 async function handleSetCookie(message, sendResponse) {
   try {
     const { name, value, domain, path, secure, httpOnly, url } = message.cookie;
+    const targetUrl = url || `https://${domain}`;
+
+    // SECURITY: Check if domain is allowed
+    if (!isCookieDomainAllowed(targetUrl)) {
+      sendResponse({
+        success: false,
+        error: 'Setting cookies for this domain is blocked for security.',
+      });
+      return;
+    }
+
     await chrome.cookies.set({
-      url: url || `https://${domain}`,
+      url: targetUrl,
       name,
       value,
       domain,
@@ -232,7 +389,26 @@ async function handleSetCookie(message, sendResponse) {
 async function handleClearCookies(message, sendResponse) {
   try {
     const url = message.url;
-    const cookies = url ? await chrome.cookies.getAll({ url }) : await chrome.cookies.getAll({});
+
+    // SECURITY: Must specify a URL, can't clear ALL cookies
+    if (!url) {
+      sendResponse({
+        success: false,
+        error: 'Must specify a URL. Clearing all cookies is disabled for security.',
+      });
+      return;
+    }
+
+    // SECURITY: Check if domain is allowed
+    if (!isCookieDomainAllowed(url)) {
+      sendResponse({
+        success: false,
+        error: 'Cookie access for this domain is blocked for security.',
+      });
+      return;
+    }
+
+    const cookies = await chrome.cookies.getAll({ url });
 
     for (const cookie of cookies) {
       await chrome.cookies.remove({

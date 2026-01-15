@@ -16,9 +16,10 @@ use crate::sys::commands::{
     security::AuthManagerState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
-    GitHubState, LLMState, LSPState, McpState, McpbState, NativeMessagingStateWrapper,
-    ProductivityState, SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState,
-    TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
+    GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState,
+    NativeMessagingStateWrapper, ProductivityState, SettingsServiceState, SettingsState,
+    ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
+    WorkspaceIndexState,
 };
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
@@ -254,6 +255,9 @@ pub fn run() {
 
             let mcp_state = McpState::new();
             app.manage(mcp_state);
+
+            // MCP OAuth state for handling OAuth flows (GitHub, Google Drive, Slack)
+            app.manage(McpOAuthState::new());
 
             // MCP Bundle (MCPB) state for bundle management
             app.manage(McpbState::new());
@@ -879,6 +883,12 @@ pub fn run() {
             crate::sys::commands::ocr_process_multi_language,
             crate::sys::commands::ocr_preprocess_image,
 
+            // Ollama
+            crate::sys::commands::ollama_check_status,
+            crate::sys::commands::ollama_list_models,
+            crate::sys::commands::ollama_get_model_info,
+            crate::sys::commands::ollama_pull_model,
+            crate::sys::commands::ollama_delete_model,
 
             crate::sys::commands::vision_send_message,
             crate::sys::commands::vision_analyze_screenshot,
@@ -1020,6 +1030,14 @@ pub fn run() {
             crate::sys::commands::mcp_check_server_health,
             crate::sys::commands::mcp_set_credential,
             crate::sys::commands::mcp_delete_credential,
+
+            // MCP OAuth
+            crate::sys::commands::mcp_oauth_start,
+            crate::sys::commands::mcp_oauth_callback,
+            crate::sys::commands::mcp_oauth_status,
+            crate::sys::commands::mcp_oauth_disconnect,
+            crate::sys::commands::mcp_oauth_refresh,
+            crate::sys::commands::mcp_oauth_set_credentials,
 
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,

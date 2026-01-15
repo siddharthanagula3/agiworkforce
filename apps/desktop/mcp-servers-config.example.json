@@ -28,14 +28,6 @@
       },
       "enabled": false
     },
-    "brave-search": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-      "env": {
-        "BRAVE_API_KEY": "<from_credential_manager>"
-      },
-      "enabled": false
-    },
     "stripe": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-stripe"],

@@ -188,6 +188,30 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
 
             let json: Value = serde_json::from_str(data)?;
 
+            // Check for API error responses in streaming format
+            if let Some(error) = json.get("error") {
+                let error_message = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Unknown error");
+                let error_type = error
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("api_error");
+                let error_code = error.get("code").and_then(|c| c.as_str()).unwrap_or("");
+                return Err(format!(
+                    "OpenAI API error ({}{}): {}",
+                    error_type,
+                    if error_code.is_empty() {
+                        String::new()
+                    } else {
+                        format!("/{}", error_code)
+                    },
+                    error_message
+                )
+                .into());
+            }
+
             if let Some(choices) = json.get("choices").and_then(|c| c.as_array()) {
                 if let Some(choice) = choices.first() {
                     if let Some(delta) = choice.get("delta") {
@@ -274,6 +298,22 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         let json: Value = serde_json::from_str(&data)?;
 
         match event_type.as_deref() {
+            Some("error") => {
+                // Handle Anthropic error events
+                let error_type = json
+                    .get("error")
+                    .and_then(|e| e.get("type"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("unknown_error");
+                let error_message = json
+                    .get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Unknown error");
+                return Err(
+                    format!("Anthropic API error ({}): {}", error_type, error_message).into(),
+                );
+            }
             Some("content_block_delta") => {
                 if let Some(delta) = json.get("delta") {
                     if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
@@ -339,6 +379,24 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         if let Some(data) = line.strip_prefix("data: ") {
             let json: Value = serde_json::from_str(data)?;
 
+            // Check for Google API error responses in streaming format
+            if let Some(error) = json.get("error") {
+                let error_message = error
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Unknown error");
+                let error_code = error.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+                let error_status = error
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("UNKNOWN");
+                return Err(format!(
+                    "Google API error {} ({}): {}",
+                    error_code, error_status, error_message
+                )
+                .into());
+            }
+
             if let Some(candidates) = json.get("candidates").and_then(|c| c.as_array()) {
                 if let Some(candidate) = candidates.first() {
                     if let Some(content_block) = candidate.get("content") {
@@ -392,6 +450,11 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
 
 fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
     let json: Value = serde_json::from_str(event.trim())?;
+
+    // Check for Ollama error responses
+    if let Some(error) = json.get("error").and_then(|e| e.as_str()) {
+        return Err(format!("Ollama error: {}", error).into());
+    }
 
     let mut content = String::new();
     let mut done = false;

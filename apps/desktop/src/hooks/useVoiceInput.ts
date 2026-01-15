@@ -88,6 +88,17 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isManualStop = useRef(false);
 
+  // Use refs to avoid recreating recognition on callback changes
+  const onResultRef = useRef(onResult);
+  const onErrorRef = useRef(onError);
+  const onEndRef = useRef(onEnd);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+    onErrorRef.current = onError;
+    onEndRef.current = onEnd;
+  }, [onResult, onError, onEnd]);
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const isSupported = !!SpeechRecognition;
@@ -136,9 +147,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         }));
 
         if (finalTranscript) {
-          onResult?.(finalTranscript, true);
+          onResultRef.current?.(finalTranscript, true);
         } else if (interimTranscript) {
-          onResult?.(interimTranscript, false);
+          onResultRef.current?.(interimTranscript, false);
         }
       };
 
@@ -149,7 +160,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
           isListening: false,
           error: errorMessage,
         }));
-        onError?.(errorMessage);
+        onErrorRef.current?.(errorMessage);
       };
 
       recognition.onend = () => {
@@ -167,7 +178,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
           }
         }
 
-        onEnd?.();
+        onEndRef.current?.();
       };
 
       recognitionRef.current = recognition;
@@ -182,7 +193,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         }
       }
     };
-  }, [continuous, interimResults, language, onResult, onError, onEnd]);
+  }, [continuous, interimResults, language]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || state.isListening) return;
