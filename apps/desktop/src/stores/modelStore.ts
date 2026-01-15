@@ -57,6 +57,25 @@ export interface ModelInfo {
   available: boolean;
 }
 
+/** Ollama model details from the Rust backend */
+export interface OllamaModelDetails {
+  parameter_size: string;
+  quantization_level: string;
+  family: string;
+  families: string[];
+  parent_model: string;
+  format: string;
+}
+
+/** Ollama model representation from the Rust backend */
+export interface OllamaModel {
+  name: string;
+  size: number;
+  modified_at: string;
+  digest: string;
+  details: OllamaModelDetails;
+}
+
 interface ModelState {
   selectedModel: string | null;
   selectedProvider: Provider | null;
@@ -73,6 +92,12 @@ interface ModelState {
 
   thinkingModeEnabled: boolean;
 
+  // Ollama-specific state
+  ollamaModels: OllamaModel[];
+  ollamaAvailable: boolean;
+  ollamaLoading: boolean;
+  ollamaError: string | null;
+
   loading: boolean;
   error: string | null;
 
@@ -85,6 +110,13 @@ interface ModelState {
   getUsageStats: () => Promise<UsageStats>;
   refreshUsageStats: () => Promise<void>;
   getAvailableModels: () => Promise<ModelInfo[]>;
+
+  // Ollama-specific actions
+  checkOllamaStatus: () => Promise<boolean>;
+  fetchOllamaModels: () => Promise<OllamaModel[]>;
+  pullOllamaModel: (modelName: string) => Promise<void>;
+  deleteOllamaModel: (modelName: string) => Promise<void>;
+
   reset: () => void;
 }
 
@@ -142,6 +174,13 @@ export const useModelStore = create<ModelState>()(
         availableModels: [],
         usageStats: null,
         thinkingModeEnabled: false,
+
+        // Ollama-specific initial state
+        ollamaModels: [],
+        ollamaAvailable: false,
+        ollamaLoading: false,
+        ollamaError: null,
+
         loading: false,
         error: null,
 
@@ -265,6 +304,80 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
+        // Ollama-specific actions
+        checkOllamaStatus: async () => {
+          try {
+            const available = await invoke<boolean>('ollama_check_status');
+            set({ ollamaAvailable: available, ollamaError: null });
+            return available;
+          } catch (error) {
+            console.error('Failed to check Ollama status:', error);
+            set({ ollamaAvailable: false, ollamaError: String(error) });
+            return false;
+          }
+        },
+
+        fetchOllamaModels: async () => {
+          set({ ollamaLoading: true, ollamaError: null });
+          try {
+            // First check if Ollama is available
+            const available = await invoke<boolean>('ollama_check_status');
+            if (!available) {
+              set({
+                ollamaAvailable: false,
+                ollamaModels: [],
+                ollamaLoading: false,
+                ollamaError:
+                  'Ollama is not running. Start it with "ollama serve" in your terminal.',
+              });
+              return [];
+            }
+
+            const models = await invoke<OllamaModel[]>('ollama_list_models');
+            set({
+              ollamaModels: models,
+              ollamaAvailable: true,
+              ollamaLoading: false,
+              ollamaError: null,
+            });
+            return models;
+          } catch (error) {
+            console.error('Failed to fetch Ollama models:', error);
+            set({
+              ollamaModels: [],
+              ollamaLoading: false,
+              ollamaError: String(error),
+            });
+            return [];
+          }
+        },
+
+        pullOllamaModel: async (modelName: string) => {
+          set({ ollamaLoading: true, ollamaError: null });
+          try {
+            await invoke('ollama_pull_model', { modelName });
+            // Refresh the model list after pulling
+            await get().fetchOllamaModels();
+          } catch (error) {
+            console.error('Failed to pull Ollama model:', error);
+            set({ ollamaLoading: false, ollamaError: String(error) });
+            throw error;
+          }
+        },
+
+        deleteOllamaModel: async (modelName: string) => {
+          set({ ollamaLoading: true, ollamaError: null });
+          try {
+            await invoke('ollama_delete_model', { modelName });
+            // Refresh the model list after deletion
+            await get().fetchOllamaModels();
+          } catch (error) {
+            console.error('Failed to delete Ollama model:', error);
+            set({ ollamaLoading: false, ollamaError: String(error) });
+            throw error;
+          }
+        },
+
         reset: () => {
           set({
             selectedModel: null,
@@ -283,6 +396,11 @@ export const useModelStore = create<ModelState>()(
               managed_cloud: null,
             },
             usageStats: null,
+            // Reset Ollama state
+            ollamaModels: [],
+            ollamaAvailable: false,
+            ollamaLoading: false,
+            ollamaError: null,
             loading: false,
             error: null,
           });
@@ -352,6 +470,35 @@ export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
 export const selectProviderStatus = (provider: Provider) => (state: ModelState) =>
   state.providerStatuses[provider];
 
+// Ollama selectors
+export const selectOllamaModels = (state: ModelState) => state.ollamaModels;
+export const selectOllamaAvailable = (state: ModelState) => state.ollamaAvailable;
+export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
+export const selectOllamaError = (state: ModelState) => state.ollamaError;
+
+/**
+ * Helper function to format Ollama model size for display
+ */
+export const formatOllamaModelSize = (sizeInBytes: number): string => {
+  const gb = sizeInBytes / (1024 * 1024 * 1024);
+  if (gb >= 1) {
+    return `${gb.toFixed(1)} GB`;
+  }
+  const mb = sizeInBytes / (1024 * 1024);
+  return `${mb.toFixed(0)} MB`;
+};
+
+/**
+ * Helper function to get display name for Ollama model
+ */
+export const getOllamaModelDisplayName = (model: OllamaModel): string => {
+  const paramSize = model.details?.parameter_size;
+  if (paramSize) {
+    return `${model.name} (${paramSize})`;
+  }
+  return model.name;
+};
+
 export const initializeModelStoreFromSettings = async () => {
   const modelStore = useModelStore.getState();
 
@@ -363,7 +510,10 @@ export const initializeModelStoreFromSettings = async () => {
     const settingsStore = useSettingsStore.getState();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
-    const defaultModel = settingsStore.llmConfig.defaultModels[defaultProvider];
+    // For subscription-only model, only managed_cloud and ollama are in defaultModels
+    // Fall back to 'auto' for any other provider (should not happen in practice)
+    const defaultModels = settingsStore.llmConfig.defaultModels as Record<string, string>;
+    const defaultModel = defaultModels[defaultProvider] ?? 'auto';
 
     if (defaultProvider && defaultModel) {
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store

@@ -316,19 +316,13 @@ mod tests {
     async fn test_mock_browser_controller() {
         let browser = MockBrowserController::new();
 
-        browser
-            .navigate("https://api.agiworkforce.com")
-            .await
-            .unwrap();
+        browser.navigate("https://example.com/page1").await.unwrap();
 
-        browser
-            .navigate("https://api.agiworkforce.com")
-            .await
-            .unwrap();
+        browser.navigate("https://example.com/page2").await.unwrap();
 
         let history = browser.get_history();
         assert_eq!(history.len(), 2);
-        assert_eq!(history[0], "https://api.agiworkforce.com".to_string());
+        assert_eq!(history[0], "https://example.com/page1".to_string());
     }
 
     #[test]
@@ -368,12 +362,12 @@ mod tests {
     async fn test_mock_api_client() {
         let client = MockApiClient::new();
         client.set_response(
-            "https://api.agiworkforce.com",
+            "https://example.com/api/test",
             serde_json::json!({"status": "ok"}),
         );
 
         let response = client
-            .request("GET", "https://api.agiworkforce.com")
+            .request("GET", "https://example.com/api/test")
             .await
             .unwrap();
         assert_eq!(response["status"], "ok");

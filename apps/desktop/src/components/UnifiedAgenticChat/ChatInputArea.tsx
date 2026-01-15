@@ -13,8 +13,9 @@ import {
   Clock,
   Radio,
   Waves,
+  Sparkles,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
@@ -40,6 +41,7 @@ import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
 import { useUsageStore } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
 
 const PLAN_CREDIT_LIMITS = {
   hobby: { monthly: 1.0, daily: 0.3 },
@@ -102,6 +104,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessingAttachments, setIsProcessingAttachments] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -176,6 +179,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const availableModels = useModelStore((state) => state.availableModels);
   const prefersReducedMotion = useReducedMotion();
 
+  // Simple mode state - hide advanced features for non-technical users
+  const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
+
   // Voice transcription state
   const [preferLocalWhisper, setPreferLocalWhisper] = useState(false);
   const [showTranscriptionModeSelector, setShowTranscriptionModeSelector] = useState(false);
@@ -214,15 +220,32 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     });
   }, [toggleRecording]);
 
-  const modelDisplayName = selectedModel?.startsWith('auto')
-    ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Smart Routing)')
-    : selectedModel === 'auto'
-      ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Best Value)')
-      : selectedModel
-        ? (getModelMetadata(selectedModel)?.name ??
-          availableModels.find((m) => m.id === selectedModel)?.name ??
-          selectedModel)
-        : 'GPT-5.1 Instant';
+  const modelDisplayName = useMemo(() => {
+    // In simple mode, show user-friendly names without technical jargon
+    if (isSimpleMode) {
+      if (selectedModel?.startsWith('auto') || selectedModel === 'auto' || !selectedModel) {
+        return 'Auto';
+      }
+      // Simplify model names for non-technical users
+      const metadata = getModelMetadata(selectedModel);
+      if (metadata?.name) {
+        // Remove version numbers and technical suffixes for simple mode
+        return metadata.name.split(' ')[0] || 'AI';
+      }
+      return 'AI';
+    }
+
+    // Advanced mode: show full technical names
+    return selectedModel?.startsWith('auto')
+      ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Smart Routing)')
+      : selectedModel === 'auto'
+        ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Best Value)')
+        : selectedModel
+          ? (getModelMetadata(selectedModel)?.name ??
+            availableModels.find((m) => m.id === selectedModel)?.name ??
+            selectedModel)
+          : 'GPT-5.1 Instant';
+  }, [selectedModel, isSimpleMode, availableModels]);
 
   // Allow typing while streaming - only disable when actually sending
   const isInputDisabled = disabled || isSending;
@@ -424,32 +447,41 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       // If we have images and the model explicitly doesn't support vision
       if (hasImages && metadata && metadata.capabilities.vision === false) {
+        const isSimple = useSimpleModeStore.getState().mode === 'simple';
         setSubmitError(
-          `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+          isSimple
+            ? "This AI can't see images. Please choose a different AI from the dropdown above, or remove the image."
+            : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
         );
         // Filter out images, but allow other files if any
         const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
         if (nonImageFiles.length === 0) return;
 
         // Convert non-image files to base64
-        const newAttachments: Attachment[] = await Promise.all(
-          nonImageFiles.map(async (file) => {
-            const base64Content = await readFileAsBase64(file);
-            return {
-              id: crypto.randomUUID(),
-              type: 'file' as const,
-              name: file.name,
-              size: file.size,
-              mimeType: file.type,
-              content: base64Content, // Base64 data URL for backend
-            };
-          }),
-        );
-        setAttachments((prev) => [...prev, ...newAttachments]);
+        setIsProcessingAttachments(true);
+        try {
+          const newAttachments: Attachment[] = await Promise.all(
+            nonImageFiles.map(async (file) => {
+              const base64Content = await readFileAsBase64(file);
+              return {
+                id: crypto.randomUUID(),
+                type: 'file' as const,
+                name: file.name,
+                size: file.size,
+                mimeType: file.type,
+                content: base64Content, // Base64 data URL for backend
+              };
+            }),
+          );
+          setAttachments((prev) => [...prev, ...newAttachments]);
+        } finally {
+          setIsProcessingAttachments(false);
+        }
         return;
       }
 
       // Convert all files to base64 for backend compatibility
+      setIsProcessingAttachments(true);
       try {
         const newAttachments: Attachment[] = await Promise.all(
           files.map(async (file) => {
@@ -476,6 +508,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       } catch (error) {
         console.error('[ChatInputArea] Error reading files:', error);
         setSubmitError('Failed to process one or more files. Please try again.');
+      } finally {
+        setIsProcessingAttachments(false);
       }
     },
     [selectedModel, attachments, readFileAsBase64],
@@ -643,15 +677,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           useBillingStore.getState();
 
         if (creditBalance_cents !== null && creditBalance_cents <= 0) {
+          // Restore content and attachments on early return
+          setContent(messageContent);
+          setDraftContent(messageContent);
+          if (messageAttachments) setAttachments(messageAttachments);
           setSubmitError(
             'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
           );
+          setIsSending(false);
           sendAbortControllerRef.current = null;
           return;
         }
 
         if (dailyLimit_cents && dailyUsage_cents && dailyUsage_cents >= dailyLimit_cents) {
+          // Restore content and attachments on early return
+          setContent(messageContent);
+          setDraftContent(messageContent);
+          if (messageAttachments) setAttachments(messageAttachments);
           setSubmitError('Daily credit limit reached. Credits will reset at midnight UTC.');
+          setIsSending(false);
           sendAbortControllerRef.current = null;
           return;
         }
@@ -769,8 +813,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
     if (metadata && metadata.capabilities.vision === false) {
       event.preventDefault();
+      const isSimple = useSimpleModeStore.getState().mode === 'simple';
       setSubmitError(
-        `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+        isSimple
+          ? "This AI can't see images. Please choose a different AI from the dropdown above."
+          : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
       );
       return;
     }
@@ -879,7 +926,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {/* Animated border container */}
                 <div className="relative">
                   <motion.div
-                    className="absolute inset-0 rounded-3xl bg-linear-to-r from-primary via-purple-500 to-primary"
+                    className="absolute inset-0 rounded-3xl bg-linear-to-r from-amber-500 via-orange-500 to-amber-500"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                     style={{ padding: '3px' }}
@@ -935,29 +982,32 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         }
         style={{ willChange: 'transform' }}
       >
-        <motion.div
-          initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
-          className="mb-3 flex items-center justify-center gap-2 flex-wrap"
-        >
-          {FOCUS_MODES.map((mode) => (
-            <button
-              key={mode.value || 'all'}
-              onClick={() => setFocusMode(mode.value)}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
-                focusMode === mode.value
-                  ? 'bg-primary text-white shadow-md shadow-primary/25'
-                  : 'bg-white/80 dark:bg-charcoal-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-700 border border-gray-200 dark:border-gray-700',
-              )}
-              aria-pressed={focusMode === mode.value}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </motion.div>
+        {/* Focus modes - hidden in simple mode for cleaner UI */}
+        {!isSimpleMode && (
+          <motion.div
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
+            className="mb-3 flex items-center justify-center gap-2 flex-wrap"
+          >
+            {FOCUS_MODES.map((mode) => (
+              <button
+                key={mode.value || 'all'}
+                onClick={() => setFocusMode(mode.value)}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
+                  focusMode === mode.value
+                    ? 'bg-primary text-white shadow-md shadow-primary/25'
+                    : 'bg-white/80 dark:bg-charcoal-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-700 border border-gray-200 dark:border-gray-700',
+                )}
+                aria-pressed={focusMode === mode.value}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </motion.div>
+        )}
 
         <div
           className={cn(
@@ -1006,6 +1056,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Attachment processing indicator */}
+          {isProcessingAttachments && (
+            <div
+              className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                <span>{isSimpleMode ? 'Adding your files...' : 'Processing attachments...'}</span>
               </div>
             </div>
           )}
@@ -1080,7 +1145,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           )}
 
           {submitError && (
-            <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100">
+            <div
+              className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100"
+              role="alert"
+              aria-live="assertive"
+            >
               {submitError}
             </div>
           )}
@@ -1108,115 +1177,165 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                       ? 'Current model does not support attachments'
                       : 'Attach files'
                   }
+                  aria-label={
+                    selectedModel && getModelMetadata(selectedModel)?.capabilities.vision === false
+                      ? 'Attach files - disabled, current model does not support attachments'
+                      : 'Attach files'
+                  }
                 >
-                  <Paperclip size={18} />
+                  <Paperclip size={18} aria-hidden="true" />
                 </button>
               )}
-              {/* Voice recording button with mode selector */}
-              <div className="relative">
-                <Popover
-                  open={showTranscriptionModeSelector}
-                  onOpenChange={setShowTranscriptionModeSelector}
+              {/* Voice recording button - simple in simple mode, with mode selector in advanced mode */}
+              {isSimpleMode ? (
+                /* Simple mode: just a basic mic button */
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  disabled={isInputDisabled || !isVoiceSupported || isTranscribing}
+                  className={cn(
+                    'p-2 rounded-lg transition-all duration-200',
+                    isListening
+                      ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
+                      : isTranscribing
+                        ? 'bg-amber-500 text-white animate-pulse'
+                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                  title={isListening ? 'Stop recording' : 'Voice input'}
+                  aria-label={
+                    isTranscribing
+                      ? 'Transcribing your voice...'
+                      : isListening
+                        ? 'Stop voice recording'
+                        : 'Start voice input'
+                  }
                 >
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      onClick={toggleListening}
-                      disabled={isInputDisabled || !isVoiceSupported || isTranscribing}
-                      className={cn(
-                        'p-2 rounded-l-lg transition-all duration-200',
-                        isListening
-                          ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
-                          : isTranscribing
-                            ? 'bg-amber-500 text-white animate-pulse'
-                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
-                        'disabled:opacity-50 disabled:cursor-not-allowed',
-                      )}
-                      title={
-                        isListening
-                          ? 'Stop recording'
-                          : isTranscribing
-                            ? 'Transcribing...'
-                            : `Voice input (${preferLocalWhisper ? 'Whisper' : 'Live'})`
-                      }
-                    >
-                      {isTranscribing ? (
-                        <Loader2 size={18} className="animate-spin" />
-                      ) : isListening ? (
-                        <MicOff size={18} />
-                      ) : (
-                        <Mic size={18} />
-                      )}
-                    </button>
-                    <PopoverTrigger asChild>
+                  {isTranscribing ? (
+                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                  ) : isListening ? (
+                    <MicOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Mic size={18} aria-hidden="true" />
+                  )}
+                </button>
+              ) : (
+                /* Advanced mode: mic button with mode selector dropdown */
+                <div className="relative">
+                  <Popover
+                    open={showTranscriptionModeSelector}
+                    onOpenChange={setShowTranscriptionModeSelector}
+                  >
+                    <div className="flex items-center">
                       <button
                         type="button"
-                        disabled={isInputDisabled || !isVoiceSupported || isListening}
+                        onClick={toggleListening}
+                        disabled={isInputDisabled || !isVoiceSupported || isTranscribing}
                         className={cn(
-                          'p-2 rounded-r-lg border-l border-gray-200 dark:border-gray-600 transition-colors',
-                          'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
-                          'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                          'p-2 rounded-l-lg transition-all duration-200',
+                          isListening
+                            ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
+                            : isTranscribing
+                              ? 'bg-amber-500 text-white animate-pulse'
+                              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                         )}
-                        title="Select transcription mode"
+                        title={
+                          isListening
+                            ? 'Stop recording'
+                            : isTranscribing
+                              ? 'Transcribing...'
+                              : `Voice input (${preferLocalWhisper ? 'Whisper' : 'Live'})`
+                        }
+                        aria-label={
+                          isTranscribing
+                            ? 'Transcribing your voice...'
+                            : isListening
+                              ? 'Stop voice recording'
+                              : `Start voice input using ${preferLocalWhisper ? 'Whisper' : 'Live'} mode`
+                        }
                       >
-                        <ChevronDown size={12} />
-                      </button>
-                    </PopoverTrigger>
-                  </div>
-                  <PopoverContent align="start" side="top" sideOffset={8} className="w-64 p-2">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 pb-1">
-                        Transcription Mode
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPreferLocalWhisper(false);
-                          setShowTranscriptionModeSelector(false);
-                        }}
-                        className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                          !preferLocalWhisper
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
+                        {isTranscribing ? (
+                          <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                        ) : isListening ? (
+                          <MicOff size={18} aria-hidden="true" />
+                        ) : (
+                          <Mic size={18} aria-hidden="true" />
                         )}
-                      >
-                        <Radio size={16} />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">Live (Web Speech)</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Real-time transcription as you speak
-                          </div>
-                        </div>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPreferLocalWhisper(true);
-                          setShowTranscriptionModeSelector(false);
-                        }}
-                        className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                          preferLocalWhisper
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
-                        )}
-                      >
-                        <Waves size={16} />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">
-                            Whisper {availableLocalWhisper.length > 0 ? '(Local)' : '(Cloud)'}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            More accurate, processes after recording
-                          </div>
-                        </div>
-                      </button>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={isInputDisabled || !isVoiceSupported || isListening}
+                          className={cn(
+                            'p-2 rounded-r-lg border-l border-gray-200 dark:border-gray-600 transition-colors',
+                            'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+                            'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                            'disabled:opacity-50 disabled:cursor-not-allowed',
+                          )}
+                          title="Select transcription mode"
+                          aria-label="Select voice transcription mode"
+                          aria-haspopup="true"
+                          aria-expanded={showTranscriptionModeSelector}
+                        >
+                          <ChevronDown size={12} aria-hidden="true" />
+                        </button>
+                      </PopoverTrigger>
                     </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
+                    <PopoverContent align="start" side="top" sideOffset={8} className="w-64 p-2">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 pb-1">
+                          Transcription Mode
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreferLocalWhisper(false);
+                            setShowTranscriptionModeSelector(false);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
+                            !preferLocalWhisper
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
+                          )}
+                        >
+                          <Radio size={16} />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">Live (Web Speech)</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Real-time transcription as you speak
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreferLocalWhisper(true);
+                            setShowTranscriptionModeSelector(false);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
+                            preferLocalWhisper
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
+                          )}
+                        >
+                          <Waves size={16} />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">
+                              Whisper {availableLocalWhisper.length > 0 ? '(Local)' : '(Cloud)'}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              More accurate, processes after recording
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
 
             {}
@@ -1228,7 +1347,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder={
-                  isQueueMode ? 'Type to queue a message while AI is working...' : placeholder
+                  isQueueMode
+                    ? isSimpleMode
+                      ? "I'm working on your request. Type here and I'll respond when ready..."
+                      : 'Type to queue a message while AI is working...'
+                    : placeholder
                 }
                 disabled={isInputDisabled}
                 rows={1}
@@ -1330,46 +1453,57 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
             {}
             <div className="flex items-center gap-2">
-              {}
-              <div className="relative" ref={modelSelectorRef}>
-                <Popover open={showModelSelector} onOpenChange={setShowModelSelector}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
-                        'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                        'transition-colors duration-150',
-                      )}
+              {/* Model selector - show simplified version in simple mode */}
+              {isSimpleMode ? (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  <Sparkles size={12} className="text-green-500" />
+                  <span>Auto</span>
+                </div>
+              ) : (
+                <div className="relative" ref={modelSelectorRef}>
+                  <Popover open={showModelSelector} onOpenChange={setShowModelSelector}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
+                          'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                          'transition-colors duration-150',
+                        )}
+                      >
+                        <span className="truncate max-w-[100px]">{modelDisplayName}</span>
+                        {thinkingModeEnabled && <Brain size={12} className="text-amber-500" />}
+                        <ChevronDown
+                          size={12}
+                          className={cn('transition-transform', showModelSelector && 'rotate-180')}
+                        />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      side="top"
+                      sideOffset={12}
+                      collisionPadding={16}
+                      className="w-72 border-none bg-transparent p-0 shadow-none z-[100]"
                     >
-                      <span className="truncate max-w-[100px]">{modelDisplayName}</span>
-                      {thinkingModeEnabled && <Brain size={12} className="text-purple-500" />}
-                      <ChevronDown
-                        size={12}
-                        className={cn('transition-transform', showModelSelector && 'rotate-180')}
-                      />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    side="top"
-                    sideOffset={12}
-                    collisionPadding={16}
-                    className="w-72 border-none bg-transparent p-0 shadow-none z-[100]"
-                  >
-                    <QuickModelSelector onClose={() => setShowModelSelector(false)} />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                      <QuickModelSelector onClose={() => setShowModelSelector(false)} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
 
-              {/* Pending messages indicator */}
+              {/* Pending messages indicator - more descriptive in simple mode */}
               {pendingCount > 0 && (
                 <div
                   className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
-                  title={`${pendingCount} message(s) queued`}
+                  title={
+                    isSimpleMode
+                      ? `${pendingCount} message${pendingCount > 1 ? 's' : ''} waiting to send`
+                      : `${pendingCount} message(s) queued`
+                  }
                 >
                   <Clock size={12} />
-                  <span>{pendingCount}</span>
+                  <span>{isSimpleMode ? `${pendingCount} waiting` : pendingCount}</span>
                 </div>
               )}
 
@@ -1384,8 +1518,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     'shadow-lg shadow-red-500/25 animate-pulse',
                   )}
                   title="Stop generation"
+                  aria-label="Stop the current response"
                 >
-                  <Square size={16} fill="currentColor" />
+                  <Square size={16} fill="currentColor" aria-hidden="true" />
                 </button>
               ) : (
                 <button
@@ -1398,16 +1533,29 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                       ? isQueueMode
                         ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-md'
                         : 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
-                      : 'bg-gray-100 dark:bg-charcoal-700 text-gray-400 cursor-not-allowed',
+                      : 'bg-gray-100 dark:bg-charcoal-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
                   )}
-                  title={isQueueMode ? 'Queue message' : 'Send message'}
+                  title={
+                    isQueueMode
+                      ? isSimpleMode
+                        ? 'Your message will be sent after the current task finishes'
+                        : 'Queue message'
+                      : 'Send message'
+                  }
+                  aria-label={
+                    isSending
+                      ? 'Sending message...'
+                      : isQueueMode
+                        ? 'Add message to queue'
+                        : 'Send message'
+                  }
                 >
                   {isSending ? (
-                    <Loader2 size={16} className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                   ) : isQueueMode ? (
-                    <Clock size={16} />
+                    <Clock size={16} aria-hidden="true" />
                   ) : (
-                    <Send size={16} />
+                    <Send size={16} aria-hidden="true" />
                   )}
                 </button>
               )}
@@ -1455,11 +1603,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                       {isTranscribing ? 'Transcribing...' : 'Recording'}
                     </span>
                     {preferLocalWhisper && !isTranscribing && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">(Whisper)</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-300">(Whisper)</span>
                     )}
                   </div>
                   {interimTranscript && (
-                    <span className="text-xs text-gray-600 dark:text-gray-400 italic truncate flex-1">
+                    <span className="text-xs text-gray-700 dark:text-gray-300 italic truncate flex-1">
                       {interimTranscript}
                     </span>
                   )}
@@ -1482,17 +1630,20 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             )}
           </AnimatePresence>
 
-          {/* Footer */}
+          {/* Footer - simplified in simple mode */}
           <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700/50">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              {inlineSuggestion ? (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isSimpleMode ? (
+                <>Press Enter to send</>
+              ) : inlineSuggestion ? (
                 <>Tab to accept suggestion / Esc to dismiss</>
               ) : (
                 <>Enter to send / Shift+Enter for newline</>
               )}
             </span>
 
-            {showCreditUsage ? (
+            {/* Usage meters - hidden in simple mode */}
+            {!isSimpleMode && showCreditUsage ? (
               <div
                 className="flex items-center gap-2"
                 title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
@@ -1513,35 +1664,35 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <span
                   className={cn(
                     'text-xs font-medium tabular-nums',
-                    isLowBalance ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500',
+                    isLowBalance
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-gray-600 dark:text-gray-300',
                   )}
                 >
                   {creditPercentage.toFixed(1)}%
                 </span>
               </div>
-            ) : (
-              tokenUsage && (
-                <div className="flex items-center gap-2" title="Context Window Usage">
-                  <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all duration-300',
-                        tokenPercentage > 90
-                          ? 'bg-red-500'
-                          : tokenPercentage > 70
-                            ? 'bg-amber-500'
-                            : 'bg-primary',
-                      )}
-                      style={{ width: `${tokenPercentage}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {(tokenUsage.current ?? 0).toLocaleString()} /{' '}
-                    {(tokenUsage.max ?? 0).toLocaleString()}
-                  </span>
+            ) : !isSimpleMode && tokenUsage ? (
+              <div className="flex items-center gap-2" title="Context Window Usage">
+                <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-300',
+                      tokenPercentage > 90
+                        ? 'bg-red-500'
+                        : tokenPercentage > 70
+                          ? 'bg-amber-500'
+                          : 'bg-primary',
+                    )}
+                    style={{ width: `${tokenPercentage}%` }}
+                  />
                 </div>
-              )
-            )}
+                <span className="text-xs text-gray-600 dark:text-gray-300">
+                  {(tokenUsage.current ?? 0).toLocaleString()} /{' '}
+                  {(tokenUsage.max ?? 0).toLocaleString()}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
       </motion.div>

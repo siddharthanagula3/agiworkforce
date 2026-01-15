@@ -219,21 +219,23 @@ pub async fn privacy_delete_account(
         }
     }
 
-    // Clear credentials from keyring
-    if let Ok(entry) = keyring::Entry::new("agiworkforce", &user_id) {
-        match entry.delete_password() {
-            Ok(_) => tracing::info!(
-                "[Privacy] Deleted keyring credentials for user: {}",
-                user_id
-            ),
-            Err(e) => tracing::warn!("[Privacy] Could not delete keyring credentials: {}", e),
-        }
-    }
+    // Clear MCP credentials from database (stored encrypted)
+    // Delete any credentials that might be user-specific
+    let delete_patterns = [format!("api_key_%"), format!("mcp_credential_%")];
 
-    // Also clear any MCP-related credentials
-    let mcp_service = format!("agiworkforce-mcp-{}", user_id);
-    if let Ok(entry) = keyring::Entry::new(&mcp_service, "default") {
-        let _ = entry.delete_password();
+    for pattern in &delete_patterns {
+        match conn.execute("DELETE FROM settings_v2 WHERE key LIKE ?1", [pattern]) {
+            Ok(rows) => {
+                if rows > 0 {
+                    tracing::info!(
+                        "[Privacy] Deleted {} credential entries matching pattern: {}",
+                        rows,
+                        pattern
+                    );
+                }
+            }
+            Err(e) => tracing::warn!("[Privacy] Could not delete credentials: {}", e),
+        }
     }
 
     tracing::info!(

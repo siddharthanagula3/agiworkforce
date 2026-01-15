@@ -399,6 +399,10 @@ impl LLMRouter {
         self.set_provider(Provider::Moonshot, provider);
     }
 
+    pub fn set_perplexity(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Perplexity, provider);
+    }
+
     pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::ManagedCloud, provider);
     }
@@ -1535,12 +1539,92 @@ impl LLMRouter {
             >,
         >,
     > {
+        self.send_message_streaming_with_retry(request, preferences, None)
+            .await
+    }
+
+    /// Send a streaming message with retry logic and fallback to other candidates
+    pub async fn send_message_streaming_with_retry(
+        &self,
+        request: &LLMRequest,
+        preferences: &RouterPreferences,
+        retry_config: Option<RetryConfig>,
+    ) -> Result<
+        Pin<
+            Box<
+                dyn Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send,
+            >,
+        >,
+    > {
+        let config = retry_config.unwrap_or_default();
         let candidates = self.candidates(request, preferences);
+
         if candidates.is_empty() {
             return Err(anyhow!("No LLM providers configured"));
         }
 
-        let candidate = &candidates[0];
+        let max_candidates = if config.try_fallback_candidates {
+            candidates.len()
+        } else {
+            1
+        };
+
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
+            tracing::info!(
+                provider = %candidate.provider.as_string(),
+                model = %candidate.model,
+                candidate_index = idx,
+                total_candidates = candidates.len(),
+                "Attempting streaming LLM request"
+            );
+
+            match self
+                .invoke_streaming_with_retry(candidate, request, &config)
+                .await
+            {
+                Ok(stream) => {
+                    if idx > 0 {
+                        tracing::info!(
+                            provider = %candidate.provider.as_string(),
+                            model = %candidate.model,
+                            fallback_index = idx,
+                            "Streaming request succeeded with fallback provider"
+                        );
+                    }
+                    return Ok(stream);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        error = %e,
+                        "Streaming candidate exhausted after retries, trying next candidate"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow!("All LLM providers failed for streaming")))
+    }
+
+    /// Invoke a streaming request with retry logic for a single candidate
+    async fn invoke_streaming_with_retry(
+        &self,
+        candidate: &RouteCandidate,
+        request: &LLMRequest,
+        retry_config: &RetryConfig,
+    ) -> Result<
+        Pin<
+            Box<
+                dyn Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send,
+            >,
+        >,
+    > {
         let provider = self
             .providers
             .get(&candidate.provider)
@@ -1550,15 +1634,87 @@ impl LLMRouter {
         routed_request.model = candidate.model.clone();
         routed_request.stream = true;
 
-        tracing::info!(
-            "Starting streaming request to {} with model {}",
-            provider.name(),
-            candidate.model
-        );
+        let mut last_error: Option<anyhow::Error> = None;
 
-        provider
-            .send_message_streaming(&routed_request)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))
+        for attempt in 0..=retry_config.max_retries {
+            tracing::info!(
+                "Starting streaming request to {} with model {} (attempt {}/{})",
+                provider.name(),
+                candidate.model,
+                attempt + 1,
+                retry_config.max_retries + 1
+            );
+
+            // Add timeout to the streaming connection attempt
+            let stream_timeout = Duration::from_secs(30); // 30 second timeout for initial connection
+            let stream_result = tokio::time::timeout(
+                stream_timeout,
+                provider.send_message_streaming(&routed_request),
+            )
+            .await;
+
+            match stream_result {
+                Ok(Ok(stream)) => return Ok(stream),
+                Ok(Err(e)) => {
+                    let error_str = e.to_string();
+                    let is_retryable = is_retryable_error(&error_str);
+
+                    tracing::warn!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        attempt = attempt + 1,
+                        max_retries = retry_config.max_retries,
+                        is_retryable = is_retryable,
+                        error = %error_str,
+                        "Streaming LLM request failed"
+                    );
+
+                    if !is_retryable || attempt == retry_config.max_retries {
+                        last_error = Some(anyhow!(error_str));
+                        break;
+                    }
+
+                    let delay = calculate_backoff_delay(attempt, retry_config);
+                    tracing::info!(
+                        delay_ms = delay.as_millis() as u64,
+                        "Retrying streaming request after backoff delay"
+                    );
+                    sleep(delay).await;
+                }
+                Err(_elapsed) => {
+                    // Timeout occurred
+                    let error_str = format!(
+                        "Streaming connection timeout after {}s for {} ({})",
+                        stream_timeout.as_secs(),
+                        provider.name(),
+                        candidate.model
+                    );
+
+                    tracing::warn!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        attempt = attempt + 1,
+                        max_retries = retry_config.max_retries,
+                        error = %error_str,
+                        "Streaming connection timed out"
+                    );
+
+                    // Timeouts are retryable
+                    if attempt == retry_config.max_retries {
+                        last_error = Some(anyhow!(error_str));
+                        break;
+                    }
+
+                    let delay = calculate_backoff_delay(attempt, retry_config);
+                    tracing::info!(
+                        delay_ms = delay.as_millis() as u64,
+                        "Retrying streaming request after timeout"
+                    );
+                    sleep(delay).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow!("Streaming request failed after retries")))
     }
 }

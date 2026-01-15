@@ -23,8 +23,20 @@ import { AppError } from '../middleware/errorHandler';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { sendCommandToDesktop } from '../websocket';
 
 const router: Router = Router();
+
+// UUID validation regex (RFC 4122)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate that a string is a valid UUID format.
+ * SECURITY: Prevents injection and ensures consistent ID format.
+ */
+function isValidUUID(id: string | undefined): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
 
 router.use(authenticateToken);
 
@@ -183,6 +195,11 @@ router.get(
 
     const { desktopId } = req.params;
 
+    // SECURITY: Validate UUID format to prevent injection
+    if (!isValidUUID(desktopId)) {
+      throw new AppError('Invalid desktop ID format', 400);
+    }
+
     const { data: desktop, error } = await supabase
       .from('desktop_devices')
       .select('*')
@@ -227,6 +244,12 @@ router.post(
     }
 
     const { desktopId } = req.params;
+
+    // SECURITY: Validate UUID format to prevent injection
+    if (!isValidUUID(desktopId)) {
+      throw new AppError('Invalid desktop ID format', 400);
+    }
+
     const { type, payload } = commandSchema.parse(req.body);
 
     const { data: desktop, error } = await supabase
@@ -244,12 +267,24 @@ router.post(
       throw new AppError('Desktop not found', 404);
     }
 
-    // TODO: In the future, this should publish to a message queue (Redis pub/sub, etc.)
-    // for delivery to the desktop client. For now, we just acknowledge receipt.
+    // Send command to desktop via WebSocket (or queue if offline)
+    const commandId = randomUUID();
+    const { delivered, queued } = sendCommandToDesktop(
+      user.userId,
+      desktopId,
+      commandId,
+      type,
+      payload,
+    );
+
     res.json({
-      commandId: randomUUID(),
-      status: 'queued',
-      message: 'Command queued for delivery',
+      commandId,
+      status: delivered ? 'delivered' : queued ? 'queued' : 'failed',
+      message: delivered
+        ? 'Command delivered to desktop'
+        : queued
+          ? 'Desktop offline - command queued for delivery when device reconnects'
+          : 'Failed to deliver command',
       type,
       payload,
     });
@@ -312,6 +347,11 @@ router.post(
 
     const { desktopId } = req.params;
 
+    // SECURITY: Validate UUID format to prevent injection
+    if (!isValidUUID(desktopId)) {
+      throw new AppError('Invalid desktop ID format', 400);
+    }
+
     const { data: desktop, error: fetchError } = await supabase
       .from('desktop_devices')
       .select('id, user_id')
@@ -356,6 +396,11 @@ router.delete(
     }
 
     const { desktopId } = req.params;
+
+    // SECURITY: Validate UUID format to prevent injection
+    if (!isValidUUID(desktopId)) {
+      throw new AppError('Invalid desktop ID format', 400);
+    }
 
     // First verify ownership
     const { data: desktop, error: fetchError } = await supabase

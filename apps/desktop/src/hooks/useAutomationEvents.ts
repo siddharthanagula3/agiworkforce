@@ -68,69 +68,49 @@ export function useAutomationEvents() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    const setupListeners = async () => {
-      const unlistenRecordingStarted = await listen<RecordingStartedEvent>(
-        'automation:recording_started',
-        (event) => {
-          if (!isMountedRef.current) return;
 
-          handlersRef.current.handleRecordingStarted(event.payload);
-        },
-      );
-      unlistenFns.current.push(unlistenRecordingStarted);
-
-      const unlistenRecordingStopped = await listen<RecordingStoppedEvent>(
-        'automation:recording_stopped',
-        (event) => {
-          if (!isMountedRef.current) return;
-
-          handlersRef.current.handleRecordingStopped(event.payload.recording);
-        },
-      );
-      unlistenFns.current.push(unlistenRecordingStopped);
-
-      const unlistenActionRecorded = await listen<ActionRecordedEvent>(
-        'automation:action_recorded',
-        (event) => {
-          if (!isMountedRef.current) return;
-
-          handlersRef.current.handleActionRecorded(event.payload.action);
-        },
-      );
-      unlistenFns.current.push(unlistenActionRecorded);
-
-      const unlistenShortcutAction = await listen<string>('shortcut_action', (event) => {
-        if (!isMountedRef.current) return;
-
-        handlersRef.current.handleShortcutAction(event.payload);
+    // Helper to safely register listeners with proper cleanup on early unmount
+    const registerListener = <T>(eventName: string, handler: (event: { payload: T }) => void) => {
+      listen<T>(eventName, (event) => {
+        if (isMountedRef.current) {
+          handler(event);
+        }
+      }).then((unlisten) => {
+        if (isMountedRef.current) {
+          unlistenFns.current.push(unlisten);
+        } else {
+          // Component unmounted before listener was set up, clean up immediately
+          unlisten();
+        }
       });
-      unlistenFns.current.push(unlistenShortcutAction);
-
-      const unlistenShortcutRegistered = await listen<Shortcut>('shortcut_registered', (event) => {
-        if (!isMountedRef.current) return;
-
-        handlersRef.current.handleShortcutRegistered(event.payload);
-      });
-      unlistenFns.current.push(unlistenShortcutRegistered);
-
-      const unlistenShortcutUnregistered = await listen<string>(
-        'shortcut_unregistered',
-        (event) => {
-          if (!isMountedRef.current) return;
-
-          handlersRef.current.handleShortcutUnregistered(event.payload);
-        },
-      );
-      unlistenFns.current.push(unlistenShortcutUnregistered);
     };
 
-    setupListeners().catch((error) => {
-      console.error('[useAutomationEvents] Failed to setup listeners:', error);
+    registerListener<RecordingStartedEvent>('automation:recording_started', (event) => {
+      handlersRef.current.handleRecordingStarted(event.payload);
+    });
+
+    registerListener<RecordingStoppedEvent>('automation:recording_stopped', (event) => {
+      handlersRef.current.handleRecordingStopped(event.payload.recording);
+    });
+
+    registerListener<ActionRecordedEvent>('automation:action_recorded', (event) => {
+      handlersRef.current.handleActionRecorded(event.payload.action);
+    });
+
+    registerListener<string>('shortcut_action', (event) => {
+      handlersRef.current.handleShortcutAction(event.payload);
+    });
+
+    registerListener<Shortcut>('shortcut_registered', (event) => {
+      handlersRef.current.handleShortcutRegistered(event.payload);
+    });
+
+    registerListener<string>('shortcut_unregistered', (event) => {
+      handlersRef.current.handleShortcutUnregistered(event.payload);
     });
 
     return () => {
       isMountedRef.current = false;
-
       unlistenFns.current.forEach((unlisten) => {
         unlisten();
       });

@@ -227,7 +227,7 @@ mod tests {
             name: "Get User".to_string(),
             description: Some("Fetch user by ID".to_string()),
             method: "GET".to_string(),
-            url_template: "https://api.agiworkforce.com".to_string(),
+            url_template: "https://example.com/api/users/{{user_id}}".to_string(),
 
             headers_template: HashMap::from([
                 ("Authorization".to_string(), "Bearer {{token}}".to_string()),
@@ -253,7 +253,10 @@ mod tests {
 
         let rendered = template.render(&variables).unwrap();
 
-        assert_eq!(rendered.url, "https://api.agiworkforce.com".to_string());
+        assert_eq!(
+            rendered.url,
+            "https://example.com/api/users/123".to_string()
+        );
 
         assert_eq!(
             rendered.headers.get("Authorization").unwrap(),

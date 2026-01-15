@@ -261,8 +261,12 @@ impl LLMProvider for XAIProvider {
             .await?;
 
         if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(format!("XAI API error: {}", error_text).into());
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("XAI API error {}: {}", status, error_text).into());
         }
 
         let xai_response: XAIResponse = response.json().await?;

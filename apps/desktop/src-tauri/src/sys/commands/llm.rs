@@ -774,23 +774,24 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
     })
 }
 
+// Internal types for llm_list_ollama_models (public types are in ollama.rs)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OllamaModelDetails {
-    pub parameter_size: Option<String>,
-    pub quantization_level: Option<String>,
-    pub family: Option<String>,
+struct LlmOllamaModelDetails {
+    parameter_size: Option<String>,
+    quantization_level: Option<String>,
+    family: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OllamaModel {
-    pub name: String,
-    pub size: Option<u64>,
-    pub details: Option<OllamaModelDetails>,
+struct LlmOllamaModel {
+    name: String,
+    size: Option<u64>,
+    details: Option<LlmOllamaModelDetails>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OllamaTagsResponse {
-    pub models: Vec<OllamaModel>,
+struct LlmOllamaTagsResponse {
+    models: Vec<LlmOllamaModel>,
 }
 
 #[tauri::command]
@@ -807,7 +808,7 @@ pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
         return Err(format!("Ollama API returned error: {}", response.status()));
     }
 
-    let tags_response: OllamaTagsResponse = response
+    let tags_response: LlmOllamaTagsResponse = response
         .json()
         .await
         .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;

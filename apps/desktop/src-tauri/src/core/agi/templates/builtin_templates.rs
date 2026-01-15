@@ -772,7 +772,7 @@ fn create_code_review_agent() -> AgentTemplate {
                 parameters: HashMap::from([
                     (
                         "url".to_string(),
-                        serde_json::json!("https://api.agiworkforce.com"),
+                        serde_json::json!("https://api.github.com/repos/{{owner}}/{{repo}}/pulls/{{pr_number}}"),
                     ),
                     ("method".to_string(), serde_json::json!("GET")),
                     (
@@ -838,7 +838,7 @@ fn create_code_review_agent() -> AgentTemplate {
                 parameters: HashMap::from([
                     (
                         "url".to_string(),
-                        serde_json::json!("https://api.agiworkforce.com"),
+                        serde_json::json!("https://api.github.com/repos/{{owner}}/{{repo}}/pulls/{{pr_number}}/reviews"),
                     ),
                     ("method".to_string(), serde_json::json!("POST")),
                     (
@@ -1465,7 +1465,7 @@ fn create_content_writer_agent() -> AgentTemplate {
                 description: "Gather information from web sources".to_string(),
                 tool_id: "browser_extract".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("https://api.agiworkforce.com")),
+                    ("url".to_string(), serde_json::json!("https://www.google.com/search?q={{topic}}")),
                     ("selector".to_string(), serde_json::json!(".search-result")),
                 ]),
                 expected_output: "Research data and sources".to_string(),
@@ -1574,7 +1574,7 @@ fn create_job_application_agent() -> AgentTemplate {
                 description: "Find jobs matching criteria on job boards".to_string(),
                 tool_id: "browser_extract".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("https://api.agiworkforce.com")),
+                    ("url".to_string(), serde_json::json!("{{job_board_url}}/search?q={{job_title}}&location={{location}}")),
                     ("selector".to_string(), serde_json::json!(".job-card")),
                 ]),
                 expected_output: "List of job postings".to_string(),
@@ -1694,7 +1694,7 @@ fn create_research_agent() -> AgentTemplate {
                 description: "Search web for relevant information".to_string(),
                 tool_id: "browser_extract".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("https://api.agiworkforce.com")),
+                    ("url".to_string(), serde_json::json!("https://www.google.com/search?q={{research_query}}")),
                     ("selector".to_string(), serde_json::json!(".search-result")),
                 ]),
                 expected_output: "Search results".to_string(),

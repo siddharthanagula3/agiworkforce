@@ -25,6 +25,17 @@ import { createRateLimiter } from '../middleware/rateLimit';
 
 const router: Router = Router();
 
+// UUID validation regex (RFC 4122)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Validate that a string is a valid UUID format.
+ * SECURITY: Prevents injection and ensures consistent ID format.
+ */
+function isValidUUID(id: string | undefined): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
+
 router.use(authenticateToken);
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
@@ -194,26 +205,45 @@ router.post(
 
     const ttlSeconds = parseResult.data.ttlSeconds;
 
-    const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ttlSeconds,
-        metadata: {
-          userId: user.userId,
-          email: user.email,
+    let fetchResponse: globalThis.Response;
+    try {
+      fetchResponse = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new AppError(`Failed to provision pairing: ${text}`, 502);
+        body: JSON.stringify({
+          ttlSeconds,
+          metadata: {
+            userId: user.userId,
+            email: user.email,
+          },
+        }),
+      });
+    } catch (fetchError) {
+      console.error('[mobile] Failed to connect to signaling server:', fetchError);
+      throw new AppError('Signaling server unavailable', 503);
     }
 
-    const payload = pairingCodeResponseSchema.parse(await response.json());
+    if (!fetchResponse.ok) {
+      let errorText: string;
+      try {
+        errorText = await fetchResponse.text();
+      } catch {
+        errorText = 'Unknown error';
+      }
+      throw new AppError(`Failed to provision pairing: ${errorText}`, 502);
+    }
+
+    let jsonBody: unknown;
+    try {
+      jsonBody = await fetchResponse.json();
+    } catch (parseError) {
+      console.error('[mobile] Failed to parse signaling server response:', parseError);
+      throw new AppError('Invalid response from signaling server', 502);
+    }
+
+    const payload = pairingCodeResponseSchema.parse(jsonBody);
 
     res.json({
       code: payload.code,
@@ -282,6 +312,11 @@ router.delete(
     }
 
     const { deviceId } = req.params;
+
+    // SECURITY: Validate UUID format to prevent injection
+    if (!isValidUUID(deviceId)) {
+      throw new AppError('Invalid device ID format', 400);
+    }
 
     // First verify ownership
     const { data: device, error: fetchError } = await supabase

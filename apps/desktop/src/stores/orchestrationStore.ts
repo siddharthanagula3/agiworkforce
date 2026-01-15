@@ -41,6 +41,8 @@ interface OrchestrationState {
   cancelWorkflow: (executionId: string) => Promise<void>;
   getExecutionStatus: (executionId: string) => Promise<void>;
   getExecutionLogs: (executionId: string) => Promise<void>;
+  /** Stop polling for execution status updates */
+  stopExecutionPolling: () => void;
 
   scheduleWorkflow: (workflowId: string, cronExpr: string, timezone?: string) => Promise<void>;
   getNextExecutionTime: (cronExpr: string) => Promise<number | null>;
@@ -56,6 +58,9 @@ interface OrchestrationState {
   clearError: () => void;
   reset: () => void;
 }
+
+// Track active polling timers to prevent memory leaks
+let executionPollingTimer: ReturnType<typeof setTimeout> | null = null;
 
 const defaultNodeLibrary: NodeLibraryItem[] = [
   {
@@ -214,7 +219,11 @@ export const useOrchestrationStore = create<OrchestrationState>()(
         try {
           const executionId = await invoke<string>('execute_workflow', { workflowId, inputs });
 
-          setTimeout(() => {
+          // Clear any existing polling timer before starting a new one
+          if (executionPollingTimer) {
+            clearTimeout(executionPollingTimer);
+          }
+          executionPollingTimer = setTimeout(() => {
             get().getExecutionStatus(executionId);
           }, 1000);
 
@@ -262,12 +271,31 @@ export const useOrchestrationStore = create<OrchestrationState>()(
           set({ currentExecution: execution, loadingExecution: false });
 
           if (execution.status === 'running' || execution.status === 'pending') {
-            setTimeout(() => {
+            // Clear any existing timer before scheduling a new one
+            if (executionPollingTimer) {
+              clearTimeout(executionPollingTimer);
+            }
+            executionPollingTimer = setTimeout(() => {
               get().getExecutionStatus(executionId);
             }, 2000);
+          } else {
+            // Execution finished - clear the timer reference
+            executionPollingTimer = null;
           }
         } catch (error) {
           set({ error: String(error), loadingExecution: false });
+          // Clear timer on error to prevent orphaned polling
+          if (executionPollingTimer) {
+            clearTimeout(executionPollingTimer);
+            executionPollingTimer = null;
+          }
+        }
+      },
+
+      stopExecutionPolling: () => {
+        if (executionPollingTimer) {
+          clearTimeout(executionPollingTimer);
+          executionPollingTimer = null;
         }
       },
 
@@ -345,7 +373,13 @@ export const useOrchestrationStore = create<OrchestrationState>()(
 
       clearError: () => set({ error: null }),
 
-      reset: () =>
+      reset: () => {
+        // Stop any active execution polling before resetting state
+        if (executionPollingTimer) {
+          clearTimeout(executionPollingTimer);
+          executionPollingTimer = null;
+        }
+
         set({
           workflows: [],
           selectedWorkflow: null,
@@ -357,7 +391,8 @@ export const useOrchestrationStore = create<OrchestrationState>()(
           nodes: [],
           edges: [],
           selectedNode: null,
-        }),
+        });
+      },
     })),
     { name: 'OrchestrationStore', enabled: import.meta.env.DEV },
   ),

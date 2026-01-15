@@ -69,7 +69,7 @@ interface MarketplaceStore {
   fetchPopularTags: () => Promise<void>;
 
   searchWorkflows: (query: string) => Promise<void>;
-  setFilter: (key: keyof MarketplaceFilters, value: any) => void;
+  setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
   resetFilters: () => void;
   applyFilters: () => Promise<void>;
 
@@ -262,7 +262,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     await get().applyFilters();
   },
 
-  setFilter: (key: keyof MarketplaceFilters, value: any) => {
+  setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => {
     set((state) => ({
       filters: { ...state.filters, [key]: value },
       currentPage: 1,
@@ -298,7 +298,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   cloneWorkflow: async (request: CloneWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const clonedId = await invoke<string>('clone_marketplace_workflow', request as any);
+      const clonedId = await invoke<string>(
+        'clone_marketplace_workflow',
+        request as unknown as Record<string, unknown>,
+      );
 
       const { workflows, featuredWorkflows, trendingWorkflows } = get();
       const updateCloneCount = (w: PublishedWorkflow) =>
@@ -322,7 +325,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   publishWorkflow: async (request: PublishWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const published = await invoke<PublishedWorkflow>('publish_workflow', request as any);
+      const published = await invoke<PublishedWorkflow>(
+        'publish_workflow',
+        request as unknown as Record<string, unknown>,
+      );
       set((state) => ({
         myPublishedWorkflows: [published, ...state.myPublishedWorkflows],
         isLoading: false,
@@ -352,7 +358,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   rateWorkflow: async (request: RateWorkflowRequest) => {
     try {
-      await invoke('rate_workflow', request as any);
+      await invoke('rate_workflow', request as unknown as Record<string, unknown>);
 
       await get().fetchWorkflowReviews(request.workflow_id);
 

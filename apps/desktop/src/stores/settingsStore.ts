@@ -36,15 +36,8 @@ interface LLMConfig {
   temperature: number;
   maxTokens: number;
   defaultModels: {
-    openai: string;
-    anthropic: string;
-    google: string;
-    ollama: string;
-    xai: string;
-    deepseek: string;
-    qwen: string;
-    moonshot: string;
     managed_cloud: string;
+    ollama: string;
   };
   taskRouting: TaskRouting;
   favoriteModels: string[];
@@ -105,43 +98,18 @@ const defaultSettings: Pick<
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      openai: '',
-      anthropic: '',
-      google: '',
-      ollama: '',
-      xai: '',
-      deepseek: '',
-      qwen: '',
-      moonshot: '',
       managed_cloud: 'auto',
+      ollama: '',
     },
-    favoriteModels: [
-      'openai/gpt-5.2',
-      'openai/gpt-5.2-pro',
-      'openai/gpt-5.2-chat-latest',
-      'openai/gpt-5.2-codex',
-      'openai/gpt-5.1-thinking',
-      'anthropic/claude-sonnet-4-5',
-      'anthropic/claude-haiku-4-5',
-      'anthropic/claude-opus-4-5',
-      'google/gemini-3-pro',
-      'google/gemini-3-flash',
-      'google/gemini-3-deep-think',
-      'xai/grok-4.1',
-      'xai/grok-4.1-fast',
-      'qwen/qwen3-max',
-      'ollama/llama4-maverick',
-      'moonshot/kimi-k2-thinking',
-    ],
+    favoriteModels: [],
     taskRouting: {
-      search: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-      code: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-      docs: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-
-      chat: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-      vision: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-      image: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
-      video: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      search: { provider: 'managed_cloud', model: 'auto' },
+      code: { provider: 'managed_cloud', model: 'auto' },
+      docs: { provider: 'managed_cloud', model: 'auto' },
+      chat: { provider: 'managed_cloud', model: 'auto' },
+      vision: { provider: 'managed_cloud', model: 'auto' },
+      image: { provider: 'managed_cloud', model: 'auto' },
+      video: { provider: 'managed_cloud', model: 'auto' },
     },
   },
   windowPreferences: {
@@ -158,7 +126,8 @@ const defaultSettings: Pick<
 export const createDefaultLLMConfig = (): LLMConfig => ({
   ...defaultSettings.llmConfig,
   defaultModels: { ...defaultSettings.llmConfig.defaultModels },
-  favoriteModels: [...defaultSettings.llmConfig.favoriteModels],
+  taskRouting: { ...defaultSettings.llmConfig.taskRouting },
+  favoriteModels: [],
 });
 
 export const createDefaultWindowPreferences = (): WindowPreferences => ({
@@ -177,7 +146,8 @@ const storageFallback: Storage = {
 };
 
 // Version for storage migration
-const SETTINGS_STORE_VERSION = 1;
+// v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
+const SETTINGS_STORE_VERSION = 2;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -367,10 +337,19 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.llmConfig ?? defaultSettings.llmConfig),
               defaultModels: {
                 ...defaultSettings.llmConfig.defaultModels,
-                ...(settings.llmConfig?.defaultModels ?? defaultSettings.llmConfig.defaultModels),
+                // Only merge managed_cloud and ollama from persisted settings
+                managed_cloud:
+                  settings.llmConfig?.defaultModels?.managed_cloud ??
+                  defaultSettings.llmConfig.defaultModels.managed_cloud,
+                ollama:
+                  settings.llmConfig?.defaultModels?.ollama ??
+                  defaultSettings.llmConfig.defaultModels.ollama,
               },
-              favoriteModels:
-                settings.llmConfig?.favoriteModels ?? defaultSettings.llmConfig.favoriteModels,
+              taskRouting: {
+                ...defaultSettings.llmConfig.taskRouting,
+                ...(settings.llmConfig?.taskRouting ?? defaultSettings.llmConfig.taskRouting),
+              },
+              favoriteModels: [],
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -459,15 +438,24 @@ export const useSettingsStore = create<SettingsState>()(
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SettingsState> | undefined;
+
+          const persistedDefaultModels = persisted?.llmConfig?.defaultModels as any;
+
           const mergedLLMConfig: LLMConfig = {
             ...currentState.llmConfig,
             ...(persisted?.llmConfig ?? {}),
+            defaultProvider: 'managed_cloud', // Always use managed_cloud
             defaultModels: {
-              ...currentState.llmConfig.defaultModels,
-              ...(persisted?.llmConfig?.defaultModels ?? {}),
+              managed_cloud:
+                persistedDefaultModels?.managed_cloud ??
+                currentState.llmConfig.defaultModels.managed_cloud,
+              ollama: persistedDefaultModels?.ollama ?? currentState.llmConfig.defaultModels.ollama,
             },
-            favoriteModels:
-              persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
+            taskRouting: {
+              ...currentState.llmConfig.taskRouting,
+              ...(persisted?.llmConfig?.taskRouting ?? {}),
+            },
+            favoriteModels: [], // Always empty for subscription model
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -490,11 +478,28 @@ export const useSettingsStore = create<SettingsState>()(
           };
         },
         migrate: (persistedState: unknown, version: number) => {
-          // Migration logic for future schema changes
-          if (version === 0) {
-            return persistedState as SettingsState;
+          const state = persistedState as any;
+
+          // Migration from v1 to v2: Simplified subscription-only model
+          if (version < 2) {
+            // Reset to subscription defaults
+            if (state?.llmConfig) {
+              state.llmConfig.defaultProvider = 'managed_cloud';
+              state.llmConfig.defaultModels = {
+                managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
+                ollama: state.llmConfig?.defaultModels?.ollama ?? '',
+              };
+              state.llmConfig.favoriteModels = [];
+              // Update taskRouting to use managed_cloud with 'auto'
+              if (state.llmConfig.taskRouting) {
+                for (const key of Object.keys(state.llmConfig.taskRouting)) {
+                  state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
+                }
+              }
+            }
           }
-          return persistedState as SettingsState;
+
+          return state as SettingsState;
         },
         // Called when rehydration finishes (with or without errors)
         onRehydrateStorage: () => (state) => {

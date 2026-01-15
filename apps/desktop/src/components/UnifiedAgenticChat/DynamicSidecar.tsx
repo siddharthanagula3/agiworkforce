@@ -52,7 +52,7 @@ interface DynamicSidecarProps {
 const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = {
   terminal: <Terminal className="h-4 w-4 text-emerald-400" />,
   browser: <MousePointerClick className="h-4 w-4 text-sky-400" />,
-  code: <Braces className="h-4 w-4 text-purple-400" />,
+  code: <Braces className="h-4 w-4 text-amber-400" />,
   video: <Video className="h-4 w-4 text-orange-400" />,
   media: <ImageIcon className="h-4 w-4 text-indigo-400" />,
   files: <FileText className="h-4 w-4 text-slate-300" />,

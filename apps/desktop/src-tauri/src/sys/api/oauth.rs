@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,7 +71,7 @@ impl PkceChallenge {
         let mut hasher = Sha256::new();
         hasher.update(code_verifier.as_bytes());
         let hash = hasher.finalize();
-        let code_challenge = STANDARD.encode(hash);
+        let code_challenge = URL_SAFE_NO_PAD.encode(hash);
 
         Self {
             code_verifier,
@@ -332,9 +332,9 @@ mod tests {
         let config = OAuth2Config {
             client_id: "test_client".to_string(),
             client_secret: None,
-            auth_url: "https://api.agiworkforce.com".to_string(),
+            auth_url: "https://example.com/oauth/authorize".to_string(),
 
-            token_url: "https://api.agiworkforce.com".to_string(),
+            token_url: "https://example.com/oauth/token".to_string(),
 
             redirect_uri: "http://localhost:3000".to_string(),
 
