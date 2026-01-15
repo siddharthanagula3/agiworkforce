@@ -48,7 +48,8 @@ export type ArtifactType =
   | 'table'
   | 'mermaid'
   | 'spreadsheet'
-  | 'presentation';
+  | 'presentation'
+  | 'html';
 
 export interface Artifact {
   id: string;

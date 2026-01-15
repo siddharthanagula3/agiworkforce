@@ -6,6 +6,7 @@ import {
   Terminal as TerminalIcon,
   Globe,
   Files,
+  Lightbulb,
   X,
   Maximize2,
   Minimize2,
@@ -23,11 +24,14 @@ import {
   selectBrowserActions,
   selectFileChanges,
   selectPendingFileChanges,
+  selectReflectionIssueCount,
+  selectHasReflectionIssues,
 } from '../../stores/executionStore';
 import { ThinkingPanel } from './ThinkingPanel';
 import { TerminalPanel } from './TerminalPanel';
 import { BrowserPanel } from './BrowserPanel';
 import { FilesPanel } from './FilesPanel';
+import { ReflectionPanel } from './ReflectionPanel';
 import { Button } from '../ui/Button';
 
 export interface ExecutionDashboardProps {
@@ -81,6 +85,12 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
         setActiveTab('files');
         setPanelVisible(true);
       }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        setActiveTab('reflection');
+        setPanelVisible(true);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -92,6 +102,9 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
       setPanelVisible(true);
     }
   }, [activeGoal, panelVisible, setPanelVisible]);
+
+  const reflectionIssueCount = useExecutionStore(selectReflectionIssueCount);
+  const hasReflectionIssues = useExecutionStore(selectHasReflectionIssues);
 
   const activeStepCount = steps.filter((s) => s.status === 'in-progress').length;
   const terminalCount = terminalLogs.length;
@@ -252,6 +265,22 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
                   </span>
                 )}
               </Tabs.Trigger>
+
+              <Tabs.Trigger
+                value="reflection"
+                className={cn(
+                  'relative flex items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                  activeTab === 'reflection' && 'border-primary text-foreground',
+                )}
+              >
+                <Lightbulb className="h-4 w-4" />
+                Insights
+                {hasReflectionIssues && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-xs text-white">
+                    {reflectionIssueCount}
+                  </span>
+                )}
+              </Tabs.Trigger>
             </Tabs.List>
 
             {}
@@ -271,6 +300,10 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
               <Tabs.Content value="files" className="h-full">
                 <FilesPanel />
               </Tabs.Content>
+
+              <Tabs.Content value="reflection" className="h-full">
+                <ReflectionPanel />
+              </Tabs.Content>
             </div>
           </Tabs.Root>
         )}
@@ -282,7 +315,8 @@ export function ExecutionDashboard({ className }: ExecutionDashboardProps) {
             <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+T</kbd> Thinking •
             <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+R</kbd> Terminal •
             <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+B</kbd> Browser •
-            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+F</kbd> Files
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+F</kbd> Files •
+            <kbd className="ml-2 rounded bg-background px-1.5 py-0.5">Cmd+Shift+I</kbd> Insights
           </div>
         )}
       </motion.div>

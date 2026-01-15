@@ -271,6 +271,7 @@ mod tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         manager.register_server("test".to_string(), config);
@@ -292,6 +293,7 @@ mod tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         manager.register_server("test".to_string(), config);
