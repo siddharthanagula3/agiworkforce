@@ -6,7 +6,7 @@ export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   triggers: WorkflowTrigger[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: number;
   updated_at: number;
 }
@@ -38,7 +38,7 @@ export interface AgentNodeData {
   agent_name?: string;
   input_mapping: Record<string, string>;
   output_mapping: Record<string, string>;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 export interface DecisionNode {
@@ -133,7 +133,7 @@ export interface ToolNode {
 export interface ToolNodeData {
   label: string;
   tool_name: string;
-  tool_input: Record<string, any>;
+  tool_input: Record<string, unknown>;
   timeout_seconds?: number;
 }
 
@@ -162,7 +162,7 @@ export interface ScheduledTrigger {
 export interface EventTrigger {
   type: 'event';
   event_type: string;
-  filter?: Record<string, any>;
+  filter?: Record<string, unknown>;
 }
 
 export interface WebhookTrigger {
@@ -185,11 +185,18 @@ export interface WorkflowExecution {
   workflow_id: string;
   status: WorkflowStatus;
   current_node_id?: string;
-  inputs: Record<string, any>;
-  outputs: Record<string, any>;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
   error?: string;
   started_at?: number;
   completed_at?: number;
+}
+
+export interface WorkflowLogData {
+  message?: string;
+  error?: string;
+  output?: unknown;
+  duration_ms?: number;
 }
 
 export interface WorkflowExecutionLog {
@@ -197,7 +204,7 @@ export interface WorkflowExecutionLog {
   execution_id: string;
   node_id: string;
   event_type: LogEventType;
-  data?: any;
+  data?: WorkflowLogData;
   timestamp: number;
 }
 
@@ -213,11 +220,16 @@ export interface ScheduledWorkflow {
   enabled: boolean;
 }
 
-export interface ReactFlowNode {
+export interface ReactFlowNodeData {
+  label: string;
+  [key: string]: unknown;
+}
+
+export interface ReactFlowNode<T extends ReactFlowNodeData = ReactFlowNodeData> {
   id: string;
   type: string;
   position: { x: number; y: number };
-  data: any;
+  data: T;
 }
 
 export interface ReactFlowEdge {

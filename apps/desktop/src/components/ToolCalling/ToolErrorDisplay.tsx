@@ -5,7 +5,15 @@
  */
 
 import { useState } from 'react';
-import { XCircle, AlertCircle, RefreshCcw, Copy, Check, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  XCircle,
+  AlertCircle,
+  RefreshCcw,
+  Copy,
+  Check,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
@@ -126,7 +134,12 @@ export function ToolErrorDisplay({
   const details = getErrorDetails();
 
   return (
-    <div className={cn('border border-red-200 dark:border-red-900 rounded-lg overflow-hidden', className)}>
+    <div
+      className={cn(
+        'border border-red-200 dark:border-red-900 rounded-lg overflow-hidden',
+        className,
+      )}
+    >
       {/* Header */}
       <div className="bg-red-50 dark:bg-red-950/20 px-4 py-3 flex items-start gap-3">
         <div className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5">{details.icon}</div>
@@ -193,9 +206,7 @@ export function ToolErrorDisplay({
       {/* Additional Details */}
       {parameters && Object.keys(parameters).length > 0 && (
         <div className="p-4 bg-background border-t border-border">
-          <div className="text-xs font-semibold text-muted-foreground mb-2">
-            Parameters Used
-          </div>
+          <div className="text-xs font-semibold text-muted-foreground mb-2">Parameters Used</div>
           <div className="font-mono text-xs bg-muted/30 p-2 rounded overflow-auto max-h-32">
             <pre>{JSON.stringify(parameters, null, 2)}</pre>
           </div>

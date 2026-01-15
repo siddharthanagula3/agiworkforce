@@ -4,6 +4,7 @@ pub mod audit;
 pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
+pub mod command_validator;
 pub mod encryption;
 pub mod guardrails;
 pub mod injection_detector;
@@ -58,3 +59,9 @@ pub use storage::{decrypt_file, encrypt_file, EncryptedData, SecureStorage};
 pub use tool_guard::{SecurityError, ToolExecutionGuard, ToolPolicy};
 pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
 pub use validator::{CommandValidator, SafetyLevel};
+
+// Command validation for shell/terminal security
+pub use command_validator::{
+    requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
+    ValidationConfig,
+};

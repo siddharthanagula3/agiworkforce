@@ -19,6 +19,17 @@ export interface ConfigSchema {
   fields: ConfigField[];
 }
 
+/**
+ * Default value type for configuration fields.
+ */
+export type ConfigFieldDefaultValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ConfigFieldDefaultValue[]
+  | { [key: string]: ConfigFieldDefaultValue };
+
 export interface ConfigField {
   name: string;
   label: string;
@@ -27,7 +38,7 @@ export interface ConfigField {
   placeholder?: string;
   options?: { value: string; label: string }[];
   description?: string;
-  defaultValue?: any;
+  defaultValue?: ConfigFieldDefaultValue;
 }
 
 export interface CustomEmployee {
@@ -48,7 +59,7 @@ export interface CustomEmployee {
 export interface WorkflowDefinition {
   nodes: Node[];
   edges: Edge[];
-  variables: Record<string, any>;
+  variables: Record<string, unknown>;
 }
 
 export interface TrainingExample {
@@ -83,7 +94,7 @@ export interface EmployeeTemplate {
 }
 
 export interface NodeConfig {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CapabilityItem {

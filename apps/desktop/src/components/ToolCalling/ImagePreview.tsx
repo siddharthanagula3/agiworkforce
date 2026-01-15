@@ -33,7 +33,9 @@ export function ImagePreview({
   const [copied, setCopied] = useState(false);
 
   // Get image source (either data URL or regular URL)
-  const imageSrc = artifact.data ? `data:${artifact.mime_type ?? 'image/png'};base64,${artifact.data}` : artifact.url;
+  const imageSrc = artifact.data
+    ? `data:${artifact.mime_type ?? 'image/png'};base64,${artifact.data}`
+    : artifact.url;
 
   if (!imageSrc) {
     return (
@@ -79,7 +81,9 @@ export function ImagePreview({
 
   return (
     <>
-      <div className={cn('border border-border rounded-lg bg-background overflow-hidden', className)}>
+      <div
+        className={cn('border border-border rounded-lg bg-background overflow-hidden', className)}
+      >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/50">
           <div className="flex items-center gap-2">
@@ -88,7 +92,9 @@ export function ImagePreview({
               <span className="text-xs text-muted-foreground">{artifact.name}</span>
             )}
             {showMetadata && artifact.size && (
-              <span className="text-xs text-muted-foreground">({formatFileSize(artifact.size)})</span>
+              <span className="text-xs text-muted-foreground">
+                ({formatFileSize(artifact.size)})
+              </span>
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -156,7 +162,9 @@ export function ImagePreview({
         {ocrText && (
           <div className="border-t border-border p-3 bg-muted/30">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-muted-foreground">Extracted Text (OCR)</span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Extracted Text (OCR)
+              </span>
               <Button variant="ghost" size="sm" onClick={handleCopyOCR} className="h-6 px-2">
                 {copied ? (
                   <Check className="h-3 w-3 text-green-500" />

@@ -1,14 +1,23 @@
-type TauriCommandResult = any;
+/**
+ * Tauri API type declarations for window.__TAURI__
+ */
 
-type TauriInvoke = (command: string, args?: Record<string, any>) => Promise<TauriCommandResult>;
+type TauriInvoke = <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
-type TauriEventListener = (payload: any) => void;
+interface TauriEventPayload<T = unknown> {
+  payload: T;
+}
+
+type TauriEventListener<T = unknown> = (event: TauriEventPayload<T>) => void;
 
 type TauriUnlisten = () => void;
 
-type TauriEventListen = (event: string, handler: TauriEventListener) => Promise<TauriUnlisten>;
+type TauriEventListen = <T = unknown>(
+  event: string,
+  handler: TauriEventListener<T>,
+) => Promise<TauriUnlisten>;
 
-type TauriEventEmit = (event: string, payload?: any) => Promise<void>;
+type TauriEventEmit = (event: string, payload?: unknown) => Promise<void>;
 
 interface TauriEventAPI {
   listen: TauriEventListen;

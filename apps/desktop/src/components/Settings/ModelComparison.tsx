@@ -164,14 +164,8 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
               <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 font-semibold text-sm">
                 Basic Information
               </div>
-              <ComparisonRow
-                label="Provider"
-                getValue={(m) => PROVIDER_LABELS[m.provider]}
-              />
-              <ComparisonRow
-                label="Release Date"
-                getValue={(m) => m.released || 'Unknown'}
-              />
+              <ComparisonRow label="Provider" getValue={(m) => PROVIDER_LABELS[m.provider]} />
+              <ComparisonRow label="Release Date" getValue={(m) => m.released || 'Unknown'} />
               <ComparisonRow label="Speed" getValue={(m) => m.speed} />
               <ComparisonRow label="Quality" getValue={(m) => m.quality} />
             </div>
@@ -274,10 +268,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
               <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 font-semibold text-sm">
                 Best Use Cases
               </div>
-              <ComparisonRow
-                label="Recommended For"
-                getValue={(m) => m.bestFor.join(', ')}
-              />
+              <ComparisonRow label="Recommended For" getValue={(m) => m.bestFor.join(', ')} />
             </div>
           </div>
         </div>
@@ -314,7 +305,8 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
                   >
                     <div className="font-medium">{model.name}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                      {PROVIDER_LABELS[model.provider]} • {formatCost(model.inputCost, model.outputCost)}
+                      {PROVIDER_LABELS[model.provider]} •{' '}
+                      {formatCost(model.inputCost, model.outputCost)}
                     </div>
                   </button>
                 ))}

@@ -1,0 +1,49 @@
+# Railway deployment configuration for WebSocket Signaling Server
+# Documentation: https://docs.railway.app/reference/config-as-code
+
+[build]
+# Use Nixpacks builder (default, auto-detects Node.js)
+builder = "nixpacks"
+
+# Build command - compile TypeScript
+buildCommand = "npm run build"
+
+# Watch paths for rebuilds
+watchPatterns = ["src/**", "package.json", "tsconfig.json"]
+
+[deploy]
+# Start command
+startCommand = "node dist/index.js"
+
+# Number of replicas (use 1 for WebSocket sticky sessions)
+numReplicas = 1
+
+# Health check configuration
+healthcheckPath = "/health"
+healthcheckTimeout = 10
+
+# Restart policy
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Resource configuration
+# Railway uses shared vCPU by default, this ensures minimum resources
+# Uncomment and adjust based on your plan
+# [deploy.resources]
+# cpuLimit = 1
+# memoryLimit = 512
+
+[env]
+# Runtime environment
+NODE_ENV = "production"
+
+# Server configuration (PORT is auto-set by Railway)
+SIGNALING_HOST = "0.0.0.0"
+SIGNALING_WS_PATH = "/ws"
+
+# Note: Set these secrets in Railway dashboard:
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_ROLE_KEY
+# - SIGNALING_HTTP_URL (set to your Railway public URL)
+# - SIGNALING_WS_URL (set to wss://your-domain.railway.app/ws)
+# - ALLOWED_ORIGINS (comma-separated list of allowed origins)
