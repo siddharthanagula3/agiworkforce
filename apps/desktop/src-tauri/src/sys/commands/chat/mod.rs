@@ -1,6 +1,6 @@
 use super::llm::LLMState;
 
-use crate::core::router::{ContentPart, ImageDetail, ImageFormat, ImageInput};
+use crate::core::llm::{ContentPart, ImageDetail, ImageFormat, ImageInput};
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
 use base64::Engine;
@@ -660,7 +660,7 @@ pub async fn chat_send_message(
         }
     }
 
-    use crate::core::router::{
+    use crate::core::llm::{
         cost_calculator::CostCalculator,
         llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
         token_counter::TokenCounter,
@@ -1122,7 +1122,7 @@ pub async fn chat_send_message(
     // Ensure ManagedCloud provider is initialized if user is authenticated
     // This handles cases where provider wasn't initialized on startup
     {
-        use crate::core::router::providers::managed_cloud_provider::ManagedCloudProvider;
+        use crate::core::llm::providers::managed_cloud_provider::ManagedCloudProvider;
         use crate::sys::account::get_access_token;
 
         // Check if user has access token (is authenticated) and provider isn't already set
@@ -1167,7 +1167,7 @@ pub async fn chat_send_message(
                     name
                 );
 
-                let fallback_candidate = crate::core::router::llm_router::RouteCandidate {
+                let fallback_candidate = crate::core::llm::llm_router::RouteCandidate {
                     provider: Provider::ManagedCloud,
                     model: model.clone(), // Use the same model name as a hint for the cloud proxy
                     reason: "fallback-redirect-to-managed-cloud",

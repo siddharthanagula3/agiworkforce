@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::core::router::{ChatMessage, LLMResponse, Provider};
+use crate::core::llm::{ChatMessage, LLMResponse, Provider};
 
 pub struct LLMResponseCache {
     conn: Arc<Mutex<Connection>>,

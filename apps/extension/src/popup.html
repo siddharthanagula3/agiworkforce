@@ -12,101 +12,293 @@
       }
 
       body {
-        width: 320px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        width: 380px;
+        min-height: 480px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
+        overflow-x: hidden;
       }
 
       .header {
-        padding: 20px;
+        padding: 24px 20px 20px;
         text-align: center;
       }
 
       .header h1 {
-        font-size: 20px;
-        margin-bottom: 8px;
+        font-size: 22px;
+        margin-bottom: 6px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
       }
 
       .header p {
         font-size: 12px;
         opacity: 0.9;
+        font-weight: 400;
       }
 
       .content {
         background: white;
         color: #333;
-        padding: 20px;
-        border-radius: 12px 12px 0 0;
+        padding: 24px;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
       }
 
-      .status {
+      .status-card {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        padding: 12px;
-        background: #f5f5f5;
-        border-radius: 8px;
-        margin-bottom: 16px;
+        padding: 16px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+        transition: all 0.3s ease;
+      }
+
+      .status-card.connected {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border-color: #c3e6cb;
+      }
+
+      .status-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 14px;
+        flex-shrink: 0;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       }
 
       .status-dot {
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
-        margin-right: 8px;
+        background: #dc3545;
+        animation: pulse 2s infinite;
       }
 
-      .status-dot.connected {
-        background: #4caf50;
+      .status-card.connected .status-dot {
+        background: #28a745;
       }
 
-      .status-dot.disconnected {
-        background: #f44336;
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
       }
 
-      .status-text {
+      .status-card.connected .status-dot {
+        animation: pulse-green 2s infinite;
+      }
+
+      @keyframes pulse-green {
+        0% {
+          box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+        }
+      }
+
+      .status-info {
         flex: 1;
+      }
+
+      .status-title {
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #495057;
+      }
+
+      .status-card.connected .status-title {
+        color: #155724;
+      }
+
+      .status-subtitle {
+        font-size: 12px;
+        color: #6c757d;
+      }
+
+      .status-card.connected .status-subtitle {
+        color: #1e7e34;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .action-btn {
+        padding: 12px 16px;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: #f8f9fa;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .action-btn:hover {
+        background: #e9ecef;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .action-btn:active {
+        transform: translateY(0);
+      }
+
+      .action-btn.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+      }
+
+      .action-btn.primary:hover {
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
       }
 
       .info-section {
-        margin-top: 16px;
+        margin-top: 20px;
+      }
+
+      .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        margin-bottom: 12px;
       }
 
       .info-item {
         display: flex;
         justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #eee;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 6px;
         font-size: 13px;
+        margin-bottom: 4px;
+        transition: background 0.2s ease;
+      }
+
+      .info-item:hover {
+        background: #f8f9fa;
       }
 
       .info-label {
         font-weight: 600;
-        color: #666;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
       .info-value {
-        color: #333;
+        color: #6c757d;
+        font-size: 12px;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+        background: #f8f9fa;
+        padding: 4px 8px;
+        border-radius: 4px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .stat-card {
+        text-align: center;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+      }
+
+      .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 4px;
+      }
+
+      .stat-label {
+        font-size: 11px;
+        color: #6c757d;
+        font-weight: 500;
       }
 
       .footer {
-        padding: 16px 20px;
+        padding: 16px 20px 20px;
         text-align: center;
         font-size: 11px;
-        opacity: 0.8;
+        opacity: 0.9;
       }
 
       .footer a {
         color: white;
         text-decoration: none;
         font-weight: 600;
+        transition: opacity 0.2s ease;
       }
 
       .footer a:hover {
-        text-decoration: underline;
+        opacity: 0.8;
+      }
+
+      .divider {
+        height: 1px;
+        background: #dee2e6;
+        margin: 20px 0;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(108, 117, 125, 0.2);
+        border-top-color: #6c757d;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
@@ -117,23 +309,55 @@
     </div>
 
     <div class="content">
-      <div class="status">
-        <div class="status-dot" id="statusDot"></div>
-        <div class="status-text" id="statusText">Checking connection...</div>
+      <!-- Connection Status -->
+      <div class="status-card" id="statusCard">
+        <div class="status-icon">
+          <div class="status-dot" id="statusDot"></div>
+        </div>
+        <div class="status-info">
+          <div class="status-title" id="statusTitle">Checking connection...</div>
+          <div class="status-subtitle" id="statusSubtitle">Connecting to desktop app</div>
+        </div>
       </div>
 
-      <div class="info-section">
-        <div class="info-item">
-          <span class="info-label">Version</span>
-          <span class="info-value">1.0.0</span>
+      <!-- Quick Actions -->
+      <div class="actions">
+        <button class="action-btn primary" id="captureBtn">📸 Capture Page</button>
+        <button class="action-btn" id="refreshBtn">🔄 Refresh</button>
+      </div>
+
+      <!-- Statistics -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="tabCount">-</div>
+          <div class="stat-label">Tabs</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value" id="actionCount">-</div>
+          <div class="stat-label">Actions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="sessionTime">-</div>
+          <div class="stat-label">Session</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Page Information -->
+      <div class="info-section">
+        <div class="section-title">Current Page</div>
         <div class="info-item">
           <span class="info-label">Tab ID</span>
           <span class="info-value" id="tabId">-</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Current URL</span>
-          <span class="info-value" id="currentUrl">-</span>
+          <span class="info-label">URL</span>
+          <span class="info-value" id="currentUrl" title="">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Version</span>
+          <span class="info-value">v1.1.0</span>
         </div>
       </div>
     </div>

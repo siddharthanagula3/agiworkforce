@@ -1,6 +1,6 @@
 use super::*;
 use crate::automation::AutomationService;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

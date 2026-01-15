@@ -4,7 +4,7 @@ mod tests {
     use crate::core::agi::{
         ExecutionContext, Goal, Priority, ResourceState, ResourceUsage, ToolExecutionResult,
     };
-    use crate::core::router::LLMRouter;
+    use crate::core::llm::LLMRouter;
     use std::collections::HashMap;
     use std::sync::Arc;
 

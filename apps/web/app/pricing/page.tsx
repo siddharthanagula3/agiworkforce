@@ -2,11 +2,32 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-
-import { ArrowRight, Check, AlertCircle } from 'lucide-react';
+import type { Metadata } from 'next';
+import { ArrowRight, Check, AlertCircle, Zap, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
 import { getSupabaseClient } from '../../services/supabase';
+
+export const metadata: Metadata = {
+  title: 'Pricing Plans | AGI Workforce - Affordable AI Automation',
+  description:
+    'Simple, transparent pricing for AGI Workforce. Start free, upgrade when ready. Plans for individuals, professionals, and power users. No credit card required to start.',
+  keywords: [
+    'AGI Workforce pricing',
+    'AI automation pricing',
+    'subscription plans',
+    'free tier',
+    'hobby plan',
+    'pro plan',
+    'max plan',
+  ],
+  openGraph: {
+    title: 'Pricing Plans | AGI Workforce',
+    description:
+      'Simple, transparent pricing. Start free, upgrade when ready. Plans for individuals and teams.',
+    url: 'https://agiworkforce.com/pricing',
+  },
+};
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -78,8 +99,6 @@ function PricingContent() {
           if (data && mounted) {
             setSubscription(data);
           } else if (mounted) {
-            // No subscription found - user is on free tier
-            // The webhook will create the subscription when they complete purchase
             setSubscription(null);
           }
         }
@@ -125,7 +144,6 @@ function PricingContent() {
     }
   };
 
-  // Define plan hierarchy for upgrade/downgrade logic
   const planHierarchy: Record<string, number> = {
     free: 0,
     hobby: 1,
@@ -146,36 +164,29 @@ function PricingContent() {
       const currentLevel = getPlanLevel(subscription.plan_tier);
       const targetLevel = getPlanLevel(plan);
 
-      // Same plan, allow billing interval changes
       if (subscription.plan_tier === plan) {
         return `Update to ${plan.charAt(0).toUpperCase() + plan.slice(1)} ${billingInterval === 'annual' ? 'Yearly' : 'Monthly'}`;
       }
 
-      // Higher plan - show upgrade
       if (targetLevel > currentLevel) {
         return `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`;
       }
 
-      // Lower plan - show manage subscription
       if (targetLevel < currentLevel) {
         return 'Manage Subscription';
       }
     }
 
-    // Not subscribed or free tier
     return label;
   };
 
   const isButtonDisabled = (plan: string) => {
     if (loadingSubscription || loadingPlan === plan || loadingPlan === 'manage') return true;
-    // Only disable if same plan AND subscription doesn't exist
-    // Allow billing interval changes even for same tier
     return false;
   };
 
   const handleButtonClick = (plan: string) => {
     if (!isSubscribed) {
-      // Not subscribed - go to checkout
       handleUpgrade(plan);
       return;
     }
@@ -184,26 +195,22 @@ function PricingContent() {
       const currentLevel = getPlanLevel(subscription.plan_tier);
       const targetLevel = getPlanLevel(plan);
 
-      // Upgrading to higher plan
       if (targetLevel > currentLevel) {
         handleUpgrade(plan);
         return;
       }
 
-      // Same plan - could be billing interval change, go to checkout
       if (targetLevel === currentLevel) {
         handleUpgrade(plan);
         return;
       }
 
-      // Downgrading - go to portal
       if (targetLevel < currentLevel) {
         handleManage();
         return;
       }
     }
 
-    // Fallback to manage
     handleManage();
   };
 
@@ -211,7 +218,7 @@ function PricingContent() {
     <div className="flex min-h-screen flex-col bg-black text-white">
       <Header />
 
-      <main className="flex-1">
+      <main className="flex-1 pt-24">
         <section className="py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="text-center mb-10">
@@ -219,8 +226,8 @@ function PricingContent() {
                 Simple pricing for your AI workforce
               </h1>
               <p className="text-zinc-400 max-w-2xl mx-auto mb-8">
-                Start free, upgrade when you&apos;re ready to deploy autonomous agents across your
-                desktop and web.
+                Start free, upgrade when you're ready to deploy autonomous agents across your
+                desktop and web. No credit card required to start.
               </p>
 
               {showSubscriptionRequired && !isSubscribed && (
@@ -236,7 +243,7 @@ function PricingContent() {
                 </div>
               )}
 
-              {}
+              {/* Billing Interval Toggle */}
               <div className="flex items-center justify-center gap-4">
                 <span
                   className={`text-sm ${billingInterval === 'monthly' ? 'text-white' : 'text-zinc-500'}`}
@@ -248,6 +255,7 @@ function PricingContent() {
                     setBillingInterval((prev) => (prev === 'monthly' ? 'annual' : 'monthly'))
                   }
                   className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
+                  aria-label="Toggle billing interval"
                 >
                   <span
                     className={`${
@@ -263,14 +271,14 @@ function PricingContent() {
               </div>
             </div>
 
+            {/* Pricing Cards */}
             <div className="grid gap-6 lg:grid-cols-3 max-w-6xl mx-auto">
-              {}
+              {/* Hobby Plan */}
               <div className="rounded-2xl border-2 border-emerald-500/50 bg-black/40 p-6 flex flex-col relative overflow-hidden shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)]">
                 <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
 
                 <div className="relative">
-                  {/* Top badges */}
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     {!isSubscribed && billingInterval === 'annual' && (
                       <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide animate-pulse">
@@ -284,7 +292,7 @@ function PricingContent() {
                     )}
                     {billingInterval === 'annual' && (
                       <div className="inline-flex items-center text-xs font-medium text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse" />
+                        <Sparkles className="h-3 w-3 mr-2" />
                         Save 50%
                       </div>
                     )}
@@ -348,12 +356,12 @@ function PricingContent() {
                 </Button>
               </div>
 
-              {}
+              {/* Pro Plan */}
               <div className="rounded-2xl border border-blue-500 bg-blue-950/10 p-6 flex flex-col relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 pointer-events-none" />
                 <div className="relative">
                   <div className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-200 mb-3">
-                    <span className="h-2 w-2 rounded-full bg-blue-400 mr-2" />
+                    <Zap className="h-3 w-3 mr-2" />
                     Recommended
                   </div>
                   <h2 className="text-xl font-semibold mb-2">Pro</h2>
@@ -408,12 +416,12 @@ function PricingContent() {
                 </Button>
               </div>
 
-              {}
+              {/* Max Plan */}
               <div className="rounded-2xl border border-purple-500 bg-purple-950/10 p-6 flex flex-col relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-pink-600/5 pointer-events-none" />
                 <div className="relative">
                   <div className="inline-flex items-center rounded-full bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-200 mb-3">
-                    <span className="h-2 w-2 rounded-full bg-purple-400 mr-2" />
+                    <Sparkles className="h-3 w-3 mr-2" />
                     Power User
                   </div>
                   <h2 className="text-xl font-semibold mb-2">Max</h2>
@@ -468,6 +476,112 @@ function PricingContent() {
                 </Button>
               </div>
             </div>
+
+            {/* Feature Comparison Table */}
+            <div className="mt-16 max-w-6xl mx-auto">
+              <h2 className="text-2xl font-bold text-center mb-8">Compare Features</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="text-left py-4 px-4 text-zinc-400 font-medium">Feature</th>
+                      <th className="text-center py-4 px-4 text-emerald-400 font-medium">Hobby</th>
+                      <th className="text-center py-4 px-4 text-blue-400 font-medium">Pro</th>
+                      <th className="text-center py-4 px-4 text-purple-400 font-medium">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      {
+                        feature: 'Local LLMs (Ollama)',
+                        hobby: true,
+                        pro: true,
+                        max: true,
+                      },
+                      {
+                        feature: 'Cloud LLMs (GPT, Claude, Gemini, etc.)',
+                        hobby: false,
+                        pro: true,
+                        max: true,
+                      },
+                      {
+                        feature: 'Browser Automation',
+                        hobby: false,
+                        pro: true,
+                        max: true,
+                      },
+                      {
+                        feature: 'Desktop Automation',
+                        hobby: false,
+                        pro: false,
+                        max: true,
+                      },
+                      {
+                        feature: 'Workspaces',
+                        hobby: '1',
+                        pro: 'Unlimited',
+                        max: 'Unlimited',
+                      },
+                      {
+                        feature: 'Code Execution',
+                        hobby: 'Generate Only',
+                        pro: 'Terminal',
+                        max: 'Terminal',
+                      },
+                      {
+                        feature: 'Vision & Screen Analysis',
+                        hobby: 'Upload Only',
+                        pro: 'Real-time',
+                        max: 'Real-time',
+                      },
+                      {
+                        feature: 'Priority Support',
+                        hobby: false,
+                        pro: true,
+                        max: true,
+                      },
+                    ].map((row, i) => (
+                      <tr key={i} className="border-b border-zinc-800/50">
+                        <td className="py-4 px-4 text-zinc-300">{row.feature}</td>
+                        <td className="text-center py-4 px-4">
+                          {typeof row.hobby === 'boolean' ? (
+                            row.hobby ? (
+                              <Check className="h-5 w-5 text-emerald-400 mx-auto" />
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )
+                          ) : (
+                            <span className="text-zinc-300">{row.hobby}</span>
+                          )}
+                        </td>
+                        <td className="text-center py-4 px-4">
+                          {typeof row.pro === 'boolean' ? (
+                            row.pro ? (
+                              <Check className="h-5 w-5 text-blue-400 mx-auto" />
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )
+                          ) : (
+                            <span className="text-zinc-300">{row.pro}</span>
+                          )}
+                        </td>
+                        <td className="text-center py-4 px-4">
+                          {typeof row.max === 'boolean' ? (
+                            row.max ? (
+                              <Check className="h-5 w-5 text-purple-400 mx-auto" />
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )
+                          ) : (
+                            <span className="text-zinc-300">{row.max}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -477,7 +591,13 @@ function PricingContent() {
 
 export default function PricingPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading pricing...</div>
+        </div>
+      }
+    >
       <PricingContent />
     </Suspense>
   );

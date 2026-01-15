@@ -1,4 +1,4 @@
-use crate::core::router::{
+use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 use crate::sys::commands::{AppDatabase, LLMState};
@@ -144,17 +144,17 @@ pub async fn vision_send_message(
     };
 
     let provider = request.provider.as_deref().and_then(|p| match p {
-        "openai" => Some(crate::core::router::Provider::OpenAI),
-        "anthropic" => Some(crate::core::router::Provider::Anthropic),
-        "google" => Some(crate::core::router::Provider::Google),
-        "ollama" => Some(crate::core::router::Provider::Ollama),
+        "openai" => Some(crate::core::llm::Provider::OpenAI),
+        "anthropic" => Some(crate::core::llm::Provider::Anthropic),
+        "google" => Some(crate::core::llm::Provider::Google),
+        "ollama" => Some(crate::core::llm::Provider::Ollama),
         _ => None,
     });
 
-    let preferences = crate::core::router::llm_router::RouterPreferences {
+    let preferences = crate::core::llm::llm_router::RouterPreferences {
         provider,
         model: request.model.clone(),
-        strategy: crate::core::router::llm_router::RoutingStrategy::Auto,
+        strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
         context: None,
         prefer_cloud_credits: false,
     };

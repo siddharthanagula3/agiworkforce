@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -332,7 +332,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
         );
 
         let preferences = RouterPreferences {
-            provider: Some(crate::core::router::Provider::Anthropic),
+            provider: Some(crate::core::llm::Provider::Anthropic),
             model: Some("claude-3-haiku-20240307".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,

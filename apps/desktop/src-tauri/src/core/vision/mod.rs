@@ -240,11 +240,16 @@ pub struct VisionService {
 }
 
 impl VisionService {
+    /// Create a new vision service with the given configuration.
+    ///
+    /// # Panics
+    /// Panics if the HTTP client cannot be created (TLS initialization failure).
+    /// This is an unrecoverable error that indicates a system-level issue.
     pub fn new(config: VisionConfig) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .build()
-            .expect("Failed to create HTTP client");
+            .expect("HTTP client creation failed - TLS backend may not be available");
 
         Self {
             config: Arc::new(RwLock::new(config)),

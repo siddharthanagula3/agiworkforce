@@ -154,7 +154,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     });
 
     return groups;
-  }, [availableModels, userPlanTier, searchQuery]);
+  }, [availableModels, searchQuery]);
 
   // Fetch suggestion with debounce to prevent excessive API calls
   // TEMPORARILY DISABLED - investigating infinite loop issue
