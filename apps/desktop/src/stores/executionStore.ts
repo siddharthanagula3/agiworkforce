@@ -2,6 +2,7 @@ import { listen, isTauri } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { ResearchTask } from '../types/chat';
+import type { ReflectionInsight, FailurePattern, Correction, SubGoal } from '../api/reflection';
 
 export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
@@ -66,6 +67,30 @@ export interface PanelState {
   size: number;
 }
 
+/**
+ * Reflection state for displaying AI learning and improvement suggestions.
+ */
+export interface ReflectionState {
+  /** Most recent reflection insight */
+  currentInsight: ReflectionInsight | null;
+  /** Aggregated failure patterns across iterations */
+  failurePatterns: FailurePattern[];
+  /** Current suggested corrections */
+  corrections: Correction[];
+  /** Sub-goals derived from failed steps */
+  subGoals: SubGoal[];
+  /** AI-generated recommendations */
+  recommendations: string[];
+  /** Current iteration number */
+  iteration: number;
+  /** Whether a reflection is currently being processed */
+  isReflecting: boolean;
+  /** Whether the goal is considered achievable based on reflection */
+  goalAchievable: boolean;
+  /** Confidence score from 0-1 */
+  confidence: number;
+}
+
 export interface ExecutionState {
   activeGoal: ActiveGoal | null;
   steps: ExecutionStep[];
@@ -85,8 +110,11 @@ export interface ExecutionState {
   isStreaming: boolean;
 
   panelVisible: boolean;
-  activeTab: 'thinking' | 'terminal' | 'browser' | 'files';
+  activeTab: 'thinking' | 'terminal' | 'browser' | 'files' | 'reflection';
   panelState: Record<string, PanelState>;
+
+  /** Reflection engine state */
+  reflection: ReflectionState;
 
   setActiveGoal: (goal: ActiveGoal | null) => void;
   addStep: (step: ExecutionStep) => void;
@@ -115,11 +143,33 @@ export interface ExecutionState {
   setActiveTab: (tab: ExecutionState['activeTab']) => void;
   togglePanel: () => void;
 
+  /** Reflection actions */
+  setReflectionInsight: (insight: ReflectionInsight) => void;
+  addFailurePattern: (pattern: FailurePattern) => void;
+  setCorrections: (corrections: Correction[]) => void;
+  setSubGoals: (subGoals: SubGoal[]) => void;
+  setRecommendations: (recommendations: string[]) => void;
+  setReflecting: (isReflecting: boolean) => void;
+  setIteration: (iteration: number) => void;
+  clearReflection: () => void;
+
   /** Clean up execution contexts for a completed or failed goal (keeps goal state for UI display) */
   cleanupGoalContexts: () => void;
 
   reset: () => void;
 }
+
+const initialReflectionState: ReflectionState = {
+  currentInsight: null,
+  failurePatterns: [],
+  corrections: [],
+  subGoals: [],
+  recommendations: [],
+  iteration: 0,
+  isReflecting: false,
+  goalAchievable: true,
+  confidence: 1.0,
+};
 
 const initialState = {
   activeGoal: null,
@@ -140,7 +190,9 @@ const initialState = {
     terminal: { visible: true, size: 50 },
     browser: { visible: true, size: 50 },
     files: { visible: true, size: 50 },
+    reflection: { visible: true, size: 50 },
   },
+  reflection: initialReflectionState,
 };
 
 // Stream timeout management
@@ -313,6 +365,76 @@ export const useExecutionStore = create<ExecutionState>()(
     togglePanel: () => {
       set((state) => {
         state.panelVisible = !state.panelVisible;
+      });
+    },
+
+    // Reflection actions
+    setReflectionInsight: (insight) => {
+      set((state) => {
+        state.reflection.currentInsight = insight;
+        state.reflection.goalAchievable = insight.assessment.goalAchievable;
+        state.reflection.confidence = insight.confidence;
+        // Also update corrections, sub-goals, and recommendations from the insight
+        state.reflection.corrections = insight.corrections;
+        state.reflection.subGoals = insight.subGoals;
+        state.reflection.recommendations = insight.recommendations;
+      });
+    },
+
+    addFailurePattern: (pattern) => {
+      set((state) => {
+        // Check if pattern already exists by category
+        const existingIndex = state.reflection.failurePatterns.findIndex(
+          (p) => p.category === pattern.category,
+        );
+        if (existingIndex >= 0) {
+          // Update frequency and merge affected steps
+          const existing = state.reflection.failurePatterns[existingIndex]!;
+          existing.frequency += pattern.frequency;
+          pattern.affectedSteps.forEach((step) => {
+            if (!existing.affectedSteps.includes(step)) {
+              existing.affectedSteps.push(step);
+            }
+          });
+        } else {
+          state.reflection.failurePatterns.push(pattern);
+        }
+      });
+    },
+
+    setCorrections: (corrections) => {
+      set((state) => {
+        state.reflection.corrections = corrections;
+      });
+    },
+
+    setSubGoals: (subGoals) => {
+      set((state) => {
+        state.reflection.subGoals = subGoals;
+      });
+    },
+
+    setRecommendations: (recommendations) => {
+      set((state) => {
+        state.reflection.recommendations = recommendations;
+      });
+    },
+
+    setReflecting: (isReflecting) => {
+      set((state) => {
+        state.reflection.isReflecting = isReflecting;
+      });
+    },
+
+    setIteration: (iteration) => {
+      set((state) => {
+        state.reflection.iteration = iteration;
+      });
+    },
+
+    clearReflection: () => {
+      set((state) => {
+        state.reflection = initialReflectionState;
       });
     },
 
@@ -548,6 +670,98 @@ export async function initializeExecutionListeners() {
         accepted: null,
       });
     });
+
+    // ===== Reflection Events =====
+
+    // Main reflection completed event with full insight
+    await listen<{
+      goal_id: string;
+      iteration: number;
+      insight: ReflectionInsight;
+    }>('agi:reflection:completed', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      state.setReflectionInsight(payload.insight);
+      state.setIteration(payload.iteration);
+      state.setReflecting(false);
+
+      // Switch to reflection tab when there are issues
+      if (payload.insight.assessment.successRate < 1.0) {
+        state.setActiveTab('reflection');
+      }
+    });
+
+    // Failure patterns event
+    await listen<{
+      goal_id: string;
+      iteration: number;
+      patterns: FailurePattern[];
+    }>('agi:reflection:failure_patterns', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      payload.patterns.forEach((pattern) => {
+        state.addFailurePattern(pattern);
+      });
+    });
+
+    // Corrections event
+    await listen<{
+      goal_id: string;
+      iteration: number;
+      corrections: Correction[];
+    }>('agi:reflection:corrections', ({ payload }) => {
+      useExecutionStore.getState().setCorrections(payload.corrections);
+    });
+
+    // Recommendations event
+    await listen<{
+      goal_id: string;
+      iteration: number;
+      recommendations: string[];
+    }>('agi:reflection:recommendations', ({ payload }) => {
+      useExecutionStore.getState().setRecommendations(payload.recommendations);
+    });
+
+    // Sub-goals event
+    await listen<{
+      goal_id: string;
+      sub_goals: SubGoal[];
+    }>('agi:reflection:sub_goals', ({ payload }) => {
+      useExecutionStore.getState().setSubGoals(payload.sub_goals);
+    });
+
+    // Plan revised event (after corrections applied)
+    await listen<{
+      goal_id: string;
+      iteration: number;
+      corrections_applied: number;
+      new_steps_count: number;
+    }>('agi:reflection:plan_revised', ({ payload }) => {
+      console.debug(
+        `[ExecutionStore] Plan revised: ${payload.corrections_applied} corrections applied, ${payload.new_steps_count} new steps`,
+      );
+    });
+
+    // Goal iteration start - set reflecting state
+    await listen<{
+      goal_id: string;
+      iteration: number;
+    }>('agi:goal:iteration_start', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      state.setIteration(payload.iteration);
+      // Will be set to reflecting once actual reflection begins
+    });
+
+    // Goal unachievable event
+    await listen<{
+      goal_id: string;
+      iterations: number;
+      consecutive_failures: number;
+      final_insight: ReflectionInsight;
+    }>('agi:goal:unachievable', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      state.setReflectionInsight(payload.final_insight);
+      // Switch to reflection tab to show the final analysis
+      state.setActiveTab('reflection');
+    });
   } catch (error) {
     console.error('[ExecutionStore] Failed to initialize event listeners:', error);
     listenersInitialized = false;
@@ -574,3 +788,27 @@ export const selectPendingFileChanges = (state: ExecutionState) =>
 
 export const selectActiveStep = (state: ExecutionState) =>
   state.steps.find((s) => s.status === 'in-progress');
+
+// Reflection selectors
+export const selectReflection = (state: ExecutionState) => state.reflection;
+export const selectReflectionInsight = (state: ExecutionState) => state.reflection.currentInsight;
+export const selectFailurePatterns = (state: ExecutionState) => state.reflection.failurePatterns;
+export const selectCorrections = (state: ExecutionState) => state.reflection.corrections;
+export const selectSubGoals = (state: ExecutionState) => state.reflection.subGoals;
+export const selectRecommendations = (state: ExecutionState) => state.reflection.recommendations;
+export const selectIsReflecting = (state: ExecutionState) => state.reflection.isReflecting;
+export const selectReflectionIteration = (state: ExecutionState) => state.reflection.iteration;
+export const selectGoalAchievable = (state: ExecutionState) => state.reflection.goalAchievable;
+export const selectConfidence = (state: ExecutionState) => state.reflection.confidence;
+
+/** Check if there are any reflection issues to display */
+export const selectHasReflectionIssues = (state: ExecutionState) =>
+  state.reflection.failurePatterns.length > 0 ||
+  state.reflection.corrections.length > 0 ||
+  !state.reflection.goalAchievable;
+
+/** Get the total count of issues for badge display */
+export const selectReflectionIssueCount = (state: ExecutionState) =>
+  state.reflection.failurePatterns.length +
+  state.reflection.corrections.length +
+  (state.reflection.goalAchievable ? 0 : 1);

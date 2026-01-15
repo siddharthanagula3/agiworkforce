@@ -825,23 +825,63 @@ impl AGICore {
                             consecutive_failures = 0;
                         }
 
-                        // Emit reflection event
+                        // Emit reflection completed event with full insight data
                         self.emit_event(
                             "agi:reflection:completed",
                             json!({
                                 "goal_id": goal_id.clone(),
                                 "iteration": iteration,
-                                "insight_id": insight.id,
-                                "success_rate": insight.assessment.success_rate,
-                                "progress_estimate": insight.assessment.progress_estimate,
-                                "goal_achievable": insight.assessment.goal_achievable,
-                                "failure_patterns_count": insight.failure_patterns.len(),
-                                "corrections_count": insight.corrections.len(),
-                                "sub_goals_count": insight.sub_goals.len(),
-                                "recommendations": insight.recommendations.clone(),
-                                "confidence": insight.confidence,
+                                "insight": serde_json::to_value(&insight).unwrap_or_default(),
                             }),
                         );
+
+                        // Also emit individual events for UI components
+                        if !insight.failure_patterns.is_empty() {
+                            self.emit_event(
+                                "agi:reflection:failure_patterns",
+                                json!({
+                                    "goal_id": goal_id.clone(),
+                                    "iteration": iteration,
+                                    "patterns": insight.failure_patterns.iter().map(|p| json!({
+                                        "pattern_id": p.pattern_id,
+                                        "category": format!("{:?}", p.category),
+                                        "description": p.description,
+                                        "affected_steps": p.affected_steps,
+                                        "root_cause": p.root_cause,
+                                        "frequency": p.frequency,
+                                    })).collect::<Vec<_>>(),
+                                }),
+                            );
+                        }
+
+                        if !insight.corrections.is_empty() {
+                            self.emit_event(
+                                "agi:reflection:corrections",
+                                json!({
+                                    "goal_id": goal_id.clone(),
+                                    "iteration": iteration,
+                                    "corrections": insight.corrections.iter().map(|c| json!({
+                                        "for_step_id": c.for_step_id,
+                                        "correction_type": format!("{:?}", c.correction_type),
+                                        "description": c.description,
+                                        "alternative_tool": c.alternative_tool,
+                                        "modified_parameters": c.modified_parameters,
+                                        "priority": c.priority,
+                                    })).collect::<Vec<_>>(),
+                                }),
+                            );
+                        }
+
+                        if !insight.recommendations.is_empty() {
+                            self.emit_event(
+                                "agi:reflection:recommendations",
+                                json!({
+                                    "goal_id": goal_id.clone(),
+                                    "iteration": iteration,
+                                    "recommendations": insight.recommendations,
+                                }),
+                            );
+                        }
 
                         // Store insight in context memory
                         context.context_memory.push(ContextEntry {

@@ -493,10 +493,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   };
 
-  const researchTaskId = (message.metadata as any)?.taskId;
-  const isResearchTask =
-    (message.metadata as any)?.type === 'deep-research' ||
-    (message.metadata as any)?.type === 'deep-research-task';
+  const researchTaskId = message.metadata?.taskId;
+  const isResearchTask = message.metadata?.type === 'deep-research-task';
   const researchTask = researchTaskId ? researchTasks[researchTaskId] : null;
 
   if (isResearchTask && researchTask) {
