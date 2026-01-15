@@ -1,6 +1,6 @@
 use super::*;
 use crate::automation::AutomationService;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use crate::features::document::pdf::PdfHandler;
 use crate::sys::commands::chat::ChatAttachment;
 use anyhow::{anyhow, Result};

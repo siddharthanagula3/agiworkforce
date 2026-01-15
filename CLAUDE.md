@@ -536,3 +536,12 @@ Use `hasPlan(tier)` to check if user has at least the required tier.
 2. **Type check:** `pnpm typecheck:all` before making changes
 3. **Run relevant tests:** Especially E2E before UI/UX changes
 4. **Review:** Check git status for unintended changes before committing
+
+## Additional Documentation
+
+For comprehensive project documentation, see:
+
+- **[README.md](README.md)** - Project overview, features, and quick start
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system architecture and design patterns
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and development workflow
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** - Version history and release notes

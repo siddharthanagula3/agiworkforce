@@ -1,6 +1,6 @@
 use super::*;
 use crate::automation::AutomationService;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -114,7 +114,10 @@ impl AutonomousAgent {
             auto_approve,
         };
 
-        self.task_queue.lock().unwrap().push(task);
+        self.task_queue
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?
+            .push(task);
 
         tracing::info!("[Agent] Task {} queued for execution", task_id);
         Ok(task_id)
@@ -122,14 +125,18 @@ impl AutonomousAgent {
 
     async fn process_task_queue(&self) -> Result<()> {
         {
-            let running = self.running_tasks.lock().unwrap();
+            let running = self.running_tasks
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?;
             if running.len() >= self.config.max_concurrent_tasks {
                 return Ok(());
             }
         }
 
         let (task_id, requires_approval_check) = {
-            let mut queue = self.task_queue.lock().unwrap();
+            let mut queue = self.task_queue
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             if let Some(task) = queue.iter_mut().find(|t| t.status == TaskStatus::Pending) {
                 let task_id = task.id.clone();
                 let requires_approval = task.requires_approval && !task.auto_approve;
@@ -142,7 +149,9 @@ impl AutonomousAgent {
 
         if requires_approval_check {
             let task_clone = {
-                let queue = self.task_queue.lock().unwrap();
+                let queue = self.task_queue
+                    .lock()
+                    .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                 queue.iter().find(|t| t.id == task_id).cloned()
             };
 
@@ -150,7 +159,9 @@ impl AutonomousAgent {
                 if !self.approval.should_approve(&task).await? {
                     tracing::info!("[Agent] Task {} requires approval", task_id);
 
-                    let mut queue = self.task_queue.lock().unwrap();
+                    let mut queue = self.task_queue
+                        .lock()
+                        .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                     if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                         t.status = TaskStatus::WaitingApproval;
                     }
@@ -167,13 +178,18 @@ impl AutonomousAgent {
             }
         });
 
-        self.running_tasks.lock().unwrap().push(task_id);
+        self.running_tasks
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
+            .push(task_id);
         Ok(())
     }
 
     async fn execute_task(&self, task_id: String) -> Result<()> {
         let mut task = {
-            let mut queue = self.task_queue.lock().unwrap();
+            let mut queue = self.task_queue
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             queue
                 .iter_mut()
                 .find(|t| t.id == task_id)
@@ -189,7 +205,9 @@ impl AutonomousAgent {
             task.updated_at = std::time::Instant::now();
 
             {
-                let mut queue = self.task_queue.lock().unwrap();
+                let mut queue = self.task_queue
+                    .lock()
+                    .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                 if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                     *t = task.clone();
                 }
@@ -264,7 +282,9 @@ impl AutonomousAgent {
         }
 
         {
-            let mut queue = self.task_queue.lock().unwrap();
+            let mut queue = self.task_queue
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                 *t = task.clone();
             }
@@ -272,7 +292,7 @@ impl AutonomousAgent {
 
         self.running_tasks
             .lock()
-            .unwrap()
+            .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
             .retain(|id| id != &task_id);
 
         tracing::info!(
@@ -342,14 +362,19 @@ impl AutonomousAgent {
         Ok(true)
     }
 
+    /// Clone agent state for spawning a parallel task.
+    /// Note: Uses expect() for components that should never fail after initial setup.
     pub fn clone_for_task(&self) -> Self {
         Self {
             config: self.config.clone(),
             automation: self.automation.clone(),
             router: self.router.clone(),
-            planner: TaskPlanner::new(self.router.clone()).unwrap(),
-            executor: TaskExecutor::new(self.automation.clone()).unwrap(),
-            vision: VisionAutomation::new().unwrap(),
+            planner: TaskPlanner::new(self.router.clone())
+                .expect("TaskPlanner creation should succeed after initial setup"),
+            executor: TaskExecutor::new(self.automation.clone())
+                .expect("TaskExecutor creation should succeed after initial setup"),
+            vision: VisionAutomation::new()
+                .expect("VisionAutomation creation should succeed after initial setup"),
             approval: ApprovalManager::new(self.config.clone()),
             task_queue: self.task_queue.clone(),
             running_tasks: self.running_tasks.clone(),
@@ -357,16 +382,17 @@ impl AutonomousAgent {
         }
     }
 
-    pub fn get_task_status(&self, task_id: &str) -> Option<Task> {
-        self.task_queue
+    pub fn get_task_status(&self, task_id: &str) -> Result<Option<Task>> {
+        let queue = self.task_queue
             .lock()
-            .unwrap()
-            .iter()
-            .find(|t| t.id == task_id)
-            .cloned()
+            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+        Ok(queue.iter().find(|t| t.id == task_id).cloned())
     }
 
-    pub fn list_tasks(&self) -> Vec<Task> {
-        self.task_queue.lock().unwrap().clone()
+    pub fn list_tasks(&self) -> Result<Vec<Task>> {
+        let queue = self.task_queue
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+        Ok(queue.clone())
     }
 }

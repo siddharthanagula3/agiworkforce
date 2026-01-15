@@ -225,7 +225,7 @@ pub fn run() {
             app.manage(session_manager.clone());
 
 
-            let terminal_llm_router = Arc::new(crate::core::router::LLMRouter::new());
+            let terminal_llm_router = Arc::new(crate::core::llm::LLMRouter::new());
 
 
             let terminal_ai = crate::features::terminal::TerminalAI::new(

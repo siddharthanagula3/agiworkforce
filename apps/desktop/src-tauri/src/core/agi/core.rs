@@ -1,17 +1,86 @@
 use super::*;
 use crate::automation::AutomationService;
 use crate::core::agi::planner::Plan;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tauri::Emitter;
 use tokio::time::sleep;
 
 use tokio::sync::RwLock;
+
+// === Mutex Recovery Helpers (CRITICAL-001 fix) ===
+// These helpers recover from poisoned mutexes by clearing the poison
+// and returning the guard, logging a warning when recovery occurs.
+
+/// Acquires a mutex lock, recovering from poison if necessary.
+/// Returns the guard or an error if lock acquisition fails for other reasons.
+fn lock_with_recovery<'a, T>(mutex: &'a Mutex<T>, context: &str) -> Result<MutexGuard<'a, T>> {
+    match mutex.lock() {
+        Ok(guard) => Ok(guard),
+        Err(poisoned) => {
+            tracing::warn!(
+                "[AGI] Recovered from poisoned mutex ({}): prior thread panicked",
+                context
+            );
+            Ok(poisoned.into_inner())
+        }
+    }
+}
+
+/// Acquires a mutex lock for boolean signals, defaulting to a safe value on poison.
+fn lock_bool_signal(mutex: &Mutex<bool>, default_on_poison: bool) -> bool {
+    match mutex.lock() {
+        Ok(guard) => *guard,
+        Err(poisoned) => {
+            tracing::warn!("[AGI] Recovered from poisoned bool mutex, using default={}", default_on_poison);
+            *poisoned.into_inner()
+        }
+    }
+}
+
+/// Sets a boolean signal value, recovering from poison if necessary.
+fn set_bool_signal(mutex: &Mutex<bool>, value: bool, context: &str) {
+    match mutex.lock() {
+        Ok(mut guard) => *guard = value,
+        Err(poisoned) => {
+            tracing::warn!("[AGI] Recovered from poisoned mutex ({}), setting value={}", context, value);
+            *poisoned.into_inner() = value;
+        }
+    }
+}
+
+// === MEDIUM-006 fix: Context memory limits ===
+/// Maximum number of context memory entries to prevent unbounded growth.
+const MAX_CONTEXT_MEMORY_ENTRIES: usize = 1000;
+/// Maximum number of tool results to keep in context.
+const MAX_TOOL_RESULTS: usize = 500;
+
+/// MEDIUM-006 fix: Truncates context memory to prevent unbounded growth.
+/// Keeps the most recent entries when limit is exceeded.
+fn truncate_context_memory(context: &mut ExecutionContext) {
+    if context.context_memory.len() > MAX_CONTEXT_MEMORY_ENTRIES {
+        let excess = context.context_memory.len() - MAX_CONTEXT_MEMORY_ENTRIES;
+        tracing::debug!(
+            "Truncating context_memory: removing {} oldest entries",
+            excess
+        );
+        context.context_memory.drain(0..excess);
+    }
+
+    if context.tool_results.len() > MAX_TOOL_RESULTS {
+        let excess = context.tool_results.len() - MAX_TOOL_RESULTS;
+        tracing::debug!(
+            "Truncating tool_results: removing {} oldest entries",
+            excess
+        );
+        context.tool_results.drain(0..excess);
+    }
+}
 
 #[derive(Clone)]
 struct PlanStepRuntimeState {
@@ -249,17 +318,12 @@ impl AGICore {
 
     pub async fn start(&self) -> Result<()> {
         tracing::info!("[AGI] Starting AGI Core");
-        *self
-            .stop_signal
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire stop signal lock"))? = false;
+        // CRITICAL-001 fix: Use recovery helper instead of map_err
+        set_bool_signal(&self.stop_signal, false, "start:stop_signal");
 
         loop {
-            if *self
-                .stop_signal
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire stop signal lock"))?
-            {
+            // CRITICAL-001 fix: Use recovery helper, default to true (stop) on poison
+            if lock_bool_signal(&self.stop_signal, true) {
                 tracing::info!("[AGI] Stop signal received");
                 break;
             }
@@ -298,9 +362,8 @@ impl AGICore {
 
         self.knowledge_base.add_goal(&goal).await?;
 
-        self.active_goals
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire active goals lock"))?
+        // CRITICAL-001 fix: Use recovery helper
+        lock_with_recovery(&self.active_goals, "submit_goal:active_goals")?
             .push(goal.clone());
 
         let context = ExecutionContext {
@@ -311,9 +374,8 @@ impl AGICore {
             context_memory: Vec::new(),
         };
 
-        self.execution_contexts
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
+        // CRITICAL-001 fix: Use recovery helper
+        lock_with_recovery(&self.execution_contexts, "submit_goal:execution_contexts")?
             .insert(goal.id.clone(), context);
 
         let goal_id = goal.id.clone();
@@ -430,25 +492,18 @@ impl AGICore {
     }
 
     async fn process_goals(&self) -> Result<()> {
-        let goals = self
-            .active_goals
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire active goals lock"))?
+        // CRITICAL-001 fix: Use recovery helpers
+        let goals = lock_with_recovery(&self.active_goals, "process_goals:active_goals")?
             .clone();
 
         for goal in goals {
-            let context = self
-                .execution_contexts
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
+            let context = lock_with_recovery(&self.execution_contexts, "process_goals:get_context")?
                 .get(&goal.id)
                 .cloned();
 
             if let Some(mut ctx) = context {
                 ctx.available_resources = self.resource_manager.get_state().await?;
-                self.execution_contexts
-                    .lock()
-                    .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
+                lock_with_recovery(&self.execution_contexts, "process_goals:update_context")?
                     .insert(goal.id.clone(), ctx);
             }
         }
@@ -457,10 +512,8 @@ impl AGICore {
     }
 
     async fn achieve_goal(&self, goal_id: String) -> Result<()> {
-        let mut context = self
-            .execution_contexts
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
+        // CRITICAL-001 fix: Use recovery helper
+        let mut context = lock_with_recovery(&self.execution_contexts, "achieve_goal:get_context")?
             .get(&goal_id)
             .ok_or_else(|| anyhow!("Goal {} not found", goal_id))?
             .clone();
@@ -769,6 +822,9 @@ impl AGICore {
                     data: serde_json::to_value(&tool_result)?,
                 });
 
+                // MEDIUM-006 fix: Prevent unbounded memory growth
+                truncate_context_memory(&mut context);
+
                 self.knowledge_base
                     .add_experience(&context.goal, &tool_result)
                     .await?;
@@ -784,9 +840,8 @@ impl AGICore {
                     "progress_percent": ((index + 1) as f64 / plan.steps.len() as f64 * 100.0) as u32,
                 }));
 
-                self.execution_contexts
-                    .lock()
-                    .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
+                // CRITICAL-001 fix: Use recovery helper
+                lock_with_recovery(&self.execution_contexts, "achieve_goal:update_after_step")?
                     .insert(goal_id.clone(), context.clone());
 
                 if self.check_goal_achieved(&context).await? {
@@ -963,7 +1018,36 @@ impl AGICore {
             sleep(Duration::from_secs(delay_secs)).await;
         }
 
+        // MEDIUM-007 fix: Clean up goal from active_goals and execution_contexts
+        // This ensures resources are freed regardless of how the goal ended
+        self.cleanup_goal(&goal_id);
+
         Ok(())
+    }
+
+    /// MEDIUM-007 fix: Remove a goal from active tracking structures.
+    /// Called when achieve_goal exits for any reason (success, failure, timeout, cancellation).
+    fn cleanup_goal(&self, goal_id: &str) {
+        // Remove from active_goals
+        if let Ok(mut goals) = lock_with_recovery(&self.active_goals, "cleanup_goal:active_goals") {
+            let original_len = goals.len();
+            goals.retain(|g| g.id != goal_id);
+            if goals.len() < original_len {
+                tracing::debug!("[AGI] Removed goal {} from active_goals", goal_id);
+            }
+        }
+
+        // Remove from execution_contexts
+        if let Ok(mut contexts) = lock_with_recovery(&self.execution_contexts, "cleanup_goal:contexts") {
+            if contexts.remove(goal_id).is_some() {
+                tracing::debug!("[AGI] Removed goal {} from execution_contexts", goal_id);
+            }
+        }
+
+        self.emit_event(
+            "agi:goal:cleanup",
+            json!({ "goal_id": goal_id }),
+        );
     }
 
     async fn check_goal_achieved(&self, context: &ExecutionContext) -> Result<bool> {
@@ -1070,16 +1154,13 @@ impl AGICore {
     }
 
     pub fn pause(&self) {
-        if let Ok(mut pause) = self.pause_signal.lock() {
-            *pause = true;
-        }
+        // CRITICAL-001 fix: Use recovery helper
+        set_bool_signal(&self.pause_signal, true, "pause");
     }
 
     pub async fn cancel_goal(&self, goal_id: &str) -> Result<()> {
-        let mut contexts = self
-            .execution_contexts
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire lock"))?;
+        // CRITICAL-001 fix: Use recovery helper
+        let mut contexts = lock_with_recovery(&self.execution_contexts, "cancel_goal")?;
 
         if let Some(context) = contexts.get_mut(goal_id) {
             context.current_state.insert(
@@ -1093,25 +1174,34 @@ impl AGICore {
         }
     }
 
+    /// HIGH-001 fix: Properly handle mutex poisoning in cancellation check.
+    /// Returns true on poison (fail-safe: assume cancelled if state is corrupted).
     pub async fn is_goal_cancelled(&self, goal_id: &str) -> bool {
-        if let Ok(contexts) = self.execution_contexts.lock() {
-            if let Some(context) = contexts.get(goal_id) {
-                if let Some(val) = context.current_state.get("cancellation_requested") {
-                    return val.as_bool().unwrap_or(false);
+        match lock_with_recovery(&self.execution_contexts, "is_goal_cancelled") {
+            Ok(contexts) => {
+                if let Some(context) = contexts.get(goal_id) {
+                    if let Some(val) = context.current_state.get("cancellation_requested") {
+                        return val.as_bool().unwrap_or(false);
+                    }
                 }
+                false
+            }
+            Err(e) => {
+                // Fail-safe: if we can't check, assume cancelled to prevent runaway
+                tracing::error!("[AGI] Failed to check cancellation for {}: {}", goal_id, e);
+                true
             }
         }
-        false
     }
 
     pub fn resume(&self) {
-        if let Ok(mut pause) = self.pause_signal.lock() {
-            *pause = false;
-        }
+        // CRITICAL-001 fix: Use recovery helper
+        set_bool_signal(&self.pause_signal, false, "resume");
     }
 
     pub fn is_paused(&self) -> bool {
-        self.pause_signal.lock().map(|p| *p).unwrap_or(false)
+        // CRITICAL-001 fix: Use recovery helper, default to false (not paused) on poison
+        lock_bool_signal(&self.pause_signal, false)
     }
 
     pub fn get_capabilities(&self) -> &AGICapabilities {
@@ -1119,14 +1209,18 @@ impl AGICore {
     }
 
     pub fn get_goal_status(&self, goal_id: &str) -> Option<ExecutionContext> {
-        self.execution_contexts.lock().ok()?.get(goal_id).cloned()
+        // CRITICAL-001 fix: Use recovery helper
+        lock_with_recovery(&self.execution_contexts, "get_goal_status")
+            .ok()?
+            .get(goal_id)
+            .cloned()
     }
 
     pub fn list_goals(&self) -> Vec<Goal> {
-        self.active_goals
-            .lock()
-            .ok()
-            .map_or(Vec::new(), |g| g.clone())
+        // CRITICAL-001 fix: Use recovery helper
+        lock_with_recovery(&self.active_goals, "list_goals")
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 }
 

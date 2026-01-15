@@ -1,6 +1,6 @@
 use crate::automation::screen::{perform_ocr, OcrResult as ScreenOcrResult};
 use crate::core::agent::vision::VisionAutomation;
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -191,8 +191,8 @@ impl IntelligentFileAccess {
 Provide a detailed analysis in a structured format."#
         );
 
-        let llm_request = crate::core::router::LLMRequest {
-            messages: vec![crate::core::router::ChatMessage {
+        let llm_request = crate::core::llm::LLMRequest {
+            messages: vec![crate::core::llm::ChatMessage {
                 role: "user".to_string(),
                 content: full_prompt,
                 tool_calls: None,
@@ -208,10 +208,10 @@ Provide a detailed analysis in a structured format."#
             thinking_mode: None,
         };
 
-        let preferences = crate::core::router::RouterPreferences {
+        let preferences = crate::core::llm::RouterPreferences {
             provider: None,
             model: None,
-            strategy: crate::core::router::RoutingStrategy::Auto,
+            strategy: crate::core::llm::RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
         };
