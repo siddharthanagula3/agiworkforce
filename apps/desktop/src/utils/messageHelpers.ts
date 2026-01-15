@@ -1,6 +1,11 @@
+interface MessageMetadata {
+  type?: string;
+  [key: string]: unknown;
+}
+
 export function shouldShowClaudePlanningCard(
   userMessage: string,
-  metadata?: { type?: string; [key: string]: any },
+  metadata?: MessageMetadata,
 ): boolean {
   if (metadata?.type === 'reasoning') {
     return true;

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as ToastPrimitives from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const ToastProvider = ToastPrimitives.Provider;
@@ -35,6 +35,9 @@ const toastVariants = cva(
         default: 'border bg-background text-foreground',
         destructive:
           'destructive group border-destructive bg-destructive text-destructive-foreground',
+        success: 'border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300',
+        warning: 'border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
+        info: 'border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-300',
       },
     },
     defaultVariants: {
@@ -42,6 +45,43 @@ const toastVariants = cva(
     },
   },
 );
+
+/** Icon component for toast variants */
+const ToastIcon: React.FC<{
+  variant?: 'default' | 'destructive' | 'success' | 'warning' | 'info' | null;
+}> = ({ variant }) => {
+  const iconProps = { className: 'h-5 w-5 shrink-0', 'aria-hidden': true as const };
+
+  switch (variant) {
+    case 'success':
+      return (
+        <CheckCircle2
+          {...iconProps}
+          className={cn(iconProps.className, 'text-green-600 dark:text-green-400')}
+        />
+      );
+    case 'destructive':
+      return <XCircle {...iconProps} className={cn(iconProps.className, 'text-destructive')} />;
+    case 'warning':
+      return (
+        <AlertCircle
+          {...iconProps}
+          className={cn(iconProps.className, 'text-yellow-600 dark:text-yellow-400')}
+        />
+      );
+    case 'info':
+      return (
+        <Info
+          {...iconProps}
+          className={cn(iconProps.className, 'text-blue-600 dark:text-blue-400')}
+        />
+      );
+    default:
+      return null;
+  }
+};
+
+ToastIcon.displayName = 'ToastIcon';
 
 interface ToastProps
   extends
@@ -92,9 +132,10 @@ function ToastClose({ className, ref, ...props }: ToastCloseProps) {
         className,
       )}
       toast-close=""
+      aria-label="Dismiss notification"
       {...props}
     >
-      <X className="h-4 w-4" />
+      <X className="h-4 w-4" aria-hidden="true" />
     </ToastPrimitives.Close>
   );
 }
@@ -146,4 +187,5 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
+  ToastIcon,
 };

@@ -5,7 +5,12 @@ import { errorReportingService } from '../services/errorReporting';
 
 interface Props {
   children: ReactNode;
+  /** Custom fallback UI to show when an error occurs */
   fallback?: ReactNode;
+  /** Callback when an error is caught */
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  /** Name to identify which boundary caught the error */
+  boundaryName?: string;
 }
 
 interface State {
@@ -37,11 +42,17 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    const boundaryLabel = this.props.boundaryName
+      ? `ErrorBoundary(${this.props.boundaryName})`
+      : 'ErrorBoundary';
+    console.error(`${boundaryLabel} caught an error:`, error, errorInfo);
     this.setState({
       error,
       errorInfo,
     });
+
+    // Call optional onError callback
+    this.props.onError?.(error, errorInfo);
 
     const errorStore = useErrorStore.getState();
     errorStore.addError({
@@ -53,6 +64,7 @@ class ErrorBoundary extends Component<Props, State> {
       context: {
         componentStack: errorInfo.componentStack,
         errorBoundary: true,
+        boundaryName: this.props.boundaryName,
       },
     });
 
@@ -140,10 +152,15 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex h-screen w-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div
+          className="flex h-screen w-screen items-center justify-center bg-gray-50 dark:bg-gray-900"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
           <div className="mx-4 max-w-lg rounded-lg border border-red-200 bg-white p-8 shadow-lg dark:border-red-800 dark:bg-gray-800">
             <div className="mb-4 flex items-center gap-3">
-              <AlertCircle className="h-8 w-8 text-red-500" />
+              <AlertCircle className="h-8 w-8 text-red-500" aria-hidden="true" />
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Something went wrong
               </h1>
@@ -155,7 +172,11 @@ class ErrorBoundary extends Component<Props, State> {
             </p>
 
             {this.state.errorReported && (
-              <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+              <div
+                className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950"
+                role="status"
+                aria-live="polite"
+              >
                 <p className="text-sm text-green-700 dark:text-green-300">
                   Error report sent successfully. Thank you for helping us improve!
                 </p>
@@ -180,34 +201,42 @@ class ErrorBoundary extends Component<Props, State> {
               </details>
             )}
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3" role="group" aria-label="Error recovery actions">
               <button
                 onClick={this.handleReset}
-                className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label="Reset the current view to recover from the error"
               >
-                <Home className="h-4 w-4" />
+                <Home className="h-4 w-4" aria-hidden="true" />
                 Reset View
               </button>
               <button
                 onClick={this.handleReload}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                aria-label="Reload the entire page"
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 Reload Page
               </button>
               <button
                 onClick={this.handleCopyError}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                aria-label={
+                  this.state.copySuccess
+                    ? 'Error details copied to clipboard'
+                    : 'Copy error details to clipboard'
+                }
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="h-4 w-4" aria-hidden="true" />
                 {this.state.copySuccess ? 'Copied!' : 'Copy Error'}
               </button>
               {!this.state.errorReported && (
                 <button
                   onClick={this.handleReportError}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                  aria-label="Send an error report to help improve the application"
                 >
-                  <Send className="h-4 w-4" />
+                  <Send className="h-4 w-4" aria-hidden="true" />
                   Report Error
                 </button>
               )}

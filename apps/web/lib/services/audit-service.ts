@@ -21,7 +21,7 @@ export class AuditService {
     action: string,
     resource: string,
     resourceId: string,
-    metadata: Record<string, any> = {},
+    metadata: Record<string, unknown> = {},
     context: {
       userId?: string;
       orgId?: string;
@@ -71,7 +71,21 @@ export class AuditService {
       throw error;
     }
 
-    return data.map((log: any) => ({
+    // Type for the Supabase query result with joined actor
+    interface AuditLogWithActor {
+      id: string;
+      action: string;
+      resource: string;
+      resource_id: string;
+      metadata: Record<string, unknown>;
+      user_id: string | null;
+      organization_id: string | null;
+      ip_address: string | null;
+      user_agent: string | null;
+      created_at: string;
+      actor: { email: string } | null;
+    }
+    return (data as AuditLogWithActor[]).map((log) => ({
       ...log,
       actor_email: log.actor?.email,
     })) as AuditLog[];

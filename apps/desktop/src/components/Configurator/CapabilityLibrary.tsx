@@ -123,7 +123,11 @@ export function CapabilityLibrary({ className }: CapabilityLibraryProps) {
 
       {/* Capabilities List */}
       <ScrollArea className="flex-1">
-        <Accordion type="multiple" defaultValue={['data', 'logic', 'actions', 'ai']} className="px-2">
+        <Accordion
+          type="multiple"
+          defaultValue={['data', 'logic', 'actions', 'ai']}
+          className="px-2"
+        >
           {Object.entries(categoryLabels).map(([category, label]) => {
             const items = groupedCapabilities[category as keyof typeof groupedCapabilities];
             if (!items || items.length === 0) return null;

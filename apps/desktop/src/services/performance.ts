@@ -8,6 +8,26 @@ import {
 } from '../types/analytics';
 import { analytics } from './analytics';
 
+/**
+ * Extended performance entry for first input delay.
+ */
+interface PerformanceEventTimingEntry extends PerformanceEntry {
+  processingStart: number;
+  processingEnd: number;
+  duration: number;
+  cancelable: boolean;
+  target?: EventTarget | null;
+}
+
+/**
+ * Extended performance entry for layout shift.
+ */
+interface LayoutShiftEntry extends PerformanceEntry {
+  value: number;
+  hadRecentInput: boolean;
+  lastInputTime: number;
+}
+
 class PerformanceMonitoringService {
   private marks: Map<string, PerformanceMark> = new Map();
   private measures: PerformanceMeasure[] = [];
@@ -50,8 +70,9 @@ class PerformanceMonitoringService {
 
       const fidObserver = new PerformanceObserver((list) => {
         const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          const fid = entry.processingStart - entry.startTime;
+        entries.forEach((entry) => {
+          const fidEntry = entry as PerformanceEventTimingEntry;
+          const fid = fidEntry.processingStart - fidEntry.startTime;
           analytics.track('app_opened', {
             fid,
             metric: 'first_input_delay',
@@ -64,9 +85,10 @@ class PerformanceMonitoringService {
       let clsValue = 0;
       const clsObserver = new PerformanceObserver((list) => {
         const entries = list.getEntries();
-        entries.forEach((entry: any) => {
-          if (!entry.hadRecentInput) {
-            clsValue += entry.value;
+        entries.forEach((entry) => {
+          const layoutShiftEntry = entry as LayoutShiftEntry;
+          if (!layoutShiftEntry.hadRecentInput) {
+            clsValue += layoutShiftEntry.value;
           }
         });
       });

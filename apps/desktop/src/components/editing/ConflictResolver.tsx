@@ -3,14 +3,7 @@ import { useEditingStore } from '../../stores/editingStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Code,
-  GitMerge,
-  Users,
-} from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Code, GitMerge, Users } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/Tooltip';
@@ -42,7 +35,7 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
   }
 
   const toggleConflict = (index: number) => {
-    setExpandedConflicts(prev => {
+    setExpandedConflicts((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);
@@ -93,9 +86,7 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
                       <ChevronRight className="h-4 w-4 text-amber-500" />
                     )}
                     <GitMerge className="h-4 w-4 text-amber-500" />
-                    <span className="text-sm font-medium">
-                      Conflict {index + 1}
-                    </span>
+                    <span className="text-sm font-medium">Conflict {index + 1}</span>
                     <span className="text-xs text-muted-foreground">
                       Lines {conflict.startLine + 1} - {conflict.endLine + 1}
                     </span>
@@ -103,7 +94,8 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
 
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs">
-                      {conflict.ourContent.split('\n').length} vs {conflict.theirContent.split('\n').length} lines
+                      {conflict.ourContent.split('\n').length} vs{' '}
+                      {conflict.theirContent.split('\n').length} lines
                     </Badge>
                   </div>
                 </div>
@@ -191,8 +183,8 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
       {/* Instructions */}
       <div className="p-3 bg-muted/20 rounded-lg border border-border">
         <p className="text-xs text-muted-foreground">
-          Resolve conflicts by choosing which changes to keep. You can accept your changes,
-          their changes, or both. Conflicts must be resolved before applying changes.
+          Resolve conflicts by choosing which changes to keep. You can accept your changes, their
+          changes, or both. Conflicts must be resolved before applying changes.
         </p>
       </div>
     </Card>

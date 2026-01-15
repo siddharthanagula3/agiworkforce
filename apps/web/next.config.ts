@@ -4,8 +4,14 @@ import type { NextConfig } from 'next';
 // This ensures @agiworkforce/types and @agiworkforce/utils are available
 
 // Content Security Policy configuration
-// Note: 'unsafe-inline' for styles is needed for Next.js/React styling
-// In production, consider using nonces for stricter CSP
+// SECURITY NOTES:
+// - 'unsafe-inline' for styles: Required for Next.js/React inline styles and Stripe Elements.
+//   Consider using nonces in future for stricter CSP (requires custom server).
+// - 'unsafe-eval' for scripts: Required for Stripe.js fraud detection and some React dev tools.
+//   In production, Stripe.js requires eval for device fingerprinting. If you can accept
+//   reduced fraud protection, consider removing 'unsafe-eval' and using Stripe Elements in
+//   strict mode, though this may affect payment success rates.
+// - 'wasm-unsafe-eval': Allows WebAssembly compilation without full 'unsafe-eval'
 //
 // Note about font-src: External fonts from domains like r2cdn.perplexity.ai may be blocked.
 // This is expected behavior - CSP only allows fonts from 'self', fonts.gstatic.com, and data:.
@@ -13,17 +19,18 @@ import type { NextConfig } from 'next';
 // this is the CSP working correctly to prevent unauthorized resource loading.
 const ContentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com https://challenges.cloudflare.com;
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com https://challenges.cloudflare.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
-  img-src 'self' data: blob: https: http:;
+  img-src 'self' data: blob: https:;
   font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
   connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com;
   frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;
-  frame-ancestors 'self';
+  frame-ancestors 'none';
   form-action 'self';
   base-uri 'self';
   object-src 'none';
   upgrade-insecure-requests;
+  block-all-mixed-content;
 `
   .replace(/\s{2,}/g, ' ')
   .trim();
@@ -50,7 +57,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
+            value: 'DENY',
           },
           {
             key: 'X-Content-Type-Options',
@@ -66,7 +73,19 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'credentialless',
           },
           {
             key: 'Content-Security-Policy',

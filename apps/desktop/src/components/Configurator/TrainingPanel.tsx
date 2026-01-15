@@ -28,9 +28,7 @@ export function TrainingPanel() {
           <span className="font-semibold">Training Examples</span>
           <Badge variant="secondary">{trainingExamples.length}</Badge>
         </div>
-        <ChevronDown
-          className={cn('h-4 w-4 transition-transform', trainingOpen && 'rotate-180')}
-        />
+        <ChevronDown className={cn('h-4 w-4 transition-transform', trainingOpen && 'rotate-180')} />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="border-t">

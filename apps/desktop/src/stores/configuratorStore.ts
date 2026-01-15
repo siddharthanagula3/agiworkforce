@@ -71,7 +71,7 @@ interface ConfiguratorState {
   saveEmployee: () => Promise<void>;
 
   addNode: (node: Node) => void;
-  updateNode: (id: string, data: any) => void;
+  updateNode: (id: string, data: Record<string, unknown>) => void;
   deleteNode: (id: string) => void;
   setSelectedNode: (node: Node | null) => void;
   addEdge: (edge: Edge) => void;
@@ -320,7 +320,7 @@ export const useConfiguratorStore = create<ConfiguratorState>()(
         }));
       },
 
-      updateNode: (id: string, data: any) => {
+      updateNode: (id: string, data: Record<string, unknown>) => {
         set((state) => ({
           workflowNodes: state.workflowNodes.map((node) =>
             node.id === id ? { ...node, data: { ...node.data, ...data } } : node,

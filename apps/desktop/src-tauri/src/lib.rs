@@ -1405,6 +1405,13 @@ pub fn run() {
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
             crate::sys::commands::privacy::settings_update_privacy,
+
+            // Updater
+            crate::features::updater::check_for_updates,
+            crate::features::updater::install_update,
+            crate::features::updater::install_update_and_restart,
+            crate::features::updater::get_current_version,
+            crate::features::updater::get_version_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

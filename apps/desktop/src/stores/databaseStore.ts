@@ -1,6 +1,30 @@
 import { create } from 'zustand';
 import { invoke } from '../lib/tauri-mock';
 
+/**
+ * MongoDB document type.
+ */
+export type MongoDocument = Record<string, unknown>;
+
+/**
+ * MongoDB query filter.
+ */
+export type MongoFilter = Record<string, unknown>;
+
+/**
+ * MongoDB update operations.
+ */
+export type MongoUpdate = Record<string, unknown>;
+
+/**
+ * MongoDB operation result.
+ */
+export interface MongoResult {
+  matched_count?: number;
+  modified_count?: number;
+  upserted_id?: string;
+}
+
 export interface ConnectionConfig {
   database_type: 'Postgres' | 'MySql' | 'Sqlite' | 'MongoDB' | 'Redis';
   host?: string;
@@ -26,9 +50,14 @@ export interface DatabaseConnection {
   connected: boolean;
 }
 
+/**
+ * SQL row value types.
+ */
+export type SqlRowValue = string | number | boolean | null;
+
 export interface QueryResult {
   columns?: string[];
-  rows?: any[][];
+  rows?: SqlRowValue[][];
   affected_rows?: number;
   execution_time_ms?: number;
 }
@@ -56,7 +85,7 @@ interface DatabaseState {
   listPools: () => Promise<string[]>;
 
   executeQuery: (sql: string) => Promise<QueryResult>;
-  executePrepared: (sql: string, params: any[]) => Promise<QueryResult>;
+  executePrepared: (sql: string, params: SqlRowValue[]) => Promise<QueryResult>;
   executeBatch: (queries: string[]) => Promise<QueryResult[]>;
 
   buildSelectQuery: (query: SelectQuery) => Promise<string>;
@@ -64,16 +93,16 @@ interface DatabaseState {
   buildUpdateQuery: (query: UpdateQuery) => Promise<string>;
   buildDeleteQuery: (query: DeleteQuery) => Promise<string>;
 
-  mongoFind: (collection: string, filter: Record<string, any>, limit?: number) => Promise<any>;
-  mongoFindOne: (collection: string, filter: Record<string, any>) => Promise<any>;
-  mongoInsertOne: (collection: string, document: Record<string, any>) => Promise<string>;
-  mongoInsertMany: (collection: string, documents: Record<string, any>[]) => Promise<string[]>;
+  mongoFind: (collection: string, filter: MongoFilter, limit?: number) => Promise<MongoDocument[]>;
+  mongoFindOne: (collection: string, filter: MongoFilter) => Promise<MongoDocument | null>;
+  mongoInsertOne: (collection: string, document: MongoDocument) => Promise<string>;
+  mongoInsertMany: (collection: string, documents: MongoDocument[]) => Promise<string[]>;
   mongoUpdateMany: (
     collection: string,
-    filter: Record<string, any>,
-    update: Record<string, any>,
-  ) => Promise<any>;
-  mongoDeleteMany: (collection: string, filter: Record<string, any>) => Promise<number>;
+    filter: MongoFilter,
+    update: MongoUpdate,
+  ) => Promise<MongoResult>;
+  mongoDeleteMany: (collection: string, filter: MongoFilter) => Promise<number>;
 
   redisGet: (key: string) => Promise<string | null>;
   redisSet: (key: string, value: string, expiration?: number) => Promise<void>;
@@ -258,7 +287,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<any>('db_execute_query', {
+      const result = await invoke<QueryResult>('db_execute_query', {
         connectionId: activeConnectionId,
         sql,
       });
@@ -279,7 +308,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  executePrepared: async (sql: string, params: any[]) => {
+  executePrepared: async (sql: string, params: SqlRowValue[]) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -287,7 +316,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<any>('db_execute_prepared', {
+      const result = await invoke<QueryResult>('db_execute_prepared', {
         connectionId: activeConnectionId,
         sql,
         params,
@@ -317,7 +346,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const results = await invoke<any[]>('db_execute_batch', {
+      const results = await invoke<QueryResult[]>('db_execute_batch', {
         connectionId: activeConnectionId,
         queries,
       });
@@ -374,7 +403,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoFind: async (collection: string, filter: Record<string, any>, limit?: number) => {
+  mongoFind: async (collection: string, filter: MongoFilter, limit?: number) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -382,14 +411,14 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<any>('db_mongo_find', {
+      const result = await invoke<MongoDocument[]>('db_mongo_find', {
         connectionId: activeConnectionId,
         collection,
         filter,
         limit,
       });
 
-      set({ queryResults: { rows: result }, loading: false });
+      set({ loading: false });
       return result;
     } catch (error) {
       set({ loading: false, error: String(error) });
@@ -397,7 +426,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoFindOne: async (collection: string, filter: Record<string, any>) => {
+  mongoFindOne: async (collection: string, filter: MongoFilter) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -405,7 +434,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<any>('db_mongo_find_one', {
+      const result = await invoke<MongoDocument | null>('db_mongo_find_one', {
         connectionId: activeConnectionId,
         collection,
         filter,
@@ -419,7 +448,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoInsertOne: async (collection: string, document: Record<string, any>) => {
+  mongoInsertOne: async (collection: string, document: MongoDocument) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -441,7 +470,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoInsertMany: async (collection: string, documents: Record<string, any>[]) => {
+  mongoInsertMany: async (collection: string, documents: MongoDocument[]) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -463,11 +492,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoUpdateMany: async (
-    collection: string,
-    filter: Record<string, any>,
-    update: Record<string, any>,
-  ) => {
+  mongoUpdateMany: async (collection: string, filter: MongoFilter, update: MongoUpdate) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
@@ -475,7 +500,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<any>('db_mongo_update_many', {
+      const result = await invoke<MongoResult>('db_mongo_update_many', {
         connectionId: activeConnectionId,
         collection,
         filter,
@@ -490,7 +515,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoDeleteMany: async (collection: string, filter: Record<string, any>) => {
+  mongoDeleteMany: async (collection: string, filter: MongoFilter) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');
