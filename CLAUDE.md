@@ -6,22 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is a full-stack monorepo built with:
 
-- **Desktop:** Tauri (Rust backend + React frontend) with local SQLite database
+- **Desktop:** Tauri 2.9 (Rust backend + React 19 frontend) with local SQLite database
 - **Web:** Next.js 16 with React 19 and Supabase backend
-- **Services:** Node.js/Express API Gateway and WebSocket Signaling Server
+- **Services:** Node.js/Express API Gateway (port 3000) and WebSocket Signaling Server (port 4000)
 - **Shared:** TypeScript types and utilities via pnpm workspaces
-
-The project supports multi-platform deployment (macOS, Windows, Linux) with real-time synchronization between desktop and mobile clients.
 
 ## Essential Commands
 
 ### Development
 
 ```bash
-# Start desktop development
+# Start desktop development (hot-reload at http://localhost:5173)
 pnpm dev:desktop
 
-# Start web development
+# Start web development (at http://localhost:3001)
 cd apps/web && pnpm dev
 
 # Start backend services (in separate terminals)
@@ -31,14 +29,14 @@ pnpm --filter @agiworkforce/signaling-server dev
 # Install dependencies
 pnpm install
 
-# Type check
+# Type check all packages
 pnpm typecheck:all
 ```
 
 ### Code Quality
 
 ```bash
-# Lint all code
+# Lint all code (max 15 warnings in CI)
 pnpm lint
 
 # Fix all lint issues
@@ -49,6 +47,10 @@ pnpm format
 
 # Check formatting without changing files
 pnpm format:check
+
+# Rust formatting and linting
+cd apps/desktop/src-tauri && cargo fmt
+cd apps/desktop/src-tauri && cargo clippy
 ```
 
 ### Testing
@@ -64,8 +66,19 @@ pnpm --filter web test
 # Run a single test file (web)
 cd apps/web && pnpm vitest run __tests__/api/checkout.test.ts
 
-# Run E2E tests (desktop)
+# Run a single test file (desktop)
+cd apps/desktop && pnpm vitest run src/__tests__/path/to/test.test.ts
+
+# Run Rust tests
+cd apps/desktop/src-tauri && cargo test
+
+# Run E2E tests (desktop must be running on port 5175)
 pnpm --filter @agiworkforce/desktop test:e2e
+
+# Run specific E2E project
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=smoke
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=chat
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=agi
 
 # Run E2E tests with UI mode (useful for debugging)
 pnpm --filter @agiworkforce/desktop test:e2e -- --ui
@@ -91,7 +104,7 @@ pnpm --filter @agiworkforce/web build
 pnpm --filter @agiworkforce/api-gateway build
 ```
 
-### Cleanup
+### Cleanup & Troubleshooting
 
 ```bash
 # Remove all dist directories
@@ -99,6 +112,15 @@ pnpm clean:build
 
 # Remove all node_modules and dist (full clean)
 pnpm clean
+
+# Clear Vite cache
+rm -rf apps/desktop/node_modules/.vite
+
+# Reset local SQLite database
+rm -rf ~/.config/agiworkforce/agiworkforce.db
+
+# Clean Rust build artifacts
+cd apps/desktop/src-tauri && cargo clean
 ```
 
 ## Architecture Overview
@@ -323,83 +345,68 @@ agiworkforce/
 
 **E2E Tests (Playwright):**
 
-- Tests for smoke, chat, automation, AGI, onboarding, settings, visual regression
 - Base URL: http://localhost:5175 (Vite dev server)
 - Viewport: 1920×1080
 - Parallel disabled (serial execution)
 - Auto-retries (2x in CI, 0x locally)
 - Screenshots/videos on failure
 
-```bash
-# Run specific E2E project
-pnpm --filter @agiworkforce/desktop test:e2e -- --project=smoke
-pnpm --filter @agiworkforce/desktop test:e2e -- --project=chat
+**E2E Test Files** (`apps/desktop/e2e/`):
+
+- `smoke.spec.ts` - Critical path smoke tests
+- `chat.spec.ts` - Chat interface tests
+- `agi.spec.ts` - AGI system tests
+- `automation.spec.ts` - Workflow automation tests
+- `browser-automation.spec.ts` - Browser automation tests
+- `settings.spec.ts` - Settings and configuration tests
+- `visual-regression.spec.ts` - Visual regression tests
+- `advanced-integration-flows.spec.ts` - Advanced integration tests
+- `comprehensive-flows.spec.ts` - End-to-end flow tests
+
+## Development Patterns
+
+### Shared Code
+
+```typescript
+// Types: import type { YourType } from '@agiworkforce/types'
+// Utils: import { helper } from '@agiworkforce/utils'
 ```
 
-**Location:** `apps/desktop/e2e/` with TypeScript specs
+### Zustand State (Desktop)
 
-## Development Notes
+```typescript
+const useStore = create<State>()(
+  devtools(
+    persist(
+      subscribeWithSelector((set, get) => ({
+        /* state */
+      })),
+      { name: 'store-name', storage: createJSONStorage(() => localStorage) },
+    ),
+    { name: 'StoreName', enabled: import.meta.env.DEV },
+  ),
+);
+export const selectX = (state: State) => state.x; // Export selectors
+```
 
-### Performance Considerations
+### Tauri Commands
 
-- **Tauri Desktop:** Native Rust backend ensures efficiency; avoid long-running JS operations
-- **Next.js:** Use Server Components for data fetching; minimize client-side bundles
-- **SQLite:** Single-file database; backup before schema changes
+```typescript
+// Frontend: invoke('command_name', { params })
+// Backend: Define in src-tauri/src/sys/commands/
+```
 
-### Security
-
-- **Desktop:** Encryption available via AES-GCM (Rust)
-- **Web:** RLS policies on all sensitive tables; Supabase Auth handles sessions
-- **Services:** JWT validation; CORS configured per service
-
-### Common Patterns
-
-**Sharing Code:**
-
-- Types: `import type { YourType } from '@agiworkforce/types'`
-- Utils: `import { helper } from '@agiworkforce/utils'`
-
-**State in Desktop (Zustand v5):**
-
-- Use middleware stack: `devtools(persist(subscribeWithSelector((set, get) => ({ ... }))))`
-- Export selectors for optimized subscriptions: `export const selectX = (state: State) => state.x`
-- Use `createJSONStorage()` with localStorage fallback for persistence
-- Enable devtools only in dev: `{ name: 'StoreName', enabled: import.meta.env.DEV }`
-- Subscribe to updates via Tauri events
-
-**API Calls in Web:**
+### Web API Calls
 
 - Server Components: Direct Supabase calls
 - Client Components: React Query for caching
 
-**Tauri Commands:**
+## Debugging
 
-- Define in Rust (`src-tauri/src/sys/commands/`)
-- Invoke from React: `invoke('command_name', { params })`
-
-## Debugging Tips
-
-**Desktop App:**
-
-- Dev tools via right-click in dev mode
-- Check console for React errors
-- Rust errors in terminal where `pnpm dev:desktop` runs
-
-**Web App:**
-
-- Next.js error overlay
-- Chrome DevTools for client debugging
-- Server logs in terminal
-
-**Services:**
-
-- Check logs in service terminal
-- Health endpoint: `GET /health`
-
-**WebSocket Signaling:**
-
-- Monitor message flow in browser DevTools (Network tab → WS)
-- Pairing codes expire after 5 minutes by default
+- **Desktop Rust errors:** Terminal where `pnpm dev:desktop` runs
+- **Desktop React errors:** Right-click for dev tools in dev mode
+- **WebSocket sync:** DevTools Network tab → WS (pairing codes expire in 5 min)
+- **Service health:** `GET /health` endpoint
 
 ## Modern Stack Patterns
 
@@ -524,24 +531,28 @@ Use `hasPlan(tier)` to check if user has at least the required tier.
 
 ## Important Notes
 
-- **Never commit `.env.local` or secret keys** - use `.env.example` for templates (available in `apps/desktop/`, `apps/web/`, `services/api-gateway/`)
-- **Database migrations:** Write in SQL in `apps/web/supabase/migrations/`; Supabase handles deployment
-- **Pre-commit hooks** enforce formatting/linting; let them auto-fix when possible
-- **Monorepo:** Use `--filter` flag for targeted commands; `pnpm -r` for all packages
-- **Versioning:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3 are pinned
+- **Environment files:** Never commit `.env.local` - use `.env.example` templates in `apps/desktop/`, `apps/web/`, `services/api-gateway/`
+- **Database migrations:** Write SQL in `apps/web/supabase/migrations/`
+- **Pre-commit hooks:** Auto-fix formatting/linting via Husky
+- **Monorepo commands:** Use `--filter` for specific packages, `pnpm -r` for all
+- **Pinned versions:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3
 
-## When Starting Work
+## Quick Start Checklist
 
-1. **Check deps:** `pnpm install` (pnpm enforces exact versions via lock file)
-2. **Type check:** `pnpm typecheck:all` before making changes
-3. **Run relevant tests:** Especially E2E before UI/UX changes
-4. **Review:** Check git status for unintended changes before committing
+1. `pnpm install` - Install dependencies
+2. `pnpm typecheck:all` - Verify setup
+3. `pnpm dev:desktop` - Start desktop development
+4. Run relevant tests before committing
+
+## Commit Convention
+
+Uses [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`
+
+Scopes: `desktop`, `web`, `agi`, `mcp`, `ui`, `api`, `docs`
 
 ## Additional Documentation
 
-For comprehensive project documentation, see:
-
-- **[README.md](README.md)** - Project overview, features, and quick start
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system architecture and design patterns
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and development workflow
-- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** - Version history and release notes
+- **[README.md](README.md)** - Features and quick start
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system design, data flows, and code patterns
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Code style, testing, and PR guidelines
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** - Version history
