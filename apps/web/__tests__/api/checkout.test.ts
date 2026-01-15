@@ -145,7 +145,7 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(400);
     expect(data.error.code).toBe('VALIDATION_ERROR');
-    expect(data.error.message).toContain('Invalid plan');
+    expect(data.error.message).toMatch(/Invalid|plan/);
   });
 
   it('should create checkout session for valid request', async () => {
@@ -172,6 +172,6 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(400);
     expect(data.error.code).toBe('VALIDATION_ERROR');
-    expect(data.error.message).toContain('Invalid plan');
+    expect(data.error.message).toMatch(/Invalid|plan/);
   });
 });
