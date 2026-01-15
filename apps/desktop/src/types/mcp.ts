@@ -236,3 +236,69 @@ export interface McpbEventPayload {
   message?: string;
   error?: string;
 }
+
+// MCP OAuth Types for GitHub, Google Drive, and Slack integrations
+
+/**
+ * Supported OAuth providers for MCP server authentication
+ */
+export type McpOAuthProvider = 'github' | 'google_drive' | 'slack';
+
+/**
+ * Response from starting an OAuth flow
+ */
+export interface McpOAuthStartResponse {
+  /** The URL to open in the browser for authorization */
+  authUrl: string;
+  /** The state parameter for CSRF protection */
+  state: string;
+}
+
+/**
+ * Response from completing an OAuth flow (callback)
+ */
+export interface McpOAuthTokenResponse {
+  /** The provider that was authenticated */
+  provider: string;
+  /** Whether the connection was successful */
+  connected: boolean;
+  /** When the access token expires (Unix timestamp) */
+  expiresAt: number | null;
+}
+
+/**
+ * User information from the OAuth provider
+ */
+export interface McpOAuthUserInfo {
+  /** The user's ID on the provider */
+  id: string;
+  /** The user's display name */
+  name: string | null;
+  /** The user's email address */
+  email: string | null;
+  /** URL to the user's avatar */
+  avatarUrl: string | null;
+}
+
+/**
+ * Status of an OAuth connection
+ */
+export interface McpOAuthConnectionStatus {
+  /** Whether the provider is connected */
+  connected: boolean;
+  /** User information if connected */
+  userInfo: McpOAuthUserInfo | null;
+  /** When the access token expires (Unix timestamp) */
+  expiresAt: number | null;
+}
+
+/**
+ * Provider configuration for display in UI
+ */
+export interface McpOAuthProviderConfig {
+  id: McpOAuthProvider;
+  name: string;
+  description: string;
+  icon: string;
+  scopes: string[];
+}

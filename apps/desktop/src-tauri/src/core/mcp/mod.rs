@@ -24,3 +24,4 @@ pub use protocol::{McpToolDefinition, ToolCallResult, ToolContent};
 pub use registry::McpToolRegistry;
 pub use session::McpSession;
 pub use tool_executor::{McpToolExecutor, ToolExecutionResult, ToolStats};
+pub use transport::{HttpSseConfig, HttpSseTransport, McpTransport, StdioTransport, Transport, TransportConfig};

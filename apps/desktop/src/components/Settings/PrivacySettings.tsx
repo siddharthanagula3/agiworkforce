@@ -1,13 +1,10 @@
-import { invoke } from '@/lib/tauri-mock';
+import {
+  PrivacyClient,
+  type PrivacyPreferences,
+  downloadUserData,
+  deleteUserAccount,
+} from '@/api/privacy';
 import React, { useState } from 'react';
-
-interface PrivacyPreferences {
-  telemetryEnabled: boolean;
-  crashReportingEnabled: boolean;
-  aiModelSharingEnabled: boolean;
-  analyticsEnabled: boolean;
-  usageDataCollection: boolean;
-}
 
 export const PrivacySettings: React.FC = () => {
   const [preferences, setPreferences] = useState<PrivacyPreferences>({
@@ -32,7 +29,7 @@ export const PrivacySettings: React.FC = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      await invoke('settings_update_privacy', { preferences });
+      await PrivacyClient.updatePreferences(preferences);
       // Show success notification
     } catch (error) {
       console.error('Failed to save privacy settings:', error);
@@ -45,15 +42,7 @@ export const PrivacySettings: React.FC = () => {
   const handleExportData = async () => {
     setLoading(true);
     try {
-      const data = await invoke<string>('privacy_export_data');
-      // Create download link
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `agiworkforce-data-${Date.now()}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
+      await downloadUserData();
       setShowExportDialog(false);
     } catch (error) {
       console.error('Failed to export data:', error);
@@ -65,7 +54,8 @@ export const PrivacySettings: React.FC = () => {
   const handleDeleteAccount = async () => {
     setLoading(true);
     try {
-      await invoke('privacy_delete_account');
+      // TODO: Get actual user ID from auth context
+      await deleteUserAccount('current-user');
       // Logout and redirect to welcome screen
       window.location.href = '/welcome';
     } catch (error) {
@@ -79,9 +69,7 @@ export const PrivacySettings: React.FC = () => {
     <div className="privacy-settings">
       <div className="settings-header">
         <h2>Privacy & Security</h2>
-        <p className="text-muted">
-          Control your data and privacy preferences
-        </p>
+        <p className="text-muted">Control your data and privacy preferences</p>
       </div>
 
       <div className="settings-section">
@@ -91,8 +79,7 @@ export const PrivacySettings: React.FC = () => {
           <div className="setting-info">
             <label htmlFor="telemetry">Telemetry</label>
             <p className="setting-description">
-              Help improve AGI Workforce by sending anonymous usage data and
-              performance metrics
+              Help improve AGI Workforce by sending anonymous usage data and performance metrics
             </p>
           </div>
           <div className="setting-control">
@@ -109,8 +96,7 @@ export const PrivacySettings: React.FC = () => {
           <div className="setting-info">
             <label htmlFor="crash-reporting">Crash Reporting</label>
             <p className="setting-description">
-              Automatically send crash reports to help us fix bugs and improve
-              stability
+              Automatically send crash reports to help us fix bugs and improve stability
             </p>
           </div>
           <div className="setting-control">
@@ -127,8 +113,8 @@ export const PrivacySettings: React.FC = () => {
           <div className="setting-info">
             <label htmlFor="ai-model-sharing">AI Model Improvement</label>
             <p className="setting-description">
-              Share your interactions with AI models to help improve their
-              accuracy (data is anonymized)
+              Share your interactions with AI models to help improve their accuracy (data is
+              anonymized)
             </p>
           </div>
           <div className="setting-control">
@@ -162,8 +148,7 @@ export const PrivacySettings: React.FC = () => {
           <div className="setting-info">
             <label htmlFor="usage-data">Usage Data Collection</label>
             <p className="setting-description">
-              Collect detailed usage patterns to provide personalized
-              recommendations
+              Collect detailed usage patterns to provide personalized recommendations
             </p>
           </div>
           <div className="setting-control">
@@ -188,10 +173,7 @@ export const PrivacySettings: React.FC = () => {
             </p>
           </div>
           <div className="setting-control">
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowExportDialog(true)}
-            >
+            <button className="btn btn-secondary" onClick={() => setShowExportDialog(true)}>
               Export Data
             </button>
           </div>
@@ -201,15 +183,11 @@ export const PrivacySettings: React.FC = () => {
           <div className="setting-info">
             <label>Delete Account</label>
             <p className="setting-description">
-              Permanently delete your account and all associated data. This
-              action cannot be undone.
+              Permanently delete your account and all associated data. This action cannot be undone.
             </p>
           </div>
           <div className="setting-control">
-            <button
-              className="btn btn-danger"
-              onClick={() => setShowDeleteDialog(true)}
-            >
+            <button className="btn btn-danger" onClick={() => setShowDeleteDialog(true)}>
               Delete Account
             </button>
           </div>
@@ -221,11 +199,7 @@ export const PrivacySettings: React.FC = () => {
 
         <div className="setting-item">
           <div className="setting-info">
-            <a
-              href="https://agiworkforce.com/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a href="https://agiworkforce.com/privacy" target="_blank" rel="noopener noreferrer">
               Privacy Policy
             </a>
           </div>
@@ -233,11 +207,7 @@ export const PrivacySettings: React.FC = () => {
 
         <div className="setting-item">
           <div className="setting-info">
-            <a
-              href="https://agiworkforce.com/terms"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a href="https://agiworkforce.com/terms" target="_blank" rel="noopener noreferrer">
               Terms of Service
             </a>
           </div>
@@ -245,11 +215,7 @@ export const PrivacySettings: React.FC = () => {
 
         <div className="setting-item">
           <div className="setting-info">
-            <a
-              href="https://agiworkforce.com/security"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a href="https://agiworkforce.com/security" target="_blank" rel="noopener noreferrer">
               Security Practices
             </a>
           </div>
@@ -257,11 +223,7 @@ export const PrivacySettings: React.FC = () => {
       </div>
 
       <div className="settings-footer">
-        <button
-          className="btn btn-primary"
-          onClick={handleSave}
-          disabled={loading}
-        >
+        <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
           {loading ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
@@ -272,8 +234,8 @@ export const PrivacySettings: React.FC = () => {
           <div className="modal">
             <h3>Export Your Data</h3>
             <p>
-              Your data will be exported as a JSON file containing all your
-              conversations, settings, and automation history.
+              Your data will be exported as a JSON file containing all your conversations, settings,
+              and automation history.
             </p>
             <div className="modal-actions">
               <button
@@ -283,11 +245,7 @@ export const PrivacySettings: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleExportData}
-                disabled={loading}
-              >
+              <button className="btn btn-primary" onClick={handleExportData} disabled={loading}>
                 {loading ? 'Exporting...' : 'Export'}
               </button>
             </div>
@@ -302,8 +260,7 @@ export const PrivacySettings: React.FC = () => {
             <h3>Delete Account</h3>
             <div className="warning">
               <p>
-                <strong>Warning:</strong> This action is permanent and cannot
-                be undone.
+                <strong>Warning:</strong> This action is permanent and cannot be undone.
               </p>
               <p>All of the following will be deleted:</p>
               <ul>
@@ -322,11 +279,7 @@ export const PrivacySettings: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                className="btn btn-danger"
-                onClick={handleDeleteAccount}
-                disabled={loading}
-              >
+              <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={loading}>
                 {loading ? 'Deleting...' : 'Delete My Account'}
               </button>
             </div>

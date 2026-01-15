@@ -11,7 +11,7 @@
  * allowing the UI to gracefully degrade when Ollama is not available.
  */
 
-import { invoke } from '../lib/tauri-mock';
+import { ollamaCheckStatus, ollamaListModels, type OllamaModel } from '../api/ollama';
 import { useModelStore } from '../stores/modelStore';
 
 // Configuration
@@ -42,7 +42,7 @@ let healthState: HealthState = {
  */
 async function performHealthCheck(): Promise<boolean> {
   try {
-    const available = await invoke<boolean>('ollama_check_status');
+    const available = await ollamaCheckStatus();
 
     if (available) {
       // Only log status changes
@@ -119,22 +119,7 @@ function getGracefulErrorMessage(): string {
  */
 async function fetchModelsAsync(): Promise<void> {
   try {
-    const models = await invoke<
-      Array<{
-        name: string;
-        size: number;
-        modified_at: string;
-        digest: string;
-        details: {
-          parameter_size: string;
-          quantization_level: string;
-          family: string;
-          families: string[];
-          parent_model: string;
-          format: string;
-        };
-      }>
-    >('ollama_list_models');
+    const models: OllamaModel[] = await ollamaListModels();
 
     const previousCount = healthState.modelsCount;
     healthState.modelsCount = models.length;
