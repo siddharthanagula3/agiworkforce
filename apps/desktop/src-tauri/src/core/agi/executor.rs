@@ -4,7 +4,7 @@ use crate::core::agi::api_tools_impl;
 use crate::core::agi::outcome_tracker::OutcomeTracker;
 use crate::core::agi::planner::PlanStep;
 use crate::core::agi::process_reasoning::ProcessReasoning;
-use crate::core::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use crate::data::cache::ToolResultCache;
 use crate::features::calendar::EventDateTime;
 use crate::sys::security::ToolExecutionGuard;
@@ -1254,7 +1254,7 @@ impl AGIExecutor {
                 );
 
                 let preferences = RouterPreferences {
-                    provider: Some(crate::core::router::Provider::Anthropic),
+                    provider: Some(crate::core::llm::Provider::Anthropic),
                     model: Some("claude-haiku-4-5".to_string()),
                     strategy: RoutingStrategy::Auto,
                     context: None,

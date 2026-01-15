@@ -1,13 +1,15 @@
 use super::types::{ActionPlan, ComputerAction, ProgressVerification};
 use crate::automation::screen::CapturedImage;
-use crate::core::router::llm_router::LLMRouter;
-use crate::core::router::{ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput};
+use crate::core::llm::llm_router::LLMRouter;
+use crate::core::llm::{ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput};
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use image::DynamicImage;
 use std::io::Cursor;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 
 pub struct ActionPlanner {
     llm_router: Arc<Mutex<LLMRouter>>,
@@ -109,7 +111,12 @@ impl ActionPlanner {
         )
     }
 
+    /// HIGH-002 fix: Add timeout to prevent hanging on slow/unresponsive LLM providers.
     async fn call_vision_llm(&self, prompt: &str, base64_image: &str) -> Result<String> {
+        // HIGH-002 fix: 60-second timeout for vision LLM calls
+        // Vision models process images which takes longer than text-only calls
+        const VISION_LLM_TIMEOUT: Duration = Duration::from_secs(60);
+
         let router = self.llm_router.lock().await;
 
         let image_bytes = general_purpose::STANDARD
@@ -129,7 +136,7 @@ impl ActionPlanner {
             },
         ];
 
-        let request = crate::core::router::LLMRequest {
+        let request = crate::core::llm::LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: String::new(),
@@ -146,10 +153,10 @@ impl ActionPlanner {
             thinking_mode: None,
         };
 
-        let preferences = crate::core::router::llm_router::RouterPreferences {
-            provider: Some(crate::core::router::Provider::Anthropic),
+        let preferences = crate::core::llm::llm_router::RouterPreferences {
+            provider: Some(crate::core::llm::Provider::Anthropic),
             model: None,
-            strategy: crate::core::router::llm_router::RoutingStrategy::Auto,
+            strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
         };
@@ -161,9 +168,14 @@ impl ActionPlanner {
             ));
         }
 
-        let outcome = router
-            .invoke_candidate(&candidates[0], &request)
+        // HIGH-002 fix: Wrap LLM call with timeout
+        let llm_future = router.invoke_candidate(&candidates[0], &request);
+        let outcome = timeout(VISION_LLM_TIMEOUT, llm_future)
             .await
+            .map_err(|_| anyhow::anyhow!(
+                "Vision LLM request timed out after {} seconds",
+                VISION_LLM_TIMEOUT.as_secs()
+            ))?
             .context("Vision LLM request failed")?;
 
         Ok(outcome.response.content)
@@ -179,10 +191,31 @@ impl ActionPlanner {
         Ok(general_purpose::STANDARD.encode(&buf))
     }
 
+    /// CRITICAL-002 fix: Add size limits and bounds checking for JSON parsing.
+    /// Prevents memory exhaustion from maliciously large LLM responses.
     fn parse_action_plan(&self, response: &str) -> Result<ActionPlan> {
+        // Maximum allowed response size (1MB should be more than enough for action plans)
+        const MAX_RESPONSE_SIZE: usize = 1024 * 1024;
+        // Maximum number of actions to prevent runaway plans
+        const MAX_ACTIONS: usize = 100;
+
+        // CRITICAL-002 fix: Enforce size limit before any processing
+        if response.len() > MAX_RESPONSE_SIZE {
+            return Err(anyhow::anyhow!(
+                "Response too large: {} bytes (max: {} bytes)",
+                response.len(),
+                MAX_RESPONSE_SIZE
+            ));
+        }
+
         let json_str = if let Some(start) = response.find('{') {
             if let Some(end) = response.rfind('}') {
-                &response[start..=end]
+                // Additional bounds check to prevent slice issues
+                if end >= start && end < response.len() {
+                    &response[start..=end]
+                } else {
+                    return Err(anyhow::anyhow!("Invalid JSON bounds in response"));
+                }
             } else {
                 response
             }
@@ -190,8 +223,31 @@ impl ActionPlanner {
             response
         };
 
-        serde_json::from_str(json_str)
-            .context(format!("Failed to parse action plan from: {}", response))
+        // CRITICAL-002 fix: Check extracted JSON size
+        if json_str.len() > MAX_RESPONSE_SIZE {
+            return Err(anyhow::anyhow!(
+                "Extracted JSON too large: {} bytes",
+                json_str.len()
+            ));
+        }
+
+        // Parse with size awareness
+        let plan: ActionPlan = serde_json::from_str(json_str)
+            .context(format!(
+                "Failed to parse action plan from: {}",
+                &response[..response.len().min(500)] // Truncate error message
+            ))?;
+
+        // CRITICAL-002 fix: Validate action count to prevent runaway plans
+        if plan.actions.len() > MAX_ACTIONS {
+            return Err(anyhow::anyhow!(
+                "Too many actions in plan: {} (max: {})",
+                plan.actions.len(),
+                MAX_ACTIONS
+            ));
+        }
+
+        Ok(plan)
     }
 }
 

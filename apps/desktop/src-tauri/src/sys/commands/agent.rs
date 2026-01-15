@@ -108,6 +108,7 @@ pub async fn agent_get_task_status(task_id: String) -> Result<TaskStatusResponse
     let agent = agent_arc.lock().await;
     let task = agent
         .get_task_status(&task_id)
+        .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     Ok(TaskStatusResponse { task })
@@ -124,7 +125,7 @@ pub async fn agent_list_tasks() -> Result<ListTasksResponse, String> {
     };
 
     let agent = agent_arc.lock().await;
-    let tasks = agent.list_tasks();
+    let tasks = agent.list_tasks().map_err(|e| e.to_string())?;
 
     Ok(ListTasksResponse { tasks })
 }

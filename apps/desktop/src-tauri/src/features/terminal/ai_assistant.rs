@@ -1,4 +1,4 @@
-use crate::core::router::LLMRouter;
+use crate::core::llm::LLMRouter;
 use crate::features::terminal::SessionManager;
 use crate::sys::error::{Error, Result};
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-use crate::core::router::{ChatMessage, LLMRouter, RouterPreferences};
+use crate::core::llm::{ChatMessage, LLMRouter, RouterPreferences};
 use crate::data::db::models::Message;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -181,7 +181,7 @@ impl ContextManager {
                 Some(RouterPreferences {
                     provider: None,
                     model: Some("gpt-4o-mini".to_string()),
-                    strategy: crate::core::router::RoutingStrategy::Auto,
+                    strategy: crate::core::llm::RoutingStrategy::Auto,
                     context: None,
                     prefer_cloud_credits: false,
                 }),
