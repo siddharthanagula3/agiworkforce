@@ -5,9 +5,30 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Delimiter used to separate components in tool IDs
-/// Using double underscore to avoid conflicts with single underscores in server/tool names
-const TOOL_ID_DELIMITER: &str = "__";
+/// Delimiter used to separate components in tool IDs.
+/// HIGH-004 fix: Using triple colon as delimiter - colons are invalid in MCP server
+/// and tool names (which use DNS-like naming), making collisions impossible.
+const TOOL_ID_DELIMITER: &str = ":::";
+
+/// HIGH-004 fix: Helper to create safe tool IDs with sanitized names.
+fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
+    let safe_server = if server_name.contains(TOOL_ID_DELIMITER) {
+        server_name.replace(TOOL_ID_DELIMITER, "_")
+    } else {
+        server_name.to_string()
+    };
+
+    let safe_tool = if tool_name.contains(TOOL_ID_DELIMITER) {
+        tool_name.replace(TOOL_ID_DELIMITER, "_")
+    } else {
+        tool_name.to_string()
+    };
+
+    format!(
+        "mcp{}{}{}{}",
+        TOOL_ID_DELIMITER, safe_server, TOOL_ID_DELIMITER, safe_tool
+    )
+}
 
 pub struct McpToolRegistry {
     mcp_client: Arc<McpClient>,
@@ -27,11 +48,8 @@ impl McpToolRegistry {
     }
 
     pub fn mcp_tool_to_schema(&self, server_name: &str, mcp_tool: &McpTool) -> Tool {
-        // Use double underscore delimiter to avoid conflicts with single underscores in names
-        let tool_id = format!(
-            "mcp{}{}{}{}",
-            TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name
-        );
+        // HIGH-004 fix: Use helper for safe tool ID creation
+        let tool_id = create_safe_tool_id(server_name, &mcp_tool.name);
 
         let parameters = self.extract_parameters(&mcp_tool.input_schema);
 
@@ -208,18 +226,16 @@ impl McpToolRegistry {
         &self,
         server_name: &str,
         mcp_tool: &McpTool,
-    ) -> crate::core::router::ToolDefinition {
-        crate::core::router::ToolDefinition {
-            name: format!(
-                "mcp{}{}{}{}",
-                TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name
-            ),
+    ) -> crate::core::llm::ToolDefinition {
+        crate::core::llm::ToolDefinition {
+            // HIGH-004 fix: Use helper for safe tool ID creation
+            name: create_safe_tool_id(server_name, &mcp_tool.name),
             description: mcp_tool.description.clone().unwrap_or_default(),
             parameters: mcp_tool.input_schema.clone(),
         }
     }
 
-    pub fn get_all_tool_definitions(&self) -> Vec<crate::core::router::ToolDefinition> {
+    pub fn get_all_tool_definitions(&self) -> Vec<crate::core::llm::ToolDefinition> {
         let tools = self.mcp_client.list_all_tools();
         tools
             .into_iter()
@@ -231,7 +247,8 @@ impl McpToolRegistry {
         serde_json::json!({
             "type": "function",
             "function": {
-                "name": format!("mcp{}{}{}{}", TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name),
+                // HIGH-004 fix: Use helper for safe tool ID creation
+                "name": create_safe_tool_id(server_name, &mcp_tool.name),
                 "description": mcp_tool.description.clone().unwrap_or_default(),
                 "parameters": mcp_tool.input_schema
             }

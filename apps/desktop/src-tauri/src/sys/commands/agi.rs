@@ -3,7 +3,7 @@ use crate::core::agi::{
     AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, ExecutionContext, Goal,
     Priority, ScoredResult,
 };
-use crate::core::router::Provider;
+use crate::core::llm::Provider;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::AppDatabase;
 use anyhow::Result;
@@ -783,8 +783,8 @@ pub async fn start_agent_task(
 
     // 3. Prepare the Request
     let router = llm_state.router.clone();
-    let request = crate::core::router::LLMRequest {
-        messages: vec![crate::core::router::ChatMessage {
+    let request = crate::core::llm::LLMRequest {
+        messages: vec![crate::core::llm::ChatMessage {
             role: "user".to_string(),
             content: goal.clone(),
             tool_calls: None,
@@ -802,7 +802,7 @@ pub async fn start_agent_task(
 
     // 4. Call API
     let router_guard = router.read().await;
-    let preferences = crate::core::router::llm_router::RouterPreferences {
+    let preferences = crate::core::llm::llm_router::RouterPreferences {
         provider: Some(provider),
         model: Some(model.to_string()),
         ..Default::default()

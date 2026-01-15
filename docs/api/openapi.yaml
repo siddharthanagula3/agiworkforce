@@ -1,0 +1,940 @@
+openapi: 3.1.0
+info:
+  title: AGI Workforce API
+  version: 1.0.0
+  description: |
+    ## Overview
+
+    The AGI Workforce API provides comprehensive access to AI-powered automation, LLM routing,
+    subscription management, and device synchronization. Our API follows RESTful principles and
+    uses standard HTTP response codes, authentication, and verbs.
+
+    ## Base URLs
+
+    - **Web API**: `https://agiworkforce.com/api`
+    - **API Gateway**: `https://api.agiworkforce.com`
+    - **LLM API**: `https://agiworkforce.com/api/llm/v1` (OpenAI-compatible)
+
+    ## Authentication
+
+    The API uses two authentication methods:
+
+    ### 1. Bearer Token (Recommended)
+
+    For programmatic access, use Supabase JWT tokens:
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+      https://agiworkforce.com/api/me
+    ```
+
+    ### 2. Session Cookies
+
+    For browser-based requests, authentication is handled automatically via secure HTTP-only cookies.
+
+    ## Rate Limiting
+
+    All endpoints are rate-limited to ensure fair usage and system stability. Rate limit information
+    is included in response headers:
+
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Remaining requests in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+    - `Retry-After`: Seconds to wait before retrying (429 responses only)
+
+    ## Error Handling
+
+    The API uses conventional HTTP response codes:
+
+    - `2xx` - Success
+    - `4xx` - Client errors (invalid request, authentication, etc.)
+    - `5xx` - Server errors
+
+    Error responses include a JSON body with detailed information:
+
+    ```json
+    {
+      "error": {
+        "code": "RATE_LIMIT_EXCEEDED",
+        "message": "Rate limit exceeded. Please try again after 2026-01-15T10:30:00Z",
+        "type": "rate_limit_error"
+      }
+    }
+    ```
+
+    ## Pagination
+
+    List endpoints support pagination using query parameters:
+
+    - `limit`: Number of items to return (default: 20, max: 100)
+    - `offset`: Number of items to skip
+
+    ## Idempotency
+
+    Critical operations (payments, credit deductions) support idempotency to prevent duplicate processing.
+    Use the `Idempotency-Key` header with a unique identifier:
+
+    ```bash
+    curl -H "Idempotency-Key: unique-key-123" \
+      -X POST https://agiworkforce.com/api/checkout
+    ```
+
+  contact:
+    name: AGI Workforce Support
+    email: support@agiworkforce.com
+    url: https://agiworkforce.com/support
+  license:
+    name: Proprietary
+    url: https://agiworkforce.com/terms
+
+servers:
+  - url: https://agiworkforce.com/api
+    description: Production Web API
+  - url: https://api.agiworkforce.com
+    description: Production API Gateway
+  - url: http://localhost:3000/api
+    description: Local Development
+
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT token obtained from authentication
+
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb-access-token
+      description: Supabase session cookie (browser-based authentication)
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+        email:
+          type: string
+          format: email
+          description: User's email address
+        name:
+          type: string
+          description: Display name
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Profile picture URL
+        created_at:
+          type: integer
+          format: int64
+          description: Unix timestamp of account creation
+        updated_at:
+          type: integer
+          format: int64
+          description: Unix timestamp of last update
+        plan:
+          $ref: '#/components/schemas/Plan'
+        feature_flags:
+          $ref: '#/components/schemas/FeatureFlags'
+        credits:
+          $ref: '#/components/schemas/CreditBalance'
+          nullable: true
+
+    Plan:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [free, hobby, pro, max, enterprise]
+          description: Subscription tier
+        display_name:
+          type: string
+          description: Human-readable plan name
+        status:
+          type: string
+          enum:
+            [
+              none,
+              active,
+              trialing,
+              past_due,
+              canceled,
+              incomplete,
+              incomplete_expired,
+              unpaid,
+              paused,
+            ]
+          description: Current subscription status
+        current_period_end:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix timestamp when current billing period ends
+
+    FeatureFlags:
+      type: object
+      properties:
+        beta_features:
+          type: boolean
+          description: Access to beta features
+        advanced_model_access:
+          type: boolean
+          description: Access to advanced LLM models (Pro tier and above)
+
+    CreditBalance:
+      type: object
+      properties:
+        credits_remaining_cents:
+          type: integer
+          description: Remaining credit balance in cents
+        credits_allocated_cents:
+          type: integer
+          description: Total credits allocated for current period
+        credits_used_cents:
+          type: integer
+          description: Credits used in current period
+        daily_limit_cents:
+          type: integer
+          description: Daily spending limit in cents
+        daily_used_cents:
+          type: integer
+          description: Credits used today
+        daily_remaining_cents:
+          type: integer
+          description: Remaining daily credits
+        period_start:
+          type: string
+          format: date-time
+          description: Start of current billing period
+        period_end:
+          type: string
+          format: date-time
+          description: End of current billing period
+
+    DeviceLinkRequest:
+      type: object
+      required:
+        - device_id
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Unique device identifier (generated by client)
+        device_name:
+          type: string
+          maxLength: 100
+          description: Human-readable device name
+          example: 'MacBook Pro'
+        device_type:
+          type: string
+          enum: [desktop, mobile, web]
+          default: desktop
+          description: Type of device
+        device_fingerprint:
+          type: string
+          maxLength: 255
+          description: Hardware/software fingerprint for security
+
+    DeviceLinkResponse:
+      type: object
+      properties:
+        link_code:
+          type: string
+          pattern: '^[A-F0-9]{16}$'
+          description: 16-character hexadecimal linking code
+          example: 'A1B2C3D4E5F67890'
+        device_id:
+          type: string
+          format: uuid
+          description: Device identifier
+        verify_url:
+          type: string
+          format: uri
+          description: Web URL for code verification
+          example: 'https://agiworkforce.com/verify?code=A1B2C3D4E5F67890'
+        expires_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when code expires (15 minutes)
+        qr_code_url:
+          type: string
+          format: uri
+          nullable: true
+          description: QR code image URL (reserved for future use)
+
+    CheckoutRequest:
+      type: object
+      required:
+        - plan
+        - billingInterval
+      properties:
+        plan:
+          type: string
+          enum: [hobby, pro, max]
+          description: Subscription plan tier
+        billingInterval:
+          type: string
+          enum: [monthly, annual]
+          description: Billing frequency
+
+    CheckoutResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Stripe Checkout Session URL
+
+    ChatCompletionRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: Model identifier
+          example: 'gpt-4'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          description: Conversation messages
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 1
+          description: Sampling temperature
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: Maximum tokens to generate
+        stream:
+          type: boolean
+          default: false
+          description: Enable streaming responses
+        thinking_mode:
+          type: boolean
+          description: Enable extended thinking (reasoning models)
+        use_prompt_cache:
+          type: boolean
+          description: Enable prompt caching for cost savings
+
+    ChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+          description: Message role
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+          description: Message content (text or multimodal)
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique completion identifier
+        object:
+          type: string
+          enum: [chat.completion]
+        created:
+          type: integer
+          format: int64
+          description: Unix timestamp of creation
+        model:
+          type: string
+          description: Model used for completion
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                $ref: '#/components/schemas/ChatMessage'
+              finish_reason:
+                type: string
+                enum: [stop, length, content_filter, tool_calls]
+        usage:
+          $ref: '#/components/schemas/TokenUsage'
+        x_agi_workforce:
+          $ref: '#/components/schemas/AGIWorkforceMetadata'
+
+    TokenUsage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Tokens in the prompt
+        completion_tokens:
+          type: integer
+          description: Tokens in the completion
+        total_tokens:
+          type: integer
+          description: Total tokens used
+        cache_creation_input_tokens:
+          type: integer
+          description: Tokens used to create cache
+        cache_read_input_tokens:
+          type: integer
+          description: Tokens read from cache
+
+    AGIWorkforceMetadata:
+      type: object
+      properties:
+        provider:
+          type: string
+          description: LLM provider used
+          example: 'anthropic'
+        cost_cents:
+          type: integer
+          description: Actual cost in cents
+        fallback:
+          type: object
+          nullable: true
+          properties:
+            original_model:
+              type: string
+            reason:
+              type: string
+          description: Fallback information if cheaper model was used
+        cache:
+          type: object
+          properties:
+            tokens_saved:
+              type: integer
+              description: Tokens saved via caching
+            cost_saved_cents:
+              type: integer
+              description: Cost saved via caching
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+            message:
+              type: string
+              description: Human-readable error message
+            type:
+              type: string
+              description: Error category
+            param:
+              type: string
+              nullable: true
+              description: Parameter that caused the error
+
+paths:
+  /me:
+    get:
+      summary: Get current user
+      description: |
+        Retrieve the authenticated user's profile, subscription, and credit balance.
+
+        **Rate Limit**: 60 requests/minute
+      operationId: getCurrentUser
+      tags:
+        - User
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: '123e4567-e89b-12d3-a456-426614174000'
+                email: 'user@example.com'
+                name: 'John Doe'
+                avatar_url: null
+                created_at: 1704067200
+                updated_at: 1704153600
+                plan:
+                  tier: 'pro'
+                  display_name: 'Pro'
+                  status: 'active'
+                  current_period_end: 1706745600
+                feature_flags:
+                  beta_features: true
+                  advanced_model_access: true
+                credits:
+                  credits_remaining_cents: 150000
+                  credits_allocated_cents: 200000
+                  credits_used_cents: 50000
+                  daily_limit_cents: 10000
+                  daily_used_cents: 2500
+                  daily_remaining_cents: 7500
+                  period_start: '2026-01-01T00:00:00Z'
+                  period_end: '2026-02-01T00:00:00Z'
+        '401':
+          description: Unauthorized - invalid or missing authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retrying
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /checkout:
+    post:
+      summary: Create checkout session
+      description: |
+        Create a Stripe Checkout session for subscription purchase or upgrade.
+
+        **Rate Limit**: 5 requests/minute (security-sensitive)
+
+        **Note**: If user already has an active subscription, this will redirect to the Billing Portal instead.
+      operationId: createCheckout
+      tags:
+        - Subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+            example:
+              plan: 'pro'
+              billingInterval: 'monthly'
+      responses:
+        '200':
+          description: Checkout session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+              example:
+                url: 'https://checkout.stripe.com/c/pay/cs_test_...'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+        '429':
+          description: Rate limit exceeded
+
+  /device/link:
+    post:
+      summary: Generate device link code
+      description: |
+        Generate a secure 16-character linking code for device authorization. The code expires in 15 minutes.
+
+        **Rate Limit**: 10 requests/minute (security-sensitive)
+
+        **Security**: Uses 64-bit entropy to prevent brute-force attacks.
+      operationId: generateDeviceLink
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceLinkRequest'
+            example:
+              device_id: '550e8400-e29b-41d4-a716-446655440000'
+              device_name: 'MacBook Pro'
+              device_type: 'desktop'
+      responses:
+        '200':
+          description: Link code generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceLinkResponse'
+              example:
+                link_code: 'A1B2C3D4E5F67890'
+                device_id: '550e8400-e29b-41d4-a716-446655440000'
+                verify_url: 'https://agiworkforce.com/verify?code=A1B2C3D4E5F67890'
+                expires_at: 1705325400
+                qr_code_url: null
+        '400':
+          description: Invalid request
+        '429':
+          description: Rate limit exceeded
+
+  /device/poll:
+    post:
+      summary: Poll device authorization status
+      description: |
+        Poll to check if a device link code has been authorized. Used by desktop/mobile apps during the linking process.
+
+        **Rate Limit**: 10 requests/second
+
+        **Usage**: Poll every 2-3 seconds while waiting for user authorization.
+      operationId: pollDeviceStatus
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_id
+              properties:
+                device_id:
+                  type: string
+                  format: uuid
+            example:
+              device_id: '550e8400-e29b-41d4-a716-446655440000'
+      responses:
+        '200':
+          description: Authorization status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, authorized, denied, expired]
+                  access_token:
+                    type: string
+                    nullable: true
+                  refresh_token:
+                    type: string
+                    nullable: true
+                  user:
+                    type: object
+                    nullable: true
+              example:
+                status: 'authorized'
+                access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                refresh_token: 'v1.MU...'
+                user:
+                  id: '123e4567-e89b-12d3-a456-426614174000'
+                  email: 'user@example.com'
+        '404':
+          description: Device not found
+        '429':
+          description: Rate limit exceeded
+
+  /llm/v1/chat/completions:
+    post:
+      summary: OpenAI-compatible chat completions
+      description: |
+        Create a chat completion using various LLM providers through a unified OpenAI-compatible interface.
+
+        **Rate Limit**: 100 requests/minute
+
+        **Billing**: Charged based on actual token usage. Credits are reserved upfront and reconciled after completion.
+
+        **Features**:
+        - Multi-provider routing (OpenAI, Anthropic, Google, etc.)
+        - Automatic fallback to cheaper models on insufficient credits
+        - Prompt caching support for cost savings
+        - Streaming responses
+        - Extended thinking mode for reasoning models
+
+        **Tier Requirements**:
+        - Free tier: Not supported
+        - Hobby: Basic models only
+        - Pro+: All models including Claude Sonnet 4, GPT-4.5
+        - Max+: Premium models including Claude Opus 4.5, o3, GPT-5
+      operationId: createChatCompletion
+      tags:
+        - LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+            example:
+              model: 'gpt-4'
+              messages:
+                - role: 'system'
+                  content: 'You are a helpful assistant.'
+                - role: 'user'
+                  content: 'What is the capital of France?'
+              temperature: 0.7
+              max_tokens: 150
+      responses:
+        '200':
+          description: Completion generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+              example:
+                id: 'chatcmpl-1705325400-abc123'
+                object: 'chat.completion'
+                created: 1705325400
+                model: 'gpt-4'
+                choices:
+                  - index: 0
+                    message:
+                      role: 'assistant'
+                      content: 'The capital of France is Paris.'
+                    finish_reason: 'stop'
+                usage:
+                  prompt_tokens: 25
+                  completion_tokens: 8
+                  total_tokens: 33
+                  cache_creation_input_tokens: 0
+                  cache_read_input_tokens: 0
+                x_agi_workforce:
+                  provider: 'openai'
+                  cost_cents: 50
+                  fallback: null
+                  cache:
+                    tokens_saved: 0
+                    cost_saved_cents: 0
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '402':
+          description: Insufficient credits
+        '403':
+          description: Model not available for subscription tier
+        '429':
+          description: Rate limit exceeded
+        '500':
+          description: Server error
+
+  /llm/v1/credits/balance:
+    get:
+      summary: Get credit balance
+      description: |
+        Retrieve the current credit balance for the authenticated user.
+
+        **Rate Limit**: 60 requests/minute
+      operationId: getCreditBalance
+      tags:
+        - Credits
+      responses:
+        '200':
+          description: Credit balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditBalance'
+        '401':
+          description: Unauthorized
+        '429':
+          description: Rate limit exceeded
+
+  /llm/v1/models:
+    get:
+      summary: List available models
+      description: |
+        List all LLM models available to the current user based on their subscription tier.
+
+        **Rate Limit**: 100 requests/minute
+      operationId: listModels
+      tags:
+        - LLM
+      responses:
+        '200':
+          description: Models listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        object:
+                          type: string
+                          enum: [model]
+                        created:
+                          type: integer
+                        owned_by:
+                          type: string
+                        tier_required:
+                          type: string
+                          enum: [hobby, pro, max, enterprise]
+              example:
+                data:
+                  - id: 'gpt-4'
+                    object: 'model'
+                    created: 1687882410
+                    owned_by: 'openai'
+                    tier_required: 'pro'
+                  - id: 'claude-sonnet-4'
+                    object: 'model'
+                    created: 1698796800
+                    owned_by: 'anthropic'
+                    tier_required: 'pro'
+        '401':
+          description: Unauthorized
+
+  /stripe-webhook:
+    post:
+      summary: Stripe webhook handler
+      description: |
+        Handles Stripe webhook events for subscription lifecycle management.
+
+        **Events Handled**:
+        - checkout.session.completed
+        - customer.subscription.created
+        - customer.subscription.updated
+        - customer.subscription.deleted
+        - invoice.payment_succeeded
+        - invoice.payment_failed
+        - charge.refunded
+        - charge.dispute.created
+
+        **Security**: Validates webhook signature using Stripe webhook secret.
+
+        **Idempotency**: All events are processed idempotently to prevent duplicate processing.
+      operationId: handleStripeWebhook
+      tags:
+        - Webhooks
+      security: []
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Stripe webhook signature for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe event payload
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  eventType:
+                    type: string
+        '400':
+          description: Invalid signature or malformed event
+        '500':
+          description: Processing error
+
+  /portal:
+    post:
+      summary: Create billing portal session
+      description: |
+        Generate a Stripe Billing Portal session URL for subscription management.
+
+        **Rate Limit**: 10 requests/minute
+
+        **Usage**: Redirect users to this URL to manage their subscription, payment methods, and billing history.
+      operationId: createPortalSession
+      tags:
+        - Subscription
+      responses:
+        '200':
+          description: Portal session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+              example:
+                url: 'https://billing.stripe.com/session/...'
+        '401':
+          description: Unauthorized
+        '404':
+          description: No subscription found
+        '429':
+          description: Rate limit exceeded
+
+  /sync-subscription:
+    post:
+      summary: Sync subscription status
+      description: |
+        Manually sync subscription status from Stripe. Useful after payment success or when subscription state seems out of sync.
+
+        **Rate Limit**: 10 requests/minute
+      operationId: syncSubscription
+      tags:
+        - Subscription
+      responses:
+        '200':
+          description: Subscription synced successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscription:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      plan_tier:
+                        type: string
+                      current_period_end:
+                        type: string
+                        format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: No subscription found
+        '429':
+          description: Rate limit exceeded
+
+tags:
+  - name: User
+    description: User profile and account management
+  - name: Subscription
+    description: Subscription and billing operations
+  - name: Device
+    description: Device linking and authorization
+  - name: LLM
+    description: LLM API endpoints
+  - name: Credits
+    description: Credit management and balance
+  - name: Webhooks
+    description: Webhook endpoints for external integrations

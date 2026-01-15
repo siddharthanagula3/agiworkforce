@@ -2,7 +2,7 @@ use super::*;
 use crate::core::agi::knowledge::KnowledgeEntry;
 use crate::core::agi::process_ontology::ProcessOntology;
 use crate::core::agi::process_reasoning::ProcessReasoning;
-use crate::core::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
@@ -201,7 +201,7 @@ Return ONLY the JSON array."#,
         );
 
         let preferences = RouterPreferences {
-            provider: Some(crate::core::router::Provider::Anthropic),
+            provider: Some(crate::core::llm::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
@@ -742,7 +742,7 @@ Return ONLY a JSON array of steps with this structure:
         );
 
         let preferences = RouterPreferences {
-            provider: Some(crate::core::router::Provider::Anthropic),
+            provider: Some(crate::core::llm::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,

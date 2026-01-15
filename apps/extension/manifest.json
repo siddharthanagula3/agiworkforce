@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
   "name": "AGI Workforce Browser Automation",
-  "version": "1.0.0",
-  "description": "Browser automation extension for AGI Workforce desktop application",
+  "version": "1.1.0",
+  "description": "Intelligent browser automation and integration for AGI Workforce desktop application",
+  "author": "AGI Workforce",
+  "homepage_url": "https://agiworkforce.com",
   "permissions": [
     "activeTab",
     "tabs",
@@ -10,21 +12,25 @@
     "webNavigation",
     "cookies",
     "scripting",
-    "nativeMessaging"
+    "nativeMessaging",
+    "alarms"
   ],
+  "optional_permissions": ["downloads", "bookmarks", "history"],
   "host_permissions": ["<all_urls>"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
   },
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "src/background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["src/content.js"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": false,
+      "match_about_blank": false
     }
   ],
   "action": {
@@ -33,7 +39,8 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_title": "AGI Workforce"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -45,5 +52,23 @@
       "resources": ["src/injected.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Open AGI Workforce popup"
+    },
+    "capture_page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "Capture current page"
+    }
+  },
+  "minimum_chrome_version": "105",
+  "offline_enabled": false
 }
