@@ -133,37 +133,46 @@ const mockStripeWebhooks = {
   }),
 };
 
+// Create a mock Stripe class that works with ESM imports
+class MockStripe {
+  webhooks = mockStripeWebhooks;
+  checkout = {
+    sessions: {
+      retrieve: vi.fn().mockResolvedValue({
+        id: 'cs_test_123',
+        line_items: { data: [{ price: { id: 'price_test' } }] },
+      }),
+    },
+  };
+  subscriptions = {
+    retrieve: vi.fn().mockResolvedValue({
+      id: 'sub_test_123',
+      status: 'active',
+      items: { data: [{ price: { id: 'price_test' } }] },
+      current_period_start: Math.floor(Date.now() / 1000),
+      current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+      cancel_at_period_end: false,
+      canceled_at: null,
+    }),
+  };
+  customers = {
+    retrieve: vi.fn().mockResolvedValue({
+      id: 'cus_test_123',
+      email: 'test@example.com',
+      deleted: false,
+    }),
+  };
+  charges = {
+    retrieve: vi.fn().mockResolvedValue({
+      id: 'ch_test_123',
+      customer: 'cus_test_123',
+    }),
+  };
+}
+
 vi.mock('stripe', () => {
   return {
-    default: vi.fn().mockImplementation(() => ({
-      webhooks: mockStripeWebhooks,
-      checkout: {
-        sessions: {
-          retrieve: vi.fn().mockResolvedValue({
-            id: 'cs_test_123',
-            line_items: { data: [{ price: { id: 'price_test' } }] },
-          }),
-        },
-      },
-      subscriptions: {
-        retrieve: vi.fn().mockResolvedValue({
-          id: 'sub_test_123',
-          status: 'active',
-          items: { data: [{ price: { id: 'price_test' } }] },
-          current_period_start: Math.floor(Date.now() / 1000),
-          current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-          cancel_at_period_end: false,
-          canceled_at: null,
-        }),
-      },
-      customers: {
-        retrieve: vi.fn().mockResolvedValue({
-          id: 'cus_test_123',
-          email: 'test@example.com',
-          deleted: false,
-        }),
-      },
-    })),
+    default: MockStripe,
   };
 });
 

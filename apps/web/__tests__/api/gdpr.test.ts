@@ -351,6 +351,11 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
   });
 
   describe('Audit Logging', () => {
+    beforeEach(() => {
+      // Reset mock to success state after the previous database error test
+      mockSupabaseClient.rpc.mockResolvedValue({ data: { success: true }, error: null });
+    });
+
     it('should log deletion request for audit purposes', async () => {
       const { logger } = await import('@/lib/logger');
       const { DELETE } = await import('@/app/api/user/data/route');
@@ -375,6 +380,11 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
   });
 
   describe('CORS Support', () => {
+    beforeEach(() => {
+      // Reset mock to success state
+      mockSupabaseClient.rpc.mockResolvedValue({ data: { success: true }, error: null });
+    });
+
     it('should include CORS headers in response', async () => {
       const { DELETE } = await import('@/app/api/user/data/route');
 

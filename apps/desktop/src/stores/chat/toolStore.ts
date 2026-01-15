@@ -244,6 +244,7 @@ export interface ToolState {
   addActionLogEntry: (entry: Omit<ActionLogEntry, 'createdAt' | 'updatedAt'>) => void;
   updateActionLogEntry: (id: string, updates: Partial<ActionLogEntry>) => void;
   clearActionLog: () => void;
+  clearToolHistory: () => void;
 
   // Actions - Plan
   setWorkflowContext: (context: WorkflowContext | null) => void;
@@ -374,6 +375,15 @@ export const useToolStore = create<ToolState>()(
 
           clearActionLog: () =>
             set((state) => {
+              state.actionLog = [];
+            }),
+
+          clearToolHistory: () =>
+            set((state) => {
+              state.fileOperations = [];
+              state.terminalCommands = [];
+              state.toolExecutions = [];
+              state.screenshots = [];
               state.actionLog = [];
             }),
 
