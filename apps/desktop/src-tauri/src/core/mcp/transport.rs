@@ -1203,20 +1203,15 @@ impl McpTransport for Transport {
 }
 
 /// Transport configuration enum
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TransportConfig {
     /// Standard I/O transport (local process)
+    #[default]
     Stdio,
 
     /// HTTP/SSE transport (remote server)
     Http(HttpSseConfig),
-}
-
-impl Default for TransportConfig {
-    fn default() -> Self {
-        TransportConfig::Stdio
-    }
 }
 
 // Implement Serialize/Deserialize for HttpSseConfig
