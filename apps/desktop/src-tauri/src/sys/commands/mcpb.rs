@@ -1381,6 +1381,7 @@ pub async fn mcpb_install_bundle(
         args: bundle.config_template.args.clone(),
         env: bundle.config_template.env.clone(),
         enabled: false, // Start disabled so user can configure credentials
+        transport: None, // Use default STDIO transport
     };
 
     // Add to MCP config

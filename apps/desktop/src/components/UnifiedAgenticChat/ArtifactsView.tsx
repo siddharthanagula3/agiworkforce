@@ -1,5 +1,13 @@
 import { formatDistanceToNow } from 'date-fns';
-import { BarChart3, Code2, FileCode, Network, Search, Table as TableIcon } from 'lucide-react';
+import {
+  BarChart3,
+  Code2,
+  FileCode,
+  Globe,
+  Network,
+  Search,
+  Table as TableIcon,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { Input } from '../ui/Input';
@@ -109,6 +117,8 @@ function getArtifactIcon(type: string) {
       return <Network className="w-3 h-3" />;
     case 'table':
       return <TableIcon className="w-3 h-3" />;
+    case 'html':
+      return <Globe className="w-3 h-3" />;
     default:
       return <Code2 className="w-3 h-3" />;
   }

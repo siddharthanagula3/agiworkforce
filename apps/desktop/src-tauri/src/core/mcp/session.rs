@@ -3,7 +3,7 @@ use super::protocol::{
     ResourceDefinition, ResourceReadParams, ResourceReadResult, ResourcesListParams,
     ResourcesListResult, ToolCallParams, ToolCallResult, ToolsListResult,
 };
-use super::transport::StdioTransport;
+use super::transport::{McpTransport, Transport};
 use crate::core::mcp::{McpError, McpResult, McpServerConfig};
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ const INITIALIZATION_TIMEOUT_SECS: u64 = 10;
 pub struct McpSession {
     name: String,
 
-    transport: Arc<StdioTransport>,
+    transport: Arc<Transport>,
 
     /// Server info, protected by RwLock for thread-safe access
     server_info: Arc<RwLock<Option<Implementation>>>,
@@ -32,11 +32,65 @@ pub struct McpSession {
 }
 
 impl McpSession {
+    /// Connect to an MCP server using the appropriate transport
+    ///
+    /// Automatically selects the transport based on configuration:
+    /// - STDIO: For local process-based servers (default)
+    /// - HTTP/SSE: For remote servers accessed via HTTP
     pub async fn connect(name: String, config: McpServerConfig) -> McpResult<Self> {
         tracing::info!("[MCP Session] Connecting to server '{}'", name);
 
-        let transport =
-            StdioTransport::new(name.clone(), &config.command, &config.args, &config.env).await?;
+        let transport = Transport::from_config(name.clone(), &config).await?;
+
+        // For HTTP/SSE transport, optionally start the SSE listener
+        if let Transport::HttpSse(ref http_transport) = transport {
+            // Start SSE listener for server-initiated messages
+            // This is optional - some servers may not support SSE
+            if let Err(e) = http_transport.start_sse_listener(None).await {
+                tracing::warn!(
+                    "[MCP Session] Failed to start SSE listener for '{}': {}. \
+                     Server notifications will not be received.",
+                    name,
+                    e
+                );
+            }
+        }
+
+        let session = Self {
+            name,
+            transport: Arc::new(transport),
+            server_info: Arc::new(RwLock::new(None)),
+            capabilities: Arc::new(RwLock::new(None)),
+            tools: Arc::new(RwLock::new(Vec::new())),
+            initialized: AtomicBool::new(false),
+        };
+
+        Ok(session)
+    }
+
+    /// Connect to an MCP server with explicit transport type
+    ///
+    /// Use this when you want to explicitly specify the transport type
+    /// rather than relying on configuration.
+    pub async fn connect_with_transport(
+        name: String,
+        transport: Transport,
+    ) -> McpResult<Self> {
+        tracing::info!(
+            "[MCP Session] Connecting to server '{}' with explicit transport",
+            name
+        );
+
+        // For HTTP/SSE transport, start the SSE listener
+        if let Transport::HttpSse(ref http_transport) = transport {
+            if let Err(e) = http_transport.start_sse_listener(None).await {
+                tracing::warn!(
+                    "[MCP Session] Failed to start SSE listener for '{}': {}",
+                    name,
+                    e
+                );
+            }
+        }
 
         let session = Self {
             name,
@@ -259,6 +313,14 @@ impl McpSession {
         self.transport.is_alive()
     }
 
+    /// Get the transport type being used
+    pub fn transport_type(&self) -> &'static str {
+        match self.transport.as_ref() {
+            Transport::Stdio(_) => "stdio",
+            Transport::HttpSse(_) => "http-sse",
+        }
+    }
+
     pub async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Session] Shutting down session for '{}'", self.name);
         self.transport.shutdown().await
@@ -268,6 +330,7 @@ impl McpSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::transport::TransportConfig;
 
     #[test]
     fn test_client_capabilities() {
@@ -289,5 +352,14 @@ mod tests {
         let json = serde_json::to_string(&params).unwrap();
         assert!(json.contains("protocolVersion"));
         assert!(json.contains("clientInfo"));
+    }
+
+    #[test]
+    fn test_transport_config_default() {
+        let config = TransportConfig::default();
+        match config {
+            TransportConfig::Stdio => {}
+            _ => panic!("Expected Stdio as default transport"),
+        }
     }
 }

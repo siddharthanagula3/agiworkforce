@@ -150,6 +150,7 @@ mod unit_tests {
             ],
             env: HashMap::from([("KEY".to_string(), "value".to_string())]),
             enabled: true,
+            transport: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -230,6 +231,7 @@ mod unit_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         let session = McpSession::connect("filesystem".to_string(), config)
@@ -266,6 +268,7 @@ mod unit_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         client

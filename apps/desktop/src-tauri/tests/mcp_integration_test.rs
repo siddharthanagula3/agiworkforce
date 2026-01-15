@@ -29,6 +29,7 @@ mod mcp_integration_tests {
                 ],
                 env: HashMap::new(),
                 enabled: true,
+                transport: None,
             },
         );
 
@@ -68,6 +69,7 @@ mod mcp_integration_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         let result = client
@@ -96,6 +98,7 @@ mod mcp_integration_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         client
@@ -128,6 +131,7 @@ mod mcp_integration_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         client
@@ -157,6 +161,7 @@ mod mcp_integration_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         client
@@ -188,6 +193,7 @@ mod mcp_integration_tests {
             ],
             env: HashMap::new(),
             enabled: true,
+            transport: None,
         };
 
         client
@@ -257,6 +263,7 @@ mod mcp_integration_tests {
                 args: vec!["-y".to_string()],
                 env: HashMap::new(),
                 enabled: true,
+                transport: None,
             },
         );
 
@@ -270,5 +277,36 @@ mod mcp_integration_tests {
 
         let parsed: McpServersConfig = serde_json::from_str(&json_str).unwrap();
         assert!(parsed.mcp_servers.contains_key("filesystem"));
+    }
+
+    #[test]
+    fn test_http_transport_config_serialization() {
+        use agiworkforce_desktop::core::mcp::transport::{HttpSseConfig, TransportConfig};
+
+        // Test HTTP transport config serialization
+        let http_config = HttpSseConfig {
+            url: "https://mcp.example.com".to_string(),
+            api_key: Some("test-api-key".to_string()),
+            bearer_token: None,
+            headers: HashMap::new(),
+            timeout_secs: 60,
+            verify_ssl: true,
+        };
+
+        let json = serde_json::to_string(&http_config).unwrap();
+        assert!(json.contains("mcp.example.com"));
+        assert!(json.contains("test-api-key"));
+
+        let parsed: HttpSseConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.url, "https://mcp.example.com");
+        assert_eq!(parsed.api_key, Some("test-api-key".to_string()));
+        assert_eq!(parsed.timeout_secs, 60);
+        assert!(parsed.verify_ssl);
+
+        // Test TransportConfig serialization
+        let transport_config = TransportConfig::Http(http_config);
+        let json = serde_json::to_string(&transport_config).unwrap();
+        assert!(json.contains("http"));
+        assert!(json.contains("mcp.example.com"));
     }
 }
