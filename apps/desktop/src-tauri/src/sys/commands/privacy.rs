@@ -221,7 +221,7 @@ pub async fn privacy_delete_account(
 
     // Clear MCP credentials from database (stored encrypted)
     // Delete any credentials that might be user-specific
-    let delete_patterns = [format!("api_key_%"), format!("mcp_credential_%")];
+    let delete_patterns = ["api_key_%".to_string(), "mcp_credential_%".to_string()];
 
     for pattern in &delete_patterns {
         match conn.execute("DELETE FROM settings_v2 WHERE key LIKE ?1", [pattern]) {

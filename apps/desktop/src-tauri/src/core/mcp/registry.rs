@@ -6,11 +6,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Delimiter used to separate components in tool IDs.
-/// HIGH-004 fix: Using triple colon as delimiter - colons are invalid in MCP server
-/// and tool names (which use DNS-like naming), making collisions impossible.
-const TOOL_ID_DELIMITER: &str = ":::";
+/// Format: mcp__<server_name>__<tool_name>
+const TOOL_ID_DELIMITER: &str = "__";
 
-/// HIGH-004 fix: Helper to create safe tool IDs with sanitized names.
+/// Helper to create safe tool IDs with sanitized names.
 fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
     let safe_server = if server_name.contains(TOOL_ID_DELIMITER) {
         server_name.replace(TOOL_ID_DELIMITER, "_")
