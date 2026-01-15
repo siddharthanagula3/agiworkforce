@@ -295,7 +295,7 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
   const clearHistory = useCallback(() => {
     chatState.clearHistory();
     agentState.clearActionTrail();
-    toolState.clearActionLog();
+    toolState.clearToolHistory();
   }, [chatState, agentState, toolState]);
 
   // Create combined resetOnLogout action
@@ -604,7 +604,7 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     clearHistory: () => {
       chatState.clearHistory();
       agentState.clearActionTrail();
-      toolState.clearActionLog();
+      toolState.clearToolHistory();
     },
     resetOnLogout: () => {
       chatState.resetOnLogout();
