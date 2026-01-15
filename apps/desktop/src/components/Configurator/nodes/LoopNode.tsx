@@ -28,7 +28,9 @@ export function LoopNode({ data, selected, id }: NodeProps) {
         <div className="flex-shrink-0 text-yellow-600">
           <Repeat className="h-4 w-4" />
         </div>
-        <div className="flex-1 truncate text-sm font-medium text-gray-900">{data['label'] as string}</div>
+        <div className="flex-1 truncate text-sm font-medium text-gray-900">
+          {data['label'] as string}
+        </div>
         {selected && (
           <Button
             variant="ghost"
@@ -45,9 +47,7 @@ export function LoopNode({ data, selected, id }: NodeProps) {
       </div>
 
       {/* Loop info */}
-      {maxIterations && (
-        <div className="mt-1 text-xs text-gray-500">Max: {maxIterations}</div>
-      )}
+      {maxIterations && <div className="mt-1 text-xs text-gray-500">Max: {maxIterations}</div>}
 
       {/* Source Handle for loop body */}
       <Handle

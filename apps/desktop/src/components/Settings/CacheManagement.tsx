@@ -136,9 +136,7 @@ export const CacheManagement: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
-          {error}
-        </div>
+        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">{error}</div>
       )}
 
       {/* Overall Statistics */}
@@ -147,7 +145,9 @@ export const CacheManagement: React.FC = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-600">Total Cache Size</p>
-            <p className="text-2xl font-bold">{stats ? formatMB(stats.total_size_mb) : '0.00'} MB</p>
+            <p className="text-2xl font-bold">
+              {stats ? formatMB(stats.total_size_mb) : '0.00'} MB
+            </p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Total Cost Savings</p>

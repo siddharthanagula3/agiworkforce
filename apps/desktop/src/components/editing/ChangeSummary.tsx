@@ -2,15 +2,7 @@ import { useEditingStore } from '../../stores/editingStore';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import {
-  FileText,
-  Plus,
-  Minus,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Info,
-} from 'lucide-react';
+import { FileText, Plus, Minus, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/Tooltip';
 
@@ -19,12 +11,8 @@ interface ChangeSummaryProps {
 }
 
 export function ChangeSummary({ className }: ChangeSummaryProps) {
-  const {
-    getChangesSummary,
-    getChangedFiles,
-    acceptAllChanges,
-    rejectAllChanges,
-  } = useEditingStore();
+  const { getChangesSummary, getChangedFiles, acceptAllChanges, rejectAllChanges } =
+    useEditingStore();
 
   const stats = getChangesSummary();
   const changedFiles = getChangedFiles();
@@ -79,9 +67,7 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
             <Minus className="h-4 w-4" />
             Deletions
           </div>
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {stats.deletions}
-          </div>
+          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.deletions}</div>
         </div>
       </div>
 
@@ -139,11 +125,7 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
       <div className="flex gap-2 pt-2 border-t border-border">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="default"
-              className="flex-1 gap-2"
-              onClick={() => acceptAllChanges()}
-            >
+            <Button variant="default" className="flex-1 gap-2" onClick={() => acceptAllChanges()}>
               <CheckCircle className="h-4 w-4" />
               Accept All
             </Button>
@@ -153,11 +135,7 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              className="flex-1 gap-2"
-              onClick={() => rejectAllChanges()}
-            >
+            <Button variant="outline" className="flex-1 gap-2" onClick={() => rejectAllChanges()}>
               <XCircle className="h-4 w-4" />
               Reject All
             </Button>
@@ -182,7 +160,7 @@ function FileChangeIcon({ type }: { type: 'modified' | 'added' | 'deleted' }) {
 
 function FileChangeBadge({
   type,
-  status
+  status,
 }: {
   type: 'modified' | 'added' | 'deleted';
   status: 'pending' | 'accepted' | 'rejected' | 'partial';
@@ -218,12 +196,7 @@ function FileChangeBadge({
   };
 
   return (
-    <span className={cn(
-      'px-2 py-0.5 rounded text-xs font-medium',
-      getColor()
-    )}>
-      {getLabel()}
-    </span>
+    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', getColor())}>{getLabel()}</span>
   );
 }
 
@@ -271,11 +244,11 @@ function getRiskLevel(stats: { additions: number; deletions: number; filesChange
 
 function generateChangeDescription(
   files: Array<{ path: string; type: 'modified' | 'added' | 'deleted' }>,
-  stats: { additions: number; deletions: number; filesChanged: number }
+  stats: { additions: number; deletions: number; filesChanged: number },
 ): string {
-  const addedCount = files.filter(f => f.type === 'added').length;
-  const modifiedCount = files.filter(f => f.type === 'modified').length;
-  const deletedCount = files.filter(f => f.type === 'deleted').length;
+  const addedCount = files.filter((f) => f.type === 'added').length;
+  const modifiedCount = files.filter((f) => f.type === 'modified').length;
+  const deletedCount = files.filter((f) => f.type === 'deleted').length;
 
   const parts: string[] = [];
 

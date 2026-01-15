@@ -10,6 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -20,12 +21,6 @@ function getStripe(): Stripe {
     });
   }
   return stripeClient;
-}
-
-// Type-safe request body
-interface CheckoutRequest {
-  plan: string;
-  billingInterval: 'monthly' | 'annual';
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
@@ -44,23 +39,24 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.unauthorized('Please sign in to continue');
   }
 
-  // Type-safe request body parsing
-  let body: CheckoutRequest;
+  // Type-safe request body parsing with Zod validation
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
 
-  const { plan, billingInterval } = body;
-
-  if (!plan || !billingInterval) {
-    throw createError.validation('Missing required fields: plan and billingInterval');
+  // Validate request body against schema - provides strict type checking and sanitization
+  const validationResult = CheckoutRequestSchema.safeParse(rawBody);
+  if (!validationResult.success) {
+    const errorMessages = validationResult.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw createError.validation(`Invalid request: ${errorMessages}`);
   }
 
-  if (billingInterval !== 'monthly' && billingInterval !== 'annual') {
-    throw createError.validation('billingInterval must be either "monthly" or "annual"');
-  }
+  const { plan, billingInterval } = validationResult.data;
 
   // Lookup Price ID with type safety
   const planPrices = STRIPE_PRICE_IDS[plan as keyof typeof STRIPE_PRICE_IDS];

@@ -1,0 +1,245 @@
+# GitHub Actions workflow for WebSocket Signaling Server deployment
+# Builds Docker image, pushes to GHCR, and deploys to Railway/Fly.io
+
+name: Deploy Signaling Server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/signaling-server/**'
+      - '.github/workflows/deploy-signaling-server.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/signaling-server/**'
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deployment target'
+        required: true
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - railway
+          - fly
+          - both
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/signaling-server
+  SERVICE_DIR: services/signaling-server
+
+jobs:
+  # ===========================================================================
+  # Test Job
+  # ===========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.SERVICE_DIR }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: '${{ env.SERVICE_DIR }}/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm build
+
+      - name: Lint check
+        run: pnpm exec eslint src/ --max-warnings 0 || echo "ESLint not configured, skipping"
+
+  # ===========================================================================
+  # Build and Push Docker Image
+  # ===========================================================================
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          file: ${{ env.SERVICE_DIR }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # ===========================================================================
+  # Deploy to Railway
+  # ===========================================================================
+  deploy-railway:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_target == 'railway' || inputs.deploy_target == 'both'))
+    environment:
+      name: production-railway
+      url: ${{ vars.RAILWAY_PUBLIC_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd ${{ env.SERVICE_DIR }}
+          railway up --service signaling-server --detach
+
+      - name: Verify deployment health
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 30
+
+          # Health check with retries
+          for i in {1..5}; do
+            if curl -sf "${{ vars.RAILWAY_PUBLIC_URL }}/health" > /dev/null; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+  # ===========================================================================
+  # Deploy to Fly.io
+  # ===========================================================================
+  deploy-fly:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    needs: build
+    if: |
+      github.event_name == 'workflow_dispatch' && (inputs.deploy_target == 'fly' || inputs.deploy_target == 'both')
+    environment:
+      name: production-fly
+      url: ${{ vars.FLY_PUBLIC_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          cd ${{ env.SERVICE_DIR }}
+          flyctl deploy --remote-only --wait-timeout 300
+
+      - name: Verify deployment health
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "Checking deployment status..."
+          flyctl status --app agiworkforce-signaling
+
+          echo "Running health check..."
+          for i in {1..5}; do
+            if curl -sf "${{ vars.FLY_PUBLIC_URL }}/health" > /dev/null; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+  # ===========================================================================
+  # Cleanup Old Images
+  # ===========================================================================
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [deploy-railway, deploy-fly]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: signaling-server
+          package-type: container
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: true

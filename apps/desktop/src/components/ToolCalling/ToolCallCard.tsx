@@ -161,9 +161,7 @@ export function ToolCallCard({
             <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           )}
 
-          <div className={cn('flex items-center gap-2', status.color)}>
-            {status.icon}
-          </div>
+          <div className={cn('flex items-center gap-2', status.color)}>{status.icon}</div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -283,7 +281,12 @@ export function ToolCallCard({
           {toolCall.approved !== undefined && (
             <div className="text-xs">
               <span className="text-muted-foreground">Approved:</span>
-              <span className={cn('ml-2 font-medium', toolCall.approved ? 'text-green-600' : 'text-red-600')}>
+              <span
+                className={cn(
+                  'ml-2 font-medium',
+                  toolCall.approved ? 'text-green-600' : 'text-red-600',
+                )}
+              >
                 {toolCall.approved ? 'Yes' : 'No'}
               </span>
               {toolCall.approved_at && (

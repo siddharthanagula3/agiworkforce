@@ -3,15 +3,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
-import {
-  Check,
-  X,
-  ChevronDown,
-  ChevronRight,
-  ArrowLeftRight,
-  Eye,
-  Code,
-} from 'lucide-react';
+import { Check, X, ChevronDown, ChevronRight, ArrowLeftRight, Eye, Code } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '../ui/Badge';
 
@@ -90,7 +82,7 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
   };
 
   const toggleHunk = (index: number) => {
-    setExpandedHunks(prev => {
+    setExpandedHunks((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);
@@ -114,7 +106,12 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
 
   return (
-    <div className={cn('flex flex-col h-full border border-border rounded-lg overflow-hidden', className)}>
+    <div
+      className={cn(
+        'flex flex-col h-full border border-border rounded-lg overflow-hidden',
+        className,
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/20 border-b border-border">
         <div className="flex items-center gap-4">
@@ -186,14 +183,11 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {diff.hunks.map((hunk, index) => {
                   const isExpanded = expandedHunks.has(index);
-                  const hunkAdditions = hunk.changes.filter(c => c.type === 'add').length;
-                  const hunkDeletions = hunk.changes.filter(c => c.type === 'delete').length;
+                  const hunkAdditions = hunk.changes.filter((c) => c.type === 'add').length;
+                  const hunkDeletions = hunk.changes.filter((c) => c.type === 'delete').length;
 
                   return (
-                    <div
-                      key={index}
-                      className="border border-border/50 rounded-md overflow-hidden"
-                    >
+                    <div key={index} className="border border-border/50 rounded-md overflow-hidden">
                       <div
                         className="flex items-center justify-between p-2 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
                         onClick={() => toggleHunk(index)}
@@ -210,10 +204,14 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
                           <span className="text-xs text-green-500">+{hunkAdditions}</span>
                           <span className="text-xs text-red-500">-{hunkDeletions}</span>
                           {hunk.accepted && (
-                            <Badge variant="default" className="text-xs h-4">Accepted</Badge>
+                            <Badge variant="default" className="text-xs h-4">
+                              Accepted
+                            </Badge>
                           )}
                           {hunk.rejected && (
-                            <Badge variant="destructive" className="text-xs h-4">Rejected</Badge>
+                            <Badge variant="destructive" className="text-xs h-4">
+                              Rejected
+                            </Badge>
                           )}
                         </div>
 
@@ -249,13 +247,19 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
                                 key={changeIndex}
                                 className={cn(
                                   'px-2 py-0.5',
-                                  change.type === 'add' && 'bg-green-500/10 text-green-700 dark:text-green-400',
-                                  change.type === 'delete' && 'bg-red-500/10 text-red-700 dark:text-red-400',
-                                  change.type === 'context' && 'text-muted-foreground'
+                                  change.type === 'add' &&
+                                    'bg-green-500/10 text-green-700 dark:text-green-400',
+                                  change.type === 'delete' &&
+                                    'bg-red-500/10 text-red-700 dark:text-red-400',
+                                  change.type === 'context' && 'text-muted-foreground',
                                 )}
                               >
                                 <span className="select-none mr-2">
-                                  {change.type === 'add' ? '+' : change.type === 'delete' ? '-' : ' '}
+                                  {change.type === 'add'
+                                    ? '+'
+                                    : change.type === 'delete'
+                                      ? '-'
+                                      : ' '}
                                 </span>
                                 {change.content}
                               </div>

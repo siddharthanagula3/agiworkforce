@@ -80,7 +80,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
   const { prompt, dialog: promptDialog } = usePrompt();
 
   const debouncedSearch = useMemo(
-    () => debounce((value: string) => setDebouncedSearchQuery(value), 300),
+    () => debounce<[string], void>((value: string) => setDebouncedSearchQuery(value), 300),
     [],
   );
 

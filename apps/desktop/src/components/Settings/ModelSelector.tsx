@@ -26,13 +26,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
-  const {
-    selectedModel,
-    favorites,
-    recentModels,
-    selectModel,
-    toggleFavorite,
-  } = useModelStore();
+  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore();
 
   const allModels = useMemo(() => getAllModels(), []);
 

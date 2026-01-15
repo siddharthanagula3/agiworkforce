@@ -136,7 +136,11 @@ function JsonTreeNode({
       >
         {isExpandable && (
           <span className="w-4 h-4 flex items-center justify-center text-muted-foreground">
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {isExpanded ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
           </span>
         )}
         {!isExpandable && <span className="w-4" />}
@@ -272,17 +276,23 @@ export function JsonViewer({
             Collapse All
           </Button>
           <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
-            {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>
 
-      <div
-        className="overflow-auto p-3"
-        style={{ maxHeight }}
-      >
+      <div className="overflow-auto p-3" style={{ maxHeight }}>
         {nodesWithExpandedState.map((node) => (
-          <JsonTreeNode key={node.path} node={node} onToggle={handleToggle} searchTerm={searchTerm} />
+          <JsonTreeNode
+            key={node.path}
+            node={node}
+            onToggle={handleToggle}
+            searchTerm={searchTerm}
+          />
         ))}
       </div>
     </div>

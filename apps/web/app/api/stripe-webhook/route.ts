@@ -8,6 +8,7 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
+import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 
 // Type helpers for Stripe API version compatibility (v19 -> v20 changes)
 // These types handle the transition where period dates moved from top-level to items array
@@ -647,10 +648,9 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   // Allocate credits for the subscription period with retry
   if (data && currentPeriodStart && currentPeriodEnd) {
-    const maxRetries = 3;
     let lastError: unknown = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
       try {
         await SubscriptionService.allocateCreditsForPeriod(
           supabaseUserId,
@@ -678,14 +678,16 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
             userId: supabaseUserId,
             subscriptionId: data.id,
             attempt,
-            maxRetries,
+            maxRetries: WEBHOOK_MAX_RETRIES,
           },
-          `Credit allocation attempt ${attempt}/${maxRetries} failed`,
+          `Credit allocation attempt ${attempt}/${WEBHOOK_MAX_RETRIES} failed`,
         );
 
         // Wait before retry (exponential backoff)
-        if (attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt)));
+        if (attempt < WEBHOOK_MAX_RETRIES) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, WEBHOOK_RETRY_BASE_DELAY_MS * Math.pow(2, attempt)),
+          );
         }
       }
     }

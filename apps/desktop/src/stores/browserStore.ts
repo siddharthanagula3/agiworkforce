@@ -40,7 +40,7 @@ export interface BrowserAction {
     selector?: string;
     text?: string;
     script?: string;
-    result?: any;
+    result?: unknown;
     error?: string;
   };
   screenshotId?: string;
@@ -168,9 +168,9 @@ export const useBrowserStore = create<BrowserState>()(
           await invoke('browser_init');
           set({ initialized: true });
 
-          const unlisten1 = await listen('browser:action', (event: any) => {
+          const unlisten1 = await listen<BrowserAction>('browser:action', (event) => {
             try {
-              const action = event?.payload as BrowserAction;
+              const action = event?.payload;
               if (action) {
                 get().addAction(action);
               }
@@ -180,9 +180,9 @@ export const useBrowserStore = create<BrowserState>()(
           });
           unlistenFunctions.push(unlisten1);
 
-          const unlisten2 = await listen('browser:console', (event: any) => {
+          const unlisten2 = await listen<ConsoleLog>('browser:console', (event) => {
             try {
-              const log = event?.payload as ConsoleLog;
+              const log = event?.payload;
               if (log) {
                 set((state) => ({
                   consoleLogs: [...state.consoleLogs, log],
@@ -194,9 +194,9 @@ export const useBrowserStore = create<BrowserState>()(
           });
           unlistenFunctions.push(unlisten2);
 
-          const unlisten3 = await listen('browser:network', (event: any) => {
+          const unlisten3 = await listen<NetworkRequest>('browser:network', (event) => {
             try {
-              const request = event?.payload as NetworkRequest;
+              const request = event?.payload;
               if (request) {
                 set((state) => ({
                   networkRequests: [...state.networkRequests, request],
