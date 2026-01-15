@@ -936,7 +936,9 @@ pub struct SubGoalResponse {
 /// Get reflection insights from execution context
 /// Returns the most recent reflection insight for a goal if available
 #[tauri::command]
-pub async fn agi_get_reflection_insights(goal_id: String) -> Result<Option<ReflectionInsightResponse>, String> {
+pub async fn agi_get_reflection_insights(
+    goal_id: String,
+) -> Result<Option<ReflectionInsightResponse>, String> {
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         match agi_guard.as_ref() {
@@ -954,15 +956,18 @@ pub async fn agi_get_reflection_insights(goal_id: String) -> Result<Option<Refle
     };
 
     // Find the most recent reflection insight from context memory
-    let reflection_entry = context.context_memory.iter()
+    let reflection_entry = context
+        .context_memory
+        .iter()
         .rev()
         .find(|entry| entry.event.starts_with("reflection_iteration_"));
 
     match reflection_entry {
         Some(entry) => {
             // Parse the reflection insight from the context entry data
-            let insight: crate::core::agi::ReflectionInsight = serde_json::from_value(entry.data.clone())
-                .map_err(|e| format!("Failed to parse reflection insight: {}", e))?;
+            let insight: crate::core::agi::ReflectionInsight =
+                serde_json::from_value(entry.data.clone())
+                    .map_err(|e| format!("Failed to parse reflection insight: {}", e))?;
 
             Ok(Some(convert_reflection_insight(&insight)))
         }
@@ -972,7 +977,9 @@ pub async fn agi_get_reflection_insights(goal_id: String) -> Result<Option<Refle
 
 /// Get all failure patterns from recent reflections for a goal
 #[tauri::command]
-pub async fn agi_get_failure_patterns(goal_id: String) -> Result<Vec<FailurePatternResponse>, String> {
+pub async fn agi_get_failure_patterns(
+    goal_id: String,
+) -> Result<Vec<FailurePatternResponse>, String> {
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         match agi_guard.as_ref() {
@@ -993,7 +1000,9 @@ pub async fn agi_get_failure_patterns(goal_id: String) -> Result<Vec<FailurePatt
 
     for entry in context.context_memory.iter() {
         if entry.event.starts_with("reflection_iteration_") {
-            if let Ok(insight) = serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone()) {
+            if let Ok(insight) =
+                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
+            {
                 for pattern in insight.failure_patterns {
                     all_patterns.push(convert_failure_pattern(&pattern));
                 }
@@ -1002,9 +1011,11 @@ pub async fn agi_get_failure_patterns(goal_id: String) -> Result<Vec<FailurePatt
     }
 
     // Deduplicate by pattern_id and aggregate frequency
-    let mut pattern_map: std::collections::HashMap<String, FailurePatternResponse> = std::collections::HashMap::new();
+    let mut pattern_map: std::collections::HashMap<String, FailurePatternResponse> =
+        std::collections::HashMap::new();
     for pattern in all_patterns {
-        pattern_map.entry(pattern.category.clone())
+        pattern_map
+            .entry(pattern.category.clone())
             .and_modify(|existing| {
                 existing.frequency += pattern.frequency;
                 for step in &pattern.affected_steps {
@@ -1024,7 +1035,9 @@ pub async fn agi_get_failure_patterns(goal_id: String) -> Result<Vec<FailurePatt
 
 /// Get suggested corrections for failed steps
 #[tauri::command]
-pub async fn agi_get_suggested_corrections(goal_id: String) -> Result<Vec<CorrectionResponse>, String> {
+pub async fn agi_get_suggested_corrections(
+    goal_id: String,
+) -> Result<Vec<CorrectionResponse>, String> {
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         match agi_guard.as_ref() {
@@ -1041,17 +1054,19 @@ pub async fn agi_get_suggested_corrections(goal_id: String) -> Result<Vec<Correc
     };
 
     // Get the most recent reflection's corrections
-    let reflection_entry = context.context_memory.iter()
+    let reflection_entry = context
+        .context_memory
+        .iter()
         .rev()
         .find(|entry| entry.event.starts_with("reflection_iteration_"));
 
     match reflection_entry {
         Some(entry) => {
-            if let Ok(insight) = serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone()) {
-                let corrections: Vec<CorrectionResponse> = insight.corrections
-                    .iter()
-                    .map(convert_correction)
-                    .collect();
+            if let Ok(insight) =
+                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
+            {
+                let corrections: Vec<CorrectionResponse> =
+                    insight.corrections.iter().map(convert_correction).collect();
                 Ok(corrections)
             } else {
                 Ok(vec![])
@@ -1080,17 +1095,19 @@ pub async fn agi_get_sub_goals(goal_id: String) -> Result<Vec<SubGoalResponse>, 
     };
 
     // Get the most recent reflection's sub-goals
-    let reflection_entry = context.context_memory.iter()
+    let reflection_entry = context
+        .context_memory
+        .iter()
         .rev()
         .find(|entry| entry.event.starts_with("reflection_iteration_"));
 
     match reflection_entry {
         Some(entry) => {
-            if let Ok(insight) = serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone()) {
-                let sub_goals: Vec<SubGoalResponse> = insight.sub_goals
-                    .iter()
-                    .map(convert_sub_goal)
-                    .collect();
+            if let Ok(insight) =
+                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
+            {
+                let sub_goals: Vec<SubGoalResponse> =
+                    insight.sub_goals.iter().map(convert_sub_goal).collect();
                 Ok(sub_goals)
             } else {
                 Ok(vec![])
@@ -1119,13 +1136,17 @@ pub async fn agi_get_recommendations(goal_id: String) -> Result<Vec<String>, Str
     };
 
     // Get the most recent reflection's recommendations
-    let reflection_entry = context.context_memory.iter()
+    let reflection_entry = context
+        .context_memory
+        .iter()
         .rev()
         .find(|entry| entry.event.starts_with("reflection_iteration_"));
 
     match reflection_entry {
         Some(entry) => {
-            if let Ok(insight) = serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone()) {
+            if let Ok(insight) =
+                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
+            {
                 Ok(insight.recommendations)
             } else {
                 Ok(vec![])
@@ -1137,12 +1158,18 @@ pub async fn agi_get_recommendations(goal_id: String) -> Result<Vec<String>, Str
 
 // Helper functions to convert internal types to response types
 
-fn convert_reflection_insight(insight: &crate::core::agi::ReflectionInsight) -> ReflectionInsightResponse {
+fn convert_reflection_insight(
+    insight: &crate::core::agi::ReflectionInsight,
+) -> ReflectionInsightResponse {
     ReflectionInsightResponse {
         id: insight.id.clone(),
         goal_id: insight.goal_id.clone(),
         assessment: convert_assessment(&insight.assessment),
-        failure_patterns: insight.failure_patterns.iter().map(convert_failure_pattern).collect(),
+        failure_patterns: insight
+            .failure_patterns
+            .iter()
+            .map(convert_failure_pattern)
+            .collect(),
         corrections: insight.corrections.iter().map(convert_correction).collect(),
         sub_goals: insight.sub_goals.iter().map(convert_sub_goal).collect(),
         recommendations: insight.recommendations.clone(),
@@ -1151,11 +1178,17 @@ fn convert_reflection_insight(insight: &crate::core::agi::ReflectionInsight) -> 
     }
 }
 
-fn convert_assessment(assessment: &crate::core::agi::ExecutionAssessment) -> ExecutionAssessmentResponse {
+fn convert_assessment(
+    assessment: &crate::core::agi::ExecutionAssessment,
+) -> ExecutionAssessmentResponse {
     ExecutionAssessmentResponse {
         success_rate: assessment.success_rate,
         successful_steps: assessment.successful_steps.clone(),
-        failed_steps: assessment.failed_steps.iter().map(convert_failed_step).collect(),
+        failed_steps: assessment
+            .failed_steps
+            .iter()
+            .map(convert_failed_step)
+            .collect(),
         goal_achievable: assessment.goal_achievable,
         progress_estimate: assessment.progress_estimate,
         resource_efficiency: assessment.resource_efficiency,

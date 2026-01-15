@@ -594,10 +594,7 @@ impl HttpSseTransport {
 
                 for key in stale_keys {
                     if let Some(pending_req) = pending.remove(&key) {
-                        tracing::warn!(
-                            "[MCP HTTP Transport] Cleaning up stale request: {:?}",
-                            key
-                        );
+                        tracing::warn!("[MCP HTTP Transport] Cleaning up stale request: {:?}", key);
                         let _ = pending_req.sender.send(Err(McpError::ConnectionError(
                             "Request expired due to age".to_string(),
                         )));
@@ -903,10 +900,12 @@ impl HttpSseTransport {
 
         // Add custom headers
         for (key, value) in &self.config.headers {
-            let header_name = HeaderName::try_from(key.as_str())
-                .map_err(|e| McpError::InvalidConfig(format!("Invalid header name '{}': {}", key, e)))?;
-            let header_value = HeaderValue::from_str(value)
-                .map_err(|e| McpError::InvalidConfig(format!("Invalid header value for '{}': {}", key, e)))?;
+            let header_name = HeaderName::try_from(key.as_str()).map_err(|e| {
+                McpError::InvalidConfig(format!("Invalid header name '{}': {}", key, e))
+            })?;
+            let header_value = HeaderValue::from_str(value).map_err(|e| {
+                McpError::InvalidConfig(format!("Invalid header value for '{}': {}", key, e))
+            })?;
             headers.insert(header_name, header_value);
         }
 
@@ -918,8 +917,9 @@ impl HttpSseTransport {
         let url = format!("{}/message", self.config.url.trim_end_matches('/'));
         let headers = self.build_headers()?;
 
-        let body = serde_json::to_string(request)
-            .map_err(|e| McpError::ConnectionError(format!("Failed to serialize request: {}", e)))?;
+        let body = serde_json::to_string(request).map_err(|e| {
+            McpError::ConnectionError(format!("Failed to serialize request: {}", e))
+        })?;
 
         tracing::debug!(
             "[MCP HTTP Transport] Sending request to '{}': method={}, id={:?}",
@@ -1152,8 +1152,7 @@ impl Transport {
                     Ok(Transport::Stdio(transport))
                 }
                 TransportConfig::Http(http_config) => {
-                    let transport =
-                        HttpSseTransport::new(server_name, http_config.clone()).await?;
+                    let transport = HttpSseTransport::new(server_name, http_config.clone()).await?;
                     Ok(Transport::HttpSse(transport))
                 }
             },
