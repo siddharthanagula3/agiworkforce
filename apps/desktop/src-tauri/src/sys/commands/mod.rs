@@ -54,6 +54,7 @@ pub mod productivity;
 pub mod projects;
 pub mod prompt_enhancement;
 pub mod realtime;
+pub mod registry;
 pub mod security;
 pub mod settings;
 pub mod settings_v2;

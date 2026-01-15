@@ -11,4 +11,5 @@ pub mod tasks;
 pub mod teams;
 pub mod terminal;
 pub mod tests;
+pub mod updater;
 pub mod workflows;

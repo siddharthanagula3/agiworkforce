@@ -1,169 +1,106 @@
-import {
-  checkForInjection as checkForInjectionSecure,
-  escapeHtml as escapeHtmlSecure,
-  sanitizeHtml as sanitizeHtmlSecure,
-} from './security';
+/**
+ * Validation utilities for the desktop application.
+ *
+ * This module re-exports validation functions from @agiworkforce/utils
+ * and provides desktop-specific extensions.
+ *
+ * @module validation
+ */
 
-export function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
+import { escapeHtml as escapeHtmlSecure, sanitizeHtml as sanitizeHtmlSecure } from './security';
 
+// Re-export common validation utilities from shared package
+export {
+  validateEmail,
+  validateFilePath,
+  validatePassword,
+  validateApiKey,
+  validateJson,
+  validateSqlQuery,
+  sanitizeCommandArgs,
+  type ValidationResult,
+  type PasswordValidationResult,
+} from '@agiworkforce/utils';
+
+// Import validateUrl from shared package for compatibility wrapper
+import { validateUrl as validateUrlShared } from '@agiworkforce/utils';
+
+// Re-export checkForInjection from security.ts (local implementation)
+// This is kept for backwards compatibility with existing code
+export { checkForInjection } from './security';
+
+/**
+ * Simple URL validation (returns boolean for backwards compatibility).
+ *
+ * @param url - URL to validate
+ * @returns Whether the URL is valid
+ *
+ * @deprecated Use validateUrl from @agiworkforce/utils which returns detailed results
+ */
 export function validateUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http://' || parsed.protocol === 'https://';
-  } catch {
-    return false;
-  }
+  const result = validateUrlShared(url);
+  return result.valid;
 }
 
-export function validateFilePath(path: string): { valid: boolean; error?: string } {
-  if (path.includes('..')) {
-    return { valid: false, error: 'Directory traversal is not allowed' };
-  }
-
-  const blockedWindowsPaths = [
-    'C:\\Windows',
-    'C:\\Program Files',
-    'C:\\Program Files (x86)',
-    'C:\\ProgramData',
-  ];
-
-  for (const blocked of blockedWindowsPaths) {
-    if (path.toLowerCase().startsWith(blocked.toLowerCase())) {
-      return { valid: false, error: `Access to system directory ${blocked} is not allowed` };
-    }
-  }
-
-  const blockedUnixPaths = ['/etc', '/sys', '/proc', '/dev', '/boot', '/root'];
-
-  for (const blocked of blockedUnixPaths) {
-    if (path.startsWith(blocked)) {
-      return { valid: false, error: `Access to system directory ${blocked} is not allowed` };
-    }
-  }
-
-  return { valid: true };
-}
-
+/**
+ * Sanitize HTML content.
+ *
+ * @param html - HTML string to sanitize
+ * @returns Sanitized HTML string
+ *
+ * @deprecated Use sanitizeHtml from security.ts for proper HTML sanitization
+ */
 export function sanitizeHtml(html: string): string {
   console.warn('DEPRECATED: Use sanitizeHtml from security.ts for proper HTML sanitization');
   return sanitizeHtmlSecure(html);
 }
 
+/**
+ * Escape HTML special characters.
+ *
+ * @param text - Text to escape
+ * @returns Escaped text
+ */
 export function escapeHtml(text: string): string {
   return escapeHtmlSecure(text);
 }
 
-export function validatePassword(password: string): {
-  valid: boolean;
-  errors: string[];
-  strength: 'weak' | 'medium' | 'strong';
-} {
-  const errors: string[] = [];
-  let strength: 'weak' | 'medium' | 'strong' = 'weak';
-
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
-  }
-
-  if (!/[A-Z]/.test(password)) {
-    errors.push('Password must contain at least one uppercase letter');
-  }
-
-  if (!/[a-z]/.test(password)) {
-    errors.push('Password must contain at least one lowercase letter');
-  }
-
-  if (!/[0-9]/.test(password)) {
-    errors.push('Password must contain at least one number');
-  }
-
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    errors.push('Password must contain at least one special character');
-  }
-
-  if (errors.length === 0) {
-    if (password.length >= 12) {
-      strength = 'strong';
-    } else {
-      strength = 'medium';
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    strength,
-  };
-}
-
-export function validateApiKey(apiKey: string): boolean {
-  if (apiKey.length < 20) {
-    return false;
-  }
-
-  const apiKeyRegex = /^[a-zA-Z0-9_-]+$/;
-  return apiKeyRegex.test(apiKey);
-}
-
-export function sanitizeCommandArgs(args: string[]): string[] {
-  const dangerousChars = ['|', '&', ';', '>', '<', '`', '$', '(', ')', '\n', '\r'];
-
-  return args.map((arg) => {
-    let sanitized = arg;
-    for (const char of dangerousChars) {
-      sanitized = sanitized.replace(new RegExp(`\\${char}`, 'g'), '');
-    }
-    return sanitized;
-  });
-}
-
-export function validateJson(json: string): { valid: boolean; error?: string } {
-  try {
-    JSON.parse(json);
-    return { valid: true };
-  } catch (error) {
-    return {
-      valid: false,
-      error: error instanceof Error ? error.message : 'Invalid JSON',
-    };
-  }
-}
-
-export function validateSqlQuery(query: string): { valid: boolean; error?: string } {
-  const dangerousPatterns = [
-    /DROP\s+TABLE/i,
-    /DROP\s+DATABASE/i,
-    /TRUNCATE/i,
-    /DELETE\s+FROM\s+.*\s+WHERE\s+1\s*=\s*1/i,
-    /;\s*DROP/i,
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(query)) {
-      return { valid: false, error: 'Query contains potentially dangerous operation' };
-    }
-  }
-
-  return { valid: true };
-}
-
-export function checkForInjection(input: string): { safe: boolean; type?: string } {
-  return checkForInjectionSecure(input);
-}
-
+/**
+ * Client-side rate limiter using sliding window algorithm.
+ *
+ * @example
+ * ```typescript
+ * const limiter = new ClientRateLimiter(100, 60000); // 100 requests per minute
+ *
+ * if (limiter.checkLimit('user-123')) {
+ *   // Allow request
+ * } else {
+ *   // Reject request
+ * }
+ * ```
+ */
 export class ClientRateLimiter {
   private requests: Map<string, number[]> = new Map();
   private maxRequests: number;
   private windowMs: number;
 
+  /**
+   * Create a new rate limiter.
+   *
+   * @param maxRequests - Maximum requests allowed in the window (default: 100)
+   * @param windowMs - Window size in milliseconds (default: 60000 = 1 minute)
+   */
   constructor(maxRequests: number = 100, windowMs: number = 60000) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
   }
 
+  /**
+   * Check if a request is within rate limits.
+   *
+   * @param key - Unique identifier for the requester
+   * @returns Whether the request is allowed
+   */
   checkLimit(key: string): boolean {
     const now = Date.now();
     const requests = this.requests.get(key) || [];
@@ -180,10 +117,18 @@ export class ClientRateLimiter {
     return true;
   }
 
+  /**
+   * Reset rate limit for a specific key.
+   *
+   * @param key - Unique identifier for the requester
+   */
   reset(key: string): void {
     this.requests.delete(key);
   }
 
+  /**
+   * Clear all rate limit tracking.
+   */
   clearAll(): void {
     this.requests.clear();
   }

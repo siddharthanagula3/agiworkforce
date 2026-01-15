@@ -75,7 +75,10 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
             <Star
-              className={cn('h-4 w-4', favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400')}
+              className={cn(
+                'h-4 w-4',
+                favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400',
+              )}
             />
           </button>
         )}
@@ -89,7 +92,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         'p-4 rounded-lg border-2 cursor-pointer transition-all',
         'hover:shadow-md hover:scale-[1.02]',
         selected && 'border-blue-500 bg-blue-50 dark:bg-blue-900/20',
-        !selected && 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+        !selected &&
+          'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
       )}
       onClick={onClick}
     >
@@ -112,7 +116,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               </button>
             )}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">{model.provider}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">
+            {model.provider}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {speedIcons[model.speed]}
@@ -206,7 +212,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({
 
       {/* Release Date */}
       {model.released && (
-        <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">Released {model.released}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+          Released {model.released}
+        </div>
       )}
     </div>
   );

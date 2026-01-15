@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { Play, Loader2, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
+import {
+  Play,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  TrendingUp,
+  AlertTriangle,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,

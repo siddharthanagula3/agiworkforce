@@ -112,12 +112,17 @@ function startSessionTimer() {
   }, 1000);
 }
 
+// UI feedback duration constant (2 seconds)
+const UI_FEEDBACK_DURATION_MS = 2000;
+// Refresh button feedback duration (1 second)
+const REFRESH_FEEDBACK_DURATION_MS = 1000;
+
 async function handleCapturePage() {
   const button = document.getElementById('captureBtn');
-  const originalText = button.innerHTML;
+  const originalText = button.textContent;
 
   try {
-    button.innerHTML = '⏳ Capturing...';
+    button.textContent = 'Capturing...';
     button.disabled = true;
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -134,41 +139,41 @@ async function handleCapturePage() {
     });
 
     if (response.success) {
-      button.innerHTML = '✅ Captured!';
+      button.textContent = 'Captured!';
       incrementActionCount();
 
-      // Reset button after 2 seconds
+      // Reset button after feedback duration
       setTimeout(() => {
-        button.innerHTML = originalText;
+        button.textContent = originalText;
         button.disabled = false;
-      }, 2000);
+      }, UI_FEEDBACK_DURATION_MS);
     } else {
       throw new Error(response.error || 'Screenshot failed');
     }
   } catch (error) {
     console.error('Capture failed:', error);
-    button.innerHTML = '❌ Failed';
+    button.textContent = 'Failed';
     setTimeout(() => {
-      button.innerHTML = originalText;
+      button.textContent = originalText;
       button.disabled = false;
-    }, 2000);
+    }, UI_FEEDBACK_DURATION_MS);
   }
 }
 
 async function handleRefresh() {
   const button = document.getElementById('refreshBtn');
-  const originalText = button.innerHTML;
+  const originalText = button.textContent;
 
-  button.innerHTML = '⏳ Refreshing...';
+  button.textContent = 'Refreshing...';
   button.disabled = true;
 
   await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
 
-  button.innerHTML = '✅ Refreshed';
+  button.textContent = 'Refreshed';
   setTimeout(() => {
-    button.innerHTML = originalText;
+    button.textContent = originalText;
     button.disabled = false;
-  }, 1000);
+  }, REFRESH_FEEDBACK_DURATION_MS);
 }
 
 async function incrementActionCount() {

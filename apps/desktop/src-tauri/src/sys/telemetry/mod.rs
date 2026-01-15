@@ -1,5 +1,6 @@
 pub mod analytics_metrics;
 pub mod collector;
+pub mod correlation;
 pub mod logging;
 pub mod metrics;
 pub mod redaction;
@@ -7,6 +8,10 @@ pub mod tracing;
 
 pub use analytics_metrics::{AnalyticsMetricsCollector, AppMetrics, SystemMetrics};
 pub use collector::{CollectorConfig, EventBatch, TelemetryCollector, TelemetryEvent};
+pub use correlation::{
+    current_correlation_id, generate_correlation_id, with_correlation_id, with_new_correlation_id,
+    CorrelationGuard, RequestContext,
+};
 pub use logging::{get_current_log_path, LogConfig};
 pub use metrics::{MetricsCollector, OperationMetrics, Timer};
 pub use tracing::{capture_error, init_tracing};

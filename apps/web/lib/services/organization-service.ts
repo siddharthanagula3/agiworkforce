@@ -76,8 +76,12 @@ export class OrganizationService {
       throw error;
     }
 
-    // Flatten structure
-    return data.map((d: any) => d.organization) as Organization[];
+    // Flatten structure - Supabase returns { organization: Organization }[]
+    // The nested select returns the organization object directly
+    // Use unknown first to handle Supabase's generic return type
+    return (data as unknown as { organization: Organization | null }[])
+      .map((d) => d.organization)
+      .filter((org): org is Organization => org !== null);
   }
 
   /**

@@ -8,15 +8,7 @@ import { ChangeSummary } from './ChangeSummary';
 import { ConflictResolver } from './ConflictResolver';
 import { Button } from '../ui/Button';
 import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
-import {
-  Undo,
-  Redo,
-  Eye,
-  Code,
-  FileText,
-  LayoutGrid,
-  Maximize2,
-} from 'lucide-react';
+import { Undo, Redo, Eye, Code, FileText, LayoutGrid, Maximize2 } from 'lucide-react';
 import { Card } from '../ui/Card';
 
 interface VisualEditorProps {
@@ -25,16 +17,8 @@ interface VisualEditorProps {
 }
 
 export function VisualEditor({ rootPath, className }: VisualEditorProps) {
-  const {
-    selectedFile,
-    setSelectedFile,
-    canUndo,
-    canRedo,
-    undo,
-    redo,
-    pendingChanges,
-    conflicts,
-  } = useEditingStore();
+  const { selectedFile, setSelectedFile, canUndo, canRedo, undo, redo, pendingChanges, conflicts } =
+    useEditingStore();
 
   const [layout, setLayout] = useState<'split' | 'full'>('split');
   const [activeView, setActiveView] = useState<'diff' | 'preview'>('diff');
@@ -125,10 +109,7 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
       {/* Main Content */}
       <div className="flex-1 flex min-h-0">
         {/* File Tree Sidebar */}
-        <div className={cn(
-          'w-64 border-r border-border',
-          layout === 'full' && 'hidden'
-        )}>
+        <div className={cn('w-64 border-r border-border', layout === 'full' && 'hidden')}>
           <FileTreeWithChanges
             rootPath={rootPath}
             onFileSelect={handleFileSelect}
@@ -167,17 +148,17 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
         </div>
 
         {/* Right Sidebar */}
-        <div className={cn(
-          'w-80 border-l border-border flex flex-col gap-4 p-4 overflow-y-auto',
-          layout === 'full' && 'hidden'
-        )}>
+        <div
+          className={cn(
+            'w-80 border-l border-border flex flex-col gap-4 p-4 overflow-y-auto',
+            layout === 'full' && 'hidden',
+          )}
+        >
           {/* Change Summary */}
           <ChangeSummary />
 
           {/* Conflict Resolver */}
-          {selectedFile && hasConflicts && (
-            <ConflictResolver filePath={selectedFile} />
-          )}
+          {selectedFile && hasConflicts && <ConflictResolver filePath={selectedFile} />}
 
           {/* Instructions */}
           <Card className="p-4 space-y-2">
@@ -203,7 +184,9 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
       {/* Status Bar */}
       <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/10 text-xs text-muted-foreground">
         <div className="flex items-center gap-4">
-          <span>{pendingChanges.size} file{pendingChanges.size !== 1 ? 's' : ''} with changes</span>
+          <span>
+            {pendingChanges.size} file{pendingChanges.size !== 1 ? 's' : ''} with changes
+          </span>
           {selectedFile && (
             <>
               <span>•</span>
@@ -228,8 +211,8 @@ function EmptyState() {
       <div className="text-center space-y-2 max-w-md">
         <h3 className="text-lg font-semibold">No File Selected</h3>
         <p className="text-sm text-muted-foreground">
-          Select a file from the tree on the left to view and edit its changes.
-          You can accept or reject individual hunks, preview changes, and resolve conflicts.
+          Select a file from the tree on the left to view and edit its changes. You can accept or
+          reject individual hunks, preview changes, and resolve conflicts.
         </p>
       </div>
     </div>

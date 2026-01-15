@@ -50,6 +50,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     });
   }, [messages, debouncedSearchQuery]);
 
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (autoScroll && listRef.current && filteredMessages.length > 0) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -76,6 +77,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       clearHistory();
     }
   }, [clearHistory]);
+
+  /**
+   * PERFORMANCE OPTIMIZATION: Memoized callback factories
+   * These return stable callback functions for each message ID,
+   * preventing unnecessary re-renders of MessageBubble components.
+   * Without this, new function references would be created on every render.
+   */
+  const handleMessageEdit = useCallback(
+    (messageId: string) => (content: string) => {
+      onMessageEdit?.(messageId, content);
+    },
+    [onMessageEdit],
+  );
+
+  const handleMessageDelete = useCallback(
+    (messageId: string) => () => {
+      onMessageDelete?.(messageId);
+    },
+    [onMessageDelete],
+  );
+
+  const handleMessageRegenerate = useCallback(
+    (messageId: string) => () => {
+      onMessageRegenerate?.(messageId);
+    },
+    [onMessageRegenerate],
+  );
 
   if (filteredMessages.length === 0 && !searchQuery) {
     return (
@@ -177,7 +205,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         </div>
       )}
 
-      {}
+      {/* Message list with memoized callbacks to prevent unnecessary re-renders */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
         {filteredMessages.map((message) => (
           <MessageBubble
@@ -186,9 +214,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             showAvatar={true}
             showTimestamp={true}
             enableActions={true}
-            onEdit={(content) => onMessageEdit?.(message.id, content)}
-            onDelete={() => onMessageDelete?.(message.id)}
-            onRegenerate={() => onMessageRegenerate?.(message.id)}
+            onEdit={handleMessageEdit(message.id)}
+            onDelete={handleMessageDelete(message.id)}
+            onRegenerate={handleMessageRegenerate(message.id)}
           />
         ))}
       </div>

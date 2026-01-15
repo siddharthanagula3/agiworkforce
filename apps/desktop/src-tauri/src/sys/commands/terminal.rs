@@ -1,6 +1,9 @@
 use crate::features::terminal::{
     detect_available_shells, SessionManager, ShellInfo, ShellType, TerminalAI,
 };
+use crate::sys::security::command_validator::{
+    validate_command, validate_interactive_input, ValidationConfig,
+};
 use std::time::Instant;
 use tauri::State;
 
@@ -24,104 +27,25 @@ pub async fn execute_terminal_command(
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
 
-    tracing::info!("Executing independent terminal command: {}", command);
+    // Generate correlation ID for request tracing
+    let correlation_id = uuid::Uuid::new_v4().to_string();
 
-    let normalized = command
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
+    tracing::info!(
+        correlation_id = %correlation_id,
+        command = %command,
+        "Executing independent terminal command"
+    );
 
-    let dangerous_patterns = [
-        "rm -rf /",
-        "rm -rf /*",
-        "rm -r /",
-        "dd if=",
-        ":(){ :|:& };:",
-        "mkfs",
-        "format c:",
-        "> /dev/sda",
-        "> /dev/",
-        "chmod -r 777 /",
-        "shutdown",
-        "reboot",
-        "halt",
-        "init 0",
-        "init 6",
-        "sudo rm",
-        "curl | sh",
-        "curl | bash",
-        "wget | sh",
-        "wget | bash",
-        "eval $(",
-        "base64 -d |",
-        "> /etc/passwd",
-        "> /etc/shadow",
-        "mv /",
-        "cp /",
-        "> /boot",
-        "> /proc",
-        "> /sys",
-        "nc -e",
-        "bash -i >&",
-    ];
+    // Use centralized command validation (one-shot mode - strictest)
+    let config = ValidationConfig::oneshot().with_correlation_id(&correlation_id);
 
-    for pattern in &dangerous_patterns {
-        if normalized.contains(pattern) {
-            tracing::warn!("Blocked dangerous command pattern: {}", pattern);
-            return Err(format!(
-                "Command blocked for security: contains dangerous pattern '{}'",
-                pattern
-            ));
-        }
-    }
-
-    let suspicious_patterns = [
-        "wget", "curl", "base64", "nc", "netcat", "ssh", "scp", "sftp",
-    ];
-
-    for pattern in &suspicious_patterns {
-        if normalized.contains(pattern) {
-            tracing::warn!(
-                "Executing suspicious command pattern '{}': {}",
-                pattern,
-                command
-            );
-        }
-    }
-
-    let dangerous_metacharacters = ['`', '$', '\n', '\r'];
-
-    for meta in &dangerous_metacharacters {
-        if command.contains(*meta) {
-            let display_char = match *meta {
-                '\n' | '\r' => "newline".to_string(),
-                c => c.to_string(),
-            };
-            tracing::warn!("Blocked command containing shell metacharacter: {:?}", meta);
-            return Err(format!(
-                "Command blocked for security: contains shell metacharacter '{}'",
-                display_char
-            ));
-        }
-    }
-
-    // Block shell operators for this "one-shot" execution path.
-    // If complex shell syntax is needed, it should go through an interactive session
-    // with explicit user visibility/approval.
-    let blocked_operators = ['|', ';', '&', '<', '>'];
-    for op in &blocked_operators {
-        if command.contains(*op) {
-            tracing::warn!(
-                "Blocked command containing shell operator '{}': {}",
-                op,
-                command
-            );
-            return Err(format!(
-                "Command blocked for security: contains shell operator '{}'. Use a terminal session instead.",
-                op
-            ));
-        }
+    if let Err(e) = validate_command(&command, &config) {
+        tracing::warn!(
+            correlation_id = %correlation_id,
+            error = %e,
+            "Command validation failed"
+        );
+        return Err(e.to_string());
     }
 
     if let Some(ref dir) = cwd {
@@ -275,8 +199,16 @@ pub async fn terminal_send_input(
     data: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    // Generate correlation ID for request tracing
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+
     // Validate session_id format (prevent injection via session ID)
     if session_id.is_empty() || session_id.len() > 128 {
+        tracing::warn!(
+            correlation_id = %correlation_id,
+            session_id_len = session_id.len(),
+            "Invalid session_id length"
+        );
         return Err("Invalid session_id: must be 1-128 characters".to_string());
     }
 
@@ -285,6 +217,10 @@ pub async fn terminal_send_input(
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
+        tracing::warn!(
+            correlation_id = %correlation_id,
+            "Invalid session_id characters"
+        );
         return Err("Invalid session_id: contains invalid characters".to_string());
     }
 
@@ -292,9 +228,10 @@ pub async fn terminal_send_input(
     const MAX_INPUT_SIZE: usize = 1024 * 1024; // 1MB max
     if data.len() > MAX_INPUT_SIZE {
         tracing::warn!(
-            "Blocked oversized terminal input: {} bytes (max: {})",
-            data.len(),
-            MAX_INPUT_SIZE
+            correlation_id = %correlation_id,
+            data_size = data.len(),
+            max_size = MAX_INPUT_SIZE,
+            "Blocked oversized terminal input"
         );
         return Err(format!(
             "Input too large: {} bytes exceeds maximum of {} bytes",
@@ -303,30 +240,30 @@ pub async fn terminal_send_input(
         ));
     }
 
-    // Log suspicious patterns (similar to execute_terminal_command) for audit
-    let normalized = data.to_lowercase();
-    let suspicious_patterns = [
-        "rm -rf",
-        "dd if=",
-        "mkfs",
-        "shutdown",
-        "reboot",
-        ":(){ :|:& };:",
-    ];
-    for pattern in &suspicious_patterns {
-        if normalized.contains(pattern) {
-            tracing::warn!(
-                "Suspicious pattern '{}' detected in terminal input for session {}",
-                pattern,
-                session_id
-            );
-        }
+    // SECURITY FIX: Apply command validation to interactive sessions too
+    // This prevents the security bypass where dangerous commands could be
+    // executed through interactive mode without validation
+    if let Err(e) = validate_interactive_input(&data, Some(&correlation_id)) {
+        tracing::warn!(
+            correlation_id = %correlation_id,
+            session_id = %session_id,
+            error = %e,
+            "Interactive input validation failed - blocking dangerous command"
+        );
+        return Err(format!("Command blocked for security: {}", e));
     }
 
     state
         .send_input(&session_id, &data)
         .await
         .map_err(|e| format!("Failed to send input: {}", e))?;
+
+    tracing::debug!(
+        correlation_id = %correlation_id,
+        session_id = %session_id,
+        "Terminal input sent successfully"
+    );
+
     Ok(())
 }
 

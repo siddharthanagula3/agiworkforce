@@ -343,7 +343,7 @@ export const CostDashboard = memo(function CostDashboard() {
                       <YAxis
                         tickFormatter={(value) => {
                           const total = analytics.timeseries.reduce(
-                            (sum: number, d: any) => sum + d.total_cost,
+                            (sum, d) => sum + d.total_cost,
                             0,
                           );
                           return total > 0 ? `${((value / total) * 100).toFixed(0)}%` : '0%';
@@ -354,7 +354,7 @@ export const CostDashboard = memo(function CostDashboard() {
                         // @ts-expect-error - recharts v3 type definition mismatch
                         formatter={(value: number) => {
                           const total = analytics.timeseries.reduce(
-                            (sum: number, d: any) => sum + d.total_cost,
+                            (sum, d) => sum + d.total_cost,
                             0,
                           );
                           return total > 0 ? `${((value / total) * 100).toFixed(1)}%` : '0%';
@@ -398,7 +398,7 @@ export const CostDashboard = memo(function CostDashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={analytics.providers as any}
+                        data={analytics.providers as unknown as Array<Record<string, unknown>>}
                         dataKey="total_cost"
                         nameKey="provider"
                         cx="50%"
@@ -416,7 +416,7 @@ export const CostDashboard = memo(function CostDashboard() {
                         // @ts-expect-error - recharts v3 type definition mismatch
                         formatter={(value: number) => {
                           const total = analytics.providers.reduce(
-                            (sum: number, p: any) => sum + p.total_cost,
+                            (sum, p) => sum + p.total_cost,
                             0,
                           );
                           return total > 0 ? `${((value / total) * 100).toFixed(1)}%` : '0%';
