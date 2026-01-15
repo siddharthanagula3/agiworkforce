@@ -1,7 +1,5 @@
 use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::core::llm::{
-    ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall,
-};
+use crate::core::llm::{ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

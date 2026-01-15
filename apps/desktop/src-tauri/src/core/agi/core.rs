@@ -37,7 +37,10 @@ fn lock_bool_signal(mutex: &Mutex<bool>, default_on_poison: bool) -> bool {
     match mutex.lock() {
         Ok(guard) => *guard,
         Err(poisoned) => {
-            tracing::warn!("[AGI] Recovered from poisoned bool mutex, using default={}", default_on_poison);
+            tracing::warn!(
+                "[AGI] Recovered from poisoned bool mutex, using default={}",
+                default_on_poison
+            );
             *poisoned.into_inner()
         }
     }
@@ -48,7 +51,11 @@ fn set_bool_signal(mutex: &Mutex<bool>, value: bool, context: &str) {
     match mutex.lock() {
         Ok(mut guard) => *guard = value,
         Err(poisoned) => {
-            tracing::warn!("[AGI] Recovered from poisoned mutex ({}), setting value={}", context, value);
+            tracing::warn!(
+                "[AGI] Recovered from poisoned mutex ({}), setting value={}",
+                context,
+                value
+            );
             *poisoned.into_inner() = value;
         }
     }
@@ -363,8 +370,7 @@ impl AGICore {
         self.knowledge_base.add_goal(&goal).await?;
 
         // CRITICAL-001 fix: Use recovery helper
-        lock_with_recovery(&self.active_goals, "submit_goal:active_goals")?
-            .push(goal.clone());
+        lock_with_recovery(&self.active_goals, "submit_goal:active_goals")?.push(goal.clone());
 
         let context = ExecutionContext {
             goal: goal.clone(),
@@ -493,13 +499,13 @@ impl AGICore {
 
     async fn process_goals(&self) -> Result<()> {
         // CRITICAL-001 fix: Use recovery helpers
-        let goals = lock_with_recovery(&self.active_goals, "process_goals:active_goals")?
-            .clone();
+        let goals = lock_with_recovery(&self.active_goals, "process_goals:active_goals")?.clone();
 
         for goal in goals {
-            let context = lock_with_recovery(&self.execution_contexts, "process_goals:get_context")?
-                .get(&goal.id)
-                .cloned();
+            let context =
+                lock_with_recovery(&self.execution_contexts, "process_goals:get_context")?
+                    .get(&goal.id)
+                    .cloned();
 
             if let Some(mut ctx) = context {
                 ctx.available_resources = self.resource_manager.get_state().await?;
@@ -1038,16 +1044,15 @@ impl AGICore {
         }
 
         // Remove from execution_contexts
-        if let Ok(mut contexts) = lock_with_recovery(&self.execution_contexts, "cleanup_goal:contexts") {
+        if let Ok(mut contexts) =
+            lock_with_recovery(&self.execution_contexts, "cleanup_goal:contexts")
+        {
             if contexts.remove(goal_id).is_some() {
                 tracing::debug!("[AGI] Removed goal {} from execution_contexts", goal_id);
             }
         }
 
-        self.emit_event(
-            "agi:goal:cleanup",
-            json!({ "goal_id": goal_id }),
-        );
+        self.emit_event("agi:goal:cleanup", json!({ "goal_id": goal_id }));
     }
 
     async fn check_goal_achieved(&self, context: &ExecutionContext) -> Result<bool> {

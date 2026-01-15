@@ -125,7 +125,8 @@ impl AutonomousAgent {
 
     async fn process_task_queue(&self) -> Result<()> {
         {
-            let running = self.running_tasks
+            let running = self
+                .running_tasks
                 .lock()
                 .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?;
             if running.len() >= self.config.max_concurrent_tasks {
@@ -134,7 +135,8 @@ impl AutonomousAgent {
         }
 
         let (task_id, requires_approval_check) = {
-            let mut queue = self.task_queue
+            let mut queue = self
+                .task_queue
                 .lock()
                 .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             if let Some(task) = queue.iter_mut().find(|t| t.status == TaskStatus::Pending) {
@@ -149,7 +151,8 @@ impl AutonomousAgent {
 
         if requires_approval_check {
             let task_clone = {
-                let queue = self.task_queue
+                let queue = self
+                    .task_queue
                     .lock()
                     .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                 queue.iter().find(|t| t.id == task_id).cloned()
@@ -159,7 +162,8 @@ impl AutonomousAgent {
                 if !self.approval.should_approve(&task).await? {
                     tracing::info!("[Agent] Task {} requires approval", task_id);
 
-                    let mut queue = self.task_queue
+                    let mut queue = self
+                        .task_queue
                         .lock()
                         .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                     if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
@@ -187,7 +191,8 @@ impl AutonomousAgent {
 
     async fn execute_task(&self, task_id: String) -> Result<()> {
         let mut task = {
-            let mut queue = self.task_queue
+            let mut queue = self
+                .task_queue
                 .lock()
                 .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             queue
@@ -205,7 +210,8 @@ impl AutonomousAgent {
             task.updated_at = std::time::Instant::now();
 
             {
-                let mut queue = self.task_queue
+                let mut queue = self
+                    .task_queue
                     .lock()
                     .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
                 if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
@@ -282,7 +288,8 @@ impl AutonomousAgent {
         }
 
         {
-            let mut queue = self.task_queue
+            let mut queue = self
+                .task_queue
                 .lock()
                 .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
             if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
@@ -383,14 +390,16 @@ impl AutonomousAgent {
     }
 
     pub fn get_task_status(&self, task_id: &str) -> Result<Option<Task>> {
-        let queue = self.task_queue
+        let queue = self
+            .task_queue
             .lock()
             .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
         Ok(queue.iter().find(|t| t.id == task_id).cloned())
     }
 
     pub fn list_tasks(&self) -> Result<Vec<Task>> {
-        let queue = self.task_queue
+        let queue = self
+            .task_queue
             .lock()
             .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
         Ok(queue.clone())
