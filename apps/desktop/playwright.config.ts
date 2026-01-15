@@ -70,6 +70,16 @@ export default defineConfig({
       testMatch: '**/playwright*.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'gdpr',
+      testMatch: '**/gdpr.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'agi-safety',
+      testMatch: '**/agi-safety.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 
   // In CI, we start the dev server manually in the workflow

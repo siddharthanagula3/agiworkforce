@@ -23,7 +23,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
@@ -67,6 +67,190 @@ interface SidebarProps {
 }
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
+
+/**
+ * Memoized conversation item component to prevent unnecessary re-renders.
+ * PERFORMANCE OPTIMIZATION: Each conversation item in the sidebar can trigger
+ * re-renders when the parent state changes. By memoizing this component,
+ * we only re-render when the specific conversation data changes.
+ */
+interface ConversationItemProps {
+  conv: ConversationSummary;
+  isActive: boolean;
+  isKeyboardFocused: boolean;
+  isSimpleMode: boolean;
+  showArchived: boolean;
+  editingId: string | null;
+  editingTitle: string;
+  onSelect: (id: string) => void;
+  onStartEdit: (conv: ConversationSummary) => void;
+  onEditTitleChange: (title: string) => void;
+  onRename: (id: string) => void;
+  onCancelEdit: () => void;
+  onOpenCustomInstructions?: (id: string) => void;
+  onTogglePin: (id: string) => void;
+  onExport: (id: string, title: string) => void;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
+  onDelete: (id: string, title: string) => void;
+}
+
+const ConversationItem = memo<ConversationItemProps>(
+  ({
+    conv,
+    isActive,
+    isKeyboardFocused,
+    isSimpleMode,
+    showArchived,
+    editingId,
+    editingTitle,
+    onSelect,
+    onStartEdit,
+    onEditTitleChange,
+    onRename,
+    onCancelEdit,
+    onOpenCustomInstructions,
+    onTogglePin,
+    onExport,
+    onArchive,
+    onRestore,
+    onDelete,
+  }) => {
+    const isEditing = editingId === conv.id;
+
+    return (
+      <div
+        className={cn(
+          'group relative rounded-lg transition-all mb-1',
+          isActive ? 'bg-teal-100 dark:bg-teal-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+          isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
+        )}
+      >
+        {isEditing ? (
+          <Input
+            autoFocus
+            value={editingTitle}
+            onChange={(e) => onEditTitleChange(e.target.value)}
+            onBlur={() => onRename(conv.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRename(conv.id);
+              if (e.key === 'Escape') onCancelEdit();
+            }}
+            className="w-full px-3 py-2 text-sm"
+          />
+        ) : (
+          <div className="flex items-center">
+            <button
+              onClick={() => onSelect(conv.id)}
+              onDoubleClick={() => onStartEdit(conv)}
+              className="flex-1 text-left px-3 py-2 overflow-hidden"
+            >
+              <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
+              {conv.lastMessage && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {conv.lastMessage}
+                </div>
+              )}
+            </button>
+
+            {/* Conversation action buttons - simplified in simple mode */}
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
+              {/* Only show delete in simple mode, show all actions in advanced mode */}
+              {!isSimpleMode && (
+                <>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCustomInstructions?.(conv.id);
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-6 w-6 text-gray-400 hover:text-amber-500',
+                      conv.customInstructions && 'text-amber-500',
+                    )}
+                    title={
+                      conv.customInstructions
+                        ? 'Edit custom instructions'
+                        : 'Add custom instructions'
+                    }
+                  >
+                    <Sparkles className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePin(conv.id);
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-teal-500"
+                    title={conv.pinned ? 'Unpin' : 'Pin'}
+                  >
+                    {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExport(conv.id, conv.title || 'Untitled');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-blue-500"
+                    title="Export to Markdown"
+                  >
+                    <Download className="h-3 w-3" />
+                  </Button>
+                  {showArchived ? (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRestore(conv.id);
+                      }}
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-gray-400 hover:text-emerald-500"
+                      title="Restore from archive"
+                    >
+                      <ArchiveRestore className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onArchive(conv.id);
+                      }}
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-gray-400 hover:text-amber-500"
+                      title="Archive"
+                    >
+                      <Archive className="h-3 w-3" />
+                    </Button>
+                  )}
+                </>
+              )}
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(conv.id, conv.title || 'Untitled');
+                }}
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-400 hover:text-red-500"
+                title="Delete"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
+
+ConversationItem.displayName = 'ConversationItem';
 
 const TEMPORAL_LABELS: Record<TemporalGroup, string> = {
   today: 'Today',
@@ -335,6 +519,28 @@ export function Sidebar({
     }
   }, [deleteConfirmDialog, deleteConversation]);
 
+  // Stable callback handlers for ConversationItem to prevent re-renders
+  const handleCancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditingTitle('');
+  }, []);
+
+  const handleArchive = useCallback(
+    (id: string) => {
+      archiveConversation(id);
+      toast.success('Conversation archived');
+    },
+    [archiveConversation],
+  );
+
+  const handleRestore = useCallback(
+    (id: string) => {
+      restoreConversation(id);
+      toast.success('Conversation restored');
+    },
+    [restoreConversation],
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -382,140 +588,48 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingId, showSearch, focusedIndex, visibleConversations, handleSelectConversation]);
 
-  const renderConversationItem = (conv: ConversationSummary, isKeyboardFocused: boolean) => (
-    <div
-      key={conv.id}
-      className={cn(
-        'group relative rounded-lg transition-all mb-1',
-        conv.id === activeConversationId
-          ? 'bg-teal-100 dark:bg-teal-900/30'
-          : 'hover:bg-gray-100 dark:hover:bg-gray-800',
-        isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
-      )}
-    >
-      {editingId === conv.id ? (
-        <Input
-          autoFocus
-          value={editingTitle}
-          onChange={(e) => setEditingTitle(e.target.value)}
-          onBlur={() => handleRename(conv.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRename(conv.id);
-            if (e.key === 'Escape') {
-              setEditingId(null);
-              setEditingTitle('');
-            }
-          }}
-          className="w-full px-3 py-2 text-sm"
-        />
-      ) : (
-        <div className="flex items-center">
-          <button
-            onClick={() => selectConversation(conv.id)}
-            onDoubleClick={() => startEditing(conv)}
-            className="flex-1 text-left px-3 py-2 overflow-hidden"
-          >
-            <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
-            {conv.lastMessage && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {conv.lastMessage}
-              </div>
-            )}
-          </button>
-
-          {/* Conversation action buttons - simplified in simple mode */}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
-            {/* Only show delete in simple mode, show all actions in advanced mode */}
-            {!isSimpleMode && (
-              <>
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenCustomInstructions?.(conv.id);
-                  }}
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-6 w-6 text-gray-400 hover:text-amber-500',
-                    conv.customInstructions && 'text-amber-500',
-                  )}
-                  title={
-                    conv.customInstructions ? 'Edit custom instructions' : 'Add custom instructions'
-                  }
-                >
-                  <Sparkles className="h-3 w-3" />
-                </Button>
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePinnedConversation(conv.id);
-                  }}
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-gray-400 hover:text-teal-500"
-                  title={conv.pinned ? 'Unpin' : 'Pin'}
-                >
-                  {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
-                </Button>
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleExportConversation(conv.id, conv.title || 'Untitled');
-                  }}
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-gray-400 hover:text-blue-500"
-                  title="Export to Markdown"
-                >
-                  <Download className="h-3 w-3" />
-                </Button>
-                {showArchived ? (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      restoreConversation(conv.id);
-                      toast.success('Conversation restored');
-                    }}
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-emerald-500"
-                    title="Restore from archive"
-                  >
-                    <ArchiveRestore className="h-3 w-3" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      archiveConversation(conv.id);
-                      toast.success('Conversation archived');
-                    }}
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-gray-400 hover:text-amber-500"
-                    title="Archive"
-                  >
-                    <Archive className="h-3 w-3" />
-                  </Button>
-                )}
-              </>
-            )}
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                openDeleteConfirmDialog(conv.id, conv.title || 'Untitled');
-              }}
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-gray-400 hover:text-red-500"
-              title="Delete"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+  // Render conversation item using the memoized component
+  const renderConversationItem = useCallback(
+    (conv: ConversationSummary, isKeyboardFocused: boolean) => (
+      <ConversationItem
+        key={conv.id}
+        conv={conv}
+        isActive={conv.id === activeConversationId}
+        isKeyboardFocused={isKeyboardFocused}
+        isSimpleMode={isSimpleMode}
+        showArchived={showArchived}
+        editingId={editingId}
+        editingTitle={editingTitle}
+        onSelect={selectConversation}
+        onStartEdit={startEditing}
+        onEditTitleChange={setEditingTitle}
+        onRename={handleRename}
+        onCancelEdit={handleCancelEdit}
+        onOpenCustomInstructions={onOpenCustomInstructions}
+        onTogglePin={togglePinnedConversation}
+        onExport={handleExportConversation}
+        onArchive={handleArchive}
+        onRestore={handleRestore}
+        onDelete={openDeleteConfirmDialog}
+      />
+    ),
+    [
+      activeConversationId,
+      isSimpleMode,
+      showArchived,
+      editingId,
+      editingTitle,
+      selectConversation,
+      startEditing,
+      handleRename,
+      handleCancelEdit,
+      onOpenCustomInstructions,
+      togglePinnedConversation,
+      handleExportConversation,
+      handleArchive,
+      handleRestore,
+      openDeleteConfirmDialog,
+    ],
   );
 
   if (collapsed) {

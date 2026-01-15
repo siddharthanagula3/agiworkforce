@@ -2,32 +2,11 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Metadata } from 'next';
 import { ArrowRight, Check, AlertCircle, Zap, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
 import { getSupabaseClient } from '../../services/supabase';
-
-export const metadata: Metadata = {
-  title: 'Pricing Plans | AGI Workforce - Affordable AI Automation',
-  description:
-    'Simple, transparent pricing for AGI Workforce. Start free, upgrade when ready. Plans for individuals, professionals, and power users. No credit card required to start.',
-  keywords: [
-    'AGI Workforce pricing',
-    'AI automation pricing',
-    'subscription plans',
-    'free tier',
-    'hobby plan',
-    'pro plan',
-    'max plan',
-  ],
-  openGraph: {
-    title: 'Pricing Plans | AGI Workforce',
-    description:
-      'Simple, transparent pricing. Start free, upgrade when ready. Plans for individuals and teams.',
-    url: 'https://agiworkforce.com/pricing',
-  },
-};
+import { getPlanLevel, isActiveSubscriptionStatus } from '@/lib/constants';
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -64,7 +43,6 @@ function PricingContent() {
         throw new Error('No checkout URL returned');
       }
     } catch (err: unknown) {
-      console.error('Checkout error:', err);
       const errorMessage =
         err instanceof Error ? err.message : 'An error occurred during checkout. Please try again.';
       alert(errorMessage);
@@ -102,8 +80,9 @@ function PricingContent() {
             setSubscription(null);
           }
         }
-      } catch (error) {
-        console.error('Error fetching subscription:', error);
+      } catch {
+        // Subscription fetch failed - user may not be logged in or network issue
+        // This is expected for anonymous users, so we silently handle it
       } finally {
         if (mounted) {
           setLoadingSubscription(false);
@@ -118,8 +97,7 @@ function PricingContent() {
     };
   }, []);
 
-  const isSubscribed =
-    subscription && ['active', 'trialing', 'past_due'].includes(subscription.status);
+  const isSubscribed = subscription && isActiveSubscriptionStatus(subscription.status);
 
   const handleManage = async () => {
     setLoadingPlan('manage');
@@ -136,23 +114,11 @@ function PricingContent() {
         throw new Error(errorMessage);
       }
       if (data.url) window.location.href = data.url;
-    } catch (err) {
-      console.error('Portal error:', err);
+    } catch {
       alert('Failed to load billing portal');
     } finally {
       setLoadingPlan(null);
     }
-  };
-
-  const planHierarchy: Record<string, number> = {
-    free: 0,
-    hobby: 1,
-    pro: 2,
-    max: 3,
-  };
-
-  const getPlanLevel = (plan: string): number => {
-    return planHierarchy[plan.toLowerCase()] || 0;
   };
 
   const getButtonText = (plan: string, label: string) => {

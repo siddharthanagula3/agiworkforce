@@ -39,9 +39,7 @@ export function DiffViewer({
     }
 
     for (const hunk of data.hunks) {
-      lines.push(
-        `@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@`,
-      );
+      lines.push(`@@ -${hunk.old_start},${hunk.old_lines} +${hunk.new_start},${hunk.new_lines} @@`);
       for (const line of hunk.lines) {
         const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' ';
         lines.push(`${prefix}${line.content}`);
@@ -108,7 +106,11 @@ export function DiffViewer({
             Collapse All
           </Button>
           <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
-            {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>
@@ -155,15 +157,19 @@ export function DiffViewer({
                     const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' ';
 
                     return (
-                      <div
-                        key={lineIndex}
-                        className={cn('flex items-center px-3 py-0.5', bgColor)}
-                      >
-                        <span className={cn('w-6 text-muted-foreground select-none text-right mr-2', textColor)}>
+                      <div key={lineIndex} className={cn('flex items-center px-3 py-0.5', bgColor)}>
+                        <span
+                          className={cn(
+                            'w-6 text-muted-foreground select-none text-right mr-2',
+                            textColor,
+                          )}
+                        >
                           {line.line_number ?? ''}
                         </span>
                         <span className={cn('w-4 select-none', textColor)}>{prefix}</span>
-                        <span className={cn(textColor, 'whitespace-pre flex-1')}>{line.content}</span>
+                        <span className={cn(textColor, 'whitespace-pre flex-1')}>
+                          {line.content}
+                        </span>
                       </div>
                     );
                   })}

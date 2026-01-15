@@ -117,13 +117,15 @@ export class ApiKeyService {
 
   /**
    * List user's API Keys
+   * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
+   * to reduce data transfer and improve query performance.
    */
   static async listApiKeys(userId: string): Promise<ApiKey[]> {
     const supabase = getSupabaseClient();
 
     const { data, error } = await supabase
       .from('api_keys')
-      .select('*')
+      .select('id, user_id, name, scopes, created_at, expires_at, last_used_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -152,27 +154,27 @@ export class ApiKeyService {
   /**
    * Verify an API Key (for external API usage)
    * Supports both new salted hashes and legacy unsalted hashes for backward compatibility.
+   *
+   * PERFORMANCE OPTIMIZATION:
+   * - Select only required columns for verification (id, key_hash, user_id, scopes, expires_at)
+   * - Use early return for invalid key format
+   * - Fire-and-forget update for last_used_at to avoid blocking
+   * - Consider implementing Redis caching for verified keys in high-traffic scenarios
    */
   static async verifyKey(rawKey: string): Promise<ApiKey | null> {
     const supabase = getSupabaseClient();
 
-    // Since we can't directly query by the derived hash (salt is unique per key),
-    // we need to fetch all active keys and verify each one.
-    // For better performance in production, consider:
-    // 1. Caching verified keys in Redis
-    // 2. Using a key prefix/identifier that can be indexed
-    // 3. Limiting the search to keys created after a certain date
-
-    // First, try to find keys that match the prefix pattern for efficiency
+    // Early return for invalid key format
     // The raw key format is: sk_live_<48 hex chars>
     if (!rawKey.startsWith('sk_live_')) {
       return null;
     }
 
-    // Fetch all non-expired keys (limit to reasonable number)
+    // Fetch only required columns for verification to reduce data transfer
+    // key_hash is needed for verification, other fields are returned if valid
     const { data: keys, error } = await supabase
       .from('api_keys')
-      .select('*')
+      .select('id, user_id, name, key_hash, scopes, created_at, expires_at, last_used_at')
       .or('expires_at.is.null,expires_at.gt.now()')
       .limit(1000); // Safety limit
 
@@ -195,7 +197,9 @@ export class ApiKeyService {
             }
           });
 
-        return key as ApiKey;
+        // Return key without the hash for security
+        const { key_hash: _, ...keyWithoutHash } = key;
+        return keyWithoutHash as ApiKey;
       }
     }
 

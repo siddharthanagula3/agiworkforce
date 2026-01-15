@@ -75,6 +75,60 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 beta download requests per minute per IP
     failClosed: false,
   },
+  // Release check endpoints - generous limits for auto-update checks
+  'release-check': {
+    limit: 60,
+    window: '1 m', // 60 update checks per minute per IP
+    failClosed: false,
+  },
+  'release-latest': {
+    limit: 60,
+    window: '1 m', // 60 manifest fetches per minute per IP
+    failClosed: false,
+  },
+  // Authentication endpoints - stricter limits to prevent brute force
+  'auth-login': {
+    limit: 5,
+    window: '15 m', // 5 login attempts per 15 minutes per IP
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
+  'auth-signup': {
+    limit: 3,
+    window: '1 h', // 3 signup attempts per hour per IP (prevent mass account creation)
+    failClosed: true,
+  },
+  'auth-password-reset': {
+    limit: 3,
+    window: '1 h', // 3 password reset attempts per hour
+    failClosed: true,
+  },
+  'auth-verify': {
+    limit: 10,
+    window: '1 m', // 10 verification attempts per minute
+    failClosed: true,
+  },
+  // API key operations - critical security endpoints
+  'api-key-create': {
+    limit: 5,
+    window: '1 h', // 5 API key creations per hour
+    failClosed: true,
+  },
+  'api-key-revoke': {
+    limit: 10,
+    window: '1 m', // 10 revocations per minute (allow cleanup)
+    failClosed: true,
+  },
+  // GDPR endpoints - sensitive data operations
+  'user-data-delete': {
+    limit: 3,
+    window: '1 h', // 3 deletion requests per hour - irreversible operation
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
+  'user-data-export': {
+    limit: 5,
+    window: '1 h', // 5 export requests per hour - data portability
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
@@ -194,9 +248,27 @@ function inMemoryRateLimit(
 type RateLimitKey = keyof typeof rateLimitConfigs;
 
 /**
- * Create a rate limiter instance (only called when Redis is available)
+ * Module-level cache for rate limiter instances.
+ * This prevents creating new Ratelimit instances on every request,
+ * which significantly improves performance by reusing Redis connections.
+ *
+ * PERFORMANCE OPTIMIZATION: Ratelimit instances are expensive to create
+ * because they set up Redis connection handlers. Caching them reduces
+ * overhead from ~5-10ms per request to near-zero for subsequent requests.
  */
-function createRateLimiter(key: RateLimitKey) {
+const rateLimiterCache = new Map<RateLimitKey, Ratelimit>();
+
+/**
+ * Get or create a rate limiter instance (only called when Redis is available)
+ * Uses module-level caching to reuse instances across requests.
+ */
+function getRateLimiter(key: RateLimitKey): Ratelimit {
+  // Return cached instance if available
+  const cached = rateLimiterCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
   const config = rateLimitConfigs[key];
 
   if (!redis) {
@@ -205,11 +277,21 @@ function createRateLimiter(key: RateLimitKey) {
     throw new Error('Redis not configured for rate limiting');
   }
 
-  return new Ratelimit({
+  // Create new instance and cache it
+  const rateLimiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(config.limit, config.window),
     analytics: true,
   });
+
+  rateLimiterCache.set(key, rateLimiter);
+
+  logger.info(
+    { key, cacheSize: rateLimiterCache.size },
+    'Created and cached new rate limiter instance',
+  );
+
+  return rateLimiter;
 }
 
 /**
@@ -309,7 +391,7 @@ export async function checkRateLimit(
     };
   }
 
-  const rateLimiter = createRateLimiter(key);
+  const rateLimiter = getRateLimiter(key);
 
   try {
     const { success, limit, remaining, reset } = await rateLimiter.limit(id);

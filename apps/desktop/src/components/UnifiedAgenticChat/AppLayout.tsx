@@ -189,7 +189,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
           />
           <DynamicSidecar
             panelType={sidecarState.activeMode}
-            payload={sidecarState.context}
+            payload={sidecarState.context as Record<string, unknown> | undefined}
             onClose={() => useUnifiedChatStore.getState().closeSidecar()}
           />
         </div>
