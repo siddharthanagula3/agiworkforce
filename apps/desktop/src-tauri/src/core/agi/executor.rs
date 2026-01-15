@@ -432,13 +432,72 @@ impl AGIExecutor {
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing content parameter"))?;
 
-                let old_content = std::fs::read_to_string(path).ok();
+                // SECURITY: For new files, validate the parent directory exists and is allowed
+                // For existing files, canonicalize the path to prevent path traversal
+                let path_obj = std::path::Path::new(path);
+                let canonical_path = if path_obj.exists() {
+                    // File exists, canonicalize it
+                    std::fs::canonicalize(path).map_err(|e| {
+                        anyhow::anyhow!("Invalid or inaccessible path '{}': {}", path, e)
+                    })?
+                } else {
+                    // New file - validate parent directory
+                    let parent = path_obj
+                        .parent()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid path: no parent directory"))?;
+                    if !parent.exists() {
+                        return Err(anyhow::anyhow!(
+                            "Parent directory does not exist: {}",
+                            parent.display()
+                        ));
+                    }
+                    let canonical_parent = std::fs::canonicalize(parent).map_err(|e| {
+                        anyhow::anyhow!("Invalid parent directory '{}': {}", parent.display(), e)
+                    })?;
+                    canonical_parent.join(
+                        path_obj
+                            .file_name()
+                            .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?,
+                    )
+                };
 
-                let result = std::fs::write(path, content);
+                // SECURITY: Validate the canonicalized path is within allowed directories
+                // This prevents path traversal attacks like "../../../etc/passwd"
+                let allowed_directories = self.get_allowed_directories();
+                let path_allowed = if allowed_directories.is_empty() {
+                    // If no restrictions configured, allow access (backwards compatibility)
+                    // but log a security warning
+                    tracing::warn!(
+                        "[Executor] No allowed_directories configured - file write unrestricted. \
+                        Consider configuring allowed directories for security."
+                    );
+                    true
+                } else {
+                    allowed_directories
+                        .iter()
+                        .any(|allowed_dir| canonical_path.starts_with(allowed_dir))
+                };
+
+                if !path_allowed {
+                    tracing::error!(
+                        "[Executor] Path traversal attempt blocked: '{}' resolved to '{}' which is outside allowed directories",
+                        path,
+                        canonical_path.display()
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Access denied: path '{}' is outside allowed directories",
+                        path
+                    ));
+                }
+
+                let old_content = std::fs::read_to_string(&canonical_path).ok();
+
+                let result = std::fs::write(&canonical_path, content);
 
                 if let Some(ref app_handle) = self.app_handle {
+                    let display_path = canonical_path.to_string_lossy().to_string();
                     let file_op = crate::ui::events::create_file_write_event(
-                        path,
+                        &display_path,
                         old_content.as_deref(),
                         content,
                         result.is_ok(),
@@ -451,10 +510,13 @@ impl AGIExecutor {
                 result?;
 
                 let mut read_params = HashMap::new();
-                read_params.insert("path".to_string(), serde_json::json!(path));
+                read_params.insert(
+                    "path".to_string(),
+                    serde_json::json!(canonical_path.to_string_lossy()),
+                );
                 let _ = self.tool_cache.invalidate("file_read", &read_params);
 
-                Ok(json!({ "success": true, "path": path }))
+                Ok(json!({ "success": true, "path": canonical_path.to_string_lossy() }))
             }
             "ui_screenshot" => {
                 use crate::automation::screen::capture_primary_screen;

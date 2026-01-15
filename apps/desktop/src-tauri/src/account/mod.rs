@@ -76,7 +76,7 @@ pub async fn device_link_initiate(
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
     let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     let url = format!("{}/api/device/link", api_base);
 
     let body =
@@ -117,7 +117,7 @@ pub async fn device_link_poll(
     state: State<'_, ApiState>,
 ) -> Result<DevicePollResponse, String> {
     let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     let url = format!("{}/api/device/poll", api_base);
 
     let body =
@@ -171,7 +171,7 @@ pub async fn fetch_user_profile(
     state: State<'_, ApiState>,
 ) -> Result<UserProfile, String> {
     let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     let url = format!("{}/api/me", api_base);
 
     let api_request = ApiRequest {
@@ -203,7 +203,7 @@ pub async fn oauth_refresh(
     state: State<'_, ApiState>,
 ) -> Result<serde_json::Value, String> {
     let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     let url = format!("{}/oauth/refresh", api_base);
 
     let body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
@@ -250,47 +250,63 @@ pub async fn oauth_refresh(
 }
 
 // ============================================================================
-// Token Storage Implementation
+// Token Storage Implementation (In-Memory)
 // ============================================================================
 
-use keyring::Entry;
+use std::sync::RwLock;
 
-fn get_service() -> String {
-    "AGI Workforce".to_string()
-}
+// In-memory token storage for the Rust backend
+// This avoids keyring permission prompts while still allowing Rust to make API calls
+static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
+static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 
-/// Store access token securely in OS keychain
+/// Store access token in memory
 pub fn store_access_token(token: &str) -> Result<(), String> {
-    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
-    entry.set_password(token).map_err(|e| e.to_string())
+    let mut access = ACCESS_TOKEN.write().map_err(|e| e.to_string())?;
+    *access = Some(token.to_string());
+    Ok(())
 }
 
-/// Retrieve access token from OS keychain
+/// Retrieve access token from memory
 pub fn get_access_token() -> Result<String, String> {
-    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+    let access = ACCESS_TOKEN.read().map_err(|e| e.to_string())?;
+    access
+        .clone()
+        .ok_or_else(|| "No access token stored. Please sign in.".to_string())
 }
 
-/// Delete access token from OS keychain
+/// Delete access token from memory
 pub fn delete_access_token() -> Result<(), String> {
-    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
-    entry.delete_password().map_err(|e| e.to_string())
+    let mut access = ACCESS_TOKEN.write().map_err(|e| e.to_string())?;
+    *access = None;
+    Ok(())
 }
 
-/// Store refresh token securely in OS keychain
+/// Store refresh token in memory
 pub fn store_refresh_token(token: &str) -> Result<(), String> {
-    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
-    entry.set_password(token).map_err(|e| e.to_string())
+    let mut refresh = REFRESH_TOKEN.write().map_err(|e| e.to_string())?;
+    *refresh = Some(token.to_string());
+    Ok(())
 }
 
-/// Retrieve refresh token from OS keychain
+/// Retrieve refresh token from memory
 pub fn get_refresh_token() -> Result<String, String> {
-    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+    let refresh = REFRESH_TOKEN.read().map_err(|e| e.to_string())?;
+    refresh
+        .clone()
+        .ok_or_else(|| "No refresh token stored. Please sign in.".to_string())
 }
 
-/// Delete refresh token from OS keychain
+/// Delete refresh token from memory
 pub fn delete_refresh_token() -> Result<(), String> {
-    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
-    entry.delete_password().map_err(|e| e.to_string())
+    let mut refresh = REFRESH_TOKEN.write().map_err(|e| e.to_string())?;
+    *refresh = None;
+    Ok(())
+}
+
+/// Clear all stored tokens (called on logout)
+pub fn clear_tokens() -> Result<(), String> {
+    delete_access_token()?;
+    delete_refresh_token()?;
+    Ok(())
 }

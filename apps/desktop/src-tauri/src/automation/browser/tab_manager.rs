@@ -308,7 +308,7 @@ mod tests {
     #[tokio::test]
     async fn test_open_tab() {
         let manager = TabManager::new();
-        let result = manager.open_tab("https://api.agiworkforce.com").await;
+        let result = manager.open_tab("https://example.com").await;
 
         assert!(result.is_ok());
     }
@@ -316,15 +316,9 @@ mod tests {
     #[tokio::test]
     async fn test_list_tabs() {
         let manager = TabManager::new();
-        manager
-            .open_tab("https://api.agiworkforce.com")
-            .await
-            .unwrap();
+        manager.open_tab("https://example.com/page1").await.unwrap();
 
-        manager
-            .open_tab("https://api.agiworkforce.com")
-            .await
-            .unwrap();
+        manager.open_tab("https://example.com/page2").await.unwrap();
 
         let tabs = manager.list_tabs().await.unwrap();
         assert_eq!(tabs.len(), 2);
@@ -333,10 +327,7 @@ mod tests {
     #[tokio::test]
     async fn test_close_tab() {
         let manager = TabManager::new();
-        let tab_id = manager
-            .open_tab("https://api.agiworkforce.com")
-            .await
-            .unwrap();
+        let tab_id = manager.open_tab("https://example.com").await.unwrap();
 
         let result = manager.close_tab(&tab_id).await;
         assert!(result.is_ok());

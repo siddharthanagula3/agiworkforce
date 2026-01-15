@@ -1,5 +1,11 @@
+import 'server-only';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'edge';
 
@@ -57,98 +63,108 @@ function isNewerVersion(latest: string, current: string): boolean {
   return a[2] > b[2];
 }
 
-export async function GET(
+async function handleReleaseCheck(
   request: NextRequest,
   { params }: { params: Promise<{ target: string; version: string }> },
 ) {
+  // Rate limiting: Allow generous limits for update checks
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const { target, version } = await params;
 
   if (!target || !version) {
-    return NextResponse.json({ error: 'Missing target or version' }, { status: 400 });
+    throw createError.validation('Missing target or version parameter');
   }
 
-  try {
-    // 1. Fetch latest release from GitHub
-    // Using fetch with caching tailored for releases (revalidate every 5 minutes)
-    const headers: HeadersInit = {
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'AGI-Workforce-Updater',
-    };
-
-    // Add auth if token exists (for private repos or higher rate limits)
-    if (process.env.GITHUB_TOKEN) {
-      headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
-    }
-
-    // Desktop release repo configuration (required for updater)
-    // Set these in Vercel/production env:
-    // - DESKTOP_GITHUB_OWNER
-    // - DESKTOP_GITHUB_REPO
-    const OWNER = requireEnv('DESKTOP_GITHUB_OWNER');
-    const REPO = requireEnv('DESKTOP_GITHUB_REPO');
-
-    const GITHUB_API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
-
-    const response = await fetch(GITHUB_API_URL, { headers, next: { revalidate: 300 } });
-
-    if (!response.ok) {
-      console.error('GitHub API error:', response.status, await response.text());
-      return NextResponse.json({}, { status: 204 }); // No update found if API fails
-    }
-
-    const release = (await response.json()) as GitHubRelease;
-    const latestVersion = release.tag_name.replace(/^v/, '');
-
-    // 2. Compare versions
-    if (!isNewerVersion(latestVersion, version)) {
-      return NextResponse.json({}, { status: 204 }); // Up to date
-    }
-
-    // 3. Find matching asset
-    const platformMatcher = PLATFORM_MAP[target];
-    if (!platformMatcher) {
-      // Unknown target
-      return NextResponse.json({}, { status: 204 });
-    }
-
-    const binaryAsset = release.assets.find(
-      (a) => platformMatcher(a.name) && !a.name.endsWith('.sig'),
-    );
-
-    if (!binaryAsset) {
-      return NextResponse.json({}, { status: 204 });
-    }
-
-    // 4. Find signature
-    // Expecting: asset.name + .sig
-    const signatureAsset = release.assets.find((a) => a.name === `${binaryAsset.name}.sig`);
-
-    if (!signatureAsset) {
-      console.warn(`Signature missing for ${binaryAsset.name}`);
-      return NextResponse.json({}, { status: 204 });
-    }
-
-    // 5. Fetch signature content
-    const sigResponse = await fetch(signatureAsset.browser_download_url, { headers });
-    if (!sigResponse.ok) {
-      return NextResponse.json({}, { status: 204 });
-    }
-    const signature = await sigResponse.text();
-
-    // 6. Return JSON
-    return NextResponse.json({
-      version: `v${latestVersion}`,
-      notes: release.body,
-      pub_date: release.published_at,
-      platforms: {
-        [target]: {
-          url: binaryAsset.browser_download_url,
-          signature: signature.trim(),
-        },
-      },
-    });
-  } catch (error) {
-    console.error('Update check failed:', error);
+  // Validate target format
+  if (!PLATFORM_MAP[target]) {
+    // Unknown target - return empty response (no update)
     return NextResponse.json({}, { status: 204 });
   }
+
+  // Validate version format (basic semver check)
+  if (!parseSemver(version)) {
+    throw createError.validation('Invalid version format');
+  }
+
+  // 1. Fetch latest release from GitHub
+  // Using fetch with caching tailored for releases (revalidate every 5 minutes)
+  const headers: HeadersInit = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'AGI-Workforce-Updater',
+  };
+
+  // Add auth if token exists (for private repos or higher rate limits)
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+
+  // Desktop release repo configuration (required for updater)
+  // Set these in Vercel/production env:
+  // - DESKTOP_GITHUB_OWNER
+  // - DESKTOP_GITHUB_REPO
+  const OWNER = requireEnv('DESKTOP_GITHUB_OWNER');
+  const REPO = requireEnv('DESKTOP_GITHUB_REPO');
+
+  const GITHUB_API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
+
+  const response = await fetch(GITHUB_API_URL, { headers, next: { revalidate: 300 } });
+
+  if (!response.ok) {
+    logger.warn({ status: response.status }, 'GitHub API error during release check');
+    return NextResponse.json({}, { status: 204 }); // No update found if API fails
+  }
+
+  const release = (await response.json()) as GitHubRelease;
+  const latestVersion = release.tag_name.replace(/^v/, '');
+
+  // 2. Compare versions
+  if (!isNewerVersion(latestVersion, version)) {
+    return NextResponse.json({}, { status: 204 }); // Up to date
+  }
+
+  // 3. Find matching asset
+  const platformMatcher = PLATFORM_MAP[target];
+
+  const binaryAsset = release.assets.find(
+    (a) => platformMatcher(a.name) && !a.name.endsWith('.sig'),
+  );
+
+  if (!binaryAsset) {
+    return NextResponse.json({}, { status: 204 });
+  }
+
+  // 4. Find signature
+  // Expecting: asset.name + .sig
+  const signatureAsset = release.assets.find((a) => a.name === `${binaryAsset.name}.sig`);
+
+  if (!signatureAsset) {
+    logger.warn({ assetName: binaryAsset.name }, 'Signature missing for release asset');
+    return NextResponse.json({}, { status: 204 });
+  }
+
+  // 5. Fetch signature content
+  const sigResponse = await fetch(signatureAsset.browser_download_url, { headers });
+  if (!sigResponse.ok) {
+    return NextResponse.json({}, { status: 204 });
+  }
+  const signature = await sigResponse.text();
+
+  // 6. Return JSON
+  return NextResponse.json({
+    version: `v${latestVersion}`,
+    notes: release.body,
+    pub_date: release.published_at,
+    platforms: {
+      [target]: {
+        url: binaryAsset.browser_download_url,
+        signature: signature.trim(),
+      },
+    },
+  });
 }
+
+export const GET = withErrorHandler(handleReleaseCheck);

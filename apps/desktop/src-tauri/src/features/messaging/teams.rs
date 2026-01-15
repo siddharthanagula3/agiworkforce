@@ -36,12 +36,15 @@ impl TeamsClient {
     }
 
     pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let url = format!("https://api.agiworkforce.com/{}", self.tenant_id);
+        let url = format!(
+            "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+            self.tenant_id
+        );
 
         let params = [
             ("client_id", self.client_id.as_str()),
             ("client_secret", self.client_secret.as_str()),
-            ("scope", "https://api.agiworkforce.com"),
+            ("scope", "https://graph.microsoft.com/.default"),
             ("grant_type", "client_credentials"),
         ];
 
@@ -95,7 +98,10 @@ impl TeamsClient {
         let team_id = parts[0];
         let chan_id = parts[1];
 
-        let url = format!("https://api.agiworkforce.com/{}/{}", team_id, chan_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/teams/{}/channels/{}/messages",
+            team_id, chan_id
+        );
 
         let payload = json!({
             "body": {
@@ -136,7 +142,10 @@ impl TeamsClient {
         let team_id = parts[0];
         let chan_id = parts[1];
 
-        let url = format!("https://api.agiworkforce.com/{}/{}", team_id, chan_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/teams/{}/channels/{}/messages",
+            team_id, chan_id
+        );
 
         let payload = json!({
             "body": {
@@ -177,7 +186,10 @@ impl TeamsClient {
         let team_id = parts[0];
         let chan_id = parts[1];
 
-        let url = format!("https://api.agiworkforce.com/{}/{}", team_id, chan_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/teams/{}/channels/{}/messages",
+            team_id, chan_id
+        );
 
         let payload = json!({
             "body": {
@@ -227,7 +239,7 @@ impl TeamsClient {
         let chan_id = parts[1];
 
         let url = format!(
-            "https://api.agiworkforce.com/{}/{}/{}",
+            "https://graph.microsoft.com/v1.0/teams/{}/channels/{}/messages/{}/replies",
             team_id, chan_id, message_id
         );
 
@@ -270,7 +282,7 @@ impl TeamsClient {
         let chan_id = parts[1];
 
         let url = format!(
-            "https://api.agiworkforce.com/{}/{}/{}",
+            "https://graph.microsoft.com/v1.0/teams/{}/channels/{}/messages?$top={}",
             team_id, chan_id, limit
         );
 
@@ -299,7 +311,7 @@ impl TeamsClient {
     ) -> Result<TeamsMeeting, Box<dyn std::error::Error>> {
         self.ensure_authenticated().await?;
 
-        let url = "https://api.agiworkforce.com";
+        let url = "https://graph.microsoft.com/v1.0/me/onlineMeetings";
 
         let attendee_objects: Vec<_> = attendees
             .iter()
@@ -363,7 +375,7 @@ impl TeamsClient {
     pub async fn list_teams(&mut self) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
         self.ensure_authenticated().await?;
 
-        let url = "https://api.agiworkforce.com";
+        let url = "https://graph.microsoft.com/v1.0/me/joinedTeams";
 
         let response = self
             .client
@@ -387,7 +399,10 @@ impl TeamsClient {
     ) -> Result<Vec<Channel>, Box<dyn std::error::Error>> {
         self.ensure_authenticated().await?;
 
-        let url = format!("https://api.agiworkforce.com/{}", team_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/teams/{}/channels",
+            team_id
+        );
 
         let response = self
             .client
@@ -411,7 +426,10 @@ impl TeamsClient {
     ) -> Result<UserPresence, Box<dyn std::error::Error>> {
         self.ensure_authenticated().await?;
 
-        let url = format!("https://api.agiworkforce.com/{}", user_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/users/{}/presence",
+            user_id
+        );
 
         let response = self
             .client
@@ -436,7 +454,10 @@ impl TeamsClient {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.ensure_authenticated().await?;
 
-        let url = format!("https://api.agiworkforce.com/{}", user_id);
+        let url = format!(
+            "https://graph.microsoft.com/v1.0/users/{}/teamwork/sendActivityNotification",
+            user_id
+        );
 
         let response = self
             .client
@@ -679,7 +700,7 @@ mod tests {
     fn test_adaptive_card_creation() {
         let mut card = AdaptiveCard::new();
         card.add_text("Hello, Teams!", Some("Large"), Some("Bolder"))
-            .add_action("Learn More", "https://api.agiworkforce.com");
+            .add_action("Learn More", "https://example.com");
 
         assert_eq!(card.body.len(), 1);
         assert_eq!(card.actions.as_ref().unwrap().len(), 1);

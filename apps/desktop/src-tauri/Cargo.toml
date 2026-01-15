@@ -89,8 +89,10 @@ portable-pty = "0.8"
 which = "6.0"
 
 
-keyring = "2.3"
+# keyring removed - using machine-derived keys with SQLite storage instead
 argon2 = "0.5"
+machine-uid = "0.3"  # For getting machine-unique identifiers
+hostname = "0.4"     # For getting machine hostname as part of key derivation salt
 sha2 = "0.10"
 aes-gcm = "0.10"
 base64 = "0.22"

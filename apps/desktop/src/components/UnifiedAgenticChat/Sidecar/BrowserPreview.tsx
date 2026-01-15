@@ -37,7 +37,8 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
         setUrl(parsedUrl.toString());
         setInputUrl(parsedUrl.toString());
       } catch {
-        const searchUrl = `https://api.agiworkforce.com`;
+        // If contextId is not a valid URL, use it as a Google search query
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(contextId)}`;
         setUrl(searchUrl);
         setInputUrl(searchUrl);
       }
@@ -83,8 +84,8 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
       try {
         let finalUrl = targetUrl.trim();
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-          //') && !finalUrl.startsWith('https://')) {
-          finalUrl = `https://api.agiworkforce.com`;
+          // Prepend https:// to make it a valid URL
+          finalUrl = `https://${finalUrl}`;
         }
 
         await invoke('browser_navigate', {

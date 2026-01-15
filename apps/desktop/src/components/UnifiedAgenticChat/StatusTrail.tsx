@@ -9,21 +9,22 @@ interface StatusTrailProps {
 }
 
 function getIconForType(type: ActionTrailEntry['type']) {
+  // Icons are decorative - screen readers use aria-label on parent
   switch (type) {
     case 'thinking':
-      return <Brain className="w-4 h-4 animate-pulse" />;
+      return <Brain className="w-4 h-4 animate-pulse" aria-hidden="true" />;
     case 'searching':
-      return <Search className="w-4 h-4 animate-pulse" />;
+      return <Search className="w-4 h-4 animate-pulse" aria-hidden="true" />;
     case 'coding':
-      return <Code className="w-4 h-4 animate-pulse" />;
+      return <Code className="w-4 h-4 animate-pulse" aria-hidden="true" />;
     case 'running':
-      return <Loader2 className="w-4 h-4 animate-spin" />;
+      return <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />;
     case 'completed':
-      return <CheckCircle className="w-4 h-4" />;
+      return <CheckCircle className="w-4 h-4" aria-hidden="true" />;
     case 'error':
-      return <XCircle className="w-4 h-4" />;
+      return <XCircle className="w-4 h-4" aria-hidden="true" />;
     default:
-      return <Play className="w-4 h-4" />;
+      return <Play className="w-4 h-4" aria-hidden="true" />;
   }
 }
 
@@ -102,11 +103,18 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
 
       {/* Progress bar for multi-step operations */}
       {progress !== undefined && isInProgress && (
-        <div className="w-full h-1 bg-zinc-700/50 rounded-full overflow-hidden">
+        <div
+          className="w-full h-1 bg-zinc-700/50 rounded-full overflow-hidden"
+          role="progressbar"
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${entry.message} progress`}
+        >
           <motion.div
             className={cn(
               'h-full rounded-full',
-              entry.type === 'thinking' && 'bg-purple-500',
+              entry.type === 'thinking' && 'bg-amber-500',
               entry.type === 'searching' && 'bg-teal-500',
               entry.type === 'coding' && 'bg-blue-500',
               entry.type === 'running' && 'bg-amber-500',
@@ -129,6 +137,11 @@ export function StatusTrail({ messageId, className }: StatusTrailProps) {
     return null;
   }
 
+  // Check if any items are currently in progress
+  const hasActiveItems = actionTrail.some((entry) =>
+    ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
+  );
+
   return (
     <div
       className={cn(
@@ -139,6 +152,7 @@ export function StatusTrail({ messageId, className }: StatusTrailProps) {
       )}
       role="region"
       aria-label="Action status trail"
+      aria-busy={hasActiveItems}
     >
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (
@@ -162,6 +176,11 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
     return null;
   }
 
+  // Check if any items are currently in progress
+  const hasActiveItems = actionTrail.some((entry) =>
+    ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -180,6 +199,7 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
       )}
       role="region"
       aria-label="Floating action status trail"
+      aria-busy={hasActiveItems}
     >
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">

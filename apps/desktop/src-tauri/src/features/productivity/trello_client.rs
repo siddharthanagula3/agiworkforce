@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const TRELLO_BASE_URL: &str = "https://api.agiworkforce.com";
+const TRELLO_BASE_URL: &str = "https://api.trello.com/1";
 
 pub struct TrelloClient {
     client: Client,

@@ -33,7 +33,7 @@ impl SlackClient {
         channel: &str,
         text: &str,
     ) -> Result<SlackMessage, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/chat.postMessage";
 
         let payload = json!({
             "channel": channel,
@@ -71,7 +71,7 @@ impl SlackClient {
         channel: &str,
         blocks: Vec<SlackBlock>,
     ) -> Result<SlackMessage, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/chat.postMessage";
 
         let payload = json!({
             "channel": channel,
@@ -110,7 +110,7 @@ impl SlackClient {
         limit: usize,
     ) -> Result<Vec<SlackMessage>, Box<dyn std::error::Error>> {
         let url = format!(
-            "https://api.agiworkforce.com?channel={}&limit={}",
+            "https://slack.com/api/conversations.history?channel={}&limit={}",
             channel, limit
         );
 
@@ -155,7 +155,7 @@ impl SlackClient {
         channel: &str,
         file_path: &str,
     ) -> Result<SlackFile, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/files.upload";
 
         let file_content = tokio::fs::read(file_path).await?;
         let filename = std::path::Path::new(file_path)
@@ -195,7 +195,7 @@ impl SlackClient {
     }
 
     pub async fn listen_events(&self) -> Result<SlackEventStream, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/apps.connections.open";
 
         let response = self
             .client
@@ -261,7 +261,7 @@ impl SlackClient {
         timestamp: &str,
         emoji: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/reactions.add";
 
         let payload = json!({
             "channel": channel,
@@ -296,7 +296,7 @@ impl SlackClient {
         timestamp: &str,
         text: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/chat.update";
 
         let payload = json!({
             "channel": channel,
@@ -330,7 +330,7 @@ impl SlackClient {
         channel: &str,
         timestamp: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/chat.delete";
 
         let payload = json!({
             "channel": channel,
@@ -360,9 +360,9 @@ impl SlackClient {
 
     pub async fn get_user_info(
         &self,
-        _user_id: &str,
+        user_id: &str,
     ) -> Result<SlackUser, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com".to_string();
+        let url = format!("https://slack.com/api/users.info?user={}", user_id);
 
         let response = self
             .client
@@ -384,7 +384,7 @@ impl SlackClient {
     }
 
     pub async fn list_channels(&self) -> Result<Vec<SlackChannel>, Box<dyn std::error::Error>> {
-        let url = "https://api.agiworkforce.com";
+        let url = "https://slack.com/api/conversations.list";
 
         let response = self
             .client

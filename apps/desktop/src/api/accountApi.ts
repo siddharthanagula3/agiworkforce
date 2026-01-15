@@ -7,7 +7,34 @@ import {
 } from '../types/account';
 
 // Check if running in Tauri environment
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// Default timeout for API requests (30 seconds)
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+// Timeout error class for better error handling
+export class ApiTimeoutError extends Error {
+  constructor(operation: string, timeoutMs: number) {
+    super(`API request '${operation}' timed out after ${timeoutMs}ms`);
+    this.name = 'ApiTimeoutError';
+  }
+}
+
+/**
+ * Wraps a promise with a timeout that rejects if the operation takes too long.
+ */
+const withTimeout = <T>(
+  promise: Promise<T>,
+  operationName: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new ApiTimeoutError(operationName, timeoutMs)), timeoutMs),
+    ),
+  ]);
+};
 
 // Dynamic import of invoke to handle web development mode
 const getInvoke = async () => {
@@ -21,12 +48,13 @@ const getInvoke = async () => {
 export const accountApi = {
   deviceLinkInitiate: async (): Promise<DeviceLinkResponse> => {
     const invoke = await getInvoke();
-    return invoke('device_link_initiate');
+    return withTimeout(invoke('device_link_initiate'), 'device_link_initiate');
   },
 
   deviceLinkPoll: async (deviceCode: string): Promise<TokenResponse> => {
     const invoke = await getInvoke();
-    return invoke('device_link_poll', { deviceCode });
+    // Longer timeout for polling (60s) since user needs time to authorize
+    return withTimeout(invoke('device_link_poll', { deviceCode }), 'device_link_poll', 60_000);
   },
 
   fetchUserProfile: async (accessToken: string): Promise<UserProfile> => {
@@ -39,12 +67,12 @@ export const accountApi = {
       };
     }
     const invoke = await getInvoke();
-    return invoke('fetch_user_profile', { accessToken });
+    return withTimeout(invoke('fetch_user_profile', { accessToken }), 'fetch_user_profile');
   },
 
   oauthRefresh: async (refreshToken: string): Promise<TokenResponse> => {
     const invoke = await getInvoke();
-    return invoke('oauth_refresh', { refreshToken });
+    return withTimeout(invoke('oauth_refresh', { refreshToken }), 'oauth_refresh');
   },
 
   /** Fetch current credit balance from the API Gateway */
@@ -65,7 +93,7 @@ export const accountApi = {
       };
     }
     const invoke = await getInvoke();
-    return invoke('fetch_credit_balance');
+    return withTimeout(invoke('fetch_credit_balance'), 'fetch_credit_balance');
   },
 
   /** Report LLM usage to deduct credits */
@@ -81,12 +109,15 @@ export const accountApi = {
       return { success: false, error: 'Not available in web mode' };
     }
     const invoke = await getInvoke();
-    return invoke('report_llm_usage', {
-      amount_cents: amountCents,
-      model,
-      provider,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-    });
+    return withTimeout(
+      invoke('report_llm_usage', {
+        amount_cents: amountCents,
+        model,
+        provider,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+      }),
+      'report_llm_usage',
+    );
   },
 };
