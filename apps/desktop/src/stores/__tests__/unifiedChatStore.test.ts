@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { enableMapSet } from 'immer';
 import { useUnifiedChatStore } from '../unifiedChatStore';
+
+// Enable Immer's MapSet plugin for Map/Set support in stores
+enableMapSet();
 
 describe('unifiedChatStore', () => {
   beforeEach(() => {
