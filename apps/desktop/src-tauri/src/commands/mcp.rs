@@ -419,21 +419,39 @@ pub async fn mcp_get_server_logs(
     Ok(vec![])
 }
 
-/// Store a credential in Windows Credential Manager
+/// Store a credential in encrypted database storage
 #[tauri::command]
 pub async fn mcp_store_credential(
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
-    let service = format!("agiworkforce-mcp-{}", server_name);
-    let entry = keyring::Entry::new(&service, &key)
-        .map_err(|e| format!("Failed to create credential entry: {}", e))?;
+    use crate::mcp::config::encrypt_mcp_credential;
 
-    entry
-        .set_password(&value)
-        .map_err(|e| format!("Failed to store credential: {}", e))?;
+    // Encrypt the credential
+    let encrypted = encrypt_mcp_credential(&value)
+        .ok_or_else(|| "Failed to encrypt credential".to_string())?;
 
+    // Get the database path
+    let app_data = dirs::data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Store in database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, 'mcp_credentials', 1, ?3, ?3)",
+        rusqlite::params![cred_key, encrypted, now],
+    )
+    .map_err(|e| format!("Failed to store credential: {}", e))?;
+
+    tracing::info!("Credential stored for MCP server: {} / {}", server_name, key);
     Ok(format!("Credential stored for {} / {}", server_name, key))
 }
 

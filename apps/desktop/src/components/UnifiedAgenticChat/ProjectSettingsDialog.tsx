@@ -38,7 +38,7 @@ import { useProjectStore, type Project, type ProjectFile } from '../../stores/pr
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
 
-// Project color options
+// Project color options - defined as const tuple for type safety
 const PROJECT_COLORS = [
   { name: 'Blue', value: '#3b82f6' },
   { name: 'Green', value: '#22c55e' },
@@ -48,9 +48,13 @@ const PROJECT_COLORS = [
   { name: 'Cyan', value: '#06b6d4' },
   { name: 'Yellow', value: '#eab308' },
   { name: 'Red', value: '#ef4444' },
-];
+] as const;
 
-// Project icon options
+// Default values extracted for safe access
+const DEFAULT_COLOR: string = PROJECT_COLORS[0].value;
+const DEFAULT_ICON = 'folder';
+
+// Project icon options - defined as const tuple for type safety
 const PROJECT_ICONS = [
   { name: 'Folder', value: 'folder' },
   { name: 'Code', value: 'code' },
@@ -60,7 +64,7 @@ const PROJECT_ICONS = [
   { name: 'Rocket', value: 'rocket' },
   { name: 'Book', value: 'book' },
   { name: 'Lightbulb', value: 'lightbulb' },
-];
+] as const;
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -79,8 +83,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
-  const [color, setColor] = useState(PROJECT_COLORS[0]!.value);
-  const [icon, setIcon] = useState(PROJECT_ICONS[0]!.value);
+  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [icon, setIcon] = useState(DEFAULT_ICON);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [conversationIds, setConversationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -98,8 +102,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setName(project.name);
         setDescription(project.description);
         setCustomInstructions(project.customInstructions);
-        setColor(project.color || PROJECT_COLORS[0]!.value);
-        setIcon(project.icon || PROJECT_ICONS[0]!.value);
+        setColor(project.color || DEFAULT_COLOR);
+        setIcon(project.icon || DEFAULT_ICON);
         setFiles(project.files);
         setConversationIds(project.conversationIds);
       } else {
@@ -107,8 +111,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setName('');
         setDescription('');
         setCustomInstructions('');
-        setColor(PROJECT_COLORS[0]!.value);
-        setIcon(PROJECT_ICONS[0]!.value);
+        setColor(DEFAULT_COLOR);
+        setIcon(DEFAULT_ICON);
         setFiles([]);
         setConversationIds([]);
       }

@@ -55,158 +55,161 @@ export function ProgressIndicator({
   const [hiddenGoals, setHiddenGoals] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const unlistenPromises: Promise<() => void>[] = [];
+    let isMounted = true;
+    const unlisteners: Array<() => void> = [];
 
-    unlistenPromises.push(
-      listen<{ goal_id: string; description: string }>('agi:goal:submitted', ({ payload }) => {
-        setActiveGoals((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(payload.goal_id, {
-            goalId: payload.goal_id,
-            description: payload.description,
-            totalSteps: 0,
-            completedSteps: 0,
-            progressPercent: 0,
-            status: 'planning',
-            steps: [],
-            startTime: Date.now(),
-          });
-          return newMap;
+    // Helper to safely add listeners
+    const addListener = <T,>(eventName: string, handler: (payload: T) => void) => {
+      listen<T>(eventName, ({ payload }) => {
+        if (isMounted) {
+          handler(payload);
+        }
+      }).then((unlisten) => {
+        if (isMounted) {
+          unlisteners.push(unlisten);
+        } else {
+          unlisten();
+        }
+      });
+    };
+
+    addListener<{ goal_id: string; description: string }>('agi:goal:submitted', (payload) => {
+      setActiveGoals((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(payload.goal_id, {
+          goalId: payload.goal_id,
+          description: payload.description,
+          totalSteps: 0,
+          completedSteps: 0,
+          progressPercent: 0,
+          status: 'planning',
+          steps: [],
+          startTime: Date.now(),
         });
+        return newMap;
+      });
 
-        setExpandedGoals((prev) => new Set([...prev, payload.goal_id]));
-      }),
-    );
+      setExpandedGoals((prev) => new Set([...prev, payload.goal_id]));
+    });
 
-    unlistenPromises.push(
-      listen<{ goal_id: string; total_steps: number; estimated_duration_ms: number }>(
-        'agi:goal:plan_created',
-        ({ payload }) => {
-          setActiveGoals((prev) => {
-            const newMap = new Map(prev);
-            const goal = newMap.get(payload.goal_id);
-            if (goal) {
-              goal.totalSteps = payload.total_steps;
-              goal.status = 'executing';
-
-              goal.steps = Array.from({ length: payload.total_steps }, (_, i) => ({
-                id: `step_${i}`,
-                index: i,
-                description: 'Loading...',
-                status: 'pending',
-              }));
-            }
-            return newMap;
-          });
-        },
-      ),
-    );
-
-    unlistenPromises.push(
-      listen<{
-        goal_id: string;
-        step_id: string;
-        step_index: number;
-        total_steps: number;
-        description: string;
-      }>('agi:goal:step_started', ({ payload }) => {
-        setActiveGoals((prev) => {
-          const newMap = new Map(prev);
-          const goal = newMap.get(payload.goal_id);
-          if (goal && goal.steps[payload.step_index]) {
-            goal.steps[payload.step_index] = {
-              id: payload.step_id,
-              index: payload.step_index,
-              description: payload.description,
-              status: 'in-progress',
-              startTime: Date.now(),
-            };
-          }
-          return newMap;
-        });
-      }),
-    );
-
-    unlistenPromises.push(
-      listen<{
-        goal_id: string;
-        step_id: string;
-        step_index: number;
-        total_steps: number;
-        success: boolean;
-        execution_time_ms: number;
-        error?: string;
-      }>('agi:goal:step_completed', ({ payload }) => {
-        setActiveGoals((prev) => {
-          const newMap = new Map(prev);
-          const goal = newMap.get(payload.goal_id);
-          if (goal && goal.steps[payload.step_index]) {
-            const existingStep = goal.steps[payload.step_index];
-            if (existingStep) {
-              goal.steps[payload.step_index] = {
-                id: existingStep.id,
-                index: existingStep.index,
-                description: existingStep.description,
-                status: payload.success ? 'completed' : 'failed',
-                startTime: existingStep.startTime,
-                endTime: Date.now(),
-                executionTimeMs: payload.execution_time_ms,
-                error: payload.error,
-              };
-            }
-          }
-          return newMap;
-        });
-      }),
-    );
-
-    unlistenPromises.push(
-      listen<{
-        goal_id: string;
-        completed_steps: number;
-        total_steps: number;
-        progress_percent: number;
-      }>('agi:goal:progress', ({ payload }) => {
+    addListener<{ goal_id: string; total_steps: number; estimated_duration_ms: number }>(
+      'agi:goal:plan_created',
+      (payload) => {
         setActiveGoals((prev) => {
           const newMap = new Map(prev);
           const goal = newMap.get(payload.goal_id);
           if (goal) {
-            goal.completedSteps = payload.completed_steps;
-            goal.progressPercent = payload.progress_percent;
+            goal.totalSteps = payload.total_steps;
+            goal.status = 'executing';
+
+            goal.steps = Array.from({ length: payload.total_steps }, (_, i) => ({
+              id: `step_${i}`,
+              index: i,
+              description: 'Loading...',
+              status: 'pending',
+            }));
           }
           return newMap;
         });
-      }),
+      },
     );
 
-    unlistenPromises.push(
-      listen<{ goal_id: string; total_steps: number; completed_steps: number }>(
-        'agi:goal:achieved',
-        ({ payload }) => {
-          setActiveGoals((prev) => {
-            const newMap = new Map(prev);
-            const goal = newMap.get(payload.goal_id);
-            if (goal) {
-              goal.status = 'completed';
-              goal.completedSteps = payload.completed_steps;
-              goal.progressPercent = 100;
-            }
-            return newMap;
-          });
+    addListener<{
+      goal_id: string;
+      step_id: string;
+      step_index: number;
+      total_steps: number;
+      description: string;
+    }>('agi:goal:step_started', (payload) => {
+      setActiveGoals((prev) => {
+        const newMap = new Map(prev);
+        const goal = newMap.get(payload.goal_id);
+        if (goal && goal.steps[payload.step_index]) {
+          goal.steps[payload.step_index] = {
+            id: payload.step_id,
+            index: payload.step_index,
+            description: payload.description,
+            status: 'in-progress',
+            startTime: Date.now(),
+          };
+        }
+        return newMap;
+      });
+    });
 
-          if (autoHide) {
-            setTimeout(() => {
-              setHiddenGoals((prev) => new Set([...prev, payload.goal_id]));
-            }, autoHideDelay);
+    addListener<{
+      goal_id: string;
+      step_id: string;
+      step_index: number;
+      total_steps: number;
+      success: boolean;
+      execution_time_ms: number;
+      error?: string;
+    }>('agi:goal:step_completed', (payload) => {
+      setActiveGoals((prev) => {
+        const newMap = new Map(prev);
+        const goal = newMap.get(payload.goal_id);
+        if (goal && goal.steps[payload.step_index]) {
+          const existingStep = goal.steps[payload.step_index];
+          if (existingStep) {
+            goal.steps[payload.step_index] = {
+              id: existingStep.id,
+              index: existingStep.index,
+              description: existingStep.description,
+              status: payload.success ? 'completed' : 'failed',
+              startTime: existingStep.startTime,
+              endTime: Date.now(),
+              executionTimeMs: payload.execution_time_ms,
+              error: payload.error,
+            };
           }
-        },
-      ),
+        }
+        return newMap;
+      });
+    });
+
+    addListener<{
+      goal_id: string;
+      completed_steps: number;
+      total_steps: number;
+      progress_percent: number;
+    }>('agi:goal:progress', (payload) => {
+      setActiveGoals((prev) => {
+        const newMap = new Map(prev);
+        const goal = newMap.get(payload.goal_id);
+        if (goal) {
+          goal.completedSteps = payload.completed_steps;
+          goal.progressPercent = payload.progress_percent;
+        }
+        return newMap;
+      });
+    });
+
+    addListener<{ goal_id: string; total_steps: number; completed_steps: number }>(
+      'agi:goal:achieved',
+      (payload) => {
+        setActiveGoals((prev) => {
+          const newMap = new Map(prev);
+          const goal = newMap.get(payload.goal_id);
+          if (goal) {
+            goal.status = 'completed';
+            goal.completedSteps = payload.completed_steps;
+            goal.progressPercent = 100;
+          }
+          return newMap;
+        });
+
+        if (autoHide) {
+          setTimeout(() => {
+            setHiddenGoals((prev) => new Set([...prev, payload.goal_id]));
+          }, autoHideDelay);
+        }
+      },
     );
 
     return () => {
-      void Promise.all(unlistenPromises).then((unlisteners) => {
-        unlisteners.forEach((unlisten) => unlisten());
-      });
+      isMounted = false;
+      unlisteners.forEach((unlisten) => unlisten());
     };
   }, [autoHide, autoHideDelay]);
 

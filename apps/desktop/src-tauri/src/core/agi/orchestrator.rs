@@ -404,68 +404,103 @@ impl AgentOrchestrator {
         }
     }
 
+    /// Cancel all agents. Uses a loop that processes one agent at a time
+    /// to avoid TOCTOU race conditions where new agents could be spawned
+    /// between getting the list and cancelling.
     pub async fn cancel_all_agents(&self) -> Result<()> {
-        let agent_ids: Vec<String> = {
-            let agents = self.agents.lock().await;
-            agents.keys().cloned().collect()
-        };
+        // Process agents one at a time to avoid TOCTOU issues
+        // Each iteration gets a fresh view of the agent list
+        loop {
+            let agent_id: Option<String> = {
+                let agents = self.agents.lock().await;
+                agents.keys().next().cloned()
+            };
 
-        for agent_id in agent_ids {
-            self.cancel_agent(&agent_id).await?;
+            match agent_id {
+                Some(id) => {
+                    // Ignore errors for individual cancellations
+                    // (agent might have already completed/been removed)
+                    let _ = self.cancel_agent(&id).await;
+                }
+                None => break,
+            }
         }
 
         Ok(())
     }
 
+    /// Wait for all agents to complete. This method uses a single lock
+    /// per iteration to avoid nested lock issues and potential deadlocks.
     pub async fn wait_for_all(&self) -> Vec<AgentResult> {
         let mut results = Vec::new();
 
         loop {
-            let agent_ids: Vec<String> = {
-                let agents = self.agents.lock().await;
-                agents.keys().cloned().collect()
-            };
+            // Use a single lock acquisition to check status AND collect results
+            // This avoids the nested lock issue from the previous implementation
+            let completed_agents: Vec<(String, AgentResult)> = {
+                let mut agents = self.agents.lock().await;
 
-            if agent_ids.is_empty() {
-                break;
+                if agents.is_empty() {
+                    break;
+                }
+
+                // Find completed agents within the lock
+                let mut completed = Vec::new();
+                let agent_ids: Vec<String> = agents.keys().cloned().collect();
+
+                for agent_id in agent_ids {
+                    if let Some(agent) = agents.get(&agent_id) {
+                        let status = &agent.status;
+                        if status.status == AgentState::Completed
+                            || status.status == AgentState::Failed
+                        {
+                            let final_output =
+                                if let Some(ctx) = agent.core.get_goal_status(&agent.goal.id) {
+                                    ctx.tool_results.last().map(|tr| tr.result.clone())
+                                } else {
+                                    None
+                                };
+
+                            let result = AgentResult {
+                                agent_id: agent_id.clone(),
+                                success: status.status == AgentState::Completed,
+                                result: final_output,
+                                error: status.error.clone(),
+                                execution_time_ms: if let (Some(start), Some(end)) =
+                                    (status.started_at, status.completed_at)
+                                {
+                                    ((end - start) * 1000) as u64
+                                } else {
+                                    0
+                                },
+                            };
+                            completed.push((agent_id.clone(), result));
+                        }
+                    }
+                }
+
+                // Remove completed agents while still holding the lock
+                for (agent_id, _) in &completed {
+                    agents.remove(agent_id);
+                }
+
+                completed
+            }; // Lock released here
+
+            // Add results outside the lock
+            for (_, result) in completed_agents {
+                results.push(result);
             }
 
-            for agent_id in &agent_ids {
-                if let Some(status) = self.get_agent_status(agent_id).await {
-                    if status.status == AgentState::Completed || status.status == AgentState::Failed
-                    {
-                        let mut agents_guard = self.agents.lock().await;
-
-                        let final_output = if let Some(agent) = agents_guard.get(agent_id) {
-                            if let Some(ctx) = agent.core.get_goal_status(&agent.goal.id) {
-                                ctx.tool_results.last().map(|tr| tr.result.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
-
-                        let result = AgentResult {
-                            agent_id: agent_id.clone(),
-                            success: status.status == AgentState::Completed,
-                            result: final_output,
-                            error: status.error,
-                            execution_time_ms: if let (Some(start), Some(end)) =
-                                (status.started_at, status.completed_at)
-                            {
-                                ((end - start) * 1000) as u64
-                            } else {
-                                0
-                            },
-                        };
-                        results.push(result);
-
-                        agents_guard.remove(agent_id);
-                    }
+            // Check if we're done (need to re-check since we released lock)
+            {
+                let agents = self.agents.lock().await;
+                if agents.is_empty() {
+                    break;
                 }
             }
 
+            // Sleep outside the lock to allow other operations
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 

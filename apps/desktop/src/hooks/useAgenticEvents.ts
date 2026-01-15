@@ -256,6 +256,21 @@ export function useAgenticEvents() {
     handlersRef.current.setSidecarSectionFromEvent(eventType);
   };
 
+  /**
+   * Safely wraps an event handler with error handling to prevent crashes
+   * and ensure component stability when processing Tauri events.
+   */
+  const safeHandler = <T>(eventName: string, handler: (payload: T) => void | Promise<void>) => {
+    return async (event: { payload: T }) => {
+      if (!isMountedRef.current) return;
+      try {
+        await handler(event.payload);
+      } catch (error) {
+        console.error(`[useAgenticEvents] Error in ${eventName} handler:`, error);
+      }
+    };
+  };
+
   useEffect(() => {
     const unsubscribe = useUnifiedChatStore.subscribe((state) => {
       handlersRef.current = {
@@ -303,39 +318,46 @@ export function useAgenticEvents() {
 
       const push = (fn: UnlistenFn) => unlistenFns.current.push(fn);
 
-      const unlistenFileOp = await listen<FileOperationEvent>('agi:file_operation', (event) => {
-        if (!isMountedRef.current) return;
-        handlersRef.current.addFileOperation(event.payload.operation);
-        focusSidecar(`file_${event.payload.operation.type ?? 'file'}`);
-      });
+      const unlistenFileOp = await listen<FileOperationEvent>(
+        'agi:file_operation',
+        safeHandler('agi:file_operation', (payload) => {
+          handlersRef.current.addFileOperation(payload.operation);
+          focusSidecar(`file_${payload.operation.type ?? 'file'}`);
+        }),
+      );
       push(unlistenFileOp);
 
       const unlistenTerminal = await listen<TerminalCommandEvent>(
         'agi:terminal_command',
-        (event) => {
-          if (!isMountedRef.current) return;
-          handlersRef.current.addTerminalCommand(event.payload.command);
+        safeHandler('agi:terminal_command', (payload) => {
+          handlersRef.current.addTerminalCommand(payload.command);
           focusSidecar('terminal_execute');
-        },
+        }),
       );
       push(unlistenTerminal);
 
-      const unlistenToolExec = await listen<ToolExecutionEvent>('agi:tool_execution', (event) => {
-        if (!isMountedRef.current) return;
-        handlersRef.current.addToolExecution(event.payload.execution);
-        const tool =
-          (event.payload.execution as any)?.tool ??
-          (event.payload.execution as any)?.name ??
-          (event.payload.execution as any)?.type ??
-          '';
-        focusSidecar(tool || 'tool');
-      });
+      const unlistenToolExec = await listen<ToolExecutionEvent>(
+        'agi:tool_execution',
+        safeHandler('agi:tool_execution', (payload) => {
+          handlersRef.current.addToolExecution(payload.execution);
+          // Extract tool name from various possible field names in the execution payload
+          const exec = payload.execution as ToolExecution & {
+            tool?: string;
+            name?: string;
+            type?: string;
+          };
+          const tool = exec.toolName ?? exec.tool ?? exec.name ?? exec.type ?? '';
+          focusSidecar(tool || 'tool');
+        }),
+      );
       push(unlistenToolExec);
 
-      const unlistenScreenshot = await listen<ScreenshotEvent>('agi:screenshot', (event) => {
-        if (!isMountedRef.current) return;
-        handlersRef.current.addScreenshot(event.payload.screenshot);
-      });
+      const unlistenScreenshot = await listen<ScreenshotEvent>(
+        'agi:screenshot',
+        safeHandler('agi:screenshot', (payload) => {
+          handlersRef.current.addScreenshot(payload.screenshot);
+        }),
+      );
       push(unlistenScreenshot);
 
       const unlistenPlanUpdate = await listen<AgentPlanUpdateEvent>(
@@ -923,31 +945,41 @@ export function useAgenticEvents() {
       push(unlistenToolStream);
 
       // MCP server health and system events - sync with mcpStore
-      const { useMcpStore } = await import('../stores/mcpStore');
+      try {
+        const { useMcpStore } = await import('../stores/mcpStore');
 
-      const unlistenMcpServerUnhealthy = await listen<any>('mcp:server_unhealthy', (_event) => {
-        if (!isMountedRef.current) return;
-        // Refresh servers when a server becomes unhealthy
-        useMcpStore.getState().refreshServers();
-      });
-      push(unlistenMcpServerUnhealthy);
+        const unlistenMcpServerUnhealthy = await listen<any>(
+          'mcp:server_unhealthy',
+          safeHandler('mcp:server_unhealthy', () => {
+            // Refresh servers when a server becomes unhealthy
+            useMcpStore.getState().refreshServers();
+          }),
+        );
+        push(unlistenMcpServerUnhealthy);
 
-      const unlistenMcpToolsUpdated = await listen<any>('mcp:tools_updated', (_event) => {
-        if (!isMountedRef.current) return;
-        // Refresh tools when tools are updated on any server
-        useMcpStore.getState().refreshTools();
-      });
-      push(unlistenMcpToolsUpdated);
+        const unlistenMcpToolsUpdated = await listen<any>(
+          'mcp:tools_updated',
+          safeHandler('mcp:tools_updated', () => {
+            // Refresh tools when tools are updated on any server
+            useMcpStore.getState().refreshTools();
+          }),
+        );
+        push(unlistenMcpToolsUpdated);
 
-      const unlistenMcpSystemInitialized = await listen<any>('mcp:system_initialized', (_event) => {
-        if (!isMountedRef.current) return;
-        // When MCP system is initialized, refresh everything
-        const mcpState = useMcpStore.getState();
-        mcpState.refreshServers();
-        mcpState.refreshTools();
-        mcpState.refreshStats();
-      });
-      push(unlistenMcpSystemInitialized);
+        const unlistenMcpSystemInitialized = await listen<any>(
+          'mcp:system_initialized',
+          safeHandler('mcp:system_initialized', () => {
+            // When MCP system is initialized, refresh everything
+            const mcpState = useMcpStore.getState();
+            mcpState.refreshServers();
+            mcpState.refreshTools();
+            mcpState.refreshStats();
+          }),
+        );
+        push(unlistenMcpSystemInitialized);
+      } catch (error) {
+        console.error('[useAgenticEvents] Failed to setup MCP listeners:', error);
+      }
 
       setupInProgressRef.current = false;
     };

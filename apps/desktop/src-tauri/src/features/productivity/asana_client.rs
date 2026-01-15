@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const ASANA_BASE_URL: &str = "https://api.agiworkforce.com";
+const ASANA_BASE_URL: &str = "https://app.asana.com/api/1.0";
 
 pub struct AsanaClient {
     client: Client,

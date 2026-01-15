@@ -65,6 +65,47 @@ function handleDeepLink(url: string) {
 
     const allParams = { ...queryParams, ...hashParams };
 
+    // Check for MCP OAuth callback URLs
+    // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
+    // Or error: agiworkforce://oauth/mcp/{provider}?error={error}&error_description={description}
+    const mcpOAuthMatch = parsed.pathname.match(/^\/oauth\/mcp\/([a-zA-Z0-9_-]+)$/);
+    if (mcpOAuthMatch) {
+      const provider = mcpOAuthMatch[1];
+      const error = allParams['error'];
+      const errorDescription = allParams['error_description'];
+      const code = allParams['code'];
+      const state = allParams['state'];
+
+      if (error) {
+        // Handle OAuth error callback
+        console.log('[DeepLink] MCP OAuth error for provider:', provider, 'error:', error);
+        window.dispatchEvent(
+          new CustomEvent('mcp-oauth-error', {
+            detail: {
+              provider,
+              error,
+              error_description: errorDescription || '',
+            },
+          }),
+        );
+      } else if (code && state) {
+        // Handle successful OAuth callback
+        console.log('[DeepLink] MCP OAuth callback for provider:', provider);
+        window.dispatchEvent(
+          new CustomEvent('mcp-oauth-callback', {
+            detail: {
+              provider,
+              code,
+              state,
+            },
+          }),
+        );
+      } else {
+        console.warn('[DeepLink] MCP OAuth callback missing required params:', { code, state });
+      }
+      return; // MCP OAuth handled, don't process as regular deep link
+    }
+
     // Check for common auth tokens
     const access_token = allParams['access_token'];
     const refresh_token = allParams['refresh_token'];

@@ -144,6 +144,13 @@ class SubscriptionService {
     const supabase = getSupabase();
     console.log('[Subscription] Subscribing to realtime updates for user:', userId);
 
+    // Set a timeout to handle connection failures gracefully
+    const connectionTimeout = setTimeout(() => {
+      console.warn(
+        '[Subscription] Realtime connection timeout - will retry on next auth state change',
+      );
+    }, 30000); // 30 second timeout
+
     this.realtimeChannel = supabase
       .channel(`subscription-updates-${userId}`)
       .on(
@@ -158,13 +165,25 @@ class SubscriptionService {
           console.log('[Subscription] Realtime update received:', payload);
           // When we get an update, fetch the latest fresh data to be safe
           // and triggers logic that relies on `getSubscription()`
-          await this.getSubscription();
-          await this.refreshCurrentPlan();
+          try {
+            await this.getSubscription();
+            await this.refreshCurrentPlan();
+          } catch (error) {
+            console.error('[Subscription] Error handling realtime update:', error);
+          }
         },
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        clearTimeout(connectionTimeout);
         if (status === 'SUBSCRIBED') {
           console.log('[Subscription] Realtime subscription established');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Subscription] Realtime channel error:', err);
+          // Don't retry immediately - will be retried on next auth state change
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[Subscription] Realtime subscription timed out');
+        } else if (status === 'CLOSED') {
+          console.log('[Subscription] Realtime channel closed');
         }
       });
   }

@@ -80,11 +80,24 @@ async function handleGetBalance(request: NextRequest) {
     );
   }
 
-  // Get subscription and credits
-  const [subscription, balance] = await Promise.all([
+  // Get subscription and credits with error isolation
+  // Use Promise.allSettled to prevent one failure from blocking the other
+  const [subscriptionResult, balanceResult] = await Promise.allSettled([
     SubscriptionService.getSubscription(user.id),
     CreditService.getBalance(user.id),
   ]);
+
+  // Extract results, providing null for rejected promises
+  const subscription = subscriptionResult.status === 'fulfilled' ? subscriptionResult.value : null;
+  const balance = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
+
+  // Log any errors that occurred
+  if (subscriptionResult.status === 'rejected') {
+    console.error('Failed to fetch subscription:', subscriptionResult.reason);
+  }
+  if (balanceResult.status === 'rejected') {
+    console.error('Failed to fetch balance:', balanceResult.reason);
+  }
 
   if (!subscription) {
     return NextResponse.json(

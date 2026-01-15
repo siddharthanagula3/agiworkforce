@@ -1,13 +1,10 @@
 //! Web Search Integration
 //!
-//! Provides direct web search capabilities using multiple providers:
-//! - DuckDuckGo (free, no API key required)
-//! - Brave Search (requires API key, better results)
+//! Provides direct web search capabilities using DuckDuckGo (free, no API key required).
 
 use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::time::Duration;
 
 /// A single web search result
@@ -271,207 +268,22 @@ impl SearchProvider for DuckDuckGoProvider {
     }
 }
 
-/// Brave Search provider (requires API key for better results)
-pub struct BraveSearchProvider {
-    client: Client,
-    api_key: String,
-}
-
-impl BraveSearchProvider {
-    pub fn new(api_key: String) -> Result<Self> {
-        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
-
-        Ok(Self { client, api_key })
-    }
-
-    pub fn from_env() -> Option<Self> {
-        env::var("BRAVE_API_KEY")
-            .ok()
-            .filter(|k| !k.is_empty())
-            .and_then(|api_key| Self::new(api_key).ok())
-    }
-}
-
-/// Brave Search API response structures
-#[derive(Debug, Deserialize)]
-struct BraveSearchResponse {
-    web: Option<BraveWebResults>,
-    news: Option<BraveNewsResults>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BraveWebResults {
-    results: Vec<BraveWebResult>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BraveWebResult {
-    title: String,
-    url: String,
-    description: Option<String>,
-    #[serde(default)]
-    extra_snippets: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BraveNewsResults {
-    results: Vec<BraveNewsResult>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BraveNewsResult {
-    title: String,
-    url: String,
-    description: Option<String>,
-}
-
-#[async_trait::async_trait]
-impl SearchProvider for BraveSearchProvider {
-    async fn search(&self, query: &str, config: &WebSearchConfig) -> Result<Vec<WebSearchResult>> {
-        let endpoint = match config.search_type {
-            SearchType::Web => "https://api.search.brave.com/res/v1/web/search",
-            SearchType::News => "https://api.search.brave.com/res/v1/news/search",
-            SearchType::Images => "https://api.search.brave.com/res/v1/images/search",
-        };
-
-        let mut params = vec![
-            ("q", query.to_string()),
-            ("count", config.num_results.to_string()),
-        ];
-
-        if let Some(ref region) = config.region {
-            params.push(("country", region.clone()));
-        }
-
-        if config.safe_search {
-            params.push(("safesearch", "moderate".to_string()));
-        }
-
-        let response = self
-            .client
-            .get(endpoint)
-            .header("Accept", "application/json")
-            .header("Accept-Encoding", "gzip")
-            .header("X-Subscription-Token", &self.api_key)
-            .query(&params)
-            .send()
-            .await
-            .map_err(|e| anyhow!("Brave Search request failed: {}", e))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!("Brave Search returned status {}: {}", status, body));
-        }
-
-        let brave_response: BraveSearchResponse = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("Failed to parse Brave Search response: {}", e))?;
-
-        let mut results = Vec::new();
-
-        match config.search_type {
-            SearchType::Web => {
-                if let Some(web) = brave_response.web {
-                    for (idx, result) in web.results.into_iter().enumerate() {
-                        let domain = extract_domain(&result.url);
-                        let favicon = domain.as_ref().map(|d| {
-                            format!("https://www.google.com/s2/favicons?domain={}&sz=32", d)
-                        });
-
-                        let snippet = result.description.unwrap_or_else(|| {
-                            result.extra_snippets.first().cloned().unwrap_or_default()
-                        });
-
-                        let position = idx + 1;
-                        results.push(WebSearchResult {
-                            title: result.title,
-                            url: result.url,
-                            snippet,
-                            favicon,
-                            domain,
-                            position,
-                            citation_id: Some(format!("cite-{}", position)),
-                            access_timestamp: Some(
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .map(|d| d.as_secs())
-                                    .unwrap_or(0),
-                            ),
-                        });
-                    }
-                }
-            }
-            SearchType::News => {
-                if let Some(news) = brave_response.news {
-                    for (idx, result) in news.results.into_iter().enumerate() {
-                        let domain = extract_domain(&result.url);
-                        let favicon = domain.as_ref().map(|d| {
-                            format!("https://www.google.com/s2/favicons?domain={}&sz=32", d)
-                        });
-
-                        let position = idx + 1;
-                        results.push(WebSearchResult {
-                            title: result.title,
-                            url: result.url,
-                            snippet: result.description.unwrap_or_default(),
-                            favicon,
-                            domain,
-                            position,
-                            citation_id: Some(format!("cite-{}", position)),
-                            access_timestamp: Some(
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .map(|d| d.as_secs())
-                                    .unwrap_or(0),
-                            ),
-                        });
-                    }
-                }
-            }
-            SearchType::Images => {
-                // Images search would need different handling
-                return Err(anyhow!("Image search not yet implemented for Brave"));
-            }
-        }
-
-        Ok(results)
-    }
-
-    fn name(&self) -> &str {
-        "Brave Search"
-    }
-
-    fn is_available(&self) -> bool {
-        !self.api_key.is_empty()
-    }
-}
-
-/// Main web search service that manages providers
+/// Main web search service that uses DuckDuckGo
 pub struct WebSearchService {
-    brave_provider: Option<BraveSearchProvider>,
     duckduckgo_provider: DuckDuckGoProvider,
 }
 
 impl WebSearchService {
     pub fn new() -> Result<Self> {
-        let brave_provider = BraveSearchProvider::from_env();
         let duckduckgo_provider = DuckDuckGoProvider::new()?;
-
-        if brave_provider.is_some() {
-            tracing::info!("Brave Search API key found - using Brave as primary search provider");
-        } else {
-            tracing::info!("No Brave Search API key - using DuckDuckGo as search provider");
-        }
+        tracing::info!("Using DuckDuckGo as search provider");
 
         Ok(Self {
-            brave_provider,
             duckduckgo_provider,
         })
     }
 
-    /// Perform a web search using the best available provider
+    /// Perform a web search using DuckDuckGo
     pub async fn search(
         &self,
         query: &str,
@@ -480,20 +292,8 @@ impl WebSearchService {
         let config = config.unwrap_or_default();
         let start = std::time::Instant::now();
 
-        // Try Brave first if available
-        let (results, provider_name) = if let Some(ref brave) = self.brave_provider {
-            match brave.search(query, &config).await {
-                Ok(results) => (results, brave.name().to_string()),
-                Err(e) => {
-                    tracing::warn!("Brave Search failed, falling back to DuckDuckGo: {}", e);
-                    let results = self.duckduckgo_provider.search(query, &config).await?;
-                    (results, self.duckduckgo_provider.name().to_string())
-                }
-            }
-        } else {
-            let results = self.duckduckgo_provider.search(query, &config).await?;
-            (results, self.duckduckgo_provider.name().to_string())
-        };
+        let results = self.duckduckgo_provider.search(query, &config).await?;
+        let provider_name = self.duckduckgo_provider.name().to_string();
 
         let duration_ms = start.elapsed().as_millis() as u64;
         let count = results.len();
@@ -505,11 +305,6 @@ impl WebSearchService {
             provider: provider_name,
             duration_ms,
         })
-    }
-
-    /// Check if Brave Search is available
-    pub fn has_brave_search(&self) -> bool {
-        self.brave_provider.is_some()
     }
 }
 

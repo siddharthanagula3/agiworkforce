@@ -9,6 +9,52 @@ import { CreditService } from '@/lib/services/credit-service';
 import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
 
+// Type helpers for Stripe API version compatibility (v19 -> v20 changes)
+// These types handle the transition where period dates moved from top-level to items array
+interface StripeSubscriptionWithPeriod extends Stripe.Subscription {
+  current_period_start?: number;
+  current_period_end?: number;
+}
+
+interface StripeSubscriptionItemWithPeriod {
+  current_period_start?: number;
+  current_period_end?: number;
+  price: { id: string };
+}
+
+// Type for accessing discounts property safely across Stripe SDK versions
+// Note: Does not extend Stripe.Subscription to avoid type conflicts with base class
+interface SubscriptionDiscounts {
+  discounts?: Array<{ coupon?: { id?: string } }>;
+}
+
+// Type guard helpers for safer Stripe data access
+// Returns period values if they exist at top level, null otherwise
+function getTopLevelPeriod(sub: Stripe.Subscription): { start: number; end: number } | null {
+  const s = sub as unknown as StripeSubscriptionWithPeriod;
+  if (typeof s.current_period_start === 'number' && typeof s.current_period_end === 'number') {
+    return { start: s.current_period_start, end: s.current_period_end };
+  }
+  return null;
+}
+
+function getItemPeriod(sub: Stripe.Subscription): StripeSubscriptionItemWithPeriod | null {
+  const item = sub.items?.data?.[0] as StripeSubscriptionItemWithPeriod | undefined;
+  if (
+    item &&
+    typeof item.current_period_start === 'number' &&
+    typeof item.current_period_end === 'number'
+  ) {
+    return item;
+  }
+  return null;
+}
+
+function getDiscountCouponId(sub: Stripe.Subscription): string | null {
+  const s = sub as unknown as SubscriptionDiscounts;
+  return s.discounts?.[0]?.coupon?.id ?? null;
+}
+
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -130,8 +176,17 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
       throw new Error('No credit account found for user');
     }
 
+    // Get balance before adding credits for verification
+    const { data: balanceBefore } = await supabaseAdmin
+      .from('token_credits')
+      .select('balance_cents')
+      .eq('id', creditAccount.id)
+      .single();
+
+    const previousBalance = balanceBefore?.balance_cents ?? 0;
+
     // Add credits to the user's account using the correct credit account ID
-    const { error: creditError } = await supabaseAdmin.rpc('add_credits', {
+    const { data: rpcResult, error: creditError } = await supabaseAdmin.rpc('add_credits', {
       p_user_id: userId,
       p_account_id: creditAccount.id, // Use credit account ID, not subscription ID
       p_amount_cents: creditAmountCents,
@@ -147,15 +202,44 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
       throw creditError;
     }
 
-    logger.info(
-      {
-        userId,
-        creditAmountCents,
-        subscriptionId: subscription.id,
-        creditAccountId: creditAccount.id,
-      },
-      'Credit top-up processed successfully',
-    );
+    // Verify credits were actually added by checking the new balance
+    const { data: balanceAfter } = await supabaseAdmin
+      .from('token_credits')
+      .select('balance_cents')
+      .eq('id', creditAccount.id)
+      .single();
+
+    const newBalance = balanceAfter?.balance_cents ?? 0;
+    const actualDifference = newBalance - previousBalance;
+
+    if (actualDifference !== creditAmountCents) {
+      logger.error(
+        {
+          userId,
+          creditAccountId: creditAccount.id,
+          expected: creditAmountCents,
+          actual: actualDifference,
+          previousBalance,
+          newBalance,
+          rpcResult,
+        },
+        'Credit verification failed: balance did not increase by expected amount',
+      );
+      // Don't throw - the transaction may have partially succeeded
+      // But log error for investigation
+    } else {
+      logger.info(
+        {
+          userId,
+          creditAmountCents,
+          subscriptionId: subscription.id,
+          creditAccountId: creditAccount.id,
+          previousBalance,
+          newBalance,
+        },
+        'Credit top-up processed and verified successfully',
+      );
+    }
   } catch (error) {
     logger.error({ error, userId, creditAmountCents }, 'Error processing credit top-up');
     throw error;
@@ -396,31 +480,24 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   if (stripeSubId && stripe) {
     try {
-      const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubId);
-      const subscription = subscriptionResponse as unknown as Stripe.Subscription;
+      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
       status = subscription.status;
 
       // Handle both top-level and items-level period dates (Stripe v20+ flexible billing)
-      const subAsAny = subscription as unknown as { current_period_start?: number };
-      const periodStart = subAsAny.current_period_start;
-      const periodEnd = (subscription as unknown as { current_period_end?: number })
-        .current_period_end;
-
-      if (periodStart && periodEnd) {
+      // Using helper functions for safer access across API versions
+      const topLevelPeriod = getTopLevelPeriod(subscription);
+      if (topLevelPeriod) {
         // Top-level fields exist (standard billing)
-        currentPeriodStart = new Date(periodStart * 1000);
-        currentPeriodEnd = new Date(periodEnd * 1000);
-      } else if (subscription.items?.data?.length > 0) {
+        currentPeriodStart = new Date(topLevelPeriod.start * 1000);
+        currentPeriodEnd = new Date(topLevelPeriod.end * 1000);
+      } else {
         // Fallback to items array (flexible billing - Stripe v20+)
-        const item = subscription.items.data[0] as unknown as {
-          current_period_start?: number;
-          current_period_end?: number;
-        };
-        if (item.current_period_start && item.current_period_end) {
-          currentPeriodStart = new Date(item.current_period_start * 1000);
-          currentPeriodEnd = new Date(item.current_period_end * 1000);
+        const itemPeriod = getItemPeriod(subscription);
+        if (itemPeriod) {
+          currentPeriodStart = new Date(itemPeriod.current_period_start! * 1000);
+          currentPeriodEnd = new Date(itemPeriod.current_period_end! * 1000);
           logger.debug(
-            { subscriptionId: stripeSubId, periodStart: item.current_period_start },
+            { subscriptionId: stripeSubId, periodStart: itemPeriod.current_period_start },
             'Using period dates from subscription items (flexible billing)',
           );
         }
@@ -430,8 +507,9 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
 
       // Ensure we always get price_id from subscription if not already set
-      if (!stripePriceId && subscription.items.data.length > 0) {
-        stripePriceId = subscription.items.data[0].price.id;
+      const firstItem = subscription.items?.data?.[0];
+      if (!stripePriceId && firstItem) {
+        stripePriceId = firstItem.price.id;
         logger.info(
           { priceId: stripePriceId, subscriptionId: stripeSubId },
           'Retrieved price_id from subscription',
@@ -439,12 +517,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       }
 
       // Check discounts array (v20 API change: discount -> discounts)
-      const discounts = (
-        subscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> }
-      ).discounts;
-      if (discounts && discounts.length > 0 && discounts[0]?.coupon?.id) {
-        stripeCouponId = discounts[0].coupon.id;
-      }
+      stripeCouponId = getDiscountCouponId(subscription);
     } catch (error) {
       logger.error(
         { error, subscriptionId: stripeSubId },

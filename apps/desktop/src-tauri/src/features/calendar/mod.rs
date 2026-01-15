@@ -500,7 +500,8 @@ mod tests {
         assert!(result.is_ok());
 
         let (auth_url, state) = result.unwrap();
-        assert!(auth_url.contains("agiworkforce.com"));
+        // Google OAuth URL should contain accounts.google.com
+        assert!(auth_url.contains("accounts.google.com") || auth_url.contains("google"));
         assert!(!state.is_empty());
     }
 }

@@ -3,8 +3,10 @@ pub mod deepseek;
 pub mod google;
 pub mod http_client;
 pub mod managed_cloud_provider;
+pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+pub mod perplexity;
 pub mod qwen;
 pub mod xai;
 

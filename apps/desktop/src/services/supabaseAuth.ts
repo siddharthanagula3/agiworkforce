@@ -17,13 +17,13 @@ import {
 import { API_BASE_URL } from '../api/client';
 
 // Check if running in Tauri environment
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 // ============================================================================
 // LocalStorage Cache for Resilience Against Cold Starts
 // ============================================================================
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
-const AUTH_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const AUTH_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours - reduced from 7 days for security
 
 interface CachedAuthData<T> {
   data: T;
@@ -118,7 +118,7 @@ async function warmUpDatabase(): Promise<boolean> {
 // ============================================================================
 // Web API Fallback for Subscription
 // ============================================================================
-const WEB_APP_URL = import.meta.env['VITE_WEB_APP_URL'] || 'https://agiworkforce.com';
+const WEB_APP_URL = import.meta.env['VITE_WEB_APP_URL'] || 'https://www.agiworkforce.com';
 
 /**
  * Fetch subscription data from the web API as a fallback when direct Supabase queries fail.
@@ -260,6 +260,9 @@ class SupabaseAuthService {
   private static readonly MAX_CONSECUTIVE_FAILURES = 5;
   private lastSubscriptionFailure: number = 0;
 
+  // Track active background refresh to enable cancellation on logout/account switch
+  private activeBackgroundRefreshUserId: string | null = null;
+
   private constructor() {
     this.initializeAuthListener();
   }
@@ -317,7 +320,7 @@ class SupabaseAuthService {
     const supabase = getSupabase();
 
     try {
-      this.updateState({ isLoading: true });
+      this.updateState({ isLoading: true, error: null });
 
       const sessionPromise = supabase.auth.getSession();
       const timeoutPromise = new Promise<{ data: { session: null }; error: { message: string } }>(
@@ -329,25 +332,47 @@ class SupabaseAuthService {
           ),
       );
 
-      const {
-        data: { session },
-        error,
-      } = await Promise.race([sessionPromise, timeoutPromise]);
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      const { data, error } = result;
 
-      if (error && error.message !== 'Session check timed out') {
+      if (error) {
+        // Timeout is not a fatal error - we'll try again later or user can re-login
+        if (error.message === 'Session check timed out') {
+          console.warn('[Auth] Session check timed out - will retry on next auth event');
+          // Don't set error state for timeout - just mark as not loading
+          this.updateState({ isLoading: false });
+          return;
+        }
+
         console.error('[Auth] Session check error:', error);
         this.updateState({ isLoading: false, error: error.message });
         return;
       }
 
+      const session = data?.session;
       if (session) {
         await this.handleSignedIn(session);
       } else {
+        // No session - user is not logged in, this is normal
         this.updateState({ isLoading: false });
       }
     } catch (error) {
-      console.error('[Auth] Session check failed:', error);
-      this.updateState({ isLoading: false, error: 'Failed to check session' });
+      // Network errors or other exceptions
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const isNetworkError =
+        message.includes('fetch') ||
+        message.includes('network') ||
+        message.includes('Failed to fetch') ||
+        message.includes('NetworkError');
+
+      if (isNetworkError) {
+        console.warn('[Auth] Network error during session check - offline or connectivity issue');
+        // Don't set error state for network errors - let user know via UI hint
+        this.updateState({ isLoading: false });
+      } else {
+        console.error('[Auth] Session check failed:', error);
+        this.updateState({ isLoading: false, error: 'Failed to check session' });
+      }
     }
   }
 
@@ -371,6 +396,30 @@ class SupabaseAuthService {
     }
     this.isHandlingSignIn = true;
     this.handlingSignInForUser = user.id;
+
+    // =========================================================================
+    // CRITICAL: Sync tokens to Rust backend for ManagedCloud provider
+    // This MUST happen before any LLM API calls can succeed
+    // =========================================================================
+    if (isTauri) {
+      try {
+        const invoke = await getInvoke();
+        if (invoke) {
+          await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+          await invoke('account_store_access_token', {
+            accessToken: session.access_token,
+          });
+          if (session.refresh_token) {
+            await invoke('account_store_refresh_token', {
+              refreshToken: session.refresh_token,
+            });
+          }
+          console.log('[Auth] Tokens synced to Rust backend on sign-in');
+        }
+      } catch (error) {
+        console.warn('[Auth] Failed to sync tokens to Rust backend on sign-in:', error);
+      }
+    }
 
     // =========================================================================
     // PHASE 1: Immediate UI with cached data (non-blocking)
@@ -400,10 +449,16 @@ class SupabaseAuthService {
     // =========================================================================
     // PHASE 2: Background data refresh (non-blocking)
     // =========================================================================
+    // Track which user's background refresh is active to enable cancellation
+    this.activeBackgroundRefreshUserId = user.id;
+
     // Run in background - don't await
     this.refreshDataInBackground(user.id, session).finally(() => {
-      this.isHandlingSignIn = false;
-      this.handlingSignInForUser = null;
+      // Only clear handling flags if this was the active refresh
+      if (this.activeBackgroundRefreshUserId === user.id) {
+        this.isHandlingSignIn = false;
+        this.handlingSignInForUser = null;
+      }
     });
   }
 
@@ -413,6 +468,12 @@ class SupabaseAuthService {
    */
   private async refreshDataInBackground(userId: string, session: Session): Promise<void> {
     try {
+      // Check if this refresh has been superseded by another user or logout
+      if (this.activeBackgroundRefreshUserId !== userId) {
+        console.log('[Auth] Background refresh cancelled - user changed');
+        return;
+      }
+
       // Ensure the session is properly set in the Supabase client
       const supabase = getSupabase();
       const setSessionPromise = supabase.auth.setSession({
@@ -424,9 +485,21 @@ class SupabaseAuthService {
       );
       await Promise.race([setSessionPromise, setSessionTimeout]);
 
+      // Check again after async operation
+      if (this.activeBackgroundRefreshUserId !== userId) {
+        console.log('[Auth] Background refresh cancelled after setSession - user changed');
+        return;
+      }
+
       // Warm up the database first (handles cold start)
       console.log('[Auth] Warming up database connection...');
       await warmUpDatabase();
+
+      // Check again after database warm-up
+      if (this.activeBackgroundRefreshUserId !== userId) {
+        console.log('[Auth] Background refresh cancelled after warm-up - user changed');
+        return;
+      }
 
       // Now fetch fresh data with shorter timeouts (database should be warm)
       console.log('[Auth] Fetching fresh user data...');
@@ -435,6 +508,12 @@ class SupabaseAuthService {
         this.fetchSubscription(userId, session),
         this.fetchFeatureFlags(userId),
       ]);
+
+      // Final check before updating state
+      if (this.activeBackgroundRefreshUserId !== userId) {
+        console.log('[Auth] Background refresh cancelled after fetch - user changed');
+        return;
+      }
 
       // Cache successful fetches
       if (profile) setCachedData('profile', userId, profile);
@@ -455,6 +534,10 @@ class SupabaseAuthService {
 
       this.subscribeToSubscriptionChanges(userId);
     } catch (error) {
+      // Don't log or update state if cancelled
+      if (this.activeBackgroundRefreshUserId !== userId) {
+        return;
+      }
       console.error('[Auth] Background data refresh failed:', error);
       // Don't update subscriptionFetchStatus to 'failed' if we have cached data
       if (!this.currentState.subscription) {
@@ -464,11 +547,29 @@ class SupabaseAuthService {
   }
 
   private handleSignedOut(): void {
+    // Cancel any ongoing background refresh
+    this.activeBackgroundRefreshUserId = null;
+    this.isHandlingSignIn = false;
+    this.handlingSignInForUser = null;
+
+    // Clean up subscription channel
     if (this.subscriptionChannel) {
       this.subscriptionChannel.unsubscribe();
       this.subscriptionChannel = null;
     }
     this.subscriptionChangesSubscribedUserId = null;
+
+    // Clear debounce timer if active
+    if (this.subscriptionChangeDebounceTimer) {
+      clearTimeout(this.subscriptionChangeDebounceTimer);
+      this.subscriptionChangeDebounceTimer = null;
+    }
+
+    // Reset circuit breaker and pending fetch state
+    this.subscriptionFailureCount = 0;
+    this.lastSubscriptionFailure = 0;
+    this.subscriptionFetchInProgress = false;
+    this.pendingSubscriptionFetch = null;
 
     // Clear auth cache on sign out
     clearAuthCache();
@@ -935,7 +1036,10 @@ class SupabaseAuthService {
           const invoke = await getInvoke();
           if (invoke) {
             // Clear auth tokens from OS keyring
-            await invoke('account_clear_tokens').catch(() => {});
+            await invoke('account_clear_tokens').catch((err) => {
+              console.warn('[Auth] Failed to clear tokens from keyring:', err);
+              // Continue with sign out even if keyring clear fails
+            });
             console.log('[Auth] Auth tokens cleared from secure storage');
           }
         } catch (err) {
@@ -1071,26 +1175,68 @@ class SupabaseAuthService {
     access_token: string;
     refresh_token: string;
   }): Promise<{ error: AuthError | null }> {
-    const supabase = getSupabase();
-    console.log('[Auth] Manually setting session');
-
-    // Explicitly set session
-    const { data, error } = await supabase.auth.setSession({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-    });
-
-    if (error) {
-      console.error('[Auth] Failed to set session:', error);
-      this.updateState({ error: error.message });
+    // Validate token inputs
+    if (!tokens.access_token || typeof tokens.access_token !== 'string') {
+      const error = new AuthError('Invalid access token provided', 400, 'invalid_token');
+      console.error('[Auth] setSession failed: invalid access token');
+      this.updateState({ error: error.message, isLoading: false });
       return { error };
     }
 
-    if (data.session) {
-      await this.handleSignedIn(data.session);
+    if (!tokens.refresh_token || typeof tokens.refresh_token !== 'string') {
+      const error = new AuthError('Invalid refresh token provided', 400, 'invalid_token');
+      console.error('[Auth] setSession failed: invalid refresh token');
+      this.updateState({ error: error.message, isLoading: false });
+      return { error };
     }
 
-    return { error: null };
+    const supabase = getSupabase();
+    console.log('[Auth] Manually setting session');
+    this.updateState({ isLoading: true, error: null });
+
+    try {
+      // Explicitly set session with timeout
+      const setSessionPromise = supabase.auth.setSession({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+      });
+      const timeoutPromise = new Promise<{
+        data: { session: null; user: null };
+        error: AuthError;
+      }>((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              data: { session: null, user: null },
+              error: new AuthError('Session set timed out', 408, 'timeout'),
+            }),
+          10000,
+        ),
+      );
+
+      const { data, error } = await Promise.race([setSessionPromise, timeoutPromise]);
+
+      if (error) {
+        console.error('[Auth] Failed to set session:', error);
+        this.updateState({ error: error.message, isLoading: false });
+        return { error: error as AuthError };
+      }
+
+      if (data.session) {
+        await this.handleSignedIn(data.session);
+      } else {
+        // Session was set but no session returned - unusual but handle gracefully
+        console.warn('[Auth] setSession succeeded but no session data returned');
+        this.updateState({ isLoading: false });
+      }
+
+      return { error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error setting session';
+      console.error('[Auth] setSession exception:', err);
+      this.updateState({ error: message, isLoading: false });
+      return { error: new AuthError(message, 500, 'unknown') };
+    }
   }
 
   hasPlan(tier: PlanTier): boolean {

@@ -243,7 +243,7 @@ pub fn get_api_base_url() -> String {
     }
 
     let raw =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
     raw.trim_end_matches('/').to_string()
 }
 

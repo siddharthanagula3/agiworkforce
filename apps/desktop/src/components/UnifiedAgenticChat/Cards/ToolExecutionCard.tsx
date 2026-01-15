@@ -140,7 +140,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
       {showInputOutput && (
         <div className="border-t border-gray-200 dark:border-gray-700">
           {}
-          {execution.input && (
+          {Object.keys(execution.input).length > 0 ? (
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setShowInput(!showInput)}
@@ -167,10 +167,10 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           {}
-          {execution.success && execution.output && (
+          {execution.success && execution.output !== undefined ? (
             <div className="p-4">
               <button
                 onClick={() => setShowOutput(!showOutput)}
@@ -197,7 +197,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

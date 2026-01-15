@@ -303,10 +303,29 @@ export function IterationProgressPanel({
 
   // Listen for Tauri events
   useEffect(() => {
+    let isMounted = true;
     const unsubscribers: Array<() => void> = [];
+    const pendingListeners: Array<Promise<() => void>> = [];
+
+    // Helper to safely add listeners
+    const addListener = <T,>(eventName: string, handler: (event: { payload: T }) => void) => {
+      const promise = listen<T>(eventName, (event) => {
+        if (isMounted) {
+          handler(event);
+        }
+      });
+      pendingListeners.push(promise);
+      promise.then((unlisten) => {
+        if (isMounted) {
+          unsubscribers.push(unlisten);
+        } else {
+          unlisten();
+        }
+      });
+    };
 
     // Iteration start
-    listen<IterationStartEvent>('agi:goal:iteration_start', (event) => {
+    addListener<IterationStartEvent>('agi:goal:iteration_start', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => ({
         ...prev,
@@ -317,10 +336,10 @@ export function IterationProgressPanel({
         consecutiveFailures: event.payload.consecutiveFailures,
         startTime: prev.startTime || Date.now(),
       }));
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Iteration complete
-    listen<IterationCompleteEvent>('agi:goal:iteration_complete', (event) => {
+    addListener<IterationCompleteEvent>('agi:goal:iteration_complete', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => ({
         ...prev,
@@ -336,30 +355,30 @@ export function IterationProgressPanel({
         ],
         status: 'reflecting',
       }));
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Plan critique
-    listen<PlanCritiqueEvent>('agi:reflection:plan_critique', (event) => {
+    addListener<PlanCritiqueEvent>('agi:reflection:plan_critique', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => ({
         ...prev,
         planRisks: event.payload.risks,
         status: 'planning',
       }));
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Plan revised
-    listen<PlanRevisedEvent>('agi:reflection:plan_revised', (event) => {
+    addListener<PlanRevisedEvent>('agi:reflection:plan_revised', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       // Update status after plan revision
       setState((prev) => ({
         ...prev,
         status: 'executing',
       }));
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Reflection completed
-    listen<ReflectionCompletedEvent>('agi:reflection:completed', (event) => {
+    addListener<ReflectionCompletedEvent>('agi:reflection:completed', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => {
         // Update the last iteration with the insight
@@ -375,24 +394,24 @@ export function IterationProgressPanel({
           status: event.payload.insight.shouldContinue ? 'executing' : 'completed',
         };
       });
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Goal unachievable
-    listen<GoalUnachievableEvent>('agi:goal:unachievable', (event) => {
+    addListener<GoalUnachievableEvent>('agi:goal:unachievable', (event) => {
       if (goalId && event.payload.goalId !== goalId) return;
       setState((prev) => ({
         ...prev,
         status: 'failed',
       }));
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     // Sub-goals
-    listen<SubGoalsEvent>('agi:reflection:sub_goals', (event) => {
-      if (goalId && event.payload.goalId !== goalId) return;
+    addListener<SubGoalsEvent>('agi:reflection:sub_goals', (_event) => {
       // Handle sub-goals if needed
-    }).then((unlisten) => unsubscribers.push(unlisten));
+    });
 
     return () => {
+      isMounted = false;
       unsubscribers.forEach((unsub) => unsub());
     };
   }, [goalId]);
