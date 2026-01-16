@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { CreditAlertModal } from '@/components/modals/CreditAlertModal';
 
 interface CreditMonitorProps {
@@ -11,6 +11,38 @@ interface CreditMonitorProps {
   usagePercentage: number;
 }
 
+// Helper to check if we're in cooldown period (runs outside component for SSR safety)
+function checkCooldownStatus(userId: string): {
+  inWarningCooldown: boolean;
+  inExhaustedCooldown: boolean;
+} {
+  if (typeof window === 'undefined') {
+    return { inWarningCooldown: false, inExhaustedCooldown: false };
+  }
+
+  let inWarningCooldown = false;
+  let inExhaustedCooldown = false;
+
+  try {
+    const warningShown = localStorage.getItem(`credit-alert-warning-${userId}`);
+    const exhaustedShown = localStorage.getItem(`credit-alert-exhausted-${userId}`);
+
+    if (warningShown) {
+      const warningTime = parseInt(warningShown, 10);
+      inWarningCooldown = Date.now() - warningTime < 24 * 60 * 60 * 1000;
+    }
+
+    if (exhaustedShown) {
+      const exhaustedTime = parseInt(exhaustedShown, 10);
+      inExhaustedCooldown = Date.now() - exhaustedTime < 6 * 60 * 60 * 1000;
+    }
+  } catch (e) {
+    console.error('Failed to read alert state:', e);
+  }
+
+  return { inWarningCooldown, inExhaustedCooldown };
+}
+
 export function CreditMonitor({
   userId,
   currentPlan,
@@ -18,91 +50,64 @@ export function CreditMonitor({
   allocatedCents,
   usagePercentage,
 }: CreditMonitorProps) {
-  const [showModal, setShowModal] = useState(false);
-  const [alertType, setAlertType] = useState<'low' | 'exhausted' | 'none'>('none');
-  const [hasShownWarning, setHasShownWarning] = useState(false);
-  const [hasShownExhausted, setHasShownExhausted] = useState(false);
+  // Track whether we've shown alerts this render cycle
+  const hasTriggeredRef = useRef(false);
 
-  useEffect(() => {
-    // Check localStorage first to see if we're in cooldown period
-    let inWarningCooldown = false;
-    let inExhaustedCooldown = false;
+  // Compute initial alert state based on props and cooldown status
+  const initialAlertState = useMemo(() => {
+    const { inWarningCooldown, inExhaustedCooldown } = checkCooldownStatus(userId);
 
-    try {
-      const warningShown = localStorage.getItem(`credit-alert-warning-${userId}`);
-      const exhaustedShown = localStorage.getItem(`credit-alert-exhausted-${userId}`);
-
-      if (warningShown) {
-        const warningTime = parseInt(warningShown, 10);
-        inWarningCooldown = Date.now() - warningTime < 24 * 60 * 60 * 1000;
-      }
-
-      if (exhaustedShown) {
-        const exhaustedTime = parseInt(exhaustedShown, 10);
-        inExhaustedCooldown = Date.now() - exhaustedTime < 6 * 60 * 60 * 1000;
-      }
-    } catch (e) {
-      console.error('Failed to read alert state:', e);
+    if (usagePercentage >= 100 && !inExhaustedCooldown) {
+      return { showModal: true, alertType: 'exhausted' as const };
+    } else if (usagePercentage >= 80 && usagePercentage < 100 && !inWarningCooldown) {
+      return { showModal: true, alertType: 'low' as const };
     }
+    return { showModal: false, alertType: 'none' as const };
+  }, [userId, usagePercentage]);
 
-    // Check credit thresholds
-    if (usagePercentage >= 100 && !hasShownExhausted && !inExhaustedCooldown) {
-      // Credits exhausted
-      setAlertType('exhausted');
-      setShowModal(true);
-      setHasShownExhausted(true);
+  const [showModal, setShowModal] = useState(initialAlertState.showModal);
+  const [alertType, setAlertType] = useState<'low' | 'exhausted' | 'none'>(
+    initialAlertState.alertType,
+  );
 
-      // Store in localStorage to avoid showing multiple times
+  // Save to localStorage when modal is shown (side effect only, no state updates)
+  useEffect(() => {
+    if (showModal && alertType !== 'none' && !hasTriggeredRef.current) {
+      hasTriggeredRef.current = true;
       try {
-        localStorage.setItem(`credit-alert-exhausted-${userId}`, Date.now().toString());
-      } catch (e) {
-        console.error('Failed to save alert state:', e);
-      }
-    } else if (
-      usagePercentage >= 80 &&
-      usagePercentage < 100 &&
-      !hasShownWarning &&
-      !inWarningCooldown
-    ) {
-      // Low credits warning
-      setAlertType('low');
-      setShowModal(true);
-      setHasShownWarning(true);
-
-      // Store in localStorage to avoid showing multiple times
-      try {
-        localStorage.setItem(`credit-alert-warning-${userId}`, Date.now().toString());
+        const key =
+          alertType === 'exhausted'
+            ? `credit-alert-exhausted-${userId}`
+            : `credit-alert-warning-${userId}`;
+        localStorage.setItem(key, Date.now().toString());
       } catch (e) {
         console.error('Failed to save alert state:', e);
       }
     }
-  }, [usagePercentage, userId, hasShownWarning, hasShownExhausted]);
+  }, [showModal, alertType, userId]);
 
+  // Handle prop changes after initial render (usage might change)
   useEffect(() => {
-    // Check localStorage to see if we've already shown alerts this session
-    try {
-      const warningShown = localStorage.getItem(`credit-alert-warning-${userId}`);
-      const exhaustedShown = localStorage.getItem(`credit-alert-exhausted-${userId}`);
+    // Skip if we've already triggered an alert
+    if (hasTriggeredRef.current) return;
 
-      if (warningShown) {
-        const warningTime = parseInt(warningShown, 10);
-        // Show warning again if it's been more than 24 hours
-        if (Date.now() - warningTime < 24 * 60 * 60 * 1000) {
-          setHasShownWarning(true);
-        }
-      }
+    const { inWarningCooldown, inExhaustedCooldown } = checkCooldownStatus(userId);
 
-      if (exhaustedShown) {
-        const exhaustedTime = parseInt(exhaustedShown, 10);
-        // Show exhausted alert again if it's been more than 6 hours
-        if (Date.now() - exhaustedTime < 6 * 60 * 60 * 1000) {
-          setHasShownExhausted(true);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to read alert state:', e);
+    if (usagePercentage >= 100 && !inExhaustedCooldown) {
+      hasTriggeredRef.current = true;
+      // Use a microtask to batch state updates and avoid synchronous setState in effect
+      queueMicrotask(() => {
+        setAlertType('exhausted');
+        setShowModal(true);
+      });
+    } else if (usagePercentage >= 80 && usagePercentage < 100 && !inWarningCooldown) {
+      hasTriggeredRef.current = true;
+      queueMicrotask(() => {
+        setAlertType('low');
+        setShowModal(true);
+      });
     }
-  }, [userId]);
+  }, [usagePercentage, userId]);
 
   const handleClose = () => {
     setShowModal(false);

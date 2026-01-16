@@ -1080,10 +1080,11 @@ export const UnifiedAgenticChat: React.FC<{
           error: errorMessage,
         });
       }
-    } finally {
+      // Clean up loading state on error - for successful streaming, chat:stream-end handles this
       setIsLoading(false);
       setStreamingMessage(null);
     }
+    // Note: No finally block - for streaming mode, cleanup is handled by chat:stream-end event handler
   };
 
   const layoutClasses = {

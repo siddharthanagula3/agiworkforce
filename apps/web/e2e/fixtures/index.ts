@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/rules-of-hooks */
+// Note: This file uses Playwright's `use` function for fixtures, not React hooks
 import { test as base, expect } from '@playwright/test';
 import {
   SignupPage,
