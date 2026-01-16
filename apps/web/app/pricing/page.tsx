@@ -192,7 +192,7 @@ function PricingContent() {
                 Simple pricing for your AI workforce
               </h1>
               <p className="text-zinc-400 max-w-2xl mx-auto mb-8">
-                Start free, upgrade when you're ready to deploy autonomous agents across your
+                Start free, upgrade when you&apos;re ready to deploy autonomous agents across your
                 desktop and web. No credit card required to start.
               </p>
 

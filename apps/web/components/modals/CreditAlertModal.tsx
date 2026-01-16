@@ -176,7 +176,7 @@ export function CreditAlertModal({
           ) : (
             <>
               <p className="text-sm text-zinc-300">
-                You're running low on credits. Consider upgrading to avoid interruptions.
+                You&apos;re running low on credits. Consider upgrading to avoid interruptions.
               </p>
               {!isMaxPlan && (
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">

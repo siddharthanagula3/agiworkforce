@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 // Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 function getStripeClient(): Stripe {
@@ -170,3 +171,8 @@ async function handleCreditTopup(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleCreditTopup);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

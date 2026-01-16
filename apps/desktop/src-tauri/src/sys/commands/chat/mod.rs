@@ -987,7 +987,18 @@ pub async fn chat_send_message(
                                         "error": e.to_string()
                                     }),
                                 );
-                                break;
+                                // Emit stream-end after error so frontend can cleanup loading state
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-end",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "content": full_content.clone(),
+                                        "error": true,
+                                        "has_pending_messages": has_pending_messages()
+                                    }),
+                                );
+                                return;
                             }
                         }
                     }

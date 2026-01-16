@@ -146,7 +146,7 @@ function handleCreditError(
     daily_limit?: number;
     daily_used?: number;
   },
-  _balance: CreditBalance | null,
+  _balance?: CreditBalance | null,
 ): NextResponse {
   if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
     return NextResponse.json(

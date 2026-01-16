@@ -108,7 +108,8 @@ test.describe('Advanced Edge Cases - Network & Connectivity', () => {
 
     // ==================== Step 1: Start navigation to pricing ====================
     console.log('Step 1: Starting navigation to pricing...');
-    const navigationPromise = pricingPage.goto();
+    // Start but don't await - we'll interrupt it
+    void pricingPage.goto();
 
     // ==================== Step 2: Interrupt with immediate second navigation ====================
     console.log('Step 2: Interrupting with navigation to login...');
@@ -535,7 +536,6 @@ test.describe('Advanced Edge Cases - Payment Flows', () => {
 
       // ==================== Step 2: Attempt to create duplicate ====================
       console.log('Step 2: Attempting to create duplicate subscription...');
-      let duplicateError = null;
       try {
         await testDb.createSubscription(user.id, {
           plan_tier: 'pro',
@@ -543,8 +543,8 @@ test.describe('Advanced Edge Cases - Payment Flows', () => {
           stripe_customer_id: `cus_test_dup2_${Date.now()}`,
           stripe_subscription_id: `sub_test_dup2_${Date.now()}`,
         });
-      } catch (error) {
-        duplicateError = error;
+      } catch {
+        // Duplicate subscription blocked by database as expected
         console.log('Duplicate subscription blocked by database');
       }
 
