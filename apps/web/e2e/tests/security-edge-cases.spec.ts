@@ -231,7 +231,6 @@ test.describe('Edge Cases - Network and Timing', () => {
   test('should handle back button navigation', async ({
     page,
     loginPage,
-    dashboardPage,
     pricingPage,
     testDb,
     testUser,

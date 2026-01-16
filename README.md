@@ -1,6 +1,6 @@
 # AGI Workforce
 
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/siddhartha/agiworkforce)
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/siddhartha/agiworkforce)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
@@ -8,190 +8,232 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
 
-> Enterprise-grade AI automation platform with autonomous agents, intelligent workflows, and multi-platform support. Built with Tauri, React 19, and Rust for maximum performance and security.
+> **Your Personal AI Workforce** - An enterprise-grade AI automation platform that brings autonomous agents, intelligent chat, deep research, code generation, and powerful automation to your desktop. Built single-handedly by **Siddhartha Nagula** over 6 months of dedicated development.
 
-## Table of Contents
+---
 
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
+## What is AGI Workforce?
 
-## Overview
+**AGI Workforce** is a comprehensive AI-powered desktop application that acts as your personal team of AI assistants. Whether you need to have intelligent conversations, get expert advice, conduct deep research, write code, or automate complex workflows - AGI Workforce does it all from a single, beautifully designed interface.
 
-**AGI Workforce** is a comprehensive AI automation platform designed for developers, teams, and enterprises. It combines powerful autonomous agents, intelligent workflow automation, and seamless multi-platform synchronization in a single unified experience.
+Think of it as having access to the world's most capable AI models (OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, and local models via Ollama) combined with powerful automation tools that can control your browser, execute terminal commands, manage files, and orchestrate complex multi-step tasks - all without leaving the application.
 
-### What Makes AGI Workforce Different?
+### Why AGI Workforce?
 
-- **Autonomous AGI Agents**: Self-directed reasoning loops that plan, execute, and adapt to achieve complex goals
-- **Native Desktop Performance**: Built with Rust and Tauri for blazing-fast native performance
-- **Modern React 19**: Leveraging latest React features including Server Components and enhanced hooks
-- **Multi-Platform Sync**: Seamless synchronization between desktop and web with real-time updates
-- **MCP Integration**: Full Model Context Protocol support for extensible AI tool ecosystems
-- **Enterprise Security**: Built-in encryption, audit logging, and granular permission controls
+- **All-in-One Solution**: Chat, research, code, automate - everything in one place
+- **Multi-Provider Freedom**: Use OpenAI, Anthropic, Google, DeepSeek, xAI, or local models
+- **True Automation**: AI that can actually do things - browse the web, run commands, manage files
+- **Privacy-First**: Your data stays on your machine with local SQLite storage
+- **Enterprise-Ready**: Built with security, audit logging, and team collaboration in mind
+- **Native Performance**: Rust-powered backend delivers blazing-fast, memory-efficient operation
 
-## Key Features
+---
 
-### 🤖 Autonomous AGI System
+## Core Capabilities
 
-- **Self-Directed Reasoning**: Agents plan and execute complex multi-step tasks autonomously
-- **Goal-Oriented**: Set high-level objectives and let agents determine optimal approaches
-- **Safety Limits**: Built-in timeouts, iteration limits, and failure handling
-- **Process Reasoning**: Advanced planning with dependency tracking and parallel execution
-- **Learning System**: Agents learn from outcomes and improve over time
+### 1. Intelligent Chat & Conversations
 
-### 🔧 Powerful Automation
+AGI Workforce provides a powerful chat interface that goes beyond simple Q&A:
 
-- **Visual Workflow Builder**: Drag-and-drop interface powered by @xyflow/react
-- **Computer Use**: AI-controlled keyboard, mouse, and screen interaction
-- **Browser Automation**: Semantic web automation with CDP and Playwright integration
-- **Terminal Integration**: AI-assisted command execution with xterm.js
-- **File Operations**: Intelligent file management and code generation
+- **Multi-Provider Support**: Seamlessly switch between OpenAI (GPT-4o, GPT-4), Anthropic (Claude 4 Opus, Claude Sonnet), Google (Gemini 2.5), DeepSeek, xAI (Grok), and local models via Ollama
+- **Streaming Responses**: Real-time token streaming for immediate feedback
+- **Vision & Multimodal**: Upload images for analysis, screenshots for debugging, documents for processing
+- **Conversation Memory**: Intelligent context management that remembers your conversation history
+- **Cost Tracking**: Real-time cost calculation showing exactly what each conversation costs
+- **Multiple Chat Sessions**: Organize conversations by project or topic
 
-### 💬 Advanced Chat Interface
+### 2. Expert Advice & Assistance
 
-- **Multi-Provider Support**: OpenAI, Anthropic, Google, DeepSeek, xAI, Ollama, and more
-- **Streaming Responses**: Real-time token streaming with SSE parsing
-- **Vision Support**: Image analysis and multimodal conversations
-- **Cost Tracking**: Automatic usage and cost calculation per provider
-- **Context Management**: Intelligent context window management with automatic compaction
+Get thoughtful, expert-level guidance on any topic:
 
-### 🔌 MCP (Model Context Protocol) Support
+- **Domain Expertise**: From software engineering to business strategy, get advice tailored to your needs
+- **Code Review**: Paste code and get detailed feedback on quality, security, and best practices
+- **Problem Solving**: Describe complex problems and receive structured solutions
+- **Decision Support**: Get pros/cons analysis and recommendations for tough decisions
+- **Learning Assistant**: Explanations calibrated to your expertise level
 
-- **Server Management**: Start, stop, and configure MCP servers
-- **Tool Discovery**: Automatic discovery and registration of MCP tools
-- **HTTP Transport**: Support for both stdio and HTTP transport layers
-- **Credential Management**: Secure credential storage in OS keyring
-- **Session Management**: Persistent sessions with automatic reconnection
+### 3. Powerful Search & Discovery
 
-### 🔐 Enterprise Security
+Find information quickly and comprehensively:
 
-- **End-to-End Encryption**: AES-GCM encryption for sensitive data
-- **OS Keyring Integration**: Secure credential storage using native OS keychains
-- **Audit Logging**: Comprehensive activity tracking and compliance reporting
-- **Role-Based Access**: Granular permission controls for teams
-- **Rate Limiting**: Built-in rate limiting with Upstash Redis
+- **Web Search Integration**: AI-enhanced web search that understands context
+- **Local File Search**: Intelligent search across your documents and codebase
+- **Semantic Search**: Find relevant content even when keywords don't match exactly
+- **Cross-Reference**: Combine information from multiple sources automatically
 
-### 📊 Analytics & Monitoring
+### 4. Deep Research & Analysis
 
-- **Real-Time Metrics**: Live dashboard with usage statistics
-- **Cost Tracking**: Per-provider and per-model cost breakdown
-- **Performance Monitoring**: Latency tracking and optimization insights
-- **ROI Calculator**: Measure time and cost savings from automation
+Conduct thorough research that would take humans hours:
 
-### 🌐 Multi-Platform
+- **Multi-Source Research**: Automatically gather and synthesize information from multiple sources
+- **Structured Reports**: Generate well-organized research reports with citations
+- **Fact Verification**: Cross-check claims across multiple sources
+- **Trend Analysis**: Identify patterns and trends in complex data
+- **Competitive Intelligence**: Research competitors, markets, and technologies
 
-- **Desktop Apps**: Native macOS, Windows, and Linux applications
-- **Web Platform**: Next.js 16 SaaS with Supabase backend
-- **Real-Time Sync**: WebSocket-based synchronization between devices
-- **Offline Support**: Full functionality with local SQLite database
+### 5. Code Generation & Development
 
-## Architecture
+Your AI pair programmer that actually writes production code:
 
-### Tech Stack
+- **Code Generation**: Generate complete functions, classes, or entire modules from descriptions
+- **Multi-Language Support**: Python, TypeScript, JavaScript, Rust, Go, Java, C++, and more
+- **Code Explanation**: Understand complex codebases with detailed explanations
+- **Refactoring**: Transform messy code into clean, maintainable solutions
+- **Bug Detection**: Identify potential bugs and security vulnerabilities
+- **Test Generation**: Automatically generate unit tests and integration tests
+- **Documentation**: Generate comprehensive documentation from code
 
-**Desktop Application:**
+### 6. Workflow Automation
 
-- **Frontend**: React 19, TypeScript 5.9, Vite 7 with SWC
-- **Backend**: Rust with Tauri 2.9, Tokio async runtime
-- **State Management**: Zustand v5 with devtools, persist, and subscribeWithSelector
-- **UI Components**: Radix UI + Tailwind CSS v4 (CSS-first configuration)
-- **Database**: SQLite with Write-Ahead Logging (WAL)
+Automate repetitive tasks with intelligent workflows:
 
-**Web Application:**
+- **Visual Workflow Builder**: Drag-and-drop interface to create complex automation flows
+- **Conditional Logic**: Build workflows with if/then branching based on conditions
+- **Parallel Execution**: Run multiple tasks simultaneously for maximum efficiency
+- **Error Handling**: Built-in retry logic and fallback mechanisms
+- **Scheduling**: Set up recurring automated tasks
+- **Notifications**: Get alerts when workflows complete or encounter issues
 
-- **Framework**: Next.js 16 with React 19 Server Components
-- **Database**: Supabase PostgreSQL with Row Level Security
-- **Authentication**: Supabase Auth with JWT
-- **Styling**: Tailwind CSS v4 (CSS-first)
-- **State Management**: React Query v5 for server state
+### 7. Browser Automation
 
-**Backend Services:**
+AI that can browse the web for you:
 
-- **API Gateway**: Express.js with JWT authentication (port 3000)
-- **Signaling Server**: WebSocket server for real-time sync (port 4000)
-- **Message Queue**: Redis for distributed task queue
-- **Payment Processing**: Stripe with webhook idempotency
+- **Semantic Navigation**: Describe what you want to do in plain English ("fill out the contact form", "download the PDF")
+- **Web Scraping**: Extract structured data from websites
+- **Form Filling**: Automatically complete web forms
+- **Screenshot Analysis**: Capture and analyze web page content
+- **Multi-Tab Management**: Work across multiple browser tabs
+- **Cookie & Session Handling**: Maintain authenticated sessions
 
-**AI/ML Infrastructure:**
+### 8. Terminal & Shell Integration
 
-- **LLM Router**: Multi-provider intelligent routing with cost optimization
-- **Token Counter**: Accurate token counting per provider (cl100k_base, o200k_base)
-- **Embeddings**: Vector embeddings for semantic search
-- **Vision Pipeline**: Image processing with OCR support (Tesseract)
+Execute commands with AI understanding:
 
-### Monorepo Structure
+- **Command Generation**: Describe what you want to do, get the right command
+- **Output Analysis**: AI interprets command outputs and suggests next steps
+- **Script Generation**: Create shell scripts for complex operations
+- **Safe Execution**: Preview commands before running them
+- **History & Context**: AI remembers previous commands in context
 
-```
-agiworkforce/
-├── apps/
-│   ├── desktop/              # Tauri desktop application
-│   │   ├── src/              # React frontend (TypeScript)
-│   │   ├── src-tauri/        # Rust backend
-│   │   │   ├── src/
-│   │   │   │   ├── sys/      # System commands & security
-│   │   │   │   ├── core/     # Business logic (AGI, agents, MCP, LLM)
-│   │   │   │   ├── data/     # Data access layer
-│   │   │   │   ├── automation/ # Workflow automation
-│   │   │   │   ├── integrations/ # Third-party APIs
-│   │   │   │   └── features/ # Feature modules
-│   │   │   └── tests/        # Integration tests
-│   │   └── e2e/              # Playwright E2E tests
-│   ├── web/                  # Next.js web application
-│   │   ├── app/              # React Server Components
-│   │   ├── lib/              # Business logic & utilities
-│   │   ├── __tests__/        # Vitest tests
-│   │   └── supabase/         # Database migrations
-│   └── extension/            # Browser extension
-├── services/
-│   ├── api-gateway/          # Express.js REST API
-│   └── signaling-server/     # WebSocket signaling server
-├── packages/
-│   ├── types/                # Shared TypeScript types
-│   └── utils/                # Shared utilities
-└── docs/                     # Documentation
-```
+### 9. File & Document Management
 
-### Data Flow
+Intelligent file operations:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Desktop App                             │
-│  ┌──────────────┐         ┌─────────────┐      ┌──────────┐    │
-│  │ React UI     │◄────────┤ Tauri Bridge├─────►│ Rust     │    │
-│  │ (TypeScript) │         └─────────────┘      │ Backend  │    │
-│  └──────────────┘                              └──────────┘    │
-│       │                                              │          │
-│       │ Invoke Commands                              │          │
-│       ▼                                              ▼          │
-│  ┌──────────────┐                          ┌────────────────┐  │
-│  │ Zustand Store│                          │ SQLite DB      │  │
-│  └──────────────┘                          │ (WAL mode)     │  │
-│                                            └────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ WebSocket
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Signaling Server (WS)                        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Device Sync
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         Web App                                 │
-│  ┌──────────────┐         ┌─────────────┐      ┌──────────┐    │
-│  │ React        │◄────────┤ Next.js API ├─────►│ Supabase │    │
-│  │ Components   │         │ Routes      │      │ Postgres │    │
-│  └──────────────┘         └─────────────┘      └──────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **File Organization**: Automatically organize files based on content
+- **Document Processing**: Extract text from PDFs, images, and documents
+- **Content Transformation**: Convert between formats, summarize documents
+- **Batch Operations**: Process multiple files with a single command
+- **Version Tracking**: Keep track of document changes over time
+
+### 10. MCP (Model Context Protocol) Integration
+
+Extend AI capabilities with external tools:
+
+- **40+ MCP Servers**: Pre-configured servers for databases, APIs, file systems, and more
+- **Custom Servers**: Build and connect your own MCP servers
+- **Tool Discovery**: Automatic discovery of available tools and capabilities
+- **Secure Credentials**: Store API keys and tokens in your OS keyring
+- **Session Management**: Persistent connections with automatic reconnection
+
+---
+
+## Technology Stack
+
+AGI Workforce is built with cutting-edge technologies for maximum performance and reliability:
+
+### Desktop Application (Tauri + Rust)
+
+| Component     | Technology                                          |
+| ------------- | --------------------------------------------------- |
+| **Framework** | Tauri 2.9 - Native desktop with web technologies    |
+| **Backend**   | Rust - Memory-safe, blazing-fast performance        |
+| **Runtime**   | Tokio - Async runtime for concurrent operations     |
+| **Database**  | SQLite with WAL mode - Fast, reliable local storage |
+| **Security**  | OS Keyring integration, AES-GCM encryption          |
+
+### Frontend (React 19)
+
+| Component            | Technology                                 |
+| -------------------- | ------------------------------------------ |
+| **UI Framework**     | React 19 with latest features              |
+| **Build Tool**       | Vite 7 with SWC - Lightning-fast HMR       |
+| **State Management** | Zustand v5 - Lightweight, powerful state   |
+| **Styling**          | Tailwind CSS v4 - Utility-first CSS        |
+| **Components**       | Radix UI - Accessible component primitives |
+| **Terminal**         | xterm.js v6 - Full terminal emulation      |
+| **Code Editor**      | Monaco Editor - VS Code's editor           |
+| **Workflows**        | @xyflow/react v12 - Visual node editor     |
+| **Diagrams**         | Mermaid v11 - Diagram generation           |
+
+### Web Platform (Next.js 16)
+
+| Component          | Technology                      |
+| ------------------ | ------------------------------- |
+| **Framework**      | Next.js 16 with App Router      |
+| **Database**       | Supabase PostgreSQL with RLS    |
+| **Authentication** | Supabase Auth with JWT          |
+| **Payments**       | Stripe with webhook idempotency |
+| **Rate Limiting**  | Upstash Redis                   |
+| **Server State**   | React Query v5                  |
+
+### AI & ML Infrastructure
+
+| Component          | Technology                                       |
+| ------------------ | ------------------------------------------------ |
+| **LLM Providers**  | OpenAI, Anthropic, Google, DeepSeek, xAI, Ollama |
+| **Token Counting** | cl100k_base, o200k_base tokenizers               |
+| **Streaming**      | Server-Sent Events (SSE) parsing                 |
+| **Vision**         | Multimodal image analysis                        |
+| **OCR**            | Tesseract integration                            |
+
+---
+
+## Supported AI Models
+
+AGI Workforce supports all major AI providers:
+
+### Cloud Providers
+
+| Provider      | Models                                               | Features                       |
+| ------------- | ---------------------------------------------------- | ------------------------------ |
+| **OpenAI**    | GPT-4o, GPT-4o-mini, GPT-4-turbo, o1, o1-mini        | Chat, Vision, Function calling |
+| **Anthropic** | Claude 4 Opus, Claude 3.5/4 Sonnet, Claude 3.5 Haiku | Chat, Vision, Long context     |
+| **Google**    | Gemini 2.5 Pro/Flash, Gemini 2.0                     | Chat, Vision, Grounding        |
+| **DeepSeek**  | DeepSeek V3, DeepSeek Coder                          | Chat, Code generation          |
+| **xAI**       | Grok 2, Grok 2 Vision                                | Chat, Vision, Real-time        |
+
+### Local Models (via Ollama)
+
+Run AI models locally for complete privacy:
+
+- Llama 3.3 (70B, 8B)
+- Mistral (7B, Nemo)
+- CodeLlama
+- Phi-3
+- Qwen 2.5
+- And many more...
+
+---
+
+## Key Features at a Glance
+
+| Feature                  | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
+| **Autonomous AGI**       | Self-directed agents that plan and execute complex goals |
+| **Multi-Provider Chat**  | Switch between AI providers seamlessly                   |
+| **Vision & Multimodal**  | Analyze images, screenshots, and documents               |
+| **Browser Automation**   | AI-controlled web navigation with CDP                    |
+| **Terminal Integration** | Execute and analyze shell commands                       |
+| **Visual Workflows**     | Drag-and-drop automation builder                         |
+| **MCP Integration**      | 40+ tools via Model Context Protocol                     |
+| **Code Generation**      | Write, review, and refactor code                         |
+| **Deep Research**        | Multi-source research and analysis                       |
+| **Real-Time Sync**       | WebSocket sync between devices                           |
+| **Offline Support**      | Full functionality without internet                      |
+| **Enterprise Security**  | Encryption, audit logging, RBAC                          |
+| **Cost Tracking**        | Real-time usage and cost monitoring                      |
+
+---
 
 ## Getting Started
 
@@ -199,10 +241,10 @@ agiworkforce/
 
 - **Node.js**: 22.12.0 or higher
 - **pnpm**: 9.15.0 or higher
-- **Rust**: 1.75 or higher (for desktop development)
+- **Rust**: 1.75 or higher (for development only)
 - **Git**: Latest version
 
-### Installation
+### Quick Installation
 
 1. **Clone the repository:**
 
@@ -217,392 +259,182 @@ cd agiworkforce
 pnpm install
 ```
 
-3. **Set up environment variables:**
+3. **Configure environment:**
 
 ```bash
-# Desktop app
 cp apps/desktop/.env.example apps/desktop/.env.local
-
-# Web app
-cp apps/web/.env.example apps/web/.env.local
-
-# Services
-cp services/api-gateway/.env.example services/api-gateway/.env
-cp services/signaling-server/.env.example services/signaling-server/.env
+# Edit with your API keys (OpenAI, Anthropic, etc.)
 ```
 
-4. **Configure your API keys:**
-
-Edit the `.env.local` files with your API keys:
-
-- OpenAI API key
-- Anthropic API key
-- Google AI API key
-- Supabase URL and keys
-- Stripe keys (for web app)
-
-### Quick Start
-
-**Desktop Development:**
+4. **Start the application:**
 
 ```bash
 pnpm dev:desktop
 ```
 
-This starts the desktop app with hot-reload enabled at `http://localhost:5173`.
+The desktop app will launch with hot-reload enabled.
 
-**Web Development:**
+### First Steps
 
-```bash
-cd apps/web
-pnpm dev
+1. **Add your API keys**: Go to Settings > API Keys and add your provider keys
+2. **Start chatting**: Open a new chat and start conversing with AI
+3. **Try automation**: Create a simple workflow to automate a task
+4. **Explore MCP**: Enable MCP servers to extend capabilities
+
+---
+
+## Project Structure
+
+```
+agiworkforce/
+├── apps/
+│   ├── desktop/                 # Tauri desktop application
+│   │   ├── src/                 # React frontend
+│   │   │   ├── components/      # UI components
+│   │   │   ├── stores/          # Zustand state stores
+│   │   │   ├── hooks/           # Custom React hooks
+│   │   │   └── types/           # TypeScript types
+│   │   ├── src-tauri/           # Rust backend
+│   │   │   ├── src/
+│   │   │   │   ├── sys/         # System commands & security
+│   │   │   │   ├── core/        # Business logic (AGI, LLM, MCP)
+│   │   │   │   ├── data/        # Data access layer
+│   │   │   │   ├── automation/  # Browser & workflow automation
+│   │   │   │   └── integrations/# Third-party API integrations
+│   │   │   └── capabilities/    # Tauri permission configs
+│   │   └── e2e/                 # Playwright E2E tests
+│   ├── web/                     # Next.js 16 SaaS platform
+│   │   ├── app/                 # React Server Components
+│   │   ├── lib/                 # Business logic & services
+│   │   └── supabase/            # Database migrations
+│   └── extension/               # Browser extension
+├── services/
+│   ├── api-gateway/             # Express.js REST API (port 3000)
+│   └── signaling-server/        # WebSocket sync (port 4000)
+├── packages/
+│   ├── types/                   # Shared TypeScript types
+│   └── utils/                   # Shared utilities
+└── docs/                        # Documentation
 ```
 
-This starts the Next.js dev server at `http://localhost:3001`.
-
-**Backend Services:**
-
-```bash
-# In separate terminals:
-pnpm --filter @agiworkforce/api-gateway dev
-pnpm --filter @agiworkforce/signaling-server dev
-```
+---
 
 ## Development
 
-### Project Commands
+### Essential Commands
 
 ```bash
 # Development
-pnpm dev:desktop              # Start desktop app in dev mode
+pnpm dev:desktop              # Start desktop app (hot-reload)
 pnpm --filter web dev         # Start web app
+pnpm --filter @agiworkforce/api-gateway dev      # Start API gateway
+pnpm --filter @agiworkforce/signaling-server dev # Start WebSocket server
 
 # Code Quality
 pnpm lint                     # Lint all code
 pnpm lint:fix                 # Fix lint issues
 pnpm format                   # Format with Prettier
-pnpm format:check             # Check formatting
-pnpm typecheck:all            # Type check all packages
+pnpm typecheck:all            # Type check everything
 
 # Testing
 pnpm test                     # Run all tests
-pnpm --filter @agiworkforce/desktop test:e2e  # E2E tests
-pnpm --filter @agiworkforce/desktop test:coverage  # Coverage
+pnpm --filter @agiworkforce/desktop test:e2e     # E2E tests
 
 # Building
-pnpm build                    # Build all packages (except desktop)
-pnpm build:desktop            # Build desktop app (DMG/EXE/AppImage)
-
-# Cleanup
-pnpm clean:build              # Remove dist directories
-pnpm clean                    # Full clean (node_modules + dist)
+pnpm build:desktop            # Build desktop (DMG/EXE/AppImage)
+pnpm build                    # Build all packages
 ```
 
-### Development Workflow
+### Code Quality Standards
 
-1. **Create a feature branch:**
+- **Zero Errors**: All code must pass TypeScript strict mode
+- **Zero Warnings**: ESLint with max 15 warnings in CI
+- **Formatted**: Prettier with single quotes, semicolons
+- **Tested**: Vitest unit tests + Playwright E2E tests
+- **Documented**: JSDoc comments on public APIs
 
-```bash
-git checkout -b feature/your-feature-name
-```
-
-2. **Make your changes with proper commits:**
-
-```bash
-git add .
-git commit -m "feat: add new feature"
-```
-
-We use [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `docs:` - Documentation changes
-- `style:` - Code style changes
-- `refactor:` - Code refactoring
-- `perf:` - Performance improvements
-- `test:` - Test changes
-- `chore:` - Build/tooling changes
-
-3. **Run tests before pushing:**
-
-```bash
-pnpm typecheck:all
-pnpm lint
-pnpm test
-```
-
-4. **Push and create a pull request:**
-
-```bash
-git push origin feature/your-feature-name
-```
-
-### Code Style
-
-- **TypeScript**: Strict mode enabled, ES2020 target
-- **Prettier**: Single quotes, semicolons, trailing commas, 100 char width
-- **ESLint**: React, TypeScript, and Import plugins
-- **Rust**: Standard formatting with `rustfmt`, clippy lints enabled
-
-Pre-commit hooks automatically format and lint your code.
-
-## Testing
-
-### Unit & Integration Tests (Vitest)
-
-```bash
-# Run all tests
-pnpm test
-
-# Run tests for specific app
-pnpm --filter @agiworkforce/desktop test
-pnpm --filter web test
-
-# Run with UI
-pnpm --filter @agiworkforce/desktop test:ui
-
-# Run with coverage
-pnpm --filter @agiworkforce/desktop test:coverage
-```
-
-### E2E Tests (Playwright)
-
-```bash
-# Run all E2E tests
-pnpm --filter @agiworkforce/desktop test:e2e
-
-# Run with UI mode
-pnpm --filter @agiworkforce/desktop test:e2e -- --ui
-
-# Run specific test project
-pnpm --filter @agiworkforce/desktop test:e2e -- --project=smoke
-pnpm --filter @agiworkforce/desktop test:e2e -- --project=chat
-```
-
-Test projects:
-
-- `smoke` - Critical path smoke tests
-- `chat` - Chat interface tests
-- `automation` - Workflow automation tests
-- `agi` - AGI system tests
-- `settings` - Settings and configuration tests
-- `visual` - Visual regression tests
-
-### Test Structure
-
-```
-apps/desktop/
-├── __tests__/              # Unit tests
-│   ├── components/
-│   ├── hooks/
-│   └── utils/
-└── e2e/                    # E2E tests
-    ├── smoke.spec.ts
-    ├── chat.spec.ts
-    ├── automation.spec.ts
-    └── agi.spec.ts
-```
-
-## Deployment
-
-### Desktop Application
-
-**macOS:**
-
-```bash
-pnpm build:desktop
-# Output: apps/desktop/src-tauri/target/release/bundle/dmg/
-```
-
-**Windows:**
-
-```bash
-pnpm build:desktop
-# Output: apps/desktop/src-tauri/target/release/bundle/msi/
-```
-
-**Linux:**
-
-```bash
-pnpm build:desktop
-# Output: apps/desktop/src-tauri/target/release/bundle/appimage/
-```
-
-### Web Application (Vercel)
-
-The web app automatically deploys to Vercel on push to `main` branch.
-
-**Manual deployment:**
-
-```bash
-cd apps/web
-vercel deploy --prod
-```
-
-**Environment variables required:**
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
-
-### Backend Services
-
-Deploy services to your preferred platform (AWS, Railway, Render, etc.):
-
-```bash
-# Build services
-pnpm --filter @agiworkforce/api-gateway build
-pnpm --filter @agiworkforce/signaling-server build
-
-# Start in production
-NODE_ENV=production node dist/index.js
-```
+---
 
 ## Documentation
 
-### User Documentation
+### User Guides
 
 - **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
-- **[Getting Started Guide](docs/GETTING_STARTED.md)** - Complete setup and tutorials
-- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive user manual
+- **[User Guide](docs/USER_GUIDE.md)** - Complete user manual
 - **[Features Guide](docs/FEATURES.md)** - All features explained
-- **[FAQ](docs/FAQ.md)** - Frequently asked questions
+- **[FAQ](docs/FAQ.md)** - Common questions answered
 - **[Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md)** - Productivity shortcuts
-- **[Video Tutorials](docs/VIDEO_TUTORIAL_SCRIPTS.md)** - Video learning resources
-- **[Documentation Index](docs/DOCUMENTATION_INDEX.md)** - Complete navigation
 
 ### Developer Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system architecture
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture deep-dive
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 - **[CLAUDE.md](CLAUDE.md)** - AI assistant development guide
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history and changes
-- **[API Reference](apps/web/API_DOCUMENTATION.md)** - API documentation
-- **[docs/](docs/)** - Additional technical documentation
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history
 
-### Key Documentation
+---
 
-- **Security**: Encryption, authentication, audit logging
-- **AGI System**: Autonomous agents, reasoning loops, planning
-- **MCP Integration**: Model Context Protocol setup and usage
-- **Stripe Integration**: Payment processing, webhooks, subscriptions
-- **Database Schema**: Tables, RLS policies, migrations
-- **API Reference**: Tauri commands, REST endpoints, WebSocket protocol
+## Security & Privacy
 
-## Troubleshooting
+AGI Workforce is built with security as a core principle:
 
-### Desktop App Won't Start
+- **Local-First**: Your data stays on your machine in encrypted SQLite
+- **OS Keyring**: API keys stored in native OS keychain (macOS Keychain, Windows Credential Manager)
+- **AES-GCM Encryption**: Sensitive data encrypted at rest
+- **No Telemetry**: No data collection or tracking
+- **Audit Logging**: Full activity logging for compliance
+- **Row Level Security**: Supabase RLS for web platform
 
-**Issue**: Desktop app fails to start or shows a blank screen.
+---
 
-**Solutions:**
+## Version History
 
-1. Clear the local database: `rm -rf ~/.config/agiworkforce/agiworkforce.db`
-2. Clear cache: `rm -rf apps/desktop/node_modules/.vite`
-3. Reinstall dependencies: `pnpm clean && pnpm install`
-4. Check for Rust compiler issues: `cargo clean` in `apps/desktop/src-tauri`
+### v1.0.5 (Current)
 
-### Build Errors
+- Global deployment with signaling server
+- Auto-updater support for desktop
+- Enhanced MCP tool integration
+- Performance optimizations
 
-**Issue**: Build fails with TypeScript or Rust errors.
+### v1.0.4
 
-**Solutions:**
+- Multi-provider LLM routing
+- Browser automation with CDP
+- Visual workflow builder
+- Enhanced terminal integration
 
-1. Run type check: `pnpm typecheck:all`
-2. Clear build artifacts: `pnpm clean:build`
-3. Update Rust: `rustup update stable`
-4. Verify Node version: `node --version` (should be 22.12.0+)
+See [CHANGELOG.md](docs/CHANGELOG.md) for full history.
 
-### Database Migration Errors
+---
 
-**Issue**: Supabase migrations fail or database is out of sync.
+## About the Developer
 
-**Solutions:**
+**AGI Workforce** was developed single-handedly by **Siddhartha Nagula** over **6 months** of dedicated work. This project represents a comprehensive vision for AI-powered productivity - combining the best AI models with powerful automation capabilities in a native desktop experience.
 
-1. Check migration files in `apps/web/supabase/migrations/`
-2. Reset local database: `supabase db reset`
-3. Manually apply migration: `supabase db push`
-4. Check Supabase dashboard for schema issues
+The entire application - from the Rust backend to the React frontend, from the AI integrations to the browser automation, from the database schema to the payment processing - was designed and implemented by a single developer with a passion for building tools that make people more productive.
 
-### API Key Issues
-
-**Issue**: AI providers return authentication errors.
-
-**Solutions:**
-
-1. Verify API keys in `.env.local` files
-2. Check API key permissions and quotas
-3. Ensure keys don't have trailing whitespace
-4. Test keys with provider's API directly
-
-### WebSocket Connection Fails
-
-**Issue**: Real-time sync doesn't work between devices.
-
-**Solutions:**
-
-1. Check signaling server is running: `pnpm --filter @agiworkforce/signaling-server dev`
-2. Verify WebSocket URL in configuration
-3. Check firewall settings (port 4000)
-4. Enable WebSocket debugging in DevTools Network tab
-
-### Performance Issues
-
-**Issue**: App is slow or unresponsive.
-
-**Solutions:**
-
-1. Check SQLite database size: `ls -lh ~/.config/agiworkforce/agiworkforce.db`
-2. Optimize database: Run `PRAGMA optimize` in SQLite
-3. Clear LLM response cache
-4. Reduce token context window in settings
-5. Check system resources with Activity Monitor/Task Manager
-
-### E2E Tests Failing
-
-**Issue**: Playwright tests fail locally.
-
-**Solutions:**
-
-1. Install Playwright browsers: `npx playwright install`
-2. Start dev server: `pnpm dev:desktop` (must be running on port 5175)
-3. Run tests with UI: `pnpm --filter @agiworkforce/desktop test:e2e -- --ui`
-4. Check screenshots in `apps/desktop/test-results/`
+---
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Quick Contribution Guide
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Run the full test suite
-5. Submit a pull request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make changes with tests
+4. Run quality checks: `pnpm typecheck:all && pnpm lint && pnpm test`
+5. Commit with conventional format: `git commit -m "feat: add amazing feature"`
+6. Push and open a pull request
 
-### Code of Conduct
-
-- Be respectful and inclusive
-- Write clear, maintainable code
-- Add tests for new features
-- Update documentation as needed
-- Follow the established code style
-
-## Community
-
-- **GitHub Issues**: Bug reports and feature requests
-- **Discussions**: Questions and community support
-- **Discord**: Real-time chat (coming soon)
+---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
 
 ## Acknowledgments
 
@@ -620,6 +452,10 @@ Built with amazing open-source technologies:
 
 ---
 
-**Built with ❤️ by AGI Automation LLC**
+<div align="center">
 
-[Website](https://agiworkforce.com) • [Documentation](https://docs.agiworkforce.com) • [GitHub](https://github.com/siddhartha/agiworkforce)
+**Built with dedication by Siddhartha Nagula**
+
+[Website](https://agiworkforce.com) | [Documentation](https://docs.agiworkforce.com) | [GitHub](https://github.com/siddhartha/agiworkforce)
+
+</div>

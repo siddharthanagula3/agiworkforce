@@ -198,7 +198,8 @@ export class ApiKeyService {
           });
 
         // Return key without the hash for security
-        const { key_hash: _, ...keyWithoutHash } = key;
+        const { key_hash: _keyHash, ...keyWithoutHash } = key;
+        void _keyHash; // Intentionally discarded for security
         return keyWithoutHash as ApiKey;
       }
     }

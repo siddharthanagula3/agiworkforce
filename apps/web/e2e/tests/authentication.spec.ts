@@ -12,13 +12,7 @@ import { test, expect } from '../fixtures';
  */
 
 test.describe('Authentication', () => {
-  test('should login with valid credentials', async ({
-    page,
-    loginPage,
-    dashboardPage,
-    testDb,
-    testUser,
-  }) => {
+  test('should login with valid credentials', async ({ page, loginPage, testDb, testUser }) => {
     console.log('TEST: Login with valid credentials');
 
     // ==================== Setup: Create test user ====================
@@ -119,7 +113,6 @@ test.describe('Authentication', () => {
   test('should maintain session after page refresh', async ({
     page,
     loginPage,
-    dashboardPage,
     testDb,
     testUser,
   }) => {
@@ -236,7 +229,6 @@ test.describe('Settings Page', () => {
     page,
     loginPage,
     settingsPage,
-    billingPage,
     testDb,
     testUser,
   }) => {

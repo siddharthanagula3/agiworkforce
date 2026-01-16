@@ -15,7 +15,7 @@ export default function UpdatePasswordPage() {
   const [success, setSuccess] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [_isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [, setIsRecoveryMode] = useState(false);
 
   useEffect(() => {
     let mounted = true;

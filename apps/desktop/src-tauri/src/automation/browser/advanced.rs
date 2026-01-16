@@ -107,7 +107,7 @@ impl AdvancedBrowserOps {
 
     pub async fn get_element_state(cdp: Arc<CdpClient>, selector: &str) -> Result<ElementState> {
         let script = format!(
-            r#"
+            r"
             const el = document.querySelector('{}');
             if (!el) {{
                 return {{ exists: false }};
@@ -146,7 +146,7 @@ impl AdvancedBrowserOps {
                     pointerEvents: styles.pointerEvents
                 }}
             }};
-            "#,
+            ",
             selector.replace('\'', "\\'")
         );
 
@@ -285,7 +285,7 @@ impl AdvancedBrowserOps {
     }
 
     pub async fn wait_for_navigation(cdp: Arc<CdpClient>, timeout_ms: u64) -> Result<String> {
-        let script = r#"
+        let script = r"
             new Promise((resolve) => {
                 if (document.readyState === 'complete') {
                     resolve(window.location.href);
@@ -295,7 +295,7 @@ impl AdvancedBrowserOps {
                     });
                 }
             })
-        "#;
+        ";
 
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), cdp.evaluate(script))
             .await
@@ -318,7 +318,7 @@ impl AdvancedBrowserOps {
         target_selector: &str,
     ) -> Result<()> {
         let script = format!(
-            r#"
+            r"
             const source = document.querySelector('{}');
             const target = document.querySelector('{}');
 
@@ -354,7 +354,7 @@ impl AdvancedBrowserOps {
             }}));
 
             return true;
-            "#,
+            ",
             source_selector.replace('\'', "\\'"),
             target_selector.replace('\'', "\\'")
         );
@@ -437,7 +437,7 @@ impl AdvancedBrowserOps {
     }
 
     pub async fn get_performance_metrics(cdp: Arc<CdpClient>) -> Result<PerformanceMetrics> {
-        let script = r#"
+        let script = r"
             JSON.stringify({
                 navigationStart: performance.timing.navigationStart,
                 loadComplete: performance.timing.loadEventEnd,
@@ -448,7 +448,7 @@ impl AdvancedBrowserOps {
                     .find(e => e.name === 'first-contentful-paint')?.startTime || 0,
                 memoryUsage: performance.memory?.usedJSHeapSize || 0
             })
-        "#;
+        ";
 
         let result = cdp.evaluate(script).await?;
         let json_str = result

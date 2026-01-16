@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 async function handleDevicePoll(request: NextRequest) {
   // Parse body once and reuse - request.json() can only be called once
@@ -163,3 +164,8 @@ async function handleDevicePoll(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleDevicePoll);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

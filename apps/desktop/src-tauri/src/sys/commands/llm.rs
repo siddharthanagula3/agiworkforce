@@ -113,6 +113,8 @@ pub async fn llm_send_message(
         "xai" | "grok" => Some(Provider::XAI),
         "deepseek" => Some(Provider::DeepSeek),
         "qwen" | "alibaba" => Some(Provider::Qwen),
+        "moonshot" => Some(Provider::Moonshot),
+        "perplexity" => Some(Provider::Perplexity),
         "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
         _ => None,
     });

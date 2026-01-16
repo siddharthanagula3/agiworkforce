@@ -29,6 +29,14 @@ fn auth_failed_message() -> &'static str {
     }
 }
 
+fn method_not_allowed_message() -> &'static str {
+    if cfg!(debug_assertions) {
+        "HTTP 405 Method Not Allowed. The server may not be handling CORS preflight requests correctly. Check that OPTIONS handlers are exported for the API endpoint."
+    } else {
+        "Service temporarily unavailable. Please try again in a few moments."
+    }
+}
+
 impl Default for ManagedCloudProvider {
     fn default() -> Self {
         Self::new()
@@ -145,6 +153,10 @@ impl LLMProvider for ManagedCloudProvider {
                 std::io::ErrorKind::PermissionDenied,
                 auth_failed_message(),
             ))),
+            405 => Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                method_not_allowed_message(),
+            ))),
             _ => Err(Box::new(std::io::Error::other(format!(
                 "Cloud provider error: {}",
                 res.status()
@@ -208,6 +220,11 @@ impl LLMProvider for ManagedCloudProvider {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
                     auth_failed_message(),
+                )));
+            } else if status == 405 {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    method_not_allowed_message(),
                 )));
             } else {
                 return Err(Box::new(std::io::Error::other(format!(

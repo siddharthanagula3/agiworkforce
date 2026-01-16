@@ -1,4 +1,4 @@
-import { Page, FrameLocator } from '@playwright/test';
+import { Page } from '@playwright/test';
 import { BasePage } from './base-page';
 
 /**
@@ -157,7 +157,7 @@ export class StripePage extends BasePage {
           await this.page.waitForTimeout(500);
         }
       }
-    } catch (error) {
+    } catch {
       console.log('Could not fill card via iframe, trying direct fill');
       await this.fillTestCard();
     }
