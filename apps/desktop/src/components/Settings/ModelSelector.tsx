@@ -71,6 +71,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       deepseek: [],
       qwen: [],
       moonshot: [],
+      perplexity: [],
       managed_cloud: [],
     };
 

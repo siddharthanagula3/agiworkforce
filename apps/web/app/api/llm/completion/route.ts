@@ -14,6 +14,7 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 /**
  * Model tier requirements - maps models to minimum required subscription tier
@@ -731,3 +732,8 @@ async function handleLLMCompletion(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleLLMCompletion);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

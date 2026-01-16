@@ -18,7 +18,6 @@ test.describe('Signup and Checkout Flow', () => {
     page,
     signupPage,
     pricingPage,
-    stripePage,
     dashboardPage,
     testDb,
     stripeHelpers,
@@ -423,7 +422,7 @@ test.describe('Edge Cases', () => {
     console.log('Duplicate email test completed');
   });
 
-  test('should handle canceled checkout flow', async ({ page, pricingPage, testDb, testUser }) => {
+  test('should handle canceled checkout flow', async ({ page, testDb, testUser }) => {
     // ==================== Setup: Create test user ====================
     console.log('EDGE CASE TEST 2: Canceled checkout flow...');
 

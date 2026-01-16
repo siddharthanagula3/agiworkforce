@@ -792,7 +792,7 @@ test.describe('Credit System - Top-Up Flow for Max Plan', () => {
         expect(isCheckout).toBeTruthy();
 
         console.log('Top-up checkout flow initiated successfully');
-      } catch (err) {
+      } catch {
         // If navigation doesn't happen, check for error handling
         console.log('Navigation timeout - checking for error handling...');
 
