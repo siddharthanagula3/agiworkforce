@@ -59,7 +59,7 @@ impl OllamaProvider {
             .expect("Failed to create HTTP client");
         Self {
             client,
-            base_url: base_url.unwrap_or_else(|| "http://localhost:3000".to_string()),
+            base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
         }
     }
 

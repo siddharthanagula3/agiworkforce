@@ -10,6 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 const DeviceApproveRequestSchema = z.object({
   code: z
@@ -156,3 +157,8 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 }
 
 export const POST = withErrorHandler(handleDeviceApprove);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

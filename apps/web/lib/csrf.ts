@@ -16,7 +16,7 @@ function getCsrfSecret(): string {
 }
 
 const CSRF_HEADER = 'x-csrf-token';
-const _CSRF_COOKIE = 'csrf-token'; // Currently unused, kept for potential future use
+// Cookie name reserved for future CSRF implementation: 'csrf-token'
 
 /**
  * Generate a CSRF token

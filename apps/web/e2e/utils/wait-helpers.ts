@@ -17,7 +17,7 @@ export async function waitForUrl(
       // Wait for URL matching regex pattern
       await page.waitForURL(pattern, { timeout });
     }
-  } catch (error) {
+  } catch {
     throw new Error(
       `URL did not match expected pattern within ${timeout}ms. Current URL: ${page.url()}`,
     );
@@ -31,7 +31,7 @@ export async function waitForUrl(
 export async function waitForNetworkIdle(page: Page, timeout: number = 10000): Promise<void> {
   try {
     await page.waitForLoadState('networkidle', { timeout });
-  } catch (error) {
+  } catch {
     throw new Error(`Network did not reach idle state within ${timeout}ms`);
   }
 }
@@ -94,7 +94,7 @@ export async function waitForElement(
 ): Promise<void> {
   try {
     await page.waitForSelector(selector, { state: 'visible', timeout });
-  } catch (error) {
+  } catch {
     throw new Error(`Element "${selector}" did not become visible within ${timeout}ms`);
   }
 }
@@ -109,7 +109,7 @@ export async function waitForElementHidden(
 ): Promise<void> {
   try {
     await page.waitForSelector(selector, { state: 'hidden', timeout });
-  } catch (error) {
+  } catch {
     throw new Error(`Element "${selector}" did not become hidden within ${timeout}ms`);
   }
 }
@@ -120,7 +120,7 @@ export async function waitForElementHidden(
 export async function waitForNavigation(page: Page, timeout: number = 10000): Promise<void> {
   try {
     await page.waitForLoadState('networkidle', { timeout });
-  } catch (error) {
+  } catch {
     throw new Error(`Navigation did not complete within ${timeout}ms`);
   }
 }
@@ -131,9 +131,9 @@ export async function waitForNavigation(page: Page, timeout: number = 10000): Pr
  */
 export async function waitForResponse(
   page: Page,
-  predicate: (response: any) => boolean,
+  predicate: (response: import('@playwright/test').Response) => boolean,
   timeout: number = 10000,
-): Promise<any> {
+): Promise<import('@playwright/test').Response> {
   const response = await page.waitForResponse((resp) => predicate(resp), { timeout });
 
   if (!response) {
@@ -149,9 +149,9 @@ export async function waitForResponse(
  */
 export async function waitForRequest(
   page: Page,
-  predicate: (request: any) => boolean,
+  predicate: (request: import('@playwright/test').Request) => boolean,
   timeout: number = 10000,
-): Promise<any> {
+): Promise<import('@playwright/test').Request> {
   const request = await page.waitForRequest((req) => predicate(req), { timeout });
 
   if (!request) {

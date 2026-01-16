@@ -39,7 +39,7 @@ export interface AuditLog {
   action: string;
   resource: string;
   resource_id?: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   ip_address?: string;
   user_agent?: string;
   created_at: string;

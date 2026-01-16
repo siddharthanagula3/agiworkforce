@@ -11,6 +11,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema } from '@/lib/validations/checkout';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -224,3 +225,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 }
 
 export const POST = withErrorHandler(handleCheckout);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

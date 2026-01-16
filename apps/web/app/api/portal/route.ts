@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
@@ -352,3 +353,8 @@ async function handlePortal(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handlePortal);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

@@ -10,6 +10,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 async function handleSyncSubscription(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'sync-subscription');
@@ -75,3 +76,8 @@ async function handleSyncSubscription(request: NextRequest): Promise<NextRespons
 }
 
 export const POST = withErrorHandler(handleSyncSubscription);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

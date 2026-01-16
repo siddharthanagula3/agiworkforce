@@ -7,4 +7,5 @@ export type Provider =
   | 'deepseek'
   | 'qwen'
   | 'moonshot'
+  | 'perplexity'
   | 'managed_cloud';

@@ -68,24 +68,32 @@ impl SseStreamParser {
                 }
                 Err(e) => {
                     let error_str = e.to_string();
+                    let error_str_lower = error_str.to_lowercase();
                     // Check if this is a critical error that should be propagated
-                    // Critical errors include: API errors, authentication failures, rate limits
-                    if error_str.contains("error")
-                        || error_str.contains("API")
-                        || error_str.contains("authentication")
-                        || error_str.contains("rate limit")
+                    // Critical errors include: API errors, authentication failures, rate limits, JSON errors
+                    if error_str_lower.contains("error")
+                        || error_str_lower.contains("api")
+                        || error_str_lower.contains("authentication")
+                        || error_str_lower.contains("rate limit")
+                        || error_str_lower.contains("unauthorized")
+                        || error_str_lower.contains("forbidden")
+                        || error_str_lower.contains("invalid")
+                        || error_str_lower.contains("failed")
+                        || error_str_lower.contains("timeout")
+                        || error_str_lower.contains("connection")
                         || error_str.contains("401")
                         || error_str.contains("403")
                         || error_str.contains("429")
                         || error_str.contains("500")
                         || error_str.contains("502")
                         || error_str.contains("503")
+                        || error_str.contains("504")
                     {
                         tracing::error!("Critical stream error: {}", e);
                         self.pending_chunks.insert(0, Err(e));
                     } else {
-                        // Non-critical parsing errors (e.g., partial data, comments) are logged but not propagated
-                        tracing::warn!("Failed to parse stream event: {}", e);
+                        // Non-critical parsing errors (e.g., partial data, comments, empty data fields) are logged but not propagated
+                        tracing::debug!("Non-critical stream parse issue (ignored): {}", e);
                     }
                 }
             }
