@@ -119,7 +119,7 @@ describe('POST /api/checkout', () => {
           })),
         })),
       })),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof createSupabaseServerClient>>);
 
     const request = new NextRequest('http://localhost/api/checkout', {
       method: 'POST',

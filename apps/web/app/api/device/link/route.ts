@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 
 async function handleDeviceLink(request: NextRequest) {
   // Rate limiting - prevent abuse of device code generation
@@ -104,3 +105,8 @@ async function handleDeviceLink(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleDeviceLink);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

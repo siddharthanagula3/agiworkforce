@@ -17,6 +17,7 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   qwen: 'Qwen',
   moonshot: 'Moonshot AI',
+  perplexity: 'Perplexity',
 };
 
 // Not needed for managed cloud - kept empty for compatibility
@@ -34,6 +35,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   deepseek: [],
   qwen: [],
   moonshot: [],
+  perplexity: [],
 };
 
 // Simplified provider order - only managed cloud and ollama

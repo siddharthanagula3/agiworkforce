@@ -253,7 +253,7 @@ export default function DocsPage() {
                     <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">No data sent to AGI Workforce servers</strong>{' '}
-                      - We don't collect or store your automation data or credentials
+                      - We don&apos;t collect or store your automation data or credentials
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
@@ -306,8 +306,8 @@ export default function DocsPage() {
                       <h4 className="font-semibold text-blue-400 mb-2">OpenAI-Compatible API</h4>
                       <p className="text-zinc-300 text-sm">
                         The <code className="text-blue-300">/api/llm/v1/chat/completions</code>{' '}
-                        endpoint is fully compatible with OpenAI's API format, making it easy to
-                        integrate with existing tools and libraries.
+                        endpoint is fully compatible with OpenAI&apos;s API format, making it easy
+                        to integrate with existing tools and libraries.
                       </p>
                     </div>
                   </div>
@@ -373,7 +373,8 @@ export default function DocsPage() {
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-6">
               <h3 className="text-xl font-semibold mb-2">Need Help?</h3>
               <p className="text-zinc-400 mb-4">
-                Can't find what you're looking for? We're here to help you get started.
+                Can&apos;t find what you&apos;re looking for? We&apos;re here to help you get
+                started.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link

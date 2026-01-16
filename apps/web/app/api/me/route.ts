@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 import type { User } from '@supabase/supabase-js';
 
 async function handleGetMe(request: NextRequest) {
@@ -161,3 +162,8 @@ async function handleGetMe(request: NextRequest) {
 }
 
 export const GET = withErrorHandler(handleGetMe);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}
