@@ -13,7 +13,9 @@ const automationState = {
 (function initialize() {
   addAutomationIndicator();
   chrome.runtime.onMessage.addListener(handleMessage);
-  injectDeepAccessScript();
+  // SECURITY: Removed injectDeepAccessScript() - inline script injection exposes
+  // utilities to page context which is a security vulnerability. All functionality
+  // is now available through the content script's message-based API.
 
   // Check connection status
   checkConnectionStatus();
@@ -1490,61 +1492,8 @@ function updateIndicatorStatus() {
   }
 }
 
-function injectDeepAccessScript() {
-  const script = document.createElement('script');
-  script.textContent = `
-    window.agiWorkforceUtils = {
-      findByText: function(text) {
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_TEXT,
-          null,
-          false
-        );
-
-        const matches = [];
-        let node;
-
-        while (node = walker.nextNode()) {
-          if (node.textContent.includes(text)) {
-            matches.push(node.parentElement);
-          }
-        }
-
-        return matches;
-      },
-
-      getComputedStyles: function(selector) {
-        const element = document.querySelector(selector);
-        return element ? window.getComputedStyle(element) : null;
-      },
-
-      getShadowDomElements: function(selector) {
-        const elements = [];
-        document.querySelectorAll('*').forEach(el => {
-          if (el.shadowRoot) {
-            const shadowElements = el.shadowRoot.querySelectorAll(selector);
-            elements.push(...shadowElements);
-          }
-        });
-        return elements;
-      },
-
-      simulateKeyPress: function(key, modifiers = {}) {
-        const event = new KeyboardEvent('keydown', {
-          key: key,
-          code: 'Key' + key.toUpperCase(),
-          ctrlKey: modifiers.ctrl || false,
-          shiftKey: modifiers.shift || false,
-          altKey: modifiers.alt || false,
-          metaKey: modifiers.meta || false,
-          bubbles: true,
-        });
-        document.activeElement.dispatchEvent(event);
-      },
-    };
-  `;
-
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
-}
+// SECURITY NOTE: Removed injectDeepAccessScript() and related utility functions
+// that were injecting code into page context. This was a security vulnerability
+// as it exposed internal utilities to potentially malicious page scripts.
+// If DOM utilities are needed in the future, implement them as message-based
+// APIs that communicate between content script and background script.
