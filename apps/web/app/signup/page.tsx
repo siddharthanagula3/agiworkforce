@@ -254,30 +254,52 @@ export default function SignupPage() {
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
+            <label htmlFor="fullName" className="sr-only">
+              Full name
+            </label>
             <Input
+              id="fullName"
+              name="fullName"
               type="text"
               placeholder="Full name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
+              autoComplete="name"
+              aria-label="Full name"
             />
           </div>
           <div>
+            <label htmlFor="email" className="sr-only">
+              Email address
+            </label>
             <Input
+              id="email"
+              name="email"
               type="email"
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
+              aria-label="Email address"
             />
           </div>
           <div className="space-y-2">
+            <label htmlFor="password" className="sr-only">
+              Password
+            </label>
             <Input
+              id="password"
+              name="password"
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => handlePasswordChange(e.target.value)}
               required
+              autoComplete="new-password"
+              aria-label="Password"
+              aria-describedby="password-requirements"
             />
             {password && (
               <div className="text-xs space-y-1">
@@ -301,13 +323,20 @@ export default function SignupPage() {
             )}
           </div>
           <div>
+            <label htmlFor="confirmPassword" className="sr-only">
+              Confirm Password
+            </label>
             <Input
+              id="confirmPassword"
+              name="confirmPassword"
               type="password"
               placeholder="Confirm Password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               minLength={6}
               required
+              autoComplete="new-password"
+              aria-label="Confirm Password"
             />
           </div>
 
