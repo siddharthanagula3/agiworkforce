@@ -261,7 +261,7 @@ export const useChatStore = create<ChatState>()(
           },
           focusMode: null,
           activeView: 'chat',
-          conversationMode: 'safe',
+          conversationMode: 'auto',
           draftContent: '',
           editingMessageId: null,
           showMessageTimestamps: true,
@@ -1077,7 +1077,7 @@ export const useChatStore = create<ChatState>()(
               };
               state.focusMode = null;
               state.activeView = 'chat';
-              state.conversationMode = 'safe';
+              state.conversationMode = 'auto';
               state.draftContent = '';
               state.editingMessageId = null;
               state.selectedMessage = null;

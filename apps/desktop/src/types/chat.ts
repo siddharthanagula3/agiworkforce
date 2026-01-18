@@ -127,7 +127,7 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   providerOverride?: string;
   modelOverride?: string;
   enableTools?: boolean;
-  conversationMode?: 'safe' | 'full_control';
+  conversationMode?: 'auto' | 'manual';
   /** Custom instructions to include in the system prompt */
   customInstructions?: string;
 }

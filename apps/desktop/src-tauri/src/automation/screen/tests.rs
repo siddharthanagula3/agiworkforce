@@ -285,6 +285,7 @@ mod ocr_tests {
     use tempfile::tempdir;
 
     #[tokio::test]
+    #[ignore = "Requires display - skipped in CI"]
     async fn test_perform_ocr_basic() {
         let dir = tempdir().expect("Failed to create temp dir");
         let image_path = dir.path().join("test_capture.png");

@@ -67,4 +67,4 @@ export {
   ErrorCode,
 } from './errors';
 
-export type { ApiError, FriendlyError } from './errors';
+export type { ApiError, FriendlyError, ErrorCodeValue } from './errors';

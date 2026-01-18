@@ -9,7 +9,7 @@ module.exports = {
     ecmaFeatures: { jsx: true },
   },
   settings: {
-    react: { version: '18.2' },
+    react: { version: 'detect' },
     'import/resolver': {
       typescript: {
         // Root config plus per-package configs for path aliases

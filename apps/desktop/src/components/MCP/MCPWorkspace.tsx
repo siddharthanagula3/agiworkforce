@@ -52,8 +52,8 @@ export default function MCPWorkspace() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-semibold">MCP Management</h1>
-          <span className="text-sm text-muted-foreground">Model Context Protocol</span>
+          <h1 className="text-xl font-semibold">Tool Management</h1>
+          <span className="text-sm text-muted-foreground">Integrations & Automations</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={isLoading}>
@@ -116,7 +116,7 @@ export default function MCPWorkspace() {
           <TabsContent value="servers" className="flex-1 overflow-auto p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">MCP Servers</h2>
+                <h2 className="text-lg font-semibold">Connected Tools</h2>
                 <span className="text-sm text-muted-foreground">
                   {servers.filter((s: McpServerInfo) => s.enabled).length} enabled
                 </span>

@@ -14,6 +14,7 @@ use crate::sys::commands::{
     ai_native::{CodeGeneratorState, ContextManagerState},
     load_persisted_calendar_accounts,
     security::AuthManagerState,
+    undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
     GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState,
@@ -262,6 +263,8 @@ pub fn run() {
             // MCP Bundle (MCPB) state for bundle management
             app.manage(McpbState::new());
 
+            // Undo manager state for reversing AGI actions
+            app.manage(UndoState::new());
 
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
@@ -532,6 +535,9 @@ pub fn run() {
             crate::sys::commands::chat_get_cost_analytics,
 
             crate::sys::commands::chat_set_monthly_budget,
+            crate::sys::commands::chat_detect_intent,
+            crate::sys::commands::chat_is_stop_command,
+            crate::sys::commands::chat_handle_stop,
             crate::sys::commands::chat::clear_local_database,
 
 
@@ -904,6 +910,16 @@ pub fn run() {
             crate::sys::commands::vision_locate_element,
             crate::sys::commands::vision_describe_ui_elements,
             crate::sys::commands::vision_answer_question,
+
+            // Screen Watcher (periodic screenshots for AGI awareness)
+            crate::sys::commands::screen_watcher_start,
+            crate::sys::commands::screen_watcher_stop,
+            crate::sys::commands::screen_watcher_pause,
+            crate::sys::commands::screen_watcher_resume,
+            crate::sys::commands::screen_watcher_status,
+            crate::sys::commands::screen_watcher_get_latest,
+            crate::sys::commands::screen_watcher_get_recent,
+            crate::sys::commands::screen_watcher_capture_now,
 
             // Native Messaging (browser extension communication)
             crate::sys::commands::native_messaging_check_status,
@@ -1405,6 +1421,14 @@ pub fn run() {
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
             crate::sys::commands::privacy::settings_update_privacy,
+
+            // Undo Manager (AGI action reversal)
+            crate::sys::commands::undo_get_summary,
+            crate::sys::commands::undo_get_changes,
+            crate::sys::commands::undo_change,
+            crate::sys::commands::undo_last,
+            crate::sys::commands::undo_task,
+            crate::sys::commands::undo_can_undo,
 
             // Updater
             crate::features::updater::check_for_updates,

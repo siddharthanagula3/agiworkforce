@@ -18,6 +18,7 @@ import { AppError } from '../middleware/errorHandler';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
@@ -71,7 +72,7 @@ router.get(
     });
 
     if (error) {
-      console.error('Failed to get credit balance:', error);
+      logger.error({ error }, 'Failed to get credit balance');
       throw new AppError('Failed to get credit balance', 500);
     }
 
@@ -134,7 +135,7 @@ router.post(
     });
 
     if (error) {
-      console.error('Failed to check credits:', error);
+      logger.error({ error }, 'Failed to check credits');
       throw new AppError('Failed to check credits', 500);
     }
 
@@ -174,7 +175,7 @@ router.post(
     });
 
     if (error) {
-      console.error('Failed to deduct credits:', error);
+      logger.error({ error }, 'Failed to deduct credits');
       throw new AppError('Failed to deduct credits', 500);
     }
 

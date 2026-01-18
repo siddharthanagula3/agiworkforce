@@ -68,6 +68,10 @@ export const ErrorCode = {
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   /** Invalid response from server */
   INVALID_RESPONSE: 'INVALID_RESPONSE',
+
+  // Payment
+  /** Payment required (e.g., insufficient credits) */
+  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
 } as const;
 
 /** Type for error codes - matches the values in the ErrorCode object */
@@ -164,6 +168,7 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.NETWORK_ERROR]: 503,
   [ErrorCode.PAYLOAD_TOO_LARGE]: 413,
   [ErrorCode.INVALID_RESPONSE]: 502,
+  [ErrorCode.PAYMENT_REQUIRED]: 402,
 };
 
 /**
@@ -279,5 +284,11 @@ export const FRIENDLY_ERROR_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     message: 'We received an unexpected response from the server.',
     suggestion: 'Please try again in a few minutes.',
     icon: 'error',
+  },
+  [ErrorCode.PAYMENT_REQUIRED]: {
+    title: 'Payment Required',
+    message: 'You need to add credits or upgrade your plan to continue.',
+    suggestion: 'Visit your billing page to add credits or upgrade.',
+    icon: 'payment',
   },
 };
