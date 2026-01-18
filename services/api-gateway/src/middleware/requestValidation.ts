@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import { logger } from '../lib/logger';
 
 /**
  * Allowed Content-Types for requests with bodies.
@@ -95,14 +96,16 @@ export const validateSecurityHeaders: RequestHandler = (
     const foundHeaders = SUSPICIOUS_HEADERS.filter((header) => req.headers[header]);
 
     if (foundHeaders.length > 0) {
-      console.warn('[SECURITY] Suspicious headers detected:', {
-        headers: foundHeaders.map((h) => ({ [h]: req.headers[h] })),
-        ip: req.ip,
-        path: req.path,
-        method: req.method,
-        userAgent: req.headers['user-agent'],
-        timestamp: new Date().toISOString(),
-      });
+      logger.warn(
+        {
+          headers: foundHeaders.map((h) => ({ [h]: req.headers[h] })),
+          ip: req.ip,
+          path: req.path,
+          method: req.method,
+          userAgent: req.headers['user-agent'],
+        },
+        'SECURITY: Suspicious headers detected',
+      );
     }
   }
 
@@ -133,13 +136,15 @@ export function createStrictBodyValidator(allowedFields: string[]): RequestHandl
       if (unexpectedFields.length > 0) {
         // Log the attempt for security monitoring
         if (process.env.NODE_ENV === 'production') {
-          console.warn('[SECURITY] Unexpected fields in request body:', {
-            unexpectedFields,
-            ip: req.ip,
-            path: req.path,
-            method: req.method,
-            timestamp: new Date().toISOString(),
-          });
+          logger.warn(
+            {
+              unexpectedFields,
+              ip: req.ip,
+              path: req.path,
+              method: req.method,
+            },
+            'SECURITY: Unexpected fields in request body',
+          );
         }
 
         res.status(400).json({

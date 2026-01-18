@@ -23,19 +23,24 @@ import { mobileRouter } from './routes/mobile';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
 import { createRateLimiter } from './middleware/rateLimit';
+import { logger } from './lib/logger';
 
 if (!process.env['JWT_SECRET']) {
-  console.error('FATAL: JWT_SECRET environment variable is required but not set.');
-  console.error(
-    'Please set JWT_SECRET in your deployment environment (e.g., Vercel, Railway, etc.)',
+  logger.fatal(
+    {},
+    'JWT_SECRET environment variable is required but not set. ' +
+      'Please set JWT_SECRET in your deployment environment (e.g., Vercel, Railway, etc.). ' +
+      'Example: JWT_SECRET=your-randomly-generated-secret-key-here',
   );
-  console.error('Example: JWT_SECRET=your-randomly-generated-secret-key-here');
   process.exit(1);
 }
 
 if (!process.env['SUPABASE_URL'] || !process.env['SUPABASE_SERVICE_ROLE_KEY']) {
-  console.error('FATAL: Supabase configuration missing.');
-  console.error('Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.');
+  logger.fatal(
+    {},
+    'Supabase configuration missing. ' +
+      'Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.',
+  );
   process.exit(1);
 }
 
@@ -102,14 +107,14 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 setupWebSocket(wss);
 
 server.listen(port, () => {
-  console.log(`API Gateway running on port ${port}`);
-  console.log(`WebSocket server available at ws://localhost:${port}/ws`);
+  logger.info({ port }, 'API Gateway running');
+  logger.info({ port, path: '/ws' }, 'WebSocket server available');
 });
 
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, closing server...');
+  logger.info({}, 'SIGTERM received, closing server');
   server.close(() => {
-    console.log('Server closed');
+    logger.info({}, 'Server closed');
     process.exit(0);
   });
 });

@@ -190,11 +190,13 @@ impl ToolExecutor {
             None,
         );
 
-        let in_safe_mode = self.conversation_mode.as_deref() == Some("safe");
+        // Manual mode requires approval for dangerous/MCP tools
+        // Auto mode (default) executes autonomously
+        let in_manual_mode = self.conversation_mode.as_deref() == Some("manual");
         // Check for MCP tool ID format: mcp__server__tool__
-        if tool_call.name.starts_with("mcp__") && in_safe_mode {
+        if tool_call.name.starts_with("mcp__") && in_manual_mode {
             tracing::warn!(
-                "[Security] MCP tool '{}' requested in safe mode. Emitting approval request.",
+                "[Security] MCP tool '{}' requested in manual mode. Emitting approval request.",
                 tool_call.name
             );
 
@@ -291,9 +293,10 @@ impl ToolExecutor {
             }
         }
 
-        if is_dangerous_tool(&tool_call.name) && self.conversation_mode.as_deref() == Some("safe") {
+        if is_dangerous_tool(&tool_call.name) && self.conversation_mode.as_deref() == Some("manual")
+        {
             tracing::warn!(
-                "[Security] Dangerous tool '{}' requested in safe mode. Emitting approval request.",
+                "[Security] Dangerous tool '{}' requested in manual mode. Emitting approval request.",
                 tool_call.name
             );
 

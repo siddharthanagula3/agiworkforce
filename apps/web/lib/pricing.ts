@@ -1,5 +1,7 @@
 // apps/web/lib/pricing.ts
 
+import { logger } from './logger';
+
 /**
  * Validate that a Stripe price ID is properly configured
  * Returns the price ID if valid, undefined if not set
@@ -8,8 +10,9 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
   if (!priceId || priceId.trim() === '') {
     // Only log warning in server-side context (not during build/client)
     if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
-      console.warn(
-        `[pricing] Missing Stripe price ID for ${name}. Set the appropriate STRIPE_PRICE_* environment variable.`,
+      logger.warn(
+        { envVar: name },
+        'Missing Stripe price ID. Set the appropriate STRIPE_PRICE_* environment variable.',
       );
     }
     return undefined;
@@ -17,8 +20,9 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
 
   // Validate price ID format (Stripe price IDs start with 'price_')
   if (!priceId.startsWith('price_')) {
-    console.error(
-      `[pricing] Invalid Stripe price ID format for ${name}: ${priceId}. Price IDs should start with 'price_'.`,
+    logger.error(
+      { envVar: name, priceId },
+      'Invalid Stripe price ID format. Price IDs should start with "price_".',
     );
     return undefined;
   }

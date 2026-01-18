@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
+import { logger } from './lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -115,7 +116,7 @@ function flushPendingCommands(ws: AuthenticatedWebSocket) {
     }
 
     pendingCommands.delete(queueKey);
-    console.log(`Flushed ${validCommands.length} pending commands to device ${ws.deviceId}`);
+    logger.info({ deviceId: ws.deviceId, count: validCommands.length }, 'Flushed pending commands');
   }
 }
 
@@ -148,17 +149,17 @@ type NonAuthMessage = z.infer<typeof nonAuthMessageSchema>;
 export function setupWebSocket(wss: WebSocketServer) {
   // Handle WebSocket server errors
   wss.on('error', (error) => {
-    console.error('WebSocketServer error:', error);
+    logger.error({ error }, 'WebSocketServer error');
   });
 
   wss.on('connection', (ws: AuthenticatedWebSocket) => {
-    console.log('New WebSocket connection');
+    logger.debug({}, 'New WebSocket connection');
 
     ws.isAlive = true;
 
     // Handle individual socket errors to prevent unhandled exceptions
     ws.on('error', (error) => {
-      console.error('WebSocket client error:', error.message);
+      logger.error({ error: error.message }, 'WebSocket client error');
       // Clean up auth timeout if exists
       if (ws.authTimeout) {
         clearTimeout(ws.authTimeout);
@@ -170,7 +171,7 @@ export function setupWebSocket(wss: WebSocketServer) {
     // Set authentication timeout - close connection if not authenticated in time
     ws.authTimeout = setTimeout(() => {
       if (!ws.userId) {
-        console.log('WebSocket connection closed due to authentication timeout');
+        logger.warn({}, 'WebSocket connection closed due to authentication timeout');
         ws.send(
           JSON.stringify({
             type: 'error',
@@ -238,7 +239,7 @@ export function setupWebSocket(wss: WebSocketServer) {
 
         handleMessage(ws, parsed);
       } catch (error) {
-        console.error('Error processing WebSocket message:', error);
+        logger.error({ error }, 'Error processing WebSocket message');
       }
     });
 
@@ -256,7 +257,7 @@ export function setupWebSocket(wss: WebSocketServer) {
             clients.delete(ws.userId);
           }
         }
-        console.log(`User ${ws.userId} disconnected`);
+        logger.info({ userId: ws.userId }, 'User disconnected');
       }
     });
   });
@@ -294,9 +295,9 @@ function parseMessage(message: RawData): GatewayMessage | null {
     return gatewayMessageSchema.parse(payload);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.warn('WebSocket message failed validation', error.flatten());
+      logger.warn({ validationError: error.flatten() }, 'WebSocket message failed validation');
     } else {
-      console.warn('WebSocket message parse error', error);
+      logger.warn({ error }, 'WebSocket message parse error');
     }
     return null;
   }
@@ -343,7 +344,7 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
       }),
     );
 
-    console.log(`User ${userId} authenticated via WebSocket`);
+    logger.info({ userId }, 'User authenticated via WebSocket');
 
     // Flush any pending commands for this device
     flushPendingCommands(ws);

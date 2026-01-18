@@ -360,12 +360,14 @@ impl StripeService {
             .id
             .clone();
 
-        let mut update_params = stripe::UpdateSubscription::default();
-        update_params.items = Some(vec![stripe::UpdateSubscriptionItems {
-            id: Some(item_id.to_string()),
-            price: Some(new_price_id.to_string()),
+        let update_params = stripe::UpdateSubscription {
+            items: Some(vec![stripe::UpdateSubscriptionItems {
+                id: Some(item_id.to_string()),
+                price: Some(new_price_id.to_string()),
+                ..Default::default()
+            }]),
             ..Default::default()
-        }]);
+        };
 
         subscription =
             stripe::Subscription::update(&self.client, &subscription_id, update_params).await?;

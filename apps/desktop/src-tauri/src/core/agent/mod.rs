@@ -11,6 +11,7 @@ pub mod planner;
 pub mod prompt_engineer;
 pub mod rag_system;
 pub mod runtime;
+pub mod undo_manager;
 pub mod vision;
 
 #[cfg(test)]
@@ -18,9 +19,11 @@ mod tests;
 
 pub use approval::ApprovalManager;
 pub use autonomous::AutonomousAgent;
+pub use change_tracker::ChangeTracker;
 pub use executor::TaskExecutor;
 pub use planner::TaskPlanner;
 pub use runtime::AgentRuntime;
+pub use undo_manager::UndoManager;
 pub use vision::VisionAutomation;
 
 use serde::ser::SerializeStruct;

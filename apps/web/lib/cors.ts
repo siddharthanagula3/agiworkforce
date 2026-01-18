@@ -95,9 +95,12 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
   };
 
   if (isOriginAllowed(origin)) {
-    // Set the specific origin instead of wildcard
-    headers['Access-Control-Allow-Origin'] = origin || '*';
-    headers['Access-Control-Allow-Credentials'] = 'true';
+    // Set the specific origin - never use wildcard for authenticated endpoints
+    if (origin) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    // When origin is null (same-origin request), don't set CORS headers - they're not needed
   } else {
     logger.warn({ origin }, 'Blocked request from disallowed origin');
     // Don't set Access-Control-Allow-Origin for disallowed origins

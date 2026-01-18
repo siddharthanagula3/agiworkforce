@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, CreditCard, Download, Home, Settings } from 'lucide-react';
+import { BarChart3, CreditCard, Download, Home, MessageSquare, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,11 @@ export function Sidebar({ className }: SidebarProps) {
       title: 'Overview',
       href: '/dashboard',
       icon: Home,
+    },
+    {
+      title: 'Chat',
+      href: '/dashboard/chat',
+      icon: MessageSquare,
     },
     {
       title: 'Billing & Plan',
