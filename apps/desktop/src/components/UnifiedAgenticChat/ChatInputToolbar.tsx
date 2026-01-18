@@ -1,4 +1,4 @@
-import { Shield, ShieldOff } from 'lucide-react';
+import { Zap, Hand } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
@@ -7,12 +7,12 @@ import { QuickModelSelector } from './QuickModelSelector';
 export const ChatInputToolbar = () => {
   const conversationMode = useUnifiedChatStore((s) => s.conversationMode);
   const setConversationMode = useUnifiedChatStore((s) => s.setConversationMode);
-  const toggleSafetyMode = () => {
-    const newMode: ConversationMode = conversationMode === 'safe' ? 'full_control' : 'safe';
+  const toggleMode = () => {
+    const newMode: ConversationMode = conversationMode === 'auto' ? 'manual' : 'auto';
     setConversationMode(newMode);
   };
 
-  const isSafeMode = conversationMode === 'safe';
+  const isAutoMode = conversationMode === 'auto';
 
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-border/50 bg-background/80 backdrop-blur-sm">
@@ -24,24 +24,24 @@ export const ChatInputToolbar = () => {
 
       {}
       <Button
-        variant={isSafeMode ? 'outline' : 'default'}
+        variant={isAutoMode ? 'default' : 'outline'}
         size="sm"
-        onClick={toggleSafetyMode}
+        onClick={toggleMode}
         className={cn(
           'gap-2 transition-colors',
-          !isSafeMode && 'bg-orange-500 hover:bg-orange-600 text-white',
+          isAutoMode && 'bg-emerald-500 hover:bg-emerald-600 text-white',
         )}
-        title={isSafeMode ? 'Safe Mode: Agent asks permission' : 'Full Control: Agent acts freely'}
+        title={isAutoMode ? 'Auto: Agent acts autonomously' : 'Manual: Agent asks permission'}
       >
-        {isSafeMode ? (
+        {isAutoMode ? (
           <>
-            <Shield className="h-4 w-4" />
-            <span className="text-xs font-medium">Safe Mode</span>
+            <Zap className="h-4 w-4" />
+            <span className="text-xs font-medium">Auto</span>
           </>
         ) : (
           <>
-            <ShieldOff className="h-4 w-4" />
-            <span className="text-xs font-medium">Full Control</span>
+            <Hand className="h-4 w-4" />
+            <span className="text-xs font-medium">Manual</span>
           </>
         )}
       </Button>

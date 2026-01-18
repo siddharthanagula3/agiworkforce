@@ -293,3 +293,137 @@ export async function executeDatabaseCommand(query: string): Promise<InlinePanel
 
   return panel;
 }
+
+/**
+ * Execute undo command and return results as inline panel
+ *
+ * @param args - Optional arguments:
+ *   - empty: undo last change
+ *   - "last": undo last change
+ *   - "all": show list of all undoable changes
+ *   - change_id: undo specific change by ID
+ */
+export async function executeUndoCommand(args: string): Promise<InlinePanel> {
+  const panelId = `undo-${Date.now()}`;
+
+  const panel: InlinePanel = {
+    id: panelId,
+    type: 'terminal', // Use terminal panel to display undo results
+    content: {
+      terminal: {
+        command: `/undo ${args}`.trim(),
+        status: 'running',
+        stdout: 'Processing undo request...',
+        stderr: undefined,
+        exitCode: undefined,
+        duration: undefined,
+      },
+    },
+    isCollapsed: false,
+    timestamp: new Date(),
+    metadata: {
+      status: 'running',
+    },
+  };
+
+  try {
+    const startTime = Date.now();
+    const trimmedArgs = args.trim().toLowerCase();
+
+    let result: string;
+
+    if (trimmedArgs === '' || trimmedArgs === 'last') {
+      // Undo the most recent change
+      const undoResult = await invoke<{
+        success: boolean;
+        change_id: string;
+        change_type: string;
+        path: string | null;
+        message: string;
+      }>('undo_last', { taskId: null });
+
+      if (undoResult.success) {
+        result = `Successfully undone: ${undoResult.message}`;
+      } else {
+        result = `Undo failed: ${undoResult.message}`;
+      }
+    } else if (trimmedArgs === 'all' || trimmedArgs === 'list') {
+      // Show list of undoable changes
+      const summary = await invoke<{
+        total_changes: number;
+        revertible_changes: number;
+        changes_by_type: Record<string, number>;
+        recent_changes: Array<{
+          id: string;
+          change_type: string;
+          path: string | null;
+          timestamp: string;
+          task_id: string;
+          description: string;
+        }>;
+      }>('undo_get_summary', { taskId: null });
+
+      if (summary.revertible_changes === 0) {
+        result = 'No changes available to undo.';
+      } else {
+        const lines = [
+          `Found ${summary.revertible_changes} undoable change(s):`,
+          '',
+          ...summary.recent_changes
+            .slice(0, 10)
+            .map((change, i) => `  ${i + 1}. ${change.description}`),
+          '',
+          'Use /undo to undo the most recent change.',
+        ];
+        result = lines.join('\n');
+      }
+    } else {
+      // Treat args as a change ID to undo specific change
+      const undoResult = await invoke<{
+        success: boolean;
+        change_id: string;
+        change_type: string;
+        path: string | null;
+        message: string;
+      }>('undo_change', { changeId: trimmedArgs });
+
+      if (undoResult.success) {
+        result = `Successfully undone: ${undoResult.message}`;
+      } else {
+        result = `Undo failed: ${undoResult.message}`;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+
+    panel.content.terminal = {
+      command: `/undo ${args}`.trim(),
+      status: 'success',
+      stdout: result,
+      stderr: undefined,
+      exitCode: 0,
+      duration,
+    };
+
+    panel.metadata = {
+      status: 'success',
+      duration,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    panel.content.terminal = {
+      command: `/undo ${args}`.trim(),
+      status: 'error',
+      stdout: '',
+      stderr: `Undo error: ${errorMessage}`,
+      exitCode: 1,
+    };
+
+    panel.metadata = {
+      status: 'error',
+    };
+  }
+
+  return panel;
+}

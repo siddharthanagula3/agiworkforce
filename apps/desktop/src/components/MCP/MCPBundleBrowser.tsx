@@ -677,10 +677,10 @@ export function MCPBundleBrowser() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Cloud className="w-7 h-7 text-blue-400" />
-              MCP Bundle Registry
+              Tool Registry
             </h1>
             <p className="text-muted-foreground mt-1">
-              One-click installation of MCP servers to extend your AI capabilities
+              One-click installation of tools to extend your AI capabilities
             </p>
           </div>
           <div className="flex items-center gap-2">

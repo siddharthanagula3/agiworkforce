@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { logger } from '../lib/logger';
 
 /**
  * Custom error class for operational errors (expected errors)
@@ -27,10 +28,15 @@ export const errorHandler = (
   _next: NextFunction,
 ) => {
   // Log error details
-  console.error('Error:', err.message);
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Stack:', err.stack);
-  }
+  logger.error(
+    {
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      path: req.path,
+      method: req.method,
+    },
+    'Request error',
+  );
 
   // Determine status code
   const statusCode = err instanceof AppError ? err.statusCode : 500;

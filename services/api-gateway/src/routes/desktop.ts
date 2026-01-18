@@ -24,6 +24,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
+import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
@@ -166,7 +167,7 @@ router.post(
     });
 
     if (error) {
-      console.error('[desktop] Failed to register desktop:', error);
+      logger.error({ error }, 'Failed to register desktop');
       throw new AppError('Failed to register desktop device', 500);
     }
 
@@ -313,7 +314,7 @@ router.get(
       .order('last_seen_at', { ascending: false });
 
     if (error) {
-      console.error('[desktop] Failed to list desktops:', error);
+      logger.error({ error }, 'Failed to list desktops');
       throw new AppError('Failed to list desktop devices', 500);
     }
 
@@ -372,7 +373,7 @@ router.post(
       .eq('id', desktopId);
 
     if (updateError) {
-      console.error('[desktop] Failed to update heartbeat:', updateError);
+      logger.error({ error: updateError }, 'Failed to update heartbeat');
       throw new AppError('Failed to update heartbeat', 500);
     }
 
@@ -423,7 +424,7 @@ router.delete(
       .eq('id', desktopId);
 
     if (deleteError) {
-      console.error('[desktop] Failed to delete desktop:', deleteError);
+      logger.error({ error: deleteError }, 'Failed to delete desktop');
       throw new AppError('Failed to unregister desktop device', 500);
     }
 

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use rusqlite::Connection;
@@ -128,7 +128,7 @@ impl WebhookHandler {
 
         let event: Event = serde_json::from_str(payload)?;
 
-        if self.is_event_processed(&event.id.to_string())? {
+        if self.is_event_processed(event.id.as_ref())? {
             tracing::info!("Event {} already processed, skipping", event.id);
             return Ok(());
         }
@@ -165,7 +165,7 @@ impl WebhookHandler {
             }
         }
 
-        self.mark_event_processed(&event.id.to_string())?;
+        self.mark_event_processed(event.id.as_ref())?;
 
         Ok(())
     }

@@ -129,6 +129,17 @@ export const rateLimitConfigs = {
     window: '1 h', // 5 export requests per hour - data portability
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  // Chat API endpoints
+  'chat-conversation': {
+    limit: 60,
+    window: '1 m', // 60 conversation operations per minute
+    failClosed: false,
+  },
+  'chat-message': {
+    limit: 20,
+    window: '1 m', // 20 messages per minute (to prevent API abuse)
+    failClosed: false,
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
@@ -146,8 +157,9 @@ let lastCleanupTime = Date.now();
 
 // Log warning at startup if Redis is not configured in production
 if (process.env.NODE_ENV === 'production' && !redis) {
-  console.error(
-    '[SECURITY WARNING] Redis not configured in production environment. ' +
+  logger.error(
+    {},
+    'SECURITY WARNING: Redis not configured in production environment. ' +
       'In-memory rate limiting is NOT effective in serverless/distributed deployments. ' +
       'Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.',
   );

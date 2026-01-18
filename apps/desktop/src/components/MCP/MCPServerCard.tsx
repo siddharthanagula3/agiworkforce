@@ -54,7 +54,7 @@ export default function MCPServerCard({ server }: MCPServerCardProps) {
             <Server className="w-5 h-5 text-primary" />
             <div>
               <CardTitle className="text-base">{server.name}</CardTitle>
-              <CardDescription className="text-xs mt-1">MCP Server</CardDescription>
+              <CardDescription className="text-xs mt-1">Integration</CardDescription>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export default function MCPServerCard({ server }: MCPServerCardProps) {
             )}
             {!server.enabled && (
               <div className="flex-1 text-center text-sm text-muted-foreground py-2">
-                Server disabled in configuration
+                Integration disabled in configuration
               </div>
             )}
           </div>

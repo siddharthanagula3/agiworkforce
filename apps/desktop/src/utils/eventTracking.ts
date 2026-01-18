@@ -271,19 +271,7 @@ export const trackSettingsEvents = {
   },
 };
 
-export const trackOnboardingEvents = {
-  completed: (duration: number) => {
-    analytics.track('onboarding_completed', {
-      duration_ms: duration,
-    });
-  },
-
-  skipped: (stepNumber: number) => {
-    analytics.track('onboarding_skipped', {
-      step_number: stepNumber,
-    });
-  },
-};
+// Note: Onboarding tracking removed - no onboarding wizard in chat-first UX
 
 export const trackSubscriptionEvents = {
   upgraded: (fromTier: string, toTier: string) => {
