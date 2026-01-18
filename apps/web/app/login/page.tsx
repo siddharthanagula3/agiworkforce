@@ -141,21 +141,35 @@ function LoginForm() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
+              <label htmlFor="email" className="sr-only">
+                Email address
+              </label>
               <Input
+                id="email"
+                name="email"
                 type="email"
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
+                aria-label="Email address"
               />
             </div>
             <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
               <Input
+                id="password"
+                name="password"
                 type="password"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
+                aria-label="Password"
               />
             </div>
 

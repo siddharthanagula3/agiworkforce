@@ -140,6 +140,17 @@ export const rateLimitConfigs = {
     window: '1 m', // 20 messages per minute (to prevent API abuse)
     failClosed: false,
   },
+  // LLM completion endpoints - critical for cost control and abuse prevention
+  'llm-completion': {
+    limit: 30,
+    window: '1 m', // 30 LLM requests per minute per user
+    failClosed: true, // Security-sensitive: LLM API calls are expensive
+  },
+  'llm-streaming': {
+    limit: 20,
+    window: '1 m', // 20 streaming requests per minute (more intensive)
+    failClosed: true, // Security-sensitive: streaming is resource-intensive
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
