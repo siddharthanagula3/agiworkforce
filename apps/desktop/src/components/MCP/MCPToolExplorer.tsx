@@ -286,9 +286,9 @@ export function MCPToolExplorer() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">MCP Tool Explorer</h1>
+        <h1 className="text-2xl font-bold mb-2">Tool Explorer</h1>
         <p className="text-gray-600">
-          Browse, search, and test tools from all connected MCP servers
+          Browse, search, and test tools from all connected integrations
         </p>
       </div>
 
@@ -335,7 +335,7 @@ export function MCPToolExplorer() {
                 <div className="text-center py-12">
                   <Wrench className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No tools available</h3>
-                  <p className="text-gray-600">Connect to MCP servers to access their tools</p>
+                  <p className="text-gray-600">Enable integrations to access their tools</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

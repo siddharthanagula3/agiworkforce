@@ -43,9 +43,7 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Wrench className="w-12 h-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-medium mb-2">No tools available</h3>
-        <p className="text-sm text-muted-foreground">
-          Connect to MCP servers to see available tools
-        </p>
+        <p className="text-sm text-muted-foreground">Enable integrations to see available tools</p>
       </div>
     );
   }

@@ -18,7 +18,7 @@ import { useCodeStore } from './codeStore';
 import { useCostStore } from './costStore';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
-import { useOrchestrationStore } from './orchestrationStore';
+// Orchestration store archived - visual workflow builder removed
 import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
@@ -75,10 +75,8 @@ export function cleanupAllStoresOnLogout(): void {
     });
     console.log('[LogoutCleanup] MCP store cleaned up');
 
-    // Orchestration store - clear workflows and executions
-    const orchestrationStore = useOrchestrationStore.getState();
-    orchestrationStore.reset();
-    console.log('[LogoutCleanup] Orchestration store cleaned up');
+    // Orchestration store archived - visual workflow builder removed
+    console.log('[LogoutCleanup] Orchestration store skipped (archived)');
 
     // Cost store - clear usage data but keep filters
     useCostStore.setState({

@@ -43,6 +43,12 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
     example: '/database SELECT * FROM users',
     icon: '🗄️',
   },
+  {
+    command: '/undo',
+    description: 'Undo recent AI actions (file changes, etc.)',
+    example: '/undo or /undo list',
+    icon: '↩️',
+  },
 ];
 
 export function useSlashCommandAutocomplete() {

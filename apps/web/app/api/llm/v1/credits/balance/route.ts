@@ -7,6 +7,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getCorsHeaders } from '@/lib/cors';
+import { logger } from '@/lib/logger';
 
 /**
  * Credits Balance API
@@ -23,11 +25,7 @@ async function handleGetBalance(request: NextRequest) {
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: getCorsHeaders(request),
     });
   }
 
@@ -93,10 +91,13 @@ async function handleGetBalance(request: NextRequest) {
 
   // Log any errors that occurred
   if (subscriptionResult.status === 'rejected') {
-    console.error('Failed to fetch subscription:', subscriptionResult.reason);
+    logger.error(
+      { error: subscriptionResult.reason, userId: user.id },
+      'Failed to fetch subscription',
+    );
   }
   if (balanceResult.status === 'rejected') {
-    console.error('Failed to fetch balance:', balanceResult.reason);
+    logger.error({ error: balanceResult.reason, userId: user.id }, 'Failed to fetch balance');
   }
 
   if (!subscription) {
@@ -159,7 +160,7 @@ async function handleGetBalance(request: NextRequest) {
       },
     },
     {
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: getCorsHeaders(request),
     },
   );
 }

@@ -22,6 +22,7 @@ import { AppError } from '../middleware/errorHandler';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
@@ -125,10 +126,10 @@ router.post(
 
           // Validate timestamps are valid numbers
           if (Number.isNaN(existingTime) || Number.isNaN(itemTime)) {
-            console.error('[Sync] Invalid timestamp detected:', {
-              existingTime: existingEntry.created_at,
-              itemTime: item.timestamp,
-            });
+            logger.error(
+              { existingTime: existingEntry.created_at, itemTime: item.timestamp },
+              'Invalid timestamp detected',
+            );
             failedIds.push(item.id);
             continue;
           }
@@ -153,7 +154,7 @@ router.post(
           try {
             parsedData = JSON.parse(item.data);
           } catch (parseError) {
-            console.error('[Sync] Failed to parse item data:', parseError);
+            logger.error({ error: parseError }, 'Failed to parse item data');
             failedIds.push(item.id);
             continue;
           }
@@ -167,13 +168,13 @@ router.post(
         });
 
         if (error) {
-          console.error('[Sync] Batch item error:', error);
+          logger.error({ error }, 'Batch item error');
           failedIds.push(item.id);
         } else {
           syncedIds.push(item.id);
         }
       } catch (err) {
-        console.error('[Sync] Batch item exception:', err);
+        logger.error({ error: err }, 'Batch item exception');
         failedIds.push(item.id);
       }
     }
@@ -221,7 +222,7 @@ router.get(
     const { data: syncData, error } = await query;
 
     if (error) {
-      console.error('[Sync] Updates error:', error);
+      logger.error({ error }, 'Updates error');
       throw new AppError('Failed to pull updates', 500);
     }
 
@@ -270,7 +271,7 @@ router.post(
     });
 
     if (error) {
-      console.error('[Sync] Conflict resolution error:', error);
+      logger.error({ error }, 'Conflict resolution error');
       throw new AppError('Failed to resolve conflict', 500);
     }
 
@@ -352,7 +353,7 @@ router.post(
     );
 
     if (error) {
-      console.error('[Sync] Device registration error:', error);
+      logger.error({ error }, 'Device registration error');
       throw new AppError('Failed to register device', 500);
     }
 
@@ -386,7 +387,7 @@ router.delete(
       .eq('device_id', deviceId);
 
     if (error) {
-      console.error('[Sync] Device unregistration error:', error);
+      logger.error({ error }, 'Device unregistration error');
       throw new AppError('Failed to unregister device', 500);
     }
 
@@ -427,7 +428,7 @@ router.post(
     });
 
     if (error) {
-      console.error('[Sync] Push error:', error);
+      logger.error({ error }, 'Push error');
       throw new AppError('Failed to push sync data', 500);
     }
 
@@ -474,7 +475,7 @@ router.get(
     const { data: syncData, error } = await query;
 
     if (error) {
-      console.error('[Sync] Pull error:', error);
+      logger.error({ error }, 'Pull error');
       throw new AppError('Failed to pull sync data', 500);
     }
 
@@ -507,7 +508,7 @@ router.delete(
     const { error } = await supabase.from('sync_data').delete().eq('user_id', user.userId);
 
     if (error) {
-      console.error('[Sync] Clear error:', error);
+      logger.error({ error }, 'Clear error');
       throw new AppError('Failed to clear sync data', 500);
     }
 

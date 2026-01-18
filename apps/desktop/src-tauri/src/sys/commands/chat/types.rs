@@ -5,6 +5,46 @@ use crate::data::db::models::{
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+// === Smart Intent Detection ===
+/// User intent types for smart routing between conversation and action
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UserIntent {
+    /// Pure conversation - user is chatting, asking questions, or seeking information
+    #[default]
+    Conversation,
+    /// Action request - user wants something done (open, send, create, delete, etc.)
+    ActionRequest,
+    /// User wants to stop/cancel the current operation
+    Stop,
+    /// User is asking a clarifying question about a previous action or result
+    Clarification,
+}
+
+impl std::fmt::Display for UserIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserIntent::Conversation => write!(f, "conversation"),
+            UserIntent::ActionRequest => write!(f, "action_request"),
+            UserIntent::Stop => write!(f, "stop"),
+            UserIntent::Clarification => write!(f, "clarification"),
+        }
+    }
+}
+
+/// Result of intent detection with confidence
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntentResult {
+    /// The detected intent type
+    pub intent: UserIntent,
+    /// Confidence score from 0.0 to 1.0
+    pub confidence: f32,
+    /// Detected action verbs if any
+    pub action_verbs: Vec<String>,
+    /// Whether auto mode should be activated
+    pub should_auto_execute: bool,
+}
+
 // === MEDIUM-001 fix: Input validation constants ===
 /// Maximum content length for chat messages (1MB)
 pub const MAX_CONTENT_LENGTH: usize = 1024 * 1024;
