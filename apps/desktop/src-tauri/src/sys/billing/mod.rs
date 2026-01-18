@@ -39,7 +39,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[cfg(feature = "billing")]
-
 pub struct BillingState {
     stripe_service: Option<StripeService>,
     webhook_handler: Option<WebhookHandler>,
@@ -83,10 +82,7 @@ impl BillingState {
 
     pub fn check_cloud_access(&self) -> bool {
         if let Some(service) = &self.stripe_service {
-            match service.get_primary_subscription() {
-                Ok(Some(_)) => true,
-                _ => false,
-            }
+            matches!(service.get_primary_subscription(), Ok(Some(_)))
         } else {
             false
         }

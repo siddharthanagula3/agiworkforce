@@ -50,6 +50,34 @@ export {
   mcpGetToolSchemas,
 } from './mcp';
 
+// Chat - Intent Detection and Stop Handling
+export {
+  ChatClient,
+  detectIntent,
+  isStopCommand,
+  handleStop,
+  stopGeneration,
+  type UserIntent,
+  type IntentResult,
+} from './chat';
+
+// Screen Watcher - Continuous Screen Monitoring
+export {
+  ScreenWatcherClient,
+  startScreenWatcher,
+  stopScreenWatcher,
+  pauseScreenWatcher,
+  resumeScreenWatcher,
+  getScreenWatcherStatus,
+  getLatestScreenshot,
+  getRecentScreenshots,
+  captureScreenNow,
+  onScreenCapture,
+  type ScreenCapture,
+  type ScreenWatcherConfig,
+  type WatcherStatus,
+} from './screenWatcher';
+
 // Re-export other API modules for convenience
 export * from './automation';
 export * from './embeddings';

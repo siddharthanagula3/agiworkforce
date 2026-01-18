@@ -20,41 +20,46 @@ export type FriendlyError = FriendlyErrorType;
 /**
  * Standardized error codes for API and application errors.
  *
- * Note: This is defined here (instead of imported from @agiworkforce/types)
- * to avoid isolatedModules re-export issues with enums.
+ * Using const object pattern for isolatedModules compatibility.
  * The values are kept in sync with @agiworkforce/types/errors.
  */
-export enum ErrorCode {
+export const ErrorCode = {
   // Authentication & Authorization
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  FORBIDDEN = 'FORBIDDEN',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
 
   // Validation
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  INVALID_INPUT = 'INVALID_INPUT',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  INVALID_INPUT: 'INVALID_INPUT',
 
   // Resource
-  NOT_FOUND = 'NOT_FOUND',
-  CONFLICT = 'CONFLICT',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
 
   // Server
-  INTERNAL_ERROR = 'INTERNAL_ERROR',
-  SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
-  TIMEOUT = 'TIMEOUT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  TIMEOUT: 'TIMEOUT',
 
   // Rate Limiting
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 
   // External Services
-  STRIPE_ERROR = 'STRIPE_ERROR',
-  SUPABASE_ERROR = 'SUPABASE_ERROR',
-  PGRST116 = 'PGRST116',
+  STRIPE_ERROR: 'STRIPE_ERROR',
+  SUPABASE_ERROR: 'SUPABASE_ERROR',
+  PGRST116: 'PGRST116',
 
   // Network
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
-  INVALID_RESPONSE = 'INVALID_RESPONSE',
-}
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  INVALID_RESPONSE: 'INVALID_RESPONSE',
+
+  // Payment
+  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
+} as const;
+
+/** Type for error codes */
+export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 /**
  * Application error class with code, status, and details.
@@ -69,7 +74,7 @@ export enum ErrorCode {
  */
 export class AppError extends Error {
   constructor(
-    public code: ErrorCode,
+    public code: ErrorCodeValue,
     message: string,
     public statusCode: number = 500,
     public details?: unknown,
@@ -160,6 +165,14 @@ export const createError = {
   /** Create a payload too large (413) error */
   payloadTooLarge: (message = 'Payload too large'): AppError =>
     new AppError(ErrorCode.PAYLOAD_TOO_LARGE, message, 413),
+
+  /** Create a bad request (400) error - alias for validation */
+  badRequest: (message: string, details?: unknown): AppError =>
+    new AppError(ErrorCode.VALIDATION_ERROR, message, 400, details),
+
+  /** Create a payment required (402) error */
+  paymentRequired: (message = 'Payment required'): AppError =>
+    new AppError(ErrorCode.PAYMENT_REQUIRED, message, 402),
 };
 
 /**

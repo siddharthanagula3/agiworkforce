@@ -633,7 +633,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       activeContext: [],
       workflowContext: null,
       plan: null,
-      conversationMode: 'safe',
+      conversationMode: 'auto',
       isLoading: false,
       isStreaming: false,
       currentStreamingMessageId: null,
@@ -656,31 +656,31 @@ describe('unifiedChatStore - Extended Tests', () => {
   });
 
   describe('conversation mode switching', () => {
-    it('should default to safe mode', async () => {
+    it('should default to auto mode', async () => {
       const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
       const state = useUnifiedChatStore.getState();
-      expect(state.conversationMode).toBe('safe');
+      expect(state.conversationMode).toBe('auto');
     });
 
-    it('should switch to full_control mode', async () => {
+    it('should switch to manual mode', async () => {
       const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
       const store = useUnifiedChatStore.getState();
 
-      store.setConversationMode('full_control');
+      store.setConversationMode('manual');
 
       const state = useUnifiedChatStore.getState();
-      expect(state.conversationMode).toBe('full_control');
+      expect(state.conversationMode).toBe('manual');
     });
 
-    it('should switch back to safe mode', async () => {
+    it('should switch back to auto mode', async () => {
       const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
-      useUnifiedChatStore.setState({ conversationMode: 'full_control' });
+      useUnifiedChatStore.setState({ conversationMode: 'manual' });
 
       const store = useUnifiedChatStore.getState();
-      store.setConversationMode('safe');
+      store.setConversationMode('auto');
 
       const state = useUnifiedChatStore.getState();
-      expect(state.conversationMode).toBe('safe');
+      expect(state.conversationMode).toBe('auto');
     });
   });
 

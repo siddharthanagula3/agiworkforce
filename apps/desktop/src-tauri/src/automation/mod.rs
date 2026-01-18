@@ -11,6 +11,7 @@ pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety;
 pub mod screen;
+pub mod screen_watcher;
 pub mod types;
 #[cfg(target_os = "windows")]
 pub mod uia;

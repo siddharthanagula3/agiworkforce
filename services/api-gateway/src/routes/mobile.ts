@@ -22,6 +22,7 @@ import { AppError } from '../middleware/errorHandler';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
@@ -128,7 +129,7 @@ router.post(
     );
 
     if (error) {
-      console.error('[mobile] Failed to register device:', error);
+      logger.error({ error }, 'Failed to register device');
       throw new AppError('Failed to register mobile device', 500);
     }
 
@@ -175,7 +176,7 @@ router.post(
       .eq('id', deviceId);
 
     if (updateError) {
-      console.error('[mobile] Failed to update push token:', updateError);
+      logger.error({ error: updateError }, 'Failed to update push token');
       throw new AppError('Failed to update push token', 500);
     }
 
@@ -221,7 +222,7 @@ router.post(
         }),
       });
     } catch (fetchError) {
-      console.error('[mobile] Failed to connect to signaling server:', fetchError);
+      logger.error({ error: fetchError }, 'Failed to connect to signaling server');
       throw new AppError('Signaling server unavailable', 503);
     }
 
@@ -239,7 +240,7 @@ router.post(
     try {
       jsonBody = await fetchResponse.json();
     } catch (parseError) {
-      console.error('[mobile] Failed to parse signaling server response:', parseError);
+      logger.error({ error: parseError }, 'Failed to parse signaling server response');
       throw new AppError('Invalid response from signaling server', 502);
     }
 
@@ -280,7 +281,7 @@ router.get(
       .order('updated_at', { ascending: false });
 
     if (error) {
-      console.error('[mobile] Failed to list devices:', error);
+      logger.error({ error }, 'Failed to list devices');
       throw new AppError('Failed to list mobile devices', 500);
     }
 
@@ -339,7 +340,7 @@ router.delete(
       .eq('id', deviceId);
 
     if (deleteError) {
-      console.error('[mobile] Failed to delete device:', deleteError);
+      logger.error({ error: deleteError }, 'Failed to delete device');
       throw new AppError('Failed to delete mobile device', 500);
     }
 

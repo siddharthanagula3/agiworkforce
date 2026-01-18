@@ -39,6 +39,7 @@ import {
   executeBrowserCommand,
   executeCodeCommand,
   executeDatabaseCommand,
+  executeUndoCommand,
 } from '../../handlers/slashCommandHandlers';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -700,6 +701,9 @@ export const UnifiedAgenticChat: React.FC<{
           case 'database':
             panel = await executeDatabaseCommand(slashCommand.args);
             break;
+          case 'undo':
+            panel = await executeUndoCommand(slashCommand.args);
+            break;
           default:
             throw new Error(`Unknown command: ${slashCommand.command}`);
         }
@@ -774,8 +778,8 @@ export const UnifiedAgenticChat: React.FC<{
       return {};
     };
 
-    if (conversationMode === 'safe') {
-      // Dangerous command patterns - using word boundaries to prevent simple bypasses
+    if (conversationMode === 'manual') {
+      // In manual mode, check for dangerous command patterns
       const dangerousCommandPatterns = [
         /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
         /\b(shutdown|poweroff|reboot|halt)\b/i,
