@@ -47,7 +47,6 @@
     "core:path:allow-basename",
     "core:path:allow-is-absolute",
     "shell:allow-open",
-    "shell:allow-execute",
     "fs:allow-read-file",
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
