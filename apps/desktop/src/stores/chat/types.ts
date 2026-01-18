@@ -126,7 +126,7 @@ export interface InlinePanel {
 }
 
 export interface SlashCommandMetadata {
-  command: 'browser' | 'terminal' | 'code' | 'database';
+  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo';
   args: string;
   rawInput: string;
 }
@@ -193,4 +193,9 @@ export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-resear
 
 export type ActiveView = 'chat' | 'projects' | 'artifacts';
 
-export type ConversationMode = 'safe' | 'full_control';
+/**
+ * Conversation Mode controls AI autonomy level
+ * - 'auto': Agent acts autonomously without prompts (default)
+ * - 'manual': Agent asks for permission before dangerous actions
+ */
+export type ConversationMode = 'auto' | 'manual';

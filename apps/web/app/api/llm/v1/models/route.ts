@@ -6,6 +6,7 @@ import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getCorsHeaders } from '@/lib/cors';
 
 /**
  * OpenAI-compatible Models List API
@@ -342,11 +343,7 @@ async function handleListModels(request: NextRequest) {
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: getCorsHeaders(request),
     });
   }
 
@@ -364,7 +361,7 @@ async function handleListModels(request: NextRequest) {
         data: MODELS,
       },
       {
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: getCorsHeaders(request),
       },
     );
   }
@@ -392,7 +389,7 @@ async function handleListModels(request: NextRequest) {
         data: MODELS,
       },
       {
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: getCorsHeaders(request),
       },
     );
   }
@@ -413,7 +410,7 @@ async function handleListModels(request: NextRequest) {
       },
     },
     {
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: getCorsHeaders(request),
     },
   );
 }

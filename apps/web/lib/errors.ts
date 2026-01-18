@@ -20,4 +20,4 @@ export {
 } from '@agiworkforce/utils';
 
 // Type-only exports
-export type { ApiError, ErrorCode as ErrorCodeType } from '@agiworkforce/utils';
+export type { ApiError, ErrorCodeValue, FriendlyError } from '@agiworkforce/utils';

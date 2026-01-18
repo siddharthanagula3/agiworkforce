@@ -76,8 +76,8 @@ export default function MCPConfigEditor() {
       {}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">MCP Configuration</h2>
-          <p className="text-sm text-muted-foreground mt-1">Enable or disable MCP servers</p>
+          <h2 className="text-lg font-semibold">Tool Configuration</h2>
+          <p className="text-sm text-muted-foreground mt-1">Enable or disable integrations</p>
         </div>
         <div className="flex items-center gap-2">
           {hasChanges && (

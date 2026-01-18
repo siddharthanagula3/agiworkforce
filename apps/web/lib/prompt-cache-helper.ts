@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { LLMProviderRequest } from './llm-providers/base';
+import { logger } from './logger';
 
 /**
  * Determines if prompt caching should be enabled for a request
@@ -97,16 +98,18 @@ export function logCacheAnalytics(
 ): void {
   // Only log if caching was used
   if (response.cacheCreationInputTokens || response.cachedInputTokens) {
-    console.log('[CACHE_ANALYTICS]', {
-      userId,
-      model,
-      provider,
-      cacheWriteTokens: response.cacheCreationInputTokens || 0,
-      cachedTokens: response.cachedInputTokens || 0,
-      totalPromptTokens: response.promptTokens || 0,
-      savedCostCents: savings.savedCostCents,
-      cacheWriteCostCents: savings.cacheWriteCostCents,
-      timestamp: new Date().toISOString(),
-    });
+    logger.info(
+      {
+        userId,
+        model,
+        provider,
+        cacheWriteTokens: response.cacheCreationInputTokens || 0,
+        cachedTokens: response.cachedInputTokens || 0,
+        totalPromptTokens: response.promptTokens || 0,
+        savedCostCents: savings.savedCostCents,
+        cacheWriteCostCents: savings.cacheWriteCostCents,
+      },
+      'Cache analytics',
+    );
   }
 }

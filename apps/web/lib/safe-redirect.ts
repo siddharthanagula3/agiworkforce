@@ -2,6 +2,8 @@
  * Safe redirect utilities to prevent open redirect vulnerabilities
  */
 
+import { logger } from './logger';
+
 // Allowed hosts for redirects (add external trusted domains if needed)
 const ALLOWED_HOSTS: Set<string> = new Set([
   // Add any external trusted domains here if needed
@@ -35,7 +37,7 @@ export function getSafeRedirectUrl(
 
   // Block protocol-relative URLs (//evil.com)
   if (trimmed.startsWith('//')) {
-    console.warn(`Blocked protocol-relative redirect: ${trimmed}`);
+    logger.warn({ url: trimmed }, 'Blocked protocol-relative redirect');
     return fallback;
   }
 
@@ -46,7 +48,7 @@ export function getSafeRedirectUrl(
     lowerUrl.startsWith('data:') ||
     lowerUrl.startsWith('vbscript:')
   ) {
-    console.warn(`Blocked dangerous protocol redirect: ${trimmed}`);
+    logger.warn({ url: trimmed }, 'Blocked dangerous protocol redirect');
     return fallback;
   }
 
@@ -70,13 +72,14 @@ export function getSafeRedirectUrl(
     }
 
     // Different host - not allowed
-    console.warn(
-      `Blocked cross-origin redirect: ${trimmed} (expected host: ${parsedOrigin.host}, got: ${parsedUrl.host})`,
+    logger.warn(
+      { url: trimmed, expectedHost: parsedOrigin.host, actualHost: parsedUrl.host },
+      'Blocked cross-origin redirect',
     );
     return fallback;
   } catch {
     // Invalid URL - use fallback
-    console.warn(`Invalid redirect URL: ${trimmed}`);
+    logger.warn({ url: trimmed }, 'Invalid redirect URL');
     return fallback;
   }
 }

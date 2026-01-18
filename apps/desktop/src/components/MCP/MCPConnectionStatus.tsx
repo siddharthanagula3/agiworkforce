@@ -114,7 +114,7 @@ export function MCPConnectionStatus() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Connection Status</h2>
-          <p className="text-sm text-gray-600">Real-time monitoring of MCP server connections</p>
+          <p className="text-sm text-gray-600">Real-time monitoring of tool connections</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ export function MCPConnectionStatus() {
             <div className="text-center py-12">
               <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Servers Connected</h3>
-              <p className="text-gray-600">Connect to MCP servers to see their health status</p>
+              <p className="text-gray-600">Enable integrations to see their health status</p>
             </div>
           ) : (
             <div className="divide-y">

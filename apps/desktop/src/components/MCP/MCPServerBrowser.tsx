@@ -213,7 +213,7 @@ export function MCPServerBrowser() {
         const data = await invoke<ServerPackage[]>('mcp_get_registry');
         setServers(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load MCP servers');
+        setError(err instanceof Error ? err.message : 'Failed to load tools');
         console.error('Failed to fetch MCP servers:', err);
       } finally {
         setIsLoading(false);
@@ -250,10 +250,8 @@ export function MCPServerBrowser() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">MCP Server Registry</h1>
-        <p className="text-gray-600">
-          Discover and install MCP servers to extend your AGI capabilities
-        </p>
+        <h1 className="text-2xl font-bold mb-2">Tool Registry</h1>
+        <p className="text-gray-600">Discover and install tools to extend your AI capabilities</p>
       </div>
 
       <div className="mb-6">
@@ -292,7 +290,7 @@ export function MCPServerBrowser() {
             {isLoading ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-pulse" />
-                <p className="text-gray-600">Loading MCP servers...</p>
+                <p className="text-gray-600">Loading tools...</p>
               </div>
             ) : error ? (
               <div className="text-center py-12">
@@ -306,7 +304,7 @@ export function MCPServerBrowser() {
                 <h3 className="text-lg font-semibold mb-2">No servers found</h3>
                 <p className="text-gray-600">
                   {servers.length === 0
-                    ? 'No MCP servers available. Check back later or contact support.'
+                    ? 'No tools available. Check back later or contact support.'
                     : 'Try adjusting your search or browse other categories'}
                 </p>
               </div>

@@ -11,6 +11,39 @@ AGI Workforce is a full-stack monorepo built with:
 - **Services:** Node.js/Express API Gateway (port 3000) and WebSocket Signaling Server (port 4000)
 - **Shared:** TypeScript types and utilities via pnpm workspaces
 
+## Product Vision
+
+> **"AGI Workforce is a desktop app where non-technical users simply tell an AI what they want done, and it autonomously completes the task - with everything reversible if something goes wrong."**
+
+### Core Principles
+
+| Principle              | Decision              | Implication                                                                                                                     |
+| ---------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Target User**        | Non-technical users   | UX must be dead simple. No jargon, no configuration screens, no technical concepts exposed. Error messages in plain English.    |
+| **Interaction Model**  | Chat-first            | Users describe what they want in natural language. No visual workflow builders, no drag-and-drop. The AI figures out the steps. |
+| **Autonomy Level**     | Full autonomy         | AI completes goals without asking for approval at each step. Users set a goal and the AI handles it end-to-end.                 |
+| **Safety Model**       | Undo-based            | All actions must be reversible. Users can "undo" if something goes wrong. This enables full autonomy while maintaining safety.  |
+| **Platform Strategy**  | Desktop-primary       | Desktop app has full AGI/automation capabilities. Web platform is for billing, subscription management, and device sync only.   |
+| **LLM Access**         | Managed proxy         | AGI Workforce proxies all LLM API calls. Users pay us, not OpenAI/Anthropic directly. We handle billing complexity.             |
+| **MCP Strategy**       | Hidden complexity     | MCP powers tools behind the scenes, but users never see "MCP". They just say "search my email" and it works.                    |
+| **Browser Automation** | Natural language only | "Book me a flight to NYC" - AI handles navigation. No macro recording, no visual scripting.                                     |
+| **Onboarding**         | None required         | No setup wizard. User opens app and starts chatting immediately.                                                                |
+
+### What This Means for Development
+
+1. **Simplicity is paramount** - Every feature should be usable by someone who has never seen a terminal
+2. **Undo system is critical** - Before implementing any action (file changes, browser actions, API calls), ensure it can be reversed
+3. **No technical UI** - Settings screens should be minimal. MCP servers, API configurations, etc. should be automatic or hidden
+4. **Chat is the interface** - If you're tempted to add a button or menu, ask "could the user just ask for this in chat instead?"
+5. **Errors must be friendly** - Never show stack traces, technical codes, or developer-oriented messages to users
+6. **Managed infrastructure** - Backend must track token usage, handle API key management, and bill users accordingly
+
+### Architectural Decisions
+
+- **Deleted components were intentional**: The removed `Configurator/`, `Orchestration/`, `MissionControl/`, and `Onboarding/` components represented a visual-workflow approach that conflicts with chat-first vision
+- **State consolidation target**: Aim for ~10 domain-organized Zustand stores (chat, agent, settings, automation, auth, ui, etc.) instead of 40+ granular stores
+- **ScreenWatcher purpose**: Provides visual context to AGI during active goal execution only (not always-on surveillance)
+
 ## Essential Commands
 
 ### Development
@@ -72,7 +105,13 @@ cd apps/desktop && pnpm vitest run src/__tests__/path/to/test.test.ts
 # Run Rust tests
 cd apps/desktop/src-tauri && cargo test
 
-# Run E2E tests (desktop must be running on port 5175)
+# Run a single Rust test
+cd apps/desktop/src-tauri && cargo test test_name
+
+# Run tests in watch mode (desktop)
+cd apps/desktop && pnpm vitest
+
+# Run E2E tests (requires separate build: cd apps/desktop && pnpm build && pnpm preview)
 pnpm --filter @agiworkforce/desktop test:e2e
 
 # Run specific E2E project
@@ -499,33 +538,58 @@ PRAGMA cache_size = -64000;      // 64MB cache
 
 ## MCP (Model Context Protocol) Integration
 
-MCP tool IDs follow the format: `mcp__{server_name}__{tool_name}` (note: exactly two underscores as separator).
+**IMPORTANT: MCP is hidden from users.** Users never see "MCP servers" or configure them manually. They simply ask for things ("search my email", "check my calendar") and the system uses MCP tools behind the scenes.
 
-**Key Commands:**
+**Technical Details (for developers only):**
 
-- `mcp_set_credential(server_name, key, value)` - Store credentials in OS keyring
-- `mcp_delete_credential(server_name, key)` - Remove credentials from OS keyring
-- `mcp_get_server_logs(server_name, lines)` - Get server logs (placeholder - full implementation pending)
+- Tool IDs follow format: `mcp__{server_name}__{tool_name}` (exactly two underscores)
+- Servers auto-start based on detected user intent
+- Credentials stored in OS keyring via `mcp_set_credential(server_name, key, value)`
+- User-facing errors should never mention "MCP" - translate to plain English
 
 ## AGI Reasoning Loop
 
-The AGI system has built-in safety limits:
+The AGI operates with **full autonomy** - it completes goals without asking for approval at each step. Safety comes from **reversibility**, not permission prompts.
+
+**Safety Limits:**
 
 - **Max iterations:** 1000 iterations per goal
 - **Absolute timeout:** 5 minutes (300 seconds)
 - **Consecutive failure limit:** 3 failures triggers goal abandonment
 
-Events emitted: `agi:goal:timeout`, `agi:goal:max_iterations`, `agi:goal:cancelled`
+**Undo System (CRITICAL):**
+
+Every action the AGI takes must be reversible. Before implementing any new tool or action:
+
+1. Define how to undo/rollback the action
+2. Store the "before" state so it can be restored
+3. Provide user-friendly undo via chat ("undo that", "revert the last change")
+
+Examples:
+
+- File edit → Store original content, can restore
+- Browser form submit → May not be reversible (warn user before acting)
+- Email send → Not reversible (this is an exception requiring confirmation)
+
+**Events:** `agi:goal:timeout`, `agi:goal:max_iterations`, `agi:goal:cancelled`
 
 ## Plan Tier Hierarchy
 
-Plan tiers are ordered from lowest to highest:
+**Business Model: Subscription + Usage**
 
-1. `free` (0)
-2. `hobby` (1)
-3. `pro` (2)
-4. `max` (3)
-5. `enterprise` (4)
+Users pay AGI Workforce directly (managed proxy model). We handle all LLM API billing - users never need their own OpenAI/Anthropic keys.
+
+- Base subscription fee per tier
+- Usage-based overage for heavy users
+- Token tracking in cents for precise billing
+
+**Tiers (lowest to highest):**
+
+1. `free` (0) - Limited trial
+2. `hobby` (1) - $3.50/month base
+3. `pro` (2) - $12/month base
+4. `max` (3) - $150/month base
+5. `enterprise` (4) - Custom pricing
 
 Use `hasPlan(tier)` to check if user has at least the required tier.
 
