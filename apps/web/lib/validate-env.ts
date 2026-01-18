@@ -25,6 +25,7 @@ export function validateRequiredEnvVars(): ValidationResult {
   const warnings: string[] = [];
 
   // Critical environment variables (app won't work without these)
+  // Missing these will cause server startup to fail in production
   const criticalVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
@@ -33,7 +34,12 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_WEBHOOK_SECRET',
     'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     'NEXT_PUBLIC_APP_URL',
-    // Required in production for protected cron + diagnostic endpoints
+  ];
+
+  // Important but non-critical variables (specific features won't work without these)
+  // These generate warnings, not errors - server will still start
+  const importantVars = [
+    // Required for protected cron + diagnostic endpoints
     'CRON_SECRET',
     // Required for desktop auto-updates (Tauri updater hits /api/releases/*)
     'DESKTOP_GITHUB_OWNER',
@@ -54,6 +60,15 @@ export function validateRequiredEnvVars(): ValidationResult {
   for (const varName of criticalVars) {
     if (!process.env[varName]) {
       errors.push(`Missing critical environment variable: ${varName}`);
+    }
+  }
+
+  // Check important (but non-critical) variables - generate warnings
+  for (const varName of importantVars) {
+    if (!process.env[varName]) {
+      warnings.push(
+        `Missing important environment variable: ${varName} (some features may not work)`,
+      );
     }
   }
 
