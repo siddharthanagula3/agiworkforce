@@ -160,7 +160,7 @@ export default function GetStartedPage() {
               <li>Open the downloaded file</li>
               <li>Follow the installation instructions</li>
               <li>Sign in with your account</li>
-              <li>Start building your AI workforce!</li>
+              <li>Start chatting - just tell the AI what you want done!</li>
             </ol>
           </div>
         </div>
