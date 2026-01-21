@@ -1,5 +1,6 @@
 use super::*;
 use crate::automation::AutomationService;
+use crate::core::agent::ChangeTracker;
 use crate::core::agi::planner::Plan;
 use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
@@ -146,12 +147,16 @@ impl AGICore {
             tool_registry.clone(),
             knowledge_base.clone(),
         )?);
+        // Create a shared ChangeTracker for undo capability
+        let change_tracker = Arc::new(ChangeTracker::new());
+
         let executor = Arc::new(AGIExecutor::new(
             tool_registry.clone(),
             resource_manager.clone(),
             automation.clone(),
             router.clone(),
             app_handle.clone(),
+            Some(change_tracker),
         )?);
         let memory = Arc::new(AGIMemory::new()?);
         let learning = Arc::new(LearningSystem::new(
@@ -223,6 +228,9 @@ impl AGICore {
             process_ontology.clone(),
         )?);
 
+        // Create a shared ChangeTracker for undo capability
+        let change_tracker = Arc::new(ChangeTracker::new());
+
         let executor = Arc::new(AGIExecutor::with_process_reasoning(
             tool_registry.clone(),
             resource_manager.clone(),
@@ -231,6 +239,7 @@ impl AGICore {
             app_handle.clone(),
             process_reasoning.clone(),
             outcome_tracker.clone(),
+            Some(change_tracker),
         )?);
 
         let memory = Arc::new(AGIMemory::new()?);
