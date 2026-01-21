@@ -602,9 +602,8 @@ impl AGIExecutor {
 
                 // SECURITY: Ensure we're deleting a file, not a directory
                 // Directories require a separate tool with different safety considerations
-                let metadata = std::fs::metadata(&canonical_path).map_err(|e| {
-                    anyhow::anyhow!("Cannot access file '{}': {}", path, e)
-                })?;
+                let metadata = std::fs::metadata(&canonical_path)
+                    .map_err(|e| anyhow::anyhow!("Cannot access file '{}': {}", path, e))?;
 
                 if metadata.is_dir() {
                     return Err(anyhow::anyhow!(
@@ -2183,16 +2182,18 @@ impl AGIExecutor {
                             head.shorthand().map(|s| s.to_string())
                         } else {
                             // Detached HEAD - show commit hash
-                            head.target().map(|oid| format!("HEAD detached at {}", &oid.to_string()[..7]))
+                            head.target()
+                                .map(|oid| format!("HEAD detached at {}", &oid.to_string()[..7]))
                         }
                     }
                     Err(_) => None,
-                }.unwrap_or_else(|| "unknown".to_string());
+                }
+                .unwrap_or_else(|| "unknown".to_string());
 
                 // Get repository status
-                let statuses = repo.statuses(None).map_err(|e| {
-                    anyhow::anyhow!("Failed to get repository status: {}", e)
-                })?;
+                let statuses = repo
+                    .statuses(None)
+                    .map_err(|e| anyhow::anyhow!("Failed to get repository status: {}", e))?;
 
                 let mut staged: Vec<String> = Vec::new();
                 let mut modified: Vec<String> = Vec::new();
@@ -2395,9 +2396,9 @@ impl AGIExecutor {
                     )
                 })?;
 
-                let mut index = repo.index().map_err(|e| {
-                    anyhow!("Failed to get repository index: {}", e)
-                })?;
+                let mut index = repo
+                    .index()
+                    .map_err(|e| anyhow!("Failed to get repository index: {}", e))?;
 
                 // Collect file paths to add
                 let file_paths: Vec<String> = files
@@ -2412,8 +2413,8 @@ impl AGIExecutor {
                 let mut files_added: Vec<String> = Vec::new();
 
                 // Check if adding all files (e.g., ["."] or ["*"])
-                let add_all = file_paths.len() == 1
-                    && (file_paths[0] == "." || file_paths[0] == "*");
+                let add_all =
+                    file_paths.len() == 1 && (file_paths[0] == "." || file_paths[0] == "*");
 
                 if add_all {
                     // Add all files using glob pattern
@@ -2476,9 +2477,11 @@ impl AGIExecutor {
                         }
 
                         // Add the file to the index
-                        index.add_path(std::path::Path::new(file_path)).map_err(|e| {
-                            anyhow!("Failed to add '{}' to index: {}", file_path, e)
-                        })?;
+                        index
+                            .add_path(std::path::Path::new(file_path))
+                            .map_err(|e| {
+                                anyhow!("Failed to add '{}' to index: {}", file_path, e)
+                            })?;
 
                         files_added.push(file_path.clone());
                     }
@@ -2558,36 +2561,38 @@ impl AGIExecutor {
                     })?;
 
                     // Get the index
-                    let mut index = repo.index().map_err(|e| {
-                        anyhow!("Failed to get repository index: {}", e)
-                    })?;
+                    let mut index = repo
+                        .index()
+                        .map_err(|e| anyhow!("Failed to get repository index: {}", e))?;
 
                     // Check if there are staged changes
-                    let tree_id = index.write_tree().map_err(|e| {
-                        anyhow!("Failed to write tree from index: {}", e)
-                    })?;
+                    let tree_id = index
+                        .write_tree()
+                        .map_err(|e| anyhow!("Failed to write tree from index: {}", e))?;
 
-                    let tree = repo.find_tree(tree_id).map_err(|e| {
-                        anyhow!("Failed to find tree: {}", e)
-                    })?;
+                    let tree = repo
+                        .find_tree(tree_id)
+                        .map_err(|e| anyhow!("Failed to find tree: {}", e))?;
 
                     // Get the signature (author/committer)
-                    let signature = repo.signature().or_else(|_| {
-                        // Fallback to a default signature if git config is not set
-                        git2::Signature::now("AGI Workforce", "agi@agiworkforce.com")
-                    }).map_err(|e| {
-                        anyhow!("Failed to create signature: {}", e)
-                    })?;
+                    let signature = repo
+                        .signature()
+                        .or_else(|_| {
+                            // Fallback to a default signature if git config is not set
+                            git2::Signature::now("AGI Workforce", "agi@agiworkforce.com")
+                        })
+                        .map_err(|e| anyhow!("Failed to create signature: {}", e))?;
 
                     // Get the parent commit (HEAD), if it exists
                     let parent_commit = match repo.head() {
                         Ok(head) => {
-                            let oid = head.target().ok_or_else(|| {
-                                anyhow!("HEAD reference has no target")
-                            })?;
-                            Some(repo.find_commit(oid).map_err(|e| {
-                                anyhow!("Failed to find HEAD commit: {}", e)
-                            })?)
+                            let oid = head
+                                .target()
+                                .ok_or_else(|| anyhow!("HEAD reference has no target"))?;
+                            Some(
+                                repo.find_commit(oid)
+                                    .map_err(|e| anyhow!("Failed to find HEAD commit: {}", e))?,
+                            )
                         }
                         Err(e) => {
                             // No HEAD means this is the first commit
@@ -2603,9 +2608,9 @@ impl AGIExecutor {
 
                     // Check if there are actual changes to commit
                     if let Some(ref parent) = parent_commit {
-                        let parent_tree = parent.tree().map_err(|e| {
-                            anyhow!("Failed to get parent tree: {}", e)
-                        })?;
+                        let parent_tree = parent
+                            .tree()
+                            .map_err(|e| anyhow!("Failed to get parent tree: {}", e))?;
 
                         let diff = repo
                             .diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)
@@ -2644,7 +2649,8 @@ impl AGIExecutor {
                     );
 
                     Ok(Some((commit_hash, author_string)))
-                })();
+                })(
+                );
 
                 // Handle the result outside the git2 scope
                 let Some((commit_hash, author_string)) = git_result? else {
@@ -2884,13 +2890,14 @@ impl AGIExecutor {
                     .ok_or_else(|| anyhow!("Missing 'destination' parameter"))?;
 
                 // Validate the URL format - accept both HTTPS and SSH URLs
-                let is_valid_url = if url.starts_with("git@") || (url.contains(':') && !url.contains("://")) {
-                    // SSH URL format (git@github.com:user/repo.git)
-                    true
-                } else {
-                    // Try parsing as standard URL
-                    url::Url::parse(url).is_ok()
-                };
+                let is_valid_url =
+                    if url.starts_with("git@") || (url.contains(':') && !url.contains("://")) {
+                        // SSH URL format (git@github.com:user/repo.git)
+                        true
+                    } else {
+                        // Try parsing as standard URL
+                        url::Url::parse(url).is_ok()
+                    };
 
                 if !is_valid_url {
                     return Err(anyhow!("Invalid repository URL format: {}", url));
@@ -3222,8 +3229,7 @@ impl AGIExecutor {
                                 }));
                             }
                             // Nested topics (categories)
-                            if let Some(topics) =
-                                topic_obj.get("Topics").and_then(|v| v.as_array())
+                            if let Some(topics) = topic_obj.get("Topics").and_then(|v| v.as_array())
                             {
                                 for nested_topic in topics.iter().take(3) {
                                     if let Some(text) =
@@ -3254,8 +3260,10 @@ impl AGIExecutor {
                         .take(num_results.saturating_sub(results.len()))
                     {
                         if let Some(result_obj) = result.as_object() {
-                            let text =
-                                result_obj.get("Text").and_then(|v| v.as_str()).unwrap_or("");
+                            let text = result_obj
+                                .get("Text")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
                             let first_url = result_obj
                                 .get("FirstURL")
                                 .and_then(|v| v.as_str())
@@ -3386,11 +3394,7 @@ impl AGIExecutor {
                 ];
 
                 // Additional blocked command prefixes for extra safety
-                const BLOCKED_PREFIXES: &[&str] = &[
-                    "sudo dd ",
-                    "sudo mkfs",
-                    "sudo rm -rf /",
-                ];
+                const BLOCKED_PREFIXES: &[&str] = &["sudo dd ", "sudo mkfs", "sudo rm -rf /"];
 
                 let command = parameters["command"]
                     .as_str()
@@ -3638,10 +3642,7 @@ impl AGIExecutor {
                     }
                     Ok(Err(e)) => {
                         // Command failed to execute (e.g., shell not found)
-                        tracing::error!(
-                            "[Executor] Terminal command failed to execute: {}",
-                            e
-                        );
+                        tracing::error!("[Executor] Terminal command failed to execute: {}", e);
 
                         // Emit error event for UI
                         if let Some(ref app_handle) = self.app_handle {
@@ -3693,7 +3694,10 @@ impl AGIExecutor {
                                         .unwrap_or_else(|| ".".to_string()),
                                     exit_code: None,
                                     stdout: None,
-                                    stderr: Some(format!("Command timed out after {}ms", timeout_ms)),
+                                    stderr: Some(format!(
+                                        "Command timed out after {}ms",
+                                        timeout_ms
+                                    )),
                                     duration: Some(timeout_ms),
                                     session_id: Some(session_id.clone()),
                                     agent_id: None,

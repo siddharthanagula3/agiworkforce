@@ -62,19 +62,28 @@ export default function PrivacyPage() {
 
             <h3>3. Local Execution</h3>
             <p>
-              AGI Workforce is designed as a local-first application. Your workflow data, task
-              history, and local files remain on your device unless you explicitly choose to sync
-              them using our optional cloud features.
+              AGI Workforce is designed as a local-first application. Your chat history, task data,
+              and local files remain on your device unless you explicitly choose to sync them using
+              our optional cloud features.
             </p>
 
             <h3>4. AI Model Privacy</h3>
             <p>
-              When using local LLMs (e.g., Ollama), no data leaves your machine. When using cloud
-              providers (e.g., OpenAI, Anthropic), data is transmitted according to their respective
-              API policies. We do not use your data to train our own models.
+              AGI Workforce uses a managed proxy model for LLM access. When using local LLMs (e.g.,
+              Ollama), no data leaves your machine. When using cloud models (GPT-5, Claude 4.5,
+              Gemini 3, etc.), your requests are routed through our secure proxy. We do not store,
+              log, or use your conversations to train any models. You pay AGI Workforce directly -
+              we handle billing with AI providers on your behalf.
             </p>
 
-            <h3>5. Contact Us</h3>
+            <h3>5. Undo System and Action History</h3>
+            <p>
+              To enable our undo-based safety system, AGI Workforce stores action history locally on
+              your device. This allows you to reverse any AI action. This data is never transmitted
+              to our servers and can be cleared at any time from the application.
+            </p>
+
+            <h3>6. Contact Us</h3>
             <p>
               If you have any questions about this Privacy Policy, please contact us at
               support@agiworkforce.com.
