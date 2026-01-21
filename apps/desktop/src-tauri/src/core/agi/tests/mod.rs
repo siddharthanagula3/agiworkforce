@@ -8,3 +8,4 @@ pub mod outcome_tracker_tests;
 pub mod process_reasoning_tests;
 pub mod resources_tests;
 pub mod security_tests;
+pub mod tool_integration_tests;

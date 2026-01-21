@@ -187,6 +187,80 @@ impl ChangeTracker {
         id
     }
 
+    pub async fn record_git_commit(
+        &self,
+        repo_path: PathBuf,
+        commit_hash: String,
+        message: String,
+        task_id: String,
+    ) -> String {
+        let mut change = Change::new(
+            ChangeType::GitCommit {
+                hash: commit_hash.clone(),
+                message: message.clone(),
+            },
+            Some(repo_path),
+            task_id,
+            None,
+            None,
+        );
+        // Git commits can be reverted with git revert, but not auto-undone
+        change.can_revert = false;
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+        id
+    }
+
+    pub async fn record_command_executed(
+        &self,
+        command: String,
+        working_dir: PathBuf,
+        task_id: String,
+    ) -> String {
+        let mut change = Change::new(
+            ChangeType::CommandExecuted {
+                command: command.clone(),
+                working_dir: working_dir.to_string_lossy().to_string(),
+            },
+            Some(working_dir),
+            task_id,
+            None,
+            None,
+        );
+        // Commands cannot be automatically undone
+        change.can_revert = false;
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+        id
+    }
+
+    pub async fn record_git_checkout(
+        &self,
+        repo_path: PathBuf,
+        branch: String,
+        task_id: String,
+    ) -> String {
+        let mut change = Change::new(
+            ChangeType::GitCheckout {
+                branch: branch.clone(),
+            },
+            Some(repo_path),
+            task_id,
+            None,
+            None,
+        );
+        change.can_revert = false;
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+        id
+    }
+
     pub async fn create_snapshot(
         &self,
         task_id: String,
