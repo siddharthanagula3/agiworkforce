@@ -43,7 +43,11 @@ mod git_tool_tests {
     #[test]
     fn test_git_init_handles_nonexistent_parent() {
         let temp = TempDir::new().expect("Failed to create temp directory");
-        let invalid_path = temp.path().join("nonexistent").join("deeply").join("nested");
+        let invalid_path = temp
+            .path()
+            .join("nonexistent")
+            .join("deeply")
+            .join("nested");
 
         // Test that the parent directory doesn't exist before any init attempt
         // The executor validates that parent exists before calling git init
@@ -71,7 +75,11 @@ mod git_tool_tests {
         let statuses = repo.statuses(None).expect("Failed to get statuses");
 
         // Clean repo should have no entries
-        assert_eq!(statuses.len(), 0, "Clean repo should have no status entries");
+        assert_eq!(
+            statuses.len(),
+            0,
+            "Clean repo should have no status entries"
+        );
     }
 
     #[test]
@@ -91,7 +99,10 @@ mod git_tool_tests {
         let statuses = repo.statuses(None).expect("Failed to get statuses");
 
         // Should have one untracked entry
-        assert!(!statuses.is_empty(), "Should have at least one status entry");
+        assert!(
+            !statuses.is_empty(),
+            "Should have at least one status entry"
+        );
 
         let mut found_untracked = false;
         for entry in statuses.iter() {
@@ -192,8 +203,7 @@ mod git_tool_tests {
         fs::write(repo_path.join("file1.txt"), "content 1").expect("Failed to write file1");
         fs::write(repo_path.join("file2.txt"), "content 2").expect("Failed to write file2");
         fs::create_dir(repo_path.join("subdir")).expect("Failed to create subdir");
-        fs::write(repo_path.join("subdir/file3.txt"), "content 3")
-            .expect("Failed to write file3");
+        fs::write(repo_path.join("subdir/file3.txt"), "content 3").expect("Failed to write file3");
 
         // Add all files using glob
         let mut index = repo.index().expect("Failed to get index");
@@ -230,8 +240,8 @@ mod git_tool_tests {
         // Create commit
         let tree_id = index.write_tree().expect("Failed to write tree");
         let tree = repo.find_tree(tree_id).expect("Failed to find tree");
-        let sig = Signature::now("Test User", "test@example.com")
-            .expect("Failed to create signature");
+        let sig =
+            Signature::now("Test User", "test@example.com").expect("Failed to create signature");
 
         let commit_oid = repo
             .commit(Some("HEAD"), &sig, &sig, "Test commit message", &tree, &[])
@@ -720,11 +730,7 @@ mod terminal_execute_tests {
             .expect("Failed to execute command");
 
         assert!(!output.status.success(), "Command should fail with exit 42");
-        assert_eq!(
-            output.status.code(),
-            Some(42),
-            "Exit code should be 42"
-        );
+        assert_eq!(output.status.code(), Some(42), "Exit code should be 42");
     }
 
     #[tokio::test]
@@ -741,11 +747,7 @@ mod terminal_execute_tests {
                 || cmd_lower.contains("shutdown")
                 || cmd_lower.contains("reboot");
 
-            assert!(
-                !is_blocked,
-                "Safe command '{}' should not be blocked",
-                cmd
-            );
+            assert!(!is_blocked, "Safe command '{}' should not be blocked", cmd);
         }
     }
 
@@ -855,12 +857,12 @@ mod search_web_tests {
     fn test_num_results_clamping() {
         // Results should be clamped between 1 and 20
         let test_cases = vec![
-            (0i64, 1usize),    // 0 -> 1
-            (1, 1),            // 1 -> 1
-            (10, 10),          // 10 -> 10
-            (20, 20),          // 20 -> 20
-            (50, 20),          // 50 -> 20
-            (-5, 1),           // negative -> 1
+            (0i64, 1usize), // 0 -> 1
+            (1, 1),         // 1 -> 1
+            (10, 10),       // 10 -> 10
+            (20, 20),       // 20 -> 20
+            (50, 20),       // 50 -> 20
+            (-5, 1),        // negative -> 1
         ];
 
         for (input, expected) in test_cases {
@@ -987,10 +989,7 @@ mod search_web_tests {
         let data: serde_json::Value = response.json().await.expect("Failed to parse response");
 
         // DuckDuckGo should return some data for "rust programming"
-        assert!(
-            data.is_object(),
-            "Response should be a JSON object"
-        );
+        assert!(data.is_object(), "Response should be a JSON object");
     }
 }
 
@@ -1014,10 +1013,7 @@ mod path_security_tests {
             canonical.is_absolute(),
             "Canonicalized path should be absolute"
         );
-        assert!(
-            canonical.exists(),
-            "Canonicalized path should exist"
-        );
+        assert!(canonical.exists(), "Canonicalized path should exist");
     }
 
     #[test]
@@ -1031,10 +1027,7 @@ mod path_security_tests {
 
         // The path components contain ".." which is suspicious
         let path_str = traversal_path.to_string_lossy();
-        assert!(
-            path_str.contains(".."),
-            "Traversal path should contain .."
-        );
+        assert!(path_str.contains(".."), "Traversal path should contain ..");
 
         // Canonicalization would resolve this, but the result might not be
         // within allowed directories (which the executor checks)
@@ -1055,7 +1048,8 @@ mod path_security_tests {
 
             // Canonicalize should resolve symlink to target
             let canonical_link = fs::canonicalize(&link).expect("Failed to canonicalize link");
-            let canonical_target = fs::canonicalize(&target).expect("Failed to canonicalize target");
+            let canonical_target =
+                fs::canonicalize(&target).expect("Failed to canonicalize target");
 
             assert_eq!(
                 canonical_link, canonical_target,
@@ -1093,10 +1087,7 @@ mod path_security_tests {
             .filter_map(|d| fs::canonicalize(d).ok())
             .any(|allowed| canonical_test.starts_with(&allowed));
 
-        assert!(
-            is_allowed,
-            "Temp file should be within allowed directories"
-        );
+        assert!(is_allowed, "Temp file should be within allowed directories");
     }
 }
 
@@ -1117,10 +1108,8 @@ mod integration_workflow_tests {
         let repo = Repository::init(&repo_path).expect("git_init failed");
 
         // Step 2: Create files
-        fs::write(repo_path.join("README.md"), "# Test Project\n")
-            .expect("Failed to write README");
-        fs::write(repo_path.join("main.rs"), "fn main() {}\n")
-            .expect("Failed to write main.rs");
+        fs::write(repo_path.join("README.md"), "# Test Project\n").expect("Failed to write README");
+        fs::write(repo_path.join("main.rs"), "fn main() {}\n").expect("Failed to write main.rs");
 
         // Step 3: Add all files
         let mut index = repo.index().expect("Failed to get index");
@@ -1141,11 +1130,7 @@ mod integration_workflow_tests {
 
         // Step 5: Verify status is clean
         let statuses = repo.statuses(None).expect("Failed to get statuses");
-        assert_eq!(
-            statuses.len(),
-            0,
-            "Repository should be clean after commit"
-        );
+        assert_eq!(statuses.len(), 0, "Repository should be clean after commit");
 
         // Verify commit exists
         let commit = repo.find_commit(commit_oid).expect("Failed to find commit");

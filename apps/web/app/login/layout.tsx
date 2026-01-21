@@ -2,7 +2,8 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Sign In | AGI Workforce',
-  description: 'Sign in to your AGI Workforce account to access your AI agents and workflows.',
+  description:
+    'Sign in to your AGI Workforce account to access your AI assistant and manage billing.',
   robots: {
     index: false, // Don't index login page
   },

@@ -1,4 +1,15 @@
-import { Brain, Check, Loader2, Search, Sparkles, Wand2, X } from 'lucide-react';
+import {
+  Brain,
+  Check,
+  Loader2,
+  Search,
+  Sparkles,
+  Wand2,
+  X,
+  Zap,
+  DollarSign,
+  Crown,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -10,7 +21,7 @@ import {
 } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
-import { useModelStore } from '../../stores/modelStore';
+import { useModelStore, selectLastRoutingDecision } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
 
@@ -117,8 +128,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             outputCost: 0,
             capabilities: {
               streaming: true,
-              tools: false,
-              vision: false,
+              tools: false, // Most Ollama models don't support tools
+              vision: false, // Check specific model for vision (llava, etc.)
               json: true,
               thinking: false,
               computerUse: false,
@@ -127,6 +138,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               videoGen: false,
               search: false,
               research: false,
+              codeExecution: false, // Local models don't have code sandboxes
             },
             speed: 'medium',
             quality: 'good',
@@ -191,26 +203,42 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     selectedModel === AUTO_BALANCED_ID ||
     selectedModel === AUTO_PREMIUM_ID;
 
+  // Get last routing decision for feedback
+  const lastRoutingDecision = useModelStore(selectLastRoutingDecision);
+
+  // Auto mode configurations with icons and descriptions
+  const autoModeConfig = {
+    [AUTO_ECONOMY_ID]: {
+      name: 'Auto (Best Value)',
+      description: 'Cheapest model that works',
+      icon: DollarSign,
+      models: 'Gemini Flash, GPT-4o Mini, DeepSeek',
+    },
+    [AUTO_BALANCED_ID]: {
+      name: 'Auto Balanced',
+      description: 'Quality/cost sweet spot',
+      icon: Zap,
+      models: 'Claude Sonnet, Gemini Pro, GPT-4o',
+    },
+    [AUTO_PREMIUM_ID]: {
+      name: 'Auto (Best Model)',
+      description: 'Maximum performance',
+      icon: Crown,
+      models: 'Claude Opus, GPT-5.2',
+    },
+  };
+
   // Determine which auto modes to show based on plan tier
   const availableAutoModes = useMemo(() => {
     const plan = userPlanTier as string;
     if (plan === 'hobby' || plan === 'free' || plan === 'none') {
-      return [
-        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized for Hobby' },
-      ];
+      return [AUTO_ECONOMY_ID];
     } else if (plan === 'pro') {
-      return [
-        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized' },
-        { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
-      ];
+      return [AUTO_ECONOMY_ID, AUTO_BALANCED_ID];
     } else if (plan === 'max' || plan === 'enterprise') {
-      return [
-        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized' },
-        { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
-        { id: AUTO_PREMIUM_ID, name: 'Auto (Best Model)', description: 'Maximum performance' },
-      ];
+      return [AUTO_ECONOMY_ID, AUTO_BALANCED_ID, AUTO_PREMIUM_ID];
     }
-    return [{ id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' }];
+    return [AUTO_BALANCED_ID];
   }, [userPlanTier]);
   const suggestedMetadata = suggestion
     ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
@@ -274,48 +302,55 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         )}
       </div>
 
-      {}
+      {/* Smart Routing Section */}
       <div className="mb-2 space-y-1">
         <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Smart Routing (2026)
+          Smart Routing (Jan 2026)
         </div>
-        {availableAutoModes.map((mode) => {
-          const isSelected = selectedModel === mode.id;
+        {availableAutoModes.map((modeId) => {
+          const config = autoModeConfig[modeId as keyof typeof autoModeConfig];
+          const isSelected = selectedModel === modeId;
+          const IconComponent = config?.icon ?? Wand2;
           return (
             <button
-              key={mode.id}
-              onClick={() => handleModelChange(mode.id)}
+              key={modeId}
+              onClick={() => handleModelChange(modeId)}
               className={cn(
                 'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
                 isSelected
-                  ? 'border-amber-500 bg-linear-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-sm dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
+                  ? 'border-amber-500 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-sm dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
                   : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
               )}
             >
               <div className="flex items-center gap-2">
-                <Wand2 size={14} className={isSelected ? 'text-primary' : 'text-gray-500'} />
+                <IconComponent
+                  size={14}
+                  className={isSelected ? 'text-amber-500' : 'text-gray-500'}
+                />
                 <div className="text-left">
-                  <div className="font-medium">{mode.name}</div>
+                  <div className="font-medium">{config?.name ?? modeId}</div>
                   <div className="text-[9px] text-gray-500 dark:text-gray-400">
-                    {mode.description}
+                    {config?.description}
                   </div>
                 </div>
               </div>
-              {isSelected && <Check size={14} className="text-primary" />}
+              {isSelected && <Check size={14} className="text-amber-500" />}
             </button>
           );
         })}
 
-        {}
-        {isAutoMode && suggestion && suggestedMetadata && (
+        {/* Show last routing decision if in auto mode */}
+        {isAutoMode && lastRoutingDecision?.wasRouted && (
           <div className="ml-6 mt-1 rounded-md bg-gray-50 px-3 py-1.5 text-[10px] dark:bg-charcoal-800">
             <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <Sparkles size={10} />
+              <Sparkles size={10} className="text-amber-500" />
               <span>
-                Routing to{' '}
+                Last used:{' '}
                 <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {suggestedMetadata.name}
+                  {getModelMetadata(lastRoutingDecision.routedModelId)?.name ??
+                    lastRoutingDecision.routedModelId}
                 </span>
+                <span className="ml-1 text-gray-400">({lastRoutingDecision.taskType})</span>
               </span>
             </div>
           </div>
