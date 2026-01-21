@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Skeleton } from '../ui/Skeleton';
-import { useCostStore } from '../../stores/costStore';
+import { useBillingUsageStore } from '../../stores/billingUsage';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 import { usePrompt } from '../ui/PromptDialog';
@@ -42,15 +42,15 @@ export const CostDashboard = memo(function CostDashboard() {
     loadOverview,
     loadAnalytics,
     setMonthlyBudget,
-  } = useCostStore((state) => ({
-    overview: state.overview,
-    analytics: state.analytics,
-    filters: state.filters,
-    loadingOverview: state.loadingOverview,
-    loadingAnalytics: state.loadingAnalytics,
-    error: state.error,
-    loadOverview: state.loadOverview,
-    loadAnalytics: state.loadAnalytics,
+  } = useBillingUsageStore((state) => ({
+    overview: state.costOverview,
+    analytics: state.costAnalytics,
+    filters: state.costFilters,
+    loadingOverview: state.loadingCostOverview,
+    loadingAnalytics: state.loadingCostAnalytics,
+    error: state.costError,
+    loadOverview: state.loadCostOverview,
+    loadAnalytics: state.loadCostAnalytics,
     setMonthlyBudget: state.setMonthlyBudget,
   }));
 
