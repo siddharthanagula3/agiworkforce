@@ -17,12 +17,14 @@
  */
 
 import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
-import { useAuthStore } from './authStore';
-import { useAccountStore, type CreditBalance, type SubscriptionStatus } from './accountStore';
-import { useBillingStore } from './billingStore';
-import { useUsageStore } from './usageStore';
+import {
+  useUnifiedAuthStore,
+  type CreditBalance,
+  type SubscriptionStatus,
+  type SubscriptionFetchStatus,
+} from './auth';
+import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/supabase';
-import { type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { accountApi } from '../api/accountApi';
 import { API_BASE_URL } from '../api/client';
 
@@ -178,12 +180,14 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       subscriptionFetchStatus: authState.subscriptionFetchStatus,
     });
 
+    // Get the unified auth store
+    const unifiedAuthStore = useUnifiedAuthStore.getState();
+
     // ═══════════════════════════════════════════════════════════════
-    // STEP 1: Update AuthStore (basic user info)
+    // STEP 1: Update user info in unified store
     // ═══════════════════════════════════════════════════════════════
-    const authStore = useAuthStore.getState();
     if (authState.user) {
-      authStore.setUser({
+      unifiedAuthStore.setUser({
         id: authState.user.id,
         email: authState.user.email || '',
         name:
@@ -193,21 +197,13 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
           authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
       });
     } else {
-      authStore.clearAuth();
+      unifiedAuthStore.clearAuth();
     }
 
-    // If no user and not loading, clear all stores and return
+    // If no user and not loading, clear store and return
     if (!authState.user) {
-      console.log('[AuthOrchestrator] No user, clearing all stores');
-      useBillingStore.getState().setCustomer(null);
-      useBillingStore.getState().setSubscription(null);
-      useBillingStore.setState({
-        creditBalance_cents: null,
-        dailyUsage_cents: null,
-        dailyLimit_cents: null,
-        dailyResetAt: null,
-      });
-      useAccountStore.getState().reset();
+      console.log('[AuthOrchestrator] No user, clearing unified auth store');
+      unifiedAuthStore.reset();
       clearCachedSubscription();
       return;
     }
@@ -258,23 +254,25 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 4: Update BillingStore
+    // STEP 4: Update Unified Auth Store (combines auth, account, billing)
     // ═══════════════════════════════════════════════════════════════
-    const billingStore = useBillingStore.getState();
+    const fetchStatus: SubscriptionFetchStatus =
+      authState.subscriptionFetchStatus === 'succeeded' ? 'succeeded' : 'failed';
 
-    const customerInfo: CustomerInfo = {
+    // Set Stripe customer info
+    unifiedAuthStore.setStripeCustomer({
       id: authState.user.id,
       stripe_customer_id: authState.subscription?.stripe_customer_id || '',
       email: authState.user.email || '',
       name: authState.profile?.display_name || undefined,
       created_at: Math.floor(new Date(authState.user.created_at).getTime() / 1000),
       updated_at: Date.now() / 1000,
-    };
-    billingStore.setCustomer(customerInfo);
+    });
 
+    // Set Stripe subscription if available
     if (authState.subscription) {
       const sub = authState.subscription;
-      const subscriptionInfo: SubscriptionInfo = {
+      unifiedAuthStore.setStripeSubscription({
         id: sub.stripe_subscription_id || `sub_${authState.user.id}`,
         customer_id: authState.user.id,
         stripe_subscription_id: sub.stripe_subscription_id || '',
@@ -297,15 +295,14 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         currency: 'usd',
         created_at: Math.floor(new Date(sub.created_at || new Date()).getTime() / 1000),
         updated_at: Math.floor(new Date(sub.updated_at || new Date()).getTime() / 1000),
-      };
-      billingStore.setSubscription(subscriptionInfo);
+      });
     } else {
-      billingStore.setSubscription(null);
+      unifiedAuthStore.setStripeSubscription(null);
     }
 
-    // Update credits in billing store
+    // Update credits
     if (credits) {
-      billingStore.updateCredits({
+      unifiedAuthStore.updateCredits({
         remaining_cents: credits.remaining_cents ?? 0,
         daily_used: credits.daily_used_cents,
         daily_limit: credits.daily_limit_cents,
@@ -313,10 +310,8 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // STEP 5: Update AccountStore
-    // ═══════════════════════════════════════════════════════════════
-    useAccountStore.getState().setAccount({
+    // Update account/subscription info via setAccount
+    unifiedAuthStore.setAccount({
       id: authState.user.id,
       email: authState.user.email || null,
       displayName:
@@ -330,8 +325,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       plan: planTier,
       planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
       subscriptionStatus: (authState.subscription?.status as SubscriptionStatus) || 'none',
-      subscriptionFetchStatus:
-        authState.subscriptionFetchStatus === 'succeeded' ? 'succeeded' : 'failed',
+      subscriptionFetchStatus: fetchStatus,
       currentPeriodEnd: authState.subscription?.current_period_end
         ? new Date(authState.subscription.current_period_end).getTime()
         : null,
@@ -407,21 +401,25 @@ export function initializeAuthOrchestrator(): () => void {
     void processAuthStateChange(authState);
   });
 
-  // Also set up usage store (it subscribes to billing store, not auth directly)
-  const unsubscribeUsage = useBillingStore.subscribe((billingState) => {
-    // UsageStore logic - subscribes to billing store changes, not auth
-    const usageStore = useUsageStore.getState();
-    const { subscription, customer } = billingState;
+  // Also set up usage store (it subscribes to unified auth store)
+  const unsubscribeUsage = useUnifiedAuthStore.subscribe((authState) => {
+    // UsageStore logic - subscribes to auth store for subscription/customer changes
+    const billingUsageStore = useBillingUsageStore.getState();
+    const subscription = authState.stripeSubscription;
+    const customer = authState.stripeCustomer;
 
     if (subscription && subscription.current_period_start && subscription.current_period_end) {
       if (
-        subscription.current_period_start !== usageStore.periodStart ||
-        subscription.current_period_end !== usageStore.periodEnd
+        subscription.current_period_start !== billingUsageStore.usagePeriodStart ||
+        subscription.current_period_end !== billingUsageStore.usagePeriodEnd
       ) {
-        usageStore.setPeriod(subscription.current_period_start, subscription.current_period_end);
+        billingUsageStore.setUsagePeriod(
+          subscription.current_period_start,
+          subscription.current_period_end,
+        );
 
         if (customer) {
-          void usageStore.fetchUsage(
+          void billingUsageStore.fetchUsage(
             customer.id,
             subscription.current_period_start,
             subscription.current_period_end,
