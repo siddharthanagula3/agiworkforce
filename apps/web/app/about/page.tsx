@@ -53,7 +53,7 @@ const jsonLd = {
       url: 'https://agiworkforce.com',
       logo: 'https://agiworkforce.com/logo.svg',
       description:
-        'AGI Automation LLC builds AGI Workforce, a desktop application that brings AI agents to your computer for workflow automation.',
+        'AGI Automation LLC builds AGI Workforce, a desktop app where you tell the AI what you want and it handles everything - with full undo support.',
       foundingDate: '2025',
       foundingLocation: {
         '@type': 'Place',
@@ -159,9 +159,9 @@ export default function AboutPage() {
                     contracts or require a team of engineers to deploy.
                   </p>
                   <p className="text-zinc-400 text-lg leading-relaxed">
-                    AGI Workforce puts the power of autonomous AI agents directly on your desktop,
-                    enabling individuals and small teams to automate complex workflows that
-                    previously required entire departments.
+                    With AGI Workforce, you simply tell the AI what you want done - no technical
+                    knowledge required. Everything is reversible, so you can experiment freely
+                    knowing you can always undo.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
@@ -237,7 +237,8 @@ export default function AboutPage() {
             <div className="container relative mx-auto px-4 text-center">
               <h2 className="text-4xl font-bold tracking-tight mb-6">Ready to Get Started?</h2>
               <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-                Join thousands of users automating their workflows with AGI Workforce.
+                Just tell the AI what you want done. No setup, no configuration - everything is
+                reversible.
               </p>
               <Link
                 href="/download"

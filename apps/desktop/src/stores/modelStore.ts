@@ -15,6 +15,7 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import type { ModelMetadata } from '../constants/llm';
 import { getAllModels, getModelMetadata, PROVIDERS_IN_ORDER } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
+import { getModelForRequest, isManualSelection, type TaskType } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import { useSettingsStore } from './settingsStore';
 
@@ -55,6 +56,23 @@ export interface ModelInfo {
   name: string;
   provider: Provider;
   available: boolean;
+}
+
+/**
+ * Routing decision from the intelligent model router.
+ * This tracks what model was selected for the current/last message.
+ */
+export interface RoutingDecision {
+  /** The actual model ID that will be used */
+  routedModelId: string;
+  /** The task type that was detected */
+  taskType: TaskType;
+  /** Human-readable reason for the selection */
+  reason: string;
+  /** Whether routing was performed (false if manual selection) */
+  wasRouted: boolean;
+  /** Timestamp of the routing decision */
+  timestamp: number;
 }
 
 /** Ollama model details from the Rust backend */
@@ -98,6 +116,9 @@ interface ModelState {
   ollamaLoading: boolean;
   ollamaError: string | null;
 
+  // Intelligent routing state
+  lastRoutingDecision: RoutingDecision | null;
+
   loading: boolean;
   error: string | null;
 
@@ -116,6 +137,23 @@ interface ModelState {
   fetchOllamaModels: () => Promise<OllamaModel[]>;
   pullOllamaModel: (modelName: string) => Promise<void>;
   deleteOllamaModel: (modelName: string) => Promise<void>;
+
+  // Intelligent routing actions
+  /**
+   * Get the model to use for a specific message.
+   * - If user manually selected a model, returns that model (bypass routing)
+   * - If auto mode selected, routes to optimal model based on message content
+   *
+   * @param message - The user's message content
+   * @param hasImages - Whether the message includes images
+   * @returns The model ID to use and routing decision details
+   */
+  getRoutedModel: (message: string, hasImages?: boolean) => RoutingDecision;
+
+  /**
+   * Check if current selection is a manual model selection (bypasses routing)
+   */
+  isManualModelSelection: () => boolean;
 
   reset: () => void;
 }
@@ -157,8 +195,8 @@ export const useModelStore = create<ModelState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        selectedModel: 'auto',
-        selectedProvider: null,
+        selectedModel: 'auto-balanced',
+        selectedProvider: 'managed_cloud',
         favorites: [],
         recentModels: [],
         providerStatuses: {
@@ -182,6 +220,9 @@ export const useModelStore = create<ModelState>()(
         ollamaAvailable: false,
         ollamaLoading: false,
         ollamaError: null,
+
+        // Intelligent routing initial state
+        lastRoutingDecision: null,
 
         loading: false,
         error: null,
@@ -380,6 +421,47 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
+        // Intelligent routing implementation
+        getRoutedModel: (message: string, hasImages: boolean = false): RoutingDecision => {
+          const { selectedModel } = get();
+
+          // If no model selected, default to auto-balanced
+          const effectiveModel = selectedModel || 'auto-balanced';
+
+          // Use the model router to determine the actual model
+          const routingResult = getModelForRequest(effectiveModel, message, hasImages);
+
+          // Get task type from routing (default to 'general' for manual selections)
+          let taskType: TaskType = 'general';
+          if (routingResult.wasRouted) {
+            // Extract task type from reason if available
+            const taskMatch = routingResult.reason.match(/Keywords:.*?(\w+) task/i);
+            const matchedType = taskMatch?.[1];
+            if (matchedType) {
+              taskType = matchedType.toLowerCase() as TaskType;
+            }
+          }
+
+          const decision: RoutingDecision = {
+            routedModelId: routingResult.modelId,
+            taskType,
+            reason: routingResult.reason,
+            wasRouted: routingResult.wasRouted,
+            timestamp: Date.now(),
+          };
+
+          // Store the routing decision for UI feedback
+          set({ lastRoutingDecision: decision });
+
+          return decision;
+        },
+
+        isManualModelSelection: (): boolean => {
+          const { selectedModel } = get();
+          if (!selectedModel) return false;
+          return isManualSelection(selectedModel);
+        },
+
         reset: () => {
           set({
             selectedModel: null,
@@ -404,6 +486,8 @@ export const useModelStore = create<ModelState>()(
             ollamaAvailable: false,
             ollamaLoading: false,
             ollamaError: null,
+            // Reset routing state
+            lastRoutingDecision: null,
             loading: false,
             error: null,
           });
@@ -478,6 +562,11 @@ export const selectOllamaModels = (state: ModelState) => state.ollamaModels;
 export const selectOllamaAvailable = (state: ModelState) => state.ollamaAvailable;
 export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
 export const selectOllamaError = (state: ModelState) => state.ollamaError;
+
+// Routing selectors
+export const selectLastRoutingDecision = (state: ModelState) => state.lastRoutingDecision;
+export const selectIsAutoMode = (state: ModelState) =>
+  state.selectedModel?.startsWith('auto-') ?? false;
 
 /**
  * Helper function to format Ollama model size for display

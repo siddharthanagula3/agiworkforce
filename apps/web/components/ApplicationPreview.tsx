@@ -13,23 +13,23 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: <Zap className="h-5 w-5" />,
-    title: 'Real-Time Streaming',
-    description: 'Event-driven architecture for instant AI responses',
+    title: 'Just Chat',
+    description: 'Describe what you want in plain English - no setup needed',
   },
   {
     icon: <Code className="h-5 w-5" />,
-    title: 'Smart Mode Selection',
-    description: 'Optimized modes for Web, Code, Writing, and Research',
+    title: 'Full Autonomy',
+    description: 'AI completes tasks end-to-end without asking permission',
   },
   {
     icon: <Globe className="h-5 w-5" />,
-    title: 'Multi-Model Support',
-    description: 'Switch between Gemini, GPT, Claude, and more',
+    title: 'Always Reversible',
+    description: 'Every action can be undone - experiment freely',
   },
   {
     icon: <Monitor className="h-5 w-5" />,
-    title: 'Intelligent Interface',
-    description: 'Clean, focused design for maximum productivity',
+    title: 'Multi-LLM Support',
+    description: 'GPT-5, Claude 4.5, Gemini 3, and local models',
   },
 ];
 
@@ -112,21 +112,21 @@ export function ApplicationPreview() {
           {/* Feature Callouts (Optional - can be shown on hover) */}
           <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="rounded-full bg-blue-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
-              💬 Intelligent Chat Interface
+              💬 Just describe what you want
             </div>
             <div className="rounded-full bg-emerald-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
-              🎯 Mode Selection (Web, Code, Research)
+              ↩️ Everything is reversible
             </div>
             <div className="rounded-full bg-purple-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
-              🤖 Gemini 3 Flash & More Models
+              🤖 GPT-5, Claude 4.5, Gemini 3 & more
             </div>
           </div>
         </div>
 
         {/* Caption */}
         <p className="mt-4 text-center text-sm text-zinc-400">
-          Clean, focused interface designed for productivity. Switch between specialized modes,
-          choose from multiple AI models, and experience real-time streaming responses.
+          Just tell the AI what you want done. No configuration, no setup wizards, no technical
+          knowledge required. Everything is reversible.
         </p>
       </div>
     </div>

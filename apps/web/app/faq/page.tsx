@@ -17,19 +17,19 @@ const faqs: FAQItem[] = [
     category: 'General',
     question: 'What is AGI Workforce?',
     answer:
-      'AGI Workforce is a desktop application that brings the power of AI agents directly to your computer. It enables you to automate complex workflows, interact with multiple AI models, and boost your productivity without requiring any coding knowledge.',
+      'AGI Workforce is a desktop app where you simply tell the AI what you want done, and it autonomously completes the task. No setup wizards, no configuration screens - just open the app and start chatting. Everything the AI does is reversible, so you can always undo if something goes wrong.',
   },
   {
     category: 'General',
     question: 'How is AGI Workforce different from other AI tools?',
     answer:
-      'Unlike browser-based AI tools, AGI Workforce runs natively on your desktop with access to your local files, terminal, and applications. It supports multiple AI providers (OpenAI, Anthropic, Google, and more), works offline with local models, and keeps your data private by processing locally when possible.',
+      'AGI Workforce is designed for non-technical users who want results, not configuration. You describe your goal in plain English, and the AI figures out the steps. Unlike tools that require you to build workflows or approve every action, our AI works autonomously with a unique undo-based safety model - everything is reversible, so you can experiment freely.',
   },
   {
     category: 'General',
     question: 'Do I need technical knowledge to use AGI Workforce?',
     answer:
-      'No! AGI Workforce is designed to be accessible to everyone. You can interact with AI agents using natural language, and the intuitive interface guides you through automation workflows without requiring any programming skills.',
+      'Absolutely not. AGI Workforce is built specifically for non-technical users. There are no settings screens to configure, no technical jargon to learn. Just describe what you want in your own words and the AI handles everything. Error messages are in plain English, and you can always say "undo" if something goes wrong.',
   },
   // Pricing
   {
@@ -61,7 +61,7 @@ const faqs: FAQItem[] = [
     category: 'Platform',
     question: 'Can I sync between multiple devices?',
     answer:
-      'Yes! With a Pro or Max subscription, you can sync your workflows, settings, and history across multiple devices. Your data is securely synchronized through our cloud infrastructure.',
+      'Yes! With a Pro or Max subscription, you can sync your chat history and preferences across multiple devices. The desktop app is the primary experience, while the web platform handles billing and device management.',
   },
   {
     category: 'Platform',
@@ -74,7 +74,7 @@ const faqs: FAQItem[] = [
     category: 'Security',
     question: 'How is my data protected?',
     answer:
-      'Security is our top priority. Your API keys are encrypted and stored locally on your device. When using cloud sync, all data is encrypted in transit and at rest. We never have access to your API keys or the content of your conversations.',
+      'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. We use a managed proxy model for LLM calls, so you pay AGI Workforce directly - no need to manage your own API keys from OpenAI or Anthropic.',
   },
   {
     category: 'Security',
@@ -86,26 +86,32 @@ const faqs: FAQItem[] = [
     category: 'Security',
     question: 'Which AI providers are supported?',
     answer:
-      'AGI Workforce supports OpenAI (GPT-4, GPT-4o), Anthropic (Claude), Google (Gemini), xAI (Grok), DeepSeek, Qwen, Moonshot, and local models via Ollama. You can use your own API keys or our managed cloud service.',
+      'AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, Grok 4.1, DeepSeek V3, Qwen 3, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
   },
   // Features
   {
     category: 'Features',
     question: 'What kind of tasks can I automate?',
     answer:
-      'You can automate a wide range of tasks including file management, code generation and review, document processing, web browsing, terminal commands, scheduling, and multi-step workflows that combine multiple actions.',
+      'Just tell the AI what you need: "book me a flight to NYC", "organize my downloads folder", "fill out this form", "research competitors and create a report". The AI figures out the steps and handles web automation, file management, data processing, and more.',
   },
   {
     category: 'Features',
-    question: 'Can I use multiple AI models together?',
+    question: 'How does the undo system work?',
     answer:
-      'Yes! AGI Workforce supports intelligent task routing, allowing you to use different AI models for different types of tasks. For example, you could use Claude for coding tasks and GPT-4 for creative writing, all within the same workflow.',
+      'Every action the AI takes is reversible. If something goes wrong, just say "undo" or "revert that" and the AI will restore the previous state. This is how we provide full autonomy without risk - you can let the AI work freely knowing you can always roll back.',
   },
   {
     category: 'Features',
-    question: 'Is there an API for developers?',
+    question: 'Can I use multiple AI models?',
     answer:
-      'Enterprise customers have access to our API for integrating AGI Workforce capabilities into their own applications and workflows. Contact us for more information about enterprise solutions.',
+      'Yes! AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, DeepSeek V3, Qwen 3, and local models via Ollama. The AI automatically picks the best model for each task, or you can specify your preference.',
+  },
+  {
+    category: 'Features',
+    question: 'Do I need to build workflows or configure anything?',
+    answer:
+      'No! Unlike traditional automation tools with drag-and-drop builders, AGI Workforce uses a chat-first approach. You describe your goal in plain English and the AI determines the steps. No visual workflow builders, no configuration screens, no technical setup.',
   },
 ];
 
