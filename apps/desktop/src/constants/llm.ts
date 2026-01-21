@@ -73,11 +73,9 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
 };
 
 // Thinking model variants - models that support extended thinking/reasoning
-export const THINKING_MODEL_VARIANTS: Record<string, string> = {
-  'claude-sonnet-4.5': 'claude-opus-4.5',
-  'gpt-5.2': 'gpt-5.2', // GPT-5.2 has native reasoning
-  'gemini-3-pro': 'gemini-3-pro', // Gemini 3 has native reasoning
-};
+// For subscription-only model, thinking variants are handled by managed cloud
+// so this map is empty. Users don't manually select thinking variants.
+export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 
 // Model presets for QuickModelSelector - organized by provider
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
@@ -124,6 +122,8 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
 
 // Context windows for all models (verified January 2026)
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  // Default auto mode (subscription-only primary model)
+  auto: 128_000, // Default context window for auto mode
   // Auto modes (inherit from best available)
   'auto-economy': 2_000_000, // Grok 4 Fast has 2M
   'auto-balanced': 200_000,
@@ -209,6 +209,38 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // ============================================
   // Auto modes inherit capabilities from the models in their pool
   // The router selects based on task type and available model capabilities
+
+  // Default 'auto' mode - the primary subscription-only model
+  // This is what users see by default - intelligent task-based routing
+  auto: {
+    id: 'auto',
+    name: 'Auto (Best Available)',
+    provider: 'managed_cloud',
+    modelType: 'chat',
+    contextWindow: 128_000, // Conservative default, actual varies by routed model
+    inputCost: 0, // Included in subscription
+    outputCost: 0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true, // Managed cloud handles thinking when needed
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: true,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['All Tasks', 'Automatic Optimization', 'Smart Routing'],
+    released: 'January 2026',
+  },
+
   'auto-economy': {
     id: 'auto-economy',
     name: 'Auto (Best Value)',
