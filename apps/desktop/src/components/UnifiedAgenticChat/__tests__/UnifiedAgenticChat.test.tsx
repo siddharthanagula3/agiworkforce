@@ -56,11 +56,26 @@ vi.mock('../../../stores/authStore', () => ({
 }));
 
 // Mock stores to prevent infinite loops in React 19
-vi.mock('../../../stores/costStore', () => ({
-  useCostStore: vi.fn(() => ({
-    overview: { today_total: 0, month_total: 0, monthly_budget: null, remaining_budget: null },
-    loadOverview: vi.fn(),
+vi.mock('../../../stores/billingUsage', () => ({
+  useBillingUsageStore: vi.fn(() => ({
+    costOverview: { today_total: 0, month_total: 0, monthly_budget: null, remaining_budget: null },
+    loadCostOverview: vi.fn(),
+    budget: {
+      enabled: false,
+      period: 'daily',
+      limit: 100000,
+      warningThreshold: 80,
+      currentUsage: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      estimatedCost: 0,
+      periodStart: Date.now(),
+      periodEnd: Date.now() + 86400000,
+    },
+    addTokenUsage: vi.fn(),
+    getTokenCost: vi.fn(() => 0),
   })),
+  selectBudget: (state: unknown) => (state as { budget: unknown }).budget,
 }));
 
 vi.mock('../../../stores/chatStore', () => ({

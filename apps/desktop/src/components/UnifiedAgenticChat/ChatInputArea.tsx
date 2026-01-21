@@ -38,7 +38,7 @@ import {
 import { QuickModelSelector } from './QuickModelSelector';
 import { SubscriptionGateResult } from '../../utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
-import { useUsageStore } from '../../stores/usageStore';
+import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/billingStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
@@ -889,7 +889,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       : 0;
 
   // Use individual selectors to avoid re-renders on unrelated state changes
-  const getTokenCost = useUsageStore((state) => state.getTokenCost);
+  const getTokenCost = useBillingUsageStore((state) => state.getTokenCost);
   const subscription = useBillingStore((state) => state.subscription);
   const monthlyCost = getTokenCost();
 

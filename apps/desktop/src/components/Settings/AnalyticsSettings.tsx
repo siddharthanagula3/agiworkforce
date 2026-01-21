@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { useAnalyticsStore } from '../../stores/analyticsStore';
+import { useBillingUsageStore } from '../../stores/billingUsage';
 import { PrivacyConsent } from '../../types/analytics';
 
 export const AnalyticsSettings = () => {
   const { privacyConsent, updatePrivacyConsent, exportAnalyticsData, deleteAllAnalyticsData } =
-    useAnalyticsStore();
+    useBillingUsageStore((state) => ({
+      privacyConsent: state.privacyConsent,
+      updatePrivacyConsent: state.updatePrivacyConsent,
+      exportAnalyticsData: state.exportAnalyticsData,
+      deleteAllAnalyticsData: state.deleteAllAnalyticsData,
+    }));
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
