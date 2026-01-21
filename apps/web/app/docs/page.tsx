@@ -17,21 +17,21 @@ import {
 import { Header } from '../../components/layout/Header';
 
 export const metadata: Metadata = {
-  title: 'Documentation | AGI Workforce - Complete Setup & API Guide',
+  title: 'Documentation | AGI Workforce - Features & API Reference',
   description:
-    'Complete documentation for AGI Workforce. Setup guides, feature documentation, API references, and security best practices for desktop automation with AI agents.',
+    'Documentation for AGI Workforce. Feature overview, API references, and security information. No setup required - just open the app and start chatting.',
   keywords: [
     'AGI Workforce documentation',
-    'AI agent setup',
-    'automation guide',
+    'AI automation',
+    'chat-first AI',
     'API reference',
-    'desktop automation tutorial',
+    'desktop automation',
     'LLM integration',
   ],
   openGraph: {
     title: 'Documentation | AGI Workforce',
     description:
-      'Complete guides, API references, and feature documentation for AGI Workforce. Learn how to deploy autonomous AI agents.',
+      'Feature documentation and API references for AGI Workforce. Chat-first AI automation with full undo support.',
     url: 'https://agiworkforce.com/docs',
   },
 };
@@ -245,8 +245,9 @@ export default function DocsPage() {
                   <li className="flex items-start gap-3">
                     <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-white">Sandboxed agent environments</strong> - Agents
-                      run with strict permission controls and user approval for file/network access
+                      <strong className="text-white">Undo-based safety model</strong> - Every action
+                      is reversible. Made a mistake? Just say &quot;undo&quot; and the AI reverts
+                      its changes
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
@@ -357,7 +358,7 @@ export default function DocsPage() {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-blue-500 mt-1">•</span>
-                        <span>Visual workflow designer</span>
+                        <span>Chat-first interface - no configuration needed</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-blue-500 mt-1">•</span>

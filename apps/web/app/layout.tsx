@@ -20,14 +20,16 @@ export const metadata: Metadata = {
     template: '%s | AGI Workforce',
   },
   description:
-    'Deploy autonomous AI agents to automate complex desktop and web workflows. Blazing fast, secure, and built for the autonomous era.',
+    'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by GPT-5, Claude 4.5, Gemini 3.',
   keywords: [
     'AI agents',
     'automation',
     'AGI',
     'workforce',
     'autonomous agents',
-    'workflow automation',
+    'chat-first AI',
+    'no-code automation',
+    'reversible AI',
   ],
   authors: [{ name: 'AGI Automation LLC' }],
   creator: 'AGI Automation LLC',
@@ -46,20 +48,22 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com',
     siteName: 'AGI Workforce',
     title: 'AGI Workforce | Your On-Demand AI Workforce',
-    description: 'Deploy autonomous AI agents to automate complex desktop and web workflows.',
+    description:
+      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
     images: [
       {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - Deploy autonomous AI agents',
+        alt: 'AGI Workforce - Just ask, it does',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Workforce | Your On-Demand AI Workforce',
-    description: 'Deploy autonomous AI agents to automate complex desktop and web workflows.',
+    description:
+      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
     creator: '@agiworkforce',
     images: ['/og-image.svg'],
   },
@@ -82,7 +86,7 @@ export default function RootLayout({
     url: 'https://agiworkforce.com',
     logo: 'https://agiworkforce.com/logo.png',
     description:
-      'Deploy autonomous AI agents to automate complex desktop and web workflows. Blazing fast, secure, and built for the autonomous era.',
+      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support.',
     sameAs: ['https://twitter.com/agiworkforce', 'https://github.com/agiworkforce'],
     contactPoint: {
       '@type': 'ContactPoint',

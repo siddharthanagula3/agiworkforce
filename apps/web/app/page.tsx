@@ -15,9 +15,9 @@ import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce | Your On-Demand AI Workforce - Automate Everything',
+  title: 'AGI Workforce | Your On-Demand AI Workforce - Just Ask, It Does',
   description:
-    'Deploy autonomous AI agents to automate complex desktop and web workflows. Support for GPT-5, Claude 4.5, Gemini 3, DeepSeek V3, and local models. Built with Rust for blazing performance.',
+    'Tell the AI what you want done, and it handles everything. No setup, no coding, no technical skills needed. Desktop and web automation with full undo support. Powered by GPT-5, Claude 4.5, Gemini 3, and more.',
   keywords: [
     'AI agents',
     'autonomous agents',
@@ -32,11 +32,14 @@ export const metadata: Metadata = {
     'local AI',
     'productivity tools',
     'business automation',
+    'no-code automation',
+    'chat-based AI',
+    'reversible AI',
   ],
   openGraph: {
     title: 'AGI Workforce | Your On-Demand AI Workforce',
     description:
-      'Deploy autonomous AI agents to automate complex desktop and web workflows. Multi-LLM support, local-first privacy, blazing fast performance.',
+      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [
@@ -44,7 +47,7 @@ export const metadata: Metadata = {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - Deploy autonomous AI agents',
+        alt: 'AGI Workforce - Just ask, it does',
       },
     ],
   },
@@ -52,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI Workforce | Your On-Demand AI Workforce',
     description:
-      'Deploy autonomous AI agents to automate complex desktop and web workflows. Multi-LLM support, native performance.',
+      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
     images: ['/og-image.svg'],
   },
 };
@@ -62,7 +65,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AGI Workforce - On-Demand AI Workforce',
   description:
-    'Deploy autonomous AI agents to automate complex desktop and web workflows with multi-LLM support.',
+    'Just tell the AI what you want done and it handles everything. No setup, no coding required. Desktop and web automation with full undo support.',
   url: 'https://agiworkforce.com',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -82,7 +85,8 @@ const jsonLd = {
       'Desktop and Web Automation',
       'Local-First Privacy',
       'Native Performance with Rust',
-      'Visual Workflow Builder',
+      'Chat-First Interface',
+      'Undo-Based Safety',
     ],
   },
 };
@@ -111,8 +115,8 @@ export default function Home() {
                 AI Workforce
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                Automate complex workflows, deploy autonomous agents, and scale your operations
-                without hiring a single human. Built for the autonomous era with multi-LLM support.
+                Just tell the AI what you want done, and it handles the rest. No setup, no
+                configuration, no technical knowledge required. Everything is reversible.
               </p>
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
@@ -192,8 +196,8 @@ export default function Home() {
                   },
                   {
                     icon: Sparkles,
-                    title: 'Visual Workflow Builder',
-                    desc: 'Create complex automation chains with an intuitive drag-and-drop interface. No programming knowledge needed.',
+                    title: 'Chat-First Interface',
+                    desc: 'Simply tell the AI what you want done in plain English. No configuration, no setup - just describe your goal and watch it happen.',
                   },
                 ].map((feature, i) => (
                   <div
@@ -260,10 +264,11 @@ export default function Home() {
                     <div className="flex gap-4">
                       <Shield className="h-6 w-6 text-blue-500 shrink-0" />
                       <div>
-                        <h3 className="text-xl font-semibold mb-2">Sandboxed Environments</h3>
+                        <h3 className="text-xl font-semibold mb-2">Undo-Based Safety</h3>
                         <p className="text-zinc-400">
-                          Agents run in isolated environments with strict permission controls. You
-                          approve every file access and network request before execution.
+                          Every action is reversible. Made a mistake? Simply say &quot;undo&quot;
+                          and the AI will revert its changes. Full autonomy with complete peace of
+                          mind.
                         </p>
                       </div>
                     </div>
@@ -301,12 +306,12 @@ export default function Home() {
                         <span className="text-white">TLS 1.3</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Agent Sandbox</span>
+                        <span>Undo System</span>
                         <span className="text-white">Active</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Permission System</span>
-                        <span className="text-white">Enabled</span>
+                        <span>Action Reversibility</span>
+                        <span className="text-white">100%</span>
                       </div>
                     </div>
                   </div>
