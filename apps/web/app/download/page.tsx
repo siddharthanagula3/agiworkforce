@@ -79,8 +79,8 @@ export default function DownloadPage() {
               Download AGI Workforce
             </h1>
             <p className="text-zinc-400 text-lg max-w-2xl mx-auto leading-relaxed">
-              Experience the power of an autonomous AI workforce directly on your machine. Secure,
-              private, and blazing fast.
+              Just tell the AI what you want done. No setup required - open the app and start
+              chatting. Everything is reversible.
             </p>
           </div>
 
