@@ -7,7 +7,7 @@
  * - chatStore: Conversations, messages, citations, token usage
  * - agentStore: Agent status, background tasks, action trail
  * - toolStore: Tool executions, file operations, terminal commands, approvals
- * - sidecarStore: Sidecar panel state, sidebar state
+ * - sidecarStore: Sidecar panel state, sidebar state (now consolidated in ui.ts)
  *
  * For backwards compatibility, we also export a unified hook that combines all stores.
  */
@@ -20,6 +20,8 @@ export {
   applyAgentStatusSnapshot,
 } from './agentStore';
 export { useToolStore } from './toolStore';
+
+// Sidecar store is now part of unified UI store, re-exported for backwards compatibility
 export { useSidecarStore } from './sidecarStore';
 
 // Export all types from types.ts

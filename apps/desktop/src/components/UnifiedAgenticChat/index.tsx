@@ -16,10 +16,10 @@ import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
-import { useCostStore } from '../../stores/costStore';
+import { getModelForRequest } from '../../lib/modelRouter';
+import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useBillingStore } from '../../stores/billingStore';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
@@ -70,9 +70,9 @@ export const UnifiedAgenticChat: React.FC<{
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const selectedModel = useModelStore((state) => state.selectedModel);
   const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
-  const budget = useTokenBudgetStore(selectBudget);
-  const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
-  const loadOverview = useCostStore((state) => state.loadOverview);
+  const budget = useBillingUsageStore(selectBudget);
+  const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
+  const loadOverview = useBillingUsageStore((state) => state.loadCostOverview);
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -731,52 +731,20 @@ export const UnifiedAgenticChat: React.FC<{
       useUnifiedChatStore.getState().cancelEditing();
     }
 
-    const classifyTask = (
-      text: string,
-    ): 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video' => {
-      const lc = text.toLowerCase();
-      if (
-        lc.includes('search') ||
-        lc.includes('browse') ||
-        lc.includes('find news') ||
-        lc.includes('look up')
-      ) {
-        return 'search';
-      }
-      if (lc.includes('image') || lc.includes('logo') || lc.includes('picture')) {
-        return 'image';
-      }
-      if (lc.includes('video') || lc.includes('render') || lc.includes('clip')) {
-        return 'video';
-      }
-      if (lc.includes('vision') || lc.includes('screenshot')) {
-        return 'vision';
-      }
-      if (lc.includes('pdf') || lc.includes('doc') || lc.includes('document')) {
-        return 'docs';
-      }
-      if (
-        lc.includes('code') ||
-        lc.includes('bug') ||
-        lc.includes('compile') ||
-        lc.includes('function') ||
-        lc.includes('test') ||
-        lc.includes('git') ||
-        lc.includes('build')
-      ) {
-        return 'code';
-      }
-      return 'chat';
-    };
+    // Use intelligent model router for auto modes
+    // This replaces the old local classifyTask and applyRouting functions
+    const hasImages = options.attachments?.some((a) => a.type === 'image') ?? false;
+    const currentModel = options.modelOverride ?? selectedModel ?? 'auto';
+    const routingResult = getModelForRequest(currentModel, content, hasImages);
 
-    const applyRouting = (): { providerId?: string; modelId?: string } => {
-      const task = classifyTask(content);
-      const routing = llmConfig.taskRouting?.[task];
-      if (routing) {
-        return { providerId: routing.provider, modelId: routing.model };
-      }
-      return {};
-    };
+    // Log routing decision for debugging
+    if (routingResult.wasRouted) {
+      console.log('[UnifiedAgenticChat] Model router decision:', {
+        originalModel: currentModel,
+        routedModel: routingResult.modelId,
+        reason: routingResult.reason,
+      });
+    }
 
     if (conversationMode === 'manual') {
       // In manual mode, check for dangerous command patterns
@@ -846,27 +814,15 @@ export const UnifiedAgenticChat: React.FC<{
       }
     }
 
-    const routingOverrides = applyRouting();
-
-    const isAutoMode =
-      options.modelOverride === 'auto' ||
-      routingOverrides.modelId === 'auto' ||
-      modelForMessage === 'auto';
-
+    // Use the routed model from intelligent router
+    // If routing occurred, use the routed model. Otherwise use the original selection.
     const enrichedOptions: SendOptions = {
       ...options,
-      providerOverride:
-        options.providerOverride ||
-        (isAutoMode
-          ? undefined
-          : (routingOverrides.providerId ?? providerForMessage ?? llmConfig.defaultProvider)),
-      modelOverride: isAutoMode
-        ? undefined
-        : (options.modelOverride ??
-          routingOverrides.modelId ??
-          modelForMessage ??
-          defaultModels[llmConfig.defaultProvider] ??
-          'auto'),
+      providerOverride: options.providerOverride ?? providerForMessage ?? llmConfig.defaultProvider,
+      // Use routed model if routing occurred, otherwise use the explicit model override
+      modelOverride: routingResult.wasRouted
+        ? routingResult.modelId
+        : (options.modelOverride ?? modelForMessage ?? defaultModels[llmConfig.defaultProvider]),
     };
 
     const entryPoint = content.trim();
