@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { useCostStore } from '../costStore';
+import { useBillingUsageStore } from '../billingUsage';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -8,7 +8,42 @@ vi.mock('@tauri-apps/api/core', () => ({
 vi.mock('../../services/supabaseAuth', () => ({
   supabaseAuth: {
     getUser: vi.fn(() => ({ id: 'test-user-id', email: 'test@example.com' })),
-    onAuthStateChange: vi.fn(() => ({ unsubscribe: vi.fn() })),
+    onAuthStateChange: vi.fn(() => vi.fn()),
+    checkSession: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/analytics', () => ({
+  analytics: {
+    getConfig: vi.fn(() => ({ enabled: false })),
+    getPrivacyConsent: vi.fn(() => null),
+    updateConfig: vi.fn(),
+    updatePrivacyConsent: vi.fn(),
+    exportData: vi.fn(),
+    deleteAllData: vi.fn(),
+    track: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/errorTracking', () => ({
+  ErrorSeverity: { MEDIUM: 'medium', HIGH: 'high' },
+  errorTracking: {
+    captureError: vi.fn(),
+    initialize: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/featureFlags', () => ({
+  featureFlags: {
+    isEnabled: vi.fn(() => false),
+    trackFeatureUsage: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/performance', () => ({
+  performanceMonitor: {
+    getSystemMetrics: vi.fn(),
+    getAppMetrics: vi.fn(),
   },
 }));
 
@@ -21,17 +56,17 @@ beforeEach(async () => {
   invokeMock = invoke as unknown as InvokeMock;
   invokeMock.mockReset();
 
-  useCostStore.setState({
-    overview: null,
-    analytics: null,
-    filters: { days: 30 },
-    loadingOverview: false,
-    loadingAnalytics: false,
-    error: null,
+  useBillingUsageStore.setState({
+    costOverview: null,
+    costAnalytics: null,
+    costFilters: { days: 30 },
+    loadingCostOverview: false,
+    loadingCostAnalytics: false,
+    costError: null,
   });
 });
 
-describe('useCostStore', () => {
+describe('useBillingUsageStore (cost functionality)', () => {
   it('loads analytics with normalized filters', async () => {
     invokeMock.mockResolvedValue({
       timeseries: [],
@@ -39,14 +74,16 @@ describe('useCostStore', () => {
       top_conversations: [],
     });
 
-    await useCostStore.getState().loadAnalytics({ provider: 'openai', model: 'gpt-5.2' });
+    await useBillingUsageStore
+      .getState()
+      .loadCostAnalytics({ provider: 'openai', model: 'gpt-5.2' });
     expect(invokeMock).toHaveBeenCalledWith('chat_get_cost_analytics', {
       userId: 'test-user-id',
       days: 30,
       provider: 'openai',
       model: 'gpt-5.2',
     });
-    expect(useCostStore.getState().filters).toEqual({
+    expect(useBillingUsageStore.getState().costFilters).toEqual({
       days: 30,
       provider: 'openai',
       model: 'gpt-5.2',
@@ -57,14 +94,14 @@ describe('useCostStore', () => {
       providers: [],
       top_conversations: [],
     });
-    await useCostStore.getState().loadAnalytics({ provider: '', model: '' });
+    await useBillingUsageStore.getState().loadCostAnalytics({ provider: '', model: '' });
     expect(invokeMock).toHaveBeenLastCalledWith('chat_get_cost_analytics', {
       userId: 'test-user-id',
       days: 30,
       provider: null,
       model: null,
     });
-    expect(useCostStore.getState().filters).toEqual({ days: 30 });
+    expect(useBillingUsageStore.getState().costFilters).toEqual({ days: 30 });
   });
 
   it('updates monthly budget and refreshes overview', async () => {
@@ -76,7 +113,7 @@ describe('useCostStore', () => {
       remaining_budget: 60,
     });
 
-    await useCostStore.getState().setMonthlyBudget(100);
+    await useBillingUsageStore.getState().setMonthlyBudget(100);
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_set_monthly_budget', {
       userId: 'test-user-id',
@@ -85,6 +122,6 @@ describe('useCostStore', () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'chat_get_cost_overview', {
       userId: 'test-user-id',
     });
-    expect(useCostStore.getState().overview?.monthly_budget).toBe(100);
+    expect(useBillingUsageStore.getState().costOverview?.monthly_budget).toBe(100);
   });
 });

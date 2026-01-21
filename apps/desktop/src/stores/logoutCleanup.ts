@@ -12,10 +12,10 @@
  * complete cleanup across all stores.
  */
 
-import { useBillingStore } from './billingStore';
+import { useUnifiedAuthStore, cleanupUnifiedAuthStore } from './auth';
+import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
 import { useBrowserStore } from './browserStore';
 import { useCodeStore } from './codeStore';
-import { useCostStore } from './costStore';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
 // Orchestration store archived - visual workflow builder removed
@@ -23,7 +23,6 @@ import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
 import { useUnifiedChatStore } from './unifiedChatStore';
-import { useAccountStore, cleanupAccountStore } from './accountStore';
 import { useAutomationStore } from './automationStore';
 
 /**
@@ -78,34 +77,47 @@ export function cleanupAllStoresOnLogout(): void {
     // Orchestration store archived - visual workflow builder removed
     console.log('[LogoutCleanup] Orchestration store skipped (archived)');
 
-    // Cost store - clear usage data but keep filters
-    useCostStore.setState({
-      overview: null,
-      analytics: null,
-      loadingOverview: false,
-      loadingAnalytics: false,
-      error: null,
-    });
-    console.log('[LogoutCleanup] Cost store cleaned up');
+    // Stop analytics auto-refresh before resetting state
+    stopMetricsAutoRefresh();
 
-    // Account store - clear account data and cleanup retry timers
-    cleanupAccountStore();
-    useAccountStore.getState().reset();
-    console.log('[LogoutCleanup] Account store cleaned up');
-
-    // Billing store - clear customer and subscription data
-    useBillingStore.setState({
-      customer: null,
-      subscription: null,
-      subscriptionLoading: false,
-      initialized: false,
-      error: null,
-      creditBalance_cents: null,
-      dailyUsage_cents: null,
-      dailyLimit_cents: null,
-      dailyResetAt: null,
+    // Billing/Usage consolidated store - clear usage data but keep filters and budget config
+    useBillingUsageStore.setState({
+      // Cost state
+      costOverview: null,
+      costAnalytics: null,
+      loadingCostOverview: false,
+      loadingCostAnalytics: false,
+      costError: null,
+      // Usage state
+      usageStats: null,
+      usageStatsLoading: false,
+      showAutomationWarning: false,
+      showApiCallWarning: false,
+      showStorageWarning: false,
+      showTokenWarning: false,
+      usageError: null,
+      // Analytics state
+      systemMetrics: null,
+      appMetrics: null,
+      analyticsUsageStats: null,
+      featureUsage: [],
+      isLoadingMetrics: false,
+      isLoadingStats: false,
+      // ROI state
+      roiReport: null,
+      processMetrics: [],
+      userMetrics: [],
+      toolMetrics: [],
+      trends: {},
+      isLoadingROI: false,
     });
-    console.log('[LogoutCleanup] Billing store cleaned up');
+    console.log('[LogoutCleanup] Billing/Usage store cleaned up');
+
+    // Unified Auth store - clear account, billing, and auth data
+    // (Consolidated from authStore, accountStore, and billingStore)
+    cleanupUnifiedAuthStore();
+    useUnifiedAuthStore.getState().reset();
+    console.log('[LogoutCleanup] Unified Auth store cleaned up');
 
     // 3. Clean up stores that should preserve some state (preferences)
 
@@ -151,8 +163,15 @@ export function clearPersistedUserData(): void {
 
   const keysToRemove = [
     'unified-chat-storage',
-    'billing-storage',
+    'unified-auth-storage',
+    'billing-usage-store',
     'id-mappings',
+    // Legacy store keys (now consolidated)
+    'billing-storage', // Legacy - now in unified-auth-storage
+    'auth-storage', // Legacy - now in unified-auth-storage
+    'account-storage', // Legacy - now in unified-auth-storage
+    'cost-store',
+    'agiworkforce-token-budget',
     // Note: Keep these as they're app preferences, not user data:
     // 'settings-storage', 'model-storage', 'onboarding-storage'
   ];

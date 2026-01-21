@@ -17,8 +17,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { useAnalyticsStore } from '../../stores/analyticsStore';
-import { useUsageStore, getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
+import {
+  useBillingUsageStore,
+  getUsagePercentage,
+  getRemainingPercentage,
+} from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
 import { useBillingStore } from '../../stores/billingStore';
 import { useAccountStore } from '../../stores/accountStore';
@@ -33,17 +36,17 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export const UsageDashboard: React.FC = () => {
   // Use individual selectors to prevent re-renders on unrelated state changes
-  const systemMetrics = useAnalyticsStore((state) => state.systemMetrics);
-  const appMetrics = useAnalyticsStore((state) => state.appMetrics);
-  const analyticsUsageStats = useAnalyticsStore((state) => state.usageStats);
-  const isLoadingMetrics = useAnalyticsStore((state) => state.isLoadingMetrics);
-  const loadSystemMetrics = useAnalyticsStore((state) => state.loadSystemMetrics);
-  const loadAppMetrics = useAnalyticsStore((state) => state.loadAppMetrics);
-  const loadAnalyticsUsageStats = useAnalyticsStore((state) => state.loadUsageStats);
-  const refreshAllMetrics = useAnalyticsStore((state) => state.refreshAllMetrics);
+  const systemMetrics = useBillingUsageStore((state) => state.systemMetrics);
+  const appMetrics = useBillingUsageStore((state) => state.appMetrics);
+  const analyticsUsageStats = useBillingUsageStore((state) => state.analyticsUsageStats);
+  const isLoadingMetrics = useBillingUsageStore((state) => state.isLoadingMetrics);
+  const loadSystemMetrics = useBillingUsageStore((state) => state.loadSystemMetrics);
+  const loadAppMetrics = useBillingUsageStore((state) => state.loadAppMetrics);
+  const loadAnalyticsUsageStats = useBillingUsageStore((state) => state.loadAnalyticsUsageStats);
+  const refreshAllMetrics = useBillingUsageStore((state) => state.refreshAllMetrics);
 
-  const billingUsageStats = useUsageStore((state) => state.stats);
-  const getTokenCost = useUsageStore((state) => state.getTokenCost);
+  const billingUsageStats = useBillingUsageStore((state) => state.usageStats);
+  const getTokenCost = useBillingUsageStore((state) => state.getTokenCost);
   const subscription = useBillingStore((state) => state.subscription);
   // Use useShallow for object selectors to prevent re-renders from reference changes
   const account = useAccountStore(useShallow((state) => state.account));

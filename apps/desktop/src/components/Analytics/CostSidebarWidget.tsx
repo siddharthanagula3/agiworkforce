@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { TrendingUp, Wallet, PieChart, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
-import { useCostStore } from '../../stores/costStore';
+import { useBillingUsageStore } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/Tooltip';
 
@@ -25,10 +25,10 @@ function formatCurrency(value: number | null | undefined): string {
 }
 
 export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWidgetProps) {
-  const { overview, loadingOverview, loadOverview } = useCostStore((state) => ({
-    overview: state.overview,
-    loadingOverview: state.loadingOverview,
-    loadOverview: state.loadOverview,
+  const { overview, loadingOverview, loadOverview } = useBillingUsageStore((state) => ({
+    overview: state.costOverview,
+    loadingOverview: state.loadingCostOverview,
+    loadOverview: state.loadCostOverview,
   }));
 
   useEffect(() => {
