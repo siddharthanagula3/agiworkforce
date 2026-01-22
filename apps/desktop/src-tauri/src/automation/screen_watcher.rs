@@ -266,7 +266,7 @@ async fn capture_loop() {
 /// Capture a single screenshot
 async fn capture_screenshot() -> Result<ScreenCapture> {
     // Capture in a blocking task to not block the async runtime
-    let capture_result = tokio::task::spawn_blocking(|| capture_primary_screen())
+    let capture_result = tokio::task::spawn_blocking(capture_primary_screen)
         .await
         .context("Screenshot task panicked")?
         .context("Failed to capture screen")?;

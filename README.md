@@ -1,6 +1,6 @@
 # AGI Workforce
 
-[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/siddhartha/agiworkforce)
+[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/siddhartha/agiworkforce)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
@@ -389,9 +389,17 @@ AGI Workforce is built with security as a core principle:
 
 ## Version History
 
-### v1.0.5 (Current)
+### v1.0.6 (Current)
 
-- Global deployment with signaling server
+- Simplified chat-first architecture with undo system
+- "Always use agent mode" setting for enhanced automation
+- Intelligent model router with task classification
+- Latest 2026 model support (GPT-5.2, Gemini 3, Claude Opus 4.5)
+- Major dependency updates (React 19.2.3, Vite 7.3.1, Tauri 2.9.6)
+
+### v1.0.5
+
+- Global deployment with signaling server on Fly.io
 - Auto-updater support for desktop
 - Enhanced MCP tool integration
 - Performance optimizations
