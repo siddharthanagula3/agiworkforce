@@ -97,18 +97,84 @@ impl UpdateSecurityManager {
         Ok(hex::encode(result))
     }
 
+    /// Verify Ed25519 signature of the message using the provided public key
+    ///
+    /// # Arguments
+    /// * `message` - The message that was signed (typically the file checksum)
+    /// * `signature` - Base64-encoded Ed25519 signature
+    /// * `public_key` - Base64-encoded Ed25519 public key (32 bytes)
+    ///
+    /// # Returns
+    /// * `Ok(true)` if signature is valid
+    /// * `Ok(false)` if signature is invalid
+    /// * `Err(_)` if there's an error parsing the key or signature
     fn verify_signature(
         &self,
-        _message: &str,
+        message: &str,
         signature: &str,
-        _public_key: &str,
+        public_key: &str,
     ) -> Result<bool, String> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
         if signature.is_empty() {
+            tracing::warn!("Empty signature provided");
             return Ok(false);
         }
 
-        tracing::warn!("Signature verification not fully implemented - using placeholder");
-        Ok(true)
+        if public_key.is_empty() {
+            tracing::warn!("Empty public key provided");
+            return Ok(false);
+        }
+
+        // Decode the public key from base64
+        let public_key_bytes = STANDARD
+            .decode(public_key)
+            .map_err(|e| format!("Invalid public key encoding: {}", e))?;
+
+        if public_key_bytes.len() != 32 {
+            return Err(format!(
+                "Invalid public key length: expected 32 bytes, got {}",
+                public_key_bytes.len()
+            ));
+        }
+
+        let public_key_array: [u8; 32] = public_key_bytes
+            .try_into()
+            .map_err(|_| "Failed to convert public key to array")?;
+
+        let verifying_key = VerifyingKey::from_bytes(&public_key_array)
+            .map_err(|e| format!("Invalid public key: {}", e))?;
+
+        // Decode the signature from base64
+        let signature_bytes = STANDARD
+            .decode(signature)
+            .map_err(|e| format!("Invalid signature encoding: {}", e))?;
+
+        if signature_bytes.len() != 64 {
+            return Err(format!(
+                "Invalid signature length: expected 64 bytes, got {}",
+                signature_bytes.len()
+            ));
+        }
+
+        let signature_array: [u8; 64] = signature_bytes
+            .try_into()
+            .map_err(|_| "Failed to convert signature to array")?;
+
+        let sig = Signature::from_bytes(&signature_array);
+
+        // Verify the signature
+        match verifying_key.verify(message.as_bytes(), &sig) {
+            Ok(_) => {
+                tracing::info!("Update signature verification successful");
+                Ok(true)
+            }
+            Err(e) => {
+                tracing::warn!("Update signature verification failed: {}", e);
+                Ok(false)
+            }
+        }
     }
 
     pub fn should_update(&self, current_version: &str, new_version: &str) -> bool {

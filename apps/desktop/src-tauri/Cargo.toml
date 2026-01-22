@@ -100,6 +100,7 @@ rand = "0.8"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 hmac = "0.12"
 hex = "0.4"
+ed25519-dalek = { version = "2.1", features = ["pkcs8"] } # For update signature verification
 
 
 image = { version = "0.25", features = ["png", "jpeg", "webp"] }
