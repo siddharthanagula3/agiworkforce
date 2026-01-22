@@ -52,6 +52,8 @@ interface WindowPreferences {
 export interface ChatPreferences {
   /** Enable AI-powered prompt completion (ghost text suggestions) */
   promptCompletionEnabled: boolean;
+  /** Always use agent mode with tools for all messages (not just action requests) */
+  alwaysUseAgentMode: boolean;
 }
 
 interface SettingsState {
@@ -76,6 +78,7 @@ interface SettingsState {
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
   setPromptCompletionEnabled: (enabled: boolean) => void;
+  setAlwaysUseAgentMode: (enabled: boolean) => void;
 
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
@@ -119,6 +122,7 @@ const defaultSettings: Pick<
   },
   chatPreferences: {
     promptCompletionEnabled: true, // AI-powered ghost text enabled by default
+    alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
   },
   allowedDirectories: [],
 };
@@ -147,7 +151,8 @@ const storageFallback: Storage = {
 
 // Version for storage migration
 // v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
-const SETTINGS_STORE_VERSION = 2;
+// v3: Added alwaysUseAgentMode setting
+const SETTINGS_STORE_VERSION = 3;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -267,6 +272,12 @@ export const useSettingsStore = create<SettingsState>()(
         setPromptCompletionEnabled: (enabled: boolean) => {
           set((state) => ({
             chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
+          }));
+        },
+
+        setAlwaysUseAgentMode: (enabled: boolean) => {
+          set((state) => ({
+            chatPreferences: { ...state.chatPreferences, alwaysUseAgentMode: enabled },
           }));
         },
 
@@ -496,6 +507,15 @@ export const useSettingsStore = create<SettingsState>()(
                   state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
                 }
               }
+            }
+          }
+
+          // Migration from v2 to v3: Add alwaysUseAgentMode setting
+          if (version < 3) {
+            if (!state.chatPreferences) {
+              state.chatPreferences = { promptCompletionEnabled: true, alwaysUseAgentMode: false };
+            } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
+              state.chatPreferences.alwaysUseAgentMode = false;
             }
           }
 

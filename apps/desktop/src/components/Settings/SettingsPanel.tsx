@@ -48,11 +48,13 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   // Use useShallow for object selectors to prevent re-renders from reference changes
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
+  const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const setTemperature = useSettingsStore((state) => state.setTemperature);
   const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setStartupPosition = useSettingsStore((state) => state.setStartupPosition);
   const setDockOnStartup = useSettingsStore((state) => state.setDockOnStartup);
+  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
   const loading = useSettingsStore((state) => state.loading);
@@ -309,6 +311,28 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <p className="text-xs text-muted-foreground">
                             Maximum number of tokens to generate in responses
                           </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Agent Mode Settings */}
+                    <div className="rounded-lg border border-border bg-card p-6">
+                      <h4 className="font-semibold mb-4">Agent Mode</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="alwaysAgentMode">Always Use Agent Mode</Label>
+                            <p className="text-xs text-muted-foreground">
+                              When enabled, all messages will use the AI agent with access to tools
+                              (file operations, web search, terminal, etc.). Otherwise, tools are
+                              only used when the AI detects an action request.
+                            </p>
+                          </div>
+                          <Switch
+                            id="alwaysAgentMode"
+                            checked={chatPreferences.alwaysUseAgentMode}
+                            onCheckedChange={setAlwaysUseAgentMode}
+                          />
                         </div>
                       </div>
                     </div>

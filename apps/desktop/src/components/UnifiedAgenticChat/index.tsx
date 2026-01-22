@@ -936,6 +936,10 @@ export const UnifiedAgenticChat: React.FC<{
           .getState()
           .getMergedInstructions(conversationInstructions);
 
+        // Check if always use agent mode is enabled in settings
+        const alwaysUseAgentMode =
+          useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
+
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
@@ -961,6 +965,8 @@ export const UnifiedAgenticChat: React.FC<{
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
             // Pass research task ID for deep research mode
             researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
+            // Force agent mode if user has enabled "always use agent mode" setting
+            enableAgentMode: alwaysUseAgentMode ? true : undefined,
           },
         });
 
