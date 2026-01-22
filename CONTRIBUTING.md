@@ -46,7 +46,7 @@ We are committed to providing a welcoming and inspiring community for all. We pl
 Before you begin, ensure you have the following installed:
 
 - **Node.js**: 22.12.0 or higher ([Download](https://nodejs.org/))
-- **pnpm**: 9.15.0 or higher (`npm install -g pnpm`)
+- **pnpm**: 9.15.3 or higher (`npm install -g pnpm`)
 - **Rust**: 1.75 or higher ([Install](https://rustup.rs/))
 - **Git**: Latest version ([Download](https://git-scm.com/))
 
@@ -332,6 +332,36 @@ export const selectData = (state: MyStore) => state.data;
 export const selectLoading = (state: MyStore) => state.loading;
 ```
 
+**Settings Store Pattern:**
+
+When adding new user-configurable settings, follow the pattern used for features like "Always Use Agent Mode":
+
+```typescript
+// 1. Add to interface
+interface ChatPreferences {
+  promptCompletionEnabled: boolean;
+  alwaysUseAgentMode: boolean; // New setting
+}
+
+// 2. Add setter to store interface
+setAlwaysUseAgentMode: (enabled: boolean) => void;
+
+// 3. Set default value
+alwaysUseAgentMode: false,
+
+// 4. Implement setter
+setAlwaysUseAgentMode: (enabled) => {
+  set((state) => ({
+    chatPreferences: { ...state.chatPreferences, alwaysUseAgentMode: enabled },
+  }));
+},
+
+// 5. Add migration for existing users (bump version)
+if (state.chatPreferences.alwaysUseAgentMode === undefined) {
+  state.chatPreferences.alwaysUseAgentMode = false;
+}
+```
+
 ### Rust
 
 **General Principles:**
@@ -548,15 +578,35 @@ pnpm test
 
 # Specific package
 pnpm --filter @agiworkforce/desktop test
+pnpm --filter web test
+
+# Single test file
+cd apps/desktop && pnpm vitest run src/__tests__/path/to/test.test.ts
+cd apps/web && pnpm vitest run __tests__/api/checkout.test.ts
+
+# Watch mode (re-runs on file changes)
+cd apps/desktop && pnpm vitest
 
 # With coverage
 pnpm --filter @agiworkforce/desktop test:coverage
+pnpm --filter web test:coverage
 
-# E2E tests
+# E2E tests (requires build first: cd apps/desktop && pnpm build && pnpm preview)
 pnpm --filter @agiworkforce/desktop test:e2e
 
-# E2E with UI
+# E2E specific project
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=smoke
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=chat
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=agi
+
+# E2E with UI (useful for debugging)
 pnpm --filter @agiworkforce/desktop test:e2e -- --ui
+
+# Rust tests
+cd apps/desktop/src-tauri && cargo test
+
+# Single Rust test
+cd apps/desktop/src-tauri && cargo test test_name
 ```
 
 ## Commit Guidelines
@@ -834,7 +884,7 @@ Contributors are recognized in:
 - GitHub contributors page
 - Release notes
 
-Thank you for contributing to AGI Workforce! 🎉
+Thank you for contributing to AGI Workforce!
 
 ---
 
