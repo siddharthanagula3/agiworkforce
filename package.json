@@ -20,7 +20,9 @@
       "ignoreMissing": []
     },
     "overrides": {
-      "baseline-browser-mapping": "^2.9.11"
+      "baseline-browser-mapping": "^2.9.11",
+      "lodash-es": "^4.17.23",
+      "diff": "^5.2.2"
     }
   },
   "scripts": {
