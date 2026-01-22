@@ -181,42 +181,97 @@ const FALLBACK_PRICING: ModelPricing = {
   outputCostPer1MTokens: 4.0,
 };
 
+import { logger } from '@/lib/logger';
+
 export class LLMCostCalculator {
   /**
    * Calculate cost in cents for token usage
+   * @throws Never - returns 0 on error for safety
    */
   static calculateCost(provider: string, model: string, usage: TokenUsage): number {
-    const pricing = this.getPricing(provider, model);
+    try {
+      // Validate inputs
+      if (!provider || typeof provider !== 'string') {
+        logger.warn({ provider, model }, 'LLM cost calculator: Invalid provider, using fallback');
+        return this.calculateWithFallback(usage);
+      }
 
-    const inputCost = (usage.promptTokens / 1_000_000) * pricing.inputCostPer1MTokens;
-    const outputCost = (usage.completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
+      if (!model || typeof model !== 'string') {
+        logger.warn({ provider, model }, 'LLM cost calculator: Invalid model, using fallback');
+        return this.calculateWithFallback(usage);
+      }
 
-    const totalCostDollars = inputCost + outputCost;
-    // Convert to cents and round to nearest cent
-    return Math.round(totalCostDollars * 100);
+      if (
+        !usage ||
+        typeof usage.promptTokens !== 'number' ||
+        typeof usage.completionTokens !== 'number'
+      ) {
+        logger.warn({ provider, model, usage }, 'LLM cost calculator: Invalid usage data');
+        return 0;
+      }
+
+      // Validate token counts are non-negative
+      const promptTokens = Math.max(0, usage.promptTokens);
+      const completionTokens = Math.max(0, usage.completionTokens);
+
+      const pricing = this.getPricing(provider, model);
+
+      const inputCost = (promptTokens / 1_000_000) * pricing.inputCostPer1MTokens;
+      const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
+
+      const totalCostDollars = inputCost + outputCost;
+      // Convert to cents and round to nearest cent
+      return Math.round(totalCostDollars * 100);
+    } catch (error) {
+      logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
+      return 0;
+    }
+  }
+
+  /**
+   * Calculate cost using fallback pricing
+   */
+  private static calculateWithFallback(usage: TokenUsage): number {
+    const promptTokens = Math.max(0, usage?.promptTokens || 0);
+    const completionTokens = Math.max(0, usage?.completionTokens || 0);
+
+    const inputCost = (promptTokens / 1_000_000) * FALLBACK_PRICING.inputCostPer1MTokens;
+    const outputCost = (completionTokens / 1_000_000) * FALLBACK_PRICING.outputCostPer1MTokens;
+
+    return Math.round((inputCost + outputCost) * 100);
   }
 
   /**
    * Get pricing for a model
+   * Always returns valid pricing (never throws)
    */
   static getPricing(provider: string, model: string): ModelPricing {
-    // Try exact model match first
-    if (MODEL_PRICING[model]) {
-      return MODEL_PRICING[model];
-    }
+    try {
+      // Try exact model match first
+      if (model && MODEL_PRICING[model]) {
+        return MODEL_PRICING[model];
+      }
 
-    // Try provider-specific fallback
-    const providerLower = provider.toLowerCase();
-    if (PROVIDER_DEFAULTS[providerLower]) {
-      return PROVIDER_DEFAULTS[providerLower];
-    }
+      // Try provider-specific fallback
+      if (provider) {
+        const providerLower = provider.toLowerCase();
+        if (PROVIDER_DEFAULTS[providerLower]) {
+          logger.debug({ provider, model }, 'LLM cost calculator: Using provider default pricing');
+          return PROVIDER_DEFAULTS[providerLower];
+        }
+      }
 
-    // Ultimate fallback
-    return FALLBACK_PRICING;
+      // Ultimate fallback
+      logger.debug({ provider, model }, 'LLM cost calculator: Using ultimate fallback pricing');
+      return FALLBACK_PRICING;
+    } catch {
+      return FALLBACK_PRICING;
+    }
   }
 
   /**
    * Estimate cost before making request (for pre-check)
+   * @throws Never - returns 0 on error for safety
    */
   static estimateCost(
     provider: string,
@@ -224,11 +279,29 @@ export class LLMCostCalculator {
     estimatedPromptTokens: number,
     estimatedCompletionTokens: number = 1000,
   ): number {
-    return this.calculateCost(provider, model, {
-      promptTokens: estimatedPromptTokens,
-      completionTokens: estimatedCompletionTokens,
-      totalTokens: estimatedPromptTokens + estimatedCompletionTokens,
-    });
+    try {
+      // Validate inputs
+      if (typeof estimatedPromptTokens !== 'number' || estimatedPromptTokens < 0) {
+        logger.warn(
+          { estimatedPromptTokens },
+          'LLM cost calculator: Invalid prompt tokens estimate',
+        );
+        return 0;
+      }
+
+      if (typeof estimatedCompletionTokens !== 'number' || estimatedCompletionTokens < 0) {
+        estimatedCompletionTokens = 1000; // Use default
+      }
+
+      return this.calculateCost(provider, model, {
+        promptTokens: estimatedPromptTokens,
+        completionTokens: estimatedCompletionTokens,
+        totalTokens: estimatedPromptTokens + estimatedCompletionTokens,
+      });
+    } catch (error) {
+      logger.error({ error, provider, model }, 'LLM cost calculator: Error in estimateCost');
+      return 0;
+    }
   }
 
   /**
@@ -236,7 +309,11 @@ export class LLMCostCalculator {
    * Used for prompt caching calculations
    */
   static getInputCostPerMtok(provider: string, model: string): number {
-    return this.getPricing(provider, model).inputCostPer1MTokens;
+    try {
+      return this.getPricing(provider, model).inputCostPer1MTokens;
+    } catch {
+      return FALLBACK_PRICING.inputCostPer1MTokens;
+    }
   }
 
   /**

@@ -419,17 +419,150 @@ fn get_oauth_token(conn: &rusqlite::Connection, provider: &str) -> Result<String
         .ok_or_else(|| format!("Failed to decrypt OAuth token for provider: {}", provider))
 }
 
+/// OAuth provider configuration for token refresh
+struct OAuthProviderConfig {
+    token_url: &'static str,
+    client_id_key: &'static str,
+    client_secret_key: &'static str,
+}
+
+/// Get OAuth provider configuration
+fn get_oauth_provider_config(provider: &str) -> Option<OAuthProviderConfig> {
+    match provider {
+        "github" => Some(OAuthProviderConfig {
+            token_url: "https://github.com/login/oauth/access_token",
+            client_id_key: "mcp_oauth_github_client_id",
+            client_secret_key: "mcp_oauth_github_client_secret",
+        }),
+        "google" => Some(OAuthProviderConfig {
+            token_url: "https://oauth2.googleapis.com/token",
+            client_id_key: "mcp_oauth_google_client_id",
+            client_secret_key: "mcp_oauth_google_client_secret",
+        }),
+        "slack" => Some(OAuthProviderConfig {
+            token_url: "https://slack.com/api/oauth.v2.access",
+            client_id_key: "mcp_oauth_slack_client_id",
+            client_secret_key: "mcp_oauth_slack_client_secret",
+        }),
+        "microsoft" => Some(OAuthProviderConfig {
+            token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+            client_id_key: "mcp_oauth_microsoft_client_id",
+            client_secret_key: "mcp_oauth_microsoft_client_secret",
+        }),
+        "dropbox" => Some(OAuthProviderConfig {
+            token_url: "https://api.dropboxapi.com/oauth2/token",
+            client_id_key: "mcp_oauth_dropbox_client_id",
+            client_secret_key: "mcp_oauth_dropbox_client_secret",
+        }),
+        _ => None,
+    }
+}
+
 /// Refresh an OAuth token using the refresh token
 ///
-/// Note: This is a placeholder implementation. In production, this should make
-/// actual HTTP requests to the provider's token endpoint.
-fn refresh_oauth_token(provider: &str, _refresh_token: &str) -> Result<(String, i64), String> {
-    // TODO: Implement actual OAuth refresh logic for each provider
-    // For now, return an error to fall back to existing token or legacy credentials
-    Err(format!(
-        "OAuth token refresh not yet implemented for provider: {}",
-        provider
-    ))
+/// Makes HTTP requests to the provider's token endpoint to exchange
+/// the refresh token for a new access token.
+fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i64), String> {
+    // Get provider configuration
+    let provider_config = get_oauth_provider_config(provider)
+        .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
+
+    // Get client credentials from database
+    let app_data = dirs::data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Get client ID
+    let client_id: String = conn
+        .query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![provider_config.client_id_key],
+            |row| row.get(0),
+        )
+        .map_err(|_| format!("OAuth client_id not found for provider: {}", provider))?;
+
+    // Get client secret (encrypted)
+    let encrypted_secret: String = conn
+        .query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![provider_config.client_secret_key],
+            |row| row.get(0),
+        )
+        .map_err(|_| format!("OAuth client_secret not found for provider: {}", provider))?;
+
+    let client_secret = decrypt_oauth_token(&encrypted_secret)
+        .ok_or_else(|| "Failed to decrypt client secret".to_string())?;
+
+    // Use blocking HTTP client since we're in a sync context
+    let client = reqwest::blocking::Client::new();
+
+    let response = client
+        .post(provider_config.token_url)
+        .header("Accept", "application/json")
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("client_id", &client_id),
+            ("client_secret", &client_secret),
+        ])
+        .send()
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        return Err(format!(
+            "Token refresh failed with status {}: {}",
+            status, body
+        ));
+    }
+
+    let token_response: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("Failed to parse token response: {}", e))?;
+
+    // Extract access token
+    let access_token = token_response
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "access_token not found in response".to_string())?
+        .to_string();
+
+    // Calculate expiry time
+    let expires_in = token_response
+        .get("expires_in")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(3600); // Default to 1 hour if not provided
+
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let expires_at = current_time + expires_in;
+
+    // If a new refresh token is provided, store it
+    if let Some(new_refresh_token) = token_response.get("refresh_token").and_then(|v| v.as_str()) {
+        let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
+        if let Some(encrypted_refresh) = encrypt_oauth_token(new_refresh_token) {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO settings_v2 (key, value) VALUES (?1, ?2)",
+                rusqlite::params![refresh_token_key, encrypted_refresh],
+            );
+            tracing::debug!("Stored new refresh token for provider: {}", provider);
+        }
+    }
+
+    tracing::info!(
+        "Successfully refreshed OAuth token for {}, expires in {} seconds",
+        provider,
+        expires_in
+    );
+
+    Ok((access_token, expires_at))
 }
 
 /// Decrypt an OAuth token using machine-derived keys
