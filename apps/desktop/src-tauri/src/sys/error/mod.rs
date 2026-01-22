@@ -9,7 +9,11 @@ pub mod recovery;
 pub mod retry;
 
 pub use categorization::{Categorizable, ErrorCategory};
-pub use commands::{ErrorContextResponse, ErrorContextStore};
+pub use commands::{
+    abort_execution, clear_error_contexts, get_all_error_contexts, get_error_context,
+    get_recovery_suggestion, retry_failed_step, skip_failed_step, ErrorContextResponse,
+    ErrorContextStore,
+};
 pub use integration::{
     convert_tool_error, emit_error_event, execute_tool_with_recovery, EnhancedExecutionContext,
 };
