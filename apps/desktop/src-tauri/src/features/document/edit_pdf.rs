@@ -324,7 +324,10 @@ impl PdfEditor {
     pub fn append_text(&self, file_path: &str, text: &str, output_path: &str) -> Result<()> {
         let mut doc = Document::load(file_path)?;
         let pages = doc.get_pages();
-        let last_page = *pages.keys().max().ok_or_else(|| anyhow::anyhow!("No pages found"))?;
+        let last_page = *pages
+            .keys()
+            .max()
+            .ok_or_else(|| anyhow::anyhow!("No pages found"))?;
 
         self.add_text_to_page(&mut doc, last_page, text, 72.0, 72.0)?;
         doc.save(output_path)?;
@@ -347,11 +350,7 @@ impl PdfEditor {
         }
 
         target.save(output_path)?;
-        tracing::info!(
-            "Merged {} PDFs into: {}",
-            pdf_paths.len(),
-            output_path
-        );
+        tracing::info!("Merged {} PDFs into: {}", pdf_paths.len(), output_path);
         Ok(())
     }
 
@@ -382,7 +381,10 @@ impl PdfEditor {
         let pages = doc.get_pages();
 
         // Validate page range
-        let max_page = *pages.keys().max().ok_or_else(|| anyhow::anyhow!("No pages found"))?;
+        let max_page = *pages
+            .keys()
+            .max()
+            .ok_or_else(|| anyhow::anyhow!("No pages found"))?;
         if start_page < 1 || end_page > max_page || start_page > end_page {
             return Err(anyhow::anyhow!(
                 "Invalid page range: {}-{} (document has {} pages)",
@@ -460,9 +462,7 @@ impl PdfEditor {
             && normalized_rotation != 180
             && normalized_rotation != 270
         {
-            return Err(anyhow::anyhow!(
-                "Rotation must be a multiple of 90 degrees"
-            ));
+            return Err(anyhow::anyhow!("Rotation must be a multiple of 90 degrees"));
         }
 
         for page_num in pages {

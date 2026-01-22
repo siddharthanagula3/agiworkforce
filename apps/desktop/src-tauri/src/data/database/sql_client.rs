@@ -348,11 +348,7 @@ impl SqlClient {
         })
     }
 
-    async fn execute_mysql_prepared(
-        &self,
-        sql: &str,
-        params: &[JsonValue],
-    ) -> Result<QueryResult> {
+    async fn execute_mysql_prepared(&self, sql: &str, params: &[JsonValue]) -> Result<QueryResult> {
         // This is a legacy fallback path - all MySQL prepared statements should be routed
         // through self.mysql_client which has full implementation.
         tracing::debug!(

@@ -468,8 +468,8 @@ fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i
         .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
 
     // Get client credentials from database
-    let app_data = dirs::data_dir()
-        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
     let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
 
     let conn = rusqlite::Connection::open(&db_path)
