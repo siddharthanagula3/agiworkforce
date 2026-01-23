@@ -491,6 +491,81 @@ pub struct TrendingMetric {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn setup_test_db() -> (TempDir, String) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join("test_outcomes.db").to_string_lossy().to_string();
+
+        // Create the database with required schema
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS outcome_tracking (
+                id TEXT PRIMARY KEY,
+                goal_id TEXT NOT NULL,
+                process_type TEXT NOT NULL,
+                metric_name TEXT NOT NULL,
+                target_value REAL NOT NULL,
+                actual_value REAL,
+                achieved INTEGER NOT NULL,
+                tracked_at INTEGER NOT NULL
+            );"
+        ).expect("Failed to create schema");
+
+        (temp_dir, db_path)
+    }
+
     #[test]
-    fn test_outcome_tracker_creation() {}
+    fn test_outcome_tracker_creation() {
+        let (_temp_dir, db_path) = setup_test_db();
+
+        let tracker = OutcomeTracker::new(db_path.clone());
+        assert!(tracker.is_ok(), "OutcomeTracker creation should succeed");
+
+        let tracker = tracker.unwrap();
+
+        // Verify the cache is initialized
+        let cache = tracker.cache.lock();
+        assert!(cache.is_ok(), "Cache should be lockable");
+        let cache = cache.unwrap();
+        assert!(cache.recent_outcomes.is_empty() || cache.recent_outcomes.len() <= 100);
+    }
+
+    #[test]
+    fn test_success_rate_calculation() {
+        let (_temp_dir, db_path) = setup_test_db();
+
+        // Insert some test data
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+        conn.execute(
+            "INSERT INTO outcome_tracking (id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at)
+             VALUES ('o1', 'g1', 'data_entry', 'accuracy', 0.9, 0.95, 1, 1000)",
+            [],
+        ).expect("Failed to insert test data");
+        conn.execute(
+            "INSERT INTO outcome_tracking (id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at)
+             VALUES ('o2', 'g2', 'data_entry', 'accuracy', 0.9, 0.85, 0, 1001)",
+            [],
+        ).expect("Failed to insert test data");
+        drop(conn);
+
+        let tracker = OutcomeTracker::new(db_path).expect("Tracker creation should succeed");
+        let rate = tracker.calculate_success_rate(ProcessType::DataEntry);
+
+        assert!(rate.is_ok());
+        let rate = rate.unwrap();
+        assert!((rate - 0.5).abs() < 0.01, "Success rate should be 50% (1 out of 2)");
+    }
+
+    #[test]
+    fn test_empty_db_success_rate() {
+        let (_temp_dir, db_path) = setup_test_db();
+
+        let tracker = OutcomeTracker::new(db_path).expect("Tracker creation should succeed");
+        let rate = tracker.calculate_success_rate(ProcessType::DataEntry);
+
+        assert!(rate.is_ok());
+        assert_eq!(rate.unwrap(), 0.0, "Empty DB should have 0% success rate");
+    }
 }

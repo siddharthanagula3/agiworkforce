@@ -432,9 +432,70 @@ impl WorkflowSocial {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
+
+    fn create_test_db() -> Arc<Mutex<Connection>> {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS workflow_ratings (
+                workflow_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (workflow_id, user_id)
+            );
+            CREATE TABLE IF NOT EXISTS workflow_comments (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                comment TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS workflow_favorites (
+                workflow_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                favorited_at INTEGER NOT NULL,
+                PRIMARY KEY (workflow_id, user_id)
+            );
+            CREATE TABLE IF NOT EXISTS published_workflows (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                share_url TEXT NOT NULL,
+                view_count INTEGER DEFAULT 0,
+                clone_count INTEGER DEFAULT 0,
+                favorite_count INTEGER DEFAULT 0,
+                avg_rating REAL DEFAULT 0.0,
+                rating_count INTEGER DEFAULT 0,
+                estimated_time_saved INTEGER DEFAULT 0,
+                estimated_cost_saved REAL DEFAULT 0.0
+            );"
+        ).unwrap();
+        Arc::new(Mutex::new(conn))
+    }
 
     #[test]
-    fn test_rating_validation() {}
+    fn test_rating_validation() {
+        let db = create_test_db();
+        let social = WorkflowSocial::new(db);
+
+        // Test rating below minimum (0)
+        let result = social.rate_workflow("wf1", "user1", 0, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Rating must be between 1 and 5"));
+
+        // Test rating above maximum (6)
+        let result = social.rate_workflow("wf1", "user1", 6, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Rating must be between 1 and 5"));
+
+        // Test valid ratings (1-5)
+        for rating in 1..=5 {
+            let result = social.rate_workflow("wf1", &format!("user{}", rating), rating, None);
+            assert!(result.is_ok(), "Rating {} should be valid", rating);
+        }
+    }
 
     #[test]
     fn test_share_platform_serialization() {

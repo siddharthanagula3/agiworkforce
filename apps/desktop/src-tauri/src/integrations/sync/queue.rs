@@ -272,6 +272,131 @@ impl SyncQueue {
 
         Ok(result)
     }
+
+    /// Store a remote update received from the cloud.
+    /// Creates an entry in the received_updates table for local processing.
+    pub fn store_remote_update(
+        &self,
+        entity_type: SyncEntity,
+        entity_id: &str,
+        action: SyncAction,
+        data: &str,
+        timestamp: &str,
+        version: u64,
+    ) -> Result<String> {
+        let conn = self.conn.lock();
+
+        // Ensure the received_updates table exists
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS received_updates (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                data TEXT,
+                timestamp TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                applied BOOLEAN DEFAULT 0,
+                applied_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+
+        let id = uuid::Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT OR REPLACE INTO received_updates
+             (id, entity_type, entity_id, action, data, timestamp, version, applied)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0)",
+            params![
+                &id,
+                format!("{:?}", entity_type),
+                entity_id,
+                format!("{:?}", action),
+                data,
+                timestamp,
+                version,
+            ],
+        )?;
+
+        Ok(id)
+    }
+
+    /// Mark a remote update as applied
+    pub fn mark_update_applied(&self, update_id: &str) -> Result<()> {
+        let conn = self.conn.lock();
+
+        conn.execute(
+            "UPDATE received_updates SET applied = 1, applied_at = CURRENT_TIMESTAMP WHERE id = ?1",
+            [update_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Get pending remote updates that haven't been applied yet
+    pub fn get_pending_remote_updates(&self, limit: usize) -> Result<Vec<SyncQueueItem>> {
+        let conn = self.conn.lock();
+
+        // First ensure table exists
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS received_updates (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                data TEXT,
+                timestamp TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                applied BOOLEAN DEFAULT 0,
+                applied_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, entity_type, entity_id, action, data, timestamp, 0 as retry_count, applied, NULL as error
+             FROM received_updates
+             WHERE applied = 0
+             ORDER BY timestamp ASC
+             LIMIT ?1",
+        )?;
+
+        let items = stmt.query_map([limit], |row| {
+            Ok(SyncQueueItem {
+                id: row.get(0)?,
+                entity_type: match row.get::<_, String>(1)?.as_str() {
+                    "Conversation" => SyncEntity::Conversation,
+                    "Message" => SyncEntity::Message,
+                    "Project" => SyncEntity::Project,
+                    "Memory" => SyncEntity::Memory,
+                    "Settings" => SyncEntity::Settings,
+                    "Artifact" => SyncEntity::Artifact,
+                    _ => SyncEntity::Message,
+                },
+                entity_id: row.get(2)?,
+                action: match row.get::<_, String>(3)?.as_str() {
+                    "Create" => SyncAction::Create,
+                    "Update" => SyncAction::Update,
+                    "Delete" => SyncAction::Delete,
+                    _ => SyncAction::Update,
+                },
+                data: row.get(4)?,
+                timestamp: row.get(5)?,
+                retry_count: row.get(6)?,
+                synced: row.get(7)?,
+                error: row.get(8)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for item in items {
+            result.push(item?);
+        }
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]

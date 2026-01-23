@@ -27,7 +27,21 @@ export function LivePreview({ filePath, className }: LivePreviewProps) {
   }, [filePath]);
 
   const supportsPreview = useMemo(() => {
-    return ['md', 'markdown', 'html', 'json', 'jsx', 'tsx'].includes(fileExtension);
+    return [
+      'md',
+      'markdown',
+      'html',
+      'json',
+      'jsx',
+      'tsx',
+      'txt',
+      'yaml',
+      'yml',
+      'xml',
+      'svg',
+      'css',
+      'scss',
+    ].includes(fileExtension);
   }, [fileExtension]);
 
   if (!diff) {
@@ -144,12 +158,25 @@ function PreviewRenderer({ content, fileType, onError }: PreviewRendererProps) {
       case 'tsx':
         return <ComponentPreview content={content} />;
 
+      case 'txt':
+        return <TextPreview content={content} />;
+
+      case 'yaml':
+      case 'yml':
+        return <YamlPreview content={content} />;
+
+      case 'xml':
+        return <XmlPreview content={content} />;
+
+      case 'svg':
+        return <SvgPreview content={content} />;
+
+      case 'css':
+      case 'scss':
+        return <CssPreview content={content} />;
+
       default:
-        return (
-          <div className="flex items-center justify-center h-full p-8">
-            <p className="text-sm text-muted-foreground">Preview not implemented for {fileType}</p>
-          </div>
-        );
+        return <TextPreview content={content} />;
     }
   } catch (err) {
     onError(err instanceof Error ? err.message : 'Unknown error');
@@ -329,6 +356,59 @@ function SourceRenderer({ content, language }: { content: string; language: stri
     <div className="p-4 h-full overflow-auto bg-muted/5">
       <pre className="text-sm font-mono">
         <code className={`language-${language}`}>{content}</code>
+      </pre>
+    </div>
+  );
+}
+
+function TextPreview({ content }: { content: string }) {
+  return (
+    <div className="p-4 h-full overflow-auto">
+      <pre className="text-sm font-mono whitespace-pre-wrap break-words text-foreground/80">
+        {content}
+      </pre>
+    </div>
+  );
+}
+
+function YamlPreview({ content }: { content: string }) {
+  return (
+    <div className="p-4 h-full overflow-auto">
+      <pre className="text-sm font-mono">
+        <code className="language-yaml">{content}</code>
+      </pre>
+    </div>
+  );
+}
+
+function XmlPreview({ content }: { content: string }) {
+  return (
+    <div className="p-4 h-full overflow-auto">
+      <pre className="text-sm font-mono">
+        <code className="language-xml">{content}</code>
+      </pre>
+    </div>
+  );
+}
+
+function SvgPreview({ content }: { content: string }) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 flex items-center justify-center p-4 bg-checkered">
+        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: content }} />
+      </div>
+      <div className="p-2 border-t border-border bg-muted/10">
+        <p className="text-xs text-muted-foreground text-center">SVG Preview</p>
+      </div>
+    </div>
+  );
+}
+
+function CssPreview({ content }: { content: string }) {
+  return (
+    <div className="p-4 h-full overflow-auto">
+      <pre className="text-sm font-mono">
+        <code className="language-css">{content}</code>
       </pre>
     </div>
   );

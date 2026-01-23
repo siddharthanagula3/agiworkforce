@@ -206,6 +206,7 @@ windows = { version = "0.56", features = [
     "Win32_Security",
     "Win32_System_Memory",
     "Win32_System_SystemServices",
+    "Win32_System_Registry",
     "Media_SpeechRecognition",
     "Storage_Streams",
     "Globalization"
