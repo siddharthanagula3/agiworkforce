@@ -13,6 +13,17 @@ pub struct CdpClient {
     ws_url: String,
     message_id: Arc<AtomicU64>,
     connection: Arc<Mutex<Option<CdpConnection>>>,
+    /// Flag to signal shutdown to spawned tasks
+    shutdown: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for CdpClient {
+    fn drop(&mut self) {
+        // Signal shutdown to spawned tasks
+        self.shutdown
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        tracing::debug!("CdpClient dropped, signaling shutdown to WebSocket tasks");
+    }
 }
 
 struct CdpConnection {
@@ -46,7 +57,17 @@ impl CdpClient {
             ws_url,
             message_id: Arc::new(AtomicU64::new(1)),
             connection: Arc::new(Mutex::new(None)),
+            shutdown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Gracefully disconnect from the CDP endpoint
+    pub async fn disconnect(&self) {
+        self.shutdown
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let mut conn = self.connection.lock().await;
+        *conn = None;
+        tracing::info!("CDP client disconnected");
     }
 
     pub async fn connect(&self) -> Result<()> {
@@ -66,20 +87,38 @@ impl CdpClient {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (response_tx, response_rx) = std::sync::mpsc::channel();
 
+        // Clone shutdown flag for spawned tasks
+        let shutdown_writer = self.shutdown.clone();
+        let shutdown_reader = self.shutdown.clone();
+
+        // Writer task - sends messages to WebSocket
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
+                if shutdown_writer.load(std::sync::atomic::Ordering::SeqCst) {
+                    tracing::debug!("CDP writer task shutting down");
+                    break;
+                }
                 if let Err(e) = write.send(msg).await {
                     tracing::error!("Failed to send CDP message: {}", e);
                     break;
                 }
             }
+            // Attempt graceful close
+            let _ = write.close().await;
+            tracing::debug!("CDP writer task terminated");
         });
 
+        // Reader task - receives messages from WebSocket
         tokio::spawn(async move {
             while let Some(result) = read.next().await {
+                if shutdown_reader.load(std::sync::atomic::Ordering::SeqCst) {
+                    tracing::debug!("CDP reader task shutting down");
+                    break;
+                }
                 match result {
                     Ok(msg) => {
                         if response_tx.send(msg).is_err() {
+                            // Receiver dropped, exit gracefully
                             break;
                         }
                     }
@@ -89,6 +128,7 @@ impl CdpClient {
                     }
                 }
             }
+            tracing::debug!("CDP reader task terminated");
         });
 
         let mut conn = self.connection.lock().await;
