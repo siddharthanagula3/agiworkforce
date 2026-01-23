@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
+import { toast } from '@/hooks/useToast';
 import type { CacheStats, CacheAnalytics } from '../../types/cache';
 
 export const CacheManagement: React.FC = () => {
@@ -72,10 +73,18 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       const pruned = await CacheService.pruneExpired();
-      alert(`Pruned ${pruned} expired cache entries`);
+      toast({
+        title: 'Cache pruned',
+        description: `Successfully removed ${pruned} expired cache entries`,
+      });
       await loadStats(); // Reload stats
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to prune expired cache');
+      toast({
+        title: 'Prune failed',
+        description: err instanceof Error ? err.message : 'Failed to prune expired cache',
+        variant: 'destructive',
+      });
       console.error('Error pruning cache:', err);
     } finally {
       setLoading(false);
