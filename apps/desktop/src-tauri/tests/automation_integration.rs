@@ -31,10 +31,15 @@ fn test_clipboard_paste_workflow() {
     let clipboard = ClipboardManager::new().expect("ClipboardManager creation should succeed");
 
     let test_text = "Automation test text 🚀";
-    clipboard.set_text(test_text).expect("Set text should succeed");
+    clipboard
+        .set_text(test_text)
+        .expect("Set text should succeed");
 
     let retrieved = clipboard.get_text().expect("Get text should succeed");
-    assert_eq!(retrieved, test_text, "Clipboard round-trip should preserve text");
+    assert_eq!(
+        retrieved, test_text,
+        "Clipboard round-trip should preserve text"
+    );
 }
 
 /// Test screenshot capture and OCR in a GUI context.
@@ -49,7 +54,10 @@ fn test_screenshot_and_ocr_workflow() {
 
     assert!(capture.width > 0, "Captured image should have width");
     assert!(capture.height > 0, "Captured image should have height");
-    assert!(!capture.data.is_empty(), "Captured image should have pixel data");
+    assert!(
+        !capture.data.is_empty(),
+        "Captured image should have pixel data"
+    );
 }
 
 #[test]
@@ -77,7 +85,10 @@ fn test_multi_monitor_screenshot() {
     use agiworkforce_desktop::automation::screen::{list_displays, ScreenCapture};
 
     let displays = list_displays().expect("Should list available displays");
-    assert!(!displays.is_empty(), "At least one display should be available");
+    assert!(
+        !displays.is_empty(),
+        "At least one display should be available"
+    );
 
     for display in &displays {
         let capture = ScreenCapture::capture_display(display.id)

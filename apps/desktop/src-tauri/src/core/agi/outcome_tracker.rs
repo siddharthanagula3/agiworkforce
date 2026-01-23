@@ -496,7 +496,11 @@ mod tests {
 
     fn setup_test_db() -> (TempDir, String) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test_outcomes.db").to_string_lossy().to_string();
+        let db_path = temp_dir
+            .path()
+            .join("test_outcomes.db")
+            .to_string_lossy()
+            .to_string();
 
         // Create the database with required schema
         let conn = Connection::open(&db_path).expect("Failed to open database");
@@ -510,8 +514,9 @@ mod tests {
                 actual_value REAL,
                 achieved INTEGER NOT NULL,
                 tracked_at INTEGER NOT NULL
-            );"
-        ).expect("Failed to create schema");
+            );",
+        )
+        .expect("Failed to create schema");
 
         (temp_dir, db_path)
     }
@@ -555,7 +560,10 @@ mod tests {
 
         assert!(rate.is_ok());
         let rate = rate.unwrap();
-        assert!((rate - 0.5).abs() < 0.01, "Success rate should be 50% (1 out of 2)");
+        assert!(
+            (rate - 0.5).abs() < 0.01,
+            "Success rate should be 50% (1 out of 2)"
+        );
     }
 
     #[test]

@@ -36,14 +36,16 @@ mod tests {
         let state = create_test_state();
 
         // Set up some initial state
-        state.update(|s| {
-            s.pinned = true;
-            s.always_on_top = false;
-            s.dock = None;
-            s.maximized = false;
-            s.fullscreen = false;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.pinned = true;
+                s.always_on_top = false;
+                s.dock = None;
+                s.maximized = false;
+                s.fullscreen = false;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
 
@@ -68,10 +70,12 @@ mod tests {
         let state = create_test_state();
 
         // Enable fullscreen
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         let payload = WindowStatePayload {
@@ -90,10 +94,12 @@ mod tests {
         let state = create_test_state();
 
         // Set dock to left
-        state.update(|s| {
-            s.dock = Some(DockPosition::Left);
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Left);
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         let payload = WindowStatePayload {
@@ -107,10 +113,12 @@ mod tests {
         assert_eq!(payload.dock, Some(DockPosition::Left));
 
         // Change to right
-        state.update(|s| {
-            s.dock = Some(DockPosition::Right);
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Right);
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         let payload = WindowStatePayload {
@@ -129,10 +137,12 @@ mod tests {
         let state = create_test_state();
 
         // Enable maximized
-        state.update(|s| {
-            s.maximized = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.maximized = true;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         let payload = WindowStatePayload {
@@ -146,10 +156,12 @@ mod tests {
         assert!(payload.maximized, "Payload should include maximized=true");
 
         // Ensure maximized and fullscreen are independent
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         assert!(snapshot.maximized);

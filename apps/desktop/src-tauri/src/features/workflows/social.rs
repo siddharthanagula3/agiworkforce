@@ -470,8 +470,9 @@ mod tests {
                 rating_count INTEGER DEFAULT 0,
                 estimated_time_saved INTEGER DEFAULT 0,
                 estimated_cost_saved REAL DEFAULT 0.0
-            );"
-        ).unwrap();
+            );",
+        )
+        .unwrap();
         Arc::new(Mutex::new(conn))
     }
 
@@ -483,12 +484,16 @@ mod tests {
         // Test rating below minimum (0)
         let result = social.rate_workflow("wf1", "user1", 0, None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Rating must be between 1 and 5"));
+        assert!(result
+            .unwrap_err()
+            .contains("Rating must be between 1 and 5"));
 
         // Test rating above maximum (6)
         let result = social.rate_workflow("wf1", "user1", 6, None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Rating must be between 1 and 5"));
+        assert!(result
+            .unwrap_err()
+            .contains("Rating must be between 1 and 5"));
 
         // Test valid ratings (1-5)
         for rating in 1..=5 {

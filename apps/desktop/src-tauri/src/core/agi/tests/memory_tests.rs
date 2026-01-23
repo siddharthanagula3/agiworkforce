@@ -32,12 +32,15 @@ mod tests {
             if self.items.len() >= self.capacity && !self.items.contains_key(&key) {
                 return false; // At capacity
             }
-            self.items.insert(key.clone(), MemoryItem {
-                key,
-                value,
-                created_at: chrono::Utc::now().timestamp(),
-                ttl_seconds: ttl,
-            });
+            self.items.insert(
+                key.clone(),
+                MemoryItem {
+                    key,
+                    value,
+                    created_at: chrono::Utc::now().timestamp(),
+                    ttl_seconds: ttl,
+                },
+            );
             true
         }
 

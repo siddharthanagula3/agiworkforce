@@ -353,7 +353,10 @@ pub fn install_native_host_manifest() -> Result<()> {
     {
         // On Windows, register the native messaging host in the registry
         if let Err(e) = register_windows_native_host(host_name, &manifest_path) {
-            tracing::warn!("Failed to register Windows native host: {}. Manual registration may be required.", e);
+            tracing::warn!(
+                "Failed to register Windows native host: {}. Manual registration may be required.",
+                e
+            );
         } else {
             tracing::info!("Windows native messaging host registered in registry");
         }
@@ -407,7 +410,11 @@ fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path
             );
 
             if result.is_err() {
-                tracing::warn!("Failed to create registry key for {}: {:?}", key_path, result);
+                tracing::warn!(
+                    "Failed to create registry key for {}: {:?}",
+                    key_path,
+                    result
+                );
                 continue;
             }
 
@@ -429,7 +436,11 @@ fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path
             );
 
             if result.is_err() {
-                tracing::warn!("Failed to set registry value for {}: {:?}", key_path, result);
+                tracing::warn!(
+                    "Failed to set registry value for {}: {:?}",
+                    key_path,
+                    result
+                );
             }
 
             let _ = RegCloseKey(hkey);
