@@ -255,4 +255,10 @@ async function handleDeleteUserData(request: NextRequest) {
 }
 
 export const DELETE = withErrorHandler(handleDeleteUserData);
-export const OPTIONS = handleDeleteUserData;
+
+export function OPTIONS(request: NextRequest) {
+  return (
+    handleCorsPreflightRequest(request) ??
+    new NextResponse(null, { status: 204, headers: getSecurityHeaders() })
+  );
+}

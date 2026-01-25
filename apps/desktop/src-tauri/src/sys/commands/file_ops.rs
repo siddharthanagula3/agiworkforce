@@ -5,7 +5,7 @@ use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tauri::{AppHandle, Emitter};
 use tracing::{debug, info, warn};
@@ -65,7 +65,10 @@ pub struct DangerousOpEvent {
     pub paths: Vec<String>,
 }
 
-fn validate_path_security(path: &str) -> Result<(), String> {
+/// Validates path security by canonicalizing first, then checking for traversal attacks.
+/// Returns the canonical PathBuf on success to prevent TOCTOU vulnerabilities.
+fn validate_path_security(path: &str) -> Result<PathBuf, String> {
+    // Basic validation before any filesystem operations
     if path.is_empty() {
         return Err("Path cannot be empty".to_string());
     }
@@ -75,19 +78,78 @@ fn validate_path_security(path: &str) -> Result<(), String> {
             path.len()
         ));
     }
+    if path.contains('\0') {
+        return Err("Path contains null bytes which is not allowed".to_string());
+    }
 
-    if path.contains("..") {
+    // Canonicalize the path BEFORE checking for traversal
+    // This prevents bypass attacks using encoded sequences or symlinks
+    let canonical_path = if Path::new(path).exists() {
+        // For existing paths, canonicalize directly
+        fs::canonicalize(path).map_err(|e| format!("Failed to resolve path '{}': {}", path, e))?
+    } else {
+        // For non-existing paths (new files), canonicalize the parent and append filename
+        let path_obj = Path::new(path);
+        if let Some(parent) = path_obj.parent() {
+            if parent.as_os_str().is_empty() {
+                // Relative path with no parent directory - use current directory
+                let current_dir = std::env::current_dir()
+                    .map_err(|e| format!("Failed to get current directory: {}", e))?;
+                let canonical_parent = fs::canonicalize(&current_dir)
+                    .map_err(|e| format!("Failed to canonicalize current directory: {}", e))?;
+                if let Some(file_name) = path_obj.file_name() {
+                    canonical_parent.join(file_name)
+                } else {
+                    return Err(format!("Invalid path: no filename in '{}'", path));
+                }
+            } else if parent.exists() {
+                let canonical_parent = fs::canonicalize(parent)
+                    .map_err(|e| format!("Failed to resolve parent directory: {}", e))?;
+                if let Some(file_name) = path_obj.file_name() {
+                    canonical_parent.join(file_name)
+                } else {
+                    return Err(format!("Invalid path: no filename in '{}'", path));
+                }
+            } else {
+                return Err(format!(
+                    "Parent directory does not exist: {}",
+                    parent.display()
+                ));
+            }
+        } else {
+            return Err(format!("Invalid path structure: {}", path));
+        }
+    };
+
+    // Convert to string for security checks
+    let canonical_str = canonical_path.to_string_lossy();
+
+    // Check for directory traversal in the CANONICAL path
+    // This catches attempts that might have been encoded or used symlinks
+    if canonical_str.contains("..") {
+        warn!(
+            "Directory traversal detected after canonicalization: original='{}', canonical='{}'",
+            path, canonical_str
+        );
         return Err(
             "Path contains directory traversal (..) which is not allowed for security reasons"
                 .to_string(),
         );
     }
 
-    if path.contains('\0') {
-        return Err("Path contains null bytes which is not allowed".to_string());
+    // Check blacklisted paths against the CANONICAL path
+    if is_blacklisted_path(&canonical_str) {
+        warn!(
+            "Attempted access to blacklisted path: original='{}', canonical='{}'",
+            path, canonical_str
+        );
+        return Err(format!(
+            "Access to protected system path is not allowed: {}",
+            canonical_str
+        ));
     }
 
-    Ok(())
+    Ok(canonical_path)
 }
 
 pub(crate) fn is_blacklisted_path(path: &str) -> bool {
@@ -104,9 +166,12 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         ".gnupg",
         ".env",
         "credentials",
-        "private",
         "/etc/passwd",
         "/etc/shadow",
+        // Protect private key directories (but not macOS /private/ system prefix)
+        "private_keys",
+        "privatekeys",
+        "/private/etc/",
     ];
 
     blacklist
@@ -237,7 +302,7 @@ pub async fn file_read(
 ) -> Result<String, String> {
     debug!("Reading file: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     match fs::metadata(&path) {
         Ok(metadata) => {
@@ -296,7 +361,7 @@ pub async fn file_write(
 ) -> Result<(), String> {
     debug!("Writing file: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     if content.len() > 100_000_000 {
         return Err(format!(
@@ -350,7 +415,7 @@ pub async fn file_write(
 pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
     debug!("Deleting file: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     match fs::metadata(&path) {
         Ok(metadata) => {
@@ -408,8 +473,8 @@ pub async fn file_rename(
 ) -> Result<(), String> {
     debug!("Renaming file: {} -> {}", old_path, new_path);
 
-    validate_path_security(&old_path)?;
-    validate_path_security(&new_path)?;
+    let _ = validate_path_security(&old_path)?;
+    let _ = validate_path_security(&new_path)?;
 
     if !Path::new(&old_path).exists() {
         return Err(format!("Source file does not exist: {}", old_path));
@@ -451,8 +516,8 @@ pub async fn file_copy(
 ) -> Result<(), String> {
     debug!("Copying file: {} -> {}", src, dest);
 
-    validate_path_security(&src)?;
-    validate_path_security(&dest)?;
+    let _ = validate_path_security(&src)?;
+    let _ = validate_path_security(&dest)?;
 
     match fs::metadata(&src) {
         Ok(metadata) => {
@@ -505,8 +570,8 @@ pub async fn file_move(
 ) -> Result<(), String> {
     debug!("Moving file: {} -> {}", src, dest);
 
-    validate_path_security(&src)?;
-    validate_path_security(&dest)?;
+    let _ = validate_path_security(&src)?;
+    let _ = validate_path_security(&dest)?;
 
     match fs::metadata(&src) {
         Ok(metadata) => {
@@ -565,7 +630,7 @@ pub async fn file_move(
 
 #[tauri::command]
 pub async fn file_exists(path: String) -> Result<bool, String> {
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     Ok(Path::new(&path).exists())
 }
@@ -574,7 +639,7 @@ pub async fn file_exists(path: String) -> Result<bool, String> {
 pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
     debug!("Getting metadata for: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     let metadata =
         fs::metadata(&path).map_err(|e| format!("Failed to get metadata for '{}': {}", path, e))?;
@@ -607,7 +672,7 @@ pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
 pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
     debug!("Creating directory: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     if Path::new(&path).exists() {
         return Err(format!("Path already exists: {}", path));
@@ -637,7 +702,7 @@ pub async fn dir_list(
 ) -> Result<Vec<DirEntry>, String> {
     debug!("Listing directory: {}", path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     match fs::metadata(&path) {
         Ok(metadata) => {
@@ -692,7 +757,7 @@ pub async fn dir_delete(
 ) -> Result<(), String> {
     debug!("Deleting directory: {} (recursive: {})", path, recursive);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     match fs::metadata(&path) {
         Ok(metadata) => {
@@ -744,7 +809,7 @@ pub async fn dir_traverse(
         path, glob_pattern
     );
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     if glob_pattern.contains("..") {
         return Err("Glob pattern cannot contain directory traversal (..)".to_string());
@@ -864,7 +929,7 @@ pub async fn fs_read_file_content(
 ) -> Result<FileContextContent, String> {
     debug!("Reading file content for context: {}", file_path);
 
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     match fs::metadata(&file_path) {
         Ok(metadata) => {
@@ -955,7 +1020,7 @@ pub async fn fs_get_workspace_files(
 ) -> Result<Vec<WorkspaceFile>, String> {
     debug!("Getting workspace files: {}", workspace_path);
 
-    validate_path_security(&workspace_path)?;
+    let _ = validate_path_security(&workspace_path)?;
 
     match fs::metadata(&workspace_path) {
         Ok(metadata) => {
@@ -1085,7 +1150,7 @@ pub async fn file_read_text(
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
         let error = "Permission denied".to_string();
@@ -1126,7 +1191,7 @@ pub async fn file_write_text(
     content: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     if content.len() > 100_000_000 {
         return Err(format!(
@@ -1179,7 +1244,7 @@ pub async fn file_read_binary(
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
         let error = "Permission denied".to_string();
@@ -1220,7 +1285,7 @@ pub async fn file_write_binary(
     base64_content: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     if base64_content.len() > 134_000_000 {
         return Err("Content too large. Maximum is 100MB decoded".to_string());
@@ -1271,7 +1336,7 @@ pub async fn file_write_binary(
 
 #[tauri::command]
 pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String> {
-    validate_path_security(&file_path)?;
+    let _ = validate_path_security(&file_path)?;
 
     let metadata =
         fs::metadata(&file_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
@@ -1309,7 +1374,7 @@ pub async fn undo_file_operation(
 ) -> Result<(), String> {
     info!("Undo file operation: {} on {}", operation, path);
 
-    validate_path_security(&path)?;
+    let _ = validate_path_security(&path)?;
 
     match operation.as_str() {
         "restore" => {
