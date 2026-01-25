@@ -184,10 +184,14 @@ impl OAuthManager {
             return Err(anyhow!("Provider mismatch"));
         }
 
-        let providers = self.providers.read();
-        let config = providers
-            .get(&provider)
-            .ok_or_else(|| anyhow!("Provider not configured: {:?}", provider))?;
+        // Clone config before await to avoid holding lock across async boundary
+        let config = {
+            let providers = self.providers.read();
+            providers
+                .get(&provider)
+                .ok_or_else(|| anyhow!("Provider not configured: {:?}", provider))?
+                .clone()
+        };
 
         let client = BasicClient::new(
             ClientId::new(config.client_id.clone()),
@@ -223,10 +227,14 @@ impl OAuthManager {
         provider: OAuthProvider,
         refresh_token: String,
     ) -> Result<OAuthTokenResult> {
-        let providers = self.providers.read();
-        let config = providers
-            .get(&provider)
-            .ok_or_else(|| anyhow!("Provider not configured: {:?}", provider))?;
+        // Clone config before await to avoid holding lock across async boundary
+        let config = {
+            let providers = self.providers.read();
+            providers
+                .get(&provider)
+                .ok_or_else(|| anyhow!("Provider not configured: {:?}", provider))?
+                .clone()
+        };
 
         let client = BasicClient::new(
             ClientId::new(config.client_id.clone()),

@@ -954,6 +954,8 @@ export function Sidebar({
               <div key={group} className="mb-4">
                 <button
                   onClick={() => toggleGroup(group)}
+                  aria-expanded={expandedGroups.has(group)}
+                  aria-controls={`conversation-group-${group}`}
                   className="w-full flex items-center gap-2 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >
                   <ChevronRight
@@ -973,6 +975,7 @@ export function Sidebar({
                 <AnimatePresence>
                   {expandedGroups.has(group) && (
                     <motion.div
+                      id={`conversation-group-${group}`}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
