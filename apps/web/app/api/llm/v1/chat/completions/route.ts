@@ -721,4 +721,10 @@ async function handleChatCompletions(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleChatCompletions);
-export const OPTIONS = handleChatCompletions;
+
+export function OPTIONS(request: NextRequest) {
+  return (
+    handleCorsPreflightRequest(request) ??
+    new NextResponse(null, { status: 204, headers: getSecurityHeaders() })
+  );
+}

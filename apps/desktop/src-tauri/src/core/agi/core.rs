@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tauri::Emitter;
@@ -29,35 +30,6 @@ fn lock_with_recovery<'a, T>(mutex: &'a Mutex<T>, context: &str) -> Result<Mutex
                 context
             );
             Ok(poisoned.into_inner())
-        }
-    }
-}
-
-/// Acquires a mutex lock for boolean signals, defaulting to a safe value on poison.
-fn lock_bool_signal(mutex: &Mutex<bool>, default_on_poison: bool) -> bool {
-    match mutex.lock() {
-        Ok(guard) => *guard,
-        Err(poisoned) => {
-            tracing::warn!(
-                "[AGI] Recovered from poisoned bool mutex, using default={}",
-                default_on_poison
-            );
-            *poisoned.into_inner()
-        }
-    }
-}
-
-/// Sets a boolean signal value, recovering from poison if necessary.
-fn set_bool_signal(mutex: &Mutex<bool>, value: bool, context: &str) {
-    match mutex.lock() {
-        Ok(mut guard) => *guard = value,
-        Err(poisoned) => {
-            tracing::warn!(
-                "[AGI] Recovered from poisoned mutex ({}), setting value={}",
-                context,
-                value
-            );
-            *poisoned.into_inner() = value;
         }
     }
 }
@@ -121,8 +93,8 @@ pub struct AGICore {
     automation: Arc<AutomationService>,
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
-    stop_signal: Arc<Mutex<bool>>,
-    pause_signal: Arc<Mutex<bool>>,
+    stop_signal: Arc<AtomicBool>,
+    pause_signal: Arc<AtomicBool>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
     process_ontology: Option<Arc<ProcessOntology>>,
@@ -187,8 +159,8 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
-            stop_signal: Arc::new(Mutex::new(false)),
-            pause_signal: Arc::new(Mutex::new(false)),
+            stop_signal: Arc::new(AtomicBool::new(false)),
+            pause_signal: Arc::new(AtomicBool::new(false)),
             app_handle,
             process_reasoning: None,
             process_ontology: None,
@@ -271,8 +243,8 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
-            stop_signal: Arc::new(Mutex::new(false)),
-            pause_signal: Arc::new(Mutex::new(false)),
+            stop_signal: Arc::new(AtomicBool::new(false)),
+            pause_signal: Arc::new(AtomicBool::new(false)),
             app_handle,
             process_reasoning: Some(process_reasoning),
             process_ontology: Some(process_ontology),
@@ -334,12 +306,10 @@ impl AGICore {
 
     pub async fn start(&self) -> Result<()> {
         tracing::info!("[AGI] Starting AGI Core");
-        // CRITICAL-001 fix: Use recovery helper instead of map_err
-        set_bool_signal(&self.stop_signal, false, "start:stop_signal");
+        self.stop_signal.store(false, Ordering::SeqCst);
 
         loop {
-            // CRITICAL-001 fix: Use recovery helper, default to true (stop) on poison
-            if lock_bool_signal(&self.stop_signal, true) {
+            if self.stop_signal.load(Ordering::SeqCst) {
                 tracing::info!("[AGI] Stop signal received");
                 break;
             }
@@ -1162,14 +1132,11 @@ impl AGICore {
     }
 
     pub fn stop(&self) {
-        if let Ok(mut stop) = self.stop_signal.lock() {
-            *stop = true;
-        }
+        self.stop_signal.store(true, Ordering::SeqCst);
     }
 
     pub fn pause(&self) {
-        // CRITICAL-001 fix: Use recovery helper
-        set_bool_signal(&self.pause_signal, true, "pause");
+        self.pause_signal.store(true, Ordering::SeqCst);
     }
 
     pub async fn cancel_goal(&self, goal_id: &str) -> Result<()> {
@@ -1209,13 +1176,11 @@ impl AGICore {
     }
 
     pub fn resume(&self) {
-        // CRITICAL-001 fix: Use recovery helper
-        set_bool_signal(&self.pause_signal, false, "resume");
+        self.pause_signal.store(false, Ordering::SeqCst);
     }
 
     pub fn is_paused(&self) -> bool {
-        // CRITICAL-001 fix: Use recovery helper, default to false (not paused) on poison
-        lock_bool_signal(&self.pause_signal, false)
+        self.pause_signal.load(Ordering::SeqCst)
     }
 
     pub fn get_capabilities(&self) -> &AGICapabilities {

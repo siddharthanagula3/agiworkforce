@@ -259,20 +259,18 @@ impl PdfEditor {
             if let Some(new_page_id) = id_map.get(page_id) {
                 // Get target's pages object
                 if let Ok(catalog) = target.catalog() {
-                    if let Ok(pages_ref) = catalog.get(b"Pages") {
-                        if let Object::Reference(pages_id) = pages_ref {
-                            if let Ok(pages_obj) = target.get_object_mut(*pages_id) {
-                                if let Ok(pages_dict) = pages_obj.as_dict_mut() {
-                                    if let Ok(kids) = pages_dict.get_mut(b"Kids") {
-                                        if let Object::Array(ref mut kids_array) = kids {
-                                            kids_array.push(Object::Reference(*new_page_id));
-                                        }
-                                    }
-                                    // Update count
-                                    if let Ok(count) = pages_dict.get(b"Count") {
-                                        if let Ok(c) = count.as_i64() {
-                                            pages_dict.set("Count", Object::Integer(c + 1));
-                                        }
+                    if let Ok(Object::Reference(pages_id)) = catalog.get(b"Pages") {
+                        if let Ok(pages_obj) = target.get_object_mut(*pages_id) {
+                            if let Ok(pages_dict) = pages_obj.as_dict_mut() {
+                                if let Ok(Object::Array(ref mut kids_array)) =
+                                    pages_dict.get_mut(b"Kids")
+                                {
+                                    kids_array.push(Object::Reference(*new_page_id));
+                                }
+                                // Update count
+                                if let Ok(count) = pages_dict.get(b"Count") {
+                                    if let Ok(c) = count.as_i64() {
+                                        pages_dict.set("Count", Object::Integer(c + 1));
                                     }
                                 }
                             }
@@ -456,7 +454,7 @@ impl PdfEditor {
         let all_pages = doc.get_pages();
 
         // Normalize rotation to 0, 90, 180, or 270
-        let normalized_rotation = ((rotation % 360) + 360) % 360;
+        let normalized_rotation = rotation.rem_euclid(360);
         if normalized_rotation != 0
             && normalized_rotation != 90
             && normalized_rotation != 180
