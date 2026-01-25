@@ -1407,7 +1407,27 @@ pub fn run() {
             crate::sys::commands::governance::expire_timed_out_requests,
 
 
+            // Tutorials
+            crate::sys::commands::tutorials::get_tutorials,
+            crate::sys::commands::tutorials::get_tutorial,
+            crate::sys::commands::tutorials::get_recommended_tutorial,
+            crate::sys::commands::tutorials::start_tutorial,
+            crate::sys::commands::tutorials::complete_tutorial_step,
+            crate::sys::commands::tutorials::skip_tutorial_step,
+            crate::sys::commands::tutorials::complete_tutorial,
+            crate::sys::commands::tutorials::reset_tutorial,
+            crate::sys::commands::tutorials::get_tutorial_progress,
+            crate::sys::commands::tutorials::get_user_tutorial_progress,
+            crate::sys::commands::tutorials::get_tutorial_stats,
+            crate::sys::commands::tutorials::record_step_view,
+            crate::sys::commands::tutorials::get_user_rewards,
+            crate::sys::commands::tutorials::has_reward,
+            crate::sys::commands::tutorials::has_unlocked_feature,
             crate::sys::commands::tutorials::get_user_credits,
+            crate::sys::commands::tutorials::populate_sample_data,
+            crate::sys::commands::tutorials::has_sample_data,
+            crate::sys::commands::tutorials::clear_sample_data,
+            crate::sys::commands::tutorials::submit_tutorial_feedback,
 
 
             crate::sys::commands::messaging::connect_slack,
@@ -1429,6 +1449,27 @@ pub fn run() {
             crate::sys::commands::undo_last,
             crate::sys::commands::undo_task,
             crate::sys::commands::undo_can_undo,
+
+            // MySQL Database Commands
+            crate::sys::commands::db_mysql_test_connection,
+            crate::sys::commands::db_mysql_list_tables,
+            crate::sys::commands::db_mysql_describe_table,
+            crate::sys::commands::db_mysql_list_indexes,
+            crate::sys::commands::db_mysql_call_procedure,
+            crate::sys::commands::db_mysql_bulk_insert,
+            crate::sys::commands::db_validate_query,
+
+            // Error Recovery Commands
+            crate::sys::error::commands::get_error_context,
+            crate::sys::error::commands::get_all_error_contexts,
+            crate::sys::error::commands::retry_failed_step,
+            crate::sys::error::commands::skip_failed_step,
+            crate::sys::error::commands::abort_execution,
+            crate::sys::error::commands::clear_error_contexts,
+            crate::sys::error::commands::get_recovery_suggestion,
+
+            // Additional Automation
+            crate::sys::commands::automation_get_text,
 
             // Updater
             crate::features::updater::check_for_updates,

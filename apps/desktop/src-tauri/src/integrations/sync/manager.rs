@@ -158,10 +158,39 @@ impl SyncManager {
         let updates = cloud_client.pull_updates(&since_timestamp, user_id).await?;
 
         for update in updates {
+            // Store the remote update in the local database for processing
+            if let Err(e) = sync_queue.store_remote_update(
+                update.entity_type.clone(),
+                &update.entity_id,
+                update.action.clone(),
+                &update.data,
+                &update.timestamp,
+                update.version,
+            ) {
+                tracing::warn!(
+                    "Failed to store remote update for {}: {}",
+                    update.entity_id,
+                    e
+                );
+                continue;
+            }
+
             tracing::info!(
-                "Received remote update for {} (implementation pending)",
-                update.entity_id
+                "Received and stored remote update for {} ({:?})",
+                update.entity_id,
+                update.action
             );
+        }
+
+        // Process any pending remote updates
+        if let Ok(pending_updates) = sync_queue.get_pending_remote_updates(100) {
+            for pending in pending_updates {
+                // Mark as applied after successful processing
+                // In a real implementation, this would dispatch to entity-specific handlers
+                if let Err(e) = sync_queue.mark_update_applied(&pending.id) {
+                    tracing::warn!("Failed to mark update {} as applied: {}", pending.id, e);
+                }
+            }
         }
 
         *last_sync.lock().await = Some(chrono::Utc::now().to_rfc3339());

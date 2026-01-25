@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '../../../lib/tauri-mock';
 import { PublishedWorkflow } from '../../../types/marketplace';
+import { toast } from '@/hooks/useToast';
 
 interface WorkflowTemplate {
   id: string;
@@ -88,10 +89,17 @@ export const WorkflowMarketplace: React.FC = () => {
         userName,
       });
 
-      alert(`Workflow cloned successfully! New workflow ID: ${clonedId}`);
+      toast({
+        title: 'Workflow cloned',
+        description: `Successfully cloned workflow (ID: ${clonedId})`,
+      });
     } catch (error) {
       console.error('Failed to clone workflow:', error);
-      alert('Failed to clone workflow');
+      toast({
+        title: 'Clone failed',
+        description: 'Failed to clone workflow. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -106,9 +114,17 @@ export const WorkflowMarketplace: React.FC = () => {
         comment: null,
       });
 
-      alert('Rating submitted successfully!');
+      toast({
+        title: 'Rating submitted',
+        description: 'Thank you for your feedback!',
+      });
     } catch (error) {
       console.error('Failed to rate workflow:', error);
+      toast({
+        title: 'Rating failed',
+        description: 'Failed to submit rating. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -121,12 +137,20 @@ export const WorkflowMarketplace: React.FC = () => {
 
       if (platform === 'direct_link') {
         navigator.clipboard.writeText(shareUrl);
-        alert('Link copied to clipboard!');
+        toast({
+          title: 'Link copied',
+          description: 'Share link copied to clipboard!',
+        });
       } else {
         window.open(shareUrl, '_blank');
       }
     } catch (error) {
       console.error('Failed to generate share link:', error);
+      toast({
+        title: 'Share failed',
+        description: 'Failed to generate share link.',
+        variant: 'destructive',
+      });
     }
   };
 

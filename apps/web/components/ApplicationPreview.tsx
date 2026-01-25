@@ -91,18 +91,38 @@ export function ApplicationPreview() {
               </button>
             </>
           ) : (
-            <div className="w-full h-full">
-              {/* Replace with your actual video embed */}
-              <iframe
-                width="100%"
-                height="100%"
-                src="https://www.youtube.com/embed/YOUR_VIDEO_ID?autoplay=1"
-                title="AGI Workforce Demo"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="rounded-lg"
-              />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-black">
+              {/* Demo video placeholder - shows app preview with animated features */}
+              <div className="text-center p-8 max-w-xl">
+                <div className="mb-6 relative">
+                  <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
+                  <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl inline-block">
+                    <Play className="h-16 w-16 text-white" fill="currentColor" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-3">See AGI Workforce in Action</h3>
+                <p className="text-zinc-400 mb-6">
+                  Watch how our AI autonomously completes tasks - from browsing the web to editing
+                  files, all with natural language commands.
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
+                    💬 Natural Language
+                  </span>
+                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-sm">
+                    ↩️ Fully Reversible
+                  </span>
+                  <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                    🤖 Multi-LLM
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowVideo(false)}
+                  className="mt-6 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  ← Back to screenshot
+                </button>
+              </div>
             </div>
           )}
 

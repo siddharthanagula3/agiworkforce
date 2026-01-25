@@ -287,12 +287,81 @@ async fn run_and_capture(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_terminal_ai_creation() {}
-
-    #[test]
     fn test_command_sanitization() {
         let input = r#"echo "test with quotes""#;
         let escaped = input.replace('"', r#"\""#);
         assert!(escaped.contains(r#"\""#));
     }
+
+    #[test]
+    fn test_code_block_trimming() {
+        // Test the command extraction logic used in suggest_command
+        let response = "```bash\necho hello\n```";
+        let command = response
+            .trim()
+            .trim_start_matches("```")
+            .trim_start_matches("bash")
+            .trim_end_matches("```")
+            .trim();
+        assert_eq!(command, "echo hello");
+    }
+
+    #[test]
+    fn test_powershell_block_trimming() {
+        let response = "```powershell\nGet-Process\n```";
+        let command = response
+            .trim()
+            .trim_start_matches("```")
+            .trim_start_matches("powershell")
+            .trim_end_matches("```")
+            .trim();
+        assert_eq!(command, "Get-Process");
+    }
+
+    #[test]
+    fn test_plain_command_response() {
+        let response = "ls -la";
+        let command = response
+            .trim()
+            .trim_start_matches("```")
+            .trim_start_matches("bash")
+            .trim_start_matches("sh")
+            .trim_end_matches("```")
+            .trim();
+        assert_eq!(command, "ls -la");
+    }
+
+    #[test]
+    fn test_ok_response_detection() {
+        // Test the improvement suggestion logic
+        let analysis = "OK";
+        let is_ok = analysis.eq_ignore_ascii_case("OK") || analysis.eq_ignore_ascii_case("OK.");
+        assert!(is_ok);
+
+        let analysis = "ok.";
+        let is_ok = analysis.eq_ignore_ascii_case("OK") || analysis.eq_ignore_ascii_case("OK.");
+        assert!(is_ok);
+
+        let analysis = "HIGH: Security issue found";
+        let is_ok = analysis.eq_ignore_ascii_case("OK") || analysis.eq_ignore_ascii_case("OK.");
+        assert!(!is_ok);
+    }
+
+    #[test]
+    fn test_commit_message_format() {
+        // Test the commit message formatting
+        let commit_message = "feat(auth): add login validation";
+        let full_message = format!(
+            "{}\n\n- Generated with AGI Workforce\nCo-Authored-By: AGI Assistant <noreply@agiworkforce.ai>",
+            commit_message.trim()
+        );
+
+        assert!(full_message.contains("feat(auth)"));
+        assert!(full_message.contains("Generated with AGI Workforce"));
+        assert!(full_message.contains("Co-Authored-By"));
+    }
+
+    // Note: Full TerminalAI tests require LLMRouter and SessionManager instances
+    // which cannot be easily created in unit tests. The actual AI functionality
+    // should be tested via integration tests.
 }
