@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Upload, File, X } from 'lucide-react';
+import { Upload, File, X, AlertCircle } from 'lucide-react';
+import { toast } from '@/hooks/useToast';
 
 const cn = (...classes: (string | undefined | false)[]) => classes.filter(Boolean).join(' ');
 
@@ -22,6 +23,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
 }) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -35,8 +37,12 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
 
   const validateFile = useCallback(
     (file: File): boolean => {
+      setError(null);
+
       if (file.size > maxSize * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Max size is ${maxSize}MB.`);
+        const errorMsg = `File "${file.name}" is too large. Maximum size is ${maxSize}MB.`;
+        setError(errorMsg);
+        toast({ title: 'File too large', description: errorMsg, variant: 'destructive' });
         return false;
       }
 
@@ -53,7 +59,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         );
 
         if (!isAccepted) {
-          alert(`File ${file.name} has an invalid type.`);
+          const errorMsg = `File "${file.name}" has an invalid type. Accepted types: ${accept}`;
+          setError(errorMsg);
+          toast({ title: 'Invalid file type', description: errorMsg, variant: 'destructive' });
           return false;
         }
       }
@@ -74,10 +82,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const validFiles = files.filter(validateFile);
 
       if (validFiles.length + uploadedFiles.length > maxFiles) {
-        alert(`You can only upload a maximum of ${maxFiles} files.`);
+        const errorMsg = `You can only upload a maximum of ${maxFiles} files.`;
+        setError(errorMsg);
+        toast({ title: 'Too many files', description: errorMsg, variant: 'destructive' });
         return;
       }
 
+      setError(null);
       setUploadedFiles((prev) => [...prev, ...validFiles]);
       onFilesSelected(validFiles);
     },
@@ -92,10 +103,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const validFiles = files.filter(validateFile);
 
       if (validFiles.length + uploadedFiles.length > maxFiles) {
-        alert(`You can only upload a maximum of ${maxFiles} files.`);
+        const errorMsg = `You can only upload a maximum of ${maxFiles} files.`;
+        setError(errorMsg);
+        toast({ title: 'Too many files', description: errorMsg, variant: 'destructive' });
         return;
       }
 
+      setError(null);
       setUploadedFiles((prev) => [...prev, ...validFiles]);
       onFilesSelected(validFiles);
       e.target.value = ''; // Reset input
@@ -151,6 +165,25 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           </p>
         </label>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div
+          className="mt-3 flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto p-1 hover:bg-red-100 dark:hover:bg-red-800 rounded"
+            aria-label="Dismiss error"
+            type="button"
+          >
+            <X className="w-3 h-3 text-red-500" />
+          </button>
+        </div>
+      )}
 
       {/* File List */}
       {uploadedFiles.length > 0 && (

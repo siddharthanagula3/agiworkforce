@@ -53,7 +53,8 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
       {platforms.map((platform) => {
         const isDetected = detectedOS === platform.id;
 
-        const isComingSoon = platform.id === 'windows' || platform.id === 'linux';
+        // All platforms are now available for download
+        const isComingSoon = false;
 
         if (!platform.url && !isComingSoon) return null;
 

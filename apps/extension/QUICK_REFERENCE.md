@@ -287,31 +287,42 @@ All API responses follow:
 'parent descendant'; // Descendant
 ```
 
-### XPath (via helper)
+### XPath (via content script)
 
 ```javascript
-// Use findByText utility
-window.agiWorkforceUtils.findByText('Submit');
+// Use content script messaging to find elements
+chrome.tabs.sendMessage(tabId, {
+  type: 'FIND_ELEMENTS',
+  selector: "text='Submit'",
+});
 ```
 
 ---
 
-## Injected Utilities
+## Content Script Utilities
 
-Available via `window.agiWorkforceUtils`:
+> **Note:** Direct `window.agiWorkforceUtils` injection was removed for security.
+> Use the message-based API instead:
 
 ```javascript
-// Find by text
-findByText('button text');
+// Find elements via messaging
+chrome.tabs.sendMessage(tabId, {
+  type: 'FIND_ELEMENTS',
+  selector: "text='button text'",
+});
 
-// Get computed styles
-getComputedStyles('#element');
-
-// Query shadow DOM
-getShadowDomElements('.inside-shadow');
+// Get element info including styles
+chrome.tabs.sendMessage(tabId, {
+  type: 'GET_ELEMENT_INFO',
+  selector: '#element',
+});
 
 // Simulate key press
-simulateKeyPress('Enter', { ctrl: true });
+chrome.tabs.sendMessage(tabId, {
+  type: 'TYPE',
+  key: 'Enter',
+  modifiers: { ctrlKey: true },
+});
 ```
 
 ---

@@ -7,6 +7,7 @@ import { Input } from '../ui/Input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Dialog } from '../ui/Dialog';
+import { toast } from '@/hooks/useToast';
 import {
   Search,
   Download,
@@ -243,7 +244,10 @@ export function MCPServerBrowser() {
   const handleInstall = async (server: ServerPackage) => {
     console.log('Installing server:', server.id);
 
-    alert(`Installing ${server.name}...`);
+    toast({
+      title: 'Installing tool',
+      description: `Installing ${server.name}...`,
+    });
     setDetailsOpen(false);
   };
 

@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { toast } from '@/hooks/useToast';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle, Code } from 'lucide-react';
 
 interface TerminalAIAssistantProps {
@@ -74,9 +75,17 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
       setImprovements(null);
       setIntent('');
 
-      alert(`Smart commit successful!\n\n${result}`);
+      toast({
+        title: 'Smart commit successful',
+        description: result.substring(0, 100) + (result.length > 100 ? '...' : ''),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Smart commit failed');
+      toast({
+        title: 'Commit failed',
+        description: err instanceof Error ? err.message : 'Smart commit failed',
+        variant: 'destructive',
+      });
       console.error('Smart commit failed:', err);
     } finally {
       setLoading(false);

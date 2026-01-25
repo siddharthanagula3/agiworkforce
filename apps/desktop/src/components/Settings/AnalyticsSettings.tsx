@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useBillingUsageStore } from '../../stores/billingUsage';
+import { toast } from '@/hooks/useToast';
 import { PrivacyConsent } from '../../types/analytics';
 
 export const AnalyticsSettings = () => {
@@ -36,10 +37,17 @@ export const AnalyticsSettings = () => {
     setIsExporting(true);
     try {
       await exportAnalyticsData();
-      alert('Analytics data exported successfully!');
+      toast({
+        title: 'Export successful',
+        description: 'Analytics data exported successfully!',
+      });
     } catch (error) {
       console.error('Failed to export data:', error);
-      alert('Failed to export analytics data. Please try again.');
+      toast({
+        title: 'Export failed',
+        description: 'Failed to export analytics data. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsExporting(false);
     }
@@ -49,11 +57,18 @@ export const AnalyticsSettings = () => {
     setIsDeleting(true);
     try {
       await deleteAllAnalyticsData();
-      alert('All analytics data deleted successfully!');
+      toast({
+        title: 'Data deleted',
+        description: 'All analytics data deleted successfully!',
+      });
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('Failed to delete data:', error);
-      alert('Failed to delete analytics data. Please try again.');
+      toast({
+        title: 'Delete failed',
+        description: 'Failed to delete analytics data. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsDeleting(false);
     }

@@ -611,13 +611,129 @@ pub async fn apply_changes(changes: Vec<FileChange>) -> Result<ApplyResult, Stri
     })
 }
 
+/// Revert changes to files using stored edit history
+///
+/// Looks up the original content from applied edits and restores it.
+/// Falls back to git checkout if no edit history is found.
 #[tauri::command]
-pub async fn revert_changes(file_paths: Vec<String>) -> Result<(), String> {
+pub async fn revert_changes(
+    file_paths: Vec<String>,
+    edit_state: State<'_, Arc<Mutex<CodeEditingState>>>,
+) -> Result<RevertResult, String> {
     tracing::info!("Reverting {} files", file_paths.len());
 
+    let mut reverted = Vec::new();
+    let mut failed = Vec::new();
+
+    let editing_state = edit_state.lock().await;
+    let mut edits = editing_state.edits.lock().await;
+    let mut sessions = editing_state.composer_sessions.lock().await;
+
     for path in file_paths {
-        tracing::warn!("Revert not implemented for: {}", path);
+        let path_buf = PathBuf::from(&path);
+        let mut found_original = None;
+
+        // First, check individual edits
+        for edit in edits.values() {
+            if edit.file_path == path_buf && edit.status == EditStatus::Applied {
+                found_original = Some(edit.original_content.clone());
+                break;
+            }
+        }
+
+        // If not found in individual edits, check composer sessions
+        if found_original.is_none() {
+            for session in sessions.values() {
+                for edit in &session.edits {
+                    if edit.file_path == path_buf && edit.status == EditStatus::Applied {
+                        found_original = Some(edit.original_content.clone());
+                        break;
+                    }
+                }
+                if found_original.is_some() {
+                    break;
+                }
+            }
+        }
+
+        match found_original {
+            Some(original_content) => {
+                // Restore the original content
+                match std::fs::write(&path, &original_content) {
+                    Ok(_) => {
+                        tracing::info!("Reverted file from edit history: {}", path);
+
+                        // Update the edit status back to pending
+                        for edit in edits.values_mut() {
+                            if edit.file_path == path_buf {
+                                edit.status = EditStatus::Pending;
+                            }
+                        }
+                        for session in sessions.values_mut() {
+                            for edit in &mut session.edits {
+                                if edit.file_path == path_buf {
+                                    edit.status = EditStatus::Pending;
+                                }
+                            }
+                        }
+
+                        reverted.push(path);
+                    }
+                    Err(e) => {
+                        let msg = format!("Failed to write original content to {}: {}", path, e);
+                        tracing::error!("{}", msg);
+                        failed.push(FailedRevert { path, reason: msg });
+                    }
+                }
+            }
+            None => {
+                // Try git checkout as fallback
+                match try_git_revert(&path) {
+                    Ok(_) => {
+                        tracing::info!("Reverted file via git: {}", path);
+                        reverted.push(path);
+                    }
+                    Err(e) => {
+                        let msg = format!("No edit history found and git revert failed: {}", e);
+                        tracing::warn!("{}", msg);
+                        failed.push(FailedRevert { path, reason: msg });
+                    }
+                }
+            }
+        }
     }
 
-    Ok(())
+    Ok(RevertResult {
+        success: failed.is_empty(),
+        reverted_files: reverted,
+        failed_files: failed,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevertResult {
+    pub success: bool,
+    pub reverted_files: Vec<String>,
+    pub failed_files: Vec<FailedRevert>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedRevert {
+    pub path: String,
+    pub reason: String,
+}
+
+/// Attempt to revert a file using git checkout
+fn try_git_revert(file_path: &str) -> Result<(), String> {
+    let output = std::process::Command::new("git")
+        .args(["checkout", "HEAD", "--", file_path])
+        .output()
+        .map_err(|e| format!("Failed to run git: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("git checkout failed: {}", stderr))
+    }
 }
