@@ -4,6 +4,7 @@ use crate::core::agi::{
     Priority, ScoredResult,
 };
 use crate::core::llm::Provider;
+use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::AppDatabase;
 use anyhow::Result;
@@ -740,13 +741,33 @@ pub async fn get_knowledge_by_category(
     Ok(filtered)
 }
 
-/// Helper function to get user tier (simplified - can be enhanced with actual DB lookup)
-fn get_user_tier() -> &'static str {
-    // TODO: Replace with actual subscription lookup from database
-    // For now, defaulting to "pro" - in production, fetch from:
-    // - get_current_plan() or
-    // - UserSubscription from billing state
-    "pro"
+/// Helper function to get user tier from billing state
+async fn get_user_tier_from_billing(billing: &BillingStateWrapper) -> String {
+    let billing_guard = billing.0.lock().await;
+
+    #[cfg(feature = "billing")]
+    {
+        if let Ok(service) = billing_guard.stripe_service() {
+            if let Ok(Some(sub)) = service.get_primary_subscription() {
+                let plan = sub.plan_name.to_lowercase();
+                // Map subscription plan names to tier names
+                return match plan.as_str() {
+                    p if p.contains("max") || p.contains("enterprise") => "max".to_string(),
+                    p if p.contains("pro") || p.contains("professional") => "pro".to_string(),
+                    p if p.contains("hobby") || p.contains("basic") => "hobby".to_string(),
+                    _ => "free".to_string(),
+                };
+            }
+        }
+        "free".to_string()
+    }
+
+    #[cfg(not(feature = "billing"))]
+    {
+        drop(billing_guard);
+        // Without billing feature, default to "pro" for development
+        "pro".to_string()
+    }
 }
 
 /// Select best model and provider based on user tier
@@ -764,21 +785,23 @@ pub async fn start_agent_task(
     goal: String,
     _mode: String,
     llm_state: State<'_, LLMState>,
+    billing_state: State<'_, BillingStateWrapper>,
     user_id: Option<String>,
 ) -> Result<String, String> {
     tracing::info!("[start_agent_task] Starting agent task with goal: {}", goal);
 
-    // 1. Determine User Tier
-    let user_tier = get_user_tier();
+    // 1. Determine User Tier from billing state
+    let user_tier = get_user_tier_from_billing(&billing_state).await;
+    let user_tier_str = user_tier.as_str();
 
     // 2. Select Best Model based on Tier
-    let (model, provider) = select_best_model_by_tier(user_tier);
+    let (model, provider) = select_best_model_by_tier(user_tier_str);
 
     tracing::info!(
         "[start_agent_task] Auto-selecting model {} (provider: {:?}) for tier {}",
         model,
         provider,
-        user_tier
+        user_tier_str
     );
 
     // 3. Prepare the Request

@@ -245,6 +245,48 @@ pub async fn get_command_history(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_session_manager_creation() {}
+    fn test_session_context_structure() {
+        // Test that SessionContext can be created with valid data
+        let context = SessionContext {
+            shell_type: ShellType::Bash,
+            cwd: "/home/user".to_string(),
+        };
+
+        assert_eq!(context.cwd, "/home/user");
+        // ShellType should have a sensible default
+        let context_clone = context.clone();
+        assert_eq!(context_clone.cwd, context.cwd);
+    }
+
+    #[test]
+    fn test_session_context_clone() {
+        let context = SessionContext {
+            shell_type: ShellType::PowerShell,
+            cwd: "/workspace/project".to_string(),
+        };
+
+        let cloned = context.clone();
+        assert_eq!(cloned.cwd, context.cwd);
+    }
+
+    #[test]
+    fn test_session_context_debug() {
+        let context = SessionContext {
+            shell_type: ShellType::Zsh,
+            cwd: "/test".to_string(),
+        };
+
+        // Verify Debug trait is implemented
+        let debug_str = format!("{:?}", context);
+        assert!(debug_str.contains("SessionContext"));
+        assert!(debug_str.contains("/test"));
+    }
+
+    // Note: Full SessionManager tests require a Tauri AppHandle which
+    // cannot be created in unit tests. Integration tests should be used
+    // for testing create_session, send_input, resize_session, etc.
+    // See: apps/desktop/e2e/ for integration tests
 }

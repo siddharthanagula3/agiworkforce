@@ -168,12 +168,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     return groups;
   }, [availableModels, searchQuery]);
 
-  // Fetch suggestion with debounce to prevent excessive API calls
-  // TEMPORARILY DISABLED - investigating infinite loop issue
-  useEffect(() => {
-    // Disabled to isolate the infinite loop issue
-    return () => {};
-  }, []);
+  // NOTE: Router suggestions feature has been replaced by Auto modes (Economy/Balanced/Premium).
+  // The Auto modes use backend routing logic rather than client-side suggestions.
+  // The suggestion state is kept for potential future per-model recommendations.
 
   const handleModelChange = (modelId: string) => {
     if (

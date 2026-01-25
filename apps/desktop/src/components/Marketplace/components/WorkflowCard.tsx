@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../../../components/ui/Card';
+import { toast } from '@/hooks/useToast';
 import { useAuthStore } from '../../../stores/authStore';
 import type { PublishedWorkflow } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
@@ -56,7 +57,11 @@ export const WorkflowCard = memo(function WorkflowCard({
         showCloneSuccess(workflow);
       } catch (error) {
         console.error('Failed to clone workflow:', error);
-        alert('Failed to clone workflow. Please try again.');
+        toast({
+          title: 'Clone failed',
+          description: 'Failed to clone workflow. Please try again.',
+          variant: 'destructive',
+        });
       } finally {
         setIsCloning(false);
       }

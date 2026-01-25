@@ -1526,33 +1526,31 @@ Standard error messages returned in `error` field:
 
 ## Injected Script API
 
-Available via `window.agiWorkforceUtils` on all pages:
+> **SECURITY NOTE:** The `window.agiWorkforceUtils` API was removed in version 1.1.0 for security reasons.
+> Injecting utilities into page context exposed internal functionality to potentially malicious page scripts.
 
-```typescript
-interface AGIWorkforceUtils {
-  findByText(text: string): HTMLElement[];
-  getComputedStyles(selector: string): CSSStyleDeclaration | null;
-  getShadowDomElements(selector: string): Element[];
-  simulateKeyPress(
-    key: string,
-    modifiers?: {
-      ctrl?: boolean;
-      shift?: boolean;
-      alt?: boolean;
-      meta?: boolean;
-    },
-  ): void;
-}
-```
-
-**Usage:**
+**Alternative Approach:**
+All functionality previously available through injected utilities is now accessible via the message-based API.
+Use the content script messaging system instead:
 
 ```javascript
-// From page context
-const buttons = window.agiWorkforceUtils.findByText('Submit');
-const styles = window.agiWorkforceUtils.getComputedStyles('#header');
-window.agiWorkforceUtils.simulateKeyPress('Enter', { ctrl: true });
+// Use chrome.runtime.sendMessage from extension context
+// or postMessage from page context (with verification)
+
+// Example: Finding elements by text (via content script)
+chrome.tabs.sendMessage(tabId, {
+  type: 'FIND_ELEMENTS',
+  selector: "text='Submit'",
+});
+
+// Example: Getting computed styles
+chrome.tabs.sendMessage(tabId, {
+  type: 'GET_ELEMENT_INFO',
+  selector: '#header',
+});
 ```
+
+This message-based approach maintains proper security boundaries while providing equivalent functionality.
 
 ---
 

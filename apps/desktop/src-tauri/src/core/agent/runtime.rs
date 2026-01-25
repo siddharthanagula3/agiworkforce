@@ -887,17 +887,98 @@ Do not repeat the error message."#,
                     tracing::info!("[AgentRuntime] Reverted file deletion: {:?}", path);
                 }
             }
-            ChangeType::CommandExecuted { .. } => {
+            ChangeType::FileRenamed { old_path } => {
+                if let Some(new_path) = &change.path {
+                    let old_path_buf = std::path::PathBuf::from(old_path);
+                    tokio::fs::rename(new_path, &old_path_buf)
+                        .await
+                        .map_err(|e| format!("Failed to rename file back: {}", e))?;
+                    tracing::info!(
+                        "[AgentRuntime] Reverted file rename: {:?} -> {:?}",
+                        new_path,
+                        old_path
+                    );
+                }
+            }
+            ChangeType::CommandExecuted { command, .. } => {
                 tracing::warn!(
-                    "[AgentRuntime] Cannot revert command execution: {:?}",
-                    change.change_type
+                    "[AgentRuntime] Cannot revert command execution '{}': Commands are non-reversible",
+                    command.chars().take(50).collect::<String>()
                 );
             }
-            _ => {
-                tracing::warn!(
-                    "[AgentRuntime] Revert not implemented for change type: {:?}",
-                    change.change_type
-                );
+            ChangeType::GitCommit { hash, .. } => {
+                // Revert git commit by running git revert
+                let output = tokio::process::Command::new("git")
+                    .args(["revert", "--no-commit", hash])
+                    .output()
+                    .await
+                    .map_err(|e| format!("Failed to revert git commit: {}", e))?;
+
+                if output.status.success() {
+                    tracing::info!("[AgentRuntime] Reverted git commit: {}", hash);
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    tracing::warn!("[AgentRuntime] Git revert may have failed: {}", stderr);
+                }
+            }
+            ChangeType::GitCheckout { branch } => {
+                // Try to checkout the previous branch if we have metadata
+                if let Some(prev_branch) = change.metadata.get("previous_branch") {
+                    if let Some(prev) = prev_branch.as_str() {
+                        let output = tokio::process::Command::new("git")
+                            .args(["checkout", prev])
+                            .output()
+                            .await
+                            .map_err(|e| format!("Failed to checkout previous branch: {}", e))?;
+
+                        if output.status.success() {
+                            tracing::info!(
+                                "[AgentRuntime] Reverted git checkout: {} -> {}",
+                                branch,
+                                prev
+                            );
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "[AgentRuntime] Cannot revert git checkout to {}: Previous branch not recorded",
+                        branch
+                    );
+                }
+            }
+            ChangeType::DirectoryCreated => {
+                if let Some(path) = &change.path {
+                    // Only remove if directory is empty
+                    match tokio::fs::read_dir(path).await {
+                        Ok(mut entries) => {
+                            if entries.next_entry().await.ok().flatten().is_none() {
+                                tokio::fs::remove_dir(path)
+                                    .await
+                                    .map_err(|e| format!("Failed to remove directory: {}", e))?;
+                                tracing::info!(
+                                    "[AgentRuntime] Reverted directory creation: {:?}",
+                                    path
+                                );
+                            } else {
+                                tracing::warn!(
+                                    "[AgentRuntime] Cannot revert directory creation: {:?} is not empty",
+                                    path
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("[AgentRuntime] Cannot check directory: {}", e);
+                        }
+                    }
+                }
+            }
+            ChangeType::DirectoryDeleted => {
+                if let Some(path) = &change.path {
+                    tokio::fs::create_dir_all(path)
+                        .await
+                        .map_err(|e| format!("Failed to recreate directory: {}", e))?;
+                    tracing::info!("[AgentRuntime] Reverted directory deletion: {:?}", path);
+                }
             }
         }
 
