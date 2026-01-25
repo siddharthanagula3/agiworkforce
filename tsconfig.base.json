@@ -31,7 +31,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
-    "useUnknownInCatchVariables": false,
+    "useUnknownInCatchVariables": true,
     "allowJs": false,
     "downlevelIteration": true, // Required for MapIterator and spread operations on ES2020
 

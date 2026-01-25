@@ -206,7 +206,13 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       )}
 
       {/* Message list with memoized callbacks to prevent unnecessary re-renders */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+      <div
+        ref={listRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Chat messages"
+        className="flex-1 overflow-y-auto px-4 py-2 space-y-2"
+      >
         {filteredMessages.map((message) => (
           <MessageBubble
             key={message.id}
