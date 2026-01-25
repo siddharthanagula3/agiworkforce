@@ -7,6 +7,7 @@ import { ScrollArea } from '../../../components/ui/ScrollArea';
 import { Separator } from '../../../components/ui/Separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
 import { Textarea } from '../../../components/ui/Textarea';
+import { toast } from '@/hooks/useToast';
 import { useAuthStore } from '../../../stores/authStore';
 import type { WorkflowDefinition } from '../../../types/workflow';
 import { useMarketplaceStore } from '../marketplaceStore';
@@ -51,7 +52,11 @@ export function WorkflowDetailModal() {
       showCloneSuccess(selectedWorkflow);
     } catch (error) {
       console.error('Failed to clone workflow:', error);
-      alert('Failed to clone workflow. Please try again.');
+      toast({
+        title: 'Clone failed',
+        description: 'Failed to clone workflow. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsCloning(false);
     }
@@ -63,7 +68,11 @@ export function WorkflowDetailModal() {
 
   const handleSubmitReview = async () => {
     if (userRating === 0) {
-      alert('Please select a rating');
+      toast({
+        title: 'Rating required',
+        description: 'Please select a rating before submitting.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -80,10 +89,17 @@ export function WorkflowDetailModal() {
 
       setUserRating(0);
       setReviewText('');
-      alert('Review submitted successfully!');
+      toast({
+        title: 'Review submitted',
+        description: 'Thank you for your feedback!',
+      });
     } catch (error) {
       console.error('Failed to submit review:', error);
-      alert('Failed to submit review. Please try again.');
+      toast({
+        title: 'Submission failed',
+        description: 'Failed to submit review. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmittingReview(false);
     }

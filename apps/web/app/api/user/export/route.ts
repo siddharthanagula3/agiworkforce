@@ -260,7 +260,7 @@ async function handleExportUserData(request: NextRequest) {
 
     // Fetch device authorizations
     const { data: deviceAuths } = await adminSupabase
-      .from('device_authorizations')
+      .from('device_authorization_codes')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
@@ -268,7 +268,7 @@ async function handleExportUserData(request: NextRequest) {
       // Redact sensitive device tokens
       exportData.device_authorizations = deviceAuths.map((auth) => ({
         ...auth,
-        device_code: '[REDACTED]',
+        user_code: auth.user_code ? '[REDACTED]' : null,
         access_token: auth.access_token ? '[REDACTED]' : null,
         refresh_token: auth.refresh_token ? '[REDACTED]' : null,
       }));

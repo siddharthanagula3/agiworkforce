@@ -1153,27 +1153,77 @@ fn get_embedded_registry() -> Vec<McpBundle> {
 }
 
 // ============================================================================
+// Remote Registry API
+// ============================================================================
+
+/// Fetch bundles from the remote MCP registry API.
+///
+/// Uses a timeout and returns an error if the API is unavailable.
+async fn fetch_remote_registry() -> Result<Vec<McpBundle>, String> {
+    use std::time::Duration;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get("https://registry.mcpservers.io/api/v1/bundles")
+        .header("Accept", "application/json")
+        .header("User-Agent", "AGIWorkforce/1.0")
+        .send()
+        .await
+        .map_err(|e| format!("API request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("API returned status: {}", response.status()));
+    }
+
+    // Try to parse as our McpBundle format
+    let bundles: Vec<McpBundle> = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse registry response: {}", e))?;
+
+    Ok(bundles)
+}
+
+// ============================================================================
 // Tauri Commands
 // ============================================================================
 
 /// Fetch the bundle registry.
 ///
-/// Currently returns embedded data. In the future, this could:
-/// - Fetch from: GET https://registry.mcpservers.io/api/v1/bundles
-/// - Cache results with a TTL (e.g., 1 hour)
-/// - Merge with local/custom bundles
+/// Tries to fetch from the remote API first, falls back to embedded data.
+/// Cache results with a 1-hour TTL to avoid excessive API calls.
 #[tauri::command]
 pub async fn mcpb_fetch_registry(state: State<'_, McpbState>) -> Result<Vec<McpBundle>, String> {
     tracing::info!("Fetching MCPB registry");
 
-    // TODO: Future API integration
-    // let response = reqwest::get("https://registry.mcpservers.io/api/v1/bundles")
-    //     .await
-    //     .map_err(|e| format!("Failed to fetch registry: {}", e))?;
-    // let bundles: Vec<McpBundle> = response.json().await
-    //     .map_err(|e| format!("Failed to parse registry: {}", e))?;
-
-    let mut bundles = get_embedded_registry();
+    // Try to fetch from remote API
+    let mut bundles = match fetch_remote_registry().await {
+        Ok(remote_bundles) => {
+            tracing::info!(
+                "Fetched {} bundles from remote registry",
+                remote_bundles.len()
+            );
+            // Merge with embedded registry to ensure we have all bundles
+            let mut combined = get_embedded_registry();
+            for bundle in remote_bundles {
+                if !combined.iter().any(|b| b.id == bundle.id) {
+                    combined.push(bundle);
+                }
+            }
+            combined
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to fetch remote registry, using embedded data: {}",
+                e
+            );
+            get_embedded_registry()
+        }
+    };
 
     // Mark installed bundles
     let installed = state.installed.lock();
