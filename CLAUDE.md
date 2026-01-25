@@ -368,6 +368,14 @@ agiworkforce/
 - Track redemptions per user
 - RLS: Service role creates, users view own
 
+**security_audit_logs:**
+
+- Security event logging for compliance
+- Event types: auth_failed, rate_limit_exceeded, authorization_failed, suspicious_activity
+- Severity levels: info, warning, error, critical
+- Auto-cleanup: 90 days retention via `cleanup_old_security_logs()` function
+- Service role access only
+
 ### Local Database (Desktop SQLite)
 
 - Self-contained at data directory
@@ -433,6 +441,23 @@ export const selectX = (state: State) => state.x; // Export selectors
 ```typescript
 // Frontend: invoke('command_name', { params })
 // Backend: Define in src-tauri/src/sys/commands/
+```
+
+### Code Editing API
+
+The desktop app provides a typed API for AGI code changes with undo support:
+
+```typescript
+import { applyEdit, rejectEdit, revertChanges, getPendingEdits } from '@/api/codeEditing';
+
+// Apply a pending edit from AGI
+await applyEdit(editId);
+
+// Reject an edit (keeps original)
+await rejectEdit(editId);
+
+// Revert all changes from a goal
+const result = await revertChanges(goalId);
 ```
 
 ### Web API Calls
@@ -600,6 +625,7 @@ Use `hasPlan(tier)` to check if user has at least the required tier.
 - **Pre-commit hooks:** Auto-fix formatting/linting via Husky
 - **Monorepo commands:** Use `--filter` for specific packages, `pnpm -r` for all
 - **Pinned versions:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3
+- **New APIs:** `apps/desktop/src/api/codeEditing.ts` provides typed wrappers for AGI code changes
 
 ## Quick Start Checklist
 

@@ -701,11 +701,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       {/* Context Menu Portal */}
       {contextMenu && (
         <div
+          role="menu"
+          aria-label="Message actions"
           className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-800/95 backdrop-blur-sm py-1 shadow-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            role="menuitem"
             onClick={() => {
               handleCopy();
               closeContextMenu();
@@ -716,6 +719,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             Copy message
           </button>
           <button
+            role="menuitem"
             onClick={() => {
               handleBookmark();
               closeContextMenu();
@@ -727,6 +731,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           </button>
           {isUser && (onEdit || onEditSave) && !message.error && (
             <button
+              role="menuitem"
               onClick={() => {
                 handleStartEdit();
                 closeContextMenu();
@@ -739,6 +744,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
           {isAssistant && onRegenerate && !message.error && (
             <button
+              role="menuitem"
               onClick={() => {
                 onRegenerate();
                 closeContextMenu();
@@ -751,8 +757,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
           {onDelete && (
             <>
-              <div className="my-1 border-t border-zinc-700" />
+              <div role="separator" className="my-1 border-t border-zinc-700" />
               <button
+                role="menuitem"
                 onClick={() => {
                   onDelete();
                   closeContextMenu();
