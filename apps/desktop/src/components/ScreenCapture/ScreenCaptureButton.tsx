@@ -10,8 +10,9 @@ import {
 } from '../ui/DropdownMenu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { RegionSelector } from './RegionSelector';
+import { WindowSelector } from './WindowSelector';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
-import type { Region, CaptureResult } from '../../types/capture';
+import type { Region, CaptureResult, WindowInfo } from '../../types/capture';
 import { toast } from 'sonner';
 
 interface ScreenCaptureButtonProps {
@@ -36,7 +37,8 @@ export function ScreenCaptureButton({
   className,
 }: ScreenCaptureButtonProps) {
   const [showRegionSelector, setShowRegionSelector] = useState(false);
-  const { captureFullScreen, captureRegion, isCapturing } = useScreenCapture();
+  const [showWindowSelector, setShowWindowSelector] = useState(false);
+  const { captureFullScreen, captureRegion, getAvailableWindows, isCapturing } = useScreenCapture();
 
   const handleFullScreen = async () => {
     try {
@@ -55,6 +57,20 @@ export function ScreenCaptureButton({
     setShowRegionSelector(true);
   };
 
+  const handleWindowCapture = async () => {
+    try {
+      const windows = await getAvailableWindows();
+      if (windows.length === 0) {
+        toast.error('No windows available for capture');
+        return;
+      }
+      setShowWindowSelector(true);
+    } catch (error) {
+      toast.error('Failed to get available windows');
+      console.error('Window list error:', error);
+    }
+  };
+
   const handleRegionConfirm = async (region: Region) => {
     setShowRegionSelector(false);
     try {
@@ -69,8 +85,33 @@ export function ScreenCaptureButton({
     }
   };
 
+  const handleWindowConfirm = async (window: WindowInfo) => {
+    setShowWindowSelector(false);
+    try {
+      // Capture the window by capturing its bounds as a region
+      const region: Region = {
+        x: window.bounds?.x || 0,
+        y: window.bounds?.y || 0,
+        width: window.bounds?.width || 800,
+        height: window.bounds?.height || 600,
+      };
+      const result = await captureRegion(region, conversationId);
+      if (!suppressToasts) {
+        toast.success(`Window "${window.title}" captured successfully`);
+      }
+      onCaptureComplete?.(result);
+    } catch (error) {
+      toast.error('Failed to capture window');
+      console.error('Capture error:', error);
+    }
+  };
+
   const handleRegionCancel = () => {
     setShowRegionSelector(false);
+  };
+
+  const handleWindowCancel = () => {
+    setShowWindowSelector(false);
   };
 
   if (mode === 'quick') {
@@ -136,16 +177,20 @@ export function ScreenCaptureButton({
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem disabled>
+          <DropdownMenuItem onClick={handleWindowCapture} disabled={isCapturing || disabled}>
             <Image className="mr-2 h-4 w-4" />
             <span>Capture Window</span>
-            <span className="ml-auto text-xs text-muted-foreground">Coming soon</span>
+            <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+W</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {showRegionSelector && (
         <RegionSelector onConfirm={handleRegionConfirm} onCancel={handleRegionCancel} />
+      )}
+
+      {showWindowSelector && (
+        <WindowSelector onConfirm={handleWindowConfirm} onCancel={handleWindowCancel} />
       )}
     </>
   );

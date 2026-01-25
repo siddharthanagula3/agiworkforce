@@ -49,7 +49,22 @@ export class OrganizationService {
 
     if (memberError) {
       logger.error({ error: memberError, orgId: org.id }, 'Failed to add owner to organization');
-      // Cleanup? For now just throw
+
+      // Cleanup: Delete the orphaned organization
+      const { error: cleanupError } = await supabase
+        .from('organizations')
+        .delete()
+        .eq('id', org.id);
+
+      if (cleanupError) {
+        logger.error(
+          { error: cleanupError, orgId: org.id },
+          'Failed to cleanup orphaned organization after member add failure',
+        );
+      } else {
+        logger.info({ orgId: org.id }, 'Cleaned up orphaned organization after member add failure');
+      }
+
       throw memberError;
     }
 

@@ -83,13 +83,18 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.internal('Failed to create device authorization code');
     }
 
+    // Generate QR code URL using a reliable public service
+    // The QR code encodes the verification URL for easy mobile scanning
+    const encodedVerifyUrl = encodeURIComponent(verify_url);
+    const qr_code_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=svg&data=${encodedVerifyUrl}`;
+
     return NextResponse.json(
       {
         link_code,
         device_id,
         verify_url,
         expires_at: Math.floor(expiresAt.getTime() / 1000),
-        qr_code_url: null,
+        qr_code_url,
       },
       { status: 200 },
     );

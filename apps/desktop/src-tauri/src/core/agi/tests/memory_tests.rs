@@ -1,8 +1,68 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    /// Mock memory item for testing purposes
+    #[allow(dead_code)]
+    #[derive(Debug, Clone)]
+    struct MemoryItem {
+        key: String,
+        value: String,
+        created_at: i64,
+        ttl_seconds: Option<u64>,
+    }
+
+    /// Mock working memory for testing
+    #[allow(dead_code)]
+    struct WorkingMemory {
+        items: HashMap<String, MemoryItem>,
+        capacity: usize,
+    }
+
+    #[allow(dead_code)]
+    impl WorkingMemory {
+        fn new(capacity: usize) -> Self {
+            Self {
+                items: HashMap::new(),
+                capacity,
+            }
+        }
+
+        fn store(&mut self, key: String, value: String, ttl: Option<u64>) -> bool {
+            if self.items.len() >= self.capacity && !self.items.contains_key(&key) {
+                return false; // At capacity
+            }
+            self.items.insert(
+                key.clone(),
+                MemoryItem {
+                    key,
+                    value,
+                    created_at: chrono::Utc::now().timestamp(),
+                    ttl_seconds: ttl,
+                },
+            );
+            true
+        }
+
+        fn retrieve(&self, key: &str) -> Option<&MemoryItem> {
+            self.items.get(key)
+        }
+
+        fn clear(&mut self) {
+            self.items.clear();
+        }
+
+        fn len(&self) -> usize {
+            self.items.len()
+        }
+    }
 
     #[test]
-    fn test_memory_creation() {}
+    fn test_memory_creation() {
+        let memory = WorkingMemory::new(100);
+        assert_eq!(memory.len(), 0);
+        assert_eq!(memory.capacity, 100);
+    }
 
     #[test]
     fn test_working_memory_storage() {

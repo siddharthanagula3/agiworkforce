@@ -351,9 +351,100 @@ pub fn install_native_host_manifest() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        // On Windows, also need to add registry key
-        // This would require winreg crate
-        tracing::warn!("Windows registry setup not implemented - manual registration required");
+        // On Windows, register the native messaging host in the registry
+        if let Err(e) = register_windows_native_host(host_name, &manifest_path) {
+            tracing::warn!(
+                "Failed to register Windows native host: {}. Manual registration may be required.",
+                e
+            );
+        } else {
+            tracing::info!("Windows native messaging host registered in registry");
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path) -> Result<()> {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_WRITE,
+        REG_OPTION_NON_VOLATILE, REG_SZ,
+    };
+
+    // Registry path for Chrome native messaging hosts
+    let chrome_key_path = format!(
+        "SOFTWARE\\Google\\Chrome\\NativeMessagingHosts\\{}",
+        host_name
+    );
+
+    // Registry path for Edge native messaging hosts
+    let edge_key_path = format!(
+        "SOFTWARE\\Microsoft\\Edge\\NativeMessagingHosts\\{}",
+        host_name
+    );
+
+    let manifest_path_str = manifest_path
+        .to_str()
+        .ok_or_else(|| anyhow!("Invalid manifest path"))?;
+
+    // Register for both Chrome and Edge
+    for key_path in [&chrome_key_path, &edge_key_path] {
+        let key_path_wide: Vec<u16> = key_path.encode_utf16().chain(std::iter::once(0)).collect();
+
+        unsafe {
+            let mut hkey: HKEY = HKEY::default();
+            let mut disposition: u32 = 0;
+
+            let result = RegCreateKeyExW(
+                HKEY_CURRENT_USER,
+                PCWSTR(key_path_wide.as_ptr()),
+                0,
+                PCWSTR::null(),
+                REG_OPTION_NON_VOLATILE,
+                KEY_WRITE,
+                None,
+                &mut hkey,
+                Some(&mut disposition),
+            );
+
+            if result.is_err() {
+                tracing::warn!(
+                    "Failed to create registry key for {}: {:?}",
+                    key_path,
+                    result
+                );
+                continue;
+            }
+
+            // Set the default value to the manifest path
+            let manifest_wide: Vec<u16> = manifest_path_str
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+
+            let result = RegSetValueExW(
+                hkey,
+                PCWSTR::null(), // Default value (empty name)
+                0,
+                REG_SZ,
+                Some(std::slice::from_raw_parts(
+                    manifest_wide.as_ptr() as *const u8,
+                    manifest_wide.len() * 2,
+                )),
+            );
+
+            if result.is_err() {
+                tracing::warn!(
+                    "Failed to set registry value for {}: {:?}",
+                    key_path,
+                    result
+                );
+            }
+
+            let _ = RegCloseKey(hkey);
+        }
     }
 
     Ok(())

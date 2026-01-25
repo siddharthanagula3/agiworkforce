@@ -31,20 +31,142 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_window_get_state_returns_correct_payload() {}
+    fn test_window_get_state_returns_correct_payload() {
+        // Test that window state can be captured as a payload
+        let state = create_test_state();
+
+        // Set up some initial state
+        state
+            .update(|s| {
+                s.pinned = true;
+                s.always_on_top = false;
+                s.dock = None;
+                s.maximized = false;
+                s.fullscreen = false;
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+
+        // Create payload from snapshot
+        let payload = WindowStatePayload {
+            pinned: snapshot.pinned,
+            always_on_top: snapshot.always_on_top,
+            dock: snapshot.dock,
+            maximized: snapshot.maximized,
+            fullscreen: snapshot.fullscreen,
+        };
+
+        assert!(payload.pinned);
+        assert!(!payload.always_on_top);
+        assert!(payload.dock.is_none());
+        assert!(!payload.maximized);
+        assert!(!payload.fullscreen);
+    }
 
     #[test]
-    #[ignore]
-    fn test_window_get_state_includes_fullscreen() {}
+    fn test_window_get_state_includes_fullscreen() {
+        let state = create_test_state();
+
+        // Enable fullscreen
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+        let payload = WindowStatePayload {
+            pinned: snapshot.pinned,
+            always_on_top: snapshot.always_on_top,
+            dock: snapshot.dock,
+            maximized: snapshot.maximized,
+            fullscreen: snapshot.fullscreen,
+        };
+
+        assert!(payload.fullscreen, "Payload should include fullscreen=true");
+    }
 
     #[test]
-    #[ignore]
-    fn test_window_get_state_with_dock_position() {}
+    fn test_window_get_state_with_dock_position() {
+        let state = create_test_state();
+
+        // Set dock to left
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Left);
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+        let payload = WindowStatePayload {
+            pinned: snapshot.pinned,
+            always_on_top: snapshot.always_on_top,
+            dock: snapshot.dock,
+            maximized: snapshot.maximized,
+            fullscreen: snapshot.fullscreen,
+        };
+
+        assert_eq!(payload.dock, Some(DockPosition::Left));
+
+        // Change to right
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Right);
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+        let payload = WindowStatePayload {
+            pinned: snapshot.pinned,
+            always_on_top: snapshot.always_on_top,
+            dock: snapshot.dock,
+            maximized: snapshot.maximized,
+            fullscreen: snapshot.fullscreen,
+        };
+
+        assert_eq!(payload.dock, Some(DockPosition::Right));
+    }
 
     #[test]
-    #[ignore]
-    fn test_window_get_state_with_maximized() {}
+    fn test_window_get_state_with_maximized() {
+        let state = create_test_state();
+
+        // Enable maximized
+        state
+            .update(|s| {
+                s.maximized = true;
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+        let payload = WindowStatePayload {
+            pinned: snapshot.pinned,
+            always_on_top: snapshot.always_on_top,
+            dock: snapshot.dock,
+            maximized: snapshot.maximized,
+            fullscreen: snapshot.fullscreen,
+        };
+
+        assert!(payload.maximized, "Payload should include maximized=true");
+
+        // Ensure maximized and fullscreen are independent
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
+
+        let snapshot = state.snapshot();
+        assert!(snapshot.maximized);
+        assert!(snapshot.fullscreen);
+    }
 
     #[test]
     fn test_window_state_payload_serialization() {

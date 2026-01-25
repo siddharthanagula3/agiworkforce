@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
+import { revertChanges as revertAgiChanges, type RevertResult } from '../api/codeEditing';
 
 export interface OpenFile {
   path: string;
@@ -27,6 +28,7 @@ interface CodeState {
   saveFile: (path: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   revertFile: (path: string) => void;
+  revertAgiChanges: (paths: string[]) => Promise<RevertResult>;
   getFileByPath: (path: string) => OpenFile | undefined;
   hydrateOpenFiles: () => Promise<void>;
 }
@@ -307,6 +309,43 @@ export const useCodeStore = create<CodeState>()(
               index === fileIndex ? revertedFile : openFile,
             ),
           });
+        },
+
+        /**
+         * Revert AGI-made changes to files using the backend edit history.
+         * Falls back to git checkout if no edit history exists.
+         * After successful revert, reloads the file content from disk.
+         */
+        revertAgiChanges: async (paths: string[]): Promise<RevertResult> => {
+          const result = await revertAgiChanges(paths);
+
+          // Reload successfully reverted files from disk
+          if (result.reverted_files.length > 0) {
+            const state = get();
+            for (const path of result.reverted_files) {
+              const fileIndex = state.openFiles.findIndex((f) => f.path === path);
+              if (fileIndex !== -1) {
+                try {
+                  const content = await invoke<string>('file_read', { path });
+                  const updatedFiles = [...get().openFiles];
+                  const file = updatedFiles[fileIndex];
+                  if (file) {
+                    updatedFiles[fileIndex] = {
+                      ...file,
+                      content,
+                      originalContent: content,
+                      isDirty: false,
+                    };
+                    set({ openFiles: updatedFiles });
+                  }
+                } catch (error) {
+                  console.warn('Failed to reload reverted file:', path, error);
+                }
+              }
+            }
+          }
+
+          return result;
         },
 
         getFileByPath: (path: string) => {
