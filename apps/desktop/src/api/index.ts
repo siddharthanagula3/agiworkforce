@@ -80,6 +80,7 @@ export {
 
 // Re-export other API modules for convenience
 export * from './automation';
+export * from './codeEditing';
 export * from './embeddings';
 export * from './media';
 export * from './migration';

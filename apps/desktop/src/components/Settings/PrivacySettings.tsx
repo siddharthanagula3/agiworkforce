@@ -5,6 +5,7 @@ import {
   deleteUserAccount,
 } from '@/api/privacy';
 import React, { useState } from 'react';
+import { useAuthStore } from '@/stores/auth';
 
 export const PrivacySettings: React.FC = () => {
   const [preferences, setPreferences] = useState<PrivacyPreferences>({
@@ -52,11 +53,17 @@ export const PrivacySettings: React.FC = () => {
   };
 
   const handleDeleteAccount = async () => {
+    const userId = useAuthStore.getState().getCurrentUserId();
+    if (!userId) {
+      console.error('Cannot delete account: No user ID available');
+      return;
+    }
+
     setLoading(true);
     try {
-      // TODO: Get actual user ID from auth context
-      await deleteUserAccount('current-user');
+      await deleteUserAccount(userId);
       // Logout and redirect to welcome screen
+      await useAuthStore.getState().signOut();
       window.location.href = '/welcome';
     } catch (error) {
       console.error('Failed to delete account:', error);

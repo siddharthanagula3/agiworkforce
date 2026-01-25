@@ -137,7 +137,10 @@ pub async fn cache_clear_by_type(
             Ok(())
         }
         "tool" => {
-            tracing::warn!("Tool cache not yet implemented");
+            // Tool caches are managed per-execution by AgiExecutor instances.
+            // They automatically clear when executions complete.
+            // No global tool cache to clear, but we log the request for visibility.
+            tracing::info!("Tool cache clear requested - tool caches are per-execution and auto-clear on completion");
             Ok(())
         }
         "codebase" => {

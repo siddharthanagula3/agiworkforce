@@ -40,4 +40,10 @@ export interface WindowInfo {
   handle: string;
   title: string;
   process: string;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }

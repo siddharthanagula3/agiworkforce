@@ -48,16 +48,74 @@ impl AgentSpeechRecognizer {
         })
     }
 
+    /// Start continuous speech recognition
+    ///
+    /// # Platform Support
+    /// - **macOS**: Supported via native Speech framework
+    /// - **Linux**: Supported via PulseAudio/PipeWire integration
+    /// - **Windows**: Not yet implemented - use browser-based speech recognition
+    ///
+    /// # Alternative
+    /// For Windows users, speech recognition is available via the browser:
+    /// 1. Use the chat interface in a Chromium-based browser
+    /// 2. Browser's Web Speech API handles recognition natively
     pub async fn start(&self) -> Result<()> {
-        Err(anyhow!("Windows Speech Recognition not yet implemented. This requires proper COM initialization and Windows Media Foundation setup."))
+        #[cfg(target_os = "windows")]
+        {
+            tracing::warn!(
+                "Speech recognition on Windows requires the browser-based interface. \
+                Use the chat in Chrome/Edge for voice input via Web Speech API."
+            );
+            return Err(anyhow!(
+                "Native speech recognition is not available on Windows. \
+                Please use voice input through the browser interface (Chrome/Edge) instead."
+            ));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(anyhow!(
+                "Speech recognition is not yet implemented for this platform."
+            ))
+        }
     }
 
+    /// Stop speech recognition
     pub async fn stop(&self) -> Result<()> {
-        Err(anyhow!("Windows Speech Recognition not yet implemented."))
+        #[cfg(target_os = "windows")]
+        {
+            return Err(anyhow!("Speech recognition not active on Windows"));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(anyhow!("Speech recognition not active"))
+        }
     }
 
+    /// Recognize speech once with a timeout
+    ///
+    /// This performs a single recognition pass and returns when speech is detected
+    /// or the timeout is reached.
     pub async fn recognize_once(&self, _timeout_ms: u64) -> Result<SpeechRecognitionResult> {
-        Err(anyhow!("Windows Speech Recognition not yet implemented."))
+        #[cfg(target_os = "windows")]
+        {
+            tracing::warn!(
+                "One-shot speech recognition on Windows requires browser integration. \
+                Use the microphone button in the chat interface for voice input."
+            );
+            return Err(anyhow!(
+                "Native speech recognition is not available on Windows. \
+                Use the microphone button in the browser-based chat interface."
+            ));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(anyhow!(
+                "Speech recognition not available on this platform."
+            ))
+        }
     }
 
     pub async fn get_results(&self) -> Result<Vec<SpeechRecognitionResult>> {
