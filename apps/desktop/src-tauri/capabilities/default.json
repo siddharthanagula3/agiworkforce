@@ -46,7 +46,6 @@
     "core:path:allow-extname",
     "core:path:allow-basename",
     "core:path:allow-is-absolute",
-    "shell:allow-open",
     "fs:allow-read-file",
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
@@ -93,8 +92,6 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-unregister-all",
-    "global-shortcut:allow-is-registered",
-    "updater:allow-check",
-    "updater:allow-download-and-install"
+    "global-shortcut:allow-is-registered"
   ]
 }

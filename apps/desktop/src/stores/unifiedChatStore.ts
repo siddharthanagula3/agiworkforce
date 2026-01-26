@@ -21,7 +21,7 @@ import {
   applyAgentStatusSnapshot,
 } from './chat/agentStore';
 import { useToolStore } from './chat/toolStore';
-import { useSidecarStore } from './chat/sidecarStore';
+import { useUIStore as useSidecarStore } from './ui';
 
 // Re-export all types for backwards compatibility
 export type {
@@ -72,7 +72,7 @@ export type {
   ToolStreamStateEntry,
 } from './chat/toolStore';
 
-export type { SidecarSection, SidecarMode, SidecarState } from './chat/sidecarStore';
+export type { SidecarSection, SidecarMode, SidecarState } from './ui';
 
 // Re-export ContextItem type
 export type { ContextItem } from '@agiworkforce/types';

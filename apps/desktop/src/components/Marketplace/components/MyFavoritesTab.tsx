@@ -2,7 +2,7 @@ import { Heart, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { invoke } from '../../../lib/tauri-mock';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';

@@ -4,7 +4,7 @@ import { Brain, ChevronDown, Clock, Layers, Loader2, Sparkles } from 'lucide-rea
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '../../lib/utils';
-import { useSimpleModeStore } from '../../stores/simpleModeStore';
+import { useSimpleModeStore } from '../../stores/ui';
 
 interface ReasoningAccordionProps {
   content: string;

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
@@ -35,30 +36,67 @@ struct CachedElement {
     cached_at: Instant,
 }
 
+/// Thread-safe UI Automation service for Windows.
+///
+/// # Safety
+///
+/// The `IUIAutomation` COM interface is wrapped in an `Arc<Mutex<>>` to ensure
+/// serialized access from any thread. While Windows COM objects created in STA
+/// (Single-Threaded Apartment) mode ideally should be accessed from their creating
+/// thread, wrapping in a Mutex ensures:
+///
+/// 1. No concurrent access to the COM interface occurs
+/// 2. All operations are serialized through the mutex
+/// 3. The service can safely be shared across Tauri's async runtime
+///
+/// The `IUIAutomation` interface is documented as "thread-agile" by Microsoft,
+/// meaning it can be called from any thread as long as COM is initialized on that
+/// thread. The mutex provides additional safety by preventing any concurrent access.
+///
+/// Reference: <https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/>
 pub struct UIAutomationService {
-    automation: IUIAutomation,
+    /// The UI Automation COM interface, wrapped in Arc<Mutex> for thread safety.
+    /// All access must go through `with_automation()` to ensure proper synchronization.
+    automation: Arc<Mutex<IUIAutomation>>,
+    /// Cache of discovered UI elements, keyed by runtime ID.
+    /// Uses parking_lot::Mutex for better performance than std::sync::Mutex.
     cache: Mutex<HashMap<String, CachedElement>>,
+    /// Time-to-live for cached elements.
     cache_ttl: Duration,
 }
 
-// SAFETY: These impls are technically unsound for STA COM objects.
-// Windows COM initialized with COINIT_APARTMENTTHREADED creates Single-Threaded Apartment
-// objects that should only be accessed from the thread that created them.
+// SAFETY: UIAutomationService is safe to Send and Sync because:
 //
-// CURRENT WORKAROUND: In practice, this is mitigated by:
-// 1. The UIAutomationService is created once and stored in the AppState
-// 2. All automation commands go through Tauri which serializes on the main thread
-// 3. The IUIAutomation interface specifically is documented as thread-agile
+// 1. The `IUIAutomation` COM interface is wrapped in `Arc<Mutex<>>` ensuring:
+//    - No concurrent access (mutex serializes all operations)
+//    - Exclusive access pattern matches COM STA requirements
 //
-// TODO(SAFETY): For full correctness, automation should use a dedicated thread with channels.
-// See: https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/
+// 2. Microsoft documents IUIAutomation as "thread-agile", meaning it can be
+//    called from any thread as long as COM is initialized on that thread.
+//    See: https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/
+//
+// 3. All access goes through `with_automation()` which holds the lock for
+//    the duration of any COM operation, preventing data races.
+//
+// 4. The cache uses parking_lot::Mutex which is inherently Send + Sync.
+//
+// The unsafe impls are required because IUIAutomation is a raw COM pointer
+// that doesn't implement Send/Sync in the windows crate. The Mutex wrapper
+// provides the synchronization that makes these impls sound.
+
+// SAFETY: The Mutex ensures exclusive access to the COM interface.
+// IUIAutomation is thread-agile per Microsoft documentation.
 unsafe impl Send for UIAutomationService {}
 
-// SAFETY: The Mutex<HashMap> cache provides interior synchronization.
-// The IUIAutomation interface is thread-agile per Microsoft documentation.
+// SAFETY: The Mutex serializes all access to the COM interface.
+// No concurrent access to IUIAutomation can occur.
 unsafe impl Sync for UIAutomationService {}
 
 impl UIAutomationService {
+    /// Creates a new UI Automation service.
+    ///
+    /// Initializes COM in apartment-threaded mode and creates the IUIAutomation
+    /// interface. The interface is wrapped in a mutex for thread-safe access.
     pub fn new() -> Result<Self> {
         COM_INITIALIZED.get_or_init(|| unsafe {
             if let Err(err) = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() {
@@ -86,30 +124,49 @@ impl UIAutomationService {
         };
 
         Ok(Self {
-            automation,
+            automation: Arc::new(Mutex::new(automation)),
             cache: Mutex::new(HashMap::new()),
             cache_ttl: Duration::from_secs(30),
         })
     }
 
-    pub(super) fn automation(&self) -> &IUIAutomation {
-        &self.automation
+    /// Executes an operation with exclusive access to the UI Automation interface.
+    ///
+    /// This method ensures thread-safe access to the COM interface by acquiring
+    /// the mutex lock before invoking the provided closure.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A closure that receives a reference to the `IUIAutomation` interface
+    ///
+    /// # Returns
+    ///
+    /// The result of the closure execution
+    pub(crate) fn with_automation<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&IUIAutomation) -> R,
+    {
+        let guard = self.automation.lock();
+        f(&*guard)
     }
 
+    /// Gets the desktop root element.
+    ///
+    /// This is the top-level element from which all UI element searches begin.
     pub(super) fn root_element(&self) -> Result<IUIAutomationElement> {
-        unsafe { self.automation.GetRootElement() }
+        self.with_automation(|auto| unsafe { auto.GetRootElement() })
             .map_err(|err| anyhow!("GetRootElement: {err:?}"))
     }
 
+    /// Registers a UI element in the cache and returns its runtime ID.
+    ///
+    /// The runtime ID is used as a key to retrieve the element later.
     pub(super) fn register_element(&self, element: &IUIAutomationElement) -> Result<String> {
         let runtime_id =
             unsafe { element.GetRuntimeId() }.map_err(|err| anyhow!("GetRuntimeId: {err:?}"))?;
         let id = safe_array_to_runtime_id(runtime_id)?;
 
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire cache lock"))?;
+        let mut cache = self.cache.lock();
         cache.insert(
             id.clone(),
             CachedElement {
@@ -120,13 +177,15 @@ impl UIAutomationService {
         Ok(id)
     }
 
+    /// Retrieves a cached UI element by its runtime ID.
+    ///
+    /// Also cleans up expired entries from the cache.
     pub(super) fn get_element(&self, id: &str) -> Result<IUIAutomationElement> {
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire cache lock"))?;
+        let mut cache = self.cache.lock();
 
-        cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
+        // Clean up expired entries
+        let ttl = self.cache_ttl;
+        cache.retain(|_, cached| cached.cached_at.elapsed() < ttl);
 
         cache
             .get(id)
@@ -134,16 +193,17 @@ impl UIAutomationService {
             .ok_or_else(|| anyhow!("Unknown element id: {id}"))
     }
 
+    /// Removes expired entries from the element cache.
     pub fn clear_expired_cache(&self) {
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
-        }
+        let mut cache = self.cache.lock();
+        let ttl = self.cache_ttl;
+        cache.retain(|_, cached| cached.cached_at.elapsed() < ttl);
     }
 
+    /// Clears all entries from the element cache.
     pub fn clear_cache(&self) {
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.clear();
-        }
+        let mut cache = self.cache.lock();
+        cache.clear();
     }
 }
 

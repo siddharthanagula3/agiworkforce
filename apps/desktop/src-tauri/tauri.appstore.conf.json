@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AGI Workforce",
+  "version": "1.0.6",
+  "identifier": "com.agiworkforce.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:vite",
+    "beforeBuildCommand": "cd ../.. && pnpm --filter @agiworkforce/desktop run build:web",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist",
+    "removeUnusedCommands": true
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "AGI Workforce",
+        "width": 1400,
+        "height": 850,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "shadow": true,
+        "visible": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "fullscreen": false,
+        "skipTaskbar": false,
+        "acceptFirstMouse": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.supabase.co wss://*.supabase.co https://agiworkforce.com https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev; frame-src 'self' https://js.stripe.com; frame-ancestors 'none'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Productivity",
+    "shortDescription": "AI-powered autonomous task automation for macOS",
+    "longDescription": "AGI Workforce is an intelligent desktop assistant that automates complex tasks using AI. Simply describe what you want done in natural language, and the AI autonomously completes it with full undo support.",
+    "macOS": {
+      "entitlements": "entitlements.appstore.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": "D2PR62RLT4",
+      "signingIdentity": "Apple Distribution: AGI AUTOMATION LLC (D2PR62RLT4)",
+      "infoPlist": "Info.appstore.plist",
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

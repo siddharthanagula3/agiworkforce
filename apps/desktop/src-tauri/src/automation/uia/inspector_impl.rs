@@ -93,25 +93,22 @@ impl InspectorService {
     }
 
     fn get_parent(&self, element: &IUIAutomationElement) -> Result<BasicElementInfo> {
-        let parent = unsafe {
-            self.native
-                .automation()
-                .ControlViewWalker()
-                .map_err(|err| anyhow!("ControlViewWalker failed: {err:?}"))?
-                .GetParentElement(element)
-                .map_err(|err| anyhow!("GetParentElement failed: {err:?}"))?
-        };
+        let walker = self
+            .native
+            .with_automation(|auto| unsafe { auto.ControlViewWalker() })
+            .map_err(|err| anyhow!("ControlViewWalker failed: {err:?}"))?;
+
+        let parent = unsafe { walker.GetParentElement(element) }
+            .map_err(|err| anyhow!("GetParentElement failed: {err:?}"))?;
 
         self.get_basic_info(&parent)
     }
 
     fn get_children(&self, element: &IUIAutomationElement) -> Result<Vec<BasicElementInfo>> {
-        let condition = unsafe {
-            self.native
-                .automation()
-                .CreateTrueCondition()
-                .map_err(|err| anyhow!("CreateTrueCondition failed: {err:?}"))?
-        };
+        let condition = self
+            .native
+            .with_automation(|auto| unsafe { auto.CreateTrueCondition() })
+            .map_err(|err| anyhow!("CreateTrueCondition failed: {err:?}"))?;
 
         let children_array = unsafe {
             elemen
@@ -159,12 +156,10 @@ impl UIInspector for InspectorService {
     fn inspect_element_at_point(&self, x: i32, y: i32) -> Result<DetailedElementInfo> {
         let point = POINT { x, y };
 
-        let element = unsafe {
-            self.native
-                .automation()
-                .ElementFromPoint(point)
-                .map_err(|err| anyhow!("ElementFromPoint failed: {err:?}"))?
-        };
+        let element = self
+            .native
+            .with_automation(|auto| unsafe { auto.ElementFromPoint(point) })
+            .map_err(|err| anyhow!("ElementFromPoint failed: {err:?}"))?;
 
         self.get_detailed_info(&element)
     }
@@ -175,12 +170,10 @@ impl UIInspector for InspectorService {
     }
 
     fn get_focused_element(&self) -> Result<DetailedElementInfo> {
-        let element = unsafe {
-            self.native
-                .automation()
-                .GetFocusedElement()
-                .map_err(|err| anyhow!("GetFocusedElement failed: {err:?}"))?
-        };
+        let element = self
+            .native
+            .with_automation(|auto| unsafe { auto.GetFocusedElement() })
+            .map_err(|err| anyhow!("GetFocusedElement failed: {err:?}"))?;
         self.get_detailed_info(&element)
     }
 
