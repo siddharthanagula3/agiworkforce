@@ -70,9 +70,12 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
     <div className="relative flex-1 overflow-hidden">
       {/* Thinking indicator */}
       {isLoading && !isStreaming && (
-        <div className="absolute top-0 left-0 right-0 z-10 flex justify-center py-4 bg-gradient-to-b from-white dark:from-gray-900 to-transparent">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700">
-            <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+        <div
+          data-testid="thinking-indicator"
+          className="absolute top-0 left-0 right-0 z-10 flex justify-center py-4 bg-gradient-to-b from-white dark:from-gray-900 to-transparent"
+        >
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 animate-pulse">
+            <Sparkles className="w-4 h-4 text-amber-500" />
             <span className="text-sm text-amber-700 dark:text-amber-300">Thinking...</span>
           </div>
         </div>
@@ -82,6 +85,7 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        data-testid="chat-stream"
         className="h-full overflow-y-auto px-2 py-4 space-y-1"
       >
         {messages.map((message) => (
