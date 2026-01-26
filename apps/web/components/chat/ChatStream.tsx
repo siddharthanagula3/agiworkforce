@@ -86,17 +86,19 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
         ref={scrollContainerRef}
         onScroll={handleScroll}
         data-testid="chat-stream"
-        className="h-full overflow-y-auto px-2 py-4 space-y-1"
+        className="h-full overflow-y-auto scroll-smooth"
       >
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            showAvatar
-            showTimestamp={false}
-            enableActions
-          />
-        ))}
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+          {messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              showAvatar
+              showTimestamp={false}
+              enableActions
+            />
+          ))}
+        </div>
       </div>
 
       {/* Scroll to bottom button */}
@@ -104,19 +106,20 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
         <button
           onClick={scrollToBottom}
           className={clsx(
-            'absolute bottom-4 left-1/2 -translate-x-1/2 z-20',
-            'flex items-center gap-2 px-4 py-2 rounded-full',
-            'bg-gray-800/90 dark:bg-gray-200/90 backdrop-blur-sm',
-            'border border-gray-700 dark:border-gray-300',
-            'text-sm text-white dark:text-gray-900',
-            'hover:bg-gray-700 dark:hover:bg-gray-300',
-            'shadow-lg transition-all duration-200',
-            'animate-in fade-in slide-in-from-bottom-2',
+            'absolute bottom-6 left-1/2 -translate-x-1/2 z-20',
+            'flex items-center gap-2 px-4 py-2.5 rounded-full',
+            'bg-charcoal-900/95 dark:bg-white/95 backdrop-blur-md',
+            'border border-charcoal-700 dark:border-gray-300',
+            'text-sm font-medium text-white dark:text-charcoal-900',
+            'hover:bg-charcoal-800 dark:hover:bg-gray-100',
+            'shadow-lg shadow-black/20 dark:shadow-black/10',
+            'transition-all duration-200',
+            'animate-in fade-in slide-in-from-bottom-4',
           )}
           aria-label="Scroll to bottom"
         >
           <ArrowDown className="w-4 h-4" />
-          <span>New messages</span>
+          <span>Scroll to bottom</span>
         </button>
       )}
     </div>
