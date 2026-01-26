@@ -275,9 +275,11 @@ export const ChatInputArea = memo(function ChatInputArea({
       {/* Input area */}
       <div
         className={clsx(
-          'relative rounded-2xl bg-white dark:bg-gray-800',
-          'border border-gray-200 dark:border-gray-700',
-          'shadow-lg focus-within:ring-2 focus-within:ring-blue-500/50',
+          'relative rounded-2xl',
+          'bg-white/95 dark:bg-charcoal-800/95 backdrop-blur-xl',
+          'border border-gray-200/80 dark:border-gray-700/80',
+          'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
+          'focus-within:border-teal-500/50 focus-within:ring-4 focus-within:ring-teal-500/10',
           'transition-all duration-200',
           className,
         )}
@@ -373,7 +375,7 @@ export const ChatInputArea = memo(function ChatInputArea({
               className={clsx(
                 'p-2 rounded-lg transition-colors',
                 content.trim() && !isInputDisabled
-                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                  ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed',
               )}
               title="Send message"
