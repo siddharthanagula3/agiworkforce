@@ -37,11 +37,11 @@ import {
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
 import { SubscriptionGateResult } from '../../utils/subscriptionGate';
-import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
+import { SubscriptionLockDialog } from '../Subscription';
 import { useBillingUsageStore } from '../../stores/billingUsage';
-import { useBillingStore } from '../../stores/billingStore';
+import { useBillingStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 
 const PLAN_CREDIT_LIMITS = {
   hobby: { monthly: 1.0, daily: 0.3 },

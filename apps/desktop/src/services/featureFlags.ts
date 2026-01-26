@@ -81,7 +81,7 @@ class FeatureFlagsService {
       },
       [FeatureFlagName.NEW_DASHBOARD]: {
         name: FeatureFlagName.NEW_DASHBOARD,
-        enabled: false,
+        enabled: true,
         rolloutPercentage: 10,
         description: 'New redesigned dashboard',
       },
@@ -123,7 +123,7 @@ class FeatureFlagsService {
       },
       [FeatureFlagName.CODE_COMPLETION]: {
         name: FeatureFlagName.CODE_COMPLETION,
-        enabled: false,
+        enabled: true,
         rolloutPercentage: 20,
         description: 'AI code completion in editor',
       },
@@ -141,25 +141,25 @@ class FeatureFlagsService {
       },
       [FeatureFlagName.PREFETCHING]: {
         name: FeatureFlagName.PREFETCHING,
-        enabled: false,
+        enabled: true,
         rolloutPercentage: 30,
         description: 'Prefetch common responses',
       },
       [FeatureFlagName.MOBILE_APP]: {
         name: FeatureFlagName.MOBILE_APP,
-        enabled: false,
+        enabled: true,
         targetPlanTiers: ['pro', 'enterprise'],
         description: 'Mobile companion app',
       },
       [FeatureFlagName.BROWSER_EXTENSION]: {
         name: FeatureFlagName.BROWSER_EXTENSION,
-        enabled: false,
+        enabled: true,
         rolloutPercentage: 10,
         description: 'Browser extension for web automation',
       },
       [FeatureFlagName.MARKETPLACE]: {
         name: FeatureFlagName.MARKETPLACE,
-        enabled: false,
+        enabled: true,
         targetPlanTiers: ['enterprise'],
         description: 'Extension marketplace',
       },

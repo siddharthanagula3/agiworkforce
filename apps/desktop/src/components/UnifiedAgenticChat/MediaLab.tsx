@@ -19,7 +19,7 @@ import type {
   ImageSizeId,
   VideoResolutionId,
 } from '../../types/media';
-import { useBillingStore } from '../../stores/billingStore';
+import { useBillingStore } from '../../stores/auth';
 import { toast } from 'sonner';
 
 const imageProviders: Array<{

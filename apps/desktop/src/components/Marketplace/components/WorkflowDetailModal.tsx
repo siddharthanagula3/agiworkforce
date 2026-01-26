@@ -8,7 +8,7 @@ import { Separator } from '../../../components/ui/Separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
 import { Textarea } from '../../../components/ui/Textarea';
 import { toast } from '@/hooks/useToast';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 import type { WorkflowDefinition } from '../../../types/workflow';
 import { useMarketplaceStore } from '../marketplaceStore';
 

@@ -14,8 +14,9 @@ impl UIAutomationService {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
 
-        let true_condition =
-            unsafe { self.automation().CreateTrueCondition() }.map_err(|err| anyhow!("{err:?}"))?;
+        let true_condition = self
+            .with_automation(|auto| unsafe { auto.CreateTrueCondition() })
+            .map_err(|err| anyhow!("{err:?}"))?;
 
         let array = unsafe { desktop.FindAll(TreeScope_Children, &true_condition) }
             .map_err(|err| anyhow!("FindAll: {err:?}"))?;
@@ -159,17 +160,18 @@ impl UIAutomationService {
             if let Some(control_type_id) = self.control_type_by_name(control_type) {
                 let variant = VARIANT::from(control_type_id.0);
 
-                let condition = unsafe {
-                    self.automation
-                        .CreatePropertyCondition(UIA_ControlTypePropertyId, &variant)
-                }
-                .map_err(|err| anyhow!("CreatePropertyCondition: {err:?}"))?;
+                let condition = self
+                    .with_automation(|auto| unsafe {
+                        auto.CreatePropertyCondition(UIA_ControlTypePropertyId, &variant)
+                    })
+                    .map_err(|err| anyhow!("CreatePropertyCondition: {err:?}"))?;
                 conditions.push(condition);
             }
         }
 
         if conditions.is_empty() {
-            unsafe { self.automation.CreateTrueCondition() }.map_err(|err| anyhow!("{err:?}"))
+            self.with_automation(|auto| unsafe { auto.CreateTrueCondition() })
+                .map_err(|err| anyhow!("{err:?}"))
         } else {
             self.combine_conditions(&conditions, true)
         }
@@ -182,11 +184,8 @@ impl UIAutomationService {
     ) -> Result<IUIAutomationCondition> {
         let variant = VARIANT::from(BSTR::from(value));
 
-        unsafe {
-            self.automation
-                .CreatePropertyCondition(property_id, &variant)
-        }
-        .map_err(|err| anyhow!("CreatePropertyCondition: {err:?}"))
+        self.with_automation(|auto| unsafe { auto.CreatePropertyCondition(property_id, &variant) })
+            .map_err(|err| anyhow!("CreatePropertyCondition: {err:?}"))
     }
 
     fn combine_conditions(
@@ -200,12 +199,15 @@ impl UIAutomationService {
 
         let mut combined = conditions[0].clone();
         for condition in &conditions[1..] {
-            combined = if and {
-                unsafe { self.automation.CreateAndCondition(&combined, condition) }
-            } else {
-                unsafe { self.automation.CreateOrCondition(&combined, condition) }
-            }
-            .map_err(|err| anyhow!("Combine conditions: {err:?}"))?;
+            combined = self
+                .with_automation(|auto| {
+                    if and {
+                        unsafe { auto.CreateAndCondition(&combined, condition) }
+                    } else {
+                        unsafe { auto.CreateOrCondition(&combined, condition) }
+                    }
+                })
+                .map_err(|err| anyhow!("Combine conditions: {err:?}"))?;
         }
         Ok(combined)
     }

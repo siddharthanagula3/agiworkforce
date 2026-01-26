@@ -27,7 +27,7 @@ import {
   type ModelUsageStats,
 } from '../services/stripe';
 import { checkUsageLimit, shouldShowUsageWarning } from '../utils/featureGates';
-import { useBillingStore } from './billingStore';
+import { useBillingStore } from './auth';
 import { getModelMetadata } from '../constants/llm';
 import { analytics } from '../services/analytics';
 import { ErrorSeverity, errorTracking } from '../services/errorTracking';

@@ -18,7 +18,7 @@ import {
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { cn } from '../../lib/utils';
 import { supabaseAuth } from '../../services/supabaseAuth';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore } from '../../stores/auth';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';

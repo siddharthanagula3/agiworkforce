@@ -23,7 +23,7 @@ import { MessageBubble } from './MessageBubble';
 import { CurrentActionBadge } from './CurrentActionBadge';
 import { ActiveToolStreams } from './Cards/ActiveToolStreams';
 import { IterationProgressPanel } from '../AGI';
-import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
 
