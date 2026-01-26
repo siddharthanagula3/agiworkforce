@@ -9,6 +9,7 @@ import {
   LoginPage,
   SettingsPage,
   BillingPage,
+  ChatPage,
 } from '../page-objects';
 import { TestDatabase, StripeHelpers, waitForUrl, pollUntil } from '../utils';
 
@@ -25,6 +26,7 @@ type Fixtures = {
   loginPage: LoginPage;
   settingsPage: SettingsPage;
   billingPage: BillingPage;
+  chatPage: ChatPage;
   testDb: TestDatabase;
   stripeHelpers: StripeHelpers;
   testUser: {
@@ -92,6 +94,14 @@ export const test = base.extend<Fixtures>({
    */
   billingPage: async ({ page }, use) => {
     await use(new BillingPage(page));
+  },
+
+  /**
+   * ChatPage fixture - provides page object for chat interface interactions
+   * Automatically instantiated with the browser page
+   */
+  chatPage: async ({ page }, use) => {
+    await use(new ChatPage(page));
   },
 
   /**
