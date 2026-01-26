@@ -177,8 +177,8 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
       {isOpen && (
         <div
           className={clsx(
-            'absolute top-full left-0 mt-1 z-50',
-            'min-w-[280px] max-h-[400px] overflow-y-auto',
+            'absolute top-full right-0 mt-1 z-50',
+            'w-[320px] max-h-[70vh] overflow-y-auto',
             'bg-white dark:bg-charcoal-800',
             'border border-gray-200 dark:border-gray-700/50',
             'rounded-xl shadow-xl',
@@ -213,7 +213,9 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {model.name}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal">
+                      {model.description}
+                    </p>
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-teal-500" />}
                 </button>
