@@ -76,6 +76,8 @@ export class CreditService {
 
   /**
    * Check if user has enough credits
+   * Returns true if user has sufficient credits, false otherwise.
+   * On RPC errors, falls back to direct balance check for reliability.
    */
   static async checkAvailable(userId: string, amountCents: number): Promise<boolean> {
     try {
@@ -86,13 +88,72 @@ export class CreditService {
       });
 
       if (error) {
-        logger.error({ error, userId, amountCents }, 'Failed to check credits');
-        throw error;
+        logger.error(
+          { error, userId, amountCents },
+          'RPC check_credits_available failed, trying fallback',
+        );
+        // Fall back to direct balance check
+        return this.checkAvailableFallback(userId, amountCents);
       }
 
-      return data === true;
+      // Handle various boolean representations from PostgreSQL/Supabase
+      // PostgreSQL boolean can be returned as: true, false, 't', 'f', 1, 0, 'true', 'false'
+      const result = data === true || data === 't' || data === 'true' || data === 1;
+
+      logger.debug(
+        { userId, amountCents, rawData: data, result },
+        'Credit availability check completed',
+      );
+
+      return result;
     } catch (error) {
-      logger.error({ error, userId, amountCents }, 'Error in checkAvailable');
+      logger.error({ error, userId, amountCents }, 'Error in checkAvailable, trying fallback');
+      // Fall back to direct balance check instead of failing silently
+      return this.checkAvailableFallback(userId, amountCents);
+    }
+  }
+
+  /**
+   * Fallback credit check using direct balance query
+   * Used when the RPC function fails (e.g., auth issues, network errors)
+   */
+  private static async checkAvailableFallback(
+    userId: string,
+    amountCents: number,
+  ): Promise<boolean> {
+    try {
+      const balance = await this.getBalance(userId);
+
+      if (!balance || !balance.account_id) {
+        logger.warn({ userId }, 'No credit balance found in fallback check');
+        return false;
+      }
+
+      // Check monthly limit
+      if (balance.credits_remaining_cents < amountCents) {
+        logger.debug(
+          { userId, remaining: balance.credits_remaining_cents, required: amountCents },
+          'Insufficient monthly credits (fallback)',
+        );
+        return false;
+      }
+
+      // Check daily limit
+      const dailyRemaining = balance.daily_remaining_cents ?? balance.credits_remaining_cents;
+      if (dailyRemaining < amountCents) {
+        logger.debug(
+          { userId, dailyRemaining, required: amountCents },
+          'Insufficient daily credits (fallback)',
+        );
+        return false;
+      }
+
+      logger.info({ userId, amountCents }, 'Credit check passed via fallback method');
+      return true;
+    } catch (error) {
+      logger.error({ error, userId, amountCents }, 'Fallback credit check also failed');
+      // Only return false if we truly can't determine credit availability
+      // This is a last resort - the user should see an error rather than being silently blocked
       return false;
     }
   }
