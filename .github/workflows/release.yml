@@ -12,7 +12,6 @@ permissions:
 env:
   RUST_VERSION: '1.90.0'
   NODE_VERSION: '22'
-  PNPM_VERSION: '10.11.0'
 
 jobs:
   create-release:
@@ -66,9 +65,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
