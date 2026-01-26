@@ -72,7 +72,7 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
       {isLoading && !isStreaming && (
         <div
           data-testid="thinking-indicator"
-          className="absolute top-0 left-0 right-0 z-10 flex justify-center py-4 bg-gradient-to-b from-white dark:from-gray-900 to-transparent"
+          className="absolute top-0 left-0 right-0 z-10 flex justify-center py-4 bg-gradient-to-b from-cream-50 dark:from-charcoal-900 to-transparent"
         >
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 animate-pulse">
             <Sparkles className="w-4 h-4 text-amber-500" />
