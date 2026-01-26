@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-01-26
+
+### Security
+
+- **XSS Prevention**: Fixed SVG rendering vulnerability in LivePreview component by adding DOMPurify sanitization with `USE_PROFILES: { svg: true, svgFilters: true }` (`LivePreview.tsx:395-404`)
+
+### Changed
+
+- **Immer State Management**: Added Immer middleware to Zustand stores for cleaner state updates:
+  - `codeStore.ts`: Immutable file operations with cleaner syntax
+  - `automationStore.ts`: Mutable-style inspector and shortcut handling
+  - `browserStore.ts`: Optimized array operations with push/splice
+
+### Documentation
+
+- **Docs Reorganization**: Restructured documentation into organized folders:
+  - `docs/architecture/` - System design, database schema
+  - `docs/development/` - Setup, testing, patterns
+  - `docs/features/` - Feature documentation (MCP, chat, agent mode)
+  - `docs/getting-started/` - Quick start, installation
+  - `docs/deployment/` - Build and deploy guides
+  - `docs/security/` - Security documentation
+  - `docs/archive/` - Legacy documentation
+- Added comprehensive README files for services (api-gateway, signaling-server)
+- Added desktop app README with development instructions
+
 ### Security Audit Fixes (2026-01-06)
 
 #### Critical Fixes
