@@ -12,7 +12,8 @@ vi.mock('@/lib/logger', () => ({
 
 // Mock Supabase with configurable latency
 let simulatedLatencyMs = 0;
-const mockRpc = vi.fn(async () => {
+
+const mockRpc = vi.fn(async (): Promise<{ data: any; error: any }> => {
   // Simulate database latency for realistic benchmarks
   if (simulatedLatencyMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, simulatedLatencyMs));

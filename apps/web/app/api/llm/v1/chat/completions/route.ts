@@ -90,6 +90,22 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   'gpt-4.5-turbo': ['pro', 'max', 'enterprise'],
 };
 
+// Auto model tier mappings - translate tier-based model selections to actual models
+const AUTO_MODEL_MAPPINGS: Record<string, string> = {
+  'auto-economy': 'gpt-4o-mini', // Fast, cost-effective
+  'auto-balanced': 'gpt-4o', // Good balance of speed and quality
+  'auto-premium': 'claude-sonnet-4-20250514', // Best quality
+};
+
+/**
+ * Resolve auto model names to actual LLM model names
+ * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings
+ */
+function resolveAutoModel(model: string): string {
+  const modelLower = model.toLowerCase();
+  return AUTO_MODEL_MAPPINGS[modelLower] || model;
+}
+
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
   const modelLower = model.toLowerCase();
   const tierLower = subscriptionTier.toLowerCase();
@@ -304,6 +320,18 @@ async function handleChatCompletions(request: NextRequest) {
 
   const chatRequest = validationResult.data;
 
+  // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models
+  const requestedModel = chatRequest.model;
+  chatRequest.model = resolveAutoModel(chatRequest.model);
+
+  // Log if auto model was resolved
+  if (requestedModel !== chatRequest.model) {
+    logger.info(
+      { userId: user.id, requestedModel, resolvedModel: chatRequest.model },
+      'Auto model resolved to actual model',
+    );
+  }
+
   // Check model access
   if (!checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
     const modelKey = chatRequest.model.toLowerCase();
@@ -380,8 +408,75 @@ async function handleChatCompletions(request: NextRequest) {
     maxTokens,
   );
 
-  // Check credits
+  // Ensure credits are allocated for the user's subscription period
+  // This handles cases where subscription was created but credits weren't allocated
+  let existingBalance = await CreditService.getBalance(user.id);
+
+  logger.debug(
+    {
+      userId: user.id,
+      hasBalance: !!existingBalance,
+      accountId: existingBalance?.account_id,
+      remaining: existingBalance?.credits_remaining_cents,
+      planTier: subscription.plan_tier,
+    },
+    'Credit balance check',
+  );
+
+  if (!existingBalance || !existingBalance.account_id) {
+    logger.info(
+      { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+      'No credit account found, allocating credits for subscription period',
+    );
+
+    try {
+      const accountId = await SubscriptionService.allocateCreditsForPeriod(
+        user.id,
+        subscription.id,
+        subscription.plan_tier,
+        subscription.current_period_start,
+        subscription.current_period_end,
+      );
+
+      if (accountId) {
+        logger.info({ userId: user.id, accountId }, 'Credits allocated successfully');
+        // Re-fetch balance after allocation
+        existingBalance = await CreditService.getBalance(user.id);
+        logger.debug(
+          {
+            userId: user.id,
+            newBalance: existingBalance?.credits_remaining_cents,
+            accountId: existingBalance?.account_id,
+          },
+          'Balance after allocation',
+        );
+      } else {
+        logger.warn(
+          { userId: user.id, planTier: subscription.plan_tier },
+          'Credit allocation returned no account ID - plan may not include credits',
+        );
+      }
+    } catch (allocError) {
+      logger.error(
+        { error: allocError, userId: user.id, planTier: subscription.plan_tier },
+        'Failed to allocate credits - continuing with credit check',
+      );
+    }
+  }
+
+  // Check credits with detailed logging
   const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+
+  logger.debug(
+    {
+      userId: user.id,
+      estimatedCostCents,
+      hasCredits,
+      balanceRemaining: existingBalance?.credits_remaining_cents,
+      dailyRemaining: existingBalance?.daily_remaining_cents,
+    },
+    'Credit availability check result',
+  );
 
   if (!hasCredits) {
     const balance = await CreditService.getBalance(user.id);
