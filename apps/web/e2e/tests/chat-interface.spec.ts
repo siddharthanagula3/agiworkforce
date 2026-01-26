@@ -349,6 +349,137 @@ test.describe('Chat UI Elements', () => {
   });
 });
 
+test.describe('Chat Messaging Flow', () => {
+  test('should send message and receive streaming response', async ({
+    page,
+    loginPage,
+    chatPage,
+    testDb,
+    testUser,
+  }) => {
+    test.setTimeout(120000); // Allow up to 2 minutes for streaming response
+    console.log('TEST: Send message and receive streaming response');
+
+    // ==================== Setup ====================
+    const user = await testDb.createTestUser(testUser.email, testUser.password);
+    testUser.userId = user.id;
+    await testDb.createSubscription(user.id, { plan_tier: 'hobby', status: 'active' });
+    console.log(`Test user created: ${testUser.email}`);
+
+    try {
+      // ==================== Step 1: Login ====================
+      console.log('Step 1: Logging in...');
+      await loginPage.goto();
+      await loginPage.login(testUser.email, testUser.password);
+      await page.waitForURL(/.*dashboard.*/, { timeout: 15000 });
+
+      // ==================== Step 2: Navigate to chat ====================
+      console.log('Step 2: Navigating to chat...');
+      await chatPage.goto();
+      expect(await chatPage.isChatInputVisible()).toBeTruthy();
+
+      // ==================== Step 3: Send a test message ====================
+      console.log('Step 3: Sending test message...');
+      const testMessage = 'Hello, please respond with a simple greeting.';
+      await chatPage.sendMessage(testMessage);
+
+      // ==================== Step 4: Verify user message appears ====================
+      console.log('Step 4: Verifying user message appears...');
+      // Wait a moment for the message to be added to the UI
+      await page.waitForTimeout(500);
+
+      // Look for the user message in the chat
+      const userMessageLocator = page.locator('[data-message-role="user"], .message-user');
+      await expect(userMessageLocator.first()).toBeVisible({ timeout: 5000 });
+
+      // ==================== Step 5: Wait for assistant response ====================
+      console.log('Step 5: Waiting for assistant response...');
+
+      // Wait for either streaming indicator or assistant message to appear
+      const streamingOrResponse = await Promise.race([
+        chatPage.waitForStreamingStart(30000).then(() => 'streaming'),
+        page
+          .locator('[data-message-role="assistant"], .message-assistant')
+          .first()
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'response'),
+      ]).catch(() => 'timeout');
+
+      console.log(`Response status: ${streamingOrResponse}`);
+
+      if (streamingOrResponse === 'streaming') {
+        // Wait for streaming to complete
+        console.log('Streaming started, waiting for completion...');
+        await chatPage.waitForStreamingEnd(60000);
+      }
+
+      // ==================== Step 6: Verify assistant message appears ====================
+      console.log('Step 6: Verifying assistant response...');
+
+      // Wait for assistant message to appear
+      const assistantMessageLocator = page.locator(
+        '[data-message-role="assistant"], .message-assistant',
+      );
+      await expect(assistantMessageLocator.first()).toBeVisible({ timeout: 10000 });
+
+      // Get the assistant's response text
+      const responseText = await chatPage.getLastAssistantMessage();
+      console.log(`Assistant response: ${responseText.substring(0, 100)}...`);
+
+      // Verify response is not empty
+      expect(responseText.length).toBeGreaterThan(0);
+      console.log('Messaging flow completed successfully!');
+    } finally {
+      // ==================== Cleanup ====================
+      await testDb.cleanup(user.id);
+      await testDb.deleteTestUser(user.id);
+    }
+  });
+
+  test('should display user message immediately after sending', async ({
+    page,
+    loginPage,
+    chatPage,
+    testDb,
+    testUser,
+  }) => {
+    console.log('TEST: User message appears immediately');
+
+    // ==================== Setup ====================
+    const user = await testDb.createTestUser(testUser.email, testUser.password);
+    testUser.userId = user.id;
+    await testDb.createSubscription(user.id, { plan_tier: 'hobby', status: 'active' });
+
+    try {
+      // Login and navigate
+      await loginPage.goto();
+      await loginPage.login(testUser.email, testUser.password);
+      await page.waitForURL(/.*dashboard.*/, { timeout: 15000 });
+      await chatPage.goto();
+
+      // Send message
+      const testMessage = 'Test immediate display';
+      await chatPage.sendMessage(testMessage);
+
+      // Wait for user message to appear in the DOM
+      const userMessageBubble = page.locator('[data-message-role="user"]').first();
+      await expect(userMessageBubble).toBeVisible({ timeout: 5000 });
+
+      // Verify the message text is displayed
+      await expect(userMessageBubble).toContainText(testMessage);
+
+      // Verify user message count is at least 1
+      const messageCount = await chatPage.getUserMessageCount();
+      expect(messageCount).toBeGreaterThanOrEqual(1);
+
+      console.log('User message displayed immediately');
+    } finally {
+      await testDb.cleanup(user.id);
+      await testDb.deleteTestUser(user.id);
+    }
+  });
+});
+
 test.describe('Chat Error Handling', () => {
   test('should handle unauthorized access gracefully', async ({ page }) => {
     console.log('TEST: Unauthorized access handling');
