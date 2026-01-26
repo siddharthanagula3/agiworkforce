@@ -102,7 +102,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       <div
         className={clsx(
           'flex flex-col items-center py-4 w-12',
-          'bg-white dark:bg-gray-900',
+          'bg-white dark:bg-charcoal-900',
           'border-r border-gray-200 dark:border-gray-800',
           className,
         )}
@@ -130,7 +130,7 @@ export const ChatSidebar = memo(function ChatSidebar({
     <div
       className={clsx(
         'flex flex-col w-64 lg:w-72',
-        'bg-white dark:bg-gray-900',
+        'bg-white dark:bg-charcoal-900',
         'border-r border-gray-200 dark:border-gray-800',
         className,
       )}
@@ -215,7 +215,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                       'group relative flex items-center gap-2 px-2 py-2 rounded-lg',
                       'transition-colors duration-150',
                       isActive
-                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-300'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300',
                     )}
                   >
