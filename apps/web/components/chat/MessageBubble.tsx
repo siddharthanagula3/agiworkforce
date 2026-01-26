@@ -61,9 +61,9 @@ export const MessageBubble = memo(function MessageBubble({
       data-message-role={message.role}
       data-testid={`message-${message.role}`}
       className={clsx(
-        'group flex gap-3 px-4 py-3 transition-colors',
+        'group flex gap-3 px-4 py-3 transition-colors message-bubble',
         isUser ? 'flex-row-reverse' : '',
-        !isUser && 'hover:bg-gray-50 dark:hover:bg-gray-900/50',
+        !isUser && 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50',
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -73,9 +73,7 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           className={clsx(
             'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-            isUser
-              ? 'bg-gradient-to-br from-blue-500 to-blue-600'
-              : 'bg-gradient-to-br from-amber-500 to-orange-600',
+            isUser ? 'bg-blue-600' : 'bg-gradient-to-br from-amber-500 to-orange-600',
           )}
         >
           {isUser ? (

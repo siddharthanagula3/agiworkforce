@@ -16,14 +16,14 @@ const redis =
 // Rate limit configurations per endpoint
 export const rateLimitConfigs = {
   checkout: {
-    limit: 5,
-    window: '1 m', // 5 requests per minute
-    failClosed: true, // Security-sensitive: block if Redis fails
+    limit: 15,
+    window: '1 m', // 15 requests per minute (allows retries and page refreshes)
+    failClosed: false, // Allow checkout even if Redis fails - business critical
   },
   'credit-topup': {
-    limit: 5,
-    window: '1 m', // 5 top-up checkout sessions per minute
-    failClosed: true, // Security-sensitive: block if Redis fails
+    limit: 15,
+    window: '1 m', // 15 top-up checkout sessions per minute (allows retries)
+    failClosed: false, // Allow topup even if Redis fails - business critical
   },
   'device-link': {
     limit: 10,
