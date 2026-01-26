@@ -3,6 +3,38 @@ import 'server-only';
 import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
 import { logger } from '@/lib/logger';
 
+/**
+ * Models that require max_completion_tokens instead of max_tokens.
+ * These are reasoning models (GPT-5 series, o-series) that generate
+ * both visible output tokens and internal reasoning tokens.
+ *
+ * See: https://help.openai.com/en/articles/5072518-controlling-the-length-of-openai-model-responses
+ */
+const MODELS_REQUIRING_MAX_COMPLETION_TOKENS = [
+  // GPT-5 series (reasoning models)
+  'gpt-5',
+  'gpt-5-turbo',
+  'gpt-5-mini',
+  'gpt-5-nano',
+  // O-series (reasoning models)
+  'o1',
+  'o1-mini',
+  'o1-preview',
+  'o3',
+  'o3-mini',
+  'o4-mini',
+];
+
+/**
+ * Check if a model requires max_completion_tokens instead of max_tokens
+ */
+function requiresMaxCompletionTokens(model: string): boolean {
+  const modelLower = model.toLowerCase();
+  return MODELS_REQUIRING_MAX_COMPLETION_TOKENS.some(
+    (m) => modelLower === m || modelLower.startsWith(`${m}-`),
+  );
+}
+
 export class OpenAIProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
     return 'https://api.openai.com/v1';
@@ -37,7 +69,13 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.temperature = request.temperature;
     }
     if (request.max_tokens !== undefined) {
-      body.max_tokens = request.max_tokens;
+      // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
+      // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
+      if (requiresMaxCompletionTokens(request.model)) {
+        body.max_completion_tokens = request.max_tokens;
+      } else {
+        body.max_tokens = request.max_tokens;
+      }
     }
     if (request.stream !== undefined) {
       body.stream = request.stream;
@@ -148,7 +186,15 @@ export class OpenAIProvider extends BaseLLMProvider {
     };
 
     if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+    if (request.max_tokens !== undefined) {
+      // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
+      // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
+      if (requiresMaxCompletionTokens(request.model)) {
+        body.max_completion_tokens = request.max_tokens;
+      } else {
+        body.max_tokens = request.max_tokens;
+      }
+    }
     if (request.tools) body.tools = request.tools;
     if (request.tool_choice) body.tool_choice = request.tool_choice;
 
