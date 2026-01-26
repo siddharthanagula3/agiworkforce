@@ -81,9 +81,9 @@ export const EmptyState = memo(function EmptyState({ onSuggestionClick }: EmptyS
               onClick={() => onSuggestionClick?.(suggestion.prompt)}
               className={clsx(
                 'flex items-center gap-3 p-4 rounded-xl text-left',
-                'border border-gray-200 dark:border-gray-700',
-                'bg-white dark:bg-gray-800',
-                'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                'border border-gray-200 dark:border-gray-700/50',
+                'bg-white dark:bg-charcoal-800',
+                'hover:bg-gray-50 dark:hover:bg-charcoal-700/50',
                 'hover:border-gray-300 dark:hover:border-gray-600',
                 'transition-all duration-200',
                 'group',

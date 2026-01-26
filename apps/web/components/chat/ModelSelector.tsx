@@ -159,8 +159,8 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
           'flex items-center gap-2 px-3 py-1.5 rounded-lg',
-          'bg-gray-100 dark:bg-gray-800',
-          'hover:bg-gray-200 dark:hover:bg-gray-700',
+          'bg-gray-100 dark:bg-charcoal-800',
+          'hover:bg-gray-200 dark:hover:bg-charcoal-700',
           'border border-gray-200 dark:border-gray-700',
           'text-sm font-medium text-gray-700 dark:text-gray-300',
           'transition-colors duration-200',
@@ -179,8 +179,8 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
           className={clsx(
             'absolute top-full left-0 mt-1 z-50',
             'min-w-[280px] max-h-[400px] overflow-y-auto',
-            'bg-white dark:bg-gray-800',
-            'border border-gray-200 dark:border-gray-700',
+            'bg-white dark:bg-charcoal-800',
+            'border border-gray-200 dark:border-gray-700/50',
             'rounded-xl shadow-xl',
             'animate-in fade-in slide-in-from-top-2 duration-200',
           )}
@@ -201,9 +201,9 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
                   onClick={() => handleSelectModel(id, model.tier)}
                   className={clsx(
                     'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left',
-                    'hover:bg-gray-100 dark:hover:bg-gray-700',
+                    'hover:bg-gray-100 dark:hover:bg-charcoal-700',
                     'transition-colors duration-150',
-                    isSelected && 'bg-blue-50 dark:bg-blue-900/30',
+                    isSelected && 'bg-teal-50 dark:bg-teal-900/30',
                   )}
                 >
                   <span className={clsx('p-1.5 rounded', badge.color)}>
@@ -215,7 +215,7 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{model.description}</p>
                   </div>
-                  {isSelected && <Check className="w-4 h-4 text-blue-500" />}
+                  {isSelected && <Check className="w-4 h-4 text-teal-500" />}
                 </button>
               );
             })}
@@ -272,7 +272,7 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
                             </p>
                           )}
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-500" />}
+                        {isSelected && <Check className="w-4 h-4 text-teal-500" />}
                         {isLocked && <Lock className="w-4 h-4 text-gray-400" />}
                       </button>
                     );

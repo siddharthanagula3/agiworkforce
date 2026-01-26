@@ -125,9 +125,9 @@ export const ChatContainer = memo(function ChatContainer({ className = '' }: Cha
         />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-950">
+        <div className="flex-1 flex flex-col min-w-0 bg-cream-50 dark:bg-charcoal-900">
           {/* Header with model selector */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-charcoal-900">
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Chat</h1>
               {activeConversationId && (
@@ -146,7 +146,7 @@ export const ChatContainer = memo(function ChatContainer({ className = '' }: Cha
           </div>
 
           {/* Input area */}
-          <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+          <div className="p-4 bg-white dark:bg-charcoal-900 border-t border-gray-200 dark:border-gray-800">
             <ChatInputArea
               onSend={handleSendMessage}
               onStopGeneration={stopGeneration}
