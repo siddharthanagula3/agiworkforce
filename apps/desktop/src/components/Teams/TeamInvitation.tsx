@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore } from '../../stores/auth';
 import type { TeamInvitation as TeamInvitationType, Team } from '../../types/teams';
 import { Button } from '../ui/Button';
 import { Mail, Copy, Check } from 'lucide-react';

@@ -63,17 +63,30 @@ pub fn run() {
         tracing::error!("Application Panic: {:?}", info);
     }));
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+
+    // Shell plugin - disabled for App Store builds (sandbox restrictions)
+    #[cfg(feature = "shell")]
+    {
+        builder = builder.plugin(tauri_plugin_shell::init());
+    }
+
+    // Updater plugin - disabled for App Store builds (App Store handles updates)
+    #[cfg(feature = "updater")]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder
         .setup(|app| {
 
             let app_data_dir = match app.path().app_data_dir() {
@@ -1470,11 +1483,16 @@ pub fn run() {
             // Additional Automation
             crate::sys::commands::automation_get_text,
 
-            // Updater
+            // Updater (only available when not building for App Store)
+            #[cfg(feature = "updater")]
             crate::features::updater::check_for_updates,
+            #[cfg(feature = "updater")]
             crate::features::updater::install_update,
+            #[cfg(feature = "updater")]
             crate::features::updater::install_update_and_restart,
+            #[cfg(feature = "updater")]
             crate::features::updater::get_current_version,
+            #[cfg(feature = "updater")]
             crate::features::updater::get_version_info,
         ])
         .run(tauri::generate_context!())

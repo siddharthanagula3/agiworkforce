@@ -9,12 +9,12 @@ import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/uni
 import { useDeepLink } from './hooks/useDeepLink';
 
 import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } from 'lucide-react';
-import ErrorBoundary from './components/ErrorBoundary';
+import { ErrorBoundary } from './components/ErrorHandling';
 import ErrorToastContainer from './components/Errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
-import { useAuthStore } from './stores/authStore';
+import { useAuthStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore from './stores/errorStore';
 
@@ -173,7 +173,7 @@ const DesktopShell = () => {
       if (isTauri) {
         try {
           const { supabaseAuth } = await import('./services/supabaseAuth');
-          const { waitForAuthReady } = await import('./stores/authStore');
+          const { waitForAuthReady } = await import('./stores/auth');
           const { invoke } = await import('@tauri-apps/api/core');
 
           // Ensure Rust uses the same backend base URL as the UI (critical in local dev).

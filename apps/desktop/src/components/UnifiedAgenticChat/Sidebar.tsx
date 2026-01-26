@@ -50,8 +50,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/AlertDialog';
-import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
-import { SimpleModeToggle } from '../SimpleModeToggle';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
+import { SimpleModeToggle } from '../SimpleMode';
 
 interface SidebarProps {
   className?: string;

@@ -23,7 +23,7 @@ import {
   getRemainingPercentage,
 } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
-import { useBillingStore } from '../../stores/billingStore';
+import { useBillingStore } from '../../stores/auth';
 import { useAccountStore } from '../../stores/accountStore';
 import {
   queryTimeSeriesData,

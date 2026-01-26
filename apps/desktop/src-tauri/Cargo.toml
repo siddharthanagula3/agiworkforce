@@ -1,6 +1,6 @@
 [package]
 name = "agiworkforce-desktop"
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
@@ -23,11 +23,11 @@ unused_results = "allow"
 [dependencies]
 
 tauri = { version = "2.9.3", features = ["tray-icon", "devtools", "test"] }
-tauri-plugin-shell = "2.3.3"
+tauri-plugin-shell = { version = "2.3.3", optional = true }
 tauri-plugin-process = "2.2.0"
 tauri-plugin-fs = "2.4.4"
 tauri-plugin-dialog = "2.6.0"
-tauri-plugin-updater = "2.3.0"
+tauri-plugin-updater = { version = "2.3.0", optional = true }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-window-state = "2.4.1"
@@ -221,12 +221,18 @@ cocoa = "0.25"
 
 
 [features]
-default = ["ocr"]
+default = ["ocr", "shell", "updater"]
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]
 sentry = ["dep:sentry"]
-billing = []  
+billing = []
+# Shell plugin - not available in App Store builds
+shell = ["dep:tauri-plugin-shell"]
+# Updater plugin - App Store handles updates, so this is disabled for appstore builds
+updater = ["dep:tauri-plugin-updater"]
+# App Store build - disables shell execution, auto-updater, and other sandbox-restricted features
+appstore = []  
 
 
 [build-dependencies]

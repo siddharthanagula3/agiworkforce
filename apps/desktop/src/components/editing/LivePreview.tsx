@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { Card } from '../ui/Card';
@@ -392,10 +393,20 @@ function XmlPreview({ content }: { content: string }) {
 }
 
 function SvgPreview({ content }: { content: string }) {
+  // Sanitize SVG content to prevent XSS attacks
+  const sanitizedSvg = useMemo(
+    () =>
+      DOMPurify.sanitize(content, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['use'], // Allow <use> for SVG sprites
+      }),
+    [content],
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex items-center justify-center p-4 bg-checkered">
-        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: content }} />
+        <div className="max-w-full max-h-full" dangerouslySetInnerHTML={{ __html: sanitizedSvg }} />
       </div>
       <div className="p-2 border-t border-border bg-muted/10">
         <p className="text-xs text-muted-foreground text-center">SVG Preview</p>

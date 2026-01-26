@@ -43,7 +43,7 @@ import { SourcesFooter } from './SourcesFooter';
 import { StatusTrail } from './StatusTrail';
 
 import { useExecutionStore } from '../../stores/executionStore';
-import { useSimpleModeStore } from '../../stores/simpleModeStore';
+import { useSimpleModeStore } from '../../stores/ui';
 import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { DeepResearchPanel } from './DeepResearchPanel';
 import { CodeBlock } from './Visualizations/CodeBlock';
