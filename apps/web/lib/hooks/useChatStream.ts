@@ -203,12 +203,18 @@ export function useChatStream(): UseChatStreamReturn {
           // User cancelled - update message to show partial content
           updateMessage(assistantMessageId, { isStreaming: false });
         } else {
-          // Real error - update message with error state
+          // Real error - show the actual error message to help with debugging
+          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+          console.error('[useChatStream] API Error:', errorMessage, error);
+
+          // Show the actual error in the message for visibility
+          // This helps users and developers understand what went wrong
           updateMessage(assistantMessageId, {
             isStreaming: false,
-            content: 'Sorry, there was an error generating a response. Please try again.',
+            content: `⚠️ Error: ${errorMessage}\n\nPlease check the console for more details or try again.`,
+            error: true,
           });
-          setError(error instanceof Error ? error.message : 'An error occurred');
+          setError(errorMessage);
         }
         stopStreaming();
         setLoading(false);

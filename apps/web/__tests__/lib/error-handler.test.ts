@@ -176,8 +176,7 @@ describe('Error Handler', () => {
       });
 
       it('should include original error in dev mode', async () => {
-        const originalEnv = process.env.NODE_ENV;
-        process.env.NODE_ENV = 'development';
+        vi.stubEnv('NODE_ENV', 'development');
 
         try {
           const error = new Error('Dev error');
@@ -187,7 +186,7 @@ describe('Error Handler', () => {
           // In dev mode, internal error includes details
           expect(data.error.code).toBe('INTERNAL_ERROR');
         } finally {
-          process.env.NODE_ENV = originalEnv;
+          vi.unstubAllEnvs();
         }
       });
     });
@@ -281,7 +280,7 @@ describe('Error Handler', () => {
         },
       };
 
-      const response = await wrappedHandler(mockRequest as unknown);
+      const response = await (wrappedHandler as any)(mockRequest);
       const data = await response.json();
 
       expect(data.requestId).toBe('req-456');
