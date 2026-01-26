@@ -146,18 +146,20 @@ export const ChatContainer = memo(function ChatContainer({ className = '' }: Cha
           </div>
 
           {/* Input area */}
-          <div className="p-4 bg-white dark:bg-charcoal-900 border-t border-gray-200 dark:border-gray-800">
-            <ChatInputArea
-              onSend={handleSendMessage}
-              onStopGeneration={stopGeneration}
-              isStreaming={isStreaming}
-              isLoading={isLoading}
-              placeholder={
-                activeConversationId
-                  ? 'Continue the conversation...'
-                  : 'Start a new conversation...'
-              }
-            />
+          <div className="px-4 pb-4 pt-2 bg-cream-50 dark:bg-charcoal-900">
+            <div className="max-w-4xl mx-auto">
+              <ChatInputArea
+                onSend={handleSendMessage}
+                onStopGeneration={stopGeneration}
+                isStreaming={isStreaming}
+                isLoading={isLoading}
+                placeholder={
+                  activeConversationId
+                    ? 'Continue the conversation...'
+                    : 'Start a new conversation...'
+                }
+              />
+            </div>
           </div>
         </div>
       </div>
