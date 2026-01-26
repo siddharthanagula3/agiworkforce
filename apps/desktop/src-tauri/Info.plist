@@ -2,16 +2,99 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleURLTypes</key>
-  <array>
-    <dict>
-      <key>CFBundleURLName</key>
-      <string>AGI Workforce</string>
-      <key>CFBundleURLSchemes</key>
-      <array>
-        <string>agiworkforce</string>
-      </array>
-    </dict>
-  </array>
+    <!-- Bundle Identification -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>AGI Workforce</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.agiworkforce.desktop</string>
+    <key>CFBundleName</key>
+    <string>AGI Workforce</string>
+    <key>CFBundleDisplayName</key>
+    <string>AGI Workforce</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.6</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- Application Category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+
+    <!-- Minimum System Version -->
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+
+    <!-- Principal Class -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- High Resolution Capable -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- Supports Automatic Graphics Switching -->
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+
+    <!-- Deep Link URL Scheme -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>AGI Workforce</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>agiworkforce</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Privacy Usage Descriptions - Required for macOS permissions -->
+    <key>NSCameraUsageDescription</key>
+    <string>AGI Workforce uses your camera to capture visual content for AI-powered automation tasks. You can disable this in Privacy settings.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>AGI Workforce uses your microphone to accept voice commands and transcribe speech for hands-free automation. You can disable this in Privacy settings.</string>
+
+    <key>NSAccessibilityUsageDescription</key>
+    <string>AGI Workforce requires accessibility access to automate tasks by interacting with applications, reading screen content, and controlling UI elements on your behalf.</string>
+
+    <key>NSAppleEventsUsageDescription</key>
+    <string>AGI Workforce uses Apple Events to automate other applications and complete tasks across your Mac.</string>
+
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>AGI Workforce may access your Desktop folder to organize files and complete automation tasks you request.</string>
+
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>AGI Workforce may access your Documents folder to read, create, or modify files as part of automation tasks you request.</string>
+
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>AGI Workforce may access your Downloads folder to process downloaded files or save exported data.</string>
+
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>AGI Workforce captures screen content to understand what you're working on and provide intelligent automation assistance.</string>
+
+    <!-- Copyright -->
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025 AGI Automation LLC. All rights reserved.</string>
+
+    <!-- Supported Document Types -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>AGI Workflow</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>agiworkflow</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+        </dict>
+    </array>
 </dict>
 </plist>

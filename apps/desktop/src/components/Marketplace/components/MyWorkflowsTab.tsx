@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../../../components/ui/Card';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 import { useMarketplaceStore } from '../marketplaceStore';
 
 export function MyWorkflowsTab() {

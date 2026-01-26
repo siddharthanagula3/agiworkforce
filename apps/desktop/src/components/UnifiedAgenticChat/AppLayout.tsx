@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { CustomInstructionsDialog } from '../CustomInstructionsDialog';
+import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';

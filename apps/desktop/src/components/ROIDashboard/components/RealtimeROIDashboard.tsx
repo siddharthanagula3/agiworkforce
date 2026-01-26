@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { invoke } from '../../../lib/tauri-mock';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 
 interface PeriodStats {
   total_time_saved_hours: number;

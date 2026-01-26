@@ -79,34 +79,40 @@ These components represented a visual-workflow approach that conflicted with the
 
 ### Current Component Architecture
 
-The desktop app centers on the **UnifiedAgenticChat** component system:
+The desktop app uses **feature-based component organization**:
 
 ```
 apps/desktop/src/components/
-  UnifiedAgenticChat/           # Main chat interface (primary UI)
-    AppLayout.tsx               # Root layout with sidebar + chat
-    ChatInputArea.tsx           # Natural language input
-    ChatMessageList.tsx         # Conversation history
-    ChatStream.tsx              # Real-time AI responses
-    MessageBubble.tsx           # Individual messages
-    QuickModelSelector.tsx      # Auto/manual model selection
-    DynamicSidecar.tsx          # Context panels (code, terminal, browser)
-    CheckpointManager.tsx       # Undo/redo functionality
-    StatusTrail.tsx             # Goal execution progress
-    ArtifactRenderer.tsx        # Rich content display
-    Cards/                      # Action-specific cards
-      ApprovalRequestCard.tsx   # Rare approval requests
-      FileOperationCard.tsx     # File change visualization
-      TerminalCommandCard.tsx   # Command execution display
-      ScreenshotCard.tsx        # Visual context display
-    InlinePanels/               # Embedded workspace panels
-      BrowserInlinePanel.tsx    # Browser automation view
-      TerminalInlinePanel.tsx   # Terminal output
-      CodeInlinePanel.tsx       # Code editing
-    Sidecar/                    # Side panel components
-      CodeCanvas.tsx            # Code visualization
-      TerminalView.tsx          # Terminal workspace
-      DiffViewer.tsx            # Change visualization
+├── AGI/                      # AGI-related components
+├── Auth/                     # Authentication UI
+├── Browser/                  # Browser automation components
+├── CustomInstructions/       # Custom instructions dialog
+│   └── CustomInstructionsDialog.tsx
+├── ErrorHandling/            # Error boundary & reporting
+│   ├── ErrorBoundary.tsx     # React error boundary
+│   └── __tests__/            # Error handling tests
+├── Onboarding/               # User onboarding flow
+│   └── OnboardingWelcome.tsx # Welcome screen for new users
+├── SimpleMode/               # Simple/Advanced mode toggle
+│   └── SimpleModeToggle.tsx  # Mode switcher component
+├── Subscription/             # Subscription gate & dialogs
+│   ├── SubscriptionGate.tsx  # Full-screen subscription gate
+│   └── SubscriptionLockDialog.tsx # Modal subscription dialog
+├── UnifiedAgenticChat/       # Main chat interface (primary UI)
+│   ├── AppLayout.tsx         # Root layout with sidebar + chat
+│   ├── ChatInputArea.tsx     # Natural language input
+│   ├── ChatMessageList.tsx   # Conversation history
+│   ├── ChatStream.tsx        # Real-time AI responses
+│   ├── MessageBubble.tsx     # Individual messages
+│   ├── QuickModelSelector.tsx # Auto/manual model selection
+│   ├── DynamicSidecar.tsx    # Context panels (code, terminal, browser)
+│   ├── CheckpointManager.tsx # Undo/redo functionality
+│   ├── StatusTrail.tsx       # Goal execution progress
+│   ├── ArtifactRenderer.tsx  # Rich content display
+│   ├── Cards/                # Action-specific cards
+│   ├── InlinePanels/         # Embedded workspace panels
+│   └── Sidecar/              # Side panel components
+└── ui/                       # Shared UI primitives (Button, Dialog, etc.)
 ```
 
 ## Desktop Application Architecture
@@ -1216,4 +1222,7 @@ For more details, see:
 
 - [CLAUDE.md](CLAUDE.md) - Development patterns and guidelines
 - [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute
+- [docs/README.md](docs/README.md) - Full documentation index
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) - Version history
+- [docs/features/](docs/features/) - Feature documentation
+- [docs/api/](docs/api/) - API reference

@@ -3,7 +3,7 @@ import { WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { cn } from '../../lib/utils';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore } from '../../stores/auth';
 
 interface TitleBarProps {
   state: {

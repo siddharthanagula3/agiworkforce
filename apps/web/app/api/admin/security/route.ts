@@ -1,0 +1,179 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
+import { logger } from '@/lib/logger';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+/**
+ * Security Monitoring API
+ *
+ * GET /api/admin/security - Get security dashboard summary
+ * GET /api/admin/security?action=metrics - Get security metrics only
+ * GET /api/admin/security?action=alerts - Check alert thresholds
+ * GET /api/admin/security?action=events&severity=critical&limit=50 - Get recent events
+ * GET /api/admin/security?action=user&userId=xxx - Get events for specific user
+ * GET /api/admin/security?action=ips - Get top IP addresses
+ * POST /api/admin/security?action=cleanup - Trigger log cleanup
+ *
+ * Requires admin authentication via service role or admin user.
+ */
+
+async function verifyAdminAccess(
+  request: NextRequest,
+): Promise<{ isAdmin: boolean; userId?: string; error?: string }> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { isAdmin: false, error: 'Server configuration error' };
+  }
+
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { isAdmin: false, error: 'Missing authorization header' };
+  }
+
+  const token = authHeader.slice(7);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  // Verify the JWT and check if user has admin role
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return { isAdmin: false, error: 'Invalid or expired token' };
+  }
+
+  // Check for admin role in user metadata or profiles table
+  const isAdminMeta = user.user_metadata?.role === 'admin' || user.app_metadata?.role === 'admin';
+
+  if (isAdminMeta) {
+    return { isAdmin: true, userId: user.id };
+  }
+
+  // Check profiles table for admin flag
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.is_admin) {
+    return { isAdmin: true, userId: user.id };
+  }
+
+  return { isAdmin: false, error: 'User does not have admin privileges' };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // Verify admin access
+    const { isAdmin, error: authError } = await verifyAdminAccess(request);
+
+    if (!isAdmin) {
+      logger.warn({ error: authError }, 'Unauthorized security dashboard access attempt');
+      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action') || 'dashboard';
+
+    switch (action) {
+      case 'dashboard': {
+        const summary = await SecurityMonitoringService.getDashboardSummary();
+        return NextResponse.json(summary);
+      }
+
+      case 'metrics': {
+        const metrics = await SecurityMonitoringService.getMetrics();
+        return NextResponse.json({ metrics });
+      }
+
+      case 'alerts': {
+        const alerts = await SecurityMonitoringService.checkAlerts();
+        return NextResponse.json({ alerts });
+      }
+
+      case 'events': {
+        const severity = searchParams.get('severity') as
+          | 'low'
+          | 'medium'
+          | 'high'
+          | 'critical'
+          | null;
+        const eventType = searchParams.get('eventType') as string | null;
+        const limit = parseInt(searchParams.get('limit') || '100', 10);
+
+        const events = await SecurityMonitoringService.getRecentEvents(
+          Math.min(limit, 500), // Cap at 500
+          severity || undefined,
+          eventType as Parameters<typeof SecurityMonitoringService.getRecentEvents>[2],
+        );
+        return NextResponse.json({ events, count: events.length });
+      }
+
+      case 'user': {
+        const userId = searchParams.get('userId');
+        if (!userId) {
+          return NextResponse.json({ error: 'userId parameter required' }, { status: 400 });
+        }
+        const events = await SecurityMonitoringService.getEventsByUser(userId);
+        return NextResponse.json({ events, count: events.length });
+      }
+
+      case 'ips': {
+        const hours = parseInt(searchParams.get('hours') || '24', 10);
+        const limit = parseInt(searchParams.get('limit') || '10', 10);
+        const topIps = await SecurityMonitoringService.getTopIpAddresses(
+          Math.min(hours, 168), // Cap at 7 days
+          Math.min(limit, 50), // Cap at 50
+        );
+        return NextResponse.json({ top_ips: topIps });
+      }
+
+      default:
+        return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error in security monitoring API');
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Verify admin access
+    const { isAdmin, error: authError } = await verifyAdminAccess(request);
+
+    if (!isAdmin) {
+      logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
+      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action');
+
+    switch (action) {
+      case 'cleanup': {
+        const deletedCount = await SecurityMonitoringService.cleanupOldLogs();
+        return NextResponse.json({
+          success: true,
+          message: `Cleaned up ${deletedCount} old security log entries`,
+          deleted_count: deletedCount,
+        });
+      }
+
+      default:
+        return NextResponse.json(
+          { error: `Unknown action: ${action}. Use action=cleanup for log cleanup.` },
+          { status: 400 },
+        );
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error in security admin action');
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
