@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface BrowserTab {
@@ -145,436 +146,422 @@ const unlistenFunctions: UnlistenFn[] = [];
 
 export const useBrowserStore = create<BrowserState>()(
   devtools(
-    subscribeWithSelector((set, get) => ({
-      sessions: [],
-      activeSessionId: null,
-      initialized: false,
+    subscribeWithSelector(
+      immer((set, get) => ({
+        sessions: [],
+        activeSessionId: null,
+        initialized: false,
 
-      screenshots: [],
-      actions: [],
-      domSnapshots: [],
-      consoleLogs: [],
-      networkRequests: [],
-      highlightedElement: null,
+        screenshots: [],
+        actions: [],
+        domSnapshots: [],
+        consoleLogs: [],
+        networkRequests: [],
+        highlightedElement: null,
 
-      isRecording: false,
-      recordedSteps: [],
+        isRecording: false,
+        recordedSteps: [],
 
-      isStreaming: false,
-      streamIntervalId: null,
+        isStreaming: false,
+        streamIntervalId: null,
 
-      initialize: async () => {
-        try {
-          await invoke('browser_init');
-          set({ initialized: true });
+        initialize: async () => {
+          try {
+            await invoke('browser_init');
+            set({ initialized: true });
 
-          const unlisten1 = await listen<BrowserAction>('browser:action', (event) => {
-            try {
-              const action = event?.payload;
-              if (action) {
-                get().addAction(action);
+            const unlisten1 = await listen<BrowserAction>('browser:action', (event) => {
+              try {
+                const action = event?.payload;
+                if (action) {
+                  get().addAction(action);
+                }
+              } catch (error) {
+                console.error('[browserStore] Error handling browser:action event:', error);
               }
-            } catch (error) {
-              console.error('[browserStore] Error handling browser:action event:', error);
-            }
-          });
-          unlistenFunctions.push(unlisten1);
+            });
+            unlistenFunctions.push(unlisten1);
 
-          const unlisten2 = await listen<ConsoleLog>('browser:console', (event) => {
-            try {
-              const log = event?.payload;
-              if (log) {
-                set((state) => ({
-                  consoleLogs: [...state.consoleLogs, log],
-                }));
+            const unlisten2 = await listen<ConsoleLog>('browser:console', (event) => {
+              try {
+                const log = event?.payload;
+                if (log) {
+                  set((state) => {
+                    state.consoleLogs.push(log);
+                  });
+                }
+              } catch (error) {
+                console.error('[browserStore] Error handling browser:console event:', error);
               }
-            } catch (error) {
-              console.error('[browserStore] Error handling browser:console event:', error);
-            }
-          });
-          unlistenFunctions.push(unlisten2);
+            });
+            unlistenFunctions.push(unlisten2);
 
-          const unlisten3 = await listen<NetworkRequest>('browser:network', (event) => {
-            try {
-              const request = event?.payload;
-              if (request) {
-                set((state) => ({
-                  networkRequests: [...state.networkRequests, request],
-                }));
+            const unlisten3 = await listen<NetworkRequest>('browser:network', (event) => {
+              try {
+                const request = event?.payload;
+                if (request) {
+                  set((state) => {
+                    state.networkRequests.push(request);
+                  });
+                }
+              } catch (error) {
+                console.error('[browserStore] Error handling browser:network event:', error);
               }
-            } catch (error) {
-              console.error('[browserStore] Error handling browser:network event:', error);
-            }
-          });
-          unlistenFunctions.push(unlisten3);
-        } catch (error) {
-          console.error('Failed to initialize browser:', error);
-          set({ initialized: false });
-          throw error;
-        }
-      },
+            });
+            unlistenFunctions.push(unlisten3);
+          } catch (error) {
+            console.error('Failed to initialize browser:', error);
+            set({ initialized: false });
+            throw error;
+          }
+        },
 
-      launchBrowser: async (browserType: BrowserType, headless: boolean) => {
-        try {
-          const sessionId = await invoke<string>('browser_launch', {
-            browserType,
-            headless,
-          });
-
-          const newSession: BrowserSession = {
-            id: sessionId,
-            browserType,
-            headless,
-            tabs: [],
-            active: true,
-          };
-
-          set((state) => ({
-            sessions: [...state.sessions, newSession],
-            activeSessionId: sessionId,
-          }));
-
-          return sessionId;
-        } catch (error) {
-          console.error('Failed to launch browser:', error);
-          throw error;
-        }
-      },
-
-      closeBrowser: async (sessionId: string) => {
-        try {
-          set((state) => {
-            const newSessions = state.sessions.filter((s) => s.id !== sessionId);
-            let newActiveId = state.activeSessionId;
-
-            if (state.activeSessionId === sessionId) {
-              const nextSession = newSessions[0];
-              newActiveId = nextSession ? nextSession.id : null;
-            }
-
-            return {
-              sessions: newSessions,
-              activeSessionId: newActiveId,
-            };
-          });
-        } catch (error) {
-          console.error('Failed to close browser:', error);
-          throw error;
-        }
-      },
-
-      openTab: async (url: string) => {
-        try {
-          const tabId = await invoke<string>('browser_open_tab', { url });
-
-          set((state) => {
-            const activeId = state.activeSessionId;
-            if (!activeId) {
-              return state;
-            }
-
-            const newSessions = state.sessions.map((session) => {
-              if (session.id === activeId) {
-                return {
-                  ...session,
-                  tabs: [...session.tabs, { id: tabId, url, title: url, active: true }],
-                };
-              }
-              return session;
+        launchBrowser: async (browserType: BrowserType, headless: boolean) => {
+          try {
+            const sessionId = await invoke<string>('browser_launch', {
+              browserType,
+              headless,
             });
 
-            return { sessions: newSessions };
-          });
-
-          return tabId;
-        } catch (error) {
-          console.error('Failed to open tab:', error);
-          throw error;
-        }
-      },
-
-      closeTab: async (tabId: string) => {
-        try {
-          await invoke('browser_close_tab', { tabId });
-
-          set((state) => {
-            const newSessions = state.sessions.map((session) => ({
-              ...session,
-              tabs: session.tabs.filter((t) => t.id !== tabId),
-            }));
-
-            return { sessions: newSessions };
-          });
-        } catch (error) {
-          console.error('Failed to close tab:', error);
-          throw error;
-        }
-      },
-
-      navigateTab: async (tabId: string, url: string) => {
-        try {
-          await invoke('browser_navigate', { tabId, url });
-
-          set((state) => {
-            const newSessions = state.sessions.map((session) => ({
-              ...session,
-              tabs: session.tabs.map((tab) =>
-                tab.id === tabId ? { ...tab, url, title: url } : tab,
-              ),
-            }));
-
-            return { sessions: newSessions };
-          });
-        } catch (error) {
-          console.error('Failed to navigate:', error);
-          throw error;
-        }
-      },
-
-      clickElement: async (tabId: string, selector: string) => {
-        try {
-          await invoke('browser_click', { tabId, selector });
-        } catch (error) {
-          console.error('Failed to click element:', error);
-          throw error;
-        }
-      },
-
-      typeText: async (tabId: string, selector: string, text: string) => {
-        try {
-          await invoke('browser_type', { tabId, selector, text });
-        } catch (error) {
-          console.error('Failed to type text:', error);
-          throw error;
-        }
-      },
-
-      screenshot: async (tabId: string) => {
-        try {
-          const data = await invoke<string>('browser_screenshot', { tabId });
-          return data;
-        } catch (error) {
-          console.error('Failed to take screenshot:', error);
-          throw error;
-        }
-      },
-
-      getPageContent: async (tabId: string) => {
-        try {
-          const content = await invoke<string>('browser_get_content', { tabId });
-          return content;
-        } catch (error) {
-          console.error('Failed to get page content:', error);
-          throw error;
-        }
-      },
-
-      executeScript: async (tabId: string, script: string) => {
-        try {
-          const result = await invoke('browser_evaluate', { tabId, script });
-          return result;
-        } catch (error) {
-          console.error('Failed to execute script:', error);
-          throw error;
-        }
-      },
-
-      setActiveSession: (sessionId: string) => {
-        set({ activeSessionId: sessionId });
-      },
-
-      addAction: (action: BrowserAction) => {
-        set((state) => ({
-          actions: [...state.actions, action],
-        }));
-
-        if (get().isRecording && action.success) {
-          const step: RecordedStep = {
-            id: crypto.randomUUID(),
-            type: action.type,
-            selector: action.details.selector,
-            value: action.details.text || action.details.url,
-            timestamp: action.timestamp,
-          };
-          get().addRecordedStep(step);
-        }
-      },
-
-      addScreenshot: (screenshot: Screenshot) => {
-        set((state) => {
-          const screenshots = [...state.screenshots, screenshot];
-
-          if (screenshots.length > 50) {
-            screenshots.shift();
-          }
-          return { screenshots };
-        });
-      },
-
-      highlightElement: async (tabId: string, selector: string) => {
-        try {
-          const bounds = await invoke<ElementBounds>('browser_highlight_element', {
-            tabId,
-            selector,
-          });
-          set({ highlightedElement: bounds });
-        } catch (error) {
-          console.error('Failed to highlight element:', error);
-          throw error;
-        }
-      },
-
-      clearHighlight: () => {
-        set({ highlightedElement: null });
-      },
-
-      getDOMSnapshot: async (tabId: string) => {
-        try {
-          const snapshot = await invoke<DOMSnapshot>('browser_get_dom_snapshot', { tabId });
-          set((state) => ({
-            domSnapshots: [...state.domSnapshots, snapshot],
-          }));
-          return snapshot;
-        } catch (error) {
-          console.error('Failed to get DOM snapshot:', error);
-          throw error;
-        }
-      },
-
-      getConsoleLogs: async (tabId: string) => {
-        try {
-          const logs = await invoke<ConsoleLog[]>('browser_get_console_logs', { tabId });
-          set({ consoleLogs: logs });
-          return logs;
-        } catch (error) {
-          console.error('Failed to get console logs:', error);
-          throw error;
-        }
-      },
-
-      getNetworkActivity: async (tabId: string) => {
-        try {
-          const requests = await invoke<NetworkRequest[]>('browser_get_network_activity', {
-            tabId,
-          });
-          set({ networkRequests: requests });
-          return requests;
-        } catch (error) {
-          console.error('Failed to get network activity:', error);
-          throw error;
-        }
-      },
-
-      startStreaming: (tabId: string) => {
-        if (get().isStreaming) {
-          return;
-        }
-
-        const intervalId = window.setInterval(async () => {
-          try {
-            const data = await invoke<string>('browser_get_screenshot_stream', { tabId });
-            const screenshot: Screenshot = {
-              id: crypto.randomUUID(),
-              timestamp: Date.now(),
-              data,
-              tabId,
+            const newSession: BrowserSession = {
+              id: sessionId,
+              browserType,
+              headless,
+              tabs: [],
+              active: true,
             };
-            get().addScreenshot(screenshot);
+
+            set((state) => {
+              state.sessions.push(newSession);
+              state.activeSessionId = sessionId;
+            });
+
+            return sessionId;
           } catch (error) {
-            console.error('Failed to get screenshot stream:', error);
+            console.error('Failed to launch browser:', error);
+            throw error;
           }
-        }, 500);
+        },
 
-        set({ isStreaming: true, streamIntervalId: intervalId });
-      },
+        closeBrowser: async (sessionId: string) => {
+          try {
+            set((state) => {
+              const sessionIndex = state.sessions.findIndex((s) => s.id === sessionId);
+              if (sessionIndex >= 0) {
+                state.sessions.splice(sessionIndex, 1);
+              }
 
-      stopStreaming: () => {
-        const { streamIntervalId } = get();
-        if (streamIntervalId !== null) {
-          window.clearInterval(streamIntervalId);
-          set({ isStreaming: false, streamIntervalId: null });
-        }
-      },
+              if (state.activeSessionId === sessionId) {
+                state.activeSessionId = state.sessions[0]?.id ?? null;
+              }
+            });
+          } catch (error) {
+            console.error('Failed to close browser:', error);
+            throw error;
+          }
+        },
 
-      startRecording: () => {
-        set({ isRecording: true, recordedSteps: [] });
-      },
+        openTab: async (url: string) => {
+          try {
+            const tabId = await invoke<string>('browser_open_tab', { url });
 
-      stopRecording: () => {
-        set({ isRecording: false });
-      },
+            set((state) => {
+              const session = state.sessions.find((s) => s.id === state.activeSessionId);
+              if (session) {
+                session.tabs.push({ id: tabId, url, title: url, active: true });
+              }
+            });
 
-      addRecordedStep: (step: RecordedStep) => {
-        set((state) => ({
-          recordedSteps: [...state.recordedSteps, step],
-        }));
-      },
+            return tabId;
+          } catch (error) {
+            console.error('Failed to open tab:', error);
+            throw error;
+          }
+        },
 
-      clearRecording: () => {
-        set({ recordedSteps: [] });
-      },
+        closeTab: async (tabId: string) => {
+          try {
+            await invoke('browser_close_tab', { tabId });
 
-      generatePlaywrightCode: () => {
-        const { recordedSteps } = get();
-        let code = `import { test, expect } from '@playwright/test';
+            set((state) => {
+              for (const session of state.sessions) {
+                const tabIndex = session.tabs.findIndex((t) => t.id === tabId);
+                if (tabIndex >= 0) {
+                  session.tabs.splice(tabIndex, 1);
+                  break;
+                }
+              }
+            });
+          } catch (error) {
+            console.error('Failed to close tab:', error);
+            throw error;
+          }
+        },
+
+        navigateTab: async (tabId: string, url: string) => {
+          try {
+            await invoke('browser_navigate', { tabId, url });
+
+            set((state) => {
+              for (const session of state.sessions) {
+                const tab = session.tabs.find((t) => t.id === tabId);
+                if (tab) {
+                  tab.url = url;
+                  tab.title = url;
+                  break;
+                }
+              }
+            });
+          } catch (error) {
+            console.error('Failed to navigate:', error);
+            throw error;
+          }
+        },
+
+        clickElement: async (tabId: string, selector: string) => {
+          try {
+            await invoke('browser_click', { tabId, selector });
+          } catch (error) {
+            console.error('Failed to click element:', error);
+            throw error;
+          }
+        },
+
+        typeText: async (tabId: string, selector: string, text: string) => {
+          try {
+            await invoke('browser_type', { tabId, selector, text });
+          } catch (error) {
+            console.error('Failed to type text:', error);
+            throw error;
+          }
+        },
+
+        screenshot: async (tabId: string) => {
+          try {
+            const data = await invoke<string>('browser_screenshot', { tabId });
+            return data;
+          } catch (error) {
+            console.error('Failed to take screenshot:', error);
+            throw error;
+          }
+        },
+
+        getPageContent: async (tabId: string) => {
+          try {
+            const content = await invoke<string>('browser_get_content', { tabId });
+            return content;
+          } catch (error) {
+            console.error('Failed to get page content:', error);
+            throw error;
+          }
+        },
+
+        executeScript: async (tabId: string, script: string) => {
+          try {
+            const result = await invoke('browser_evaluate', { tabId, script });
+            return result;
+          } catch (error) {
+            console.error('Failed to execute script:', error);
+            throw error;
+          }
+        },
+
+        setActiveSession: (sessionId: string) => {
+          set({ activeSessionId: sessionId });
+        },
+
+        addAction: (action: BrowserAction) => {
+          set((state) => {
+            state.actions.push(action);
+          });
+
+          if (get().isRecording && action.success) {
+            const step: RecordedStep = {
+              id: crypto.randomUUID(),
+              type: action.type,
+              selector: action.details.selector,
+              value: action.details.text || action.details.url,
+              timestamp: action.timestamp,
+            };
+            get().addRecordedStep(step);
+          }
+        },
+
+        addScreenshot: (screenshot: Screenshot) => {
+          set((state) => {
+            state.screenshots.push(screenshot);
+            // Keep max 50 screenshots
+            if (state.screenshots.length > 50) {
+              state.screenshots.shift();
+            }
+          });
+        },
+
+        highlightElement: async (tabId: string, selector: string) => {
+          try {
+            const bounds = await invoke<ElementBounds>('browser_highlight_element', {
+              tabId,
+              selector,
+            });
+            set({ highlightedElement: bounds });
+          } catch (error) {
+            console.error('Failed to highlight element:', error);
+            throw error;
+          }
+        },
+
+        clearHighlight: () => {
+          set({ highlightedElement: null });
+        },
+
+        getDOMSnapshot: async (tabId: string) => {
+          try {
+            const snapshot = await invoke<DOMSnapshot>('browser_get_dom_snapshot', { tabId });
+            set((state) => {
+              state.domSnapshots.push(snapshot);
+            });
+            return snapshot;
+          } catch (error) {
+            console.error('Failed to get DOM snapshot:', error);
+            throw error;
+          }
+        },
+
+        getConsoleLogs: async (tabId: string) => {
+          try {
+            const logs = await invoke<ConsoleLog[]>('browser_get_console_logs', { tabId });
+            set({ consoleLogs: logs });
+            return logs;
+          } catch (error) {
+            console.error('Failed to get console logs:', error);
+            throw error;
+          }
+        },
+
+        getNetworkActivity: async (tabId: string) => {
+          try {
+            const requests = await invoke<NetworkRequest[]>('browser_get_network_activity', {
+              tabId,
+            });
+            set({ networkRequests: requests });
+            return requests;
+          } catch (error) {
+            console.error('Failed to get network activity:', error);
+            throw error;
+          }
+        },
+
+        startStreaming: (tabId: string) => {
+          if (get().isStreaming) {
+            return;
+          }
+
+          const intervalId = window.setInterval(async () => {
+            try {
+              const data = await invoke<string>('browser_get_screenshot_stream', { tabId });
+              const screenshot: Screenshot = {
+                id: crypto.randomUUID(),
+                timestamp: Date.now(),
+                data,
+                tabId,
+              };
+              get().addScreenshot(screenshot);
+            } catch (error) {
+              console.error('Failed to get screenshot stream:', error);
+            }
+          }, 500);
+
+          set({ isStreaming: true, streamIntervalId: intervalId });
+        },
+
+        stopStreaming: () => {
+          const { streamIntervalId } = get();
+          if (streamIntervalId !== null) {
+            window.clearInterval(streamIntervalId);
+            set({ isStreaming: false, streamIntervalId: null });
+          }
+        },
+
+        startRecording: () => {
+          set({ isRecording: true, recordedSteps: [] });
+        },
+
+        stopRecording: () => {
+          set({ isRecording: false });
+        },
+
+        addRecordedStep: (step: RecordedStep) => {
+          set((state) => {
+            state.recordedSteps.push(step);
+          });
+        },
+
+        clearRecording: () => {
+          set({ recordedSteps: [] });
+        },
+
+        generatePlaywrightCode: () => {
+          const { recordedSteps } = get();
+          let code = `import { test, expect } from '@playwright/test';
 
 test('recorded automation', async ({ page }) => {
 `;
 
-        recordedSteps.forEach((step) => {
-          switch (step.type) {
-            case 'navigate':
-              code += `  await page.goto('${step.value}');\n`;
-              break;
-            case 'click':
-              code += `  await page.click('${step.selector}');\n`;
-              break;
-            case 'type':
-              code += `  await page.fill('${step.selector}', '${step.value}');\n`;
-              break;
-            case 'wait':
-              code += `  await page.waitForSelector('${step.selector}');\n`;
-              break;
-            case 'screenshot':
-              code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
-              break;
-            case 'execute':
-              code += `  await page.evaluate(() => { ${step.value} });\n`;
-              break;
+          recordedSteps.forEach((step) => {
+            switch (step.type) {
+              case 'navigate':
+                code += `  await page.goto('${step.value}');\n`;
+                break;
+              case 'click':
+                code += `  await page.click('${step.selector}');\n`;
+                break;
+              case 'type':
+                code += `  await page.fill('${step.selector}', '${step.value}');\n`;
+                break;
+              case 'wait':
+                code += `  await page.waitForSelector('${step.selector}');\n`;
+                break;
+              case 'screenshot':
+                code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
+                break;
+              case 'execute':
+                code += `  await page.evaluate(() => { ${step.value} });\n`;
+                break;
+            }
+          });
+
+          code += `});\n`;
+          return code;
+        },
+
+        clearActions: () => {
+          set({ actions: [] });
+        },
+
+        clearScreenshots: () => {
+          set({ screenshots: [] });
+        },
+
+        cleanup: () => {
+          const { streamIntervalId } = get();
+          if (streamIntervalId !== null) {
+            window.clearInterval(streamIntervalId);
+            set({ isStreaming: false, streamIntervalId: null });
           }
-        });
 
-        code += `});\n`;
-        return code;
-      },
+          unlistenFunctions.forEach((unlisten) => {
+            try {
+              unlisten();
+            } catch (error) {
+              console.error('[browserStore] Error cleaning up listener:', error);
+            }
+          });
+          unlistenFunctions.length = 0;
 
-      clearActions: () => {
-        set({ actions: [] });
-      },
-
-      clearScreenshots: () => {
-        set({ screenshots: [] });
-      },
-
-      cleanup: () => {
-        const { streamIntervalId } = get();
-        if (streamIntervalId !== null) {
-          window.clearInterval(streamIntervalId);
-          set({ isStreaming: false, streamIntervalId: null });
-        }
-
-        unlistenFunctions.forEach((unlisten) => {
-          try {
-            unlisten();
-          } catch (error) {
-            console.error('[browserStore] Error cleaning up listener:', error);
-          }
-        });
-        unlistenFunctions.length = 0;
-
-        set({ initialized: false });
-      },
-    })),
+          set({ initialized: false });
+        },
+      })),
+    ),
     { name: 'BrowserStore', enabled: import.meta.env.DEV },
   ),
 );

@@ -21,7 +21,7 @@ import {
 } from '../../../components/ui/Select';
 import { Textarea } from '../../../components/ui/Textarea';
 import { invoke } from '../../../lib/tauri-mock';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 import { WORKFLOW_CATEGORIES, type WorkflowLicense } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 

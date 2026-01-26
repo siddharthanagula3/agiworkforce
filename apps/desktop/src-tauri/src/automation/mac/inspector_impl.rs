@@ -19,7 +19,7 @@ impl InspectorService {
     }
 
     fn get_detailed_info(&self, element: &AXElement) -> Result<DetailedElementInfo> {
-        let id = self.service.register_element(element.0)?;
+        let id = element.with_element(|ptr| self.service.register_element(ptr))?;
 
         let name = "Mac Element".to_string();
         let control_type = "AXElement".to_string();

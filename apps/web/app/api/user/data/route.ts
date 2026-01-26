@@ -162,7 +162,6 @@ async function handleDeleteUserData(request: NextRequest) {
           { table: 'token_credits', column: 'user_id' },
           { table: 'beta_redemptions', column: 'user_id' },
           { table: 'email_preferences', column: 'user_id' },
-          { table: 'email_sends', column: 'user_id' },
           { table: 'device_authorizations', column: 'user_id' },
           { table: 'desktop_devices', column: 'user_id' },
           { table: 'mobile_devices', column: 'user_id' },

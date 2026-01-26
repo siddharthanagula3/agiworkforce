@@ -8,9 +8,62 @@ use super::*;
 use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// Configuration for the Reflection Engine
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReflectionConfig {
+    /// Maximum number of reflections to keep in history
+    pub max_history_size: usize,
+    /// Whether to use semantic similarity for matching relevant reflections
+    pub use_semantic_similarity: bool,
+    /// Weight for semantic score (0.0-1.0), remainder goes to recency
+    pub semantic_weight: f32,
+    /// Half-life for recency decay in hours
+    pub recency_half_life_hours: f32,
+}
+
+impl Default for ReflectionConfig {
+    fn default() -> Self {
+        Self {
+            max_history_size: 100,
+            use_semantic_similarity: true,
+            semantic_weight: 0.7,
+            recency_half_life_hours: 24.0,
+        }
+    }
+}
+
+/// Calculate cosine similarity between two texts using Jaccard similarity
+/// as a simple TF approximation (bag-of-words intersection over union)
+fn calculate_similarity(text_a: &str, text_b: &str) -> f32 {
+    // Tokenize and lowercase
+    let tokens_a: HashSet<String> = text_a
+        .to_lowercase()
+        .split_whitespace()
+        .filter(|w| w.len() > 2) // Skip short words
+        .map(String::from)
+        .collect();
+
+    let tokens_b: HashSet<String> = text_b
+        .to_lowercase()
+        .split_whitespace()
+        .filter(|w| w.len() > 2)
+        .map(String::from)
+        .collect();
+
+    if tokens_a.is_empty() || tokens_b.is_empty() {
+        return 0.0;
+    }
+
+    // Jaccard similarity as simple TF approximation
+    let intersection = tokens_a.intersection(&tokens_b).count() as f32;
+    let union = tokens_a.union(&tokens_b).count() as f32;
+
+    intersection / union
+}
 
 /// Reflection insight generated after analyzing execution results
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,23 +252,38 @@ pub struct ReflectionEngine {
     learning: Arc<LearningSystem>,
     /// History of reflections for pattern analysis
     reflection_history: Arc<tokio::sync::Mutex<Vec<ReflectionInsight>>>,
-    /// Maximum reflections to keep in history
-    max_history_size: usize,
+    /// Configuration for the reflection engine
+    config: ReflectionConfig,
 }
 
 impl ReflectionEngine {
-    /// Create a new ReflectionEngine
+    /// Create a new ReflectionEngine with default configuration
     pub fn new(
         router: Arc<RwLock<LLMRouter>>,
         knowledge_base: Arc<KnowledgeBase>,
         learning: Arc<LearningSystem>,
+    ) -> Result<Self> {
+        Self::with_config(
+            router,
+            knowledge_base,
+            learning,
+            ReflectionConfig::default(),
+        )
+    }
+
+    /// Create a new ReflectionEngine with custom configuration
+    pub fn with_config(
+        router: Arc<RwLock<LLMRouter>>,
+        knowledge_base: Arc<KnowledgeBase>,
+        learning: Arc<LearningSystem>,
+        config: ReflectionConfig,
     ) -> Result<Self> {
         Ok(Self {
             router,
             knowledge_base,
             learning,
             reflection_history: Arc::new(tokio::sync::Mutex::new(Vec::new())),
-            max_history_size: 100,
+            config,
         })
     }
 
@@ -910,26 +978,70 @@ Evaluate the plan and respond with a JSON object:
         history.push(insight.clone());
 
         // Trim to max size
-        while history.len() > self.max_history_size {
+        while history.len() > self.config.max_history_size {
             history.remove(0);
         }
 
         Ok(())
     }
 
-    /// Get relevant past reflections
+    /// Get relevant past reflections using semantic similarity when enabled
     async fn get_relevant_reflections(
         &self,
-        _goal_description: &str,
+        goal_description: &str,
         limit: usize,
     ) -> Result<Vec<ReflectionInsight>> {
         let history = self.reflection_history.lock().await;
 
-        // Simple relevance: most recent reflections
-        // TODO: Add semantic similarity matching
-        let relevant: Vec<ReflectionInsight> = history.iter().rev().take(limit).cloned().collect();
+        if !self.config.use_semantic_similarity || goal_description.is_empty() {
+            // Fall back to recency-only
+            return Ok(history.iter().rev().take(limit).cloned().collect());
+        }
 
-        Ok(relevant)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        // Score each reflection combining semantic similarity and recency
+        let mut scored: Vec<(f32, &ReflectionInsight)> = history
+            .iter()
+            .map(|insight| {
+                // Combine text fields for similarity matching
+                let insight_text = format!(
+                    "{} {}",
+                    insight.recommendations.join(" "),
+                    insight
+                        .sub_goals
+                        .iter()
+                        .map(|g| g.description.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
+
+                let semantic_score = calculate_similarity(goal_description, &insight_text);
+
+                // Recency score: exponential decay over configured half-life
+                let age_hours = (now.saturating_sub(insight.timestamp)) as f32 / 3600.0;
+                let recency_score = (-age_hours / self.config.recency_half_life_hours).exp();
+
+                // Blend semantic and recency scores using configured weight
+                let semantic_weight = self.config.semantic_weight.clamp(0.0, 1.0);
+                let final_score =
+                    (semantic_weight * semantic_score) + ((1.0 - semantic_weight) * recency_score);
+
+                (final_score, insight)
+            })
+            .collect();
+
+        // Sort by score descending
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(scored
+            .into_iter()
+            .take(limit)
+            .map(|(_, i)| i.clone())
+            .collect())
     }
 
     /// Apply corrections to generate a revised plan
@@ -999,7 +1111,88 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_calculate_similarity_identical() {
+        let score = calculate_similarity("hello world test", "hello world test");
+        assert!(
+            (score - 1.0).abs() < 0.01,
+            "Identical texts should have similarity ~1.0, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_calculate_similarity_partial() {
+        let score = calculate_similarity("hello world test example", "hello world other sample");
+        assert!(
+            score > 0.2 && score < 0.8,
+            "Partial overlap should have moderate similarity, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_calculate_similarity_no_overlap() {
+        let score = calculate_similarity("hello world test", "foo bar baz");
+        assert!(
+            score < 0.01,
+            "No overlap should have near-zero similarity, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_calculate_similarity_empty_text() {
+        let score = calculate_similarity("", "hello world");
+        assert!(
+            score < 0.01,
+            "Empty text should have zero similarity, got {}",
+            score
+        );
+
+        let score2 = calculate_similarity("hello world", "");
+        assert!(
+            score2 < 0.01,
+            "Empty text should have zero similarity, got {}",
+            score2
+        );
+    }
+
+    #[test]
+    fn test_calculate_similarity_short_words_filtered() {
+        // Words with <= 2 chars are filtered out
+        let score = calculate_similarity("a b c d e", "a b c d e");
+        assert!(
+            score < 0.01,
+            "Only short words should result in zero similarity, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_calculate_similarity_case_insensitive() {
+        let score = calculate_similarity("HELLO WORLD TEST", "hello world test");
+        assert!(
+            (score - 1.0).abs() < 0.01,
+            "Similarity should be case insensitive, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_reflection_config_default() {
+        let config = ReflectionConfig::default();
+        assert_eq!(config.max_history_size, 100);
+        assert!(config.use_semantic_similarity);
+        assert!((config.semantic_weight - 0.7).abs() < 0.01);
+        assert!((config.recency_half_life_hours - 24.0).abs() < 0.01);
+    }
+
     fn create_test_engine() -> ReflectionEngine {
+        create_test_engine_with_config(ReflectionConfig::default())
+    }
+
+    fn create_test_engine_with_config(config: ReflectionConfig) -> ReflectionEngine {
         use crate::core::llm::LLMRouter;
 
         // Create minimal dependencies for testing
@@ -1015,7 +1208,7 @@ mod tests {
             knowledge_base,
             learning,
             reflection_history: Arc::new(tokio::sync::Mutex::new(Vec::new())),
-            max_history_size: 10,
+            config,
         }
     }
 }
