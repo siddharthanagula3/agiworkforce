@@ -58,6 +58,8 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <div
+      data-message-role={message.role}
+      data-testid={`message-${message.role}`}
       className={clsx(
         'group flex gap-3 px-4 py-3 transition-colors',
         isUser ? 'flex-row-reverse' : '',
