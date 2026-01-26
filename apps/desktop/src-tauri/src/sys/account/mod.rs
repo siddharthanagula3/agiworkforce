@@ -3,6 +3,28 @@ use crate::sys::commands::ApiState;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::State;
 
+/// Deserialize a timestamp that may come as either an integer or floating point from the API.
+/// Converts floating point timestamps to u64 by truncating the decimal portion.
+fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value: serde_json::Value = serde::Deserialize::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_u64() {
+                Ok(i)
+            } else if let Some(f) = n.as_f64() {
+                Ok(f as u64)
+            } else {
+                Err(D::Error::custom("Invalid timestamp number"))
+            }
+        }
+        _ => Err(D::Error::custom("Expected number for timestamp")),
+    }
+}
+
 /// Parse a JSON response with proper Content-Type validation.
 /// Returns a helpful error message if the server returned HTML instead of JSON.
 fn parse_json_response<T: DeserializeOwned>(response: &ApiResponse) -> Result<T, String> {
@@ -81,14 +103,35 @@ pub struct CreditBalance {
     pub period_start: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub period_end: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Monthly credits allocated (API returns `credits_allocated_cents`)
+    #[serde(
+        alias = "credits_allocated_cents",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub allocated_cents: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Monthly credits used (API returns `credits_used_cents`)
+    #[serde(alias = "credits_used_cents", skip_serializing_if = "Option::is_none")]
     pub used_cents: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Monthly credits remaining (API returns `credits_remaining_cents`)
+    #[serde(
+        alias = "credits_remaining_cents",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub remaining_cents: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub percentage_used: Option<f64>,
+    /// Daily credit limit in cents
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_limit_cents: Option<i32>,
+    /// Daily credits used
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_used_cents: Option<i32>,
+    /// Daily credits remaining
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_remaining_cents: Option<i32>,
+    /// Last daily reset timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_daily_reset_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +140,11 @@ pub struct UserProfile {
     pub email: String,
     pub name: String,
     pub avatar_url: Option<String>,
+    /// Timestamp - accepts both integer and floating point from API
+    #[serde(deserialize_with = "deserialize_timestamp")]
     pub created_at: u64,
+    /// Timestamp - accepts both integer and floating point from API
+    #[serde(deserialize_with = "deserialize_timestamp")]
     pub updated_at: u64,
     pub plan: PlanInfo,
     pub feature_flags: std::collections::HashMap<String, bool>,
