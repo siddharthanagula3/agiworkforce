@@ -66,9 +66,19 @@ describe('Rate Limiting', () => {
       const { rateLimitConfigs } = await import('@/lib/rate-limit');
 
       expect(rateLimitConfigs.checkout).toEqual({
-        limit: 5,
+        limit: 15,
         window: '1 m',
-        failClosed: true,
+        failClosed: false,
+      });
+    });
+
+    it('should have correct credit-topup rate limit config', async () => {
+      const { rateLimitConfigs } = await import('@/lib/rate-limit');
+
+      expect(rateLimitConfigs['credit-topup']).toEqual({
+        limit: 15,
+        window: '1 m',
+        failClosed: false,
       });
     });
 
@@ -157,9 +167,10 @@ describe('Rate Limiting', () => {
   // Security-Sensitive Endpoints (failClosed: true) Tests
   // =========================================================================
   describe('Security-Sensitive Endpoints (failClosed)', () => {
-    it('should have failClosed=true for checkout endpoint', async () => {
+    it('should have failClosed=false for checkout endpoint (business-critical)', async () => {
       const { rateLimitConfigs } = await import('@/lib/rate-limit');
-      expect(rateLimitConfigs.checkout.failClosed).toBe(true);
+      // Checkout is fail-open because blocking payments is worse than allowing retries
+      expect(rateLimitConfigs.checkout.failClosed).toBe(false);
     });
 
     it('should have failClosed=true for device-link endpoint', async () => {
@@ -180,6 +191,9 @@ describe('Rate Limiting', () => {
       expect(rateLimitConfigs.portal.failClosed).toBe(false);
       expect(rateLimitConfigs['health-check'].failClosed).toBe(false);
       expect(rateLimitConfigs.default.failClosed).toBe(false);
+      // Business-critical payment endpoints are fail-open
+      expect(rateLimitConfigs.checkout.failClosed).toBe(false);
+      expect(rateLimitConfigs['credit-topup'].failClosed).toBe(false);
     });
   });
 
@@ -341,8 +355,8 @@ describe('Rate Limiting', () => {
         headers: { 'x-forwarded-for': '10.1.0.2' },
       });
 
-      // Exhaust the checkout limit (5 requests)
-      for (let i = 0; i < 5; i++) {
+      // Exhaust the checkout limit (15 requests)
+      for (let i = 0; i < 15; i++) {
         await withRateLimit(request, 'checkout');
       }
 
@@ -364,8 +378,8 @@ describe('Rate Limiting', () => {
         headers: { 'x-forwarded-for': '10.1.0.3' },
       });
 
-      // Exhaust the limit
-      for (let i = 0; i < 5; i++) {
+      // Exhaust the limit (15 requests)
+      for (let i = 0; i < 15; i++) {
         await withRateLimit(request, 'checkout');
       }
 
@@ -431,8 +445,8 @@ describe('Rate Limiting', () => {
         headers: { 'x-forwarded-for': '10.2.0.2' },
       });
 
-      // Exhaust limit
-      for (let i = 0; i < 5; i++) {
+      // Exhaust limit (15 requests)
+      for (let i = 0; i < 15; i++) {
         await wrappedHandler(request);
       }
 
@@ -478,7 +492,8 @@ describe('Rate Limiting', () => {
 
       // Security-critical endpoints should have failClosed=true
       // This means they will block requests if Redis is unavailable
-      const securityEndpoints = ['checkout', 'device-link', 'claim-offer'];
+      // Note: checkout is fail-open (business-critical payment flow)
+      const securityEndpoints = ['device-link', 'claim-offer'];
 
       for (const endpoint of securityEndpoints) {
         const config = rateLimitConfigs[endpoint as keyof typeof rateLimitConfigs];
