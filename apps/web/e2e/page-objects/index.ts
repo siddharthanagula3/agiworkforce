@@ -11,3 +11,4 @@ export { StripePage } from './stripe-page';
 export { LoginPage } from './login-page';
 export { SettingsPage } from './settings-page';
 export { BillingPage } from './billing-page';
+export { ChatPage } from './chat-page';
