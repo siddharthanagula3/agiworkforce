@@ -24,14 +24,14 @@ describe('CORS', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    // Reset env vars
-    process.env.NODE_ENV = 'production';
-    process.env.ALLOWED_ORIGINS = 'https://app.example.com,https://admin.example.com';
-    process.env.NEXT_PUBLIC_APP_URL = 'https://example.com';
+    // Reset env vars using vi.stubEnv for proper TypeScript support
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('ALLOWED_ORIGINS', 'https://app.example.com,https://admin.example.com');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.com');
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    vi.unstubAllEnvs();
   });
 
   describe('isOriginAllowed', () => {
@@ -67,7 +67,7 @@ describe('CORS', () => {
     });
 
     it('should allow localhost in development', async () => {
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       vi.resetModules();
 
       const { isOriginAllowed } = await import('@/lib/cors');
@@ -78,7 +78,7 @@ describe('CORS', () => {
     });
 
     it('should block localhost in production', async () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       vi.resetModules();
 
       const { isOriginAllowed } = await import('@/lib/cors');
