@@ -73,7 +73,11 @@ describe('Credits Balance API', () => {
   };
 
   const mockBalance = {
+    account_id: 'account-123',
+    period_start: '2026-01-01T00:00:00Z',
+    period_end: '2026-02-01T00:00:00Z',
     credits_allocated_cents: 1200,
+    credits_used_cents: 400,
     credits_remaining_cents: 800,
     daily_limit_cents: 100,
     daily_used_cents: 25,
