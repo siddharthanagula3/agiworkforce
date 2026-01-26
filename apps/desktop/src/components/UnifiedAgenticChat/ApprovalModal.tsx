@@ -4,7 +4,7 @@ import { useApprovalActions } from '../../hooks/useApprovalActions';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useErrorToast } from '../Errors/ErrorToast';
-import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/simpleModeStore';
+import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { Button } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import {

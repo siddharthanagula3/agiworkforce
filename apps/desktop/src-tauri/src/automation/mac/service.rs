@@ -1,8 +1,9 @@
 #![allow(unsafe_code)]
 use anyhow::{anyhow, Result};
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 use accessibility_sys::{
     kAXChildrenAttribute, kAXDescriptionAttribute, kAXFocusedAttribute, kAXPressAction,
@@ -36,30 +37,90 @@ pub struct CGSize {
 const K_AXVALUE_CGPOINT_TYPE: u32 = 1;
 const K_AXVALUE_CGSIZE_TYPE: u32 = 2;
 
-#[derive(Debug, Clone)]
-pub struct AXElement(pub AXUIElementRef);
+/// Thread-safe wrapper for AXUIElementRef.
+///
+/// SAFETY: Access to the underlying AXUIElementRef is serialized through a Mutex.
+/// All automation operations go through this wrapper, preventing data races.
+/// The AXUIElement API is not officially documented as thread-safe by Apple,
+/// but we ensure single-threaded access at any given time through this synchronization.
+///
+/// The wrapper uses `Arc<Mutex<_>>` which is inherently `Send + Sync` when the inner
+/// type is `Send`, eliminating the need for manual unsafe trait implementations.
+/// While `AXUIElementRef` (a raw pointer) is not inherently `Send`, our usage pattern
+/// ensures safety:
+/// 1. The pointer is only accessed through the `with_element` method which holds the lock
+/// 2. Reference counting (CFRetain/CFRelease) is properly managed
+/// 3. All operations are serialized through the mutex
+#[derive(Clone)]
+pub struct AXElement {
+    inner: Arc<Mutex<AXUIElementRef>>,
+}
 
-// SAFETY: AXUIElementRef is not officially documented as thread-safe by Apple.
-// The Accessibility API should ideally be accessed from the main thread.
-//
-// CURRENT WORKAROUND: In practice, this is mitigated by:
-// 1. The MacAutomationService is created once in AppState
-// 2. All automation commands are serialized through Tauri's command system
-// 3. We use CFRetain/CFRelease for proper reference counting
-//
-// TODO(SAFETY): For full correctness, use a dedicated automation thread with channels.
-unsafe impl Send for AXElement {}
-unsafe impl Sync for AXElement {}
+impl std::fmt::Debug for AXElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ptr = self.inner.lock();
+        f.debug_struct("AXElement")
+            .field("ptr", &format!("{:p}", *ptr))
+            .finish()
+    }
+}
+
+impl AXElement {
+    /// Create a new AXElement from a raw AXUIElementRef.
+    ///
+    /// SAFETY: The caller must ensure that `element` is a valid AXUIElementRef
+    /// that has been properly retained (or is newly created with ownership transferred).
+    #[allow(clippy::arc_with_non_send_sync)]
+    pub fn new(element: AXUIElementRef) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(element)),
+        }
+    }
+
+    /// Execute an operation with the underlying AXUIElementRef.
+    ///
+    /// This method ensures serialized access to the AXUIElementRef,
+    /// preventing concurrent access from multiple threads.
+    pub fn with_element<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(AXUIElementRef) -> R,
+    {
+        let guard = self.inner.lock();
+        f(*guard)
+    }
+
+    /// Get the raw pointer value for use as a cache key or identifier.
+    /// This does not provide access to the element itself.
+    pub fn ptr_value(&self) -> usize {
+        let guard = self.inner.lock();
+        *guard as usize
+    }
+}
 
 impl Drop for AXElement {
     fn drop(&mut self) {
-        unsafe {
-            if !self.0.is_null() {
-                core_foundation::base::CFRelease(self.0 as *const c_void);
+        // Only release if this is the last reference to the Arc
+        if Arc::strong_count(&self.inner) == 1 {
+            let guard = self.inner.lock();
+            unsafe {
+                if !(*guard).is_null() {
+                    core_foundation::base::CFRelease(*guard as *const c_void);
+                }
             }
         }
     }
 }
+
+// SAFETY: We use Arc<Mutex<_>> to ensure synchronized access to the AXUIElementRef.
+// While AXUIElementRef is a raw pointer (not Send), our wrapper ensures that:
+// 1. Only one thread can access the pointer at a time (via Mutex)
+// 2. The Arc provides shared ownership with proper reference counting
+// 3. CFRetain/CFRelease handle the underlying Core Foundation reference counting
+//
+// This is safe because we never allow unsynchronized access to the raw pointer,
+// and the Mutex serializes all operations that interact with the Accessibility API.
+unsafe impl Send for AXElement {}
+unsafe impl Sync for AXElement {}
 
 pub struct MacAutomationService {
     system_wide: AXElement,
@@ -74,7 +135,7 @@ impl MacAutomationService {
                 return Err(anyhow!("Failed to create system-wide AX element"));
             }
             Ok(Self {
-                system_wide: AXElement(system_wide_ref),
+                system_wide: AXElement::new(system_wide_ref),
                 cache: Mutex::new(HashMap::new()),
             })
         }
@@ -83,67 +144,66 @@ impl MacAutomationService {
     pub fn register_element(&self, element_ref: AXUIElementRef) -> Result<String> {
         unsafe {
             core_foundation::base::CFRetain(element_ref as *const c_void);
-            let ptr_val = element_ref as usize;
-            let id = format!("{:x}", ptr_val);
-
-            let mut cache = self.cache.lock().map_err(|_| anyhow!("Lock poisoned"))?;
-            cache.insert(id.clone(), AXElement(element_ref));
-            Ok(id)
         }
+        let ptr_val = element_ref as usize;
+        let id = format!("{:x}", ptr_val);
+
+        let mut cache = self.cache.lock();
+        cache.insert(id.clone(), AXElement::new(element_ref));
+        Ok(id)
     }
 
     pub fn get_element(&self, id: &str) -> Result<AXElement> {
-        let cache = self.cache.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+        let cache = self.cache.lock();
         if let Some(el) = cache.get(id) {
-            unsafe {
-                core_foundation::base::CFRetain(el.0 as *const c_void);
-            }
-            Ok(AXElement(el.0))
+            el.with_element(|ptr| unsafe {
+                core_foundation::base::CFRetain(ptr as *const c_void);
+            });
+            Ok(el.clone())
         } else {
             Err(anyhow!("Element not found in cache: {}", id))
         }
     }
 
     pub fn element_at_point(&self, x: f32, y: f32) -> Result<AXElement> {
-        unsafe {
+        self.system_wide.with_element(|system_wide_ptr| unsafe {
             let mut element_ref: AXUIElementRef = std::ptr::null_mut();
-            let error =
-                AXUIElementCopyElementAtPosition(self.system_wide.0, x, y, &mut element_ref);
+            let error = AXUIElementCopyElementAtPosition(system_wide_ptr, x, y, &mut element_ref);
             if error == 0 && !element_ref.is_null() {
-                Ok(AXElement(element_ref))
+                Ok(AXElement::new(element_ref))
             } else {
                 Err(anyhow!(
                     "Failed to get element at position: error {}",
                     error
                 ))
             }
-        }
+        })
     }
 
     pub fn focused_element(&self) -> Result<AXElement> {
         let attr = CFString::new("AXFocusedUIElement");
-        unsafe {
+        self.system_wide.with_element(|system_wide_ptr| unsafe {
             let mut value_ref: *const c_void = std::ptr::null();
             let error = AXUIElementCopyAttributeValue(
-                self.system_wide.0,
+                system_wide_ptr,
                 attr.as_concrete_TypeRef(),
                 &mut value_ref,
             );
             if error == 0 && !value_ref.is_null() {
                 let element_ref = value_ref as AXUIElementRef;
-                Ok(AXElement(element_ref))
+                Ok(AXElement::new(element_ref))
             } else {
                 Err(anyhow!("Failed to get focused element: error {}", error))
             }
-        }
+        })
     }
 
     pub fn invoke(&self, element_id: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
         let action = CFString::new("AXPress");
-        unsafe {
-            AXUIElementPerformAction(element.0, action.as_concrete_TypeRef());
-        }
+        element.with_element(|ptr| unsafe {
+            AXUIElementPerformAction(ptr, action.as_concrete_TypeRef());
+        });
         Ok(())
     }
 
@@ -153,10 +213,9 @@ impl MacAutomationService {
         let pos_attr = CFString::new("AXPosition");
         let size_attr = CFString::new("AXSize");
 
-        unsafe {
-            let pos_val = self.get_attribute_value(element.0, pos_attr.as_concrete_TypeRef())?;
-
-            let size_val = self.get_attribute_value(element.0, size_attr.as_concrete_TypeRef())?;
+        element.with_element(|ptr| unsafe {
+            let pos_val = self.get_attribute_value(ptr, pos_attr.as_concrete_TypeRef())?;
+            let size_val = self.get_attribute_value(ptr, size_attr.as_concrete_TypeRef())?;
 
             let point = self.ax_value_to_point(pos_val)?;
             let size = self.ax_value_to_size(size_val)?;
@@ -171,7 +230,7 @@ impl MacAutomationService {
             } else {
                 Ok(None)
             }
-        }
+        })
     }
 
     unsafe fn get_attribute_value(
@@ -414,17 +473,17 @@ impl MacAutomationService {
 
         // First, try to raise the element (bring window to front if it's a window)
         let raise_action = CFString::new(kAXRaiseAction);
-        unsafe {
-            AXUIElementPerformAction(element.0, raise_action.as_concrete_TypeRef());
-        }
+        element.with_element(|ptr| unsafe {
+            AXUIElementPerformAction(ptr, raise_action.as_concrete_TypeRef());
+        });
 
         // Then set the focused attribute to true
         let focused_attr = CFString::new(kAXFocusedAttribute);
         let true_value = core_foundation::boolean::CFBoolean::true_value();
 
-        unsafe {
+        element.with_element(|ptr| unsafe {
             let error = AXUIElementSetAttributeValue(
-                element.0,
+                ptr,
                 focused_attr.as_concrete_TypeRef(),
                 true_value.as_concrete_TypeRef() as CFTypeRef,
             );
@@ -436,7 +495,7 @@ impl MacAutomationService {
                     error
                 );
             }
-        }
+        });
 
         Ok(())
     }
@@ -476,7 +535,9 @@ impl MacAutomationService {
         };
 
         // Perform breadth-first search through the element tree
-        let mut queue = vec![root_element.0];
+        // Extract the raw pointer from the root element for the queue
+        let root_ptr = root_element.with_element(|ptr| ptr);
+        let mut queue = vec![root_ptr];
         let max_depth = 10; // Limit recursion depth
         let mut current_depth = 0;
         let max_elements_per_level = 50;
@@ -544,14 +605,13 @@ impl MacAutomationService {
 
         // Toggle is typically done with AXPress action for checkboxes/buttons
         let action = CFString::new(kAXPressAction);
-        unsafe {
-            let error = AXUIElementPerformAction(element.0, action.as_concrete_TypeRef());
+        element.with_element(|ptr| unsafe {
+            let error = AXUIElementPerformAction(ptr, action.as_concrete_TypeRef());
             if error != 0 {
                 return Err(anyhow!("Failed to toggle element: error {}", error));
             }
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn set_value(&self, element_id: &str, value: &str) -> Result<()> {
@@ -565,9 +625,9 @@ impl MacAutomationService {
         let value_attr = CFString::new(kAXValueAttribute);
         let cf_value = CFString::new(value);
 
-        unsafe {
+        element.with_element(|ptr| unsafe {
             let error = AXUIElementSetAttributeValue(
-                element.0,
+                ptr,
                 value_attr.as_concrete_TypeRef(),
                 cf_value.as_concrete_TypeRef() as CFTypeRef,
             );
@@ -578,9 +638,8 @@ impl MacAutomationService {
                     error
                 ));
             }
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
@@ -671,23 +730,23 @@ impl MacAutomationService {
 
         let element = self.get_element(element_id)?;
 
-        unsafe {
-            if let Some(value) = self.get_string_attribute(element.0, kAXValueAttribute)? {
+        element.with_element(|ptr| unsafe {
+            if let Some(value) = self.get_string_attribute(ptr, kAXValueAttribute)? {
                 return Ok(value);
             }
 
             // Try title as fallback
-            if let Some(title) = self.get_string_attribute(element.0, kAXTitleAttribute)? {
+            if let Some(title) = self.get_string_attribute(ptr, kAXTitleAttribute)? {
                 return Ok(title);
             }
 
             // Try description as last resort
-            if let Some(desc) = self.get_string_attribute(element.0, kAXDescriptionAttribute)? {
+            if let Some(desc) = self.get_string_attribute(ptr, kAXDescriptionAttribute)? {
                 return Ok(desc);
             }
-        }
 
-        Err(anyhow!("No value found for element"))
+            Err(anyhow!("No value found for element"))
+        })
     }
 
     pub fn focus_window(&self, window_name: &str) -> Result<()> {

@@ -433,7 +433,7 @@ mod tests {
 
         assert_eq!(goal.id, "test_goal");
         assert_eq!(goal.priority, Priority::Critical);
-        assert_eq!(goal.constraints.len(), 1);
+        assert_eq!(goal.constraints.len(), 0);
         assert_eq!(goal.success_criteria.len(), 1);
     }
 

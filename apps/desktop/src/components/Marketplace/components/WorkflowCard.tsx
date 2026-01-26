@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from '../../../components/ui/Card';
 import { toast } from '@/hooks/useToast';
-import { useAuthStore } from '../../../stores/authStore';
+import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 

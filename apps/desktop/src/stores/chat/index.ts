@@ -22,7 +22,7 @@ export {
 export { useToolStore } from './toolStore';
 
 // Sidecar store is now part of unified UI store, re-exported for backwards compatibility
-export { useSidecarStore } from './sidecarStore';
+export { useUIStore as useSidecarStore } from '../ui';
 
 // Export all types from types.ts
 export type {
@@ -75,7 +75,12 @@ export type {
   ToolStreamStateEntry,
   ToolState,
 } from './toolStore';
-export type { SidecarSection, SidecarMode, SidecarState, SidecarStoreState } from './sidecarStore';
+export type {
+  SidecarSection,
+  SidecarMode,
+  SidecarState,
+  UIState as SidecarStoreState,
+} from '../ui';
 
 // Export selectors from all stores
 export {
@@ -143,4 +148,4 @@ export {
   selectSidecar,
   selectIsSidecarVisible,
   selectActiveSidecarMode,
-} from './sidecarStore';
+} from '../ui';

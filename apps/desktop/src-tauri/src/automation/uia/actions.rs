@@ -141,12 +141,10 @@ impl UIAutomationService {
 
         let mut current = element.clone();
         for _ in 0..10 {
-            let parent_result = unsafe {
-                self.automation()
-                    .ControlViewWalker()
-                    .map_err(|err| anyhow!("ControlViewWalker: {err:?}"))?
-                    .GetParentElement(&current)
-            };
+            let walker = self
+                .with_automation(|auto| unsafe { auto.ControlViewWalker() })
+                .map_err(|err| anyhow!("ControlViewWalker: {err:?}"))?;
+            let parent_result = unsafe { walker.GetParentElement(&current) };
 
             let parent = match parent_result {
                 Ok(p) => p,
