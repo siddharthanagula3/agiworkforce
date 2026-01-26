@@ -13,6 +13,7 @@ export interface Message {
   isStreaming?: boolean;
   attachments?: Attachment[];
   reactions?: { type: 'thumbsUp' | 'thumbsDown'; userId: string }[];
+  error?: boolean; // Indicates if this message contains an error
 }
 
 export interface Attachment {
