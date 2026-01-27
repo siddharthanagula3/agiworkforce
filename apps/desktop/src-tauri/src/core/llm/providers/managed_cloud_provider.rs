@@ -40,8 +40,14 @@ fn method_not_allowed_message() -> &'static str {
 impl Default for ManagedCloudProvider {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create default ManagedCloudProvider: {}", e);
-            panic!("Failed to create default ManagedCloudProvider: {}", e);
+            tracing::warn!(
+                "Failed to create ManagedCloudProvider with custom timeouts: {}. Using default client.",
+                e
+            );
+            // Fallback to default client which cannot fail
+            Self {
+                client: Client::new(),
+            }
         })
     }
 }

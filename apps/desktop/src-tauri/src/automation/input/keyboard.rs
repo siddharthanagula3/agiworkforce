@@ -119,15 +119,6 @@ impl KeyboardSimulator {
     }
 }
 
-impl Default for KeyboardSimulator {
-    fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create KeyboardSimulator: {}", e);
-            panic!("Failed to create KeyboardSimulator: {}", e);
-        })
-    }
-}
-
 impl KeyboardSimulator {
     pub fn modifier_key(name: &str) -> Option<Key> {
         match name.to_lowercase().as_str() {
