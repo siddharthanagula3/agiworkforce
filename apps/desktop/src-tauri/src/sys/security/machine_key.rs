@@ -39,6 +39,8 @@ pub enum KeyPurpose {
     ApiKeys,
     /// For master encryption (general purpose)
     MasterEncryption,
+    /// For encrypting email account credentials
+    EmailCredentials,
 }
 
 impl KeyPurpose {
@@ -49,6 +51,7 @@ impl KeyPurpose {
             KeyPurpose::McpCredentials => "mcp_credentials",
             KeyPurpose::ApiKeys => "api_keys",
             KeyPurpose::MasterEncryption => "master_encryption",
+            KeyPurpose::EmailCredentials => "email_credentials",
         }
     }
 }
