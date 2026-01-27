@@ -149,7 +149,7 @@ export const CacheManagement: React.FC = () => {
       )}
 
       {/* Overall Statistics */}
-      <div className="bg-white border rounded-lg p-4 shadow-sm">
+      <div className="bg-white border rounded-lg p-4 shadow-xs">
         <h3 className="text-lg font-semibold mb-4">Overall Statistics</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -169,7 +169,7 @@ export const CacheManagement: React.FC = () => {
 
       {/* LLM Cache */}
       {stats && (
-        <div className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="bg-white border rounded-lg p-4 shadow-xs">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">LLM Cache</h3>
             <button
@@ -201,7 +201,7 @@ export const CacheManagement: React.FC = () => {
 
       {/* Analytics */}
       {analytics && analytics.most_cached_queries.length > 0 && (
-        <div className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="bg-white border rounded-lg p-4 shadow-xs">
           <h3 className="text-lg font-semibold mb-4">Most Cached Queries</h3>
           <div className="space-y-2">
             {analytics.most_cached_queries.slice(0, 5).map((query, index) => (
@@ -226,7 +226,7 @@ export const CacheManagement: React.FC = () => {
 
       {/* Provider Breakdown */}
       {analytics && analytics.provider_breakdown.length > 0 && (
-        <div className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="bg-white border rounded-lg p-4 shadow-xs">
           <h3 className="text-lg font-semibold mb-4">Cache by Provider</h3>
           <div className="space-y-2">
             {analytics.provider_breakdown.map((provider, index) => (
@@ -253,7 +253,7 @@ export const CacheManagement: React.FC = () => {
       )}
 
       {/* Actions */}
-      <div className="bg-white border rounded-lg p-4 shadow-sm">
+      <div className="bg-white border rounded-lg p-4 shadow-xs">
         <h3 className="text-lg font-semibold mb-4">Cache Actions</h3>
         <div className="flex flex-wrap gap-2">
           <button

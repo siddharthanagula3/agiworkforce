@@ -328,7 +328,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                 className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
                   'transition-colors group whitespace-nowrap',
-                  isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50',
+                  isActive ? 'bg-background border border-border shadow-xs' : 'hover:bg-muted/50',
                 )}
               >
                 <Database

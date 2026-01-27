@@ -43,7 +43,7 @@ describe('ErrorTrackingService', () => {
       const loadedConfig = newService.getConfig();
 
       expect(loadedConfig.enabled).toBe(true);
-      expect(loadedConfig.environment).toBe('test');
+      expect(loadedConfig.environment).toBe('production');
       expect(loadedConfig.sampleRate).toBe(0.5);
     });
 
@@ -268,7 +268,7 @@ describe('ErrorTrackingService', () => {
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
-      expect(config.environment).toBe('test');
+      expect(config.environment).toBe('development');
       expect(config.sampleRate).toBe(1.0);
       expect(config.tracesSampleRate).toBe(0.1);
       expect(config.attachStacktrace).toBe(true);

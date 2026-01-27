@@ -122,7 +122,7 @@
 
   /* Backdrop blur */
   --blur-xs: 2px;
-  --blur-sm: 4px;
+  --blur-xs: 4px;
   --blur-md: 12px;
   --blur-lg: 16px;
   --blur-xl: 24px;

@@ -295,7 +295,10 @@ function parseMessage(message: RawData): GatewayMessage | null {
     return gatewayMessageSchema.parse(payload);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.warn({ validationError: error.flatten() }, 'WebSocket message failed validation');
+      logger.warn(
+        { validationError: z.treeifyError(error) },
+        'WebSocket message failed validation',
+      );
     } else {
       logger.warn({ error }, 'WebSocket message parse error');
     }

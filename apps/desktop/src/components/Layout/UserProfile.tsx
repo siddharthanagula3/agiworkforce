@@ -64,7 +64,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <div className="truncate text-sm font-medium text-zinc-100">{name}</div>
               <div
                 className={cn(
-                  'mt-0.5 inline-flex items-center rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300',
+                  'mt-0.5 inline-flex items-center rounded-xs bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300',
                   isTierLoading && 'animate-pulse',
                 )}
               >

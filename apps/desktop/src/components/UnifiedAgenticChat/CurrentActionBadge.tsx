@@ -147,7 +147,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className={cn(
             'inline-flex items-center gap-2 px-3 py-1.5 rounded-full',
-            'backdrop-blur-sm border',
+            'backdrop-blur-xs border',
             'shadow-lg',
             getColorClasses(displayAction.type).bg,
             getColorClasses(displayAction.type).border,
@@ -235,7 +235,7 @@ export function CurrentActionStack({ className }: CurrentActionBadgeProps) {
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               className={cn(
                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg',
-                'backdrop-blur-sm border',
+                'backdrop-blur-xs border',
                 colors.bg,
                 colors.border,
               )}

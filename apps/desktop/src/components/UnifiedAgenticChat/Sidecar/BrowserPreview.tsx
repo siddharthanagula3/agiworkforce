@@ -248,7 +248,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
 
       {}
       {isLoading && tabId && (
-        <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/50 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/50 backdrop-blur-xs">
           <div className="flex items-center gap-3 rounded-xl bg-zinc-900 px-6 py-4 shadow-2xl">
             <Loader2 className="h-5 w-5 animate-spin text-teal" />
             <span className="text-sm font-medium text-zinc-200">Loading page...</span>

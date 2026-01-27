@@ -95,8 +95,12 @@ class ErrorTrackingService {
       }
 
       const environment = import.meta.env['MODE'];
-      if (environment) {
-        this.config.environment = environment as any;
+      if (
+        environment === 'development' ||
+        environment === 'staging' ||
+        environment === 'production'
+      ) {
+        this.config.environment = environment;
       }
     } catch (error) {
       console.error('Failed to load error tracking config:', error);

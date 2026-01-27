@@ -274,7 +274,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                 onClick={() => setActiveSession(session.id)}
                 className={cn(
                   'group flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 transition-colors',
-                  isActive ? 'border border-border bg-background shadow-sm' : 'hover:bg-muted/50',
+                  isActive ? 'border border-border bg-background shadow-xs' : 'hover:bg-muted/50',
                 )}
               >
                 <TerminalIcon className="h-3 w-3 text-muted-foreground" />

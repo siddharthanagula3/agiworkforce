@@ -19,7 +19,6 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
@@ -82,163 +81,155 @@ const deviceRegistrationSchema = z
 // POST /batch - Batch sync (matches Rust CloudSyncClient.sync_batch)
 // SECURITY: Rate limited to 30/min - batch operations can be resource-intensive
 // =============================================================================
-router.post(
-  '/batch',
-  createRateLimiter('sync-batch'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const batch = batchSyncSchema.parse(req.body);
-    const deviceId = req.headers['x-device-id'] as string | undefined;
+  const batch = batchSyncSchema.parse(req.body);
+  const deviceId = req.headers['x-device-id'] as string | undefined;
 
-    const syncedIds: string[] = [];
-    const failedIds: string[] = [];
-    const conflicts: Array<{
-      entity_id: string;
-      entity_type: string;
-      local_hash: string;
-      remote_hash: string;
-      remote_data: string;
-      remote_timestamp: string;
-    }> = [];
+  const syncedIds: string[] = [];
+  const failedIds: string[] = [];
+  const conflicts: Array<{
+    entity_id: string;
+    entity_type: string;
+    local_hash: string;
+    remote_hash: string;
+    remote_data: string;
+    remote_timestamp: string;
+  }> = [];
 
-    // Process each item in the batch
-    for (const item of batch.items) {
-      try {
-        // Check for conflicts - look for existing entries with same entity_id
-        const { data: existing } = await supabase
-          .from('sync_data')
-          .select('*')
-          .eq('user_id', user.userId)
-          .eq('sync_type', item.entity_type)
-          .order('created_at', { ascending: false })
-          .limit(1);
+  // Process each item in the batch
+  for (const item of batch.items) {
+    try {
+      // Check for conflicts - look for existing entries with same entity_id
+      const { data: existing } = await supabase
+        .from('sync_data')
+        .select('*')
+        .eq('user_id', user.userId)
+        .eq('sync_type', item.entity_type)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-        // For now, simple last-write-wins with conflict detection
-        // Full conflict resolution would need entity_id and version columns in schema
-        const existingEntry = existing?.[0];
-        if (existingEntry && item.action === 'Update') {
-          const existingTime = new Date(existingEntry.created_at).getTime();
-          const itemTime = new Date(item.timestamp).getTime();
+      // For now, simple last-write-wins with conflict detection
+      // Full conflict resolution would need entity_id and version columns in schema
+      const existingEntry = existing?.[0];
+      if (existingEntry && item.action === 'Update') {
+        const existingTime = new Date(existingEntry.created_at).getTime();
+        const itemTime = new Date(item.timestamp).getTime();
 
-          // Validate timestamps are valid numbers
-          if (Number.isNaN(existingTime) || Number.isNaN(itemTime)) {
-            logger.error(
-              { existingTime: existingEntry.created_at, itemTime: item.timestamp },
-              'Invalid timestamp detected',
-            );
-            failedIds.push(item.id);
-            continue;
-          }
-
-          // If remote is newer, it's a conflict
-          if (existingTime > itemTime) {
-            conflicts.push({
-              entity_id: item.entity_id,
-              entity_type: item.entity_type,
-              local_hash: item.data?.substring(0, 32) ?? '',
-              remote_hash: JSON.stringify(existingEntry.data).substring(0, 32),
-              remote_data: JSON.stringify(existingEntry.data),
-              remote_timestamp: existingEntry.created_at,
-            });
-            continue;
-          }
-        }
-
-        // Insert the sync item
-        let parsedData = {};
-        if (item.data) {
-          try {
-            parsedData = JSON.parse(item.data);
-          } catch (parseError) {
-            logger.error({ error: parseError }, 'Failed to parse item data');
-            failedIds.push(item.id);
-            continue;
-          }
-        }
-
-        const { error } = await supabase.from('sync_data').insert({
-          user_id: user.userId,
-          device_id: deviceId ?? batch.device_id,
-          sync_type: item.entity_type,
-          data: parsedData,
-        });
-
-        if (error) {
-          logger.error({ error }, 'Batch item error');
+        // Validate timestamps are valid numbers
+        if (Number.isNaN(existingTime) || Number.isNaN(itemTime)) {
+          logger.error(
+            { existingTime: existingEntry.created_at, itemTime: item.timestamp },
+            'Invalid timestamp detected',
+          );
           failedIds.push(item.id);
-        } else {
-          syncedIds.push(item.id);
+          continue;
         }
-      } catch (err) {
-        logger.error({ error: err }, 'Batch item exception');
-        failedIds.push(item.id);
-      }
-    }
 
-    res.json({
-      success: failedIds.length === 0,
-      synced_ids: syncedIds,
-      failed_ids: failedIds,
-      conflicts,
-      updates: [], // Updates are fetched via GET /updates
-    });
-  }),
-);
+        // If remote is newer, it's a conflict
+        if (existingTime > itemTime) {
+          conflicts.push({
+            entity_id: item.entity_id,
+            entity_type: item.entity_type,
+            local_hash: item.data?.substring(0, 32) ?? '',
+            remote_hash: JSON.stringify(existingEntry.data).substring(0, 32),
+            remote_data: JSON.stringify(existingEntry.data),
+            remote_timestamp: existingEntry.created_at,
+          });
+          continue;
+        }
+      }
+
+      // Insert the sync item
+      let parsedData = {};
+      if (item.data) {
+        try {
+          parsedData = JSON.parse(item.data);
+        } catch (parseError) {
+          logger.error({ error: parseError }, 'Failed to parse item data');
+          failedIds.push(item.id);
+          continue;
+        }
+      }
+
+      const { error } = await supabase.from('sync_data').insert({
+        user_id: user.userId,
+        device_id: deviceId ?? batch.device_id,
+        sync_type: item.entity_type,
+        data: parsedData,
+      });
+
+      if (error) {
+        logger.error({ error }, 'Batch item error');
+        failedIds.push(item.id);
+      } else {
+        syncedIds.push(item.id);
+      }
+    } catch (err) {
+      logger.error({ error: err }, 'Batch item exception');
+      failedIds.push(item.id);
+    }
+  }
+
+  res.json({
+    success: failedIds.length === 0,
+    synced_ids: syncedIds,
+    failed_ids: failedIds,
+    conflicts,
+    updates: [], // Updates are fetched via GET /updates
+  });
+});
 
 // =============================================================================
 // GET /updates - Pull updates since timestamp (matches CloudSyncClient.pull_updates)
 // SECURITY: Rate limited to 60/min - polling for updates
 // =============================================================================
-router.get(
-  '/updates',
-  createRateLimiter('sync-updates'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const sinceRaw = req.query['since'];
-    const since = typeof sinceRaw === 'string' ? sinceRaw : new Date(0).toISOString();
-    const deviceId = req.headers['x-device-id'] as string | undefined;
+  const sinceRaw = req.query['since'];
+  const since = typeof sinceRaw === 'string' ? sinceRaw : new Date(0).toISOString();
+  const deviceId = req.headers['x-device-id'] as string | undefined;
 
-    // Query sync data from Supabase
-    let query = supabase
-      .from('sync_data')
-      .select('*')
-      .eq('user_id', user.userId)
-      .gt('created_at', since)
-      .order('created_at', { ascending: true });
+  // Query sync data from Supabase
+  let query = supabase
+    .from('sync_data')
+    .select('*')
+    .eq('user_id', user.userId)
+    .gt('created_at', since)
+    .order('created_at', { ascending: true });
 
-    // Exclude data from the requesting device (they already have it)
-    if (deviceId) {
-      query = query.neq('device_id', deviceId);
-    }
+  // Exclude data from the requesting device (they already have it)
+  if (deviceId) {
+    query = query.neq('device_id', deviceId);
+  }
 
-    const { data: syncData, error } = await query;
+  const { data: syncData, error } = await query;
 
-    if (error) {
-      logger.error({ error }, 'Updates error');
-      throw new AppError('Failed to pull updates', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Updates error');
+    throw new AppError('Failed to pull updates', 500);
+  }
 
-    // Transform to RemoteUpdate format expected by Rust client
-    const updates = (syncData ?? []).map((row, index) => ({
-      entity_type: row.sync_type,
-      entity_id: row.id, // Using row id as entity_id for now
-      action: 'Update' as const, // Default to Update since we don't track action in schema
-      data: JSON.stringify(row.data),
-      timestamp: row.created_at,
-      version: index + 1, // Simple incrementing version
-    }));
+  // Transform to RemoteUpdate format expected by Rust client
+  const updates = (syncData ?? []).map((row, index) => ({
+    entity_type: row.sync_type,
+    entity_id: row.id, // Using row id as entity_id for now
+    action: 'Update' as const, // Default to Update since we don't track action in schema
+    data: JSON.stringify(row.data),
+    timestamp: row.created_at,
+    version: index + 1, // Simple incrementing version
+  }));
 
-    res.json(updates);
-  }),
-);
+  res.json(updates);
+});
 
 // =============================================================================
 // POST /resolve-conflict - Conflict resolution (matches CloudSyncClient.resolve_conflict)
@@ -247,7 +238,7 @@ router.get(
 router.post(
   '/resolve-conflict',
   createRateLimiter('sync-resolve'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -276,47 +267,43 @@ router.post(
     }
 
     res.json({ success: true });
-  }),
+  },
 );
 
 // =============================================================================
 // GET /status - Get sync status (matches CloudSyncClient.get_sync_status)
 // SECURITY: Rate limited to 60/min - status checks are lightweight
 // =============================================================================
-router.get(
-  '/status',
-  createRateLimiter('sync-status'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.get('/status', createRateLimiter('sync-status'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const _deviceId = req.headers['x-device-id'] as string | undefined;
+  const _deviceId = req.headers['x-device-id'] as string | undefined;
 
-    // Get counts for this user
-    const { count: pendingCount } = await supabase
-      .from('sync_data')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.userId);
+  // Get counts for this user
+  const { count: pendingCount } = await supabase
+    .from('sync_data')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.userId);
 
-    // Get last sync timestamp
-    const { data: lastSync } = await supabase
-      .from('sync_data')
-      .select('created_at')
-      .eq('user_id', user.userId)
-      .order('created_at', { ascending: false })
-      .limit(1);
+  // Get last sync timestamp
+  const { data: lastSync } = await supabase
+    .from('sync_data')
+    .select('created_at')
+    .eq('user_id', user.userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
 
-    res.json({
-      is_syncing: false, // We don't track this at the API level
-      last_sync: lastSync?.[0]?.created_at ?? null,
-      pending_count: pendingCount ?? 0,
-      failed_count: 0, // Would need failure tracking in schema
-      next_sync: null, // Client determines this
-    });
-  }),
-);
+  res.json({
+    is_syncing: false, // We don't track this at the API level
+    last_sync: lastSync?.[0]?.created_at ?? null,
+    pending_count: pendingCount ?? 0,
+    failed_count: 0, // Would need failure tracking in schema
+    next_sync: null, // Client determines this
+  });
+});
 
 // =============================================================================
 // POST /devices/register - Register device (matches CloudSyncClient.register_device)
@@ -325,7 +312,7 @@ router.get(
 router.post(
   '/devices/register',
   createRateLimiter('device-register'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -358,7 +345,7 @@ router.post(
     }
 
     res.json({ success: true });
-  }),
+  },
 );
 
 // =============================================================================
@@ -368,7 +355,7 @@ router.post(
 router.delete(
   '/devices/:deviceId',
   createRateLimiter('device-delete'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -392,7 +379,7 @@ router.delete(
     }
 
     res.json({ success: true });
-  }),
+  },
 );
 
 // =============================================================================
@@ -410,110 +397,98 @@ const legacySyncSchema = z
 
 // POST /push - Legacy push endpoint
 // SECURITY: Rate limited to 30/min for backwards compatibility
-router.post(
-  '/push',
-  createRateLimiter('sync-legacy'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { type, data, deviceId } = legacySyncSchema.parse(req.body);
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
+  const { type, data, deviceId } = legacySyncSchema.parse(req.body);
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const { error } = await supabase.from('sync_data').insert({
-      user_id: user.userId,
-      device_id: deviceId,
-      sync_type: type,
-      data: data,
-    });
+  const { error } = await supabase.from('sync_data').insert({
+    user_id: user.userId,
+    device_id: deviceId,
+    sync_type: type,
+    data: data,
+  });
 
-    if (error) {
-      logger.error({ error }, 'Push error');
-      throw new AppError('Failed to push sync data', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Push error');
+    throw new AppError('Failed to push sync data', 500);
+  }
 
-    res.json({
-      success: true,
-      timestamp: Date.now(),
-    });
-  }),
-);
+  res.json({
+    success: true,
+    timestamp: Date.now(),
+  });
+});
 
 // GET /pull - Legacy pull endpoint
 // SECURITY: Rate limited to 30/min for backwards compatibility
-router.get(
-  '/pull',
-  createRateLimiter('sync-legacy'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const sinceRaw = req.query['since'];
-    let since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
-    // Validate the timestamp is a valid number
-    if (Number.isNaN(since) || since < 0) {
-      since = 0;
-    }
-    const deviceIdParam = req.query['deviceId'];
-    const deviceId = typeof deviceIdParam === 'string' ? deviceIdParam : undefined;
+  const sinceRaw = req.query['since'];
+  let since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
+  // Validate the timestamp is a valid number
+  if (Number.isNaN(since) || since < 0) {
+    since = 0;
+  }
+  const deviceIdParam = req.query['deviceId'];
+  const deviceId = typeof deviceIdParam === 'string' ? deviceIdParam : undefined;
 
-    const sinceDate = new Date(since).toISOString();
+  const sinceDate = new Date(since).toISOString();
 
-    let query = supabase
-      .from('sync_data')
-      .select('*')
-      .eq('user_id', user.userId)
-      .gt('created_at', sinceDate)
-      .order('created_at', { ascending: true });
+  let query = supabase
+    .from('sync_data')
+    .select('*')
+    .eq('user_id', user.userId)
+    .gt('created_at', sinceDate)
+    .order('created_at', { ascending: true });
 
-    if (deviceId) {
-      query = query.neq('device_id', deviceId);
-    }
+  if (deviceId) {
+    query = query.neq('device_id', deviceId);
+  }
 
-    const { data: syncData, error } = await query;
+  const { data: syncData, error } = await query;
 
-    if (error) {
-      logger.error({ error }, 'Pull error');
-      throw new AppError('Failed to pull sync data', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Pull error');
+    throw new AppError('Failed to pull sync data', 500);
+  }
 
-    const formattedData = (syncData ?? []).map((row) => ({
-      userId: row.user_id,
-      type: row.sync_type,
-      data: row.data,
-      timestamp: new Date(row.created_at).getTime(),
-      deviceId: row.device_id,
-    }));
+  const formattedData = (syncData ?? []).map((row) => ({
+    userId: row.user_id,
+    type: row.sync_type,
+    data: row.data,
+    timestamp: new Date(row.created_at).getTime(),
+    deviceId: row.device_id,
+  }));
 
-    res.json({
-      data: formattedData,
-      timestamp: Date.now(),
-    });
-  }),
-);
+  res.json({
+    data: formattedData,
+    timestamp: Date.now(),
+  });
+});
 
 // DELETE /clear - Legacy clear endpoint
 // SECURITY: Rate limited to 30/min for backwards compatibility (destructive but legacy)
-router.delete(
-  '/clear',
-  createRateLimiter('sync-legacy'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.delete('/clear', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const { error } = await supabase.from('sync_data').delete().eq('user_id', user.userId);
+  const { error } = await supabase.from('sync_data').delete().eq('user_id', user.userId);
 
-    if (error) {
-      logger.error({ error }, 'Clear error');
-      throw new AppError('Failed to clear sync data', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Clear error');
+    throw new AppError('Failed to clear sync data', 500);
+  }
 
-    res.json({ success: true });
-  }),
-);
+  res.json({ success: true });
+});
 
 export { router as syncRouter };

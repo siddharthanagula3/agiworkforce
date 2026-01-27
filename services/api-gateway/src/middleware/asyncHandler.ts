@@ -20,7 +20,26 @@ type AsyncRouteHandler<
 /**
  * Async error handling wrapper for Express route handlers.
  * Catches promise rejections and passes them to Express error handlers.
- * Based on Express.js best practices for async/await error handling.
+ *
+ * @deprecated Express 5.x natively catches promise rejections in async route handlers.
+ * You can use async route handlers directly without this wrapper.
+ * This utility is kept for backwards compatibility only.
+ *
+ * Before (Express 4.x required this):
+ * ```typescript
+ * router.get('/endpoint', asyncHandler(async (req, res) => {
+ *   const data = await fetchData();
+ *   res.json(data);
+ * }));
+ * ```
+ *
+ * After (Express 5.x - asyncHandler not needed):
+ * ```typescript
+ * router.get('/endpoint', async (req, res) => {
+ *   const data = await fetchData();
+ *   res.json(data);
+ * });
+ * ```
  */
 export const asyncHandler = <
   P = ParamsDictionary,

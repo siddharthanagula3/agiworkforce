@@ -168,7 +168,7 @@ export const useBrowserStore = create<BrowserState>()(
         initialize: async () => {
           try {
             await invoke('browser_init');
-            set({ initialized: true });
+            set({ initialized: true }, undefined, 'browser/initialize');
 
             const unlisten1 = await listen<BrowserAction>('browser:action', (event) => {
               try {
@@ -186,9 +186,13 @@ export const useBrowserStore = create<BrowserState>()(
               try {
                 const log = event?.payload;
                 if (log) {
-                  set((state) => {
-                    state.consoleLogs.push(log);
-                  });
+                  set(
+                    (state) => {
+                      state.consoleLogs.push(log);
+                    },
+                    undefined,
+                    'browser/consoleLog',
+                  );
                 }
               } catch (error) {
                 console.error('[browserStore] Error handling browser:console event:', error);
@@ -200,9 +204,13 @@ export const useBrowserStore = create<BrowserState>()(
               try {
                 const request = event?.payload;
                 if (request) {
-                  set((state) => {
-                    state.networkRequests.push(request);
-                  });
+                  set(
+                    (state) => {
+                      state.networkRequests.push(request);
+                    },
+                    undefined,
+                    'browser/networkRequest',
+                  );
                 }
               } catch (error) {
                 console.error('[browserStore] Error handling browser:network event:', error);
@@ -211,7 +219,7 @@ export const useBrowserStore = create<BrowserState>()(
             unlistenFunctions.push(unlisten3);
           } catch (error) {
             console.error('Failed to initialize browser:', error);
-            set({ initialized: false });
+            set({ initialized: false }, undefined, 'browser/initialize/error');
             throw error;
           }
         },
@@ -231,10 +239,14 @@ export const useBrowserStore = create<BrowserState>()(
               active: true,
             };
 
-            set((state) => {
-              state.sessions.push(newSession);
-              state.activeSessionId = sessionId;
-            });
+            set(
+              (state) => {
+                state.sessions.push(newSession);
+                state.activeSessionId = sessionId;
+              },
+              undefined,
+              'browser/launchBrowser',
+            );
 
             return sessionId;
           } catch (error) {
@@ -245,16 +257,20 @@ export const useBrowserStore = create<BrowserState>()(
 
         closeBrowser: async (sessionId: string) => {
           try {
-            set((state) => {
-              const sessionIndex = state.sessions.findIndex((s) => s.id === sessionId);
-              if (sessionIndex >= 0) {
-                state.sessions.splice(sessionIndex, 1);
-              }
+            set(
+              (state) => {
+                const sessionIndex = state.sessions.findIndex((s) => s.id === sessionId);
+                if (sessionIndex >= 0) {
+                  state.sessions.splice(sessionIndex, 1);
+                }
 
-              if (state.activeSessionId === sessionId) {
-                state.activeSessionId = state.sessions[0]?.id ?? null;
-              }
-            });
+                if (state.activeSessionId === sessionId) {
+                  state.activeSessionId = state.sessions[0]?.id ?? null;
+                }
+              },
+              undefined,
+              'browser/closeBrowser',
+            );
           } catch (error) {
             console.error('Failed to close browser:', error);
             throw error;
@@ -265,12 +281,16 @@ export const useBrowserStore = create<BrowserState>()(
           try {
             const tabId = await invoke<string>('browser_open_tab', { url });
 
-            set((state) => {
-              const session = state.sessions.find((s) => s.id === state.activeSessionId);
-              if (session) {
-                session.tabs.push({ id: tabId, url, title: url, active: true });
-              }
-            });
+            set(
+              (state) => {
+                const session = state.sessions.find((s) => s.id === state.activeSessionId);
+                if (session) {
+                  session.tabs.push({ id: tabId, url, title: url, active: true });
+                }
+              },
+              undefined,
+              'browser/openTab',
+            );
 
             return tabId;
           } catch (error) {
@@ -283,15 +303,19 @@ export const useBrowserStore = create<BrowserState>()(
           try {
             await invoke('browser_close_tab', { tabId });
 
-            set((state) => {
-              for (const session of state.sessions) {
-                const tabIndex = session.tabs.findIndex((t) => t.id === tabId);
-                if (tabIndex >= 0) {
-                  session.tabs.splice(tabIndex, 1);
-                  break;
+            set(
+              (state) => {
+                for (const session of state.sessions) {
+                  const tabIndex = session.tabs.findIndex((t) => t.id === tabId);
+                  if (tabIndex >= 0) {
+                    session.tabs.splice(tabIndex, 1);
+                    break;
+                  }
                 }
-              }
-            });
+              },
+              undefined,
+              'browser/closeTab',
+            );
           } catch (error) {
             console.error('Failed to close tab:', error);
             throw error;
@@ -302,16 +326,20 @@ export const useBrowserStore = create<BrowserState>()(
           try {
             await invoke('browser_navigate', { tabId, url });
 
-            set((state) => {
-              for (const session of state.sessions) {
-                const tab = session.tabs.find((t) => t.id === tabId);
-                if (tab) {
-                  tab.url = url;
-                  tab.title = url;
-                  break;
+            set(
+              (state) => {
+                for (const session of state.sessions) {
+                  const tab = session.tabs.find((t) => t.id === tabId);
+                  if (tab) {
+                    tab.url = url;
+                    tab.title = url;
+                    break;
+                  }
                 }
-              }
-            });
+              },
+              undefined,
+              'browser/navigateTab',
+            );
           } catch (error) {
             console.error('Failed to navigate:', error);
             throw error;
@@ -367,13 +395,17 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         setActiveSession: (sessionId: string) => {
-          set({ activeSessionId: sessionId });
+          set({ activeSessionId: sessionId }, undefined, 'browser/setActiveSession');
         },
 
         addAction: (action: BrowserAction) => {
-          set((state) => {
-            state.actions.push(action);
-          });
+          set(
+            (state) => {
+              state.actions.push(action);
+            },
+            undefined,
+            'browser/addAction',
+          );
 
           if (get().isRecording && action.success) {
             const step: RecordedStep = {
@@ -388,13 +420,17 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         addScreenshot: (screenshot: Screenshot) => {
-          set((state) => {
-            state.screenshots.push(screenshot);
-            // Keep max 50 screenshots
-            if (state.screenshots.length > 50) {
-              state.screenshots.shift();
-            }
-          });
+          set(
+            (state) => {
+              state.screenshots.push(screenshot);
+              // Keep max 50 screenshots
+              if (state.screenshots.length > 50) {
+                state.screenshots.shift();
+              }
+            },
+            undefined,
+            'browser/addScreenshot',
+          );
         },
 
         highlightElement: async (tabId: string, selector: string) => {
@@ -403,7 +439,7 @@ export const useBrowserStore = create<BrowserState>()(
               tabId,
               selector,
             });
-            set({ highlightedElement: bounds });
+            set({ highlightedElement: bounds }, undefined, 'browser/highlightElement');
           } catch (error) {
             console.error('Failed to highlight element:', error);
             throw error;
@@ -411,15 +447,19 @@ export const useBrowserStore = create<BrowserState>()(
         },
 
         clearHighlight: () => {
-          set({ highlightedElement: null });
+          set({ highlightedElement: null }, undefined, 'browser/clearHighlight');
         },
 
         getDOMSnapshot: async (tabId: string) => {
           try {
             const snapshot = await invoke<DOMSnapshot>('browser_get_dom_snapshot', { tabId });
-            set((state) => {
-              state.domSnapshots.push(snapshot);
-            });
+            set(
+              (state) => {
+                state.domSnapshots.push(snapshot);
+              },
+              undefined,
+              'browser/getDOMSnapshot',
+            );
             return snapshot;
           } catch (error) {
             console.error('Failed to get DOM snapshot:', error);
@@ -430,7 +470,7 @@ export const useBrowserStore = create<BrowserState>()(
         getConsoleLogs: async (tabId: string) => {
           try {
             const logs = await invoke<ConsoleLog[]>('browser_get_console_logs', { tabId });
-            set({ consoleLogs: logs });
+            set({ consoleLogs: logs }, undefined, 'browser/getConsoleLogs');
             return logs;
           } catch (error) {
             console.error('Failed to get console logs:', error);
@@ -443,7 +483,7 @@ export const useBrowserStore = create<BrowserState>()(
             const requests = await invoke<NetworkRequest[]>('browser_get_network_activity', {
               tabId,
             });
-            set({ networkRequests: requests });
+            set({ networkRequests: requests }, undefined, 'browser/getNetworkActivity');
             return requests;
           } catch (error) {
             console.error('Failed to get network activity:', error);
@@ -471,33 +511,41 @@ export const useBrowserStore = create<BrowserState>()(
             }
           }, 500);
 
-          set({ isStreaming: true, streamIntervalId: intervalId });
+          set(
+            { isStreaming: true, streamIntervalId: intervalId },
+            undefined,
+            'browser/startStreaming',
+          );
         },
 
         stopStreaming: () => {
           const { streamIntervalId } = get();
           if (streamIntervalId !== null) {
             window.clearInterval(streamIntervalId);
-            set({ isStreaming: false, streamIntervalId: null });
+            set({ isStreaming: false, streamIntervalId: null }, undefined, 'browser/stopStreaming');
           }
         },
 
         startRecording: () => {
-          set({ isRecording: true, recordedSteps: [] });
+          set({ isRecording: true, recordedSteps: [] }, undefined, 'browser/startRecording');
         },
 
         stopRecording: () => {
-          set({ isRecording: false });
+          set({ isRecording: false }, undefined, 'browser/stopRecording');
         },
 
         addRecordedStep: (step: RecordedStep) => {
-          set((state) => {
-            state.recordedSteps.push(step);
-          });
+          set(
+            (state) => {
+              state.recordedSteps.push(step);
+            },
+            undefined,
+            'browser/addRecordedStep',
+          );
         },
 
         clearRecording: () => {
-          set({ recordedSteps: [] });
+          set({ recordedSteps: [] }, undefined, 'browser/clearRecording');
         },
 
         generatePlaywrightCode: () => {
@@ -535,18 +583,22 @@ test('recorded automation', async ({ page }) => {
         },
 
         clearActions: () => {
-          set({ actions: [] });
+          set({ actions: [] }, undefined, 'browser/clearActions');
         },
 
         clearScreenshots: () => {
-          set({ screenshots: [] });
+          set({ screenshots: [] }, undefined, 'browser/clearScreenshots');
         },
 
         cleanup: () => {
           const { streamIntervalId } = get();
           if (streamIntervalId !== null) {
             window.clearInterval(streamIntervalId);
-            set({ isStreaming: false, streamIntervalId: null });
+            set(
+              { isStreaming: false, streamIntervalId: null },
+              undefined,
+              'browser/cleanup/stopStreaming',
+            );
           }
 
           unlistenFunctions.forEach((unlisten) => {
@@ -558,7 +610,7 @@ test('recorded automation', async ({ page }) => {
           });
           unlistenFunctions.length = 0;
 
-          set({ initialized: false });
+          set({ initialized: false }, undefined, 'browser/cleanup');
         },
       })),
     ),
@@ -569,3 +621,46 @@ test('recorded automation', async ({ page }) => {
 export function cleanupBrowserStore() {
   useBrowserStore.getState().cleanup();
 }
+
+// Selectors
+export const selectBrowserSessions = (state: BrowserState) => state.sessions;
+export const selectActiveSessionId = (state: BrowserState) => state.activeSessionId;
+export const selectBrowserInitialized = (state: BrowserState) => state.initialized;
+
+export const selectScreenshots = (state: BrowserState) => state.screenshots;
+export const selectBrowserActions = (state: BrowserState) => state.actions;
+export const selectDomSnapshots = (state: BrowserState) => state.domSnapshots;
+export const selectConsoleLogs = (state: BrowserState) => state.consoleLogs;
+export const selectNetworkRequests = (state: BrowserState) => state.networkRequests;
+export const selectHighlightedElement = (state: BrowserState) => state.highlightedElement;
+
+export const selectBrowserIsRecording = (state: BrowserState) => state.isRecording;
+export const selectRecordedSteps = (state: BrowserState) => state.recordedSteps;
+
+export const selectIsStreaming = (state: BrowserState) => state.isStreaming;
+export const selectStreamIntervalId = (state: BrowserState) => state.streamIntervalId;
+
+// Derived selectors
+export const selectActiveSession = (state: BrowserState) =>
+  state.sessions.find((s) => s.id === state.activeSessionId);
+export const selectSessionById = (sessionId: string) => (state: BrowserState) =>
+  state.sessions.find((s) => s.id === sessionId);
+export const selectActiveTabs = (state: BrowserState) => {
+  const session = state.sessions.find((s) => s.id === state.activeSessionId);
+  return session?.tabs ?? [];
+};
+export const selectActiveTab = (state: BrowserState) => {
+  const session = state.sessions.find((s) => s.id === state.activeSessionId);
+  return session?.tabs.find((t) => t.active);
+};
+export const selectSessionCount = (state: BrowserState) => state.sessions.length;
+export const selectHasActiveSessions = (state: BrowserState) => state.sessions.length > 0;
+export const selectLatestScreenshot = (state: BrowserState) =>
+  state.screenshots[state.screenshots.length - 1];
+export const selectScreenshotCount = (state: BrowserState) => state.screenshots.length;
+export const selectActionCount = (state: BrowserState) => state.actions.length;
+export const selectRecordedStepCount = (state: BrowserState) => state.recordedSteps.length;
+export const selectErrorLogs = (state: BrowserState) =>
+  state.consoleLogs.filter((log) => log.level === 'error');
+export const selectFailedRequests = (state: BrowserState) =>
+  state.networkRequests.filter((req) => req.status >= 400);
