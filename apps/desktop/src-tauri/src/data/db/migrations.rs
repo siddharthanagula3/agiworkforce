@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 45;
+const CURRENT_VERSION: i32 = 46;
 
 // =============================================================================
 // SQL INJECTION PREVENTION
@@ -126,6 +126,9 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "auth_audit_log",
         // Tasks
         "tasks",
+        // Memory (persistent AGI memory)
+        "user_memory",
+        "daily_logs",
         // FTS tables (virtual)
         "messages_fts",
         "conversations_fts",
@@ -421,6 +424,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         run_migration_in_transaction(conn, 45, apply_migration_v45)?;
     }
 
+    if current_version < 46 {
+        run_migration_in_transaction(conn, 46, apply_migration_v46)?;
+    }
+
     Ok(())
 }
 
@@ -501,6 +508,67 @@ fn apply_migration_v45(conn: &Connection) -> Result<()> {
             INSERT INTO conversations_fts(conversation_id, title, description, project_id, timestamp)
             VALUES (CAST(new.id AS TEXT), new.title, '', NULL, new.created_at);
         END",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v46: Create persistent memory tables for AGI
+/// Based on Clawdbot's two-layer memory architecture:
+/// 1. user_memory: Long-term curated memories (preferences, facts, decisions)
+/// 2. daily_logs: Append-only daily context logs
+fn apply_migration_v46(conn: &Connection) -> Result<()> {
+    // Create user_memory table for long-term persistent memories
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL CHECK(category IN ('Preference', 'Fact', 'Decision', 'Context')),
+            topic TEXT NOT NULL,
+            content TEXT NOT NULL,
+            importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+            source TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(category, topic)
+        )",
+        [],
+    )?;
+
+    // Create indexes for efficient memory retrieval
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_memory_category ON user_memory(category)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_memory_importance ON user_memory(importance DESC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_memory_updated ON user_memory(updated_at DESC)",
+        [],
+    )?;
+
+    // Create daily_logs table for append-only daily context
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS daily_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_date TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            entry_type TEXT NOT NULL DEFAULT 'context' CHECK(entry_type IN ('context', 'action', 'note', 'milestone')),
+            content TEXT NOT NULL,
+            metadata TEXT
+        )",
+        [],
+    )?;
+
+    // Create indexes for daily_logs
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(log_date)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_daily_logs_type ON daily_logs(entry_type)",
         [],
     )?;
 
