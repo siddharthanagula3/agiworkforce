@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 46;
+const CURRENT_VERSION: i32 = 47;
 
 // =============================================================================
 // SQL INJECTION PREVENTION
@@ -132,6 +132,8 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         // FTS tables (virtual)
         "messages_fts",
         "conversations_fts",
+        // Scheduling
+        "scheduled_jobs",
     ])
 });
 
@@ -428,6 +430,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         run_migration_in_transaction(conn, 46, apply_migration_v46)?;
     }
 
+    if current_version < 47 {
+        run_migration_in_transaction(conn, 47, apply_migration_v47)?;
+    }
+
     Ok(())
 }
 
@@ -569,6 +575,46 @@ fn apply_migration_v46(conn: &Connection) -> Result<()> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_daily_logs_type ON daily_logs(entry_type)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v47: Create scheduled_jobs table for task scheduling
+fn apply_migration_v47(conn: &Connection) -> Result<()> {
+    // Create scheduled_jobs table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS scheduled_jobs (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            schedule_type TEXT NOT NULL CHECK(schedule_type IN ('cron', 'interval', 'once')),
+            cron_expression TEXT,
+            interval_seconds INTEGER,
+            run_at TEXT,
+            timezone TEXT DEFAULT 'UTC',
+            action_type TEXT NOT NULL CHECK(action_type IN ('briefing', 'reminder', 'agent_task', 'custom')),
+            action_data TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_run TEXT,
+            next_run TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // Create indexes for efficient job retrieval
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next_run ON scheduled_jobs(next_run)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_schedule_type ON scheduled_jobs(schedule_type)",
         [],
     )?;
 
