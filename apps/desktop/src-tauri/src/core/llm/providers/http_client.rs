@@ -1,8 +1,18 @@
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::sync::Arc;
 use std::time::Duration;
+
+/// A lazily-initialized fallback client without retry middleware.
+/// This uses `reqwest::Client::new()` which is infallible with default settings.
+static FALLBACK_CLIENT: Lazy<Arc<ClientWithMiddleware>> = Lazy::new(|| {
+    // Client::new() with default settings cannot fail
+    let client = Client::new();
+    let client_with_middleware = ClientBuilder::new(client).build();
+    Arc::new(client_with_middleware)
+});
 
 /// Shared HTTP client with automatic retries and timeout management
 ///
@@ -45,8 +55,13 @@ impl HttpClient {
 impl Default for HttpClient {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create default HttpClient: {}", e);
-            panic!("Failed to create default HttpClient: {}", e);
+            tracing::warn!(
+                "Failed to create HttpClient with retries: {}. Using fallback client without retry middleware.",
+                e
+            );
+            Self {
+                client: Arc::clone(&FALLBACK_CLIENT),
+            }
         })
     }
 }
