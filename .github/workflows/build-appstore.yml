@@ -74,13 +74,13 @@ jobs:
           APPLE_SIGNING_IDENTITY: 'Apple Distribution: AGI AUTOMATION LLC (${{ secrets.APPLE_TEAM_ID }})'
         run: |
           cd src-tauri
-          # Build with appstore feature, excluding shell and updater
+          # Build with appstore feature, excluding shell, updater, and ocr (OCR requires native Tesseract which isn't bundled)
           cargo tauri build \
             --bundles app \
             --target universal-apple-darwin \
             --config tauri.appstore.conf.json \
             --no-default-features \
-            --features "ocr,appstore"
+            --features "appstore"
 
       - name: Sign App Bundle
         working-directory: apps/desktop
