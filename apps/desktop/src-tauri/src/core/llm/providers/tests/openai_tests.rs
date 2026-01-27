@@ -8,29 +8,34 @@ mod tests {
 
     #[test]
     fn test_provider_instantiation() {
-        let provider = OpenAIProvider::new("test-key".to_string());
+        let provider =
+            OpenAIProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert_eq!(provider.name(), "OpenAI");
         assert!(provider.is_configured());
     }
 
     #[test]
     fn test_provider_unconfigured() {
-        let provider = OpenAIProvider::new("your-api-key-here".to_string());
+        let provider = OpenAIProvider::new("your-api-key-here".to_string())
+            .expect("Failed to create provider");
         assert!(!provider.is_configured());
 
-        let empty_provider = OpenAIProvider::new("".to_string());
+        let empty_provider =
+            OpenAIProvider::new("".to_string()).expect("Failed to create provider");
         assert!(!empty_provider.is_configured());
     }
 
     #[test]
     fn test_supports_vision() {
-        let provider = OpenAIProvider::new("test-key".to_string());
+        let provider =
+            OpenAIProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert!(provider.supports_vision());
     }
 
     #[test]
     fn test_supports_function_calling() {
-        let provider = OpenAIProvider::new("test-key".to_string());
+        let provider =
+            OpenAIProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert!(provider.supports_function_calling());
     }
 

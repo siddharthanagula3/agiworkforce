@@ -1,6 +1,7 @@
 pub mod contacts;
 pub mod email_parser;
 pub mod gmail_oauth;
+pub mod gmail_pubsub;
 
 pub mod imap_client;
 pub mod smtp_client;

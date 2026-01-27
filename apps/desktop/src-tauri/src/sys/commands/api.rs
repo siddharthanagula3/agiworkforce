@@ -15,17 +15,21 @@ pub struct ApiState {
 
 impl Default for ApiState {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default ApiState: {}", e);
+            panic!("Failed to create default ApiState: {}", e);
+        })
     }
 }
 
 impl ApiState {
-    pub fn new() -> Self {
-        Self {
-            client: ApiClient::new().expect("Failed to initialize API client"),
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
+            client: ApiClient::new()
+                .map_err(|e| format!("Failed to initialize API client: {}", e))?,
             oauth_clients: Mutex::new(HashMap::new()),
             pkce_challenges: Mutex::new(HashMap::new()),
-        }
+        })
     }
 
     pub async fn execute_request(&self, request: ApiRequest) -> Result<ApiResponse, String> {
@@ -284,14 +288,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_api_state_creation() {
-        let state = ApiState::new();
+        let state = ApiState::new().expect("Failed to create ApiState");
         assert!(state.oauth_clients.lock().await.is_empty());
         assert!(state.pkce_challenges.lock().await.is_empty());
     }
 
     #[tokio::test]
     async fn test_oauth_client_management() {
-        let state = ApiState::new();
+        let state = ApiState::new().expect("Failed to create ApiState");
 
         let config = OAuth2Config {
             client_id: "test_client".to_string(),

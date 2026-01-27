@@ -201,7 +201,11 @@ pub async fn workspace_search_symbols(
         });
     }
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     if let Some(limit) = query.limit {
         results.truncate(limit);

@@ -45,20 +45,28 @@ pub enum CalendarClient {
 }
 
 impl CalendarClient {
-    pub fn new_google(client_id: String, client_secret: String, redirect_uri: String) -> Self {
-        CalendarClient::Google(GoogleCalendarClient::new(
+    pub fn new_google(
+        client_id: String,
+        client_secret: String,
+        redirect_uri: String,
+    ) -> Result<Self> {
+        Ok(CalendarClient::Google(GoogleCalendarClient::new(
             client_id,
             client_secret,
             redirect_uri,
-        ))
+        )?))
     }
 
-    pub fn new_outlook(client_id: String, client_secret: String, redirect_uri: String) -> Self {
-        CalendarClient::Outlook(OutlookCalendarClient::new(
+    pub fn new_outlook(
+        client_id: String,
+        client_secret: String,
+        redirect_uri: String,
+    ) -> Result<Self> {
+        Ok(CalendarClient::Outlook(OutlookCalendarClient::new(
             client_id,
             client_secret,
             redirect_uri,
-        ))
+        )?))
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, PkceChallenge) {
@@ -174,12 +182,12 @@ impl CalendarManager {
                 client_id.clone(),
                 client_secret.clone(),
                 redirect_uri.clone(),
-            ),
+            )?,
             CalendarProvider::Outlook => CalendarClient::new_outlook(
                 client_id.clone(),
                 client_secret.clone(),
                 redirect_uri.clone(),
-            ),
+            )?,
         };
 
         let (auth_url, pkce) = client.get_authorization_url(&state);
@@ -225,12 +233,12 @@ impl CalendarManager {
                 settings.client_id.clone(),
                 settings.client_secret.clone(),
                 settings.redirect_uri.clone(),
-            ),
+            )?,
             CalendarProvider::Outlook => CalendarClient::new_outlook(
                 settings.client_id.clone(),
                 settings.client_secret.clone(),
                 settings.redirect_uri.clone(),
-            ),
+            )?,
         };
 
         client
@@ -257,11 +265,11 @@ impl CalendarManager {
         account_id: String,
         info: CalendarAccountInfo,
         client: Option<CalendarClient>,
-    ) {
+    ) -> Result<()> {
         if let Some(client) = client {
             self.clients.insert(account_id.clone(), client);
         } else if !self.clients.contains_key(&account_id) {
-            let mut client = build_client(&info);
+            let mut client = build_client(&info)?;
             client.set_token(info.token.clone());
             self.clients.insert(account_id.clone(), client);
         } else if let Some(mut entry) = self.clients.get_mut(&account_id) {
@@ -269,6 +277,7 @@ impl CalendarManager {
         }
 
         self.accounts.insert(account_id, info);
+        Ok(())
     }
 
     fn ensure_client_loaded(&self, account_id: &str) -> Result<()> {
@@ -281,7 +290,7 @@ impl CalendarManager {
             .get(account_id)
             .ok_or_else(|| Error::Other("Account not loaded".to_string()))?;
 
-        let mut client = build_client(info.value());
+        let mut client = build_client(info.value())?;
         client.set_token(info.token.clone());
         self.clients.insert(account_id.to_string(), client);
         Ok(())
@@ -461,7 +470,7 @@ impl Default for CalendarManager {
     }
 }
 
-fn build_client(info: &CalendarAccountInfo) -> CalendarClient {
+fn build_client(info: &CalendarAccountInfo) -> Result<CalendarClient> {
     match info.provider {
         CalendarProvider::Google => CalendarClient::new_google(
             info.settings.client_id.clone(),

@@ -50,12 +50,18 @@ trait ScheduledJobBuilderExt {
 impl ScheduledJobBuilderExt for super::types::ScheduledJobBuilder {
     fn build_with_schedule(self, schedule: JobSchedule) -> ScheduledJob {
         match schedule {
-            JobSchedule::Cron(expr) => self.cron(expr).build(),
-            JobSchedule::Interval(interval) => self.interval(interval).build(),
+            JobSchedule::Cron(expr) => self.cron(expr).build().expect("Failed to build cron job"),
+            JobSchedule::Interval(interval) => self
+                .interval(interval)
+                .build()
+                .expect("Failed to build interval job"),
             JobSchedule::OneShot(datetime) => {
                 // For one-shot, we need to set up a cron that will fire once
                 // but the actual OneShot handling is in the scheduler
-                let mut job = self.interval(JobInterval::seconds(1)).build();
+                let mut job = self
+                    .interval(JobInterval::seconds(1))
+                    .build()
+                    .expect("Failed to build one-shot job");
                 job.schedule = JobSchedule::OneShot(datetime);
                 job
             }
@@ -109,7 +115,8 @@ async fn test_create_scheduler_multiple_instances() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler1.add_job(job).await.unwrap();
 
@@ -136,7 +143,8 @@ async fn test_add_cron_job() {
             event_name: "cron_test".into(),
             payload: serde_json::json!({"type": "cron"}),
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     let result = scheduler.add_job(job).await;
     assert!(result.is_ok(), "Adding cron job should succeed");
@@ -171,7 +179,8 @@ async fn test_add_cron_job_various_expressions() {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         let result = scheduler.add_job(job).await;
         assert!(
@@ -197,7 +206,8 @@ async fn test_add_cron_job_invalid_expression() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     // The job will be added, but scheduling will fail
     let result = scheduler.add_job(job).await;
@@ -232,7 +242,8 @@ async fn test_add_interval_job() {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         let result = scheduler.add_job(job).await;
         assert!(
@@ -270,7 +281,8 @@ async fn test_interval_job_execution() {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -308,7 +320,8 @@ async fn test_add_once_job() {
                 executed_clone.store(true, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     // Set the actual one-shot schedule
     job.schedule = JobSchedule::OneShot(run_time);
@@ -338,7 +351,8 @@ async fn test_once_job_past_time() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     job.schedule = JobSchedule::OneShot(past_time);
 
@@ -374,7 +388,8 @@ async fn test_remove_job() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     assert_eq!(scheduler.list_jobs().await.len(), 1);
@@ -413,7 +428,8 @@ async fn test_remove_job_while_running() {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -455,7 +471,8 @@ async fn test_pause_resume_job() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -484,7 +501,8 @@ async fn test_pause_already_paused() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -507,7 +525,8 @@ async fn test_resume_not_paused() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -529,7 +548,8 @@ async fn test_pause_stops_execution() {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -584,7 +604,8 @@ async fn test_list_jobs() {
                 event_name: format!("event-{}", i),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
         scheduler.add_job(job).await.unwrap();
     }
 
@@ -614,7 +635,8 @@ async fn test_list_jobs_with_mixed_states() {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
         scheduler.add_job(job).await.unwrap();
     }
 
@@ -646,7 +668,8 @@ async fn test_job_summary_fields() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -716,7 +739,8 @@ async fn test_job_persistence_simulation() {
                     event_name: format!("{}_event", id),
                     payload: serde_json::json!({"persisted": true}),
                 })
-                .build();
+                .build()
+                .expect("Failed to build job");
 
             scheduler.add_job(job.clone()).await.unwrap();
             store.save_job(&job).await;
@@ -768,7 +792,8 @@ async fn test_job_persistence_with_metadata() {
             .metadata("custom_key", serde_json::json!("custom_value"))
             .metadata("count", serde_json::json!(42))
             .max_retries(5)
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         scheduler.add_job(job.clone()).await.unwrap();
         store.save_job(&job).await;
@@ -964,7 +989,8 @@ async fn test_concurrent_jobs() {
                         counter_clone.fetch_add(1, Ordering::SeqCst);
                     }),
                 }))
-                .build();
+                .build()
+                .expect("Failed to build job");
 
         scheduler.add_job(job).await.unwrap();
     }
@@ -1003,7 +1029,8 @@ async fn test_concurrent_jobs_different_intervals() {
                 fast_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     let slow_clone = counter_slow.clone();
     let slow_job = ScheduledJob::builder("slow-job", "Slow Job")
@@ -1013,7 +1040,8 @@ async fn test_concurrent_jobs_different_intervals() {
                 slow_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(fast_job).await.unwrap();
     scheduler.add_job(slow_job).await.unwrap();
@@ -1049,7 +1077,8 @@ async fn test_concurrent_add_remove_jobs() {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
         scheduler.add_job(job).await.unwrap();
     }
 
@@ -1065,7 +1094,8 @@ async fn test_concurrent_add_remove_jobs() {
                     event_name: "added".into(),
                     payload: serde_json::Value::Null,
                 })
-                .build();
+                .build()
+                .expect("Failed to build job");
             let _ = scheduler_add.add_job(job).await;
             sleep(std::time::Duration::from_millis(100)).await;
         }
@@ -1111,7 +1141,8 @@ async fn test_job_execution_callback() {
                 executed_clone.store(true, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -1158,7 +1189,8 @@ async fn test_job_execution_with_action_handler() {
             event_name: "handler_event".into(),
             payload: serde_json::json!({"handled": true}),
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -1189,7 +1221,8 @@ async fn test_job_execution_trigger_now() {
                 executed_clone.store(true, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -1215,7 +1248,8 @@ async fn test_job_execution_history_recording() {
         .action(JobAction::Callback(CallbackAction {
             callback: Arc::new(|| {}),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -1257,7 +1291,8 @@ async fn test_job_execution_failure_handling() {
             }),
         }))
         .max_retries(2)
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();
@@ -1299,7 +1334,8 @@ async fn test_duplicate_job_id_rejection() {
             event_name: "test".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     let job2 = ScheduledJob::builder("duplicate-id", "Second Job with Same ID")
         .interval(JobInterval::seconds(120))
@@ -1307,7 +1343,8 @@ async fn test_duplicate_job_id_rejection() {
             event_name: "test2".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job1).await.unwrap();
     let result = scheduler.add_job(job2).await;
@@ -1334,7 +1371,8 @@ async fn test_scheduler_start_stop_restart() {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             }),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -1371,7 +1409,8 @@ async fn test_update_job() {
             event_name: "original".into(),
             payload: serde_json::Value::Null,
         })
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
 
@@ -1403,7 +1442,8 @@ async fn test_history_limit() {
         .action(JobAction::Callback(CallbackAction {
             callback: Arc::new(|| {}),
         }))
-        .build();
+        .build()
+        .expect("Failed to build job");
 
     scheduler.add_job(job).await.unwrap();
     scheduler.start().await.unwrap();

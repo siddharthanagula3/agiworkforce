@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 47;
+const CURRENT_VERSION: i32 = 49;
 
 // =============================================================================
 // SQL INJECTION PREVENTION
@@ -134,6 +134,7 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "conversations_fts",
         // Scheduling
         "scheduled_jobs",
+        "job_executions",
     ])
 });
 
@@ -149,7 +150,15 @@ fn validate_sql_identifier(identifier: &str, identifier_type: &str) -> Result<()
     }
 
     // Must start with a letter or underscore
-    let first_char = identifier.chars().next().unwrap();
+    let first_char = match identifier.chars().next() {
+        Some(c) => c,
+        None => {
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "{} name cannot be empty",
+                identifier_type
+            )))
+        }
+    };
     if !first_char.is_ascii_alphabetic() && first_char != '_' {
         return Err(rusqlite::Error::InvalidParameterName(format!(
             "{} name '{}' must start with a letter or underscore",
@@ -432,6 +441,14 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 47 {
         run_migration_in_transaction(conn, 47, apply_migration_v47)?;
+    }
+
+    if current_version < 48 {
+        run_migration_in_transaction(conn, 48, apply_migration_v48)?;
+    }
+
+    if current_version < 49 {
+        run_migration_in_transaction(conn, 49, apply_migration_v49)?;
     }
 
     Ok(())
@@ -4156,6 +4173,84 @@ fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool
     let mut stmt =
         conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE lower(name) = lower(?2)")?;
     stmt.exists([table, column])
+}
+
+/// Migration v48: Add last_accessed column to user_memory for importance decay
+/// This column tracks when a memory was last accessed, enabling time-based decay
+/// of memory importance for memories that aren't frequently accessed.
+fn apply_migration_v48(conn: &Connection) -> Result<()> {
+    // Check if the column already exists (idempotent migration)
+    if !table_has_column(conn, "user_memory", "last_accessed")? {
+        // Add last_accessed column with default to current timestamp
+        conn.execute(
+            "ALTER TABLE user_memory ADD COLUMN last_accessed TEXT DEFAULT CURRENT_TIMESTAMP",
+            [],
+        )?;
+
+        // Initialize last_accessed to created_at for existing memories
+        conn.execute(
+            "UPDATE user_memory SET last_accessed = created_at WHERE last_accessed IS NULL",
+            [],
+        )?;
+
+        // Create index for efficient decay candidate queries
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_memory_last_accessed ON user_memory(last_accessed)",
+            [],
+        )?;
+    }
+
+    tracing::info!(
+        "Applied migration v48: Added last_accessed column to user_memory for importance decay"
+    );
+
+    Ok(())
+}
+
+/// Migration v49: Create job_executions table for scheduler execution logging
+/// This table tracks the execution history of scheduled jobs.
+fn apply_migration_v49(conn: &Connection) -> Result<()> {
+    // Create job_executions table for tracking job execution history
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS job_executions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+            error TEXT,
+            duration_ms INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // Create indexes for efficient querying
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_executions_job_id ON job_executions(job_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_executions_started_at ON job_executions(started_at DESC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_executions_status ON job_executions(status)",
+        [],
+    )?;
+
+    // Add foreign key constraint to scheduled_jobs table (soft constraint via trigger)
+    // Note: We use a soft constraint since jobs may be deleted while executions are retained for history
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_job_executions_job_status ON job_executions(job_id, status)",
+        [],
+    )?;
+
+    tracing::info!(
+        "Applied migration v49: Created job_executions table for scheduler execution logging"
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]

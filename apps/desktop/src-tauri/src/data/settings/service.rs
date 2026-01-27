@@ -39,6 +39,9 @@ pub enum SettingsServiceError {
 
     #[error("Invalid setting value type for key: {0}")]
     InvalidType(String),
+
+    #[error("Failed to acquire lock: {0}")]
+    LockError(String),
 }
 
 /// Settings service with encryption and caching
@@ -125,7 +128,10 @@ impl SettingsService {
     ) -> Result<(), SettingsServiceError> {
         self.validate_setting(&key, &value)?;
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
 
         let value_to_store = if encrypted {
             let plaintext = value.to_json_string()?;
@@ -137,7 +143,10 @@ impl SettingsService {
 
         repository::upsert_setting(&conn, key.clone(), value_to_store, category, encrypted)?;
 
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         cache.insert(key, value);
 
         Ok(())
@@ -145,13 +154,19 @@ impl SettingsService {
 
     pub fn get(&self, key: &str) -> Result<SettingValue, SettingsServiceError> {
         {
-            let cache = self.cache.lock().unwrap();
+            let cache = self
+                .cache
+                .lock()
+                .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
             if let Some(value) = cache.get(key) {
                 return Ok(value.clone());
             }
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         let setting = repository::get_setting(&conn, key)
             .map_err(|_| SettingsServiceError::NotFound(key.to_string()))?;
 
@@ -167,7 +182,10 @@ impl SettingsService {
             stored_value
         };
 
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         cache.insert(key.to_string(), value.clone());
 
         Ok(value)
@@ -197,21 +215,33 @@ impl SettingsService {
 
             processed_settings.push((key.clone(), value_to_store, category, encrypted));
 
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self
+                .cache
+                .lock()
+                .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
             cache.insert(key, value);
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         repository::upsert_settings_batch(&conn, processed_settings)?;
 
         Ok(())
     }
 
     pub fn delete(&self, key: &str) -> Result<(), SettingsServiceError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         repository::delete_setting(&conn, key)?;
 
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         cache.remove(key);
 
         Ok(())
@@ -221,18 +251,25 @@ impl SettingsService {
         &self,
         category: SettingCategory,
     ) -> Result<Vec<Setting>, SettingsServiceError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         Ok(repository::get_settings_by_category(&conn, category)?)
     }
 
     pub fn list_all(&self) -> Result<Vec<Setting>, SettingsServiceError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         Ok(repository::list_all_settings(&conn)?)
     }
 
     pub fn clear_cache(&self) {
-        let mut cache = self.cache.lock().unwrap();
-        cache.clear();
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.clear();
+        }
     }
 
     fn validate_setting(
@@ -300,7 +337,10 @@ impl SettingsService {
     }
 
     pub fn load_app_settings(&self) -> Result<AppSettings, SettingsServiceError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         let all_settings = repository::list_all_settings(&conn)?;
 
         let mut app_settings = AppSettings::default();

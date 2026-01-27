@@ -7,29 +7,34 @@ mod tests {
 
     #[test]
     fn test_provider_instantiation() {
-        let provider = AnthropicProvider::new("test-key".to_string());
+        let provider =
+            AnthropicProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert_eq!(provider.name(), "Anthropic");
         assert!(provider.is_configured());
     }
 
     #[test]
     fn test_provider_unconfigured() {
-        let provider = AnthropicProvider::new("your-api-key-here".to_string());
+        let provider = AnthropicProvider::new("your-api-key-here".to_string())
+            .expect("Failed to create provider");
         assert!(!provider.is_configured());
 
-        let empty_provider = AnthropicProvider::new("".to_string());
+        let empty_provider =
+            AnthropicProvider::new("".to_string()).expect("Failed to create provider");
         assert!(!empty_provider.is_configured());
     }
 
     #[test]
     fn test_supports_vision() {
-        let provider = AnthropicProvider::new("test-key".to_string());
+        let provider =
+            AnthropicProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert!(provider.supports_vision());
     }
 
     #[test]
     fn test_supports_function_calling() {
-        let provider = AnthropicProvider::new("test-key".to_string());
+        let provider =
+            AnthropicProvider::new("test-key".to_string()).expect("Failed to create provider");
         assert!(provider.supports_function_calling());
     }
 

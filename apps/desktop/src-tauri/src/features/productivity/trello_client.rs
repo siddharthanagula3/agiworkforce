@@ -59,17 +59,17 @@ struct TrelloMember {
 }
 
 impl TrelloClient {
-    pub fn new(api_key: String, token: String) -> Self {
+    pub fn new(api_key: String, token: String) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
             api_key,
             token,
-        }
+        })
     }
 
     fn build_url(&self, endpoint: &str) -> String {

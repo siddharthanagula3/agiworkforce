@@ -573,11 +573,11 @@ fn to_sqlite_timestamp(dt: DateTime<Utc>) -> String {
 }
 
 fn start_of_day(dt: DateTime<Utc>) -> DateTime<Utc> {
-    let date = dt.date_naive();
-    let naive = date
+    dt.date_naive()
         .and_hms_opt(0, 0, 0)
-        .expect("00:00:00 should be a valid time");
-    Utc.from_utc_datetime(&naive)
+        .map(|naive| Utc.from_utc_datetime(&naive))
+        // 00:00:00 is always a valid time, so default to beginning of UNIX epoch as fallback
+        .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(dt))
 }
 
 pub fn create_token_usage(conn: &Connection, usage: &TokenUsage) -> Result<i64> {

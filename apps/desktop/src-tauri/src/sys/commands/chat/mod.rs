@@ -1474,9 +1474,18 @@ pub async fn chat_send_message(
             match get_access_token() {
                 Ok(_) => {
                     // User is authenticated, register ManagedCloud provider
-                    let mut router = _llm_state.router.write().await;
-                    router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
-                    info!("[Chat] Initialized ManagedCloud provider for authenticated user");
+                    match ManagedCloudProvider::new() {
+                        Ok(provider) => {
+                            let mut router = _llm_state.router.write().await;
+                            router.set_managed_cloud(Box::new(provider));
+                            info!(
+                                "[Chat] Initialized ManagedCloud provider for authenticated user"
+                            );
+                        }
+                        Err(e) => {
+                            warn!("[Chat] Failed to create ManagedCloud provider: {}", e);
+                        }
+                    }
                 }
                 Err(_) => {
                     // User not authenticated, ManagedCloud won't be available
