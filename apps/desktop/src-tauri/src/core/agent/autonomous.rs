@@ -174,7 +174,7 @@ impl AutonomousAgent {
             }
         }
 
-        let agent_clone = self.clone_for_task();
+        let agent_clone = self.clone_for_task()?;
         let task_id_clone = task_id.clone();
         tokio::spawn(async move {
             if let Err(e) = agent_clone.execute_task(task_id_clone).await {
@@ -370,23 +370,23 @@ impl AutonomousAgent {
     }
 
     /// Clone agent state for spawning a parallel task.
-    /// Note: Uses expect() for components that should never fail after initial setup.
-    pub fn clone_for_task(&self) -> Self {
-        Self {
+    /// Returns Result instead of panicking if component creation fails.
+    pub fn clone_for_task(&self) -> Result<Self> {
+        Ok(Self {
             config: self.config.clone(),
             automation: self.automation.clone(),
             router: self.router.clone(),
             planner: TaskPlanner::new(self.router.clone())
-                .expect("TaskPlanner creation should succeed after initial setup"),
+                .map_err(|e| anyhow!("TaskPlanner creation failed: {}", e))?,
             executor: TaskExecutor::new(self.automation.clone())
-                .expect("TaskExecutor creation should succeed after initial setup"),
+                .map_err(|e| anyhow!("TaskExecutor creation failed: {}", e))?,
             vision: VisionAutomation::new()
-                .expect("VisionAutomation creation should succeed after initial setup"),
+                .map_err(|e| anyhow!("VisionAutomation creation failed: {}", e))?,
             approval: ApprovalManager::new(self.config.clone()),
             task_queue: self.task_queue.clone(),
             running_tasks: self.running_tasks.clone(),
             stop_signal: self.stop_signal.clone(),
-        }
+        })
     }
 
     pub fn get_task_status(&self, task_id: &str) -> Result<Option<Task>> {

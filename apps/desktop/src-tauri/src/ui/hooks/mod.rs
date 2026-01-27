@@ -104,7 +104,10 @@ impl HookRegistry {
 
 impl Default for HookRegistry {
     fn default() -> Self {
-        Self::new().expect("Failed to create default hook registry")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default hook registry: {}", e);
+            panic!("Failed to create default hook registry: {}", e);
+        })
     }
 }
 

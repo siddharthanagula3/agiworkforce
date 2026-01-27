@@ -18,6 +18,7 @@ pub mod process_reasoning;
 pub mod reflection;
 pub mod resources;
 pub mod sandbox;
+pub mod semantic_search;
 pub mod templates;
 pub mod tools;
 
@@ -31,7 +32,10 @@ pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
 pub use memory::AGIMemory;
-pub use memory_manager::{DailyLogEntry, LogEntryType, MemoryCategory, MemoryEntry, MemoryManager};
+pub use memory_manager::{
+    DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,
+    MemoryEntry, MemoryManager, MemoryStats,
+};
 pub use orchestrator::{
     AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,
     ResourceLock, UiGuard,
@@ -46,11 +50,15 @@ pub use reflection::{
 };
 pub use resources::ResourceManager;
 pub use sandbox::{CodeExecutionResult, ExecutionConfig, Sandbox, SandboxManager};
+pub use semantic_search::{IndexStats, SemanticSearchConfig, SemanticSearchResult, TfIdfIndex};
 pub use templates::{
     get_builtin_templates, AgentTemplate, DifficultyLevel, TemplateCategory, TemplateManager,
     WorkflowDefinition, WorkflowStep,
 };
-pub use tools::{Tool, ToolCapability, ToolRegistry, ToolResult};
+pub use tools::{
+    create_list_skills_tool, create_skill_use_tool, SkillTool, SkillToolInput, Tool,
+    ToolCapability, ToolRegistry, ToolResult,
+};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
