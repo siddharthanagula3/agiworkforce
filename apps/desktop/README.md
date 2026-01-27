@@ -94,6 +94,37 @@ cd ../.. && pnpm build:desktop
 - **MCP Integration**: Extensible tool ecosystem
 - **Multi-model Support**: OpenAI, Anthropic, Google, DeepSeek, xAI, Ollama
 
+## Optional Features
+
+Some features require additional system dependencies:
+
+### OCR (Text Recognition)
+
+The OCR feature uses Tesseract for extracting text from images. It's **disabled by default** because it requires system-level dependencies.
+
+**To enable OCR:**
+
+1. Install Tesseract:
+
+   ```bash
+   # macOS
+   brew install tesseract
+
+   # Ubuntu/Debian
+   sudo apt install tesseract-ocr libtesseract-dev
+
+   # Windows (via vcpkg)
+   vcpkg install tesseract
+   ```
+
+2. Build with the OCR feature:
+   ```bash
+   cd apps/desktop/src-tauri
+   cargo build --features ocr
+   ```
+
+**Note:** The released app does not include OCR to avoid dependency issues for users. Text recognition will be available in a future update with bundled libraries.
+
 ## Configuration
 
 ### Environment Variables
