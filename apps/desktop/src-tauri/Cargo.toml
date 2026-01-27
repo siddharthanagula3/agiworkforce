@@ -221,7 +221,10 @@ cocoa = "0.25"
 
 
 [features]
-default = ["ocr", "shell", "updater"]
+default = ["shell", "updater"]
+# Note: "ocr" feature requires Tesseract to be installed on the system
+# Enable with: cargo build --features ocr
+# Install Tesseract: brew install tesseract (macOS) or apt install tesseract-ocr libtesseract-dev (Linux)
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]

@@ -627,7 +627,7 @@ pub async fn ocr_process_image(
     _image_path: String,
     _language: Option<String>,
 ) -> Result<OCRResult, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
@@ -640,13 +640,13 @@ pub async fn ocr_process_region(
     _height: u32,
     _language: Option<String>,
 ) -> Result<OCRResult, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
 #[tauri::command]
 pub async fn ocr_get_languages() -> Result<Vec<Language>, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
@@ -655,7 +655,7 @@ pub async fn ocr_get_result(
     _db: State<'_, AppDatabase>,
     _capture_id: String,
 ) -> Result<Option<OCRResult>, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
@@ -665,13 +665,13 @@ pub async fn ocr_process_with_boxes(
     _language: Option<String>,
     _preprocess: Option<bool>,
 ) -> Result<OCRResult, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
 #[tauri::command]
 pub async fn ocr_detect_languages(_image_path: String) -> Result<Vec<LanguageDetection>, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
@@ -680,7 +680,7 @@ pub async fn ocr_process_multi_language(
     _image_path: String,
     _preprocess: Option<bool>,
 ) -> Result<MultiLanguageResult, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
 
 #[cfg(not(feature = "ocr"))]
@@ -689,5 +689,5 @@ pub async fn ocr_preprocess_image(
     _image_path: String,
     _output_path: Option<String>,
 ) -> Result<String, String> {
-    Err("OCR feature not enabled. Please rebuild with --features ocr".to_string())
+    Err("Text recognition is not available in this version. This feature will be enabled in a future update.".to_string())
 }
