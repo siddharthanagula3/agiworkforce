@@ -5,10 +5,7 @@
 
 use super::error::SchedulerError;
 use super::proactive::ProactiveScheduler;
-use super::types::{
-    CallbackAction, JobAction, JobInterval, JobSchedule, JobState,
-    ScheduledJob,
-};
+use super::types::{CallbackAction, JobAction, JobInterval, JobSchedule, JobState, ScheduledJob};
 use chrono::{Duration, Timelike, Utc};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -74,7 +71,10 @@ impl ScheduledJobBuilderExt for super::types::ScheduledJobBuilder {
 async fn test_create_scheduler() {
     // Test successful scheduler creation
     let scheduler = ProactiveScheduler::new().await;
-    assert!(scheduler.is_ok(), "Scheduler should be created successfully");
+    assert!(
+        scheduler.is_ok(),
+        "Scheduler should be created successfully"
+    );
 
     let scheduler = scheduler.unwrap();
 
@@ -154,11 +154,11 @@ async fn test_add_cron_job_various_expressions() {
 
     // Test various valid cron expressions
     let cron_expressions = vec![
-        ("0 0 * * * *", "hourly"),      // Every hour
-        ("0 0 0 * * *", "daily"),       // Every day at midnight
-        ("0 30 9 * * *", "morning"),    // Every day at 9:30
-        ("0 0 0 * * MON", "weekly"),    // Every Monday at midnight
-        ("0 0 0 1 * *", "monthly"),     // First day of every month
+        ("0 0 * * * *", "hourly"),       // Every hour
+        ("0 0 0 * * *", "daily"),        // Every day at midnight
+        ("0 30 9 * * *", "morning"),     // Every day at 9:30
+        ("0 0 0 * * MON", "weekly"),     // Every Monday at midnight
+        ("0 0 0 1 * *", "monthly"),      // First day of every month
         ("0 */5 * * * *", "every-5min"), // Every 5 minutes
     ];
 
@@ -247,7 +247,10 @@ async fn test_add_interval_job() {
     assert_eq!(jobs.len(), expected_count);
 
     // Verify schedule descriptions
-    let summaries: HashMap<_, _> = jobs.iter().map(|j| (j.id.as_str(), &j.schedule_description)).collect();
+    let summaries: HashMap<_, _> = jobs
+        .iter()
+        .map(|j| (j.id.as_str(), &j.schedule_description))
+        .collect();
     assert!(summaries["30-seconds"].contains("second"));
     assert!(summaries["5-minutes"].contains("minute"));
     assert!(summaries["1-hour"].contains("hour"));
@@ -619,8 +622,14 @@ async fn test_list_jobs_with_mixed_states() {
     scheduler.pause_job("mixed-1").await.unwrap();
 
     let jobs = scheduler.list_jobs().await;
-    let paused: Vec<_> = jobs.iter().filter(|j| j.state == JobState::Paused).collect();
-    let scheduled: Vec<_> = jobs.iter().filter(|j| j.state == JobState::Scheduled).collect();
+    let paused: Vec<_> = jobs
+        .iter()
+        .filter(|j| j.state == JobState::Paused)
+        .collect();
+    let scheduled: Vec<_> = jobs
+        .iter()
+        .filter(|j| j.state == JobState::Scheduled)
+        .collect();
 
     assert_eq!(paused.len(), 1);
     assert_eq!(scheduled.len(), 2);
@@ -947,14 +956,15 @@ async fn test_concurrent_jobs() {
 
     for (i, counter) in counters.iter().enumerate() {
         let counter_clone = counter.clone();
-        let job = ScheduledJob::builder(format!("concurrent-{}", i), format!("Concurrent Job {}", i))
-            .interval(JobInterval::seconds(1))
-            .action(JobAction::Callback(CallbackAction {
-                callback: Arc::new(move || {
-                    counter_clone.fetch_add(1, Ordering::SeqCst);
-                }),
-            }))
-            .build();
+        let job =
+            ScheduledJob::builder(format!("concurrent-{}", i), format!("Concurrent Job {}", i))
+                .interval(JobInterval::seconds(1))
+                .action(JobAction::Callback(CallbackAction {
+                    callback: Arc::new(move || {
+                        counter_clone.fetch_add(1, Ordering::SeqCst);
+                    }),
+                }))
+                .build();
 
         scheduler.add_job(job).await.unwrap();
     }
@@ -1262,10 +1272,16 @@ async fn test_job_execution_failure_handling() {
     assert!(!history.is_empty(), "Should have execution history");
 
     let failed_exec = history.iter().find(|e| e.state == JobState::Failed);
-    assert!(failed_exec.is_some(), "Should have recorded a failed execution");
+    assert!(
+        failed_exec.is_some(),
+        "Should have recorded a failed execution"
+    );
 
     if let Some(exec) = failed_exec {
-        assert!(exec.error.is_some(), "Failed execution should have error message");
+        assert!(
+            exec.error.is_some(),
+            "Failed execution should have error message"
+        );
     }
 }
 
@@ -1328,7 +1344,10 @@ async fn test_scheduler_start_stop_restart() {
     scheduler.stop().await.unwrap();
 
     let count_after_first = counter.load(Ordering::SeqCst);
-    assert!(count_after_first >= 2, "Should have executions after first run");
+    assert!(
+        count_after_first >= 2,
+        "Should have executions after first run"
+    );
 
     // Second run (restart)
     scheduler.start().await.unwrap();
