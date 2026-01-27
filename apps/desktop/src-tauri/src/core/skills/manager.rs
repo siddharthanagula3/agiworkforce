@@ -141,10 +141,10 @@ You can perform file operations using the following capabilities:
 - Respect file permissions and ownership
 "#,
             ),
-            Skill::builder("shell-commands")
-                .description("Execute shell commands and scripts")
-                .instructions(
-                    r#"# Shell Commands
+            Skill::bundled(
+                "shell-commands",
+                "Execute shell commands and scripts",
+                r#"# Shell Commands
 
 You can execute shell commands to accomplish tasks.
 
@@ -164,12 +164,11 @@ You can execute shell commands to accomplish tasks.
 - Handle errors gracefully
 - Capture and report both stdout and stderr
 "#,
-                )
-                .build(),
-            Skill::builder("web-search")
-                .description("Search the web for information")
-                .instructions(
-                    r#"# Web Search
+            ),
+            Skill::bundled(
+                "web-search",
+                "Search the web for information",
+                r#"# Web Search
 
 You can search the web to find information.
 
@@ -184,8 +183,7 @@ You can search the web to find information.
 - Cite sources when providing information from web searches
 - Be aware that search results may be outdated
 "#,
-                )
-                .build(),
+            ),
         ]
     }
 

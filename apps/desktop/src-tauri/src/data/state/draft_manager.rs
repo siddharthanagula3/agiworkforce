@@ -17,7 +17,7 @@ impl DraftManager {
 
 
     pub fn save_draft(&self, draft: &MessageDraft) -> SqliteResult<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         db.execute(
             "INSERT OR REPLACE INTO message_drafts (conversation_id, content, attachments, focus_mode, saved_at)
@@ -36,7 +36,7 @@ impl DraftManager {
 
 
     pub fn get_draft(&self, conversation_id: &str) -> SqliteResult<Option<MessageDraft>> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         let mut stmt = db.prepare(
             "SELECT conversation_id, content, attachments, focus_mode, saved_at
@@ -63,7 +63,7 @@ impl DraftManager {
 
 
     pub fn clear_draft(&self, conversation_id: &str) -> SqliteResult<()> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         db.execute(
             "DELETE FROM message_drafts WHERE conversation_id = ?1",
@@ -75,7 +75,7 @@ impl DraftManager {
 
 
     pub fn get_all_drafts(&self) -> SqliteResult<Vec<MessageDraft>> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         let mut stmt = db.prepare(
             "SELECT conversation_id, content, attachments, focus_mode, saved_a
@@ -102,7 +102,7 @@ impl DraftManager {
 
 
     pub fn cleanup_old_drafts(&self, days: i64) -> SqliteResult<usize> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
         let cutoff = Utc::now() - chrono::Duration::days(days);
 
         let count = db.execute(

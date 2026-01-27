@@ -140,17 +140,14 @@ impl ScheduledJobBuilder {
     }
 
     /// Builds the scheduled job.
-    ///
-    /// # Panics
-    ///
-    /// Panics if schedule or action is not set.
-    pub fn build(self) -> ScheduledJob {
+    /// Returns Result with error if required fields are missing.
+    pub fn build(self) -> Result<ScheduledJob, &'static str> {
         let now = Utc::now();
-        ScheduledJob {
+        Ok(ScheduledJob {
             id: self.id,
             name: self.name,
-            schedule: self.schedule.expect("Schedule is required"),
-            action: self.action.expect("Action is required"),
+            schedule: self.schedule.ok_or("Schedule is required")?,
+            action: self.action.ok_or("Action is required")?,
             enabled: self.enabled,
             last_run: None,
             next_run: None,
@@ -159,7 +156,7 @@ impl ScheduledJobBuilder {
             retry_count: 0,
             created_at: now,
             updated_at: now,
-        }
+        })
     }
 
     /// Attempts to build the scheduled job, returning an error if required fields are missing.
@@ -364,6 +361,43 @@ pub struct JobSummary {
     pub next_run: Option<DateTime<Utc>>,
     /// Schedule description.
     pub schedule_description: String,
+}
+
+/// Record of a job execution persisted to the database.
+///
+/// This differs from `JobExecution` in that it uses database-friendly types
+/// (i64 for ID, String for timestamps) and is designed for persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobExecutionRecord {
+    /// Unique database ID for this execution record.
+    pub id: i64,
+    /// ID of the job that was executed.
+    pub job_id: String,
+    /// When the execution started (ISO 8601 format).
+    pub started_at: String,
+    /// When the execution completed (ISO 8601 format), if finished.
+    pub completed_at: Option<String>,
+    /// The status of this execution.
+    pub status: ExecutionStatus,
+    /// Error message if the execution failed.
+    pub error: Option<String>,
+    /// Duration of the execution in milliseconds.
+    pub duration_ms: Option<i64>,
+}
+
+/// Status of a job execution.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionStatus {
+    /// Execution is currently running.
+    Running,
+    /// Execution completed successfully.
+    Completed,
+    /// Execution failed with an error.
+    Failed,
+    /// Execution was cancelled before completion.
+    Cancelled,
 }
 
 impl From<&ScheduledJob> for JobSummary {

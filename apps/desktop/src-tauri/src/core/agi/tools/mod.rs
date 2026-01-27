@@ -1,3 +1,7 @@
+pub mod skill_tool;
+
+pub use skill_tool::{create_list_skills_tool, create_skill_use_tool, SkillTool, SkillToolInput};
+
 use super::*;
 use crate::automation::AutomationService;
 use crate::core::llm::LLMRouter;

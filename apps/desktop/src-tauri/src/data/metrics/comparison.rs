@@ -148,7 +148,10 @@ impl MetricsComparison {
         offset_days: i64,
         period_days: i64,
     ) -> Result<PeriodStats, String> {
-        let conn = self.db.lock().unwrap();
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
         let now = Utc::now().timestamp();
         let end = now - (offset_days * 24 * 60 * 60);
         let start = end - (period_days * 24 * 60 * 60);

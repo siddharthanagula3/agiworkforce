@@ -1,4 +1,5 @@
 pub mod calendar;
+pub mod canvas;
 pub mod clipboard;
 pub mod communications;
 pub mod document;
@@ -13,4 +14,5 @@ pub mod terminal;
 pub mod tests;
 #[cfg(feature = "updater")]
 pub mod updater;
+pub mod webhooks;
 pub mod workflows;

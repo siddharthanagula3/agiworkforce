@@ -4,7 +4,11 @@
 //! or fixed intervals, supporting pause/resume, job management, and execution tracking.
 
 use super::error::{SchedulerError, SchedulerResult};
-use super::types::{JobAction, JobExecution, JobSchedule, JobState, JobSummary, ScheduledJob};
+use super::types::{
+    ExecutionStatus, JobAction, JobExecution, JobExecutionRecord, JobSchedule, JobState,
+    JobSummary, ScheduledJob,
+};
+use crate::data::db::Database;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -65,6 +69,8 @@ pub struct ProactiveScheduler {
     max_history_entries: usize,
     /// Callback for handling job actions.
     action_handler: Arc<RwLock<Option<ActionHandler>>>,
+    /// Optional database connection for persistent execution logging.
+    database: Option<Arc<Database>>,
 }
 
 /// Type alias for the action handler callback.
@@ -87,7 +93,32 @@ impl ProactiveScheduler {
             history: Arc::new(RwLock::new(Vec::new())),
             max_history_entries: 1000,
             action_handler: Arc::new(RwLock::new(None)),
+            database: None,
         })
+    }
+
+    /// Creates a new ProactiveScheduler with a database connection for persistent logging.
+    ///
+    /// This enables execution logging to be persisted to the database.
+    pub async fn with_database(database: Arc<Database>) -> SchedulerResult<Self> {
+        let scheduler = JobScheduler::new().await.map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create scheduler: {}", e))
+        })?;
+
+        Ok(Self {
+            inner: Arc::new(RwLock::new(Some(scheduler))),
+            jobs: Arc::new(RwLock::new(HashMap::new())),
+            running: Arc::new(RwLock::new(false)),
+            history: Arc::new(RwLock::new(Vec::new())),
+            max_history_entries: 1000,
+            action_handler: Arc::new(RwLock::new(None)),
+            database: Some(database),
+        })
+    }
+
+    /// Sets the database connection for persistent execution logging.
+    pub fn set_database(&mut self, database: Arc<Database>) {
+        self.database = Some(database);
     }
 
     /// Sets a custom action handler for processing job actions.
@@ -719,6 +750,192 @@ impl ProactiveScheduler {
             }
         }
     }
+
+    // =========================================================================
+    // Execution Logging Methods
+    // =========================================================================
+
+    /// Logs the start of a job execution to the database.
+    ///
+    /// Returns the execution record ID that should be used to log the end of execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no database is configured or if the database operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let execution_id = scheduler.log_execution_start("my-job").await?;
+    /// // ... execute the job ...
+    /// scheduler.log_execution_end(execution_id, ExecutionStatus::Completed, None).await?;
+    /// ```
+    pub async fn log_execution_start(&self, job_id: &str) -> SchedulerResult<i64> {
+        let db = self.database.as_ref().ok_or_else(|| {
+            SchedulerError::InternalError(
+                "No database configured for execution logging".to_string(),
+            )
+        })?;
+
+        let started_at = Utc::now().to_rfc3339();
+        let job_id_owned = job_id.to_string();
+
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO job_executions (job_id, started_at, status) VALUES (?1, ?2, ?3)",
+                rusqlite::params![job_id_owned, started_at, "running"],
+            )?;
+            Ok(conn.last_insert_rowid())
+        })
+        .map_err(|e| SchedulerError::InternalError(format!("Failed to log execution start: {}", e)))
+    }
+
+    /// Logs the end of a job execution to the database.
+    ///
+    /// Updates the execution record with the completion status, error (if any), and duration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no database is configured or if the database operation fails.
+    pub async fn log_execution_end(
+        &self,
+        execution_id: i64,
+        status: ExecutionStatus,
+        error: Option<String>,
+    ) -> SchedulerResult<()> {
+        let db = self.database.as_ref().ok_or_else(|| {
+            SchedulerError::InternalError(
+                "No database configured for execution logging".to_string(),
+            )
+        })?;
+
+        let completed_at = Utc::now().to_rfc3339();
+        let status_str = match status {
+            ExecutionStatus::Running => "running",
+            ExecutionStatus::Completed => "completed",
+            ExecutionStatus::Failed => "failed",
+            ExecutionStatus::Cancelled => "cancelled",
+        };
+
+        db.with_connection(|conn| {
+            // Calculate duration from started_at
+            let started_at: String = conn.query_row(
+                "SELECT started_at FROM job_executions WHERE id = ?1",
+                [execution_id],
+                |row| row.get(0),
+            )?;
+
+            let duration_ms = if let (Ok(start), Ok(end)) = (
+                DateTime::parse_from_rfc3339(&started_at),
+                DateTime::parse_from_rfc3339(&completed_at),
+            ) {
+                Some((end - start).num_milliseconds())
+            } else {
+                None
+            };
+
+            conn.execute(
+                "UPDATE job_executions SET completed_at = ?1, status = ?2, error = ?3, duration_ms = ?4 WHERE id = ?5",
+                rusqlite::params![completed_at, status_str, error, duration_ms, execution_id],
+            )?;
+            Ok(())
+        })
+        .map_err(|e| SchedulerError::InternalError(format!("Failed to log execution end: {}", e)))
+    }
+
+    /// Retrieves execution history from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `job_id` - Optional job ID to filter by. If None, returns all executions.
+    /// * `limit` - Maximum number of records to return.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no database is configured or if the database operation fails.
+    pub async fn get_execution_history(
+        &self,
+        job_id: Option<&str>,
+        limit: usize,
+    ) -> SchedulerResult<Vec<JobExecutionRecord>> {
+        let db = self.database.as_ref().ok_or_else(|| {
+            SchedulerError::InternalError(
+                "No database configured for execution logging".to_string(),
+            )
+        })?;
+
+        let job_id_owned = job_id.map(|s| s.to_string());
+        let limit_i64 = limit as i64;
+
+        db.with_connection(|conn| {
+            let mut records = Vec::new();
+
+            if let Some(ref jid) = job_id_owned {
+                let mut stmt = conn.prepare(
+                    "SELECT id, job_id, started_at, completed_at, status, error, duration_ms
+                     FROM job_executions
+                     WHERE job_id = ?1
+                     ORDER BY started_at DESC
+                     LIMIT ?2",
+                )?;
+
+                let rows = stmt.query_map(rusqlite::params![jid, limit_i64], |row| {
+                    Ok(JobExecutionRecord {
+                        id: row.get(0)?,
+                        job_id: row.get(1)?,
+                        started_at: row.get(2)?,
+                        completed_at: row.get(3)?,
+                        status: parse_execution_status(row.get::<_, String>(4)?.as_str()),
+                        error: row.get(5)?,
+                        duration_ms: row.get(6)?,
+                    })
+                })?;
+
+                for row in rows {
+                    records.push(row?);
+                }
+            } else {
+                let mut stmt = conn.prepare(
+                    "SELECT id, job_id, started_at, completed_at, status, error, duration_ms
+                     FROM job_executions
+                     ORDER BY started_at DESC
+                     LIMIT ?1",
+                )?;
+
+                let rows = stmt.query_map([limit_i64], |row| {
+                    Ok(JobExecutionRecord {
+                        id: row.get(0)?,
+                        job_id: row.get(1)?,
+                        started_at: row.get(2)?,
+                        completed_at: row.get(3)?,
+                        status: parse_execution_status(row.get::<_, String>(4)?.as_str()),
+                        error: row.get(5)?,
+                        duration_ms: row.get(6)?,
+                    })
+                })?;
+
+                for row in rows {
+                    records.push(row?);
+                }
+            }
+
+            Ok(records)
+        })
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to get execution history: {}", e))
+        })
+    }
+}
+
+/// Helper function to parse execution status from database string.
+fn parse_execution_status(s: &str) -> ExecutionStatus {
+    match s {
+        "running" => ExecutionStatus::Running,
+        "completed" => ExecutionStatus::Completed,
+        "failed" => ExecutionStatus::Failed,
+        "cancelled" => ExecutionStatus::Cancelled,
+        _ => ExecutionStatus::Failed, // Default to failed for unknown statuses
+    }
 }
 
 impl Default for ProactiveScheduler {
@@ -732,6 +949,7 @@ impl Default for ProactiveScheduler {
             history: Arc::new(RwLock::new(Vec::new())),
             max_history_entries: 1000,
             action_handler: Arc::new(RwLock::new(None)),
+            database: None,
         }
     }
 }
@@ -762,7 +980,8 @@ mod tests {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         // Add job
         let result = scheduler.add_job(job.clone()).await;
@@ -800,7 +1019,8 @@ mod tests {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         scheduler.add_job(job).await.unwrap();
 
@@ -853,7 +1073,8 @@ mod tests {
                 event_name: "test".into(),
                 payload: serde_json::Value::Null,
             })
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         let result = scheduler.add_job(job).await;
         assert!(result.is_ok());
@@ -875,7 +1096,8 @@ mod tests {
                     counter_clone.fetch_add(1, Ordering::SeqCst);
                 }),
             }))
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         scheduler.add_job(job).await.unwrap();
         scheduler.start().await.unwrap();
@@ -902,7 +1124,8 @@ mod tests {
                     counter_clone.fetch_add(1, Ordering::SeqCst);
                 }),
             }))
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         scheduler.add_job(job).await.unwrap();
 
@@ -926,7 +1149,8 @@ mod tests {
             .action(JobAction::Callback(CallbackAction {
                 callback: Arc::new(|| {}),
             }))
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         scheduler.add_job(job).await.unwrap();
         scheduler.start().await.unwrap();
@@ -980,7 +1204,8 @@ mod tests {
             .enabled(false)
             .max_retries(5)
             .metadata("key", serde_json::json!("value"))
-            .build();
+            .build()
+            .expect("Failed to build job");
 
         assert_eq!(job.id, "builder-test");
         assert_eq!(job.name, "Builder Test Job");

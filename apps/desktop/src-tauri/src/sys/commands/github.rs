@@ -116,18 +116,29 @@ pub async fn github_clone_repo(
                 repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
                     .map_err(|e| e.message().to_string())?;
             } else if analysis.0.is_normal() {
+                let head_ref = repo.head().map_err(|e| e.message().to_string())?;
                 let head_commit = repo
-                    .reference_to_annotated_commit(&repo.head().unwrap())
-                    .unwrap();
+                    .reference_to_annotated_commit(&head_ref)
+                    .map_err(|e| e.message().to_string())?;
                 repo.merge(&[&fetch_commit], None, None)
                     .map_err(|e| e.message().to_string())?;
 
-                let sig = repo.signature().unwrap();
-                let tree_id = repo.index().unwrap().write_tree().unwrap();
-                let tree = repo.find_tree(tree_id).unwrap();
+                let sig = repo.signature().map_err(|e| e.message().to_string())?;
+                let tree_id = repo
+                    .index()
+                    .map_err(|e| e.message().to_string())?
+                    .write_tree()
+                    .map_err(|e| e.message().to_string())?;
+                let tree = repo
+                    .find_tree(tree_id)
+                    .map_err(|e| e.message().to_string())?;
 
-                let head_commit_obj = repo.find_commit(head_commit.id()).unwrap();
-                let fetch_commit_obj = repo.find_commit(fetch_commit.id()).unwrap();
+                let head_commit_obj = repo
+                    .find_commit(head_commit.id())
+                    .map_err(|e| e.message().to_string())?;
+                let fetch_commit_obj = repo
+                    .find_commit(fetch_commit.id())
+                    .map_err(|e| e.message().to_string())?;
 
                 repo.commit(
                     Some("HEAD"),
@@ -137,13 +148,16 @@ pub async fn github_clone_repo(
                     &tree,
                     &[&head_commit_obj, &fetch_commit_obj],
                 )
-                .unwrap();
+                .map_err(|e| e.message().to_string())?;
 
-                repo.checkout_head(None).unwrap();
+                repo.checkout_head(None)
+                    .map_err(|e| e.message().to_string())?;
             }
         } else {
-            std::fs::create_dir_all(local_path_clone.parent().unwrap())
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+            if let Some(parent) = local_path_clone.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            }
 
             let mut callbacks = RemoteCallbacks::new();
             callbacks.credentials(|_url, username_from_url, _allowed_types| {

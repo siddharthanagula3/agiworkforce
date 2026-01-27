@@ -74,13 +74,13 @@ struct AsanaTaskCreate {
 }
 
 impl AsanaClient {
-    pub fn new(token: String) -> Self {
+    pub fn new(token: String) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        Self { client, token }
+        Ok(Self { client, token })
     }
 
     pub async fn verify_connection(&mut self) -> Result<String> {
