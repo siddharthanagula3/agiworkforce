@@ -205,7 +205,7 @@ export function TableViewer({
       {/* Table */}
       <div className="overflow-auto" style={{ maxHeight }}>
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm border-b border-border">
+          <thead className="sticky top-0 bg-muted/80 backdrop-blur-xs border-b border-border">
             <tr>
               {data.columns.map((column) => (
                 <th

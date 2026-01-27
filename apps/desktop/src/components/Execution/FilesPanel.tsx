@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import { File, FilePlus, FileEdit, FileX, Check, X, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { defaultEditorOptions, getMonacoTheme } from '../../lib/monaco-config';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import {
   useExecutionStore,
   selectFileChanges,
@@ -18,8 +20,11 @@ export function FilesPanel({ className }: FilesPanelProps) {
   const fileChanges = useExecutionStore(selectFileChanges);
   const activeGoal = useExecutionStore(selectActiveGoal);
   const updateFileChange = useExecutionStore((state) => state.updateFileChange);
+  const { theme } = useThemeContext();
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const monacoTheme = getMonacoTheme(theme);
 
   useEffect(() => {
     if (!selectedFile && fileChanges.length > 0) {
@@ -191,14 +196,13 @@ export function FilesPanel({ className }: FilesPanelProps) {
                   original={selectedFile.oldContent || ''}
                   modified={selectedFile.newContent || ''}
                   language={selectedFile.language || 'plaintext'}
-                  theme="vs-dark"
+                  theme={monacoTheme}
                   options={{
+                    ...defaultEditorOptions,
                     readOnly: true,
                     minimap: { enabled: false },
-                    fontSize: 13,
                     lineNumbers: 'on',
                     renderSideBySide: true,
-                    scrollBeyondLastLine: false,
                     automaticLayout: true,
                   }}
                 />

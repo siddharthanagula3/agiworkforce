@@ -185,9 +185,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             // Code editing - loaded on-demand for code workspaces
             'monaco-vendor': ['monaco-editor'],
 
-            // Flow/diagram editor - loaded on-demand for workflow editor
-            'flow-vendor': ['@xyflow/react'],
-
             // Virtualization for large lists
             'virtualization-vendor': ['react-window', 'react-virtualized-auto-sizer'],
 

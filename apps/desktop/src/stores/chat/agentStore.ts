@@ -122,96 +122,140 @@ export const useAgentStore = create<AgentState>()(
 
         // Agent status actions
         updateAgentStatus: (id, status) =>
-          set((state) => {
-            const index = state.agents.findIndex((a) => a.id === id);
-            if (index !== -1 && state.agents[index]) {
-              Object.assign(state.agents[index]!, status);
-            }
-          }),
+          set(
+            (state) => {
+              const index = state.agents.findIndex((a) => a.id === id);
+              if (index !== -1 && state.agents[index]) {
+                Object.assign(state.agents[index]!, status);
+              }
+            },
+            undefined,
+            'agent/updateAgentStatus',
+          ),
 
         setAgentStatus: (status) =>
-          set((state) => {
-            state.agentStatus = status;
-          }),
+          set(
+            (state) => {
+              state.agentStatus = status;
+            },
+            undefined,
+            'agent/setAgentStatus',
+          ),
 
         addAgent: (agent) =>
-          set((state) => {
-            state.agents.push(agent);
-          }),
+          set(
+            (state) => {
+              state.agents.push(agent);
+            },
+            undefined,
+            'agent/addAgent',
+          ),
 
         removeAgent: (id) =>
-          set((state) => {
-            state.agents = state.agents.filter((a) => a.id !== id);
-          }),
+          set(
+            (state) => {
+              state.agents = state.agents.filter((a) => a.id !== id);
+            },
+            undefined,
+            'agent/removeAgent',
+          ),
 
         // Background task actions
         updateTaskProgress: (id, progress) =>
-          set((state) => {
-            const index = state.backgroundTasks.findIndex((t) => t.id === id);
-            if (index !== -1 && state.backgroundTasks[index]) {
-              state.backgroundTasks[index]!.progress = progress;
-            }
-          }),
+          set(
+            (state) => {
+              const index = state.backgroundTasks.findIndex((t) => t.id === id);
+              if (index !== -1 && state.backgroundTasks[index]) {
+                state.backgroundTasks[index]!.progress = progress;
+              }
+            },
+            undefined,
+            'agent/updateTaskProgress',
+          ),
 
         addBackgroundTask: (task) =>
-          set((state) => {
-            if (state.backgroundTasks.some((t) => t.id === task.id)) {
-              return;
-            }
-            state.backgroundTasks.push({ ...task, createdAt: new Date() });
-          }),
+          set(
+            (state) => {
+              if (state.backgroundTasks.some((t) => t.id === task.id)) {
+                return;
+              }
+              state.backgroundTasks.push({ ...task, createdAt: new Date() });
+            },
+            undefined,
+            'agent/addBackgroundTask',
+          ),
 
         updateBackgroundTask: (id, updates) =>
-          set((state) => {
-            const index = state.backgroundTasks.findIndex((t) => t.id === id);
-            if (index !== -1 && state.backgroundTasks[index]) {
-              Object.assign(state.backgroundTasks[index]!, updates);
-            }
-          }),
+          set(
+            (state) => {
+              const index = state.backgroundTasks.findIndex((t) => t.id === id);
+              if (index !== -1 && state.backgroundTasks[index]) {
+                Object.assign(state.backgroundTasks[index]!, updates);
+              }
+            },
+            undefined,
+            'agent/updateBackgroundTask',
+          ),
 
         clearBackgroundTasks: () =>
-          set((state) => {
-            state.backgroundTasks = [];
-          }),
+          set(
+            (state) => {
+              state.backgroundTasks = [];
+            },
+            undefined,
+            'agent/clearBackgroundTasks',
+          ),
 
         // Action trail actions
         addActionTrailEntry: (entry) =>
-          set((state) => {
-            const newEntry: ActionTrailEntry = {
-              id: crypto.randomUUID(),
-              timestamp: new Date(),
-              ...entry,
-            };
-            state.actionTrail.push(newEntry);
+          set(
+            (state) => {
+              const newEntry: ActionTrailEntry = {
+                id: crypto.randomUUID(),
+                timestamp: new Date(),
+                ...entry,
+              };
+              state.actionTrail.push(newEntry);
 
-            if (entry.fadeAfter) {
-              const timerId = setTimeout(() => {
-                try {
-                  get().removeActionTrailEntry(newEntry.id);
-                } catch (error) {
-                  console.warn('[AgentStore] Error during auto-remove:', error);
-                }
-              }, entry.fadeAfter);
-              state.fadeTimers.set(newEntry.id, timerId);
-            }
-          }),
+              if (entry.fadeAfter) {
+                const timerId = setTimeout(() => {
+                  try {
+                    get().removeActionTrailEntry(newEntry.id);
+                  } catch (error) {
+                    console.warn('[AgentStore] Error during auto-remove:', error);
+                  }
+                }, entry.fadeAfter);
+                state.fadeTimers.set(newEntry.id, timerId);
+              }
+            },
+            undefined,
+            'agent/addActionTrailEntry',
+          ),
 
         removeActionTrailEntry: (id) =>
-          set((state) => {
-            const timerId = state.fadeTimers.get(id);
-            if (timerId !== undefined) {
-              clearTimeout(timerId);
-              state.fadeTimers.delete(id);
-            }
-            state.actionTrail = state.actionTrail.filter((entry) => entry.id !== id);
-          }),
+          set(
+            (state) => {
+              const timerId = state.fadeTimers.get(id);
+              if (timerId !== undefined) {
+                clearTimeout(timerId);
+                state.fadeTimers.delete(id);
+              }
+              state.actionTrail = state.actionTrail.filter((entry) => entry.id !== id);
+            },
+            undefined,
+            'agent/removeActionTrailEntry',
+          ),
 
         clearActionTrail: () =>
-          set((state) => {
-            state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
-            state.fadeTimers.clear();
-            state.actionTrail = [];
-          }),
+          set(
+            (state) => {
+              state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
+              state.fadeTimers.clear();
+              state.actionTrail = [];
+            },
+            undefined,
+            'agent/clearActionTrail',
+          ),
 
         getActiveActionTrail: (messageId) => {
           const state = get();
@@ -223,14 +267,22 @@ export const useAgentStore = create<AgentState>()(
 
         // Autonomous mode actions
         setAutonomousMode: (value) =>
-          set((state) => {
-            state.isAutonomousMode = value;
-          }),
+          set(
+            (state) => {
+              state.isAutonomousMode = value;
+            },
+            undefined,
+            'agent/setAutonomousMode',
+          ),
 
         setMissionControlOpen: (open) =>
-          set((state) => {
-            state.missionControlOpen = open;
-          }),
+          set(
+            (state) => {
+              state.missionControlOpen = open;
+            },
+            undefined,
+            'agent/setMissionControlOpen',
+          ),
 
         // Reset
         resetOnLogout: () => {
@@ -238,15 +290,19 @@ export const useAgentStore = create<AgentState>()(
           const currentFadeTimers = get().fadeTimers;
           currentFadeTimers.forEach((timerId) => clearTimeout(timerId));
 
-          set((state) => {
-            state.agents = [];
-            state.agentStatus = null;
-            state.backgroundTasks = [];
-            state.actionTrail = [];
-            state.fadeTimers = new Map();
-            state.isAutonomousMode = false;
-            state.missionControlOpen = false;
-          });
+          set(
+            (state) => {
+              state.agents = [];
+              state.agentStatus = null;
+              state.backgroundTasks = [];
+              state.actionTrail = [];
+              state.fadeTimers = new Map();
+              state.isAutonomousMode = false;
+              state.missionControlOpen = false;
+            },
+            undefined,
+            'agent/resetOnLogout',
+          );
         },
       })),
     ),
@@ -314,41 +370,49 @@ async function bootstrapAgentStatuses() {
 }
 
 export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
-  useAgentStore.setState((state) => {
-    if (!payloads || payloads.length === 0) {
-      state.agents = [];
-      state.agentStatus = null;
-      return;
-    }
+  useAgentStore.setState(
+    (state) => {
+      if (!payloads || payloads.length === 0) {
+        state.agents = [];
+        state.agentStatus = null;
+        return;
+      }
 
-    const normalized = payloads.map((agent) => mergeAgentStatus(undefined, agent));
-    state.agents = normalized;
-    state.agentStatus =
-      normalized.find((agent) => agent.status === 'running' || agent.status === 'paused') ??
-      normalized[0] ??
-      null;
-  });
+      const normalized = payloads.map((agent) => mergeAgentStatus(undefined, agent));
+      state.agents = normalized;
+      state.agentStatus =
+        normalized.find((agent) => agent.status === 'running' || agent.status === 'paused') ??
+        normalized[0] ??
+        null;
+    },
+    undefined,
+    'agent/applyStatusSnapshot',
+  );
 }
 
 function applyAgentStatusUpdate(payload: AgentStatusPayload) {
-  useAgentStore.setState((state) => {
-    const index = state.agents.findIndex((agent) => agent.id === payload.id);
-    const nextStatus = mergeAgentStatus(index !== -1 ? state.agents[index] : undefined, payload);
+  useAgentStore.setState(
+    (state) => {
+      const index = state.agents.findIndex((agent) => agent.id === payload.id);
+      const nextStatus = mergeAgentStatus(index !== -1 ? state.agents[index] : undefined, payload);
 
-    if (index !== -1) {
-      state.agents[index] = nextStatus;
-    } else {
-      state.agents.push(nextStatus);
-    }
+      if (index !== -1) {
+        state.agents[index] = nextStatus;
+      } else {
+        state.agents.push(nextStatus);
+      }
 
-    if (
-      !state.agentStatus ||
-      state.agentStatus.id === nextStatus.id ||
-      nextStatus.status === 'running'
-    ) {
-      state.agentStatus = nextStatus;
-    }
-  });
+      if (
+        !state.agentStatus ||
+        state.agentStatus.id === nextStatus.id ||
+        nextStatus.status === 'running'
+      ) {
+        state.agentStatus = nextStatus;
+      }
+    },
+    undefined,
+    'agent/applyStatusUpdate',
+  );
 }
 
 function mergeAgentStatus(

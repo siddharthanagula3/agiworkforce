@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
@@ -37,6 +38,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
     }
 
     const terminal = new Terminal({
+      scrollback: 10000,
       cursorBlink: false,
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -75,6 +77,14 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
 
     terminal.open(terminalRef.current);
     fitAddon.fit();
+
+    // Load WebGL addon for GPU acceleration (with fallback)
+    try {
+      const webglAddon = new WebglAddon();
+      terminal.loadAddon(webglAddon);
+    } catch (e) {
+      console.warn('WebGL addon not available, using canvas renderer:', e);
+    }
 
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;

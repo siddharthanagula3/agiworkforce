@@ -367,20 +367,20 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           style={{ left: tabMenu.x, top: tabMenu.y }}
         >
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeCurrent}
           >
             <X className="h-4 w-4" />
             Close tab
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeOthers}
           >
             Close others
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeAll}
           >
             Close all
@@ -388,7 +388,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           <div className="my-1 h-px bg-border/60" />
           <button
             className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveLeft && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
             )}
             onClick={moveLeft}
@@ -399,7 +399,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           </button>
           <button
             className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted',
+              'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveRight && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
             )}
             onClick={moveRight}
@@ -410,14 +410,14 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           </button>
           <div className="my-1 h-px bg-border/60" />
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTab}
           >
             <Save className="h-4 w-4" />
             Save tab
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTabAsCopy}
           >
             <Copy className="h-4 w-4" />
@@ -528,7 +528,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
                     'transition-colors group whitespace-nowrap select-none',
-                    isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50',
+                    isActive ? 'bg-background border border-border shadow-xs' : 'hover:bg-muted/50',
                   )}
                 >
                   <span

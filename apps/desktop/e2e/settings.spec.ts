@@ -81,7 +81,8 @@ test.describe('Settings and Configuration', () => {
   test('should configure resource limits', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    const cpuInput = page.locator('input[name*="cpu"], [data-testid="cpu-limit"]').first();
+    // Use semantic locators for input
+    const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
     const cpuVisible = await cpuInput.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (cpuVisible) {
@@ -100,8 +101,10 @@ test.describe('Settings and Configuration', () => {
   test('should toggle autonomous mode', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for checkbox
     const autonomousToggle = page
-      .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
+      .getByRole('checkbox', { name: /autonomous/i })
+      .or(page.getByTestId('autonomous-toggle'))
       .first();
     const toggleVisible = await autonomousToggle.isVisible({ timeout: 2000 }).catch(() => false);
 
@@ -120,8 +123,10 @@ test.describe('Settings and Configuration', () => {
   test('should configure auto-approval settings', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for checkbox
     const autoApprovalCheckbox = page
-      .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
+      .getByRole('checkbox', { name: /auto.?approv/i })
+      .or(page.getByTestId('auto-approve'))
       .first();
     const checkboxVisible = await autoApprovalCheckbox
       .isVisible({ timeout: 2000 })
@@ -167,14 +172,19 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for tab/button
     const keyboardTab = page
-      .locator('button:has-text("Keyboard"), button:has-text("Shortcuts")')
+      .getByRole('tab', { name: /keyboard|shortcuts/i })
+      .or(page.getByRole('button', { name: /keyboard|shortcuts/i }))
       .first();
 
     if (await errorHandler.isElementVisible(keyboardTab, 2000)) {
       await errorHandler.safeClick(keyboardTab);
 
-      const shortcutsList = page.locator('[data-testid="shortcuts-list"], .shortcuts-list').first();
+      const shortcutsList = page
+        .getByTestId('shortcuts-list')
+        .or(page.locator('.shortcuts-list'))
+        .first();
 
       if (await errorHandler.isElementVisible(shortcutsList, 2000)) {
         await expect(shortcutsList).toBeVisible();
@@ -186,12 +196,17 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
-    const notificationsTab = page.locator('button:has-text("Notifications")').first();
+    // Use semantic role for tab/button
+    const notificationsTab = page
+      .getByRole('tab', { name: /notifications/i })
+      .or(page.getByRole('button', { name: /notifications/i }))
+      .first();
 
     if (await errorHandler.isElementVisible(notificationsTab, 2000)) {
       await errorHandler.safeClick(notificationsTab);
 
-      const notificationToggle = page.locator('input[type="checkbox"]').first();
+      // Use semantic role for checkbox
+      const notificationToggle = page.getByRole('checkbox').first();
 
       if (await errorHandler.isElementVisible(notificationToggle, 2000)) {
         await errorHandler.safeClick(notificationToggle);
@@ -208,13 +223,19 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
-    const privacyTab = page.locator('button:has-text("Privacy"), button:has-text("Data")').first();
+    // Use semantic role for tab/button
+    const privacyTab = page
+      .getByRole('tab', { name: /privacy|data/i })
+      .or(page.getByRole('button', { name: /privacy|data/i }))
+      .first();
 
     if (await errorHandler.isElementVisible(privacyTab, 2000)) {
       await errorHandler.safeClick(privacyTab);
 
+      // Use semantic role for combobox
       const retentionSelect = page
-        .locator('select[name*="retention"], [data-testid="retention-period"]')
+        .getByRole('combobox', { name: /retention/i })
+        .or(page.getByTestId('retention-period'))
         .first();
 
       if (await errorHandler.isElementVisible(retentionSelect, 2000)) {
@@ -231,8 +252,10 @@ test.describe('Settings and Configuration', () => {
   test('should export settings configuration', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for button
     const exportButton = page
-      .locator('button:has-text("Export"), [data-testid="export-settings"]')
+      .getByRole('button', { name: /export/i })
+      .or(page.getByTestId('export-settings'))
       .first();
 
     if (await exportButton.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -244,8 +267,10 @@ test.describe('Settings and Configuration', () => {
   test('should import settings configuration', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for button
     const importButton = page
-      .locator('button:has-text("Import"), [data-testid="import-settings"]')
+      .getByRole('button', { name: /import/i })
+      .or(page.getByTestId('import-settings'))
       .first();
 
     if (await importButton.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -256,7 +281,8 @@ test.describe('Settings and Configuration', () => {
   test('should validate settings before saving', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    const cpuInput = page.locator('input[name*="cpu"], [data-testid="cpu-limit"]').first();
+    // Use semantic locators for input
+    const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
 
     if (await cpuInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await cpuInput.clear();
@@ -264,7 +290,8 @@ test.describe('Settings and Configuration', () => {
 
       await settingsPage.saveButton.click();
 
-      const errorMessage = page.locator('[role="alert"], .error-message').first();
+      // Use semantic role for alert
+      const errorMessage = page.getByRole('alert').or(page.locator('.error-message')).first();
 
       await page.waitForTimeout(1000);
 
@@ -278,12 +305,16 @@ test.describe('Settings and Configuration', () => {
   test('should display current version information', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    const aboutTab = page.locator('button:has-text("About")').first();
+    // Use semantic role for tab/button
+    const aboutTab = page
+      .getByRole('tab', { name: /about/i })
+      .or(page.getByRole('button', { name: /about/i }))
+      .first();
 
     if (await aboutTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await aboutTab.click();
 
-      const versionInfo = page.locator('[data-testid="version"], .version-info').first();
+      const versionInfo = page.getByTestId('version').or(page.locator('.version-info')).first();
 
       if (await versionInfo.isVisible({ timeout: 2000 }).catch(() => false)) {
         const versionText = await versionInfo.textContent();
@@ -295,8 +326,10 @@ test.describe('Settings and Configuration', () => {
   test('should check for updates', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
+    // Use semantic role for button
     const checkUpdatesButton = page
-      .locator('button:has-text("Check for Updates"), [data-testid="check-updates"]')
+      .getByRole('button', { name: /check for updates/i })
+      .or(page.getByTestId('check-updates'))
       .first();
 
     if (await checkUpdatesButton.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -304,7 +337,10 @@ test.describe('Settings and Configuration', () => {
 
       await page.waitForTimeout(2000);
 
-      const updateStatus = page.locator('[data-testid="update-status"], .update-status').first();
+      const updateStatus = page
+        .getByTestId('update-status')
+        .or(page.locator('.update-status'))
+        .first();
 
       if (await updateStatus.isVisible({ timeout: 3000 }).catch(() => false)) {
         await expect(updateStatus).toBeVisible();

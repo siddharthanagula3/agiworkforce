@@ -23,9 +23,9 @@ test.describe('Automation Workflow', () => {
     if (await refreshButton.isVisible()) {
       await refreshButton.click();
 
-      await page.waitForTimeout(1000);
-
+      // Wait for windows list to appear after refresh
       const windowsList = page.locator('[data-testid="windows-list"], .windows-list').first();
+      await windowsList.waitFor({ state: 'visible', timeout: 5000 });
       await expect(windowsList).toBeVisible();
 
       const windowItems = windowsList.locator('li, [data-testid="window-item"]');
@@ -47,9 +47,9 @@ test.describe('Automation Workflow', () => {
         .first();
       await searchButton.click();
 
-      await page.waitForTimeout(1000);
-
+      // Wait for search results to appear
       const resultsList = page.locator('[data-testid="search-results"], .search-results').first();
+      await resultsList.waitFor({ state: 'visible', timeout: 5000 });
       await expect(resultsList).toBeVisible();
     }
   });
@@ -62,12 +62,12 @@ test.describe('Automation Workflow', () => {
     if (await screenshotButton.isVisible()) {
       await screenshotButton.click();
 
-      await page.waitForTimeout(2000);
-
+      // Wait for screenshot preview to appear
       const preview = page
         .locator('[data-testid="screenshot-preview"], .screenshot-preview img')
         .first();
-      await expect(preview).toBeVisible({ timeout: 5000 });
+      await preview.waitFor({ state: 'visible', timeout: 10000 });
+      await expect(preview).toBeVisible();
     }
   });
 
@@ -104,9 +104,9 @@ test.describe('Automation Workflow', () => {
       await typeInput.fill('Hello, World!');
       await typeButton.click();
 
-      await page.waitForTimeout(1000);
+      // Wait for success indicator to appear
       const successIndicator = page.locator('.success, [data-status="success"]').first();
-      await expect(successIndicator).toBeVisible({ timeout: 3000 });
+      await expect(successIndicator).toBeVisible({ timeout: 5000 });
     }
   });
 
@@ -127,7 +127,9 @@ test.describe('Automation Workflow', () => {
 
         await hotkeyButton.click();
 
-        await page.waitForTimeout(1000);
+        // Wait for hotkey action to complete - check for success indicator or button state
+        const successIndicator = page.locator('.success, [data-status="success"]').first();
+        await successIndicator.waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
       }
     }
   });
@@ -153,12 +155,12 @@ test.describe('Automation Workflow', () => {
     if (await filterInput.isVisible()) {
       await filterInput.fill('Chrome');
 
-      await page.waitForTimeout(500);
-
-      const visibleWindows = page.locator('[data-testid="window-item"]:visible');
-      const count = await visibleWindows.count();
-
-      expect(count).toBeGreaterThanOrEqual(0);
+      // Wait for filter to be applied
+      await expect(async () => {
+        const visibleWindows = page.locator('[data-testid="window-item"]:visible');
+        const count = await visibleWindows.count();
+        expect(count).toBeGreaterThanOrEqual(0);
+      }).toPass({ timeout: 3000 });
     }
   });
 
@@ -169,17 +171,21 @@ test.describe('Automation Workflow', () => {
 
     if (await screenshotButton.isVisible()) {
       await screenshotButton.click();
-      await page.waitForTimeout(2000);
+
+      // Wait for screenshot preview to appear before clicking OCR
+      const preview = page
+        .locator('[data-testid="screenshot-preview"], .screenshot-preview img')
+        .first();
+      await preview.waitFor({ state: 'visible', timeout: 10000 });
 
       const ocrButton = page.locator('button:has-text("OCR"), [data-testid="perform-ocr"]').first();
 
       if (await ocrButton.isVisible()) {
         await ocrButton.click();
 
-        await page.waitForTimeout(3000);
-
+        // Wait for OCR results to appear
         const ocrResults = page.locator('[data-testid="ocr-results"], .ocr-results').first();
-        await expect(ocrResults).toBeVisible({ timeout: 10000 });
+        await expect(ocrResults).toBeVisible({ timeout: 15000 });
       }
     }
   });

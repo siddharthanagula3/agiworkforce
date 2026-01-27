@@ -66,7 +66,7 @@ export function ApplicationPreview() {
       </div>
 
       {/* Main Preview */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm mx-auto max-w-5xl shadow-2xl shadow-blue-900/20">
+      <div className="rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur-xs mx-auto max-w-5xl shadow-2xl shadow-blue-900/20">
         <div className="rounded-lg bg-black aspect-video w-full flex items-center justify-center border border-white/5 relative overflow-hidden group">
           {/* Screenshot/Video */}
           {!showVideo ? (
@@ -82,7 +82,7 @@ export function ApplicationPreview() {
               {/* Play Button Overlay */}
               <button
                 onClick={() => setShowVideo(true)}
-                className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm transition-all hover:bg-black/30 group/play"
+                className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-xs transition-all hover:bg-black/30 group/play"
                 aria-label="Play demo video"
               >
                 <div className="rounded-full bg-blue-600 p-4 transition-transform group-hover/play:scale-110 group-hover/play:bg-blue-500">
@@ -131,13 +131,13 @@ export function ApplicationPreview() {
 
           {/* Feature Callouts (Optional - can be shown on hover) */}
           <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="rounded-full bg-blue-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
+            <div className="rounded-full bg-blue-600/90 backdrop-blur-xs px-3 py-1 text-xs font-medium text-white">
               💬 Just describe what you want
             </div>
-            <div className="rounded-full bg-emerald-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
+            <div className="rounded-full bg-emerald-600/90 backdrop-blur-xs px-3 py-1 text-xs font-medium text-white">
               ↩️ Everything is reversible
             </div>
-            <div className="rounded-full bg-purple-600/90 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
+            <div className="rounded-full bg-purple-600/90 backdrop-blur-xs px-3 py-1 text-xs font-medium text-white">
               🤖 GPT-5, Claude 4.5, Gemini 3 & more
             </div>
           </div>

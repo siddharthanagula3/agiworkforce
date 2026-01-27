@@ -241,7 +241,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             transition={{ delay: 0.2 }}
             className="flex items-center gap-3 mb-12"
           >
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center">
               <Sparkles className="w-6 h-6" />
             </div>
             <span className="text-2xl font-bold">AGI Workforce</span>
@@ -280,7 +280,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
                 transition={{ delay: 0.5 + index * 0.1 }}
                 className="flex items-start gap-4"
               >
-                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
                   <feature.icon className="w-5 h-5" />
                 </div>
                 <div>
