@@ -63,7 +63,13 @@ pub async fn agent_init(
     tokio::spawn(async move {
         let agent = {
             let guard = agent_clone.lock().await;
-            guard.clone_for_task()
+            match guard.clone_for_task() {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::error!("[Agent] Failed to clone agent for task: {}", e);
+                    return;
+                }
+            }
         };
         if let Err(e) = agent.start().await {
             tracing::error!("[Agent] Agent loop error: {}", e);

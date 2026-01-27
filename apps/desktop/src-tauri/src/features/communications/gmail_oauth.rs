@@ -108,7 +108,7 @@ impl GmailOAuthClient {
     /// * `client_id` - Google OAuth client ID
     /// * `client_secret` - Google OAuth client secret
     /// * `redirect_uri` - OAuth redirect URI (must match Google Console configuration)
-    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Self {
+    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Result<Self> {
         let oauth_config = OAuth2Config {
             client_id,
             client_secret: Some(client_secret),
@@ -128,16 +128,16 @@ impl GmailOAuthClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        let oauth_client =
-            OAuth2Client::new(oauth_config).expect("Failed to create OAuth client for Gmail");
+        let oauth_client = OAuth2Client::new(oauth_config)
+            .map_err(|e| Error::Other(format!("Failed to create OAuth client for Gmail: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
             oauth_client,
             token: None,
-        }
+        })
     }
 
     /// Generate authorization URL with PKCE challenge
@@ -342,7 +342,7 @@ impl GmailOAuthManager {
             client_id.clone(),
             client_secret.clone(),
             redirect_uri.clone(),
-        );
+        )?;
 
         let (auth_url, pkce) = client.generate_auth_url(&state);
 
@@ -384,7 +384,7 @@ impl GmailOAuthManager {
             settings.client_id.clone(),
             settings.client_secret.clone(),
             settings.redirect_uri.clone(),
-        );
+        )?;
 
         let token = client.exchange_code(code, &pkce.code_verifier).await?;
 
@@ -418,7 +418,7 @@ impl GmailOAuthManager {
         account_id: String,
         info: GmailAccountInfo,
         client: Option<GmailOAuthClient>,
-    ) {
+    ) -> Result<()> {
         if let Some(client) = client {
             self.clients.insert(account_id.clone(), client);
         } else if !self.clients.contains_key(&account_id) {
@@ -426,7 +426,7 @@ impl GmailOAuthManager {
                 info.settings.client_id.clone(),
                 info.settings.client_secret.clone(),
                 info.settings.redirect_uri.clone(),
-            );
+            )?;
             client.set_token(info.token.clone());
             self.clients.insert(account_id.clone(), client);
         } else if let Some(mut entry) = self.clients.get_mut(&account_id) {
@@ -434,6 +434,7 @@ impl GmailOAuthManager {
         }
 
         self.accounts.insert(account_id, info);
+        Ok(())
     }
 
     /// Remove an account from the manager
@@ -497,7 +498,7 @@ impl GmailOAuthManager {
             info.settings.client_id.clone(),
             info.settings.client_secret.clone(),
             info.settings.redirect_uri.clone(),
-        );
+        )?;
 
         let new_token = client.refresh_token(&refresh_token).await?;
 
@@ -536,7 +537,8 @@ mod tests {
             "test_client_id".to_string(),
             "test_client_secret".to_string(),
             "http://localhost:3000/callback".to_string(),
-        );
+        )
+        .expect("Failed to create client");
 
         assert!(client.token().is_none());
     }
@@ -547,7 +549,8 @@ mod tests {
             "test_client_id".to_string(),
             "test_client_secret".to_string(),
             "http://localhost:3000/callback".to_string(),
-        );
+        )
+        .expect("Failed to create client");
 
         let (auth_url, pkce) = client.generate_auth_url("test_state");
 
@@ -624,7 +627,9 @@ mod tests {
             picture_url: None,
         };
 
-        manager.upsert_account("account_1".to_string(), info.clone(), None);
+        manager
+            .upsert_account("account_1".to_string(), info.clone(), None)
+            .expect("Failed to upsert account");
 
         assert_eq!(manager.list_accounts().len(), 1);
         assert!(manager.account_info("account_1").is_some());

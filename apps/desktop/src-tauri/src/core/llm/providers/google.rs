@@ -133,20 +133,20 @@ pub struct GoogleProvider {
 }
 
 impl GoogleProvider {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         // Use environment variable for base URL, defaulting to official Google Generative AI API
         let base_url = std::env::var("GOOGLE_API_BASE")
             .unwrap_or_else(|_| "https://generativelanguage.googleapis.com/v1beta".to_string());
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {

@@ -16,7 +16,7 @@ pub struct HttpClient {
 
 impl HttpClient {
     /// Create a new HTTP client with retry and timeout configuration
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, String> {
         // Retry policy: exponential backoff for transient errors
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3); // Retry up to 3 times
 
@@ -25,15 +25,15 @@ impl HttpClient {
             .connect_timeout(Duration::from_secs(30)) // 30s connect timeout
             .timeout(Duration::from_secs(300)) // 5m read timeout
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
         let client = ClientBuilder::new(client)
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
-        Self {
+        Ok(Self {
             client: Arc::new(client),
-        }
+        })
     }
 
     /// Get a clone of the underlying client
@@ -44,7 +44,10 @@ impl HttpClient {
 
 impl Default for HttpClient {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default HttpClient: {}", e);
+            panic!("Failed to create default HttpClient: {}", e);
+        })
     }
 }
 

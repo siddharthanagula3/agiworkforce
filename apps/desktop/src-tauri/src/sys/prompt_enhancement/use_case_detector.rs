@@ -242,7 +242,8 @@ impl UseCaseDetector {
             .map(|(uc, score)| (*uc, score / max_score))
             .collect();
 
-        normalized_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        normalized_scores
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         let (primary_use_case, primary_confidence) = normalized_scores[0];
         let primary_keywords = matched_keywords

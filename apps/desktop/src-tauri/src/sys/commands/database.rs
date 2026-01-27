@@ -102,17 +102,18 @@ pub async fn db_execute_query(
 
     let state = state.lock().await;
 
-    state
+    let result = state
         .sql_client
         .execute_query(&connection_id, &sql)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
         .map_err(|e| {
             format!(
                 "Query execution failed for connection '{}': {}",
                 connection_id, e
             )
-        })
+        })?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -145,12 +146,13 @@ pub async fn db_execute_prepared(
 
     let state = state.lock().await;
 
-    state
+    let result = state
         .sql_client
         .execute_prepared(&connection_id, &sql, &params)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("Prepared statement execution failed: {}", e))
+        .map_err(|e| format!("Prepared statement execution failed: {}", e))?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -195,7 +197,7 @@ pub async fn db_execute_batch(
         .map(|results| {
             results
                 .into_iter()
-                .map(|r| serde_json::to_value(r).unwrap())
+                .filter_map(|r| serde_json::to_value(r).ok())
                 .collect()
         })
         .map_err(|e| format!("Batch execution failed: {}", e))
@@ -228,12 +230,13 @@ pub async fn db_get_pool_stats(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
 
-    state
+    let stats = state
         .sql_client
         .get_pool_stats(&connection_id)
         .await
-        .map(|stats| serde_json::to_value(stats).unwrap())
-        .map_err(|e| format!("Failed to get pool stats: {}", e))
+        .map_err(|e| format!("Failed to get pool stats: {}", e))?;
+
+    serde_json::to_value(stats).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -272,12 +275,13 @@ pub async fn db_mysql_describe_table(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
 
-    state
+    let result = state
         .sql_client
         .mysql_describe_table(&connection_id, &table_name)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("MySQL describe table failed: {}", e))
+        .map_err(|e| format!("MySQL describe table failed: {}", e))?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -288,12 +292,13 @@ pub async fn db_mysql_list_indexes(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
 
-    state
+    let result = state
         .sql_client
         .mysql_list_indexes(&connection_id, &table_name)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("MySQL list indexes failed: {}", e))
+        .map_err(|e| format!("MySQL list indexes failed: {}", e))?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -312,7 +317,7 @@ pub async fn db_mysql_call_procedure(
         .map(|results| {
             results
                 .into_iter()
-                .map(|r| serde_json::to_value(r).unwrap())
+                .filter_map(|r| serde_json::to_value(r).ok())
                 .collect()
         })
         .map_err(|e| format!("MySQL call procedure failed: {}", e))
@@ -449,12 +454,13 @@ pub async fn db_mongo_find(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
 
-    state
+    let result = state
         .mongo_client
         .find(&connection_id, &collection, &filter, limit)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("MongoDB find failed: {}", e))
+        .map_err(|e| format!("MongoDB find failed: {}", e))?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]
@@ -515,12 +521,13 @@ pub async fn db_mongo_update_many(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
 
-    state
+    let result = state
         .mongo_client
         .update_many(&connection_id, &collection, &filter, &update)
         .await
-        .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("MongoDB updateMany failed: {}", e))
+        .map_err(|e| format!("MongoDB updateMany failed: {}", e))?;
+
+    serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
 #[tauri::command]

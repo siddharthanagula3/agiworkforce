@@ -320,12 +320,16 @@ pub async fn llm_configure_provider(
 
     match provider.as_str() {
         "ollama" => {
-            router.set_ollama(Box::new(OllamaProvider::new(base_url)));
+            let ollama = OllamaProvider::new(base_url)
+                .map_err(|e| format!("Failed to create Ollama provider: {}", e))?;
+            router.set_ollama(Box::new(ollama));
             Ok(())
         }
         "managed_cloud" | "managedcloud" | "cloud" => {
             // ManagedCloud doesn't need an API key - it uses the access token from keyring
-            router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
+            let managed = ManagedCloudProvider::new()
+                .map_err(|e| format!("Failed to create ManagedCloud provider: {}", e))?;
+            router.set_managed_cloud(Box::new(managed));
             Ok(())
         }
         _ => Err(format!(
@@ -372,9 +376,14 @@ pub async fn llm_ensure_managed_cloud(state: State<'_, LLMState>) -> Result<bool
     match get_access_token() {
         Ok(_) => {
             // User is authenticated, register ManagedCloud provider
-            let mut router = state.router.write().await;
-            router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
-            Ok(true)
+            match ManagedCloudProvider::new() {
+                Ok(provider) => {
+                    let mut router = state.router.write().await;
+                    router.set_managed_cloud(Box::new(provider));
+                    Ok(true)
+                }
+                Err(_) => Ok(false),
+            }
         }
         Err(_) => {
             // User not authenticated, ManagedCloud won't be available

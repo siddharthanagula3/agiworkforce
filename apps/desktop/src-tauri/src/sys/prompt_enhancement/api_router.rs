@@ -58,10 +58,10 @@ impl APIRouter {
     }
 
     pub fn suggest_provider(&self, use_case: UseCase, context: &PromptContext) -> APIProvider {
-        let providers = self
-            .routing_rules
-            .get(&use_case)
-            .expect("Use case should have routing rules");
+        let providers = match self.routing_rules.get(&use_case) {
+            Some(p) => p,
+            None => return APIProvider::GPT, // Default fallback
+        };
 
         if use_case == UseCase::Coding {
             if let Some(complexity) = context.complexity {
@@ -71,7 +71,7 @@ impl APIRouter {
             }
         }
 
-        providers[0]
+        providers.first().copied().unwrap_or(APIProvider::GPT)
     }
 
     pub fn get_fallback_providers(&self, use_case: UseCase) -> Vec<APIProvider> {
@@ -90,8 +90,8 @@ impl APIRouter {
         let mut providers = self
             .routing_rules
             .get(&use_case)
-            .expect("Use case should have routing rules")
-            .clone();
+            .cloned()
+            .unwrap_or_else(|| vec![APIProvider::GPT]);
 
         if prefer_local && providers.contains(&APIProvider::Ollama) {
             providers.retain(|p| *p != APIProvider::Ollama);

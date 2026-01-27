@@ -5,6 +5,7 @@ pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
 pub mod command_validator;
+pub mod dm_protection;
 pub mod encryption;
 pub mod guardrails;
 pub mod injection_detector;
@@ -35,6 +36,9 @@ pub use audit_logger::{
 };
 pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
 pub use auth_db::{AuthAuditLog, AuthDatabaseManager};
+pub use dm_protection::{
+    AllowlistedSender, DmProtection, DmProtectionConfig, PairingCode, VerificationMethod,
+};
 pub use encryption::{decrypt_secret, encrypt_secret, EncryptedSecret, SecretStore};
 pub use machine_key::{derive_key, derive_key_base64, get_machine_id_hash, KeyPurpose};
 pub use oauth::{

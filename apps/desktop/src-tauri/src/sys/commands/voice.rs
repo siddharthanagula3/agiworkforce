@@ -1,10 +1,19 @@
+//! Tauri commands for voice functionality (transcription, TTS, wake word, PTT)
+
+use crate::features::speech::{
+    create_tts_provider, PttConfig, PushToTalk, TtsConfig, TtsProvider, Voice, VoiceWake,
+    WakeWordConfig,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
+
+// =============================================================================
+// Transcription Types and State
+// =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceTranscription {
@@ -33,6 +42,9 @@ pub enum VoiceProvider {
 pub struct VoiceState {
     pub settings: Arc<Mutex<VoiceSettings>>,
     pub client: Client,
+    pub tts_config: Arc<RwLock<TtsConfig>>,
+    pub wake: Arc<RwLock<VoiceWake>>,
+    pub ptt: Arc<RwLock<PushToTalk>>,
 }
 
 impl VoiceState {
@@ -45,6 +57,9 @@ impl VoiceState {
                 language: None,
             })),
             client: Client::new(),
+            tts_config: Arc::new(RwLock::new(TtsConfig::default())),
+            wake: Arc::new(RwLock::new(VoiceWake::default())),
+            ptt: Arc::new(RwLock::new(PushToTalk::default())),
         }
     }
 }
@@ -54,6 +69,19 @@ impl Default for VoiceState {
         Self::new()
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VoiceCapabilities {
+    pub tts_available: bool,
+    pub tts_provider: String,
+    pub wake_word_enabled: bool,
+    pub ptt_enabled: bool,
+    pub ptt_hotkey: String,
+}
+
+// =============================================================================
+// Transcription Commands
+// =============================================================================
 
 #[tauri::command]
 pub async fn voice_transcribe_file(
@@ -72,7 +100,7 @@ pub async fn voice_transcribe_file(
         VoiceProvider::WebSpeech => {
             Err("Web Speech API transcription must be done from frontend".to_string())
         }
-        VoiceProvider::Local => transcribe_with_local_whisper(&audio_path, &settings).await,
+        VoiceProvider::Local => Err("Local Whisper model not yet implemented".to_string()),
     }
 }
 
@@ -157,6 +185,34 @@ pub async fn voice_stop_recording() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn voice_check_local_whisper() -> Result<bool, String> {
+    // Check if local Whisper model is available
+    // This checks for common whisper.cpp paths
+    let possible_paths = ["/usr/local/bin/whisper", "/usr/bin/whisper"];
+
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            return Ok(true);
+        }
+    }
+
+    // Check home directory paths
+    if let Some(home) = dirs::home_dir() {
+        let home_whisper = home.join(".local/bin/whisper");
+        if home_whisper.exists() {
+            return Ok(true);
+        }
+    }
+
+    // Also check if whisper is in PATH
+    if which::which("whisper").is_ok() {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
 async fn transcribe_with_openai(
     audio_path: &PathBuf,
     settings: &VoiceSettings,
@@ -226,208 +282,161 @@ struct WhisperResponse {
     duration: Option<f32>,
 }
 
-/// Local Whisper transcription using whisper.cpp CLI or Python whisper
-/// Falls back to available local whisper implementation
-async fn transcribe_with_local_whisper(
-    audio_path: &PathBuf,
-    settings: &VoiceSettings,
-) -> Result<VoiceTranscription, String> {
-    tracing::info!(
-        "Attempting local Whisper transcription for: {:?}",
-        audio_path
-    );
+// =============================================================================
+// TTS Commands
+// =============================================================================
 
-    // Determine model size from settings (default to "base" for speed)
-    let model_size = if settings.model.contains("large") {
-        "large"
-    } else if settings.model.contains("medium") {
-        "medium"
-    } else if settings.model.contains("small") {
-        "small"
-    } else if settings.model.contains("tiny") {
-        "tiny"
-    } else {
-        "base"
-    };
-
-    // Try whisper.cpp first (faster, C++ implementation)
-    if let Ok(result) = try_whisper_cpp(audio_path, model_size, settings.language.as_deref()).await
-    {
-        return Ok(result);
-    }
-
-    // Fall back to Python whisper CLI
-    if let Ok(result) =
-        try_python_whisper(audio_path, model_size, settings.language.as_deref()).await
-    {
-        return Ok(result);
-    }
-
-    // Fall back to mlx-whisper (Apple Silicon optimized)
-    if let Ok(result) = try_mlx_whisper(audio_path, model_size, settings.language.as_deref()).await
-    {
-        return Ok(result);
-    }
-
-    Err("Local Whisper not available. Install one of:\n\
-         - whisper.cpp: brew install whisper-cpp\n\
-         - Python whisper: pip install openai-whisper\n\
-         - MLX whisper: pip install mlx-whisper (Apple Silicon)"
-        .to_string())
-}
-
-/// Try whisper.cpp CLI
-async fn try_whisper_cpp(
-    audio_path: &PathBuf,
-    model: &str,
-    language: Option<&str>,
-) -> Result<VoiceTranscription, String> {
-    let mut cmd = Command::new("whisper-cpp");
-    cmd.arg("-m")
-        .arg(format!("ggml-{}.bin", model))
-        .arg("-f")
-        .arg(audio_path)
-        .arg("--output-txt")
-        .arg("--no-timestamps");
-
-    if let Some(lang) = language {
-        cmd.arg("-l").arg(lang);
-    }
-
-    let output = cmd
-        .output()
-        .map_err(|e| format!("whisper-cpp not found: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "whisper-cpp failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    Ok(VoiceTranscription {
-        text,
-        language: language.map(|s| s.to_string()),
-        duration: None,
-        confidence: Some(0.9), // Local models don't provide confidence
-    })
-}
-
-/// Try Python OpenAI Whisper CLI
-async fn try_python_whisper(
-    audio_path: &PathBuf,
-    model: &str,
-    language: Option<&str>,
-) -> Result<VoiceTranscription, String> {
-    let mut cmd = Command::new("whisper");
-    cmd.arg(audio_path)
-        .arg("--model")
-        .arg(model)
-        .arg("--output_format")
-        .arg("txt");
-
-    if let Some(lang) = language {
-        cmd.arg("--language").arg(lang);
-    }
-
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Python whisper not found: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Python whisper failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Python whisper outputs to a .txt file with same name
-    let txt_path = audio_path.with_extension("txt");
-    let text = std::fs::read_to_string(&txt_path)
-        .map_err(|e| format!("Failed to read whisper output: {}", e))?;
-
-    // Clean up the output file
-    let _ = std::fs::remove_file(txt_path);
-
-    Ok(VoiceTranscription {
-        text: text.trim().to_string(),
-        language: language.map(|s| s.to_string()),
-        duration: None,
-        confidence: Some(0.9),
-    })
-}
-
-/// Try MLX Whisper (Apple Silicon optimized)
-async fn try_mlx_whisper(
-    audio_path: &PathBuf,
-    model: &str,
-    language: Option<&str>,
-) -> Result<VoiceTranscription, String> {
-    let mut cmd = Command::new("mlx_whisper");
-    cmd.arg(audio_path)
-        .arg("--model")
-        .arg(format!("mlx-community/whisper-{}-mlx", model));
-
-    if let Some(lang) = language {
-        cmd.arg("--language").arg(lang);
-    }
-
-    let output = cmd
-        .output()
-        .map_err(|e| format!("mlx_whisper not found: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "mlx_whisper failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    Ok(VoiceTranscription {
-        text,
-        language: language.map(|s| s.to_string()),
-        duration: None,
-        confidence: Some(0.9),
-    })
-}
-
+/// Get voice capabilities
 #[tauri::command]
-pub async fn voice_check_local_whisper() -> Result<Vec<String>, String> {
-    let mut available = Vec::new();
+pub async fn voice_get_capabilities(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+) -> Result<VoiceCapabilities, String> {
+    let voice_state = state.lock().await;
+    let tts_config = voice_state.tts_config.read().await;
+    let wake = voice_state.wake.read().await;
+    let ptt = voice_state.ptt.read().await;
 
-    // Check whisper.cpp
-    if Command::new("whisper-cpp")
-        .arg("--help")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        available.push("whisper-cpp".to_string());
+    Ok(VoiceCapabilities {
+        tts_available: tts_config.api_key.is_some()
+            || matches!(tts_config.provider, TtsProvider::System),
+        tts_provider: format!("{:?}", tts_config.provider),
+        wake_word_enabled: wake.get_config().enabled,
+        ptt_enabled: ptt.get_config().enabled,
+        ptt_hotkey: ptt.get_config().hotkey.clone(),
+    })
+}
+
+/// Speak text using TTS
+#[tauri::command]
+pub async fn voice_tts_speak(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    text: String,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let config = voice_state.tts_config.read().await.clone();
+    let provider = create_tts_provider(config);
+
+    provider
+        .synthesize(&text)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// List available TTS voices
+#[tauri::command]
+pub async fn voice_tts_list_voices(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+) -> Result<Vec<Voice>, String> {
+    let voice_state = state.lock().await;
+    let config = voice_state.tts_config.read().await.clone();
+    let provider = create_tts_provider(config);
+
+    provider.list_voices().await.map_err(|e| e.to_string())
+}
+
+/// Configure TTS
+#[tauri::command]
+pub async fn voice_tts_configure(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    config: TtsConfig,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let mut current = voice_state.tts_config.write().await;
+    *current = config;
+    Ok(())
+}
+
+// =============================================================================
+// Wake Word Commands
+// =============================================================================
+
+/// Enable wake word detection
+#[tauri::command]
+pub async fn voice_wake_enable(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    config: Option<WakeWordConfig>,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let mut wake = voice_state.wake.write().await;
+
+    if let Some(cfg) = config {
+        wake.update_config(cfg);
     }
 
-    // Check Python whisper
-    if Command::new("whisper")
-        .arg("--help")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        available.push("python-whisper".to_string());
-    }
+    wake.start().await.map(|_| ()).map_err(|e| e.to_string())
+}
 
-    // Check MLX whisper
-    if Command::new("mlx_whisper")
-        .arg("--help")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        available.push("mlx-whisper".to_string());
-    }
+/// Disable wake word detection
+#[tauri::command]
+pub async fn voice_wake_disable(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let wake = voice_state.wake.read().await;
+    wake.stop();
+    Ok(())
+}
 
-    Ok(available)
+/// Get wake word status
+#[tauri::command]
+pub async fn voice_wake_status(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<bool, String> {
+    let voice_state = state.lock().await;
+    let wake = voice_state.wake.read().await;
+    Ok(wake.is_listening())
+}
+
+/// Configure wake word
+#[tauri::command]
+pub async fn voice_wake_configure(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    config: WakeWordConfig,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let mut wake = voice_state.wake.write().await;
+    wake.update_config(config);
+    Ok(())
+}
+
+// =============================================================================
+// Push-to-Talk Commands
+// =============================================================================
+
+/// Configure push-to-talk
+#[tauri::command]
+pub async fn voice_ptt_configure(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    config: PttConfig,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let mut ptt = voice_state.ptt.write().await;
+    ptt.update_config(config);
+    Ok(())
+}
+
+/// Get PTT state
+#[tauri::command]
+pub async fn voice_ptt_state(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<String, String> {
+    let voice_state = state.lock().await;
+    let ptt = voice_state.ptt.read().await;
+    Ok(format!("{:?}", ptt.get_state()))
+}
+
+/// Handle PTT key down
+#[tauri::command]
+pub async fn voice_ptt_key_down(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let ptt = voice_state.ptt.read().await;
+    ptt.key_down().await.map_err(|e| e.to_string())
+}
+
+/// Handle PTT key up
+#[tauri::command]
+pub async fn voice_ptt_key_up(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+) -> Result<Option<usize>, String> {
+    let voice_state = state.lock().await;
+    let ptt = voice_state.ptt.read().await;
+    ptt.key_up()
+        .await
+        .map(|audio| audio.map(|a| a.len()))
+        .map_err(|e| e.to_string())
 }

@@ -120,7 +120,7 @@ pub async fn calendar_complete_oauth(
 
     state
         .manager
-        .upsert_account(account_id.clone(), account_info.clone(), Some(client));
+        .upsert_account(account_id.clone(), account_info.clone(), Some(client))?;
 
     app.emit("calendar:connected", &account_id)
         .map_err(|e| Error::Other(format!("Failed to emit event: {}", e)))?;
@@ -156,7 +156,7 @@ pub async fn calendar_list_calendars(
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
     state
         .manager
-        .upsert_account(account_id.clone(), info.clone(), None);
+        .upsert_account(account_id.clone(), info.clone(), None)?;
 
     let calendars = state.manager.list_calendars(&account_id).await?;
 
@@ -176,7 +176,7 @@ pub async fn calendar_list_events(
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
     state
         .manager
-        .upsert_account(account_id.clone(), info.clone(), None);
+        .upsert_account(account_id.clone(), info.clone(), None)?;
 
     let response = state.manager.list_events(&account_id, &request).await?;
 
@@ -202,7 +202,7 @@ pub async fn calendar_create_event(
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
     state
         .manager
-        .upsert_account(account_id.clone(), info.clone(), None);
+        .upsert_account(account_id.clone(), info.clone(), None)?;
 
     let event = state.manager.create_event(&account_id, &request).await?;
 
@@ -229,7 +229,7 @@ pub async fn calendar_update_event(
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
     state
         .manager
-        .upsert_account(account_id.clone(), info.clone(), None);
+        .upsert_account(account_id.clone(), info.clone(), None)?;
 
     let event = state
         .manager
@@ -262,7 +262,7 @@ pub async fn calendar_delete_event(
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
     state
         .manager
-        .upsert_account(account_id.clone(), info.clone(), None);
+        .upsert_account(account_id.clone(), info.clone(), None)?;
 
     state
         .manager
@@ -298,9 +298,12 @@ pub async fn calendar_list_accounts(
     let records = list_calendar_accounts(&conn)?;
 
     for (account_id, info, _) in &records {
-        state
+        if let Err(e) = state
             .manager
-            .upsert_account(account_id.clone(), info.clone(), None);
+            .upsert_account(account_id.clone(), info.clone(), None)
+        {
+            tracing::warn!("Failed to upsert calendar account {}: {}", account_id, e);
+        }
     }
 
     let accounts = records

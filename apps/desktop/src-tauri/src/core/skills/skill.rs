@@ -289,21 +289,17 @@ impl SkillBuilder {
     }
 
     /// Builds the skill.
-    ///
-    /// # Panics
-    ///
-    /// Panics if description or instructions are not set.
-    #[must_use]
-    pub fn build(self) -> Skill {
-        Skill {
+    /// Returns Result with error if required fields are missing.
+    pub fn build(self) -> Result<Skill, &'static str> {
+        Ok(Skill {
             name: self.name,
-            description: self.description.expect("description is required"),
-            instructions: self.instructions.expect("instructions is required"),
+            description: self.description.ok_or("description is required")?,
+            instructions: self.instructions.ok_or("instructions is required")?,
             requires_bins: self.requires_bins,
             requires_env: self.requires_env,
             supported_os: self.supported_os,
             source: self.source,
-        }
+        })
     }
 
     /// Tries to build the skill, returning None if required fields are missing.
@@ -334,7 +330,8 @@ mod tests {
             .requires_env_var("API_KEY")
             .supported_os(vec!["darwin".to_string(), "linux".to_string()])
             .source(SkillSource::Bundled)
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         assert_eq!(skill.name, "test-skill");
         assert_eq!(skill.description, "A test skill");
@@ -370,7 +367,8 @@ mod tests {
             .description("desc")
             .instructions("inst")
             .supported_os(vec![current_os.to_string()])
-            .build();
+            .build()
+            .expect("Failed to build skill");
         assert!(skill_with_os.supports_current_os());
 
         // Check with non-matching OS
@@ -378,7 +376,8 @@ mod tests {
             .description("desc")
             .instructions("inst")
             .supported_os(vec!["nonexistent-os".to_string()])
-            .build();
+            .build()
+            .expect("Failed to build skill");
         assert!(!skill_wrong_os.supports_current_os());
     }
 
@@ -430,7 +429,8 @@ mod tests {
             .instructions("Follow these instructions carefully.")
             .requires_bin("docker")
             .requires_env_var("DOCKER_HOST")
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         let context = skill.to_context_string();
 

@@ -486,7 +486,10 @@ impl ApiClient {
 
 impl Default for ApiClient {
     fn default() -> Self {
-        Self::new().expect("Failed to construct default ApiClient")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to construct default ApiClient: {}", e);
+            panic!("Failed to construct default ApiClient: {}", e);
+        })
     }
 }
 

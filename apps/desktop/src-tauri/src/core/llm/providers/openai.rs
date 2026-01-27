@@ -137,22 +137,21 @@ impl OpenAIProvider {
     /// Create a new OpenAI provider with the given API key.
     ///
     /// # Panics
-    /// Panics if the HTTP client cannot be created (TLS initialization failure).
-    /// This is an unrecoverable error that indicates a system-level issue.
-    pub fn new(api_key: String) -> Self {
+    /// Returns error if the HTTP client cannot be created (TLS initialization failure).
+    pub fn new(api_key: String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("HTTP client creation failed - TLS backend may not be available");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         // Use environment variable for base URL, defaulting to official OpenAI API
         let base_url = std::env::var("OPENAI_API_BASE")
             .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     fn uses_max_completion_tokens(model: &str) -> bool {

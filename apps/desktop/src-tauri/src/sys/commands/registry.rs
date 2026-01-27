@@ -624,6 +624,9 @@ macro_rules! integration_command_handlers {
             $crate::sys::commands::contact_delete,
             $crate::sys::commands::contact_import_vcard,
             $crate::sys::commands::contact_export_vcard,
+            // Email Keyring Migration
+            $crate::sys::commands::email_check_keyring_status,
+            $crate::sys::commands::email_migrate_credentials,
             // Gmail OAuth
             $crate::sys::commands::gmail_oauth_start,
             $crate::sys::commands::gmail_oauth_complete,

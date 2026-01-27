@@ -113,22 +113,22 @@ pub struct MoonshotProvider {
 }
 
 impl MoonshotProvider {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         // Moonshot API base URL
         let base_url = std::env::var("MOONSHOT_API_BASE")
             .unwrap_or_else(|_| "https://api.moonshot.cn/v1".to_string());
 
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     /// Calculate cost for Moonshot models (per million tokens)

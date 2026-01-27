@@ -140,7 +140,7 @@ pub async fn api_create_key(
 ) -> Result<String, String> {
     let manager = state.inner().read();
     let key = manager.create_api_key(name, permissions, expires_in_days);
-    Ok(serde_json::to_string(&key).unwrap())
+    serde_json::to_string(&key).map_err(|e| format!("Serialization error: {}", e))
 }
 
 // Note: api_revoke_key is not exposed via Tauri - API keys managed via web dashboard
@@ -158,7 +158,7 @@ pub async fn api_revoke_key(
 pub async fn api_list_keys(state: State<'_, ApiSecurityState>) -> Result<String, String> {
     let manager = state.inner().read();
     let keys = manager.list_api_keys();
-    Ok(serde_json::to_string(&keys).unwrap())
+    serde_json::to_string(&keys).map_err(|e| format!("Serialization error: {}", e))
 }
 
 // Note: api_rotate_key is not exposed via Tauri - API keys managed via web dashboard
@@ -169,7 +169,7 @@ pub async fn api_rotate_key(
 ) -> Result<String, String> {
     let manager = state.inner().read();
     let key = manager.rotate_api_key(&key_id)?;
-    Ok(serde_json::to_string(&key).unwrap())
+    serde_json::to_string(&key).map_err(|e| format!("Serialization error: {}", e))
 }
 
 // Note: api_validate_signature is not exposed via Tauri - signature validation happens server-side

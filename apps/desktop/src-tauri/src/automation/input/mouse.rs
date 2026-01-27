@@ -287,7 +287,10 @@ impl MouseSimulator {
 
 impl Default for MouseSimulator {
     fn default() -> Self {
-        Self::new().expect("Failed to create MouseSimulator")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create MouseSimulator: {}", e);
+            panic!("Failed to create MouseSimulator: {}", e);
+        })
     }
 }
 

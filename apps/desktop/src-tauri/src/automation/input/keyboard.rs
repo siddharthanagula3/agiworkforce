@@ -121,7 +121,10 @@ impl KeyboardSimulator {
 
 impl Default for KeyboardSimulator {
     fn default() -> Self {
-        Self::new().expect("Failed to create KeyboardSimulator")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create KeyboardSimulator: {}", e);
+            panic!("Failed to create KeyboardSimulator: {}", e);
+        })
     }
 }
 

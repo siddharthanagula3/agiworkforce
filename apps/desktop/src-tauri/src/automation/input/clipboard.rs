@@ -39,7 +39,10 @@ impl ClipboardManager {
 
 impl Default for ClipboardManager {
     fn default() -> Self {
-        Self::new().expect("Failed to create ClipboardManager")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create ClipboardManager: {}", e);
+            panic!("Failed to create ClipboardManager: {}", e);
+        })
     }
 }
 

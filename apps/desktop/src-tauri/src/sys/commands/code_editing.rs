@@ -87,7 +87,7 @@ SELECTED CODE:
 INSTRUCTION: {}
 
 Respond ONLY with the modified code. Do not include explanations or markdown formatting."#,
-        file_path.file_name().unwrap(),
+        file_path.file_name().unwrap_or_default(),
         original_content,
         selection,
         instruction
@@ -202,7 +202,7 @@ pub async fn composer_start_session(
         if let Ok(content) = std::fs::read_to_string(file_path) {
             context_content.push_str(&format!(
                 "\n\nFILE: {:?}\n```\n{}\n```\n",
-                file_path.file_name().unwrap(),
+                file_path.file_name().unwrap_or_default(),
                 content
             ));
         }

@@ -3,9 +3,15 @@
 //! Tauri commands for managing undo operations.
 //! These commands allow users to reverse AGI actions through natural language
 //! or direct API calls from the frontend.
+//!
+//! This module provides two types of undo capabilities:
+//! 1. File/system change undo (via UndoManager)
+//! 2. Form submission undo (via FormUndoManager)
 
 use crate::core::agent::change_tracker::ChangeTracker;
+use crate::core::agent::form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 use crate::core::agent::undo_manager::{UndoManager, UndoResult, UndoSummary, UndoableChange};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -14,15 +20,18 @@ use tokio::sync::RwLock;
 pub struct UndoState {
     pub manager: RwLock<Option<Arc<UndoManager>>>,
     pub change_tracker: Arc<ChangeTracker>,
+    pub form_undo_manager: Arc<FormUndoManager>,
 }
 
 impl UndoState {
     pub fn new() -> Self {
         let change_tracker = Arc::new(ChangeTracker::new());
         let manager = Arc::new(UndoManager::new(change_tracker.clone()));
+        let form_undo_manager = Arc::new(FormUndoManager::new(100));
         Self {
             manager: RwLock::new(Some(manager)),
             change_tracker,
+            form_undo_manager,
         }
     }
 
@@ -32,6 +41,10 @@ impl UndoState {
             .as_ref()
             .cloned()
             .unwrap_or_else(|| Arc::new(UndoManager::new(self.change_tracker.clone())))
+    }
+
+    pub fn get_form_undo_manager(&self) -> Arc<FormUndoManager> {
+        self.form_undo_manager.clone()
     }
 }
 
@@ -118,6 +131,145 @@ pub fn get_change_tracker(undo_state: &UndoState) -> Arc<ChangeTracker> {
     undo_state.change_tracker.clone()
 }
 
+// ============================================================================
+// Form Undo Commands
+// ============================================================================
+
+/// Record a form submission for potential undo
+///
+/// This should be called before submitting a form to capture its state.
+/// The system will automatically detect if the form contains sensitive data
+/// (like payment information) and mark it as non-undoable.
+#[tauri::command]
+pub async fn form_undo_record(
+    undo_state: State<'_, UndoState>,
+    url: String,
+    form_selector: String,
+    field_values: HashMap<String, String>,
+    can_undo: Option<bool>,
+    task_id: Option<String>,
+    method: Option<String>,
+    action_url: Option<String>,
+) -> Result<FormSubmission, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+
+    let submission = form_manager
+        .record_submission_with_metadata(
+            url,
+            form_selector,
+            field_values,
+            can_undo.unwrap_or(true),
+            task_id,
+            method,
+            action_url,
+        )
+        .await;
+
+    Ok(submission)
+}
+
+/// Attempt to undo a form submission
+///
+/// Returns instructions for undoing the submission, including:
+/// - The URL to navigate to
+/// - The fields to refill with their original values
+///
+/// Note: This does not actually perform the browser automation.
+/// The caller must execute the navigation and form filling.
+#[tauri::command]
+pub async fn form_undo_attempt(
+    undo_state: State<'_, UndoState>,
+    submission_id: String,
+) -> Result<FormUndoResult, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    form_manager.undo_submission(&submission_id).await
+}
+
+/// Check if a specific form submission can be undone
+#[tauri::command]
+pub async fn form_undo_can_undo(
+    undo_state: State<'_, UndoState>,
+    submission_id: String,
+) -> Result<bool, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    Ok(form_manager.can_undo(&submission_id).await)
+}
+
+/// List recent form submissions
+///
+/// Returns form submissions in reverse chronological order (most recent first).
+/// Optionally filter by task ID and limit the number of results.
+#[tauri::command]
+pub async fn form_undo_list(
+    undo_state: State<'_, UndoState>,
+    limit: Option<usize>,
+    task_id: Option<String>,
+) -> Result<Vec<FormSubmission>, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    let submissions = form_manager
+        .get_recent_submissions(limit, task_id.as_deref())
+        .await;
+    Ok(submissions)
+}
+
+/// Get only the submissions that can be undone
+#[tauri::command]
+pub async fn form_undo_list_undoable(
+    undo_state: State<'_, UndoState>,
+) -> Result<Vec<FormSubmission>, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    let submissions = form_manager.get_undoable_submissions().await;
+    Ok(submissions)
+}
+
+/// Get a specific form submission by ID
+#[tauri::command]
+pub async fn form_undo_get(
+    undo_state: State<'_, UndoState>,
+    submission_id: String,
+) -> Result<Option<FormSubmission>, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    Ok(form_manager.get_submission(&submission_id).await)
+}
+
+/// Clear all form submission history
+#[tauri::command]
+pub async fn form_undo_clear(undo_state: State<'_, UndoState>) -> Result<(), String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    form_manager.clear_history().await;
+    Ok(())
+}
+
+/// Clear old form submissions (older than specified hours)
+#[tauri::command]
+pub async fn form_undo_clear_old(
+    undo_state: State<'_, UndoState>,
+    max_age_hours: u64,
+) -> Result<(), String> {
+    let form_manager = undo_state.get_form_undo_manager();
+    form_manager.clear_old_submissions(max_age_hours).await;
+    Ok(())
+}
+
+/// Get form undo statistics
+#[tauri::command]
+pub async fn form_undo_stats(undo_state: State<'_, UndoState>) -> Result<FormUndoStats, String> {
+    let form_manager = undo_state.get_form_undo_manager();
+
+    Ok(FormUndoStats {
+        total_submissions: form_manager.submission_count().await,
+        undoable_submissions: form_manager.undoable_count().await,
+    })
+}
+
+/// Statistics about form undo history
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormUndoStats {
+    pub total_submissions: usize,
+    pub undoable_submissions: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,5 +282,15 @@ mod tests {
 
         assert_eq!(summary.total_changes, 0);
         assert_eq!(summary.revertible_changes, 0);
+    }
+
+    #[tokio::test]
+    async fn test_form_undo_manager_in_state() {
+        let state = UndoState::new();
+        let form_manager = state.get_form_undo_manager();
+
+        // Should start empty
+        assert_eq!(form_manager.submission_count().await, 0);
+        assert_eq!(form_manager.undoable_count().await, 0);
     }
 }
