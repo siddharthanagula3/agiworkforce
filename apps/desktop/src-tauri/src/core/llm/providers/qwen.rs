@@ -20,20 +20,20 @@ pub struct QwenProvider {
 }
 
 impl QwenProvider {
-    pub fn new(api_key: Option<String>) -> Self {
+    pub fn new(api_key: Option<String>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         // Use environment variable for base URL, defaulting to official Qwen API (DashScope)
         let base_url =
             std::env::var("QWEN_API_BASE").unwrap_or_else(|_| QWEN_API_BASE_DEFAULT.to_string());
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {

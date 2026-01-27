@@ -24,8 +24,11 @@ impl RateLimiter {
         }
     }
 
-    async fn acquire(&self) -> tokio::sync::SemaphorePermit<'_> {
-        self.semaphore.acquire().await.expect("Semaphore closed")
+    async fn acquire(&self) -> Result<tokio::sync::SemaphorePermit<'_>> {
+        self.semaphore
+            .acquire()
+            .await
+            .map_err(|_| Error::Other("Semaphore closed".to_string()))
     }
 
     async fn wait_for_rate_limit(&self) {
@@ -74,7 +77,7 @@ struct NotionDatabaseQuery {
 }
 
 impl NotionClient {
-    pub fn new(token: String) -> Self {
+    pub fn new(token: String) -> Result<Self> {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             "Notion-Version",
@@ -85,17 +88,17 @@ impl NotionClient {
             .default_headers(headers)
             .timeout(Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
             token,
             rate_limiter: RateLimiter::new(MAX_REQUESTS_PER_SECOND),
-        }
+        })
     }
 
     pub async fn verify_connection(&mut self) -> Result<String> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let response = self
             .client
@@ -121,7 +124,7 @@ impl NotionClient {
     }
 
     pub async fn list_pages(&self) -> Result<Vec<NotionPage>> {
-        let _permit = self.rate_limiter.acquire().await;
+        let _permit = self.rate_limiter.acquire().await?;
 
         let response = self
             .client

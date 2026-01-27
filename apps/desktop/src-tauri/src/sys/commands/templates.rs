@@ -10,22 +10,26 @@ pub struct TemplateManagerState {
     pub manager: Arc<Mutex<TemplateManager>>,
 }
 
-pub fn initialize_template_manager(db: Arc<Mutex<Connection>>) -> TemplateManager {
-    let manager = TemplateManager::new(db).expect("Failed to create TemplateManager");
+pub fn initialize_template_manager(db: Arc<Mutex<Connection>>) -> Result<TemplateManager, String> {
+    let manager =
+        TemplateManager::new(db).map_err(|e| format!("Failed to create TemplateManager: {}", e))?;
 
     let builtin_templates = get_builtin_templates();
     manager
         .initialize_builtin_templates(builtin_templates)
-        .expect("Failed to initialize built-in templates");
+        .map_err(|e| format!("Failed to initialize built-in templates: {}", e))?;
 
-    manager
+    Ok(manager)
 }
 
 #[tauri::command]
 pub async fn get_all_templates(
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     mgr.get_all_templates().map_err(|e| e.to_string())
 }
 
@@ -34,7 +38,10 @@ pub async fn get_template_by_id(
     id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Option<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     mgr.get_template_by_id(&id).map_err(|e| e.to_string())
 }
 
@@ -43,7 +50,10 @@ pub async fn get_templates_by_category(
     category: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     let cat = TemplateCategory::from_str(&category)
         .ok_or_else(|| format!("Invalid category: {}", category))?;
     mgr.get_templates_by_category(cat)
@@ -55,7 +65,10 @@ pub async fn install_template(
     template_id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<(), String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     let user_id = "default_user";
     mgr.install_template(user_id, &template_id)
@@ -66,7 +79,10 @@ pub async fn install_template(
 pub async fn get_installed_templates(
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
     let user_id = "default_user";
     mgr.get_installed_templates(user_id)
@@ -78,7 +94,10 @@ pub async fn search_templates(
     query: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     mgr.search_templates(&query).map_err(|e| e.to_string())
 }
 
@@ -88,7 +107,10 @@ pub async fn execute_template(
     _params: HashMap<String, String>,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<String, String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     let template = mgr
         .get_template_by_id(&template_id)
         .map_err(|e| e.to_string())?
@@ -108,7 +130,10 @@ pub async fn uninstall_template(
     template_id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<(), String> {
-    let mgr = manager.manager.lock().unwrap();
+    let mgr = manager
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
     let user_id = "default_user";
 
     mgr.uninstall_template(user_id, &template_id)
@@ -142,7 +167,8 @@ mod tests {
         crate::data::db::migrations::run_migrations(&conn).unwrap();
 
         let db = Arc::new(Mutex::new(conn));
-        let manager = initialize_template_manager(db);
+        let manager =
+            initialize_template_manager(db).expect("Failed to initialize template manager");
 
         let templates = manager.get_all_templates().unwrap();
         assert!(

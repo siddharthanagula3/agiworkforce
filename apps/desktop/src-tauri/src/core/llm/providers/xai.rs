@@ -22,23 +22,21 @@ pub struct XAIProvider {
 impl XAIProvider {
     /// Create a new XAI provider with the given optional API key.
     ///
-    /// # Panics
-    /// Panics if the HTTP client cannot be created (TLS initialization failure).
-    /// This is an unrecoverable error that indicates a system-level issue.
-    pub fn new(api_key: Option<String>) -> Self {
+    /// Returns error if the HTTP client cannot be created (TLS initialization failure).
+    pub fn new(api_key: Option<String>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("HTTP client creation failed - TLS backend may not be available");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         // Use environment variable for base URL, defaulting to official xAI API
         let base_url =
             std::env::var("XAI_API_BASE").unwrap_or_else(|_| XAI_API_BASE_DEFAULT.to_string());
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {

@@ -47,7 +47,7 @@ impl ProductivityManager {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| Error::Config("Missing Notion token".to_string()))?;
 
-                let mut client = NotionClient::new(token.to_string());
+                let mut client = NotionClient::new(token.to_string())?;
                 let account_id = client.verify_connection().await?;
                 self.notion_client = Some(Arc::new(Mutex::new(client)));
                 Ok(account_id)
@@ -62,7 +62,7 @@ impl ProductivityManager {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| Error::Config("Missing Trello token".to_string()))?;
 
-                let mut client = TrelloClient::new(api_key.to_string(), token.to_string());
+                let mut client = TrelloClient::new(api_key.to_string(), token.to_string())?;
                 let account_id = client.verify_connection().await?;
                 self.trello_client = Some(Arc::new(Mutex::new(client)));
                 Ok(account_id)
@@ -73,7 +73,7 @@ impl ProductivityManager {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| Error::Config("Missing Asana token".to_string()))?;
 
-                let mut client = AsanaClient::new(token.to_string());
+                let mut client = AsanaClient::new(token.to_string())?;
                 let account_id = client.verify_connection().await?;
                 self.asana_client = Some(Arc::new(Mutex::new(client)));
                 Ok(account_id)

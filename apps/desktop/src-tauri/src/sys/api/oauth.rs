@@ -34,7 +34,7 @@ impl TokenResponse {
         if let Some(expires_at) = self.expires_at {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             return now >= expires_at;
         }
@@ -45,7 +45,7 @@ impl TokenResponse {
         if let Some(expires_in) = self.expires_in {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             self.expires_at = Some(now + expires_in);
         }

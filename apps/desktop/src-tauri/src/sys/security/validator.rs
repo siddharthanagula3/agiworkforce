@@ -9,8 +9,13 @@ fn compile_regex(pattern: &str) -> Regex {
         Err(e) => {
             warn!("Failed to compile regex pattern '{}': {}. Using fallback pattern that matches nothing.", pattern, e);
 
+            // Both patterns are valid regex that match nothing, so this chain should never fail
             Regex::new(r"\b\B")
-                .unwrap_or_else(|_| Regex::new("^$").expect("Basic regex pattern failed"))
+                .or_else(|_| Regex::new("^$"))
+                .unwrap_or_else(|_| {
+                    // This is a last resort - using an always-valid empty string pattern
+                    Regex::new("(?:)").unwrap()
+                })
         }
     }
 }

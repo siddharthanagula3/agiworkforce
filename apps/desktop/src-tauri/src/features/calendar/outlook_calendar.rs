@@ -24,7 +24,7 @@ pub struct OutlookCalendarClient {
 }
 
 impl OutlookCalendarClient {
-    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Self {
+    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Result<Self> {
         let oauth_config = OAuth2Config {
             client_id,
             client_secret: Some(client_secret),
@@ -42,16 +42,17 @@ impl OutlookCalendarClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        let oauth_client =
-            OAuth2Client::new(oauth_config).expect("Failed to create OAuth client for calendar");
+        let oauth_client = OAuth2Client::new(oauth_config).map_err(|e| {
+            Error::Other(format!("Failed to create OAuth client for calendar: {}", e))
+        })?;
 
-        Self {
+        Ok(Self {
             client,
             oauth_client,
             token: None,
-        }
+        })
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, PkceChallenge) {
