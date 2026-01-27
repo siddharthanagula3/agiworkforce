@@ -230,8 +230,16 @@ pub struct McpOAuthState {
 impl Default for McpOAuthState {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create default McpOAuthState: {}", e);
-            panic!("Failed to create default McpOAuthState: {}", e);
+            tracing::warn!(
+                "Failed to create configured HTTP client, using default: {}",
+                e
+            );
+            // Fallback to a default client without custom configuration.
+            // reqwest::Client::new() cannot fail and provides sensible defaults.
+            Self {
+                pending_flows: Arc::new(RwLock::new(HashMap::new())),
+                http_client: reqwest::Client::new(),
+            }
         })
     }
 }

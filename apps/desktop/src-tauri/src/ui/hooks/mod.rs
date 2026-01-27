@@ -105,8 +105,17 @@ impl HookRegistry {
 impl Default for HookRegistry {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create default hook registry: {}", e);
-            panic!("Failed to create default hook registry: {}", e);
+            tracing::warn!(
+                "Failed to create hook registry with default path: {}. Using fallback.",
+                e
+            );
+            // Fallback: use a temp directory path that may not persist across sessions,
+            // but allows the registry to function without panicking
+            let fallback_path = std::env::temp_dir().join("agiworkforce-hooks.yaml");
+            Self {
+                executor: Arc::new(HookExecutor::new()),
+                config_path: fallback_path,
+            }
         })
     }
 }

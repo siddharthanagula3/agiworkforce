@@ -133,7 +133,8 @@ pub async fn execute_api_upload(
 
     let api_state = app_handle.state::<crate::sys::commands::ApiState>();
     let response = api_state
-        .client
+        .get_client()
+        .map_err(|e| anyhow!("Failed to get API client: {}", e))?
         .upload_file(url, file_path, field_name, additional_fields, auth)
         .await
         .map_err(|e| anyhow!("File upload failed: {}", e))?;
@@ -173,7 +174,8 @@ pub async fn execute_api_download(
 
     let api_state = app_handle.state::<crate::sys::commands::ApiState>();
     let response = api_state
-        .client
+        .get_client()
+        .map_err(|e| anyhow!("Failed to get API client: {}", e))?
         .download_file(url, save_path, auth)
         .await
         .map_err(|e| anyhow!("File download failed: {}", e))?;
