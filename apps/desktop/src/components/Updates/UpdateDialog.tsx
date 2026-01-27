@@ -1,6 +1,7 @@
 import { AlertCircle, ArrowRight, Check, Download, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useUpdater } from '../../hooks/useUpdater';
 import { Button } from '../ui/Button';
 import {
@@ -179,7 +180,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
                   'prose prose-sm dark:prose-invert prose-p:my-1 prose-ul:my-1 prose-li:my-0',
                 )}
               >
-                <ReactMarkdown>{updateInfo.releaseNotes}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{updateInfo.releaseNotes}</ReactMarkdown>
               </div>
             </div>
           )}

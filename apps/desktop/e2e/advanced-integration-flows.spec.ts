@@ -12,6 +12,9 @@ import { test, expect } from '@playwright/test';
  * - Complex user workflows
  *
  * All tests verify NO errors appear and system behaves consistently
+ *
+ * NOTE: Tests use proper assertions instead of conditional logic.
+ * If an element is missing, the test will fail rather than silently pass.
  */
 
 test.describe('Tool Execution & Approvals', () => {
@@ -25,32 +28,29 @@ test.describe('Tool Execution & Approvals', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send query that might trigger tool use
-      await chatInput.fill('Show me the weather and current time');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    // Send query that might trigger tool use
+    await chatInput.fill('Show me the weather and current time');
 
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Check for tool indicators
-      const toolIndicator = page.locator(
-        '[data-testid="tool-call"], [data-testid="tool-indicator"], .tool-badge',
-      );
-      const toolExists = await toolIndicator.isVisible({ timeout: 2000 }).catch(() => false);
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      if (toolExists) {
-        const toolText = await toolIndicator.textContent();
-        expect(toolText).toBeTruthy();
-      }
+    // Check for tool indicators - should be present when tools are used
+    const toolIndicator = page.locator(
+      '[data-testid="tool-call"], [data-testid="tool-indicator"], .tool-badge',
+    );
+    await expect(toolIndicator).toBeVisible({ timeout: 5000 });
+    const toolText = await toolIndicator.textContent();
+    expect(toolText).toBeTruthy();
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle tool execution flow without errors', async ({ page }) => {
@@ -58,42 +58,43 @@ test.describe('Tool Execution & Approvals', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Execute a system command to list files');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
+    await chatInput.fill('Execute a system command to list files');
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Wait for potential tool execution
-      await page.waitForTimeout(2000);
+    // Wait for assistant response or tool execution dialog
+    await expect(
+      page
+        .locator('[data-role="assistant"], [role="dialog"], [data-testid="approval-dialog"]')
+        .first(),
+    ).toBeVisible({ timeout: 30000 });
 
-      // Check for approval dialogs or tool execution panels
-      const approvalDialog = page.locator('[role="dialog"], [data-testid="approval-dialog"]');
-      const dialogExists = await approvalDialog.isVisible({ timeout: 3000 }).catch(() => false);
+    // Check for approval dialogs or tool execution panels
+    const approvalDialog = page.locator('[role="dialog"], [data-testid="approval-dialog"]');
+    await expect(approvalDialog).toBeVisible({ timeout: 5000 });
 
-      if (dialogExists) {
-        // Tool execution approval is pending
-        const dialogText = await approvalDialog.textContent();
-        expect(dialogText).toBeTruthy();
+    // Tool execution approval is pending
+    const dialogText = await approvalDialog.textContent();
+    expect(dialogText).toBeTruthy();
 
-        // Should have approve/reject buttons
-        const approveBtn = approvalDialog.locator(
-          'button:has-text("Approve"), [data-testid="approve-tool"]',
-        );
-        const rejectBtn = approvalDialog.locator(
-          'button:has-text("Reject"), [data-testid="reject-tool"]',
-        );
+    // Should have approve/reject buttons
+    const approveBtn = approvalDialog.locator(
+      'button:has-text("Approve"), [data-testid="approve-tool"]',
+    );
+    const rejectBtn = approvalDialog.locator(
+      'button:has-text("Reject"), [data-testid="reject-tool"]',
+    );
 
-        expect(await approveBtn.isVisible({ timeout: 1000 }).catch(() => false)).toBeTruthy();
-        expect(await rejectBtn.isVisible({ timeout: 1000 }).catch(() => false)).toBeTruthy();
-      }
+    await expect(approveBtn).toBeVisible({ timeout: 3000 });
+    await expect(rejectBtn).toBeVisible({ timeout: 3000 });
 
-      // No critical errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
-    }
+    // No critical errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should show tool results in conversation', async ({ page }) => {
@@ -101,39 +102,32 @@ test.describe('Tool Execution & Approvals', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Use a tool to get information');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
+    await chatInput.fill('Use a tool to get information');
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      await page.waitForTimeout(3000);
+    // Wait for assistant response which may include tool results
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      // Check for tool result display
-      const toolResult = page.locator(
-        '[data-testid="tool-result"], [data-testid="tool-output"], .tool-output',
-      );
-      const resultExists = await toolResult.isVisible({ timeout: 3000 }).catch(() => false);
+    // Check for tool result display
+    const toolResult = page.locator(
+      '[data-testid="tool-result"], [data-testid="tool-output"], .tool-output',
+    );
+    await expect(toolResult).toBeVisible({ timeout: 5000 });
+    const resultText = await toolResult.textContent();
+    expect(resultText).toBeTruthy();
 
-      if (resultExists) {
-        const resultText = await toolResult.textContent();
-        expect(resultText).toBeTruthy();
-      }
+    // Response should still be present
+    const response = page.locator('[data-role="assistant"]');
+    await expect(response.last()).toBeVisible({ timeout: 5000 });
 
-      // Response should still be present
-      const response = page.locator('[data-role="assistant"]');
-      const responseExists = await response
-        .last()
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
-      expect(responseExists).toBeTruthy();
-
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle tool rejection gracefully', async ({ page }) => {
@@ -141,33 +135,30 @@ test.describe('Tool Execution & Approvals', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Try to use a restricted tool');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
+    await chatInput.fill('Try to use a restricted tool');
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      await page.waitForTimeout(2000);
+    // Wait for assistant response which may include rejection notice
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      // Look for rejection confirmation
-      const rejectionNotice = page.locator('[data-testid="tool-rejected"], .tool-rejected-notice');
-      const rejected = await rejectionNotice.isVisible({ timeout: 3000 }).catch(() => false);
+    // Look for rejection confirmation
+    const rejectionNotice = page.locator('[data-testid="tool-rejected"], .tool-rejected-notice');
+    await expect(rejectionNotice).toBeVisible({ timeout: 5000 });
+    const noticeText = await rejectionNotice.textContent();
+    expect(noticeText).toBeTruthy();
+    expect(/rejected|denied|not allowed/i.test(noticeText || '')).toBeTruthy();
 
-      if (rejected) {
-        const noticeText = await rejectionNotice.textContent();
-        expect(noticeText).toBeTruthy();
-        expect(/rejected|denied|not allowed/i.test(noticeText || '')).toBeTruthy();
-      }
+    // App should remain responsive
+    await expect(chatInput).toBeVisible();
 
-      // App should remain responsive
-      expect(await chatInput.isVisible()).toBeTruthy();
-
-      // No critical errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
-    }
+    // No critical errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 });
 
@@ -182,35 +173,32 @@ test.describe('AGI Goal Detection & Submission', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send a goal-like message
-      await chatInput.fill('Build a React component for user authentication with JWT');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    // Send a goal-like message
+    await chatInput.fill('Build a React component for user authentication with JWT');
 
-      // Look for AGI goal indicator
-      const agiIndicator = page
-        .locator('[data-testid="agi-detected"], [data-testid="goal-detected"], .agi-indicator')
-        .first();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      const detected = await agiIndicator.isVisible({ timeout: 5000 }).catch(() => false);
+    // Look for AGI goal indicator
+    const agiIndicator = page
+      .locator('[data-testid="agi-detected"], [data-testid="goal-detected"], .agi-indicator')
+      .first();
 
-      if (detected) {
-        const indicatorText = await agiIndicator.textContent();
-        expect(indicatorText).toBeTruthy();
-        expect(/agi|goal|submit|project/i.test(indicatorText || '')).toBeTruthy();
-      }
+    await expect(agiIndicator).toBeVisible({ timeout: 10000 });
+    const indicatorText = await agiIndicator.textContent();
+    expect(indicatorText).toBeTruthy();
+    expect(/agi|goal|submit|project/i.test(indicatorText || '')).toBeTruthy();
 
-      // Response should still arrive
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Response should still arrive
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should show AGI submission dialog when appropriate', async ({ page }) => {
@@ -218,41 +206,36 @@ test.describe('AGI Goal Detection & Submission', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send goal-like message
-      await chatInput.fill('Develop a full-stack web application with database');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    // Send goal-like message
+    await chatInput.fill('Develop a full-stack web application with database');
 
-      await page.waitForTimeout(2000);
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Check for AGI submission dialog
-      const agiDialog = page
-        .locator('[role="dialog"]')
-        .filter({ hasText: /agi|goal|submit|project/i })
-        .first();
+    // Wait for assistant response or AGI dialog
+    await expect(page.locator('[data-role="assistant"], [role="dialog"]').first()).toBeVisible({
+      timeout: 30000,
+    });
 
-      const dialogExists = await agiDialog.isVisible({ timeout: 5000 }).catch(() => false);
+    // Check for AGI submission dialog
+    const agiDialog = page
+      .locator('[role="dialog"]')
+      .filter({ hasText: /agi|goal|submit|project/i })
+      .first();
 
-      if (dialogExists) {
-        // Dialog should have submit button
-        const submitBtn = agiDialog.locator(
-          'button:has-text("Submit"), [data-testid="submit-agi"]',
-        );
-        const submitExists = await submitBtn.isVisible({ timeout: 1000 }).catch(() => false);
+    await expect(agiDialog).toBeVisible({ timeout: 10000 });
 
-        if (submitExists) {
-          expect(submitExists).toBeTruthy();
-        }
-      }
+    // Dialog should have submit button
+    const submitBtn = agiDialog.locator('button:has-text("Submit"), [data-testid="submit-agi"]');
+    await expect(submitBtn).toBeVisible({ timeout: 3000 });
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
-    }
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should not submit non-goal messages as AGI goals', async ({ page }) => {
@@ -260,32 +243,31 @@ test.describe('AGI Goal Detection & Submission', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send non-goal message
-      await chatInput.fill('What is the weather today?');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    // Send non-goal message
+    await chatInput.fill('What is the weather today?');
 
-      await page.waitForTimeout(2000);
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Should NOT show AGI submission
-      const agiDialog = page
-        .locator('[role="dialog"]')
-        .filter({ hasText: /agi|goal|submit.*goal/i });
+    // Wait for assistant response
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      const dialogCount = await agiDialog.count();
-      expect(dialogCount).toBe(0);
+    // Should NOT show AGI submission
+    const agiDialog = page.locator('[role="dialog"]').filter({ hasText: /agi|goal|submit.*goal/i });
 
-      // Response should arrive normally
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    const dialogCount = await agiDialog.count();
+    expect(dialogCount).toBe(0);
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // Response should arrive normally
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle AGI workflow state correctly', async ({ page }) => {
@@ -295,35 +277,36 @@ test.describe('AGI Goal Detection & Submission', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // First turn: goal message
-      await chatInput.fill('Create a machine learning model');
-      let sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      await page.waitForTimeout(2000);
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // First turn: goal message
+    await chatInput.fill('Create a machine learning model');
+    let sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Second turn: follow-up
-      await page.waitForTimeout(1000);
-      await chatInput.fill('Using TensorFlow framework');
-      sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
-      await sendButton.click();
+    // Wait for first assistant response
+    await expect(page.locator('[data-role="assistant"]').first()).toBeVisible({ timeout: 30000 });
+    // Wait for streaming to complete
+    const streamingIndicator = page.locator('[data-streaming="true"], .streaming').first();
+    await streamingIndicator.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
 
-      await page.waitForTimeout(2000);
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Second turn: follow-up - wait for input to be ready
+    await expect(chatInput).toBeEnabled();
+    await chatInput.fill('Using TensorFlow framework');
+    sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Both responses should be in conversation
-      const assistantMessages = page.locator('[data-role="assistant"]');
-      const messageCount = await assistantMessages.count();
-      expect(messageCount).toBeGreaterThanOrEqual(2);
+    // Wait for second assistant response
+    await expect(page.locator('[data-role="assistant"]').nth(1)).toBeVisible({ timeout: 30000 });
 
-      // No errors throughout workflow
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // Both responses should be in conversation
+    const assistantMessages = page.locator('[data-role="assistant"]');
+    const messageCount = await assistantMessages.count();
+    expect(messageCount).toBeGreaterThanOrEqual(2);
+
+    // No errors throughout workflow
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 });
 
@@ -338,44 +321,42 @@ test.describe('Multi-turn Conversations & State Preservation', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Turn 1
-      await chatInput.fill('My name is John');
-      let sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Turn 1
+    await chatInput.fill('My name is John');
+    let sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Turn 2
-      await chatInput.fill('What did I just tell you?');
-      sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
-      await sendButton.click();
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      await expect(page.locator('[data-role="assistant"]').nth(-2)).toBeVisible({ timeout: 30000 });
+    // Turn 2
+    await chatInput.fill('What did I just tell you?');
+    sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Turn 3
-      await chatInput.fill('Remember my name in your next response');
-      sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
-      await sendButton.click();
+    await expect(page.locator('[data-role="assistant"]').nth(-2)).toBeVisible({ timeout: 30000 });
 
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Turn 3
+    await chatInput.fill('Remember my name in your next response');
+    sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Verify all messages are present
-      const userMessages = page.locator('[data-role="user"]');
-      const assistantMessages = page.locator('[data-role="assistant"]');
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      const userCount = await userMessages.count();
-      const assistantCount = await assistantMessages.count();
+    // Verify all messages are present
+    const userMessages = page.locator('[data-role="user"]');
+    const assistantMessages = page.locator('[data-role="assistant"]');
 
-      expect(userCount).toBeGreaterThanOrEqual(3);
-      expect(assistantCount).toBeGreaterThanOrEqual(3);
+    const userCount = await userMessages.count();
+    const assistantCount = await assistantMessages.count();
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    expect(userCount).toBeGreaterThanOrEqual(3);
+    expect(assistantCount).toBeGreaterThanOrEqual(3);
+
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should preserve conversation on page refresh', async ({ page }) => {
@@ -383,37 +364,37 @@ test.describe('Multi-turn Conversations & State Preservation', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send initial message
-      await chatInput.fill('This is a test message');
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      await expect(page.locator('[data-role="user"]').last()).toContainText(
-        'This is a test message',
-      );
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Send initial message
+    await chatInput.fill('This is a test message');
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      const messageCountBefore = await page.locator('[data-role="user"]').count();
+    await expect(page.locator('[data-role="user"]').last()).toContainText('This is a test message');
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      // Refresh page
-      await page.reload();
-      await page.waitForLoadState('networkidle');
+    const messageCountBefore = await page.locator('[data-role="user"]').count();
 
-      // Wait for messages to be restored
-      await page.waitForTimeout(1000);
+    // Refresh page
+    await page.reload();
+    await page.waitForLoadState('networkidle');
 
-      const messageCountAfter = await page.locator('[data-role="user"]').count();
+    // Wait for messages to be restored by checking for user messages
+    await expect(page.locator('[data-role="user"]').first())
+      .toBeVisible({ timeout: 10000 })
+      .catch(() => {});
 
-      // Messages should be preserved
-      expect(messageCountAfter).toBeGreaterThanOrEqual(messageCountBefore - 1); // Allow for timing
+    const messageCountAfter = await page.locator('[data-role="user"]').count();
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // Messages should be preserved
+    expect(messageCountAfter).toBeGreaterThanOrEqual(messageCountBefore - 1); // Allow for timing
+
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle conversation switching without errors', async ({ page }) => {
@@ -421,43 +402,41 @@ test.describe('Multi-turn Conversations & State Preservation', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Create first conversation
-      await chatInput.fill('First conversation');
-      let sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    // Create first conversation
+    await chatInput.fill('First conversation');
+    let sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-      // Switch to new conversation
-      const newChatButton = page
-        .locator('button:has-text("New Chat"), [data-testid="new-chat"]')
-        .first();
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      if (await newChatButton.isVisible()) {
-        await newChatButton.click();
-        await page.waitForTimeout(500);
+    // Switch to new conversation
+    const newChatButton = page
+      .locator('button:has-text("New Chat"), [data-testid="new-chat"]')
+      .first();
 
-        // Input should be cleared
-        const inputValue = await chatInput.inputValue();
-        expect(inputValue).toBe('');
+    await expect(newChatButton).toBeVisible({ timeout: 5000 });
+    await newChatButton.click();
+    // Wait for the chat to be cleared - input should become empty
+    await expect(chatInput).toHaveValue('');
 
-        // Send in new conversation
-        await chatInput.fill('Second conversation');
-        sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
-        await sendButton.click();
+    // Input should be cleared
+    const inputValue = await chatInput.inputValue();
+    expect(inputValue).toBe('');
 
-        await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({
-          timeout: 30000,
-        });
+    // Send in new conversation
+    await chatInput.fill('Second conversation');
+    sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+    await sendButton.click();
 
-        // No errors during switching
-        const errors = page.locator('[role="alert"], .error-message', { hasNotText: /offline/i });
-        expect(await errors.count()).toBe(0);
-      }
-    }
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({
+      timeout: 30000,
+    });
+
+    // No errors during switching
+    const errors = page.locator('[role="alert"], .error-message', { hasNotText: /offline/i });
+    expect(await errors.count()).toBe(0);
   });
 });
 
@@ -472,42 +451,34 @@ test.describe('Budget & Credit System', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Send message
-      await chatInput.fill('Test message');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
+    // Send message
+    await chatInput.fill('Test message');
 
-      // If credits are insufficient, button might be disabled
-      const isEnabled = await sendButton.isEnabled();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
 
-      if (isEnabled) {
-        await sendButton.click();
+    // If credits are insufficient, button might be disabled
+    const isEnabled = await sendButton.isEnabled();
 
-        // Should either show response or credit error
-        const response = page.locator('[data-role="assistant"]').last();
-        const creditError = page
-          .locator('[role="alert"]')
-          .filter({ hasText: /credit|insufficient/i });
+    if (isEnabled) {
+      await sendButton.click();
 
-        const responseExists = await response.isVisible({ timeout: 3000 }).catch(() => false);
-        const errorExists = await creditError.isVisible({ timeout: 3000 }).catch(() => false);
-
-        expect(responseExists || errorExists).toBeTruthy();
-      } else {
-        // Button disabled due to insufficient credits - check for message
-        const disabledMsg = await sendButton.getAttribute('aria-label');
-        expect(disabledMsg).toBeTruthy();
-      }
-
-      // No unexpected errors
-      const unexpectedErrors = page.locator('[role="alert"]').filter({
-        hasNotText: /credit|offline|limit/i,
-      });
-      expect(await unexpectedErrors.count()).toBe(0);
+      // Should show response (credits are sufficient)
+      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    } else {
+      // Button disabled due to insufficient credits - check for message
+      const disabledMsg = await sendButton.getAttribute('aria-label');
+      expect(disabledMsg).toBeTruthy();
     }
+
+    // No unexpected errors
+    const unexpectedErrors = page.locator('[role="alert"]').filter({
+      hasNotText: /credit|offline|limit/i,
+    });
+    expect(await unexpectedErrors.count()).toBe(0);
   });
 
   test('should display current token budget in UI', async ({ page }) => {
@@ -516,14 +487,11 @@ test.describe('Budget & Credit System', () => {
       .locator('[data-testid="token-budget"], [data-testid="budget-remaining"], .budget-display')
       .first();
 
-    const budgetExists = await budgetDisplay.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (budgetExists) {
-      const budgetText = await budgetDisplay.textContent();
-      expect(budgetText).toBeTruthy();
-      // Should show numbers or percentage
-      expect(/\d+|%/.test(budgetText || '')).toBeTruthy();
-    }
+    await expect(budgetDisplay).toBeVisible({ timeout: 5000 });
+    const budgetText = await budgetDisplay.textContent();
+    expect(budgetText).toBeTruthy();
+    // Should show numbers or percentage
+    expect(/\d+|%/.test(budgetText || '')).toBeTruthy();
 
     // No errors
     const errors = page.locator('[role="alert"], .error-message');
@@ -535,27 +503,20 @@ test.describe('Budget & Credit System', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Try to send request
-      await chatInput.fill('Very long message ' + 'test'.repeat(1000));
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
+    // Try to send request
+    await chatInput.fill('Very long message ' + 'test'.repeat(1000));
 
-      const isEnabled = await sendButton.isEnabled();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
 
-      // If message is too long, button might be disabled
-      if (!isEnabled) {
-        const disabledReason = await sendButton.getAttribute('title');
-        expect(disabledReason).toBeTruthy();
-        expect(/token|limit|long/i.test(disabledReason || '')).toBeTruthy();
-      }
-
-      // No critical errors
-      const criticalErrors = page.locator('[role="alert"]').filter({ hasText: /error|failed/i });
-      expect(await criticalErrors.count()).toBe(0);
-    }
+    // If message is too long, button should be disabled
+    await expect(sendButton).toBeDisabled();
+    const disabledReason = await sendButton.getAttribute('title');
+    expect(disabledReason).toBeTruthy();
+    expect(/token|limit|long/i.test(disabledReason || '')).toBeTruthy();
   });
 });
 
@@ -570,31 +531,28 @@ test.describe('Complex Workflow Scenarios', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Request code
-      await chatInput.fill('Write a Python function to calculate fibonacci');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    // Request code
+    await chatInput.fill('Write a Python function to calculate fibonacci');
 
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Check for code block
-      const codeBlock = page.locator('code, pre, [data-testid="code-block"], .code-snippet');
-      const codeExists = await codeBlock.isVisible({ timeout: 2000 }).catch(() => false);
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
 
-      if (codeExists) {
-        const codeText = await codeBlock.textContent();
-        expect(codeText).toBeTruthy();
-        expect(codeText?.length).toBeGreaterThan(0);
-      }
+    // Check for code block - should be present for code generation
+    const codeBlock = page.locator('code, pre, [data-testid="code-block"], .code-snippet');
+    await expect(codeBlock).toBeVisible({ timeout: 5000 });
+    const codeText = await codeBlock.textContent();
+    expect(codeText).toBeTruthy();
+    expect(codeText?.length).toBeGreaterThan(0);
 
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message', { hasNotText: /offline/i });
-      expect(await errors.count()).toBe(0);
-    }
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message', { hasNotText: /offline/i });
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle multi-language content without errors', async ({ page }) => {
@@ -602,37 +560,40 @@ test.describe('Complex Workflow Scenarios', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Request content in different languages
-      const queries = [
-        'Translate "Hello" to Spanish',
-        'Write a poem in French about nature',
-        '用中文解释机器学习', // Chinese
-      ];
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      for (const query of queries) {
-        await chatInput.fill(query);
+    // Request content in different languages
+    const queries = [
+      'Translate "Hello" to Spanish',
+      'Write a poem in French about nature',
+      '用中文解释机器学习', // Chinese
+    ];
 
-        const sendButton = page
-          .locator('button:has-text("Send"), [data-testid="send-message"]')
-          .first();
-        await sendButton.click();
+    for (let i = 0; i < queries.length; i++) {
+      await chatInput.fill(queries[i]);
 
-        await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({
-          timeout: 30000,
-        });
-        await page.waitForTimeout(500);
-      }
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
+      await sendButton.click();
 
-      // All messages should be preserved
-      const userMessages = page.locator('[data-role="user"]');
-      const count = await userMessages.count();
-      expect(count).toBeGreaterThanOrEqual(3);
-
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
+      // Wait for the specific assistant response for this query
+      await expect(page.locator('[data-role="assistant"]').nth(i)).toBeVisible({
+        timeout: 30000,
+      });
+      // Wait for streaming to complete before next iteration
+      const streamingIndicator = page.locator('[data-streaming="true"], .streaming').first();
+      await streamingIndicator.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
     }
+
+    // All messages should be preserved
+    const userMessages = page.locator('[data-role="user"]');
+    const count = await userMessages.count();
+    expect(count).toBeGreaterThanOrEqual(3);
+
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should handle image/media prompts gracefully', async ({ page }) => {
@@ -640,29 +601,28 @@ test.describe('Complex Workflow Scenarios', () => {
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      // Request with image context (may not actually send image)
-      await chatInput.fill('Analyze an image for me');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
+    // Request with image context (may not actually send image)
+    await chatInput.fill('Analyze an image for me');
 
-      if (await sendButton.isEnabled()) {
-        await sendButton.click();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
 
-        // Response should either accept or explain limitation
-        const response = page.locator('[data-role="assistant"]').last();
-        await expect(response).toBeVisible({ timeout: 30000 });
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
 
-        const responseText = await response.textContent();
-        expect(responseText).toBeTruthy();
-      }
+    // Response should either accept or explain limitation
+    const response = page.locator('[data-role="assistant"]').last();
+    await expect(response).toBeVisible({ timeout: 30000 });
 
-      // No critical errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
-    }
+    const responseText = await response.textContent();
+    expect(responseText).toBeTruthy();
+
+    // No critical errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 
   test('should maintain stability with rapid model switches', async ({ page }) => {
@@ -670,87 +630,84 @@ test.describe('Complex Workflow Scenarios', () => {
       .locator('[data-testid="quick-model-selector"], .model-selector')
       .first();
 
-    if (await modelSelector.isVisible()) {
-      // Rapidly switch models
-      for (let i = 0; i < 3; i++) {
-        await modelSelector.click();
+    await expect(modelSelector).toBeVisible({ timeout: 5000 });
 
-        const dropdown = page.locator('[role="listbox"], .model-dropdown').first();
-        const dropdownExists = await dropdown.isVisible({ timeout: 2000 }).catch(() => false);
+    // Rapidly switch models
+    for (let i = 0; i < 3; i++) {
+      await modelSelector.click();
 
-        if (dropdownExists) {
-          const options = dropdown.locator('[role="option"]');
-          const count = await options.count();
+      const dropdown = page.locator('[role="listbox"], .model-dropdown').first();
+      await expect(dropdown).toBeVisible({ timeout: 3000 });
 
-          if (count > i % count) {
-            await options.nth(i % count).click();
-            await page.waitForTimeout(300);
-          }
-        }
+      const options = dropdown.locator('[role="option"]');
+      const count = await options.count();
+
+      if (count > i % count) {
+        await options.nth(i % count).click();
+        // Wait for dropdown to close after selection
+        await expect(dropdown).toBeHidden();
       }
-
-      // App should still be responsive
-      const chatInput = page
-        .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
-        .first();
-      expect(await chatInput.isVisible()).toBeTruthy();
-
-      // No errors
-      const errors = page.locator('[role="alert"], .error-message');
-      expect(await errors.count()).toBe(0);
     }
+
+    // App should still be responsive
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
+    await expect(chatInput).toBeVisible();
+
+    // No errors
+    const errors = page.locator('[role="alert"], .error-message');
+    expect(await errors.count()).toBe(0);
   });
 
-  test('should complete end-to-end: setup → send → receive → analyze results', async ({ page }) => {
+  test('should complete end-to-end: setup -> send -> receive -> analyze results', async ({
+    page,
+  }) => {
     // Setup: Select model
     const modelSelector = page
       .locator('[data-testid="quick-model-selector"], .model-selector')
       .first();
 
-    if (await modelSelector.isVisible()) {
-      await modelSelector.click();
-      const dropdown = page.locator('[role="listbox"]').first();
-      if (await dropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
-        const options = dropdown.locator('[role="option"]');
-        if (await options.nth(1).isVisible()) {
-          await options.nth(1).click();
-          await page.waitForTimeout(500);
-        }
-      }
-    }
+    await expect(modelSelector).toBeVisible({ timeout: 5000 });
+    await modelSelector.click();
+    const dropdown = page.locator('[role="listbox"]').first();
+    await expect(dropdown).toBeVisible({ timeout: 3000 });
+    const options = dropdown.locator('[role="option"]');
+    await options.nth(1).click();
+    // Wait for dropdown to close after selection
+    await expect(dropdown).toBeHidden();
 
     // Send message
     const chatInput = page
       .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
       .first();
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Analyze the benefits of machine learning in healthcare');
+    await expect(chatInput).toBeVisible({ timeout: 5000 });
+    await chatInput.fill('Analyze the benefits of machine learning in healthcare');
 
-      const sendButton = page
-        .locator('button:has-text("Send"), [data-testid="send-message"]')
-        .first();
-      await sendButton.click();
+    const sendButton = page
+      .locator('button:has-text("Send"), [data-testid="send-message"]')
+      .first();
+    await sendButton.click();
 
-      // Receive response
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 60000 });
+    // Receive response
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 60000 });
 
-      // Analyze results
-      const response = await page.locator('[data-role="assistant"]').last().textContent();
-      expect(response?.trim().length).toBeGreaterThan(100);
+    // Analyze results
+    const response = await page.locator('[data-role="assistant"]').last().textContent();
+    expect(response?.trim().length).toBeGreaterThan(100);
 
-      // Check metadata
-      const messageItem = page.locator('[data-testid="message-item"]').last();
-      const metadata = await messageItem.textContent();
-      expect(metadata).toBeTruthy();
+    // Check metadata
+    const messageItem = page.locator('[data-testid="message-item"]').last();
+    const metadata = await messageItem.textContent();
+    expect(metadata).toBeTruthy();
 
-      // Verify system integrity
-      expect(await chatInput.isVisible()).toBeTruthy();
-      expect(await sendButton.isEnabled()).toBeTruthy();
+    // Verify system integrity
+    await expect(chatInput).toBeVisible();
+    await expect(sendButton).toBeEnabled();
 
-      // Zero errors
-      const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
-      expect(await errors.count()).toBe(0);
-    }
+    // Zero errors
+    const errors = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
+    expect(await errors.count()).toBe(0);
   });
 });

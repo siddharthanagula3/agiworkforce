@@ -104,7 +104,7 @@ export function MobileCompanionWorkspace() {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto bg-slate-50/60 p-8">
-      <Card className="border border-slate-200 shadow-sm">
+      <Card className="border border-slate-200 shadow-xs">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2 text-xl font-semibold text-slate-900">

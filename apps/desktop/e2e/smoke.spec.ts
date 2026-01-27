@@ -12,8 +12,8 @@ test.describe('Desktop App Smoke Tests', () => {
     const title = await page.title();
     expect(title).toBeTruthy();
 
-    // The root element should exist
-    const root = page.locator('#root');
+    // The root element should exist - use getByTestId pattern
+    const root = page.getByTestId('root').or(page.locator('#root'));
     await expect(root).toBeAttached({ timeout: 10000 });
 
     // Wait for network to settle
@@ -31,8 +31,8 @@ test.describe('Desktop App Smoke Tests', () => {
     // Wait for network to settle
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // Verify the root element exists
-    const root = page.locator('#root');
+    // Verify the root element exists - use getByTestId pattern with fallback
+    const root = page.getByTestId('root').or(page.locator('#root'));
     await expect(root).toBeAttached();
   });
 });

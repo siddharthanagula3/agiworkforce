@@ -220,6 +220,18 @@ export function withRetry<TArgs extends unknown[], TResult>(
   return (...args: TArgs) => retryWithBackoff(() => fn(...args), options);
 }
 
+/** Error with an HTTP status code */
+interface HttpError extends Error {
+  status?: number;
+}
+
+/** Type guard to check if an error has an HTTP status property */
+function hasHttpStatus(error: unknown): error is HttpError {
+  return (
+    error instanceof Error && 'status' in error && typeof (error as HttpError).status === 'number'
+  );
+}
+
 /**
  * Common retry conditions for network errors
  */
@@ -247,9 +259,9 @@ export const retryConditions = {
     if (error instanceof Response) {
       return error.status >= 500 && error.status < 600;
     }
-    if (error instanceof Error && 'status' in error) {
-      const status = (error as any).status;
-      return typeof status === 'number' && status >= 500 && status < 600;
+    if (hasHttpStatus(error)) {
+      const status = error.status;
+      return status !== undefined && status >= 500 && status < 600;
     }
     return false;
   },
@@ -259,8 +271,8 @@ export const retryConditions = {
     if (error instanceof Response) {
       return error.status === 429;
     }
-    if (error instanceof Error && 'status' in error) {
-      return (error as any).status === 429;
+    if (hasHttpStatus(error)) {
+      return error.status === 429;
     }
     return false;
   },

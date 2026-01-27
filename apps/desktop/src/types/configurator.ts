@@ -1,6 +1,27 @@
-import type { Node, Edge } from '@xyflow/react';
-
 export type CapabilityCategory = 'data' | 'logic' | 'actions' | 'ai';
+
+/**
+ * Basic node type for workflow definitions.
+ * Replaces @xyflow/react Node type.
+ */
+export interface WorkflowNode {
+  id: string;
+  type?: string;
+  position: { x: number; y: number };
+  data: Record<string, unknown>;
+}
+
+/**
+ * Basic edge type for workflow definitions.
+ * Replaces @xyflow/react Edge type.
+ */
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
 
 export type NodeType = 'trigger' | 'action' | 'condition' | 'loop' | 'ai';
 
@@ -57,8 +78,8 @@ export interface CustomEmployee {
 }
 
 export interface WorkflowDefinition {
-  nodes: Node[];
-  edges: Edge[];
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
   variables: Record<string, unknown>;
 }
 

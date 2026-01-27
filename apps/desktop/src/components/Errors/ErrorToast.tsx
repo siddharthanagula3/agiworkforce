@@ -105,7 +105,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
             {onRetry && errorDef.recoverable && (
               <button
                 onClick={onRetry}
-                className="flex items-center gap-1 rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="flex items-center gap-1 rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 <RefreshCw className="h-3 w-3" />
                 Retry
@@ -117,7 +117,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
                 href={errorDef.helpLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Learn more
               </a>

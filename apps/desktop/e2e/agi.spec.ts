@@ -2,194 +2,222 @@ import { test, expect } from './fixtures';
 import { SettingsSnapshot } from './page-objects/SettingsPage';
 import { createErrorHandler } from './utils/error-handler';
 
+/**
+ * AGI TEST SUITE
+ *
+ * Tests AGI goal management, resource monitoring, knowledge base, and settings.
+ *
+ * NOTE: Tests use proper assertions instead of conditional logic.
+ * If an element is missing, the test will fail rather than silently pass.
+ */
+
 test.describe('AGI Goal Management', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    // Use semantic locators for navigation
     const agiLink = page
-      .locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")')
+      .getByRole('link', { name: /agi|goals/i })
+      .or(page.getByRole('button', { name: /agi|goals/i }))
       .first();
-    if (await agiLink.isVisible()) {
-      await agiLink.click();
-      await page.waitForLoadState('networkidle');
-    }
+    await expect(agiLink).toBeVisible({ timeout: 5000 });
+    await agiLink.click();
+    await page.waitForLoadState('networkidle');
   });
 
   test('should submit a new goal', async ({ page }) => {
-    const goalInput = page
-      .locator('textarea[placeholder*="goal"], [data-testid="goal-input"]')
-      .first();
+    // Use semantic locators with fallbacks
+    const goalInput = page.getByTestId('goal-input').or(page.getByPlaceholder(/goal/i)).first();
     const submitButton = page
-      .locator('button:has-text("Submit"), [data-testid="submit-goal"]')
+      .getByRole('button', { name: /submit/i })
+      .or(page.getByTestId('submit-goal'))
       .first();
 
-    if ((await goalInput.isVisible()) && (await submitButton.isVisible())) {
-      await goalInput.fill('Create a simple React component with a button that counts clicks');
+    await expect(goalInput).toBeVisible({ timeout: 5000 });
+    await expect(submitButton).toBeVisible({ timeout: 5000 });
 
-      await submitButton.click();
+    await goalInput.fill('Create a simple React component with a button that counts clicks');
 
-      await page.waitForTimeout(1000);
-      const goalsList = page.locator('[data-testid="goals-list"], .goals-list').first();
-      await expect(goalsList).toBeVisible();
+    await submitButton.click();
 
-      const goalItem = page.locator('[data-testid="goal-item"]').last();
-      await expect(goalItem).toContainText('React component');
-    }
+    // Wait for goals list to appear after submission
+    const goalsList = page.getByTestId('goals-list').or(page.locator('.goals-list')).first();
+    await goalsList.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(goalsList).toBeVisible();
+
+    const goalItem = page.getByTestId('goal-item').last();
+    await expect(goalItem).toContainText('React component');
   });
 
   test('should display goal status', async ({ page }) => {
-    const goalItem = page.locator('[data-testid="goal-item"]').first();
+    const goalItem = page.getByTestId('goal-item').first();
 
-    if (await goalItem.isVisible()) {
-      const statusBadge = goalItem.locator('[data-testid="goal-status"], .status-badge').first();
-      await expect(statusBadge).toBeVisible();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
 
-      const statusText = await statusBadge.textContent();
-      expect(statusText).toMatch(/pending|in progress|completed|failed|cancelled/i);
-    }
+    const statusBadge = goalItem
+      .getByTestId('goal-status')
+      .or(goalItem.locator('.status-badge'))
+      .first();
+    await expect(statusBadge).toBeVisible();
+
+    const statusText = await statusBadge.textContent();
+    expect(statusText).toMatch(/pending|in progress|completed|failed|cancelled/i);
   });
 
   test('should show goal details', async ({ page }) => {
-    const goalItem = page.locator('[data-testid="goal-item"]').first();
+    const goalItem = page.getByTestId('goal-item').first();
 
-    if (await goalItem.isVisible()) {
-      await goalItem.click();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
+    await goalItem.click();
 
-      const detailsPanel = page.locator('[data-testid="goal-details"], .goal-details').first();
-      await expect(detailsPanel).toBeVisible();
+    const detailsPanel = page.getByTestId('goal-details').or(page.locator('.goal-details')).first();
+    await expect(detailsPanel).toBeVisible();
 
-      await expect(detailsPanel).toContainText(/description|status|steps/i);
-    }
+    await expect(detailsPanel).toContainText(/description|status|steps/i);
   });
 
   test('should display execution steps', async ({ page }) => {
-    const goalItem = page.locator('[data-testid="goal-item"]').first();
+    const goalItem = page.getByTestId('goal-item').first();
 
-    if (await goalItem.isVisible()) {
-      await goalItem.click();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
+    await goalItem.click();
 
-      const stepsList = page.locator('[data-testid="steps-list"], .steps-list').first();
+    const stepsList = page.getByTestId('steps-list').or(page.locator('.steps-list')).first();
 
-      if (await stepsList.isVisible()) {
-        const stepItems = stepsList.locator('li, [data-testid="step-item"]');
-        const count = await stepItems.count();
-        expect(count).toBeGreaterThanOrEqual(0);
-      }
-    }
+    await expect(stepsList).toBeVisible({ timeout: 5000 });
+    // Use semantic role for list items
+    const stepItems = stepsList.getByRole('listitem').or(stepsList.getByTestId('step-item'));
+    const count = await stepItems.count();
+    expect(count).toBeGreaterThanOrEqual(0);
   });
 
   test('should show step status', async ({ page }) => {
-    const stepItem = page.locator('[data-testid="step-item"]').first();
+    const stepItem = page.getByTestId('step-item').first();
 
-    if (await stepItem.isVisible()) {
-      const stepStatus = stepItem.locator('[data-testid="step-status"], .step-status').first();
-      await expect(stepStatus).toBeVisible();
+    await expect(stepItem).toBeVisible({ timeout: 5000 });
 
-      const statusText = await stepStatus.textContent();
-      expect(statusText).toMatch(/pending|in progress|completed|failed/i);
-    }
+    const stepStatus = stepItem
+      .getByTestId('step-status')
+      .or(stepItem.locator('.step-status'))
+      .first();
+    await expect(stepStatus).toBeVisible();
+
+    const statusText = await stepStatus.textContent();
+    expect(statusText).toMatch(/pending|in progress|completed|failed/i);
   });
 
   test('should display progress percentage', async ({ page }) => {
-    const goalItem = page.locator('[data-testid="goal-item"]').first();
+    const goalItem = page.getByTestId('goal-item').first();
 
-    if (await goalItem.isVisible()) {
-      const progressBar = goalItem.locator('[role="progressbar"], .progress-bar').first();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
 
-      if (await progressBar.isVisible()) {
-        const ariaValue = await progressBar.getAttribute('aria-valuenow');
-        expect(ariaValue).toBeTruthy();
-      }
-    }
+    // Use semantic role for progress bar
+    const progressBar = goalItem
+      .getByRole('progressbar')
+      .or(goalItem.locator('.progress-bar'))
+      .first();
+
+    await expect(progressBar).toBeVisible({ timeout: 5000 });
+    const ariaValue = await progressBar.getAttribute('aria-valuenow');
+    expect(ariaValue).toBeTruthy();
   });
 
   test('should cancel a goal', async ({ page }) => {
     const errorHandler = createErrorHandler(page);
     const goalItem = page.locator('[data-testid="goal-item"][data-status="Pending"]').first();
 
-    if (await goalItem.isVisible()) {
-      const cancelButton = goalItem
-        .locator('button[aria-label*="Cancel"], [data-testid="cancel-goal"]')
-        .first();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
 
-      if (await cancelButton.isVisible()) {
-        await cancelButton.click();
+    // Use semantic role for cancel button
+    const cancelButton = goalItem
+      .getByRole('button', { name: /cancel/i })
+      .or(goalItem.getByTestId('cancel-goal'))
+      .first();
 
-        const confirmButton = page
-          .locator('button:has-text("Cancel Goal"), button:has-text("Confirm")')
-          .first();
-        await errorHandler.handleOptionalDialog(confirmButton, 1000);
+    await expect(cancelButton).toBeVisible({ timeout: 5000 });
+    await cancelButton.click();
 
-        await page.waitForTimeout(1000);
-        const status = goalItem.locator('[data-testid="goal-status"]').first();
-        await expect(status).toContainText('Cancelled');
-      }
-    }
+    const confirmButton = page.getByRole('button', { name: /cancel goal|confirm/i }).first();
+    await errorHandler.handleOptionalDialog(confirmButton, 1000);
+
+    // Wait for status to update to Cancelled
+    const status = goalItem.getByTestId('goal-status').first();
+    await expect(status).toContainText('Cancelled', { timeout: 5000 });
   });
 
   test('should delete a completed goal', async ({ page }) => {
     const errorHandler = createErrorHandler(page);
     const goalItem = page.locator('[data-testid="goal-item"][data-status="Completed"]').first();
 
-    if (await goalItem.isVisible()) {
-      const initialCount = await page.locator('[data-testid="goal-item"]').count();
+    await expect(goalItem).toBeVisible({ timeout: 5000 });
 
-      const deleteButton = goalItem
-        .locator('button[aria-label*="Delete"], [data-testid="delete-goal"]')
-        .first();
+    const initialCount = await page.getByTestId('goal-item').count();
 
-      if (await deleteButton.isVisible()) {
-        await deleteButton.click();
+    // Use semantic role for delete button
+    const deleteButton = goalItem
+      .getByRole('button', { name: /delete/i })
+      .or(goalItem.getByTestId('delete-goal'))
+      .first();
 
-        const confirmButton = page
-          .locator('button:has-text("Delete"), button:has-text("Confirm")')
-          .first();
-        await errorHandler.handleOptionalDialog(confirmButton, 1000);
+    await expect(deleteButton).toBeVisible({ timeout: 5000 });
+    await deleteButton.click();
 
-        await page.waitForTimeout(1000);
-        const newCount = await page.locator('[data-testid="goal-item"]').count();
-        expect(newCount).toBeLessThan(initialCount);
-      }
-    }
+    const confirmButton = page.getByRole('button', { name: /delete|confirm/i }).first();
+    await errorHandler.handleOptionalDialog(confirmButton, 1000);
+
+    // Wait for goal to be removed from the list
+    await expect(async () => {
+      const newCount = await page.getByTestId('goal-item').count();
+      expect(newCount).toBeLessThan(initialCount);
+    }).toPass({ timeout: 5000 });
   });
 
   test('should filter goals by status', async ({ page }) => {
+    // Use semantic role for combobox/select
     const statusFilter = page
-      .locator('select[name="status"], [data-testid="status-filter"]')
+      .getByRole('combobox', { name: /status/i })
+      .or(page.getByTestId('status-filter'))
       .first();
 
-    if (await statusFilter.isVisible()) {
-      await statusFilter.selectOption('Completed');
+    await expect(statusFilter).toBeVisible({ timeout: 5000 });
+    await statusFilter.selectOption('Completed');
 
-      await page.waitForTimeout(500);
-
-      const visibleGoals = page.locator('[data-testid="goal-item"]:visible');
+    // Wait for filter to be applied by checking for filtered results
+    await expect(async () => {
+      const visibleGoals = page.getByTestId('goal-item').filter({ has: page.locator(':visible') });
       const count = await visibleGoals.count();
+      // Just need the filter to have been applied (count can be 0 or more)
+      expect(count).toBeGreaterThanOrEqual(0);
+    }).toPass({ timeout: 3000 });
 
-      for (let i = 0; i < count; i++) {
-        const goal = visibleGoals.nth(i);
-        const status = await goal.getAttribute('data-status');
-        expect(status).toBe('Completed');
-      }
+    const visibleGoals = page.getByTestId('goal-item').filter({ has: page.locator(':visible') });
+    const count = await visibleGoals.count();
+
+    for (let i = 0; i < count; i++) {
+      const goal = visibleGoals.nth(i);
+      const status = await goal.getAttribute('data-status');
+      expect(status).toBe('Completed');
     }
   });
 
   test('should search goals by description', async ({ page }) => {
+    // Use semantic locators for search input
     const searchInput = page
-      .locator('input[placeholder*="Search"], [data-testid="search-goals"]')
+      .getByRole('searchbox')
+      .or(page.getByPlaceholder(/search/i))
+      .or(page.getByTestId('search-goals'))
       .first();
 
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('React');
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    await searchInput.fill('React');
 
-      await page.waitForTimeout(500);
-
-      const visibleGoals = page.locator('[data-testid="goal-item"]:visible');
+    // Wait for search debounce and results to update
+    await expect(async () => {
+      const visibleGoals = page.getByTestId('goal-item').filter({ has: page.locator(':visible') });
       const count = await visibleGoals.count();
-
       expect(count).toBeGreaterThanOrEqual(0);
-    }
+    }).toPass({ timeout: 3000 });
   });
 });
 
@@ -198,51 +226,60 @@ test.describe('AGI Resource Monitoring', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    // Use semantic locators for navigation
     const agiLink = page
-      .locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")')
+      .getByRole('link', { name: /agi|goals/i })
+      .or(page.getByRole('button', { name: /agi|goals/i }))
       .first();
-    if (await agiLink.isVisible()) {
-      await agiLink.click();
-      await page.waitForLoadState('networkidle');
-    }
+    await expect(agiLink).toBeVisible({ timeout: 5000 });
+    await agiLink.click();
+    await page.waitForLoadState('networkidle');
   });
 
   test('should display resource usage', async ({ page }) => {
     const resourcePanel = page
-      .locator('[data-testid="resource-monitor"], .resource-monitor')
+      .getByTestId('resource-monitor')
+      .or(page.locator('.resource-monitor'))
       .first();
 
-    if (await resourcePanel.isVisible()) {
-      await expect(resourcePanel).toContainText(/cpu|memory|network|storage/i);
-    }
+    await expect(resourcePanel).toBeVisible({ timeout: 5000 });
+    await expect(resourcePanel).toContainText(/cpu|memory|network|storage/i);
   });
 
   test('should show CPU usage percentage', async ({ page }) => {
-    const cpuIndicator = page.locator('[data-testid="cpu-usage"], .cpu-usage').first();
+    const cpuIndicator = page.getByTestId('cpu-usage').or(page.locator('.cpu-usage')).first();
 
-    if (await cpuIndicator.isVisible()) {
-      const cpuText = await cpuIndicator.textContent();
-      expect(cpuText).toMatch(/\d+%/);
-    }
+    await expect(cpuIndicator).toBeVisible({ timeout: 5000 });
+    const cpuText = await cpuIndicator.textContent();
+    expect(cpuText).toMatch(/\d+%/);
   });
 
   test('should show memory usage', async ({ page }) => {
-    const memoryIndicator = page.locator('[data-testid="memory-usage"], .memory-usage').first();
+    const memoryIndicator = page
+      .getByTestId('memory-usage')
+      .or(page.locator('.memory-usage'))
+      .first();
 
-    if (await memoryIndicator.isVisible()) {
-      const memoryText = await memoryIndicator.textContent();
-      expect(memoryText).toMatch(/\d+\s*(MB|GB)/i);
-    }
+    await expect(memoryIndicator).toBeVisible({ timeout: 5000 });
+    const memoryText = await memoryIndicator.textContent();
+    expect(memoryText).toMatch(/\d+\s*(MB|GB)/i);
   });
 
   test('should warn when resources are high', async ({ page }) => {
     const errorHandler = createErrorHandler(page);
-    const warningIndicator = page.locator('[data-warning="high"], .resource-warning').first();
+    // Use semantic role for alerts
+    const warningIndicator = page
+      .getByRole('alert')
+      .or(page.locator('[data-warning="high"]'))
+      .or(page.locator('.resource-warning'))
+      .first();
 
-    if (await errorHandler.isElementVisible(warningIndicator, 1000)) {
-      await expect(warningIndicator).toBeVisible();
-      await expect(warningIndicator).toContainText(/high|warning|throttle/i);
-    }
+    // This is a conditional test - warning only appears when resources are high
+    const warningVisible = await errorHandler.isElementVisible(warningIndicator, 1000);
+    test.skip(!warningVisible, 'Resource warning not present (resources not high)');
+
+    await expect(warningIndicator).toBeVisible();
+    await expect(warningIndicator).toContainText(/high|warning|throttle/i);
   });
 });
 
@@ -251,72 +288,85 @@ test.describe('AGI Knowledge Base', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    // Use semantic locators for navigation
     const knowledgeLink = page
-      .locator('a[href*="knowledge"], button:has-text("Knowledge")')
+      .getByRole('link', { name: /knowledge/i })
+      .or(page.getByRole('button', { name: /knowledge/i }))
       .first();
-    if (await knowledgeLink.isVisible()) {
-      await knowledgeLink.click();
-      await page.waitForLoadState('networkidle');
-    }
+    await expect(knowledgeLink).toBeVisible({ timeout: 5000 });
+    await knowledgeLink.click();
+    await page.waitForLoadState('networkidle');
   });
 
   test('should display past experiences', async ({ page }) => {
     const experiencesList = page
-      .locator('[data-testid="experiences-list"], .experiences-list')
+      .getByTestId('experiences-list')
+      .or(page.locator('.experiences-list'))
       .first();
 
-    if (await experiencesList.isVisible()) {
-      const experienceItems = experiencesList.locator('li, [data-testid="experience-item"]');
-      const count = await experienceItems.count();
-      expect(count).toBeGreaterThanOrEqual(0);
-    }
+    await expect(experiencesList).toBeVisible({ timeout: 5000 });
+    // Use semantic role for list items
+    const experienceItems = experiencesList
+      .getByRole('listitem')
+      .or(experiencesList.getByTestId('experience-item'));
+    const count = await experienceItems.count();
+    expect(count).toBeGreaterThanOrEqual(0);
   });
 
   test('should show experience details', async ({ page }) => {
-    const experienceItem = page.locator('[data-testid="experience-item"]').first();
+    const experienceItem = page.getByTestId('experience-item').first();
 
-    if (await experienceItem.isVisible()) {
-      await experienceItem.click();
+    await expect(experienceItem).toBeVisible({ timeout: 5000 });
+    await experienceItem.click();
 
-      const detailsPanel = page
-        .locator('[data-testid="experience-details"], .experience-details')
-        .first();
-      await expect(detailsPanel).toBeVisible();
+    const detailsPanel = page
+      .getByTestId('experience-details')
+      .or(page.locator('.experience-details'))
+      .first();
+    await expect(detailsPanel).toBeVisible();
 
-      await expect(detailsPanel).toContainText(/goal|outcome|lesson/i);
-    }
+    await expect(detailsPanel).toContainText(/goal|outcome|lesson/i);
   });
 
   test('should search experiences', async ({ page }) => {
+    // Use semantic locators for search
     const searchInput = page
-      .locator('input[placeholder*="Search"], [data-testid="search-experiences"]')
+      .getByRole('searchbox')
+      .or(page.getByPlaceholder(/search/i))
+      .or(page.getByTestId('search-experiences'))
       .first();
 
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('component');
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    await searchInput.fill('component');
 
-      await page.waitForTimeout(500);
-
-      const visibleExperiences = page.locator('[data-testid="experience-item"]:visible');
+    // Wait for search debounce and results to update
+    await expect(async () => {
+      const visibleExperiences = page
+        .getByTestId('experience-item')
+        .filter({ has: page.locator(':visible') });
       const count = await visibleExperiences.count();
       expect(count).toBeGreaterThanOrEqual(0);
-    }
+    }).toPass({ timeout: 3000 });
   });
 
   test('should filter by outcome', async ({ page }) => {
+    // Use semantic role for combobox
     const outcomeFilter = page
-      .locator('select[name="outcome"], [data-testid="outcome-filter"]')
+      .getByRole('combobox', { name: /outcome/i })
+      .or(page.getByTestId('outcome-filter'))
       .first();
 
-    if (await outcomeFilter.isVisible()) {
-      await outcomeFilter.selectOption('Success');
+    await expect(outcomeFilter).toBeVisible({ timeout: 5000 });
+    await outcomeFilter.selectOption('Success');
 
-      await page.waitForTimeout(500);
-
-      const visibleExperiences = page.locator('[data-testid="experience-item"]:visible');
+    // Wait for filter to be applied
+    await expect(async () => {
+      const visibleExperiences = page
+        .getByTestId('experience-item')
+        .filter({ has: page.locator(':visible') });
       const count = await visibleExperiences.count();
       expect(count).toBeGreaterThanOrEqual(0);
-    }
+    }).toPass({ timeout: 3000 });
   });
 });
 
@@ -331,13 +381,15 @@ test.describe('AGI Settings', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.locator('#root').waitFor({ state: 'attached', timeout: 10000 });
 
+    // Use semantic locators for settings navigation
     const settingsLink = page
-      .locator('a[href*="settings"], button[aria-label*="Settings"]')
+      .getByRole('link', { name: /settings/i })
+      .or(page.getByRole('button', { name: /settings/i }))
       .first();
-    if (await settingsLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await settingsLink.click();
-      await page.waitForTimeout(1000);
-    }
+    await expect(settingsLink).toBeVisible({ timeout: 5000 });
+    await settingsLink.click();
+    // Wait for settings page to load
+    await page.waitForLoadState('domcontentloaded');
 
     // Initialize empty snapshot
     settingsSnapshot = {};
@@ -355,73 +407,79 @@ test.describe('AGI Settings', () => {
   });
 
   test('should configure resource limits', async ({ page }) => {
-    const cpuLimitInput = page.locator('input[name*="cpu"], [data-testid="cpu-limit"]').first();
+    // Use semantic locators for input
+    const cpuLimitInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
 
-    if (await cpuLimitInput.isVisible()) {
-      await cpuLimitInput.clear();
-      await cpuLimitInput.fill('70');
+    await expect(cpuLimitInput).toBeVisible({ timeout: 5000 });
+    await cpuLimitInput.clear();
+    await cpuLimitInput.fill('70');
 
-      const saveButton = page
-        .locator('button:has-text("Save"), [data-testid="save-settings"]')
-        .first();
-      await saveButton.click();
+    // Use semantic role for save button
+    const saveButton = page
+      .getByRole('button', { name: /save/i })
+      .or(page.getByTestId('save-settings'))
+      .first();
+    await saveButton.click();
 
-      const successMessage = page.locator('[role="status"], .success-message').first();
-      await expect(successMessage).toBeVisible({ timeout: 3000 });
-    }
+    // Use semantic role for status
+    const successMessage = page.getByRole('status').or(page.locator('.success-message')).first();
+    await expect(successMessage).toBeVisible({ timeout: 3000 });
   });
 
   test('should enable/disable autonomous mode', async ({ page }) => {
+    // Use semantic role for checkbox
     const autonomousToggle = page
-      .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
+      .getByRole('checkbox', { name: /autonomous/i })
+      .or(page.getByTestId('autonomous-toggle'))
       .first();
 
-    if (await autonomousToggle.isVisible()) {
-      const initialState = await autonomousToggle.isChecked();
+    await expect(autonomousToggle).toBeVisible({ timeout: 5000 });
+    const initialState = await autonomousToggle.isChecked();
 
-      await autonomousToggle.click();
+    await autonomousToggle.click();
 
-      const newState = await autonomousToggle.isChecked();
-      expect(newState).not.toBe(initialState);
-    }
+    const newState = await autonomousToggle.isChecked();
+    expect(newState).not.toBe(initialState);
   });
 
   test('should configure auto-approval settings', async ({ page }) => {
+    // Use semantic role for checkbox
     const autoApprovalCheckbox = page
-      .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
+      .getByRole('checkbox', { name: /auto.?approv/i })
+      .or(page.getByTestId('auto-approve'))
       .first();
 
-    if (await autoApprovalCheckbox.isVisible()) {
-      await autoApprovalCheckbox.click();
+    await expect(autoApprovalCheckbox).toBeVisible({ timeout: 5000 });
+    await autoApprovalCheckbox.click();
 
-      const saveButton = page
-        .locator('button:has-text("Save"), [data-testid="save-settings"]')
-        .first();
-      await saveButton.click();
+    // Use semantic role for save button
+    const saveButton = page
+      .getByRole('button', { name: /save/i })
+      .or(page.getByTestId('save-settings'))
+      .first();
+    await saveButton.click();
 
-      await page.waitForTimeout(1000);
-      const successIndicator = page.locator('.success, [data-status="success"]').first();
-      await expect(successIndicator).toBeVisible({ timeout: 3000 });
-    }
+    // Wait for success indicator to appear
+    const successIndicator = page.getByRole('status').or(page.locator('.success')).first();
+    await expect(successIndicator).toBeVisible({ timeout: 5000 });
   });
 
   test('should reset settings to defaults', async ({ page }) => {
     const errorHandler = createErrorHandler(page);
+    // Use semantic role for reset button
     const resetButton = page
-      .locator('button:has-text("Reset"), [data-testid="reset-settings"]')
+      .getByRole('button', { name: /reset/i })
+      .or(page.getByTestId('reset-settings'))
       .first();
 
-    if (await resetButton.isVisible()) {
-      await resetButton.click();
+    await expect(resetButton).toBeVisible({ timeout: 5000 });
+    await resetButton.click();
 
-      const confirmButton = page
-        .locator('button:has-text("Reset"), button:has-text("Confirm")')
-        .first();
-      await errorHandler.handleOptionalDialog(confirmButton, 1000);
+    const confirmButton = page.getByRole('button', { name: /reset|confirm/i }).first();
+    await errorHandler.handleOptionalDialog(confirmButton, 1000);
 
-      await page.waitForTimeout(1000);
-      const successMessage = page.locator('[role="status"], .success-message').first();
-      await expect(successMessage).toBeVisible({ timeout: 3000 });
-    }
+    // Wait for success message to appear - use semantic role for status
+    const successMessage = page.getByRole('status').or(page.locator('.success-message')).first();
+    await expect(successMessage).toBeVisible({ timeout: 5000 });
   });
 });

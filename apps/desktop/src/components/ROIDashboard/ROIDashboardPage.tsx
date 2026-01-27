@@ -78,7 +78,7 @@ export function ROIDashboardPage() {
   return (
     <div className="flex h-full flex-col bg-background">
       {}
-      <div className="border-b border-border/60 bg-background/95 backdrop-blur-sm">
+      <div className="border-b border-border/60 bg-background/95 backdrop-blur-xs">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div>

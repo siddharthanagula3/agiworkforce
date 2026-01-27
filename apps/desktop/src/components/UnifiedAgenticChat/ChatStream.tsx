@@ -17,6 +17,7 @@ import {
 import React, { Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react';
 
 import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '../ui/Button';
 import { MessageBubble } from './MessageBubble';
@@ -40,6 +41,7 @@ const card =
 // Keyboard shortcuts removed
 
 export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggestionClick }) => {
+  const prefersReducedMotion = useReducedMotion();
   const messages = useUnifiedChatStore((state) => state.messages);
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
   const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
@@ -300,11 +302,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       <AnimatePresence>
         {showSearch && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-0 left-0 right-0 z-20 p-2 bg-zinc-900/95 backdrop-blur-sm border-b border-white/10"
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -20 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -20 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.15 }}
+            className="absolute top-0 left-0 right-0 z-20 p-2 bg-zinc-900/95 backdrop-blur-xs border-b border-white/10"
           >
             <div className="flex items-center gap-2 max-w-xl mx-auto">
               <div className="relative flex-1">
@@ -407,25 +409,32 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             <motion.div
               key="thinking"
               className="flex items-start gap-3 px-4 py-3"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+              transition={prefersReducedMotion ? { duration: 0.15 } : undefined}
             >
               {/* Warm avatar - Claude style */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               {/* Thinking indicator - warm, communicative */}
-              <div className="bg-amber-900/20 dark:bg-amber-900/30 backdrop-blur-sm rounded-2xl rounded-tl-md px-4 py-3 border border-amber-500/20">
+              <div className="bg-amber-900/20 dark:bg-amber-900/30 backdrop-blur-xs rounded-2xl rounded-tl-md px-4 py-3 border border-amber-500/20">
                 <div className="flex items-center gap-2.5" role="status" aria-live="polite">
-                  {/* ASCII-style spinner */}
-                  <motion.span
-                    className="text-amber-500 dark:text-amber-400 font-mono text-base"
-                    animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                  >
-                    ✦
-                  </motion.span>
+                  {/* ASCII-style spinner - simplified for reduced motion */}
+                  {prefersReducedMotion ? (
+                    <span className="text-amber-500 dark:text-amber-400 font-mono text-base">
+                      ✦
+                    </span>
+                  ) : (
+                    <motion.span
+                      className="text-amber-500 dark:text-amber-400 font-mono text-base"
+                      animate={{ rotate: [0, 360] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                    >
+                      ✦
+                    </motion.span>
+                  )}
                   <span className="text-sm text-amber-700 dark:text-amber-200">
                     {isSimpleMode ? 'Thinking about your question...' : 'Thinking...'}
                   </span>
@@ -436,23 +445,28 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             <motion.div
               key="live-execution"
               className="flex items-start gap-3 px-4 py-3"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+              transition={prefersReducedMotion ? { duration: 0.15 } : undefined}
             >
               {/* Warm working avatar */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
                 <Activity className="h-4 w-4 text-white" />
               </div>
               {/* Working indicator - warm, communicative */}
-              <div className="bg-amber-900/20 dark:bg-amber-900/30 backdrop-blur-sm rounded-2xl rounded-tl-md px-4 py-2.5 border border-amber-500/20">
+              <div className="bg-amber-900/20 dark:bg-amber-900/30 backdrop-blur-xs rounded-2xl rounded-tl-md px-4 py-2.5 border border-amber-500/20">
                 <div className="flex items-center gap-2.5" role="status" aria-live="polite">
-                  {/* Pulsing indicator */}
-                  <motion.div
-                    className="w-2 h-2 rounded-full bg-amber-500 dark:bg-amber-400"
-                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
-                  />
+                  {/* Pulsing indicator - simplified for reduced motion */}
+                  {prefersReducedMotion ? (
+                    <div className="w-2 h-2 rounded-full bg-amber-500 dark:bg-amber-400" />
+                  ) : (
+                    <motion.div
+                      className="w-2 h-2 rounded-full bg-amber-500 dark:bg-amber-400"
+                      animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                  )}
                   <span className="text-sm text-amber-700 dark:text-amber-200">
                     {isSimpleMode
                       ? agentStatus?.currentGoal
@@ -622,12 +636,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       <AnimatePresence>
         {showScrollButton && (
           <motion.button
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            transition={{ duration: 0.2 }}
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.9 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.9 }}
+            transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
             onClick={scrollToBottom}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/90 backdrop-blur-sm border border-white/10 text-sm text-zinc-200 hover:bg-zinc-700/90 hover:text-white shadow-lg transition-colors z-10"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/90 backdrop-blur-xs border border-white/10 text-sm text-zinc-200 hover:bg-zinc-700/90 hover:text-white shadow-lg transition-colors z-10"
             aria-label="Scroll to bottom"
           >
             <ArrowDown className="h-4 w-4" />

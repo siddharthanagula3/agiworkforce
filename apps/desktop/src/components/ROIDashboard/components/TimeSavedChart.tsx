@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { NameType, Payload, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import {
   Card,
   CardContent,
@@ -22,16 +23,23 @@ interface TimeSavedChartProps {
   loading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+/** Props for custom tooltip content in Recharts */
+interface CustomTooltipProps<TValue extends ValueType, TName extends NameType> {
+  active?: boolean;
+  payload?: ReadonlyArray<Payload<TValue, TName>>;
+  label?: string | number;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps<number, string>) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
 
+  const formattedLabel = typeof label === 'string' ? format(parseISO(label), 'MMM dd, yyyy') : '';
+
   return (
     <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-lg border border-border">
-      <p className="text-sm font-medium mb-1">
-        {label ? format(parseISO(label), 'MMM dd, yyyy') : ''}
-      </p>
+      <p className="text-sm font-medium mb-1">{formattedLabel}</p>
       <p className="text-sm text-primary font-semibold">{payload[0]?.value?.toFixed(1)}h saved</p>
     </div>
   );

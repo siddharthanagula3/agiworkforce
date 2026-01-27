@@ -1339,6 +1339,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           budget: state.budget,
           budgetAlerts: state.budgetAlerts,
         }),
+        migrate: (persistedState: unknown, _version: number) => {
+          // Handle future migrations here
+          return persistedState as BillingUsageState;
+        },
       },
     ),
     { name: 'BillingUsageStore', enabled: import.meta.env.DEV },

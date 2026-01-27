@@ -15,7 +15,6 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
@@ -61,7 +60,7 @@ const deductCreditsSchema = z
 router.get(
   '/balance',
   createRateLimiter('credits-balance'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -108,7 +107,7 @@ router.get(
       period_end: balance.period_end,
       last_daily_reset_at: balance.last_daily_reset_at,
     });
-  }),
+  },
 );
 
 /**
@@ -117,34 +116,30 @@ router.get(
  *
  * SECURITY: Rate limited to 10 requests/minute per user
  */
-router.post(
-  '/check',
-  createRateLimiter('credits-check'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.post('/check', createRateLimiter('credits-check'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    // SECURITY: Use strict schema to reject unexpected fields
-    const { amount_cents } = checkCreditsSchema.parse(req.body);
+  // SECURITY: Use strict schema to reject unexpected fields
+  const { amount_cents } = checkCreditsSchema.parse(req.body);
 
-    const { data, error } = await supabase.rpc('check_credits_available', {
-      p_user_id: user.userId,
-      p_amount_cents: amount_cents,
-    });
+  const { data, error } = await supabase.rpc('check_credits_available', {
+    p_user_id: user.userId,
+    p_amount_cents: amount_cents,
+  });
 
-    if (error) {
-      logger.error({ error }, 'Failed to check credits');
-      throw new AppError('Failed to check credits', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Failed to check credits');
+    throw new AppError('Failed to check credits', 500);
+  }
 
-    res.json({
-      available: data === true,
-      requested_cents: amount_cents,
-    });
-  }),
-);
+  res.json({
+    available: data === true,
+    requested_cents: amount_cents,
+  });
+});
 
 /**
  * POST /api/credits/deduct
@@ -153,63 +148,59 @@ router.post(
  *
  * SECURITY: Rate limited to 5 requests/minute per user (strictest - financial)
  */
-router.post(
-  '/deduct',
-  createRateLimiter('credits-deduct'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.post('/deduct', createRateLimiter('credits-deduct'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const { amount_cents, description, metadata, idempotency_key } = deductCreditsSchema.parse(
-      req.body,
-    );
+  const { amount_cents, description, metadata, idempotency_key } = deductCreditsSchema.parse(
+    req.body,
+  );
 
-    const { data, error } = await supabase.rpc('deduct_credits', {
-      p_user_id: user.userId,
-      p_amount_cents: amount_cents,
-      p_description: description || `LLM usage: ${metadata?.model || 'unknown model'}`,
-      p_metadata: metadata || {},
-      p_idempotency_key: idempotency_key || null,
-    });
+  const { data, error } = await supabase.rpc('deduct_credits', {
+    p_user_id: user.userId,
+    p_amount_cents: amount_cents,
+    p_description: description || `LLM usage: ${metadata?.model || 'unknown model'}`,
+    p_metadata: metadata || {},
+    p_idempotency_key: idempotency_key || null,
+  });
 
-    if (error) {
-      logger.error({ error }, 'Failed to deduct credits');
-      throw new AppError('Failed to deduct credits', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Failed to deduct credits');
+    throw new AppError('Failed to deduct credits', 500);
+  }
 
-    // The RPC returns an array, get the first row
-    const result = Array.isArray(data) ? data[0] : data;
+  // The RPC returns an array, get the first row
+  const result = Array.isArray(data) ? data[0] : data;
 
-    if (!result) {
-      throw new AppError('No credit account found', 404);
-    }
+  if (!result) {
+    throw new AppError('No credit account found', 404);
+  }
 
-    // Check if deduction was successful
-    if (!result.success) {
-      res.status(402).json({
-        success: false,
-        error: result.error || 'Credit deduction failed',
-        code: result.code,
-        remaining_cents: result.remaining_cents,
-        daily_limit: result.daily_limit,
-        daily_used: result.daily_used,
-        daily_remaining: result.daily_remaining,
-        reset_in_hours: result.reset_in_hours,
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
+  // Check if deduction was successful
+  if (!result.success) {
+    res.status(402).json({
+      success: false,
+      error: result.error || 'Credit deduction failed',
+      code: result.code,
       remaining_cents: result.remaining_cents,
       daily_limit: result.daily_limit,
       daily_used: result.daily_used,
       daily_remaining: result.daily_remaining,
       reset_in_hours: result.reset_in_hours,
     });
-  }),
-);
+    return;
+  }
+
+  res.json({
+    success: true,
+    remaining_cents: result.remaining_cents,
+    daily_limit: result.daily_limit,
+    daily_used: result.daily_used,
+    daily_remaining: result.daily_remaining,
+    reset_in_hours: result.reset_in_hours,
+  });
+});
 
 export { router as creditsRouter };

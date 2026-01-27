@@ -155,86 +155,122 @@ export const useAutomationStore = create<AutomationState>()(
         lastTriggeredShortcut: null,
 
         async loadWindows() {
-          set({ loadingWindows: true, error: null });
+          set({ loadingWindows: true, error: null }, undefined, 'automation/loadWindows/start');
           try {
             const windows = await listAutomationWindows();
-            set({ windows, loadingWindows: false });
+            set({ windows, loadingWindows: false }, undefined, 'automation/loadWindows/success');
           } catch (error) {
             console.error('Failed to load automation windows:', error);
-            set({ error: String(error), loadingWindows: false, windows: [] });
+            set(
+              { error: String(error), loadingWindows: false, windows: [] },
+              undefined,
+              'automation/loadWindows/error',
+            );
             throw error;
           }
         },
 
         async searchElements(query) {
-          set({ loadingElements: true, error: null });
+          set({ loadingElements: true, error: null }, undefined, 'automation/searchElements/start');
           try {
             const elements = await findAutomationElements(query);
-            set({ elements, loadingElements: false });
+            set(
+              { elements, loadingElements: false },
+              undefined,
+              'automation/searchElements/success',
+            );
           } catch (error) {
             console.error('Failed to find automation elements:', error);
-            set({ error: String(error), loadingElements: false, elements: [] });
+            set(
+              { error: String(error), loadingElements: false, elements: [] },
+              undefined,
+              'automation/searchElements/error',
+            );
           }
         },
 
         async click(request) {
-          set({ runningAction: true, error: null });
+          set({ runningAction: true, error: null }, undefined, 'automation/click/start');
           try {
             await clickAutomation(request);
-            set({ runningAction: false });
+            set({ runningAction: false }, undefined, 'automation/click/success');
           } catch (error) {
             console.error('Automation click failed:', error);
-            set({ error: String(error), runningAction: false });
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/click/error',
+            );
             throw error;
           }
         },
 
         async typeText(text, options) {
-          set({ runningAction: true, error: null });
+          set({ runningAction: true, error: null }, undefined, 'automation/typeText/start');
           try {
             await sendKeys(text, options);
-            set({ runningAction: false });
+            set({ runningAction: false }, undefined, 'automation/typeText/success');
           } catch (error) {
             console.error('Automation type failed:', error);
-            set({ error: String(error), runningAction: false });
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/typeText/error',
+            );
             throw error;
           }
         },
 
         async hotkey(key, modifiers) {
-          set({ runningAction: true, error: null });
+          set({ runningAction: true, error: null }, undefined, 'automation/hotkey/start');
           try {
             await sendHotkey(key, modifiers);
-            set({ runningAction: false });
+            set({ runningAction: false }, undefined, 'automation/hotkey/success');
           } catch (error) {
             console.error('Automation hotkey failed:', error);
-            set({ error: String(error), runningAction: false });
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/hotkey/error',
+            );
             throw error;
           }
         },
 
         async screenshot(options) {
-          set({ runningAction: true, error: null });
+          set({ runningAction: true, error: null }, undefined, 'automation/screenshot/start');
           try {
             const capture = await automationScreenshot(options ?? {});
-            set({ lastScreenshot: capture, runningAction: false });
+            set(
+              { lastScreenshot: capture, runningAction: false },
+              undefined,
+              'automation/screenshot/success',
+            );
             return capture;
           } catch (error) {
             console.error('Automation screenshot failed:', error);
-            set({ error: String(error), runningAction: false, lastScreenshot: null });
+            set(
+              { error: String(error), runningAction: false, lastScreenshot: null },
+              undefined,
+              'automation/screenshot/error',
+            );
             throw error;
           }
         },
 
         async ocr(imagePath) {
-          set({ runningAction: true, error: null });
+          set({ runningAction: true, error: null }, undefined, 'automation/ocr/start');
           try {
             const result = await automationOcr(imagePath);
-            set({ lastOcr: result, runningAction: false });
+            set({ lastOcr: result, runningAction: false }, undefined, 'automation/ocr/success');
             return result;
           } catch (error) {
             console.error('Automation OCR failed:', error);
-            set({ error: String(error), runningAction: false, lastOcr: null });
+            set(
+              { error: String(error), runningAction: false, lastOcr: null },
+              undefined,
+              'automation/ocr/error',
+            );
             throw error;
           }
         },
@@ -257,44 +293,52 @@ export const useAutomationStore = create<AutomationState>()(
 
         clearError() {
           if (get().error) {
-            set({ error: null });
+            set({ error: null }, undefined, 'automation/clearError');
           }
         },
 
         reset() {
-          set({
-            windows: [],
-            elements: [],
-            loadingWindows: false,
-            loadingElements: false,
-            runningAction: false,
-            error: null,
-            lastScreenshot: null,
-            lastOcr: null,
-            isRecording: false,
-            currentRecording: null,
-            recordings: [],
-            scripts: [],
-            selectedScript: null,
-            loadingScripts: false,
-            isExecuting: false,
-            executionProgress: 0,
-            executionHistory: [],
-            currentExecution: null,
-            inspector: {
-              isActive: false,
+          set(
+            {
+              windows: [],
+              elements: [],
+              loadingWindows: false,
+              loadingElements: false,
+              runningAction: false,
+              error: null,
+              lastScreenshot: null,
+              lastOcr: null,
+              isRecording: false,
+              currentRecording: null,
+              recordings: [],
+              scripts: [],
+              selectedScript: null,
+              loadingScripts: false,
+              isExecuting: false,
+              executionProgress: 0,
+              executionHistory: [],
+              currentExecution: null,
+              inspector: {
+                isActive: false,
+              },
+              shortcuts: [],
+              lastTriggeredShortcut: null,
             },
-            shortcuts: [],
-            lastTriggeredShortcut: null,
-          });
+            undefined,
+            'automation/reset',
+          );
         },
 
         startRecording: async () => {
-          set({ isRecording: true, currentRecording: null });
+          set(
+            { isRecording: true, currentRecording: null },
+            undefined,
+            'automation/startRecording',
+          );
         },
 
         stopRecording: async () => {
-          set({ isRecording: false });
+          set({ isRecording: false }, undefined, 'automation/stopRecording');
           return null;
         },
 
@@ -303,12 +347,20 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         loadScripts: async () => {
-          set({ loadingScripts: true, error: null });
+          set({ loadingScripts: true, error: null }, undefined, 'automation/loadScripts/start');
           try {
-            set({ scripts: [], loadingScripts: false });
+            set(
+              { scripts: [], loadingScripts: false },
+              undefined,
+              'automation/loadScripts/success',
+            );
           } catch (error) {
             console.error('Failed to load scripts:', error);
-            set({ error: String(error), loadingScripts: false, scripts: [] });
+            set(
+              { error: String(error), loadingScripts: false, scripts: [] },
+              undefined,
+              'automation/loadScripts/error',
+            );
             throw error;
           }
         },
@@ -318,7 +370,7 @@ export const useAutomationStore = create<AutomationState>()(
         deleteScript: async () => {},
 
         selectScript: (script) => {
-          set({ selectedScript: script });
+          set({ selectedScript: script }, undefined, 'automation/selectScript');
         },
 
         executeScript: async () => {
@@ -326,19 +378,27 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         stopExecution: () => {
-          set({ isExecuting: false });
+          set({ isExecuting: false }, undefined, 'automation/stopExecution');
         },
 
         activateInspector: () => {
-          set((state) => {
-            state.inspector.isActive = true;
-          });
+          set(
+            (state) => {
+              state.inspector.isActive = true;
+            },
+            undefined,
+            'automation/activateInspector',
+          );
         },
 
         deactivateInspector: () => {
-          set((state) => {
-            state.inspector.isActive = false;
-          });
+          set(
+            (state) => {
+              state.inspector.isActive = false;
+            },
+            undefined,
+            'automation/deactivateInspector',
+          );
         },
 
         inspectElementAt: async () => {},
@@ -349,56 +409,111 @@ export const useAutomationStore = create<AutomationState>()(
             startTime: session.startTime,
             isRecording: session.isRecording,
           };
-          set({
-            isRecording: true,
-            currentRecording: recordingSession,
-          });
+          set(
+            {
+              isRecording: true,
+              currentRecording: recordingSession,
+            },
+            undefined,
+            'automation/handleRecordingStarted',
+          );
         },
 
         handleRecordingStopped: (recording) => {
-          set((state) => {
-            state.isRecording = false;
-            state.currentRecording = null;
-            state.recordings.unshift(recording);
-          });
+          set(
+            (state) => {
+              state.isRecording = false;
+              state.currentRecording = null;
+              state.recordings.unshift(recording);
+            },
+            undefined,
+            'automation/handleRecordingStopped',
+          );
         },
 
         handleActionRecorded: (_action) => {
-          set((state) => {
-            if (!state.currentRecording) {
-              console.warn('[AutomationStore] Action recorded but no active recording session');
-              return state;
-            }
+          set(
+            (state) => {
+              if (!state.currentRecording) {
+                console.warn('[AutomationStore] Action recorded but no active recording session');
+                return state;
+              }
 
-            return state;
-          });
+              return state;
+            },
+            undefined,
+            'automation/handleActionRecorded',
+          );
         },
 
         handleShortcutAction: (action) => {
-          set({ lastTriggeredShortcut: action });
+          set({ lastTriggeredShortcut: action }, undefined, 'automation/handleShortcutAction');
         },
 
         handleShortcutRegistered: (shortcut) => {
-          set((state) => {
-            const existingIndex = state.shortcuts.findIndex((s) => s.id === shortcut.id);
-            if (existingIndex >= 0) {
-              state.shortcuts[existingIndex] = shortcut;
-            } else {
-              state.shortcuts.push(shortcut);
-            }
-          });
+          set(
+            (state) => {
+              const existingIndex = state.shortcuts.findIndex((s) => s.id === shortcut.id);
+              if (existingIndex >= 0) {
+                state.shortcuts[existingIndex] = shortcut;
+              } else {
+                state.shortcuts.push(shortcut);
+              }
+            },
+            undefined,
+            'automation/handleShortcutRegistered',
+          );
         },
 
         handleShortcutUnregistered: (shortcutId) => {
-          set((state) => {
-            const index = state.shortcuts.findIndex((s) => s.id === shortcutId);
-            if (index >= 0) {
-              state.shortcuts.splice(index, 1);
-            }
-          });
+          set(
+            (state) => {
+              const index = state.shortcuts.findIndex((s) => s.id === shortcutId);
+              if (index >= 0) {
+                state.shortcuts.splice(index, 1);
+              }
+            },
+            undefined,
+            'automation/handleShortcutUnregistered',
+          );
         },
       })),
     ),
     { name: 'AutomationStore', enabled: import.meta.env.DEV },
   ),
 );
+
+// Selectors
+export const selectAutomationWindows = (state: AutomationState) => state.windows;
+export const selectAutomationElements = (state: AutomationState) => state.elements;
+export const selectLoadingWindows = (state: AutomationState) => state.loadingWindows;
+export const selectLoadingElements = (state: AutomationState) => state.loadingElements;
+export const selectRunningAction = (state: AutomationState) => state.runningAction;
+export const selectAutomationError = (state: AutomationState) => state.error;
+export const selectLastScreenshot = (state: AutomationState) => state.lastScreenshot;
+export const selectLastOcr = (state: AutomationState) => state.lastOcr;
+
+export const selectIsRecording = (state: AutomationState) => state.isRecording;
+export const selectCurrentRecording = (state: AutomationState) => state.currentRecording;
+export const selectRecordings = (state: AutomationState) => state.recordings;
+
+export const selectScripts = (state: AutomationState) => state.scripts;
+export const selectSelectedScript = (state: AutomationState) => state.selectedScript;
+export const selectLoadingScripts = (state: AutomationState) => state.loadingScripts;
+
+export const selectIsExecuting = (state: AutomationState) => state.isExecuting;
+export const selectExecutionProgress = (state: AutomationState) => state.executionProgress;
+export const selectExecutionHistory = (state: AutomationState) => state.executionHistory;
+export const selectCurrentExecution = (state: AutomationState) => state.currentExecution;
+
+export const selectInspector = (state: AutomationState) => state.inspector;
+export const selectInspectorIsActive = (state: AutomationState) => state.inspector.isActive;
+
+export const selectShortcuts = (state: AutomationState) => state.shortcuts;
+export const selectLastTriggeredShortcut = (state: AutomationState) => state.lastTriggeredShortcut;
+
+// Derived selectors
+export const selectEnabledShortcuts = (state: AutomationState) =>
+  state.shortcuts.filter((s) => s.enabled);
+export const selectRecordingCount = (state: AutomationState) => state.recordings.length;
+export const selectScriptCount = (state: AutomationState) => state.scripts.length;

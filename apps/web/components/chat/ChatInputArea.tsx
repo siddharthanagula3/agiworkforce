@@ -254,7 +254,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     <>
       {/* Drag overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center">
           <div className="flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-500/10">
             <ImageIcon className="w-12 h-12 text-blue-500" />
             <p className="text-lg font-medium text-white">Drop images here</p>

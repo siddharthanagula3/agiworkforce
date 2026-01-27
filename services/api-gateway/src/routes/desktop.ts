@@ -20,7 +20,6 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
@@ -73,13 +72,14 @@ const registerDesktopSchema = z
 // Strict payload schemas for each command type using discriminatedUnion
 // SECURITY: This prevents arbitrary data injection and validates command-specific fields
 // Note: Each inner object uses .strict() to reject unexpected fields
+// Zod v4: Use top-level format validators for better performance
 const chatPayloadSchema = z
   .object({
     type: z.literal('chat'),
     payload: z
       .object({
         message: z.string().min(1).max(10000),
-        conversationId: z.string().uuid().optional(),
+        conversationId: z.uuid().optional(),
         model: z.string().max(50).optional(),
         temperature: z.number().min(0).max(2).optional(),
       })
@@ -87,13 +87,14 @@ const chatPayloadSchema = z
   })
   .strict();
 
+// Zod v4: Use top-level format validators for better performance
 const automationPayloadSchema = z
   .object({
     type: z.literal('automation'),
     payload: z
       .object({
         action: z.enum(['run', 'stop', 'pause', 'resume']),
-        workflowId: z.string().uuid(),
+        workflowId: z.uuid(),
         parameters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
         timeout: z.number().int().min(1000).max(3600000).optional(), // 1s to 1h
       })
@@ -146,7 +147,7 @@ function isOnline(lastSeenAt: string): boolean {
 router.post(
   '/register',
   createRateLimiter('device-register'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { name, platform, version } = registerDesktopSchema.parse(req.body);
     const user = req.user;
     if (!user) {
@@ -175,7 +176,7 @@ router.post(
       desktopId,
       message: 'Desktop registered successfully',
     });
-  }),
+  },
 );
 
 /**
@@ -187,7 +188,7 @@ router.post(
 router.get(
   '/:desktopId/status',
   createRateLimiter('device-status'),
-  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
+  async (req: Request<{ desktopId: string }>, res: Response) => {
     // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
@@ -225,7 +226,7 @@ router.get(
       online: isOnline(desktop.last_seen_at),
       lastSeen: new Date(desktop.last_seen_at).getTime(),
     });
-  }),
+  },
 );
 
 /**
@@ -237,7 +238,7 @@ router.get(
 router.post(
   '/:desktopId/command',
   createRateLimiter('device-command'),
-  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
+  async (req: Request<{ desktopId: string }>, res: Response) => {
     // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
@@ -289,7 +290,7 @@ router.post(
       type,
       payload,
     });
-  }),
+  },
 );
 
 /**
@@ -298,38 +299,34 @@ router.post(
  *
  * SECURITY: Rate limited to 30/min for list operations
  */
-router.get(
-  '/',
-  createRateLimiter('device-list'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.get('/', createRateLimiter('device-list'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const { data: devices, error } = await supabase
-      .from('desktop_devices')
-      .select('*')
-      .eq('user_id', user.userId)
-      .order('last_seen_at', { ascending: false });
+  const { data: devices, error } = await supabase
+    .from('desktop_devices')
+    .select('*')
+    .eq('user_id', user.userId)
+    .order('last_seen_at', { ascending: false });
 
-    if (error) {
-      logger.error({ error }, 'Failed to list desktops');
-      throw new AppError('Failed to list desktop devices', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Failed to list desktops');
+    throw new AppError('Failed to list desktop devices', 500);
+  }
 
-    const userDesktops = (devices || []).map((d: DesktopDevice) => ({
-      id: d.id,
-      name: d.name,
-      platform: d.platform,
-      version: d.version,
-      online: isOnline(d.last_seen_at),
-      lastSeen: new Date(d.last_seen_at).getTime(),
-    }));
+  const userDesktops = (devices || []).map((d: DesktopDevice) => ({
+    id: d.id,
+    name: d.name,
+    platform: d.platform,
+    version: d.version,
+    online: isOnline(d.last_seen_at),
+    lastSeen: new Date(d.last_seen_at).getTime(),
+  }));
 
-    res.json({ desktops: userDesktops });
-  }),
-);
+  res.json({ desktops: userDesktops });
+});
 
 /**
  * Update desktop heartbeat (last seen)
@@ -340,7 +337,7 @@ router.get(
 router.post(
   '/:desktopId/heartbeat',
   createRateLimiter('heartbeat'),
-  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
+  async (req: Request<{ desktopId: string }>, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -378,7 +375,7 @@ router.post(
     }
 
     res.json({ success: true });
-  }),
+  },
 );
 
 /**
@@ -390,7 +387,7 @@ router.post(
 router.delete(
   '/:desktopId',
   createRateLimiter('device-delete'),
-  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
+  async (req: Request<{ desktopId: string }>, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -429,7 +426,7 @@ router.delete(
     }
 
     res.json({ success: true, message: 'Desktop device unregistered' });
-  }),
+  },
 );
 
 export { router as desktopRouter };

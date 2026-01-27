@@ -27,21 +27,32 @@ export class SettingsPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
+    // Use semantic locators with fallback to test IDs
     this.saveButton = page
-      .locator('button:has-text("Save"), [data-testid="save-settings"]')
+      .getByRole('button', { name: /save/i })
+      .or(page.getByTestId('save-settings'))
       .first();
     this.resetButton = page
-      .locator('button:has-text("Reset"), [data-testid="reset-settings"]')
+      .getByRole('button', { name: /reset/i })
+      .or(page.getByTestId('reset-settings'))
       .first();
-    this.themeSelect = page.locator('select[name="theme"], [data-testid="theme-select"]').first();
+    this.themeSelect = page
+      .getByRole('combobox', { name: /theme/i })
+      .or(page.getByLabel(/theme/i))
+      .or(page.getByTestId('theme-select'))
+      .first();
     this.languageSelect = page
-      .locator('select[name="language"], [data-testid="language-select"]')
+      .getByRole('combobox', { name: /language/i })
+      .or(page.getByLabel(/language/i))
+      .or(page.getByTestId('language-select'))
       .first();
   }
 
   async navigateToSettings() {
+    // Use semantic navigation - prefer role-based or accessible locators
     const settingsLink = this.page
-      .locator('a[href*="settings"], button[aria-label*="Settings"]')
+      .getByRole('link', { name: /settings/i })
+      .or(this.page.getByRole('button', { name: /settings/i }))
       .first();
     if (await settingsLink.isVisible()) {
       await settingsLink.click();
@@ -55,14 +66,17 @@ export class SettingsPage extends BasePage {
 
   async configureProvider(provider: 'openai' | 'anthropic' | 'google' | 'ollama', apiKey?: string) {
     const providerTab = this.page
-      .locator(`button:has-text("Providers"), [data-testid="providers-tab"]`)
+      .getByRole('tab', { name: /providers/i })
+      .or(this.page.getByRole('button', { name: /providers/i }))
+      .or(this.page.getByTestId('providers-tab'))
       .first();
     if (await providerTab.isVisible()) {
       await providerTab.click();
     }
 
     const providerSelect = this.page
-      .locator(`[data-testid="${provider}-provider"], button:has-text("${provider}")`)
+      .getByTestId(`${provider}-provider`)
+      .or(this.page.getByRole('button', { name: new RegExp(provider, 'i') }))
       .first();
     if (await providerSelect.isVisible()) {
       await providerSelect.click();
@@ -70,7 +84,9 @@ export class SettingsPage extends BasePage {
 
     if (apiKey) {
       const apiKeyInput = this.page
-        .locator('input[name="apiKey"], [data-testid="api-key-input"]')
+        .getByLabel(/api key/i)
+        .or(this.page.getByPlaceholder(/api key/i))
+        .or(this.page.getByTestId('api-key-input'))
         .first();
       await apiKeyInput.fill(apiKey);
     }
@@ -78,7 +94,8 @@ export class SettingsPage extends BasePage {
 
   async setResourceLimit(resource: 'cpu' | 'memory', value: string) {
     const input = this.page
-      .locator(`input[name*="${resource}"], [data-testid="${resource}-limit"]`)
+      .getByLabel(new RegExp(resource, 'i'))
+      .or(this.page.getByTestId(`${resource}-limit`))
       .first();
     if (await input.isVisible({ timeout: 2000 }).catch(() => false)) {
       await input.clear();
@@ -88,7 +105,9 @@ export class SettingsPage extends BasePage {
 
   async toggleAutonomousMode(enable: boolean) {
     const toggle = this.page
-      .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
+      .getByRole('checkbox', { name: /autonomous/i })
+      .or(this.page.getByLabel(/autonomous/i))
+      .or(this.page.getByTestId('autonomous-toggle'))
       .first();
     if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
       const isChecked = await toggle.isChecked();
@@ -101,7 +120,9 @@ export class SettingsPage extends BasePage {
 
   async toggleAutoApproval(enable: boolean) {
     const toggle = this.page
-      .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
+      .getByRole('checkbox', { name: /auto.?approv/i })
+      .or(this.page.getByLabel(/auto.?approv/i))
+      .or(this.page.getByTestId('auto-approve'))
       .first();
     if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
       const isChecked = await toggle.isChecked();
@@ -116,7 +137,10 @@ export class SettingsPage extends BasePage {
     if (await this.saveButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await this.saveButton.click();
 
-      const successMessage = this.page.locator('[role="status"], .success-message').first();
+      const successMessage = this.page
+        .getByRole('status')
+        .or(this.page.locator('.success-message'))
+        .first();
       await successMessage.waitFor({ timeout: 5000 }).catch(() => {});
     }
   }
@@ -126,21 +150,25 @@ export class SettingsPage extends BasePage {
     if (await this.resetButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await this.resetButton.click();
 
-      const confirmButton = this.page
-        .locator('button:has-text("Reset"), button:has-text("Confirm")')
-        .first();
+      const confirmButton = this.page.getByRole('button', { name: /reset|confirm/i }).first();
       if (await errorHandler.isElementVisible(confirmButton, 2000)) {
         await errorHandler.safeClick(confirmButton);
       }
 
-      const successMessage = this.page.locator('[role="status"], .success-message').first();
+      const successMessage = this.page
+        .getByRole('status')
+        .or(this.page.locator('.success-message'))
+        .first();
       await successMessage.waitFor({ timeout: 5000 }).catch(() => {});
     }
   }
 
   async isSettingsSaved(): Promise<boolean> {
     const errorHandler = createErrorHandler(this.page);
-    const successMessage = this.page.locator('[role="status"], .success-message').first();
+    const successMessage = this.page
+      .getByRole('status')
+      .or(this.page.locator('.success-message'))
+      .first();
     return await errorHandler.isElementVisible(successMessage, 5000);
   }
 
@@ -169,9 +197,13 @@ export class SettingsPage extends BasePage {
       }
 
       try {
-        const cpuInput = this.page.locator('input[name*="cpu"], [data-testid="cpu-limit"]').first();
+        const cpuInput = this.page
+          .getByLabel(/cpu/i)
+          .or(this.page.getByTestId('cpu-limit'))
+          .first();
         const memoryInput = this.page
-          .locator('input[name*="memory"], [data-testid="memory-limit"]')
+          .getByLabel(/memory/i)
+          .or(this.page.getByTestId('memory-limit'))
           .first();
 
         const cpuValue = await cpuInput.inputValue().catch(() => '');
@@ -188,7 +220,8 @@ export class SettingsPage extends BasePage {
 
       try {
         const autonomousToggle = this.page
-          .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
+          .getByRole('checkbox', { name: /autonomous/i })
+          .or(this.page.getByTestId('autonomous-toggle'))
           .first();
         const isChecked = await autonomousToggle.isChecked().catch(() => false);
         snapshot.autonomousMode = isChecked;
@@ -198,7 +231,8 @@ export class SettingsPage extends BasePage {
 
       try {
         const autoApprovalToggle = this.page
-          .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
+          .getByRole('checkbox', { name: /auto.?approv/i })
+          .or(this.page.getByTestId('auto-approve'))
           .first();
         const isChecked = await autoApprovalToggle.isChecked().catch(() => false);
         snapshot.autoApproval = isChecked;
@@ -288,7 +322,8 @@ export class SettingsPage extends BasePage {
   async getResourceLimitValue(resource: 'cpu' | 'memory'): Promise<string> {
     try {
       const input = this.page
-        .locator(`input[name*="${resource}"], [data-testid="${resource}-limit"]`)
+        .getByLabel(new RegExp(resource, 'i'))
+        .or(this.page.getByTestId(`${resource}-limit`))
         .first();
       return await input.inputValue().catch(() => '');
     } catch (error) {
