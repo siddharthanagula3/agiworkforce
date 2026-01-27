@@ -86,7 +86,7 @@ export const useCodeStore = create<CodeState>()(
           persistedOpenPaths: [],
 
           setRootPath: (path: string) => {
-            set({ rootPath: path });
+            set({ rootPath: path }, undefined, 'code/setRootPath');
           },
 
           openFile: async (path: string, options?: { activate?: boolean }) => {
@@ -96,7 +96,7 @@ export const useCodeStore = create<CodeState>()(
             const existingFile = state.openFiles.find((f) => f.path === path);
             if (existingFile) {
               if (shouldActivate) {
-                set({ activeFilePath: path });
+                set({ activeFilePath: path }, undefined, 'code/activateExistingFile');
               }
               return;
             }
@@ -119,11 +119,15 @@ export const useCodeStore = create<CodeState>()(
                 ? state.persistedOpenPaths
                 : [...state.persistedOpenPaths, path];
 
-              set({
-                openFiles: nextOpenFiles,
-                activeFilePath: shouldActivate ? path : state.activeFilePath,
-                persistedOpenPaths: nextPersisted,
-              });
+              set(
+                {
+                  openFiles: nextOpenFiles,
+                  activeFilePath: shouldActivate ? path : state.activeFilePath,
+                  persistedOpenPaths: nextPersisted,
+                },
+                undefined,
+                'code/openFile',
+              );
             } catch (error) {
               console.error('Failed to open file:', error);
               throw error;
@@ -149,19 +153,27 @@ export const useCodeStore = create<CodeState>()(
               }
             }
 
-            set({
-              openFiles: newOpenFiles,
-              activeFilePath: newActiveFile,
-              persistedOpenPaths: state.persistedOpenPaths.filter((p) => p !== path),
-            });
+            set(
+              {
+                openFiles: newOpenFiles,
+                activeFilePath: newActiveFile,
+                persistedOpenPaths: state.persistedOpenPaths.filter((p) => p !== path),
+              },
+              undefined,
+              'code/closeFile',
+            );
           },
 
           closeAllFiles: () => {
-            set({
-              openFiles: [],
-              activeFilePath: null,
-              persistedOpenPaths: [],
-            });
+            set(
+              {
+                openFiles: [],
+                activeFilePath: null,
+                persistedOpenPaths: [],
+              },
+              undefined,
+              'code/closeAllFiles',
+            );
           },
 
           closeOtherFiles: (path: string) => {
@@ -171,11 +183,15 @@ export const useCodeStore = create<CodeState>()(
               return;
             }
 
-            set({
-              openFiles: [file],
-              activeFilePath: path,
-              persistedOpenPaths: [path],
-            });
+            set(
+              {
+                openFiles: [file],
+                activeFilePath: path,
+                persistedOpenPaths: [path],
+              },
+              undefined,
+              'code/closeOtherFiles',
+            );
           },
 
           moveFile: (path: string, targetIndex: number) => {
@@ -196,17 +212,21 @@ export const useCodeStore = create<CodeState>()(
             const persisted = state.persistedOpenPaths.filter((p) => p !== path);
             persisted.splice(targetIndex, 0, path);
 
-            set({
-              openFiles: files,
-              persistedOpenPaths: persisted,
-            });
+            set(
+              {
+                openFiles: files,
+                persistedOpenPaths: persisted,
+              },
+              undefined,
+              'code/moveFile',
+            );
           },
 
           setActiveFile: (path: string) => {
             const state = get();
             const file = state.openFiles.find((f) => f.path === path);
             if (file) {
-              set({ activeFilePath: path });
+              set({ activeFilePath: path }, undefined, 'code/setActiveFile');
             }
           },
 
@@ -231,9 +251,13 @@ export const useCodeStore = create<CodeState>()(
               index === fileIndex ? updatedFile : openFile,
             );
 
-            set({
-              openFiles: updatedFiles,
-            });
+            set(
+              {
+                openFiles: updatedFiles,
+              },
+              undefined,
+              'code/updateFileContent',
+            );
           },
 
           saveFile: async (path: string) => {
@@ -256,11 +280,15 @@ export const useCodeStore = create<CodeState>()(
                 isDirty: false,
               };
 
-              set({
-                openFiles: state.openFiles.map((openFile, index) =>
-                  index === fileIndex ? updatedFile : openFile,
-                ),
-              });
+              set(
+                {
+                  openFiles: state.openFiles.map((openFile, index) =>
+                    index === fileIndex ? updatedFile : openFile,
+                  ),
+                },
+                undefined,
+                'code/saveFile',
+              );
             } catch (error) {
               console.error('Failed to save file:', error);
               throw error;
@@ -282,7 +310,7 @@ export const useCodeStore = create<CodeState>()(
                 file.isDirty ? { ...file, originalContent: file.content, isDirty: false } : file,
               );
 
-              set({ openFiles: newOpenFiles });
+              set({ openFiles: newOpenFiles }, undefined, 'code/saveAllFiles');
             } catch (error) {
               console.error('Failed to save all files:', error);
               throw error;
@@ -306,11 +334,15 @@ export const useCodeStore = create<CodeState>()(
               isDirty: false,
             };
 
-            set({
-              openFiles: state.openFiles.map((openFile, index) =>
-                index === fileIndex ? revertedFile : openFile,
-              ),
-            });
+            set(
+              {
+                openFiles: state.openFiles.map((openFile, index) =>
+                  index === fileIndex ? revertedFile : openFile,
+                ),
+              },
+              undefined,
+              'code/revertFile',
+            );
           },
 
           /**
@@ -338,7 +370,7 @@ export const useCodeStore = create<CodeState>()(
                         originalContent: content,
                         isDirty: false,
                       };
-                      set({ openFiles: updatedFiles });
+                      set({ openFiles: updatedFiles }, undefined, 'code/reloadRevertedFile');
                     }
                   } catch (error) {
                     console.warn('Failed to reload reverted file:', path, error);
@@ -370,21 +402,30 @@ export const useCodeStore = create<CodeState>()(
             }
 
             if (state.activeFilePath) {
-              set({ activeFilePath: state.activeFilePath });
+              set({ activeFilePath: state.activeFilePath }, undefined, 'code/hydrateActiveFile');
             } else if (state.persistedOpenPaths.length > 0) {
-              set({ activeFilePath: state.persistedOpenPaths[0] ?? null });
+              set(
+                { activeFilePath: state.persistedOpenPaths[0] ?? null },
+                undefined,
+                'code/hydrateActiveFile',
+              );
             }
           },
         })),
       ),
       {
         name: 'code-storage',
+        version: 1,
         storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
           rootPath: state.rootPath,
           activeFilePath: state.activeFilePath,
           persistedOpenPaths: state.persistedOpenPaths,
         }),
+        migrate: (persistedState: unknown, _version: number) => {
+          // Handle future migrations here
+          return persistedState as CodeState;
+        },
       },
     ),
     { name: 'CodeStore', enabled: import.meta.env.DEV },
@@ -393,3 +434,24 @@ export const useCodeStore = create<CodeState>()(
 
 // Use useCodeStore.getState() to access current state when needed outside of React components.
 // Example: const { openFiles, activeFilePath } = useCodeStore.getState();
+
+// Selectors
+export const selectOpenFiles = (state: CodeState) => state.openFiles;
+export const selectActiveFilePath = (state: CodeState) => state.activeFilePath;
+export const selectRootPath = (state: CodeState) => state.rootPath;
+export const selectPersistedOpenPaths = (state: CodeState) => state.persistedOpenPaths;
+
+// Derived selectors
+export const selectActiveFile = (state: CodeState) =>
+  state.openFiles.find((f) => f.path === state.activeFilePath);
+export const selectDirtyFiles = (state: CodeState) => state.openFiles.filter((f) => f.isDirty);
+export const selectHasDirtyFiles = (state: CodeState) => state.openFiles.some((f) => f.isDirty);
+export const selectOpenFileCount = (state: CodeState) => state.openFiles.length;
+export const selectDirtyFileCount = (state: CodeState) =>
+  state.openFiles.filter((f) => f.isDirty).length;
+export const selectFileByPath = (path: string) => (state: CodeState) =>
+  state.openFiles.find((f) => f.path === path);
+export const selectIsFileDirty = (path: string) => (state: CodeState) =>
+  state.openFiles.find((f) => f.path === path)?.isDirty ?? false;
+export const selectIsFileOpen = (path: string) => (state: CodeState) =>
+  state.openFiles.some((f) => f.path === path);

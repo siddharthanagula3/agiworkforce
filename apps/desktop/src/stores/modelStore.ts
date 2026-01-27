@@ -231,37 +231,53 @@ export const useModelStore = create<ModelState>()(
           try {
             useSettingsStore.getState().setDefaultModel(provider, modelId);
 
-            set({
-              selectedModel: modelId,
-              selectedProvider: provider,
-            });
+            set(
+              {
+                selectedModel: modelId,
+                selectedProvider: provider,
+              },
+              undefined,
+              'model/selectModel',
+            );
 
             get().addToRecent(modelId);
           } catch (error) {
             console.error('Failed to select model:', error);
-            set({ error: String(error) });
+            set({ error: String(error) }, undefined, 'model/selectModel/error');
           }
         },
 
         toggleFavorite: (modelId: string) => {
-          set((state) => {
-            const favorites = state.favorites.includes(modelId)
-              ? state.favorites.filter((id) => id !== modelId)
-              : [...state.favorites, modelId];
-            return { favorites };
-          });
+          set(
+            (state) => {
+              const favorites = state.favorites.includes(modelId)
+                ? state.favorites.filter((id) => id !== modelId)
+                : [...state.favorites, modelId];
+              return { favorites };
+            },
+            undefined,
+            'model/toggleFavorite',
+          );
         },
 
         toggleThinkingMode: () => {
-          set((state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }));
+          set(
+            (state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }),
+            undefined,
+            'model/toggleThinkingMode',
+          );
         },
 
         addToRecent: (modelId: string) => {
-          set((state) => {
-            const filtered = state.recentModels.filter((id) => id !== modelId);
-            const recentModels = [modelId, ...filtered].slice(0, 5);
-            return { recentModels };
-          });
+          set(
+            (state) => {
+              const filtered = state.recentModels.filter((id) => id !== modelId);
+              const recentModels = [modelId, ...filtered].slice(0, 5);
+              return { recentModels };
+            },
+            undefined,
+            'model/addToRecent',
+          );
         },
 
         checkProviderStatus: async (provider: Provider) => {
@@ -270,12 +286,16 @@ export const useModelStore = create<ModelState>()(
               provider,
             });
 
-            set((state) => ({
-              providerStatuses: {
-                ...state.providerStatuses,
-                [provider]: status,
-              },
-            }));
+            set(
+              (state) => ({
+                providerStatuses: {
+                  ...state.providerStatuses,
+                  [provider]: status,
+                },
+              }),
+              undefined,
+              'model/checkProviderStatus',
+            );
 
             return status;
           } catch (error) {
@@ -286,37 +306,49 @@ export const useModelStore = create<ModelState>()(
               error: String(error),
             };
 
-            set((state) => ({
-              providerStatuses: {
-                ...state.providerStatuses,
-                [provider]: errorStatus,
-              },
-            }));
+            set(
+              (state) => ({
+                providerStatuses: {
+                  ...state.providerStatuses,
+                  [provider]: errorStatus,
+                },
+              }),
+              undefined,
+              'model/checkProviderStatus/error',
+            );
 
             return errorStatus;
           }
         },
 
         checkAllProviders: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null }, undefined, 'model/checkAllProviders/start');
           try {
             await Promise.all(PROVIDERS_IN_ORDER.map((p) => get().checkProviderStatus(p)));
-            set({ loading: false });
+            set({ loading: false }, undefined, 'model/checkAllProviders/success');
           } catch (error) {
             console.error('Failed to check provider statuses:', error);
-            set({ error: String(error), loading: false });
+            set(
+              { error: String(error), loading: false },
+              undefined,
+              'model/checkAllProviders/error',
+            );
           }
         },
 
         getUsageStats: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null }, undefined, 'model/getUsageStats/start');
           try {
             const stats = await invoke<UsageStats>('llm_get_usage_stats');
-            set({ usageStats: stats, loading: false });
+            set({ usageStats: stats, loading: false }, undefined, 'model/getUsageStats/success');
             return stats;
           } catch (error) {
             console.error('Failed to get usage stats:', error);
-            set({ error: String(error), loading: false, usageStats: defaultUsageStats });
+            set(
+              { error: String(error), loading: false, usageStats: defaultUsageStats },
+              undefined,
+              'model/getUsageStats/error',
+            );
             return defaultUsageStats;
           }
         },
@@ -326,14 +358,22 @@ export const useModelStore = create<ModelState>()(
         },
 
         getAvailableModels: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null }, undefined, 'model/getAvailableModels/start');
           try {
             const models = await invoke<ModelInfo[]>('llm_get_available_models');
-            set({ loading: false, availableModels: models });
+            set(
+              { loading: false, availableModels: models },
+              undefined,
+              'model/getAvailableModels/success',
+            );
             return models;
           } catch (error) {
             console.error('Failed to get available models:', error);
-            set({ error: String(error), loading: false });
+            set(
+              { error: String(error), loading: false },
+              undefined,
+              'model/getAvailableModels/error',
+            );
 
             const allModels = getAllModels();
             const fallbackModels = allModels.map((model) => ({
@@ -342,7 +382,11 @@ export const useModelStore = create<ModelState>()(
               provider: model.provider,
               available: true,
             }));
-            set({ availableModels: fallbackModels });
+            set(
+              { availableModels: fallbackModels },
+              undefined,
+              'model/getAvailableModels/fallback',
+            );
             return fallbackModels;
           }
         },
@@ -351,72 +395,108 @@ export const useModelStore = create<ModelState>()(
         checkOllamaStatus: async () => {
           try {
             const available = await invoke<boolean>('ollama_check_status');
-            set({ ollamaAvailable: available, ollamaError: null });
+            set(
+              { ollamaAvailable: available, ollamaError: null },
+              undefined,
+              'model/checkOllamaStatus',
+            );
             return available;
           } catch (error) {
             console.error('Failed to check Ollama status:', error);
-            set({ ollamaAvailable: false, ollamaError: String(error) });
+            set(
+              { ollamaAvailable: false, ollamaError: String(error) },
+              undefined,
+              'model/checkOllamaStatus/error',
+            );
             return false;
           }
         },
 
         fetchOllamaModels: async () => {
-          set({ ollamaLoading: true, ollamaError: null });
+          set(
+            { ollamaLoading: true, ollamaError: null },
+            undefined,
+            'model/fetchOllamaModels/start',
+          );
           try {
             // First check if Ollama is available
             const available = await invoke<boolean>('ollama_check_status');
             if (!available) {
-              set({
-                ollamaAvailable: false,
-                ollamaModels: [],
-                ollamaLoading: false,
-                ollamaError:
-                  'Ollama is not running. Start it with "ollama serve" in your terminal.',
-              });
+              set(
+                {
+                  ollamaAvailable: false,
+                  ollamaModels: [],
+                  ollamaLoading: false,
+                  ollamaError:
+                    'Ollama is not running. Start it with "ollama serve" in your terminal.',
+                },
+                undefined,
+                'model/fetchOllamaModels/unavailable',
+              );
               return [];
             }
 
             const models = await invoke<OllamaModel[]>('ollama_list_models');
-            set({
-              ollamaModels: models,
-              ollamaAvailable: true,
-              ollamaLoading: false,
-              ollamaError: null,
-            });
+            set(
+              {
+                ollamaModels: models,
+                ollamaAvailable: true,
+                ollamaLoading: false,
+                ollamaError: null,
+              },
+              undefined,
+              'model/fetchOllamaModels/success',
+            );
             return models;
           } catch (error) {
             console.error('Failed to fetch Ollama models:', error);
-            set({
-              ollamaModels: [],
-              ollamaLoading: false,
-              ollamaError: String(error),
-            });
+            set(
+              {
+                ollamaModels: [],
+                ollamaLoading: false,
+                ollamaError: String(error),
+              },
+              undefined,
+              'model/fetchOllamaModels/error',
+            );
             return [];
           }
         },
 
         pullOllamaModel: async (modelName: string) => {
-          set({ ollamaLoading: true, ollamaError: null });
+          set({ ollamaLoading: true, ollamaError: null }, undefined, 'model/pullOllamaModel/start');
           try {
             await invoke('ollama_pull_model', { modelName });
             // Refresh the model list after pulling
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to pull Ollama model:', error);
-            set({ ollamaLoading: false, ollamaError: String(error) });
+            set(
+              { ollamaLoading: false, ollamaError: String(error) },
+              undefined,
+              'model/pullOllamaModel/error',
+            );
             throw error;
           }
         },
 
         deleteOllamaModel: async (modelName: string) => {
-          set({ ollamaLoading: true, ollamaError: null });
+          set(
+            { ollamaLoading: true, ollamaError: null },
+            undefined,
+            'model/deleteOllamaModel/start',
+          );
           try {
             await invoke('ollama_delete_model', { modelName });
             // Refresh the model list after deletion
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to delete Ollama model:', error);
-            set({ ollamaLoading: false, ollamaError: String(error) });
+            set(
+              { ollamaLoading: false, ollamaError: String(error) },
+              undefined,
+              'model/deleteOllamaModel/error',
+            );
             throw error;
           }
         },
@@ -451,7 +531,7 @@ export const useModelStore = create<ModelState>()(
           };
 
           // Store the routing decision for UI feedback
-          set({ lastRoutingDecision: decision });
+          set({ lastRoutingDecision: decision }, undefined, 'model/getRoutedModel');
 
           return decision;
         },
@@ -463,34 +543,38 @@ export const useModelStore = create<ModelState>()(
         },
 
         reset: () => {
-          set({
-            selectedModel: null,
-            selectedProvider: null,
-            favorites: [],
-            recentModels: [],
-            providerStatuses: {
-              openai: null,
-              anthropic: null,
-              google: null,
-              ollama: null,
-              xai: null,
-              deepseek: null,
-              qwen: null,
-              moonshot: null,
-              perplexity: null,
-              managed_cloud: null,
+          set(
+            {
+              selectedModel: null,
+              selectedProvider: null,
+              favorites: [],
+              recentModels: [],
+              providerStatuses: {
+                openai: null,
+                anthropic: null,
+                google: null,
+                ollama: null,
+                xai: null,
+                deepseek: null,
+                qwen: null,
+                moonshot: null,
+                perplexity: null,
+                managed_cloud: null,
+              },
+              usageStats: null,
+              // Reset Ollama state
+              ollamaModels: [],
+              ollamaAvailable: false,
+              ollamaLoading: false,
+              ollamaError: null,
+              // Reset routing state
+              lastRoutingDecision: null,
+              loading: false,
+              error: null,
             },
-            usageStats: null,
-            // Reset Ollama state
-            ollamaModels: [],
-            ollamaAvailable: false,
-            ollamaLoading: false,
-            ollamaError: null,
-            // Reset routing state
-            lastRoutingDecision: null,
-            loading: false,
-            error: null,
-          });
+            undefined,
+            'model/reset',
+          );
         },
       })),
       {

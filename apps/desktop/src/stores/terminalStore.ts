@@ -65,7 +65,7 @@ export const useTerminalStore = create<TerminalState>()(
         loadAvailableShells: async () => {
           try {
             const shells = await invoke<ShellInfo[]>('terminal_detect_shells');
-            set({ availableShells: shells });
+            set({ availableShells: shells }, undefined, 'terminal/loadAvailableShells');
           } catch (error) {
             console.error('Failed to detect shells:', error);
             throw error;
@@ -88,10 +88,14 @@ export const useTerminalStore = create<TerminalState>()(
               createdAt: Date.now(),
             };
 
-            set((state) => ({
-              sessions: [...state.sessions, newSession],
-              activeSessionId: sessionId,
-            }));
+            set(
+              (state) => ({
+                sessions: [...state.sessions, newSession],
+                activeSessionId: sessionId,
+              }),
+              undefined,
+              'terminal/createSession',
+            );
 
             return sessionId;
           } catch (error) {
@@ -106,20 +110,24 @@ export const useTerminalStore = create<TerminalState>()(
 
             await invoke('terminal_kill', { sessionId });
 
-            set((state) => {
-              const newSessions = state.sessions.filter((s) => s.id !== sessionId);
-              let newActiveId = state.activeSessionId;
+            set(
+              (state) => {
+                const newSessions = state.sessions.filter((s) => s.id !== sessionId);
+                let newActiveId = state.activeSessionId;
 
-              if (state.activeSessionId === sessionId) {
-                const nextSession = newSessions[0];
-                newActiveId = nextSession ? nextSession.id : null;
-              }
+                if (state.activeSessionId === sessionId) {
+                  const nextSession = newSessions[0];
+                  newActiveId = nextSession ? nextSession.id : null;
+                }
 
-              return {
-                sessions: newSessions,
-                activeSessionId: newActiveId,
-              };
-            });
+                return {
+                  sessions: newSessions,
+                  activeSessionId: newActiveId,
+                };
+              },
+              undefined,
+              'terminal/closeSession',
+            );
           } catch (error) {
             console.error('Failed to close terminal session:', error);
             throw error;
@@ -130,7 +138,7 @@ export const useTerminalStore = create<TerminalState>()(
           const state = get();
           const session = state.sessions.find((s) => s.id === sessionId);
           if (session) {
-            set({ activeSessionId: sessionId });
+            set({ activeSessionId: sessionId }, undefined, 'terminal/setActiveSession');
           }
         },
 
@@ -206,42 +214,54 @@ export const useTerminalStore = create<TerminalState>()(
           const exitUnlisten = await listen(exitEvent, () => {
             get().removeOutputListener(sessionId);
 
-            set((state) => {
-              const newSessions = state.sessions.filter((s) => s.id !== sessionId);
-              let newActiveId = state.activeSessionId;
-              if (state.activeSessionId === sessionId) {
-                const nextSession = newSessions[0];
-                newActiveId = nextSession ? nextSession.id : null;
-              }
-              return {
-                sessions: newSessions,
-                activeSessionId: newActiveId,
-              };
-            });
+            set(
+              (state) => {
+                const newSessions = state.sessions.filter((s) => s.id !== sessionId);
+                let newActiveId = state.activeSessionId;
+                if (state.activeSessionId === sessionId) {
+                  const nextSession = newSessions[0];
+                  newActiveId = nextSession ? nextSession.id : null;
+                }
+                return {
+                  sessions: newSessions,
+                  activeSessionId: newActiveId,
+                };
+              },
+              undefined,
+              'terminal/sessionExited',
+            );
 
             onExit?.();
           });
 
-          set((state) => {
-            const newListeners = new Map(state.listeners);
-            newListeners.set(sessionId, [outputUnlisten, exitUnlisten]);
-            return { listeners: newListeners };
-          });
+          set(
+            (state) => {
+              const newListeners = new Map(state.listeners);
+              newListeners.set(sessionId, [outputUnlisten, exitUnlisten]);
+              return { listeners: newListeners };
+            },
+            undefined,
+            'terminal/setupOutputListener',
+          );
         },
 
         removeOutputListener: (sessionId: string) => {
           // Atomically get and remove listeners to avoid race conditions
           let unlisteners: UnlistenFn[] | undefined;
 
-          set((state) => {
-            unlisteners = state.listeners.get(sessionId);
-            if (!unlisteners || unlisteners.length === 0) {
-              return state;
-            }
-            const newListeners = new Map(state.listeners);
-            newListeners.delete(sessionId);
-            return { listeners: newListeners };
-          });
+          set(
+            (state) => {
+              unlisteners = state.listeners.get(sessionId);
+              if (!unlisteners || unlisteners.length === 0) {
+                return state;
+              }
+              const newListeners = new Map(state.listeners);
+              newListeners.delete(sessionId);
+              return { listeners: newListeners };
+            },
+            undefined,
+            'terminal/removeOutputListener',
+          );
 
           // Call unlisteners outside of set() to avoid side effects during state update
           if (unlisteners && unlisteners.length > 0) {
@@ -273,12 +293,16 @@ export const useTerminalStore = create<TerminalState>()(
             });
           });
 
-          set({
-            sessions: [],
-            activeSessionId: null,
-            availableShells: [],
-            listeners: new Map(),
-          });
+          set(
+            {
+              sessions: [],
+              activeSessionId: null,
+              availableShells: [],
+              listeners: new Map(),
+            },
+            undefined,
+            'terminal/reset',
+          );
         },
 
         aiSuggestCommand: async (intent: string, shellType: ShellTypeLiteral, cwd?: string) => {
@@ -340,12 +364,35 @@ export const useTerminalStore = create<TerminalState>()(
       })),
       {
         name: 'terminal-storage',
+        version: 1,
         storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
           availableShells: state.availableShells,
         }),
+        migrate: (persistedState: unknown, _version: number) => {
+          // Handle future migrations here
+          return persistedState as TerminalState;
+        },
       },
     ),
     { name: 'TerminalStore', enabled: import.meta.env.DEV },
   ),
 );
+
+// Selectors
+export const selectTerminalSessions = (state: TerminalState) => state.sessions;
+export const selectActiveSessionId = (state: TerminalState) => state.activeSessionId;
+export const selectAvailableShells = (state: TerminalState) => state.availableShells;
+export const selectTerminalListeners = (state: TerminalState) => state.listeners;
+
+// Derived selectors
+export const selectActiveSession = (state: TerminalState) =>
+  state.sessions.find((s) => s.id === state.activeSessionId);
+export const selectSessionById = (sessionId: string) => (state: TerminalState) =>
+  state.sessions.find((s) => s.id === sessionId);
+export const selectSessionCount = (state: TerminalState) => state.sessions.length;
+export const selectHasActiveSessions = (state: TerminalState) => state.sessions.length > 0;
+export const selectAvailableShellTypes = (state: TerminalState) =>
+  state.availableShells.filter((shell) => shell.available);
+export const selectShellByType = (shellType: ShellTypeLiteral) => (state: TerminalState) =>
+  state.availableShells.find((shell) => shell.shell_type === shellType);

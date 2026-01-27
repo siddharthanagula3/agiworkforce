@@ -15,7 +15,7 @@ export const ChatInputToolbar = () => {
   const isAutoMode = conversationMode === 'auto';
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-border/50 bg-background/80 backdrop-blur-sm">
+    <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-border/50 bg-background/80 backdrop-blur-xs">
       {}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Model:</span>

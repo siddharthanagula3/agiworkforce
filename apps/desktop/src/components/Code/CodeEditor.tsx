@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
+import { configureMonacoTypescript, getMonacoTheme } from '../../lib/monaco-config';
 import { Button } from '../ui/Button';
 
 interface CodeEditorProps {
@@ -163,7 +164,11 @@ export function CodeEditor({
     editorRef.current?.getAction('editor.action.formatDocument')?.run();
   };
 
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light';
+  const handleBeforeMount = (monaco: Monaco) => {
+    configureMonacoTypescript(monaco);
+  };
+
+  const monacoTheme = getMonacoTheme(theme);
 
   return (
     <div
@@ -244,6 +249,7 @@ export function CodeEditor({
           value={value}
           theme={monacoTheme}
           onChange={handleChange}
+          beforeMount={handleBeforeMount}
           onMount={handleEditorDidMount}
           options={{
             readOnly,

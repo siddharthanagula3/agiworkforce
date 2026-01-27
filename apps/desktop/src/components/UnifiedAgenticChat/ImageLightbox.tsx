@@ -2,6 +2,7 @@ import { X, ZoomIn, ZoomOut, RotateCw, Download, Maximize2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface ImageLightboxProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps) {
+  const prefersReducedMotion = useReducedMotion();
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -124,8 +126,9 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/90 backdrop-blur-xs z-50"
           />
 
           {/* Lightbox Container */}
@@ -133,6 +136,7 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
             className="fixed inset-0 z-50 flex items-center justify-center"
             onWheel={handleWheel}
             onMouseMove={handleMouseMove}
@@ -140,7 +144,7 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
             onMouseLeave={handleMouseUp}
           >
             {/* Toolbar */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-xs border border-white/10">
               <button
                 onClick={handleZoomOut}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
@@ -197,17 +201,17 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
               ref={imageRef}
               src={src}
               alt={alt || 'Lightbox image'}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
+              transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
               className={cn(
                 'max-w-[90vw] max-h-[85vh] object-contain select-none',
                 isDragging ? 'cursor-grabbing' : scale > 1 ? 'cursor-grab' : 'cursor-zoom-in',
               )}
               style={{
                 transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
-                transition: isDragging ? 'none' : 'transform 0.2s ease',
+                transition: isDragging || prefersReducedMotion ? 'none' : 'transform 0.2s ease',
               }}
               onMouseDown={handleMouseDown}
               onClick={(e) => {
@@ -221,7 +225,7 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
 
             {/* Image info */}
             {alt && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-black/60 backdrop-blur-sm border border-white/10">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-black/60 backdrop-blur-xs border border-white/10">
                 <p className="text-sm text-white/80">{alt}</p>
               </div>
             )}

@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Search, Code, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ActionTrailEntry } from '../../stores/unifiedChatStore';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface StatusTrailProps {
   messageId?: string;
@@ -49,9 +50,10 @@ function getColorForType(type: ActionTrailEntry['type']) {
 
 interface StatusTrailItemProps {
   entry: ActionTrailEntry;
+  prefersReducedMotion?: boolean;
 }
 
-function StatusTrailItem({ entry }: StatusTrailItemProps) {
+function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailItemProps) {
   const isInProgress = ['thinking', 'searching', 'coding', 'running'].includes(entry.type);
   const isCompleted = entry.type === 'completed';
   const isError = entry.type === 'error';
@@ -65,17 +67,21 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -10, scale: 0.95 }}
-      transition={{
-        type: 'spring',
-        stiffness: 300,
-        damping: 25,
-      }}
+      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -10, scale: 0.95 }}
+      animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }}
+      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -10, scale: 0.95 }}
+      transition={
+        prefersReducedMotion
+          ? { duration: 0.15 }
+          : {
+              type: 'spring',
+              stiffness: 300,
+              damping: 25,
+            }
+      }
       className={cn(
         'flex flex-col gap-1.5 px-3 py-2 rounded-lg',
-        'bg-zinc-800/50 backdrop-blur-sm',
+        'bg-zinc-800/50 backdrop-blur-xs',
         'border border-white/5',
         isCompleted && 'bg-emerald-900/20 border-emerald-500/20',
         isError && 'bg-rose-900/20 border-rose-500/20',
@@ -121,7 +127,7 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
             )}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.3, ease: 'easeOut' }}
           />
         </div>
       )}
@@ -130,6 +136,7 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
 }
 
 export function StatusTrail({ messageId, className }: StatusTrailProps) {
+  const prefersReducedMotion = useReducedMotion();
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail(messageId);
 
@@ -156,7 +163,11 @@ export function StatusTrail({ messageId, className }: StatusTrailProps) {
     >
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (
-          <StatusTrailItem key={entry.id} entry={entry} />
+          <StatusTrailItem
+            key={entry.id}
+            entry={entry}
+            prefersReducedMotion={prefersReducedMotion}
+          />
         ))}
       </AnimatePresence>
     </div>
@@ -169,6 +180,7 @@ interface FloatingStatusTrailProps {
 }
 
 export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrailProps) {
+  const prefersReducedMotion = useReducedMotion();
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail(messageId);
 
@@ -183,10 +195,10 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.2 }}
+      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+      animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+      transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
       className={cn(
         'fixed top-20 right-6 z-40',
         'w-80 max-w-[calc(100vw-3rem)]',
@@ -209,7 +221,11 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
       </div>
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (
-          <StatusTrailItem key={entry.id} entry={entry} />
+          <StatusTrailItem
+            key={entry.id}
+            entry={entry}
+            prefersReducedMotion={prefersReducedMotion}
+          />
         ))}
       </AnimatePresence>
     </motion.div>

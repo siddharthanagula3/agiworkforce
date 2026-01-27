@@ -214,7 +214,7 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
                 'hover:bg-terra-cotta/90 active:scale-95',
                 'shadow-halo-terra transition-all duration-200',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
-                'backdrop-blur-sm',
+                'backdrop-blur-xs',
               )}
             >
               {saveState.status === 'saving' ? (

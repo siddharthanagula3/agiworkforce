@@ -164,86 +164,122 @@ export const useSettingsStore = create<SettingsState>()(
         _hasHydrated: false,
 
         setHasHydrated: (state: boolean) => {
-          set({ _hasHydrated: state });
+          set({ _hasHydrated: state }, undefined, 'settings/setHasHydrated');
         },
 
         setDefaultProvider: async (provider: Provider) => {
           try {
             await invoke('llm_set_default_provider', { provider });
-            set((state) => ({
-              llmConfig: { ...state.llmConfig, defaultProvider: provider },
-            }));
+            set(
+              (state) => ({
+                llmConfig: { ...state.llmConfig, defaultProvider: provider },
+              }),
+              undefined,
+              'settings/setDefaultProvider',
+            );
           } catch (error) {
             console.error('Failed to set default provider:', error);
-            set({ error: String(error) });
+            set({ error: String(error) }, undefined, 'settings/setDefaultProvider/error');
             throw error;
           }
         },
 
         setTemperature: (temperature: number) => {
-          set((state) => ({
-            llmConfig: { ...state.llmConfig, temperature },
-          }));
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, temperature },
+            }),
+            undefined,
+            'settings/setTemperature',
+          );
         },
 
         setMaxTokens: (maxTokens: number) => {
-          set((state) => ({
-            llmConfig: { ...state.llmConfig, maxTokens },
-          }));
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, maxTokens },
+            }),
+            undefined,
+            'settings/setMaxTokens',
+          );
         },
 
         setDefaultModel: (provider: Provider, model: string) => {
-          set((state) => ({
-            llmConfig: {
-              ...state.llmConfig,
-              defaultModels: { ...state.llmConfig.defaultModels, [provider]: model },
-            },
-          }));
+          set(
+            (state) => ({
+              llmConfig: {
+                ...state.llmConfig,
+                defaultModels: { ...state.llmConfig.defaultModels, [provider]: model },
+              },
+            }),
+            undefined,
+            'settings/setDefaultModel',
+          );
         },
 
         setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => {
-          set((state) => ({
-            llmConfig: {
-              ...state.llmConfig,
-              taskRouting: {
-                ...state.llmConfig.taskRouting,
-                [category]: { provider, model },
+          set(
+            (state) => ({
+              llmConfig: {
+                ...state.llmConfig,
+                taskRouting: {
+                  ...state.llmConfig.taskRouting,
+                  [category]: { provider, model },
+                },
               },
-            },
-          }));
+            }),
+            undefined,
+            'settings/setTaskRouting',
+          );
         },
 
         setFavoriteModels: (models: string[]) => {
-          set((state) => ({
-            llmConfig: { ...state.llmConfig, favoriteModels: models },
-          }));
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, favoriteModels: models },
+            }),
+            undefined,
+            'settings/setFavoriteModels',
+          );
         },
 
         addFavoriteModel: (model: string) => {
-          set((state) => {
-            const favoriteModels = [...state.llmConfig.favoriteModels];
-            if (!favoriteModels.includes(model)) {
-              favoriteModels.push(model);
-            }
-            return {
-              llmConfig: { ...state.llmConfig, favoriteModels },
-            };
-          });
+          set(
+            (state) => {
+              const favoriteModels = [...state.llmConfig.favoriteModels];
+              if (!favoriteModels.includes(model)) {
+                favoriteModels.push(model);
+              }
+              return {
+                llmConfig: { ...state.llmConfig, favoriteModels },
+              };
+            },
+            undefined,
+            'settings/addFavoriteModel',
+          );
         },
 
         removeFavoriteModel: (model: string) => {
-          set((state) => {
-            const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
-            return {
-              llmConfig: { ...state.llmConfig, favoriteModels },
-            };
-          });
+          set(
+            (state) => {
+              const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
+              return {
+                llmConfig: { ...state.llmConfig, favoriteModels },
+              };
+            },
+            undefined,
+            'settings/removeFavoriteModel',
+          );
         },
 
         setTheme: (theme: Theme) => {
-          set((state) => ({
-            windowPreferences: { ...state.windowPreferences, theme },
-          }));
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, theme },
+            }),
+            undefined,
+            'settings/setTheme',
+          );
 
           if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             if (
@@ -258,54 +294,78 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setStartupPosition: (position: 'center' | 'remember') => {
-          set((state) => ({
-            windowPreferences: { ...state.windowPreferences, startupPosition: position },
-          }));
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, startupPosition: position },
+            }),
+            undefined,
+            'settings/setStartupPosition',
+          );
         },
 
         setDockOnStartup: (dock: 'left' | 'right' | null) => {
-          set((state) => ({
-            windowPreferences: { ...state.windowPreferences, dockOnStartup: dock },
-          }));
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, dockOnStartup: dock },
+            }),
+            undefined,
+            'settings/setDockOnStartup',
+          );
         },
 
         setPromptCompletionEnabled: (enabled: boolean) => {
-          set((state) => ({
-            chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
-          }));
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
+            }),
+            undefined,
+            'settings/setPromptCompletionEnabled',
+          );
         },
 
         setAlwaysUseAgentMode: (enabled: boolean) => {
-          set((state) => ({
-            chatPreferences: { ...state.chatPreferences, alwaysUseAgentMode: enabled },
-          }));
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, alwaysUseAgentMode: enabled },
+            }),
+            undefined,
+            'settings/setAlwaysUseAgentMode',
+          );
         },
 
         addAllowedDirectory: (path: string) => {
-          set((state) => {
-            if (state.allowedDirectories.includes(path)) return {};
-            return { allowedDirectories: [...state.allowedDirectories, path] };
-          });
+          set(
+            (state) => {
+              if (state.allowedDirectories.includes(path)) return {};
+              return { allowedDirectories: [...state.allowedDirectories, path] };
+            },
+            undefined,
+            'settings/addAllowedDirectory',
+          );
         },
 
         removeAllowedDirectory: (path: string) => {
-          set((state) => ({
-            allowedDirectories: state.allowedDirectories.filter((p) => p !== path),
-          }));
+          set(
+            (state) => ({
+              allowedDirectories: state.allowedDirectories.filter((p) => p !== path),
+            }),
+            undefined,
+            'settings/removeAllowedDirectory',
+          );
         },
 
         setAllowedDirectories: (paths: string[]) => {
-          set({ allowedDirectories: paths });
+          set({ allowedDirectories: paths }, undefined, 'settings/setAllowedDirectories');
         },
 
         loadSettings: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null }, undefined, 'settings/loadSettings/start');
 
           try {
             // Web development mode: Tauri commands are unavailable.
             // Use persisted localStorage state + in-memory defaults and skip disk/native calls.
             if (!isTauriContext()) {
-              set({ loading: false, error: null });
+              set({ loading: false, error: null }, undefined, 'settings/loadSettings/webMode');
               get().setTheme(get().windowPreferences.theme);
               return;
             }
@@ -389,13 +449,17 @@ export const useSettingsStore = create<SettingsState>()(
               return;
             }
 
-            set({
-              llmConfig: mergedLLMConfig,
-              windowPreferences: mergedWindowPreferences,
-              chatPreferences: mergedChatPreferences,
-              allowedDirectories: settings.allowedDirectories ?? [],
-              loading: false,
-            });
+            set(
+              {
+                llmConfig: mergedLLMConfig,
+                windowPreferences: mergedWindowPreferences,
+                chatPreferences: mergedChatPreferences,
+                allowedDirectories: settings.allowedDirectories ?? [],
+                loading: false,
+              },
+              undefined,
+              'settings/loadSettings/success',
+            );
 
             get().setTheme(mergedWindowPreferences.theme);
 
@@ -410,13 +474,17 @@ export const useSettingsStore = create<SettingsState>()(
             console.error('Failed to load settings:', error);
 
             if (get().loading) {
-              set({ error: String(error), loading: false });
+              set(
+                { error: String(error), loading: false },
+                undefined,
+                'settings/loadSettings/error',
+              );
             }
           }
         },
 
         saveSettings: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null }, undefined, 'settings/saveSettings/start');
           try {
             const { llmConfig, windowPreferences, chatPreferences, allowedDirectories } = get();
             await invoke('settings_save', {
@@ -427,10 +495,10 @@ export const useSettingsStore = create<SettingsState>()(
                 allowedDirectories,
               },
             });
-            set({ loading: false });
+            set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
             console.error('Failed to save settings:', error);
-            set({ error: String(error), loading: false });
+            set({ error: String(error), loading: false }, undefined, 'settings/saveSettings/error');
             throw error;
           }
         },
@@ -553,3 +621,29 @@ export function waitForSettingsHydration(): Promise<void> {
     });
   });
 }
+
+// Selectors
+export const selectLlmConfig = (state: SettingsState) => state.llmConfig;
+export const selectDefaultProvider = (state: SettingsState) => state.llmConfig.defaultProvider;
+export const selectTemperature = (state: SettingsState) => state.llmConfig.temperature;
+export const selectMaxTokens = (state: SettingsState) => state.llmConfig.maxTokens;
+export const selectDefaultModels = (state: SettingsState) => state.llmConfig.defaultModels;
+export const selectTaskRouting = (state: SettingsState) => state.llmConfig.taskRouting;
+export const selectFavoriteModels = (state: SettingsState) => state.llmConfig.favoriteModels;
+
+export const selectWindowPreferences = (state: SettingsState) => state.windowPreferences;
+export const selectTheme = (state: SettingsState) => state.windowPreferences.theme;
+export const selectStartupPosition = (state: SettingsState) =>
+  state.windowPreferences.startupPosition;
+export const selectDockOnStartup = (state: SettingsState) => state.windowPreferences.dockOnStartup;
+
+export const selectChatPreferences = (state: SettingsState) => state.chatPreferences;
+export const selectPromptCompletionEnabled = (state: SettingsState) =>
+  state.chatPreferences.promptCompletionEnabled;
+export const selectAlwaysUseAgentMode = (state: SettingsState) =>
+  state.chatPreferences.alwaysUseAgentMode;
+
+export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
+export const selectSettingsLoading = (state: SettingsState) => state.loading;
+export const selectSettingsError = (state: SettingsState) => state.error;
+export const selectSettingsHasHydrated = (state: SettingsState) => state._hasHydrated;

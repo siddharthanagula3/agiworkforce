@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
+import { defaultEditorOptions, getMonacoTheme } from '../../lib/monaco-config';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { Button } from '../ui/Button';
 import { Check, X, ChevronDown, ChevronRight, ArrowLeftRight, Eye, Code } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,10 +24,13 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
     inlineMode,
     toggleInlineMode,
   } = useEditingStore();
+  const { theme } = useThemeContext();
 
   const diff = pendingChanges.get(filePath);
   const [expandedHunks, setExpandedHunks] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'diff' | 'inline'>('diff');
+
+  const monacoTheme = getMonacoTheme(theme);
 
   useEffect(() => {
     setViewMode(inlineMode ? 'inline' : 'diff');
@@ -47,21 +52,13 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
       originalEditable: false,
     });
 
-    const sharedOptions = {
-      fontSize: 14,
-      fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-      fontLigatures: true,
-      minimap: { enabled: true },
-      scrollBeyondLastLine: false,
-    };
-
     editor.getModifiedEditor().updateOptions({
-      ...sharedOptions,
+      ...defaultEditorOptions,
       readOnly: true,
     });
 
     editor.getOriginalEditor().updateOptions({
-      ...sharedOptions,
+      ...defaultEditorOptions,
       readOnly: true,
     });
   };
@@ -287,7 +284,7 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
             language={diff.language}
             original={diff.originalContent}
             modified={diff.modifiedContent}
-            theme="vs-dark"
+            theme={monacoTheme}
             onMount={handleEditorDidMount}
             options={{
               renderSideBySide: viewMode === 'diff',

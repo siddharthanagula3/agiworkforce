@@ -513,12 +513,16 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         // ═══════════════════════════════════════════════════════════════════
 
         setUser: (user: User | null) => {
-          set({
-            user,
-            isAuthenticated: !!user,
-            sessionValidated: true,
-            error: null,
-          });
+          set(
+            {
+              user,
+              isAuthenticated: !!user,
+              sessionValidated: true,
+              error: null,
+            },
+            undefined,
+            'auth/setUser',
+          );
         },
 
         getCurrentUserId: () => {
@@ -527,21 +531,25 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         },
 
         clearAuth: () => {
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: null,
-            sessionValidated: true,
-          });
+          set(
+            {
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              error: null,
+              sessionValidated: true,
+            },
+            undefined,
+            'auth/clearAuth',
+          );
         },
 
         setHasHydrated: (state: boolean) => {
-          set({ _hasHydrated: state });
+          set({ _hasHydrated: state }, undefined, 'auth/setHasHydrated');
         },
 
         setSessionValidated: (state: boolean) => {
-          set({ sessionValidated: state });
+          set({ sessionValidated: state }, undefined, 'auth/setSessionValidated');
         },
 
         isAuthReady: () => {
@@ -550,13 +558,13 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         },
 
         signIn: async (email: string, password: string) => {
-          set({ isLoading: true, error: null });
+          set({ isLoading: true, error: null }, undefined, 'auth/signIn/start');
 
           try {
             const response = await supabaseAuth.signIn({ email, password });
 
             if (response.error) {
-              set({ error: response.error.message });
+              set({ error: response.error.message }, undefined, 'auth/signIn/error');
               return { error: response.error.message };
             }
 
@@ -564,15 +572,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Sign in exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message });
+            set({ error: message }, undefined, 'auth/signIn/exception');
             return { error: message };
           } finally {
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, 'auth/signIn/complete');
           }
         },
 
         signUp: async (email: string, password: string, name?: string) => {
-          set({ isLoading: true, error: null });
+          set({ isLoading: true, error: null }, undefined, 'auth/signUp/start');
 
           try {
             const response = await supabaseAuth.signUp({
@@ -582,7 +590,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             });
 
             if (response.error) {
-              set({ error: response.error.message });
+              set({ error: response.error.message }, undefined, 'auth/signUp/error');
               return { error: response.error.message };
             }
 
@@ -590,15 +598,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Sign up exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message });
+            set({ error: message }, undefined, 'auth/signUp/exception');
             return { error: message };
           } finally {
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, 'auth/signUp/complete');
           }
         },
 
         signOut: async () => {
-          set({ isLoading: true });
+          set({ isLoading: true }, undefined, 'auth/signOut/start');
           try {
             // Clear sync lock before signOut
             syncInProgress = false;
@@ -624,22 +632,26 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             clearCreditsCache();
             resetRetryCount();
 
-            set({
-              ...getDefaultState(),
-              _hasHydrated: true,
-              sessionValidated: true,
-            });
+            set(
+              {
+                ...getDefaultState(),
+                _hasHydrated: true,
+                sessionValidated: true,
+              },
+              undefined,
+              'auth/signOut/complete',
+            );
           }
         },
 
         signInWithMagicLink: async (email: string) => {
-          set({ isLoading: true, error: null });
+          set({ isLoading: true, error: null }, undefined, 'auth/signInWithMagicLink/start');
 
           try {
             const { error } = await supabaseAuth.signInWithMagicLink(email);
 
             if (error) {
-              set({ error: error.message });
+              set({ error: error.message }, undefined, 'auth/signInWithMagicLink/error');
               return { error: error.message };
             }
 
@@ -647,21 +659,21 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Magic link sign in exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message });
+            set({ error: message }, undefined, 'auth/signInWithMagicLink/exception');
             return { error: message };
           } finally {
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, 'auth/signInWithMagicLink/complete');
           }
         },
 
         resetPassword: async (email: string) => {
-          set({ isLoading: true, error: null });
+          set({ isLoading: true, error: null }, undefined, 'auth/resetPassword/start');
 
           try {
             const { error } = await supabaseAuth.resetPassword(email);
 
             if (error) {
-              set({ error: error.message });
+              set({ error: error.message }, undefined, 'auth/resetPassword/error');
               return { error: error.message };
             }
 
@@ -669,21 +681,21 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error('[UnifiedAuth] Reset password exception:', error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message });
+            set({ error: message }, undefined, 'auth/resetPassword/exception');
             return { error: message };
           } finally {
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, 'auth/resetPassword/complete');
           }
         },
 
         signInWithOAuth: async (provider: 'github' | 'google') => {
-          set({ isLoading: true, error: null });
+          set({ isLoading: true, error: null }, undefined, 'auth/signInWithOAuth/start');
 
           try {
             const { error } = await supabaseAuth.signInWithOAuth(provider);
 
             if (error) {
-              set({ error: error.message });
+              set({ error: error.message }, undefined, 'auth/signInWithOAuth/error');
               return { error: error.message };
             }
 
@@ -691,10 +703,10 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } catch (error) {
             console.error(`[UnifiedAuth] OAuth sign in exception (${provider}):`, error);
             const message = error instanceof Error ? error.message : String(error);
-            set({ error: message });
+            set({ error: message }, undefined, 'auth/signInWithOAuth/exception');
             return { error: message };
           } finally {
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, 'auth/signInWithOAuth/complete');
           }
         },
 
@@ -703,84 +715,60 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         // ═══════════════════════════════════════════════════════════════════
 
         setAccount: (updates: Partial<AccountUpdates>) => {
-          set((state) => {
-            const newPlan = updates.plan !== undefined ? updates.plan : state.plan;
-            const newUser: User | null =
-              updates.id !== undefined
-                ? {
-                    id: updates.id || '',
-                    email: updates.email || state.user?.email || '',
-                    name: updates.displayName || state.user?.name,
-                    avatar: updates.avatar || state.user?.avatar,
-                  }
-                : state.user;
+          set(
+            (state) => {
+              const newPlan = updates.plan !== undefined ? updates.plan : state.plan;
+              const newUser: User | null =
+                updates.id !== undefined
+                  ? {
+                      id: updates.id || '',
+                      email: updates.email || state.user?.email || '',
+                      name: updates.displayName || state.user?.name,
+                      avatar: updates.avatar || state.user?.avatar,
+                    }
+                  : state.user;
 
-            const newPlanDisplayName =
-              updates.planDisplayName !== undefined
-                ? updates.planDisplayName
-                : newPlan
-                  ? PLAN_DISPLAY_NAMES[newPlan]
-                  : 'Loading...';
-            const newSubscriptionStatus =
-              updates.subscriptionStatus !== undefined
-                ? updates.subscriptionStatus
-                : state.subscriptionStatus;
-            const newSubscriptionFetchStatus =
-              updates.subscriptionFetchStatus !== undefined
-                ? updates.subscriptionFetchStatus
-                : state.subscriptionFetchStatus;
-            const newCurrentPeriodEnd =
-              updates.currentPeriodEnd !== undefined
-                ? updates.currentPeriodEnd
-                : state.currentPeriodEnd;
-            const newStripeCustomerId =
-              updates.stripeCustomerId !== undefined
-                ? updates.stripeCustomerId
-                : state.stripeCustomerId;
-            const newFeatureFlags =
-              updates.featureFlags !== undefined ? updates.featureFlags : state.featureFlags;
-            const newCredits = updates.credits !== undefined ? updates.credits : state.credits;
-            const newAccessToken =
-              updates.accessToken !== undefined ? updates.accessToken : state.accessToken;
-            const newRefreshToken =
-              updates.refreshToken !== undefined ? updates.refreshToken : state.refreshToken;
-            const newDeviceLinkId =
-              updates.deviceLinkId !== undefined ? updates.deviceLinkId : state.deviceLinkId;
-            const newDeviceLinkCode =
-              updates.deviceLinkCode !== undefined ? updates.deviceLinkCode : state.deviceLinkCode;
-            const newLastSyncedAt =
-              updates.lastSyncedAt !== undefined ? updates.lastSyncedAt : state.lastSyncedAt;
+              const newPlanDisplayName =
+                updates.planDisplayName !== undefined
+                  ? updates.planDisplayName
+                  : newPlan
+                    ? PLAN_DISPLAY_NAMES[newPlan]
+                    : 'Loading...';
+              const newSubscriptionStatus =
+                updates.subscriptionStatus !== undefined
+                  ? updates.subscriptionStatus
+                  : state.subscriptionStatus;
+              const newSubscriptionFetchStatus =
+                updates.subscriptionFetchStatus !== undefined
+                  ? updates.subscriptionFetchStatus
+                  : state.subscriptionFetchStatus;
+              const newCurrentPeriodEnd =
+                updates.currentPeriodEnd !== undefined
+                  ? updates.currentPeriodEnd
+                  : state.currentPeriodEnd;
+              const newStripeCustomerId =
+                updates.stripeCustomerId !== undefined
+                  ? updates.stripeCustomerId
+                  : state.stripeCustomerId;
+              const newFeatureFlags =
+                updates.featureFlags !== undefined ? updates.featureFlags : state.featureFlags;
+              const newCredits = updates.credits !== undefined ? updates.credits : state.credits;
+              const newAccessToken =
+                updates.accessToken !== undefined ? updates.accessToken : state.accessToken;
+              const newRefreshToken =
+                updates.refreshToken !== undefined ? updates.refreshToken : state.refreshToken;
+              const newDeviceLinkId =
+                updates.deviceLinkId !== undefined ? updates.deviceLinkId : state.deviceLinkId;
+              const newDeviceLinkCode =
+                updates.deviceLinkCode !== undefined
+                  ? updates.deviceLinkCode
+                  : state.deviceLinkCode;
+              const newLastSyncedAt =
+                updates.lastSyncedAt !== undefined ? updates.lastSyncedAt : state.lastSyncedAt;
 
-            return {
-              user: newUser,
-              isAuthenticated: !!newUser?.id,
-              plan: newPlan,
-              planDisplayName: newPlanDisplayName,
-              subscriptionStatus: newSubscriptionStatus,
-              subscriptionFetchStatus: newSubscriptionFetchStatus,
-              currentPeriodEnd: newCurrentPeriodEnd,
-              stripeCustomerId: newStripeCustomerId,
-              featureFlags: newFeatureFlags,
-              credits: newCredits,
-              accessToken: newAccessToken,
-              refreshToken: newRefreshToken,
-              deviceLinkId: newDeviceLinkId,
-              deviceLinkCode: newDeviceLinkCode,
-              lastSyncedAt: newLastSyncedAt,
-              // Derived tier flags
-              isPro:
-                newPlan !== null &&
-                (newPlan === 'hobby' ||
-                  newPlan === 'pro' ||
-                  newPlan === 'max' ||
-                  newPlan === 'enterprise'),
-              isEnterprise: newPlan === 'enterprise',
-              // Backwards compatibility - update account object
-              account: {
-                id: newUser?.id || null,
-                email: newUser?.email || null,
-                displayName: newUser?.name || null,
-                avatar: newUser?.avatar,
+              return {
+                user: newUser,
+                isAuthenticated: !!newUser?.id,
                 plan: newPlan,
                 planDisplayName: newPlanDisplayName,
                 subscriptionStatus: newSubscriptionStatus,
@@ -793,56 +781,110 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 refreshToken: newRefreshToken,
                 deviceLinkId: newDeviceLinkId,
                 deviceLinkCode: newDeviceLinkCode,
-                createdAt: state.createdAt,
                 lastSyncedAt: newLastSyncedAt,
-              },
-            };
-          });
+                // Derived tier flags
+                isPro:
+                  newPlan !== null &&
+                  (newPlan === 'hobby' ||
+                    newPlan === 'pro' ||
+                    newPlan === 'max' ||
+                    newPlan === 'enterprise'),
+                isEnterprise: newPlan === 'enterprise',
+                // Backwards compatibility - update account object
+                account: {
+                  id: newUser?.id || null,
+                  email: newUser?.email || null,
+                  displayName: newUser?.name || null,
+                  avatar: newUser?.avatar,
+                  plan: newPlan,
+                  planDisplayName: newPlanDisplayName,
+                  subscriptionStatus: newSubscriptionStatus,
+                  subscriptionFetchStatus: newSubscriptionFetchStatus,
+                  currentPeriodEnd: newCurrentPeriodEnd,
+                  stripeCustomerId: newStripeCustomerId,
+                  featureFlags: newFeatureFlags,
+                  credits: newCredits,
+                  accessToken: newAccessToken,
+                  refreshToken: newRefreshToken,
+                  deviceLinkId: newDeviceLinkId,
+                  deviceLinkCode: newDeviceLinkCode,
+                  createdAt: state.createdAt,
+                  lastSyncedAt: newLastSyncedAt,
+                },
+              };
+            },
+            undefined,
+            'auth/setAccount',
+          );
         },
 
         setPlan: (plan: PlanTier) => {
-          set({
-            plan,
-            planDisplayName: PLAN_DISPLAY_NAMES[plan],
-            subscriptionStatus: plan === 'free' ? 'none' : 'active',
-            isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
-            isEnterprise: plan === 'enterprise',
-          });
+          set(
+            {
+              plan,
+              planDisplayName: PLAN_DISPLAY_NAMES[plan],
+              subscriptionStatus: plan === 'free' ? 'none' : 'active',
+              isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
+              isEnterprise: plan === 'enterprise',
+            },
+            undefined,
+            'auth/setPlan',
+          );
         },
 
         setDisplayName: (displayName: string) => {
-          set((state) => ({
-            user: state.user ? { ...state.user, name: displayName } : null,
-          }));
+          set(
+            (state) => ({
+              user: state.user ? { ...state.user, name: displayName } : null,
+            }),
+            undefined,
+            'auth/setDisplayName',
+          );
         },
 
         setEmail: (email: string) => {
-          set((state) => ({
-            user: state.user ? { ...state.user, email } : null,
-          }));
+          set(
+            (state) => ({
+              user: state.user ? { ...state.user, email } : null,
+            }),
+            undefined,
+            'auth/setEmail',
+          );
         },
 
         setAvatar: (avatar: string | null) => {
-          set((state) => ({
-            user: state.user ? { ...state.user, avatar: avatar || undefined } : null,
-          }));
+          set(
+            (state) => ({
+              user: state.user ? { ...state.user, avatar: avatar || undefined } : null,
+            }),
+            undefined,
+            'auth/setAvatar',
+          );
         },
 
         setFeatureFlag: (flag: string, enabled: boolean) => {
-          set((state) => ({
-            featureFlags: {
-              ...state.featureFlags,
-              [flag]: enabled,
-            },
-          }));
+          set(
+            (state) => ({
+              featureFlags: {
+                ...state.featureFlags,
+                [flag]: enabled,
+              },
+            }),
+            undefined,
+            'auth/setFeatureFlag',
+          );
         },
 
         login: async (tokens: { accessToken: string; refreshToken: string }) => {
-          set({
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
-            isAuthenticated: true,
-          });
+          set(
+            {
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              isAuthenticated: true,
+            },
+            undefined,
+            'auth/login',
+          );
         },
 
         logout: async () => {
@@ -932,38 +974,42 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 }
               }
 
-              set({
-                user: {
-                  id: authState.user?.id || '',
-                  email: authState.user?.email || '',
-                  name: authState.profile?.display_name || undefined,
-                  avatar: authState.profile?.avatar_url || undefined,
+              set(
+                {
+                  user: {
+                    id: authState.user?.id || '',
+                    email: authState.user?.email || '',
+                    name: authState.profile?.display_name || undefined,
+                    avatar: authState.profile?.avatar_url || undefined,
+                  },
+                  isAuthenticated: true,
+                  plan: planTier,
+                  planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
+                  subscriptionStatus:
+                    (authState.subscription?.status as SubscriptionStatus) || 'none',
+                  subscriptionFetchStatus: fetchStatus,
+                  currentPeriodEnd: authState.subscription?.current_period_end
+                    ? new Date(authState.subscription.current_period_end).getTime()
+                    : null,
+                  stripeCustomerId: authState.subscription?.stripe_customer_id || null,
+                  featureFlags: authState.featureFlags,
+                  credits,
+                  creditBalance_cents: credits?.remaining_cents ?? null,
+                  dailyUsage_cents: credits?.daily_used_cents ?? null,
+                  dailyLimit_cents: credits?.daily_limit_cents ?? null,
+                  dailyResetAt: credits?.daily_reset_at ?? null,
+                  lastSyncedAt: Date.now(),
+                  isPro:
+                    planTier !== null &&
+                    (planTier === 'pro' ||
+                      planTier === 'max' ||
+                      planTier === 'enterprise' ||
+                      planTier === 'hobby'),
+                  isEnterprise: planTier === 'enterprise',
                 },
-                isAuthenticated: true,
-                plan: planTier,
-                planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
-                subscriptionStatus:
-                  (authState.subscription?.status as SubscriptionStatus) || 'none',
-                subscriptionFetchStatus: fetchStatus,
-                currentPeriodEnd: authState.subscription?.current_period_end
-                  ? new Date(authState.subscription.current_period_end).getTime()
-                  : null,
-                stripeCustomerId: authState.subscription?.stripe_customer_id || null,
-                featureFlags: authState.featureFlags,
-                credits,
-                creditBalance_cents: credits?.remaining_cents ?? null,
-                dailyUsage_cents: credits?.daily_used_cents ?? null,
-                dailyLimit_cents: credits?.daily_limit_cents ?? null,
-                dailyResetAt: credits?.daily_reset_at ?? null,
-                lastSyncedAt: Date.now(),
-                isPro:
-                  planTier !== null &&
-                  (planTier === 'pro' ||
-                    planTier === 'max' ||
-                    planTier === 'enterprise' ||
-                    planTier === 'hobby'),
-                isEnterprise: planTier === 'enterprise',
-              });
+                undefined,
+                'auth/syncWithBackend',
+              );
             } catch (error) {
               console.error('Failed to sync with backend:', error);
             } finally {
@@ -986,44 +1032,69 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         initializeStripe: async (stripeApiKey: string, webhookSecret: string) => {
           try {
             await StripeService.initialize(stripeApiKey, webhookSecret);
-            set({ stripeInitialized: true, error: null });
+            set(
+              { stripeInitialized: true, error: null },
+              undefined,
+              'auth/initializeStripe/success',
+            );
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : 'Failed to initialize billing';
-            set({ error: errorMessage, stripeInitialized: false });
+            set(
+              { error: errorMessage, stripeInitialized: false },
+              undefined,
+              'auth/initializeStripe/error',
+            );
             throw error;
           }
         },
 
-        setStripeCustomer: (customer) => set({ stripeCustomer: customer, customer }),
+        setStripeCustomer: (customer) =>
+          set({ stripeCustomer: customer, customer }, undefined, 'auth/setStripeCustomer'),
 
         fetchCustomerByEmail: async (email: string) => {
           try {
-            set({ error: null });
+            set({ error: null }, undefined, 'auth/fetchCustomerByEmail/start');
             const customer = await StripeService.getCustomerByEmail(email);
             if (customer) {
-              set({ stripeCustomer: customer });
+              set({ stripeCustomer: customer }, undefined, 'auth/fetchCustomerByEmail/success');
             }
             return customer;
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to get customer';
-            set({ error: errorMessage });
+            set({ error: errorMessage }, undefined, 'auth/fetchCustomerByEmail/error');
             throw error;
           }
         },
 
         setStripeSubscription: (subscription) =>
-          set({ stripeSubscription: subscription, subscription }),
+          set(
+            { stripeSubscription: subscription, subscription },
+            undefined,
+            'auth/setStripeSubscription',
+          ),
 
         fetchActiveSubscription: async (customerId: string) => {
           try {
-            set({ subscriptionFetchStatus: 'fetching', error: null });
+            set(
+              { subscriptionFetchStatus: 'fetching', error: null },
+              undefined,
+              'auth/fetchActiveSubscription/start',
+            );
             const subscription = await StripeService.getActiveSubscription(customerId);
-            set({ stripeSubscription: subscription, subscriptionFetchStatus: 'succeeded' });
+            set(
+              { stripeSubscription: subscription, subscriptionFetchStatus: 'succeeded' },
+              undefined,
+              'auth/fetchActiveSubscription/success',
+            );
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : 'Failed to fetch active subscription';
-            set({ error: errorMessage, subscriptionFetchStatus: 'failed' });
+            set(
+              { error: errorMessage, subscriptionFetchStatus: 'failed' },
+              undefined,
+              'auth/fetchActiveSubscription/error',
+            );
             throw error;
           }
         },
@@ -1044,27 +1115,31 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         },
 
         updateCredits: (info) => {
-          set((state) => ({
-            creditBalance_cents: info.remaining_cents,
-            dailyUsage_cents: info.daily_used ?? state.dailyUsage_cents ?? 0,
-            dailyLimit_cents: info.daily_limit ?? state.dailyLimit_cents ?? 0,
-            dailyResetAt: info.daily_reset_at ?? state.dailyResetAt,
-            credits: {
-              ...state.credits,
-              remaining_cents: info.remaining_cents,
-              daily_used_cents: info.daily_used,
-              daily_limit_cents: info.daily_limit,
-              daily_reset_at: info.daily_reset_at,
-            },
-          }));
+          set(
+            (state) => ({
+              creditBalance_cents: info.remaining_cents,
+              dailyUsage_cents: info.daily_used ?? state.dailyUsage_cents ?? 0,
+              dailyLimit_cents: info.daily_limit ?? state.dailyLimit_cents ?? 0,
+              dailyResetAt: info.daily_reset_at ?? state.dailyResetAt,
+              credits: {
+                ...state.credits,
+                remaining_cents: info.remaining_cents,
+                daily_used_cents: info.daily_used,
+                daily_limit_cents: info.daily_limit,
+                daily_reset_at: info.daily_reset_at,
+              },
+            }),
+            undefined,
+            'auth/updateCredits',
+          );
         },
 
         // ═══════════════════════════════════════════════════════════════════
         // Error Handling
         // ═══════════════════════════════════════════════════════════════════
 
-        setError: (error) => set({ error }),
-        clearError: () => set({ error: null }),
+        setError: (error) => set({ error }, undefined, 'auth/setError'),
+        clearError: () => set({ error: null }, undefined, 'auth/clearError'),
 
         // ═══════════════════════════════════════════════════════════════════
         // Reset
@@ -1077,10 +1152,14 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           syncInProgress = false;
           pendingSyncPromise = null;
 
-          set({
-            ...getDefaultState(),
-            _hasHydrated: true,
-          });
+          set(
+            {
+              ...getDefaultState(),
+              _hasHydrated: true,
+            },
+            undefined,
+            'auth/reset',
+          );
         },
       })),
       {

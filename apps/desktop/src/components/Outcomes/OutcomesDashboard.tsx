@@ -86,7 +86,7 @@ const ProcessStatCard: React.FC<{ stat: ProcessStat }> = ({ stat }) => {
   const averageScorePercent = (stat.average_score * 100).toFixed(1);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-xs hover:shadow-md transition-shadow">
       <h3 className="font-semibold text-lg mb-3 text-gray-800">
         {formatProcessType(stat.process_type)}
       </h3>

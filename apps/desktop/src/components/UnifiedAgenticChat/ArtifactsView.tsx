@@ -91,7 +91,7 @@ export function ArtifactsView() {
                 </div>
                 <ArtifactRenderer
                   artifact={artifact}
-                  className="h-[300px] shadow-sm hover:shadow-md transition-shadow"
+                  className="h-[300px] shadow-xs hover:shadow-md transition-shadow"
                 />
               </div>
             ))

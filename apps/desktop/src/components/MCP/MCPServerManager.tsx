@@ -27,11 +27,17 @@ import { Switch } from '../ui/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { MCPLogsViewer } from './MCPLogsViewer';
 
+/** Configuration options for an MCP server */
+interface McpServerConfig {
+  endpoint?: string;
+  [key: string]: unknown;
+}
+
 interface ServerConfigDialogProps {
   server: McpServerInfo | null;
   open: boolean;
   onClose: () => void;
-  onSave: (serverName: string, config: any) => void;
+  onSave: (serverName: string, config: McpServerConfig) => void;
 }
 
 const curatedCatalog = [
@@ -321,7 +327,7 @@ export function MCPServerManager() {
     setConfigDialogOpen(true);
   };
 
-  const handleSaveConfig = async (_serverName: string, _config: any) => {
+  const handleSaveConfig = async (_serverName: string, _config: McpServerConfig) => {
     await refreshServers();
   };
 
@@ -343,7 +349,9 @@ export function MCPServerManager() {
     try {
       await disconnectServer(serverName);
 
-      const currentConfig = await invoke<any>('mcp_get_config');
+      const currentConfig = await invoke<{ mcpServers?: Record<string, unknown> }>(
+        'mcp_get_config',
+      );
       const updatedServers = { ...(currentConfig.mcpServers || {}) };
       delete updatedServers[serverName];
 

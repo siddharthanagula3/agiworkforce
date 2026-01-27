@@ -494,9 +494,12 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   const parseResult = pairingRequestSchema.safeParse(req.body ?? {});
 
   if (!parseResult.success) {
-    logger.warn({ correlationId, error: parseResult.error.flatten() }, 'Invalid pairing request');
+    logger.warn(
+      { correlationId, error: z.treeifyError(parseResult.error) },
+      'Invalid pairing request',
+    );
     metrics.recordError('invalid_pairing_request');
-    return res.status(400).json({ error: parseResult.error.flatten() });
+    return res.status(400).json({ error: z.treeifyError(parseResult.error) });
   }
 
   const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata } = parseResult.data;

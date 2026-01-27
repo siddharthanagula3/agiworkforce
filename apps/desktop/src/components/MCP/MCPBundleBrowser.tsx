@@ -75,7 +75,7 @@ function InstallProgressModal({
   const isFailed = progress.status === 'failed';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
       <Card className="w-full max-w-md p-6 bg-surface-elevated shadow-2xl">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -221,7 +221,7 @@ function BundleDetailsModal({
   isInstalling: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-surface-elevated shadow-2xl">
         <ScrollArea className="max-h-[90vh]">
           <div className="p-6">
