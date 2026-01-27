@@ -1,5 +1,5 @@
 /**
- * Chat API - Intent Detection and Stop Command Handling
+ * Chat API - Intent Detection, Stop Command Handling, and Message Loading
  *
  * Provides TypeScript bindings for smart intent detection
  * that automatically determines whether user messages are:
@@ -7,9 +7,12 @@
  * - Action requests (do something)
  * - Stop commands (halt current operation)
  * - Clarification requests (follow-up questions)
+ *
+ * Also provides message loading functionality for conversations.
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { Message } from '../types/chat';
 
 /**
  * User intent types for smart routing
@@ -106,6 +109,31 @@ export async function stopGeneration(): Promise<void> {
 }
 
 /**
+ * Load all messages for a conversation
+ *
+ * Retrieves the message history for a specific conversation.
+ * Requires user ownership verification - only messages from conversations
+ * owned by the specified user can be loaded.
+ *
+ * @param conversationId - The ID of the conversation to load messages from
+ * @param userId - The ID of the user who owns the conversation
+ * @returns Array of messages in the conversation
+ * @throws Error if conversation not found, access denied, or user doesn't own the conversation
+ *
+ * @example
+ * ```ts
+ * const messages = await loadConversationMessages(123, 'user-uuid-here');
+ * // messages: Message[]
+ * ```
+ */
+export async function loadConversationMessages(
+  conversationId: number,
+  userId: string,
+): Promise<Message[]> {
+  return invoke<Message[]>('chat_get_messages', { conversationId, userId });
+}
+
+/**
  * ChatClient - Convenience class for chat operations
  */
 export class ChatClient {
@@ -136,6 +164,16 @@ export class ChatClient {
    */
   static async stopGeneration(): Promise<void> {
     return stopGeneration();
+  }
+
+  /**
+   * Load all messages for a conversation
+   */
+  static async loadConversationMessages(
+    conversationId: number,
+    userId: string,
+  ): Promise<Message[]> {
+    return loadConversationMessages(conversationId, userId);
   }
 
   /**
