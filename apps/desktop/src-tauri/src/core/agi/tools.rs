@@ -1283,6 +1283,137 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Memory tools for persistent cross-session memory
+        self.register_tool(Tool {
+            id: "memory_remember".to_string(),
+            name: "Remember Information".to_string(),
+            description: "Store information in long-term memory for future sessions. Use this to remember user preferences, facts, or important decisions.".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "category".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Category: preference, fact, decision, or context".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "topic".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Topic or key for this memory (e.g., 'favorite_color', 'work_hours')".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "content".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The information to remember".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "importance".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Importance level 1-10 (higher = more important, loaded at session start)".to_string(),
+                    default: Some(serde_json::json!(5)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "memory_recall".to_string(),
+            name: "Recall Memory".to_string(),
+            description: "Retrieve a specific memory by category and topic".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "category".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Category: preference, fact, decision, or context".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "topic".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Topic or key for the memory to recall".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "memory_search".to_string(),
+            name: "Search Memories".to_string(),
+            description: "Search through all memories by keyword".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "query".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Search query to find in memories".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum number of results to return".to_string(),
+                    default: Some(serde_json::json!(10)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 15,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "memory_forget".to_string(),
+            name: "Forget Memory".to_string(),
+            description: "Remove a memory by category and topic".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "category".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Category: preference, fact, decision, or context".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "topic".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Topic or key of the memory to forget".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         self.register_tool(Tool {
             id: "terminal_execute".to_string(),
             name: "Execute Terminal Command".to_string(),
