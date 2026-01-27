@@ -16,7 +16,7 @@ use crate::sys::commands::{
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
-    GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState,
+    GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState, MemoryState,
     NativeMessagingStateWrapper, ProductivityState, SettingsServiceState, SettingsState,
     ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
     WorkspaceIndexState,
@@ -253,6 +253,16 @@ pub fn run() {
 
             app.manage(DocumentState::new());
 
+            // Persistent memory state for AGI cross-session memory
+            match MemoryState::new(&db_path.to_string_lossy()) {
+                Ok(memory_state) => {
+                    app.manage(memory_state);
+                    tracing::info!("Memory manager initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize memory manager: {}. Memory features may be degraded.", e);
+                }
+            }
 
             match crate::automation::AutomationService::new() {
                 Ok(automation_service) => {
@@ -1043,7 +1053,19 @@ pub fn run() {
             crate::sys::commands::document_create_excel_numbers,
             crate::sys::commands::document_create_pdf,
             crate::sys::commands::document_create_pdf_simple,
-
+            // Memory commands (persistent cross-session memory)
+            crate::sys::commands::memory_remember,
+            crate::sys::commands::memory_recall,
+            crate::sys::commands::memory_search,
+            crate::sys::commands::memory_get_by_category,
+            crate::sys::commands::memory_get_important,
+            crate::sys::commands::memory_forget,
+            crate::sys::commands::memory_forget_topic,
+            crate::sys::commands::memory_log_context,
+            crate::sys::commands::memory_get_daily_logs,
+            crate::sys::commands::memory_get_session_context,
+            crate::sys::commands::memory_export_all,
+            crate::sys::commands::memory_cleanup_logs,
 
             crate::sys::commands::mcp_initialize,
             crate::sys::commands::mcp_list_servers,
