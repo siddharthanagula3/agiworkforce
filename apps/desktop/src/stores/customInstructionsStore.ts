@@ -104,7 +104,7 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
         setGlobalInstructions: (instructions: string) => {
           const maxLength = get().maxInstructionsLength;
           const trimmed = instructions.slice(0, maxLength);
-          set({ globalInstructions: trimmed });
+          set({ globalInstructions: trimmed }, undefined, 'customInstructions/setGlobal');
           // Persist to backend asynchronously
           get().saveToBackend();
         },
@@ -112,24 +112,36 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
         setProjectInstructions: (instructions: string) => {
           const maxLength = get().maxInstructionsLength;
           const trimmed = instructions.slice(0, maxLength);
-          set({ projectInstructions: trimmed });
+          set({ projectInstructions: trimmed }, undefined, 'customInstructions/setProject');
         },
 
         setGlobalInstructionsEnabled: (enabled: boolean) => {
-          set({ globalInstructionsEnabled: enabled });
+          set(
+            { globalInstructionsEnabled: enabled },
+            undefined,
+            'customInstructions/setGlobalEnabled',
+          );
           // Persist to backend asynchronously
           get().saveToBackend();
         },
 
         setProjectInstructionsEnabled: (enabled: boolean) => {
-          set({ projectInstructionsEnabled: enabled });
+          set(
+            { projectInstructionsEnabled: enabled },
+            undefined,
+            'customInstructions/setProjectEnabled',
+          );
         },
 
         clearAllInstructions: () => {
-          set({
-            globalInstructions: '',
-            projectInstructions: '',
-          });
+          set(
+            {
+              globalInstructions: '',
+              projectInstructions: '',
+            },
+            undefined,
+            'customInstructions/clearAll',
+          );
         },
 
         saveToBackend: async () => {
@@ -152,10 +164,14 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
             const result = await invoke<string>('load_custom_instructions');
             if (result) {
               const data = JSON.parse(result);
-              set({
-                globalInstructions: data.globalInstructions || '',
-                globalInstructionsEnabled: data.globalInstructionsEnabled ?? true,
-              });
+              set(
+                {
+                  globalInstructions: data.globalInstructions || '',
+                  globalInstructionsEnabled: data.globalInstructionsEnabled ?? true,
+                },
+                undefined,
+                'customInstructions/loadFromBackend',
+              );
             }
           } catch (error) {
             console.error('Failed to load custom instructions from backend:', error);
@@ -226,3 +242,29 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
     { name: 'CustomInstructionsStore', enabled: import.meta.env.DEV },
   ),
 );
+
+// Selectors
+export const selectGlobalInstructions = (state: CustomInstructionsState) =>
+  state.globalInstructions;
+export const selectProjectInstructions = (state: CustomInstructionsState) =>
+  state.projectInstructions;
+export const selectGlobalInstructionsEnabled = (state: CustomInstructionsState) =>
+  state.globalInstructionsEnabled;
+export const selectProjectInstructionsEnabled = (state: CustomInstructionsState) =>
+  state.projectInstructionsEnabled;
+export const selectMaxInstructionsLength = (state: CustomInstructionsState) =>
+  state.maxInstructionsLength;
+
+// Derived selectors
+export const selectHasGlobalInstructions = (state: CustomInstructionsState) =>
+  state.globalInstructions.trim().length > 0;
+export const selectHasProjectInstructions = (state: CustomInstructionsState) =>
+  state.projectInstructions.trim().length > 0;
+export const selectHasAnyInstructions = (state: CustomInstructionsState) =>
+  state.globalInstructions.trim().length > 0 || state.projectInstructions.trim().length > 0;
+export const selectGlobalInstructionsCharCount = (state: CustomInstructionsState) =>
+  state.globalInstructions.length;
+export const selectProjectInstructionsCharCount = (state: CustomInstructionsState) =>
+  state.projectInstructions.length;
+export const selectTotalInstructionsCharCount = (state: CustomInstructionsState) =>
+  state.globalInstructions.length + state.projectInstructions.length;

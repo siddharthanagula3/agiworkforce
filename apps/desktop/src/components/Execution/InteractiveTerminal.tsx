@@ -1,5 +1,6 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -199,6 +200,7 @@ export function InteractiveTerminal({
     }
 
     const terminal = new Terminal({
+      scrollback: 10000,
       cursorBlink: true,
       cursorStyle: 'bar',
       fontSize: 13,
@@ -241,6 +243,14 @@ export function InteractiveTerminal({
     terminal.open(terminalRef.current);
     fitAddon.fit();
 
+    // Load WebGL addon for GPU acceleration (with fallback)
+    try {
+      const webglAddon = new WebglAddon();
+      terminal.loadAddon(webglAddon);
+    } catch (e) {
+      console.warn('WebGL addon not available, using canvas renderer:', e);
+    }
+
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
@@ -264,7 +274,14 @@ export function InteractiveTerminal({
       resizeObserver.observe(terminalRef.current);
     }
 
+    // Handle window resize events
+    const handleWindowResize = () => {
+      fitAddon.fit();
+    };
+    window.addEventListener('resize', handleWindowResize);
+
     return () => {
+      window.removeEventListener('resize', handleWindowResize);
       resizeObserver.disconnect();
       terminal.dispose();
       xtermRef.current = null;

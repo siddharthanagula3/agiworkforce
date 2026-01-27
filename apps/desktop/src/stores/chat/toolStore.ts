@@ -310,216 +310,296 @@ export const useToolStore = create<ToolState>()(
 
           // File operations
           addFileOperation: (op) =>
-            set((state) => {
-              state.fileOperations.push({ ...op, timestamp: new Date() });
-            }),
+            set(
+              (state) => {
+                state.fileOperations.push({ ...op, timestamp: new Date() });
+              },
+              undefined,
+              'tool/addFileOperation',
+            ),
 
           // Terminal commands
           addTerminalCommand: (cmd) =>
-            set((state) => {
-              state.terminalCommands.push({ ...cmd, timestamp: new Date() });
-            }),
+            set(
+              (state) => {
+                state.terminalCommands.push({ ...cmd, timestamp: new Date() });
+              },
+              undefined,
+              'tool/addTerminalCommand',
+            ),
 
           updateTerminalOutput: (payload) =>
-            set((state) => {
-              const index = state.terminalCommands.findIndex(
-                (cmd) => cmd.id === payload.command_id,
-              );
-              if (index !== -1 && state.terminalCommands[index]) {
-                state.terminalCommands[index]!.stdout = payload.stdout;
-                state.terminalCommands[index]!.stderr = payload.stderr;
-                state.terminalCommands[index]!.exitCode = payload.exit_code;
-                state.terminalCommands[index]!.duration = payload.duration_ms;
-              }
-            }),
+            set(
+              (state) => {
+                const index = state.terminalCommands.findIndex(
+                  (cmd) => cmd.id === payload.command_id,
+                );
+                if (index !== -1 && state.terminalCommands[index]) {
+                  state.terminalCommands[index]!.stdout = payload.stdout;
+                  state.terminalCommands[index]!.stderr = payload.stderr;
+                  state.terminalCommands[index]!.exitCode = payload.exit_code;
+                  state.terminalCommands[index]!.duration = payload.duration_ms;
+                }
+              },
+              undefined,
+              'tool/updateTerminalOutput',
+            ),
 
           // Tool executions
           addToolExecution: (exec) =>
-            set((state) => {
-              state.toolExecutions.push({ ...exec, timestamp: new Date() });
-            }),
+            set(
+              (state) => {
+                state.toolExecutions.push({ ...exec, timestamp: new Date() });
+              },
+              undefined,
+              'tool/addToolExecution',
+            ),
 
           // Screenshots
           addScreenshot: (screenshot) =>
-            set((state) => {
-              state.screenshots.push({ ...screenshot, timestamp: new Date() });
-            }),
+            set(
+              (state) => {
+                state.screenshots.push({ ...screenshot, timestamp: new Date() });
+              },
+              undefined,
+              'tool/addScreenshot',
+            ),
 
           // Action log
           addActionLogEntry: (entry) =>
-            set((state) => {
-              const now = new Date();
-              state.actionLog.unshift({
-                ...entry,
-                createdAt: now,
-                updatedAt: now,
-              });
-              if (state.actionLog.length > 500) {
-                state.actionLog = state.actionLog.slice(0, 500);
-              }
-            }),
+            set(
+              (state) => {
+                const now = new Date();
+                state.actionLog.unshift({
+                  ...entry,
+                  createdAt: now,
+                  updatedAt: now,
+                });
+                if (state.actionLog.length > 500) {
+                  state.actionLog = state.actionLog.slice(0, 500);
+                }
+              },
+              undefined,
+              'tool/addActionLogEntry',
+            ),
 
           updateActionLogEntry: (id, updates) =>
-            set((state) => {
-              const index = state.actionLog.findIndex(
-                (item) => item.id === id || item.actionId === id,
-              );
-              if (index !== -1 && state.actionLog[index]) {
-                state.actionLog[index] = {
-                  ...state.actionLog[index]!,
-                  ...updates,
-                  updatedAt: new Date(),
-                };
-              }
-            }),
+            set(
+              (state) => {
+                const index = state.actionLog.findIndex(
+                  (item) => item.id === id || item.actionId === id,
+                );
+                if (index !== -1 && state.actionLog[index]) {
+                  state.actionLog[index] = {
+                    ...state.actionLog[index]!,
+                    ...updates,
+                    updatedAt: new Date(),
+                  };
+                }
+              },
+              undefined,
+              'tool/updateActionLogEntry',
+            ),
 
           clearActionLog: () =>
-            set((state) => {
-              state.actionLog = [];
-            }),
+            set(
+              (state) => {
+                state.actionLog = [];
+              },
+              undefined,
+              'tool/clearActionLog',
+            ),
 
           clearToolHistory: () =>
-            set((state) => {
-              state.fileOperations = [];
-              state.terminalCommands = [];
-              state.toolExecutions = [];
-              state.screenshots = [];
-              state.actionLog = [];
-            }),
+            set(
+              (state) => {
+                state.fileOperations = [];
+                state.terminalCommands = [];
+                state.toolExecutions = [];
+                state.screenshots = [];
+                state.actionLog = [];
+              },
+              undefined,
+              'tool/clearToolHistory',
+            ),
 
           // Plan
           setWorkflowContext: (context) =>
-            set((state) => {
-              state.workflowContext = context;
-            }),
+            set(
+              (state) => {
+                state.workflowContext = context;
+              },
+              undefined,
+              'tool/setWorkflowContext',
+            ),
 
           setPlan: (plan) =>
-            set((state) => {
-              if (!plan) {
-                state.plan = null;
-                return;
-              }
+            set(
+              (state) => {
+                if (!plan) {
+                  state.plan = null;
+                  return;
+                }
 
-              const normalizeDate = (value?: Date | string | number) => {
-                if (!value) return new Date();
-                if (value instanceof Date) return value;
-                const numeric = typeof value === 'number' ? value : Number(value);
-                if (Number.isNaN(numeric)) return new Date();
-                return new Date(numeric);
-              };
+                const normalizeDate = (value?: Date | string | number) => {
+                  if (!value) return new Date();
+                  if (value instanceof Date) return value;
+                  const numeric = typeof value === 'number' ? value : Number(value);
+                  if (Number.isNaN(numeric)) return new Date();
+                  return new Date(numeric);
+                };
 
-              state.plan = {
-                ...plan,
-                createdAt: normalizeDate(plan.createdAt),
-                updatedAt: new Date(),
-                steps:
-                  plan.steps?.map((step) => ({
-                    ...step,
-                    status: step.status ?? 'pending',
-                  })) ?? [],
-              };
-            }),
+                state.plan = {
+                  ...plan,
+                  createdAt: normalizeDate(plan.createdAt),
+                  updatedAt: new Date(),
+                  steps:
+                    plan.steps?.map((step) => ({
+                      ...step,
+                      status: step.status ?? 'pending',
+                    })) ?? [],
+                };
+              },
+              undefined,
+              'tool/setPlan',
+            ),
 
           updatePlanStep: (stepId, updates) =>
-            set((state) => {
-              if (!state.plan) {
-                return;
-              }
+            set(
+              (state) => {
+                if (!state.plan) {
+                  return;
+                }
 
-              const index = state.plan.steps.findIndex((step) => step.id === stepId);
-              if (index !== -1 && state.plan.steps[index]) {
-                state.plan.steps[index] = {
-                  ...state.plan.steps[index]!,
-                  ...updates,
-                };
-                state.plan.updatedAt = new Date();
-              }
-            }),
+                const index = state.plan.steps.findIndex((step) => step.id === stepId);
+                if (index !== -1 && state.plan.steps[index]) {
+                  state.plan.steps[index] = {
+                    ...state.plan.steps[index]!,
+                    ...updates,
+                  };
+                  state.plan.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'tool/updatePlanStep',
+            ),
 
           clearPlan: () =>
-            set((state) => {
-              state.plan = null;
-            }),
+            set(
+              (state) => {
+                state.plan = null;
+              },
+              undefined,
+              'tool/clearPlan',
+            ),
 
           // Approvals
           addApprovalRequest: (request) =>
-            set((state) => {
-              const normalized = {
-                ...request,
-                details: request.details ?? {},
-                createdAt: new Date(),
-                status: 'pending' as ApprovalStatus,
-              };
-              const index = state.pendingApprovals.findIndex(
-                (approval) => approval.id === request.id,
-              );
-              if (index !== -1) {
-                state.pendingApprovals[index] = normalized;
-              } else {
-                state.pendingApprovals.push(normalized);
-              }
-            }),
+            set(
+              (state) => {
+                const normalized = {
+                  ...request,
+                  details: request.details ?? {},
+                  createdAt: new Date(),
+                  status: 'pending' as ApprovalStatus,
+                };
+                const index = state.pendingApprovals.findIndex(
+                  (approval) => approval.id === request.id,
+                );
+                if (index !== -1) {
+                  state.pendingApprovals[index] = normalized;
+                } else {
+                  state.pendingApprovals.push(normalized);
+                }
+              },
+              undefined,
+              'tool/addApprovalRequest',
+            ),
 
           approveOperation: (id) =>
-            set((state) => {
-              const index = state.pendingApprovals.findIndex((a) => a.id === id);
-              if (index !== -1 && state.pendingApprovals[index]) {
-                state.pendingApprovals[index]!.status = 'approved';
-                state.pendingApprovals[index]!.approvedAt = new Date();
-                state.pendingApprovals.splice(index, 1);
-              }
-            }),
+            set(
+              (state) => {
+                const index = state.pendingApprovals.findIndex((a) => a.id === id);
+                if (index !== -1 && state.pendingApprovals[index]) {
+                  state.pendingApprovals[index]!.status = 'approved';
+                  state.pendingApprovals[index]!.approvedAt = new Date();
+                  state.pendingApprovals.splice(index, 1);
+                }
+              },
+              undefined,
+              'tool/approveOperation',
+            ),
 
           rejectOperation: (id, reason) =>
-            set((state) => {
-              const index = state.pendingApprovals.findIndex((a) => a.id === id);
-              if (index !== -1 && state.pendingApprovals[index]) {
-                state.pendingApprovals[index]!.status = 'rejected';
-                state.pendingApprovals[index]!.rejectedAt = new Date();
-                state.pendingApprovals[index]!.rejectionReason = reason;
-                state.pendingApprovals.splice(index, 1);
-              }
-            }),
+            set(
+              (state) => {
+                const index = state.pendingApprovals.findIndex((a) => a.id === id);
+                if (index !== -1 && state.pendingApprovals[index]) {
+                  state.pendingApprovals[index]!.status = 'rejected';
+                  state.pendingApprovals[index]!.rejectedAt = new Date();
+                  state.pendingApprovals[index]!.rejectionReason = reason;
+                  state.pendingApprovals.splice(index, 1);
+                }
+              },
+              undefined,
+              'tool/rejectOperation',
+            ),
 
           removeApprovalRequest: (id) =>
-            set((state) => {
-              state.pendingApprovals = state.pendingApprovals.filter(
-                (approval) => approval.id !== id,
-              );
-            }),
+            set(
+              (state) => {
+                state.pendingApprovals = state.pendingApprovals.filter(
+                  (approval) => approval.id !== id,
+                );
+              },
+              undefined,
+              'tool/removeApprovalRequest',
+            ),
 
           // Trusted workflows
           setTrustedWorkflow: (workflow) =>
-            set((state) => {
-              state.trustedWorkflows[workflow.hash] = {
-                ...workflow,
-                actionSignatures: workflow.actionSignatures ?? [],
-                createdAt: workflow.createdAt ?? new Date(),
-              };
-            }),
+            set(
+              (state) => {
+                state.trustedWorkflows[workflow.hash] = {
+                  ...workflow,
+                  actionSignatures: workflow.actionSignatures ?? [],
+                  createdAt: workflow.createdAt ?? new Date(),
+                };
+              },
+              undefined,
+              'tool/setTrustedWorkflow',
+            ),
 
           removeTrustedWorkflow: (hash) =>
-            set((state) => {
-              delete state.trustedWorkflows[hash];
-            }),
+            set(
+              (state) => {
+                delete state.trustedWorkflows[hash];
+              },
+              undefined,
+              'tool/removeTrustedWorkflow',
+            ),
 
           recordTrustedAction: (hash, signature) =>
-            set((state) => {
-              if (!hash || !signature) {
-                return;
-              }
-              const workflow =
-                state.trustedWorkflows[hash] ??
-                ({
-                  hash,
-                  createdAt: new Date(),
-                  actionSignatures: [],
-                } as TrustedWorkflow);
-              if (!workflow.actionSignatures.includes(signature)) {
-                workflow.actionSignatures.push(signature);
-              }
-              state.trustedWorkflows[hash] = workflow;
-            }),
+            set(
+              (state) => {
+                if (!hash || !signature) {
+                  return;
+                }
+                const workflow =
+                  state.trustedWorkflows[hash] ??
+                  ({
+                    hash,
+                    createdAt: new Date(),
+                    actionSignatures: [],
+                  } as TrustedWorkflow);
+                if (!workflow.actionSignatures.includes(signature)) {
+                  workflow.actionSignatures.push(signature);
+                }
+                state.trustedWorkflows[hash] = workflow;
+              },
+              undefined,
+              'tool/recordTrustedAction',
+            ),
 
           isActionTrusted: (hash, signature) => {
             if (!hash || !signature) {
@@ -531,69 +611,93 @@ export const useToolStore = create<ToolState>()(
 
           // Context
           addContextItem: (item) =>
-            set((state) => {
-              state.activeContext.push(item);
-            }),
+            set(
+              (state) => {
+                state.activeContext.push(item);
+              },
+              undefined,
+              'tool/addContextItem',
+            ),
 
           removeContextItem: (id) =>
-            set((state) => {
-              state.activeContext = state.activeContext.filter((item) => item.id !== id);
-            }),
+            set(
+              (state) => {
+                state.activeContext = state.activeContext.filter((item) => item.id !== id);
+              },
+              undefined,
+              'tool/removeContextItem',
+            ),
 
           clearContext: () =>
-            set((state) => {
-              state.activeContext = [];
-            }),
+            set(
+              (state) => {
+                state.activeContext = [];
+              },
+              undefined,
+              'tool/clearContext',
+            ),
 
           // Tool streaming
           updateToolStream: (toolId, updates) =>
-            set((state) => {
-              const existing = state.activeToolStreams.get(toolId);
-              if (existing) {
-                const updated: ToolStreamStateEntry = {
-                  ...existing,
-                  ...updates,
-                  outputChunks: updates.outputChunks
-                    ? [...existing.outputChunks, ...updates.outputChunks]
-                    : existing.outputChunks,
-                  outputBuffer:
-                    updates.outputBuffer !== undefined
-                      ? existing.outputBuffer + updates.outputBuffer
-                      : existing.outputBuffer,
-                };
-                state.activeToolStreams.set(toolId, updated);
-              } else {
-                const newEntry: ToolStreamStateEntry = {
-                  tool_id: toolId,
-                  tool_name: updates.tool_name || 'Unknown Tool',
-                  status: updates.status || 'running',
-                  progress: updates.progress || 0,
-                  progressMessage: updates.progressMessage,
-                  outputChunks: updates.outputChunks || [],
-                  outputBuffer: updates.outputBuffer || '',
-                  bytesProcessed: updates.bytesProcessed,
-                  bytesTotal: updates.bytesTotal,
-                  result: updates.result,
-                  error: updates.error,
-                  startedAt: updates.startedAt || new Date(),
-                  completedAt: updates.completedAt,
-                  duration_ms: updates.duration_ms,
-                  retryable: updates.retryable,
-                  parameters: updates.parameters,
-                };
-                state.activeToolStreams.set(toolId, newEntry);
-              }
-            }),
+            set(
+              (state) => {
+                const existing = state.activeToolStreams.get(toolId);
+                if (existing) {
+                  const updated: ToolStreamStateEntry = {
+                    ...existing,
+                    ...updates,
+                    outputChunks: updates.outputChunks
+                      ? [...existing.outputChunks, ...updates.outputChunks]
+                      : existing.outputChunks,
+                    outputBuffer:
+                      updates.outputBuffer !== undefined
+                        ? existing.outputBuffer + updates.outputBuffer
+                        : existing.outputBuffer,
+                  };
+                  state.activeToolStreams.set(toolId, updated);
+                } else {
+                  const newEntry: ToolStreamStateEntry = {
+                    tool_id: toolId,
+                    tool_name: updates.tool_name || 'Unknown Tool',
+                    status: updates.status || 'running',
+                    progress: updates.progress || 0,
+                    progressMessage: updates.progressMessage,
+                    outputChunks: updates.outputChunks || [],
+                    outputBuffer: updates.outputBuffer || '',
+                    bytesProcessed: updates.bytesProcessed,
+                    bytesTotal: updates.bytesTotal,
+                    result: updates.result,
+                    error: updates.error,
+                    startedAt: updates.startedAt || new Date(),
+                    completedAt: updates.completedAt,
+                    duration_ms: updates.duration_ms,
+                    retryable: updates.retryable,
+                    parameters: updates.parameters,
+                  };
+                  state.activeToolStreams.set(toolId, newEntry);
+                }
+              },
+              undefined,
+              'tool/updateToolStream',
+            ),
 
           removeToolStream: (toolId) =>
-            set((state) => {
-              state.activeToolStreams.delete(toolId);
-            }),
+            set(
+              (state) => {
+                state.activeToolStreams.delete(toolId);
+              },
+              undefined,
+              'tool/removeToolStream',
+            ),
 
           clearToolStreams: () =>
-            set((state) => {
-              state.activeToolStreams.clear();
-            }),
+            set(
+              (state) => {
+                state.activeToolStreams.clear();
+              },
+              undefined,
+              'tool/clearToolStreams',
+            ),
 
           getActiveToolStreams: () => {
             const state = get();
@@ -603,17 +707,21 @@ export const useToolStore = create<ToolState>()(
           },
 
           cancelToolExecution: async (toolId) => {
-            set((state) => {
-              const existing = state.activeToolStreams.get(toolId);
-              if (existing) {
-                state.activeToolStreams.set(toolId, {
-                  ...existing,
-                  status: 'cancelled',
-                  completedAt: new Date(),
-                  error: 'Cancelled by user',
-                });
-              }
-            });
+            set(
+              (state) => {
+                const existing = state.activeToolStreams.get(toolId);
+                if (existing) {
+                  state.activeToolStreams.set(toolId, {
+                    ...existing,
+                    status: 'cancelled',
+                    completedAt: new Date(),
+                    error: 'Cancelled by user',
+                  });
+                }
+              },
+              undefined,
+              'tool/cancelToolExecution',
+            );
 
             if (isTauri) {
               try {
@@ -626,38 +734,54 @@ export const useToolStore = create<ToolState>()(
 
           // Filters
           setFileOperationFilter: (types) =>
-            set((state) => {
-              state.filters.fileOperations = types;
-            }),
+            set(
+              (state) => {
+                state.filters.fileOperations = types;
+              },
+              undefined,
+              'tool/setFileOperationFilter',
+            ),
 
           setTerminalStatusFilter: (statuses) =>
-            set((state) => {
-              state.filters.terminalStatus = statuses;
-            }),
+            set(
+              (state) => {
+                state.filters.terminalStatus = statuses;
+              },
+              undefined,
+              'tool/setTerminalStatusFilter',
+            ),
 
           setToolNameFilter: (names) =>
-            set((state) => {
-              state.filters.toolNames = names;
-            }),
+            set(
+              (state) => {
+                state.filters.toolNames = names;
+              },
+              undefined,
+              'tool/setToolNameFilter',
+            ),
 
           // Reset
           resetOnLogout: () => {
             const activeStreams = get().activeToolStreams;
             activeStreams.clear();
 
-            set((state) => {
-              state.fileOperations = [];
-              state.terminalCommands = [];
-              state.toolExecutions = [];
-              state.screenshots = [];
-              state.actionLog = [];
-              state.pendingApprovals = [];
-              state.trustedWorkflows = {};
-              state.activeContext = [];
-              state.workflowContext = null;
-              state.plan = null;
-              state.activeToolStreams = new Map();
-            });
+            set(
+              (state) => {
+                state.fileOperations = [];
+                state.terminalCommands = [];
+                state.toolExecutions = [];
+                state.screenshots = [];
+                state.actionLog = [];
+                state.pendingApprovals = [];
+                state.trustedWorkflows = {};
+                state.activeContext = [];
+                state.workflowContext = null;
+                state.plan = null;
+                state.activeToolStreams = new Map();
+              },
+              undefined,
+              'tool/resetOnLogout',
+            );
           },
         })),
       ),
@@ -671,6 +795,10 @@ export const useToolStore = create<ToolState>()(
           trustedWorkflows: state.trustedWorkflows,
           filters: state.filters,
         }),
+        migrate: (persistedState: unknown, _version: number) => {
+          // Handle future migrations here
+          return persistedState as ToolState;
+        },
       },
     ),
     { name: 'ToolStore', enabled: import.meta.env.DEV },

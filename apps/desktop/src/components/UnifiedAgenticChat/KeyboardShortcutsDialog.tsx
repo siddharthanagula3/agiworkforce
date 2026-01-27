@@ -76,7 +76,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50"
           />
 
           {/* Dialog */}
@@ -133,7 +133,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                                   'bg-gray-100 dark:bg-gray-800',
                                   'border border-gray-200 dark:border-gray-700',
                                   'text-gray-700 dark:text-gray-300',
-                                  'shadow-sm',
+                                  'shadow-xs',
                                 )}
                               >
                                 {key}

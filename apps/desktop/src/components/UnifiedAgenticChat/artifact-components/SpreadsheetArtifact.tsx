@@ -142,7 +142,7 @@ export function SpreadsheetArtifact({
       {}
       <div className="flex-1 overflow-auto relative custom-scrollbar bg-white dark:bg-zinc-950">
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-10 shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-800">
+          <thead className="sticky top-0 z-10 shadow-xs ring-1 ring-zinc-200 dark:ring-zinc-800">
             <tr>
               <th className="w-10 border-r border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 p-1 text-center text-[10px] text-muted-foreground font-medium select-none">
                 #

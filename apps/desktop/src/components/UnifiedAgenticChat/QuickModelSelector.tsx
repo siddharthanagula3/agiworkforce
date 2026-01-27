@@ -315,7 +315,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               className={cn(
                 'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
                 isSelected
-                  ? 'border-amber-500 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-sm dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
+                  ? 'border-amber-500 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 shadow-xs dark:border-amber-500/50 dark:from-amber-500/20 dark:to-orange-500/20 dark:text-amber-400'
                   : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
               )}
             >
@@ -421,7 +421,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors',
                         isActive
-                          ? 'border-primary bg-primary/10 text-primary shadow-sm dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
+                          ? 'border-primary bg-primary/10 text-primary shadow-xs dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
                           : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
                       )}
                     >
@@ -502,7 +502,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               >
                 <div
                   className={cn(
-                    'h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform',
+                    'h-2.5 w-2.5 rounded-full bg-white shadow-xs transition-transform',
                     thinkingModeEnabled ? 'translate-x-2.5' : 'translate-x-0',
                   )}
                 />

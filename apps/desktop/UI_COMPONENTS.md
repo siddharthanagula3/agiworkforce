@@ -809,7 +809,7 @@ import { toast } from 'sonner';
 
 const schema = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.email(),
 });
 
 type FormData = z.infer<typeof schema>;

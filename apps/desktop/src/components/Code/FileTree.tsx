@@ -574,7 +574,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
             {contextMenu.isDirectory && (
               <>
                 <button
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                  className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
                   onClick={() => {
                     handleCreate(contextMenu.path, false);
                     setContextMenu(null);
@@ -586,7 +586,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                   New file
                 </button>
                 <button
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                  className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
                   onClick={() => {
                     handleCreate(contextMenu.path, true);
                     setContextMenu(null);
@@ -601,7 +601,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
               </>
             )}
             <button
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+              className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
               onClick={() => {
                 handleRename(contextMenu.path);
                 setContextMenu(null);
@@ -613,7 +613,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
               Rename
             </button>
             <button
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted text-red-600"
+              className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted text-red-600"
               onClick={() => {
                 handleDelete(contextMenu.path, contextMenu.isDirectory);
                 setContextMenu(null);

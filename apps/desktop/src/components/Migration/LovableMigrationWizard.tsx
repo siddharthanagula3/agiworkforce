@@ -511,7 +511,7 @@ export function LovableMigrationWizard() {
                           className={cn(
                             'flex h-full flex-col rounded-xl border p-4 text-left transition-all',
                             isSelected
-                              ? 'border-primary bg-primary/5 shadow-sm'
+                              ? 'border-primary bg-primary/5 shadow-xs'
                               : 'border-border/70 bg-muted/20 hover:border-primary/40',
                           )}
                         >

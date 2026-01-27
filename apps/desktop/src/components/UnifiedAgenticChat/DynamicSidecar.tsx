@@ -267,7 +267,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 
   return (
     <motion.div
-      className="flex h-full flex-col bg-gray-900/95 dark:bg-gray-950/95 backdrop-blur-sm"
+      className="flex h-full flex-col bg-gray-900/95 dark:bg-gray-950/95 backdrop-blur-xs"
       initial="hidden"
       animate="visible"
       exit="hidden"

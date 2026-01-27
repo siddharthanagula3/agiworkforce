@@ -177,7 +177,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                       onSelect={() => handleCommandExecution(item)}
                       className={cn(
                         'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                        'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-sm',
+                        'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-xs',
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -237,7 +237,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                       onSelect={() => handleCommandExecution(item)}
                       className={cn(
                         'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                        'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-sm',
+                        'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-xs',
                       )}
                     >
                       <div className="flex items-center gap-2">

@@ -50,7 +50,7 @@ function ClickRipple({ effect }: { effect: ClickEffect }) {
   return (
     <span
       className={cn(
-        'pointer-events-none absolute h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 backdrop-blur-sm transition-all duration-300 ease-out',
+        'pointer-events-none absolute h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 backdrop-blur-xs transition-all duration-300 ease-out',
         colors,
         activated ? 'scale-125 opacity-0' : 'scale-75 opacity-90',
       )}

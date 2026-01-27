@@ -109,7 +109,7 @@ export const FloatingChat = () => {
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-900 text-white overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-sm">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-xs">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center">
             <span className="text-xs font-bold">A</span>
@@ -178,7 +178,7 @@ export const FloatingChat = () => {
       {/* Input */}
       <form
         onSubmit={handleSubmit}
-        className="border-t border-zinc-800 p-3 bg-zinc-900/95 backdrop-blur-sm"
+        className="border-t border-zinc-800 p-3 bg-zinc-900/95 backdrop-blur-xs"
       >
         <div className="flex items-end gap-2">
           <textarea

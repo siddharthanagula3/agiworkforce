@@ -19,7 +19,6 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { asyncHandler } from '../middleware/asyncHandler';
 import { supabase } from '../lib/supabase';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
@@ -60,9 +59,10 @@ interface MobileDevice {
 // =============================================================================
 
 // SECURITY: .strict() rejects unexpected fields to prevent mass assignment
+// Zod v4: Use top-level format validators for better performance
 const registerSchema = z
   .object({
-    clientId: z.string().uuid().optional(),
+    clientId: z.uuid().optional(),
     platform: z.string().min(1).max(50),
     name: z.string().min(1).max(100),
     pushToken: z.string().max(500).optional(),
@@ -70,9 +70,10 @@ const registerSchema = z
   .strict();
 
 // SECURITY: .strict() rejects unexpected fields
+// Zod v4: Use top-level format validators for better performance
 const pushTokenSchema = z
   .object({
-    deviceId: z.string().uuid(),
+    deviceId: z.uuid(),
     pushToken: z.string().min(1).max(500),
   })
   .strict();
@@ -106,7 +107,7 @@ const pairingCodeResponseSchema = z.object({
 router.post(
   '/register',
   createRateLimiter('device-register'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { clientId, platform, name, pushToken } = registerSchema.parse(req.body);
     const user = req.user;
     if (!user) {
@@ -134,7 +135,7 @@ router.post(
     }
 
     res.json({ deviceId });
-  }),
+  },
 );
 
 /**
@@ -146,7 +147,7 @@ router.post(
 router.post(
   '/push-token',
   createRateLimiter('mobile-push-token'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { deviceId, pushToken } = pushTokenSchema.parse(req.body);
     const user = req.user;
     if (!user) {
@@ -181,7 +182,7 @@ router.post(
     }
 
     res.json({ success: true });
-  }),
+  },
 );
 
 /**
@@ -193,7 +194,7 @@ router.post(
 router.post(
   '/pairing-code',
   createRateLimiter('pairing-code'),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -256,7 +257,7 @@ router.post(
         wsUrl: payload.wsUrl,
       },
     });
-  }),
+  },
 );
 
 /**
@@ -265,37 +266,33 @@ router.post(
  *
  * SECURITY: Rate limited to 30/min for list operations
  */
-router.get(
-  '/',
-  createRateLimiter('device-list'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
+router.get('/', createRateLimiter('device-list'), async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw new AppError('Unauthorized', 401);
+  }
 
-    const { data: devices, error } = await supabase
-      .from('mobile_devices')
-      .select('*')
-      .eq('user_id', user.userId)
-      .order('updated_at', { ascending: false });
+  const { data: devices, error } = await supabase
+    .from('mobile_devices')
+    .select('*')
+    .eq('user_id', user.userId)
+    .order('updated_at', { ascending: false });
 
-    if (error) {
-      logger.error({ error }, 'Failed to list devices');
-      throw new AppError('Failed to list mobile devices', 500);
-    }
+  if (error) {
+    logger.error({ error }, 'Failed to list devices');
+    throw new AppError('Failed to list mobile devices', 500);
+  }
 
-    const result = (devices || []).map((device: MobileDevice) => ({
-      id: device.id,
-      name: device.name,
-      platform: device.platform,
-      pushToken: device.push_token,
-      updatedAt: new Date(device.updated_at).getTime(),
-    }));
+  const result = (devices || []).map((device: MobileDevice) => ({
+    id: device.id,
+    name: device.name,
+    platform: device.platform,
+    pushToken: device.push_token,
+    updatedAt: new Date(device.updated_at).getTime(),
+  }));
 
-    res.json({ devices: result });
-  }),
-);
+  res.json({ devices: result });
+});
 
 /**
  * Delete a mobile device
@@ -306,7 +303,7 @@ router.get(
 router.delete(
   '/:deviceId',
   createRateLimiter('device-delete'),
-  asyncHandler(async (req: Request<{ deviceId: string }>, res: Response) => {
+  async (req: Request<{ deviceId: string }>, res: Response) => {
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -345,7 +342,7 @@ router.delete(
     }
 
     res.json({ success: true, message: 'Mobile device removed' });
-  }),
+  },
 );
 
 export { router as mobileRouter };

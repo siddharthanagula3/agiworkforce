@@ -72,155 +72,199 @@ export const useMcpStore = create<McpState>()(
       searchQuery: '',
 
       initialize: async () => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/initialize/start');
         try {
           await McpClient.initialize();
           await get().refreshServers();
           await get().refreshTools();
           await get().refreshStats();
           await get().loadConfig();
-          set({ isInitialized: true, isLoading: false });
+          set({ isInitialized: true, isLoading: false }, undefined, 'mcp/initialize/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Initialization failed',
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Initialization failed',
+              isLoading: false,
+            },
+            undefined,
+            'mcp/initialize/error',
+          );
         }
       },
 
       refreshServers: async () => {
         try {
           const servers = await McpClient.listServers();
-          set({ servers, error: null });
+          set({ servers, error: null }, undefined, 'mcp/refreshServers');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to list servers',
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to list servers',
+            },
+            undefined,
+            'mcp/refreshServers/error',
+          );
         }
       },
 
       refreshTools: async () => {
         try {
           const tools = await McpClient.listTools();
-          set({ tools, error: null });
+          set({ tools, error: null }, undefined, 'mcp/refreshTools');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to list tools',
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to list tools',
+            },
+            undefined,
+            'mcp/refreshTools/error',
+          );
         }
       },
 
       refreshStats: async () => {
         try {
           const stats = await McpClient.getStats();
-          set({ stats, error: null });
+          set({ stats, error: null }, undefined, 'mcp/refreshStats');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to get stats',
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to get stats',
+            },
+            undefined,
+            'mcp/refreshStats/error',
+          );
         }
       },
 
       connectServer: async (name: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/connectServer/start');
         try {
           await McpClient.connect(name);
           await get().refreshServers();
           await get().refreshTools();
           await get().refreshStats();
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, 'mcp/connectServer/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : `Failed to connect to ${name}`,
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : `Failed to connect to ${name}`,
+              isLoading: false,
+            },
+            undefined,
+            'mcp/connectServer/error',
+          );
         }
       },
 
       disconnectServer: async (name: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/disconnectServer/start');
         try {
           await McpClient.disconnect(name);
           await get().refreshServers();
           await get().refreshTools();
           await get().refreshStats();
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, 'mcp/disconnectServer/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : `Failed to disconnect from ${name}`,
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : `Failed to disconnect from ${name}`,
+              isLoading: false,
+            },
+            undefined,
+            'mcp/disconnectServer/error',
+          );
         }
       },
 
       enableServer: async (name: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/enableServer/start');
         try {
           await McpClient.enableServer(name);
           await get().refreshServers();
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, 'mcp/enableServer/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : `Failed to enable ${name}`,
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : `Failed to enable ${name}`,
+              isLoading: false,
+            },
+            undefined,
+            'mcp/enableServer/error',
+          );
         }
       },
 
       disableServer: async (name: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/disableServer/start');
         try {
           await McpClient.disableServer(name);
           await get().refreshServers();
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, 'mcp/disableServer/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : `Failed to disable ${name}`,
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : `Failed to disable ${name}`,
+              isLoading: false,
+            },
+            undefined,
+            'mcp/disableServer/error',
+          );
         }
       },
 
       loadConfig: async () => {
         try {
           const config = await McpClient.getConfig();
-          set({ config, error: null });
+          set({ config, error: null }, undefined, 'mcp/loadConfig');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to load config',
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to load config',
+            },
+            undefined,
+            'mcp/loadConfig/error',
+          );
         }
       },
 
       updateConfig: async (config: McpServersConfig) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/updateConfig/start');
         try {
           await McpClient.updateConfig(config);
-          set({ config, isLoading: false });
+          set({ config, isLoading: false }, undefined, 'mcp/updateConfig/success');
           await get().refreshServers();
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to update config',
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to update config',
+              isLoading: false,
+            },
+            undefined,
+            'mcp/updateConfig/error',
+          );
         }
       },
 
       storeCredential: async (serverName: string, key: string, value: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, 'mcp/storeCredential/start');
         try {
           await McpClient.storeCredential(serverName, key, value);
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, 'mcp/storeCredential/success');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to store credential',
-            isLoading: false,
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to store credential',
+              isLoading: false,
+            },
+            undefined,
+            'mcp/storeCredential/error',
+          );
         }
       },
 
       searchTools: async (query: string) => {
-        set({ searchQuery: query });
+        set({ searchQuery: query }, undefined, 'mcp/setSearchQuery');
         if (!query.trim()) {
           await get().refreshTools();
           return;
@@ -228,26 +272,53 @@ export const useMcpStore = create<McpState>()(
 
         try {
           const tools = await McpClient.searchTools(query);
-          set({ tools, error: null });
+          set({ tools, error: null }, undefined, 'mcp/searchTools');
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to search tools',
-          });
+          set(
+            {
+              error: error instanceof Error ? error.message : 'Failed to search tools',
+            },
+            undefined,
+            'mcp/searchTools/error',
+          );
         }
       },
 
       setSelectedServer: (name: string | null) => {
-        set({ selectedServer: name });
+        set({ selectedServer: name }, undefined, 'mcp/setSelectedServer');
       },
 
       setSearchQuery: (query: string) => {
-        set({ searchQuery: query });
+        set({ searchQuery: query }, undefined, 'mcp/setSearchQuery');
       },
 
       clearError: () => {
-        set({ error: null });
+        set({ error: null }, undefined, 'mcp/clearError');
       },
     })),
     { name: 'McpStore', enabled: import.meta.env.DEV },
   ),
 );
+
+// Selectors
+export const selectMcpServers = (state: McpState) => state.servers;
+export const selectMcpTools = (state: McpState) => state.tools;
+export const selectMcpConfig = (state: McpState) => state.config;
+export const selectMcpStats = (state: McpState) => state.stats;
+export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
+export const selectMcpIsLoading = (state: McpState) => state.isLoading;
+export const selectMcpError = (state: McpState) => state.error;
+export const selectMcpSelectedServer = (state: McpState) => state.selectedServer;
+export const selectMcpSearchQuery = (state: McpState) => state.searchQuery;
+
+// Derived selectors
+export const selectConnectedServers = (state: McpState) =>
+  state.servers.filter((server) => server.connected);
+export const selectDisconnectedServers = (state: McpState) =>
+  state.servers.filter((server) => !server.connected);
+export const selectServerByName = (name: string) => (state: McpState) =>
+  state.servers.find((server) => server.name === name);
+export const selectToolsByServer = (serverName: string) => (state: McpState) =>
+  state.tools.filter((tool) => tool.server === serverName);
+export const selectToolCount = (state: McpState) => state.tools.length;
+export const selectServerCount = (state: McpState) => state.servers.length;
