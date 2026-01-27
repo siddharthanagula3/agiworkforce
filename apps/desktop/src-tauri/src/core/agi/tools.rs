@@ -1414,6 +1414,106 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Scheduler tools for reminders and recurring tasks
+        self.register_tool(Tool {
+            id: "schedule_reminder".to_string(),
+            name: "Schedule Reminder".to_string(),
+            description: "Set a reminder for a specific time. Examples: 'remind me in 2 hours to call mom', 'remind me tomorrow at 9am about the meeting'".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "message".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The reminder message to display when triggered".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "time".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "When to trigger the reminder (natural language like 'in 2 hours', 'tomorrow at 9am', or ISO timestamp)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "schedule_recurring_task".to_string(),
+            name: "Schedule Recurring Task".to_string(),
+            description: "Schedule a task to run on a recurring schedule. Examples: 'every morning at 8am summarize my calendar', 'every Friday at 5pm create weekly report'".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Name of the recurring task".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "schedule".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "When to run the task (cron expression or natural language like 'every day at 8am', 'every Friday at 5pm')".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "task_description".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Description of what the task should do when triggered".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "cancel_scheduled_task".to_string(),
+            name: "Cancel Scheduled Task".to_string(),
+            description: "Cancel a scheduled reminder or recurring task".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "task_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "The ID of the scheduled task to cancel".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "list_scheduled_tasks".to_string(),
+            name: "List Scheduled Tasks".to_string(),
+            description: "Show all scheduled reminders and recurring tasks".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         self.register_tool(Tool {
             id: "terminal_execute".to_string(),
             name: "Execute Terminal Command".to_string(),
