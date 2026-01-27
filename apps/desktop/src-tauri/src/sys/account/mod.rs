@@ -184,7 +184,7 @@ pub async fn device_link_initiate(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Device link request failed: {}", e))?;
@@ -220,7 +220,7 @@ pub async fn device_link_poll(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Device poll request failed: {}", e))?;
@@ -253,7 +253,7 @@ pub async fn fetch_user_profile(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Profile fetch failed: {}", e))?;
@@ -298,7 +298,7 @@ pub async fn oauth_refresh(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Token refresh failed: {}", e))?;
@@ -434,7 +434,7 @@ pub async fn fetch_credit_balance(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Failed to fetch credit balance: {}", e))?;
@@ -516,7 +516,7 @@ pub async fn report_llm_usage(
     };
 
     let response = state
-        .client
+        .get_client()?
         .execute(api_request)
         .await
         .map_err(|e| format!("Failed to report usage: {}", e))?;

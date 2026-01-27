@@ -43,16 +43,37 @@ pub struct UIElement {
 }
 
 pub struct IntelligentFileAccess {
-    vision: VisionAutomation,
+    vision: Option<VisionAutomation>,
     llm_router: Option<Arc<LLMRouter>>,
 }
 
 impl IntelligentFileAccess {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            vision: VisionAutomation::new()?,
+            vision: Some(VisionAutomation::new()?),
             llm_router: None,
         })
+    }
+
+    /// Creates an IntelligentFileAccess instance, logging any initialization errors.
+    /// Returns a degraded instance if vision initialization fails.
+    pub fn new_or_degraded() -> Self {
+        match VisionAutomation::new() {
+            Ok(vision) => Self {
+                vision: Some(vision),
+                llm_router: None,
+            },
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize VisionAutomation, vision features will be unavailable: {}",
+                    e
+                );
+                Self {
+                    vision: None,
+                    llm_router: None,
+                }
+            }
+        }
     }
 
     pub fn set_llm_router(&mut self, router: Arc<LLMRouter>) {
@@ -100,6 +121,27 @@ impl IntelligentFileAccess {
         context: Option<&str>,
         error: &str,
     ) -> Result<FileAccessResult> {
+        // Check if vision is available
+        if self.vision.is_none() {
+            tracing::warn!(
+                "Vision fallback requested but VisionAutomation is not available for {:?}",
+                file_path
+            );
+            return Ok(FileAccessResult {
+                success: false,
+                content: None,
+                method: AccessMethod::DirectFileRead,
+                screenshot_path: None,
+                ocr_text: None,
+                analysis: None,
+                solution: None,
+                error: Some(format!(
+                    "File access failed and vision fallback is unavailable: {}",
+                    error
+                )),
+            });
+        }
+
         tracing::info!("Falling back to vision-based access for {:?}", file_path);
 
         let screenshot_path = self.capture_relevant_area(file_path, error).await?;
@@ -122,7 +164,10 @@ impl IntelligentFileAccess {
     }
 
     async fn capture_relevant_area(&self, _file_path: &Path, _error: &str) -> Result<String> {
-        self.vision.capture_screenshot(None).await
+        match &self.vision {
+            Some(vision) => vision.capture_screenshot(None).await,
+            None => Err(anyhow!("VisionAutomation is not available")),
+        }
     }
 
     async fn perform_ocr_on_screenshot(&self, screenshot_path: &str) -> Result<ScreenOcrResult> {
@@ -349,9 +394,6 @@ Provide a detailed analysis in a structured format."#
 
 impl Default for IntelligentFileAccess {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create IntelligentFileAccess: {}", e);
-            panic!("Failed to create IntelligentFileAccess: {}", e);
-        })
+        Self::new_or_degraded()
     }
 }
