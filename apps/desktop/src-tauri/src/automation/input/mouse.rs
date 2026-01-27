@@ -285,15 +285,6 @@ impl MouseSimulator {
     }
 }
 
-impl Default for MouseSimulator {
-    fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create MouseSimulator: {}", e);
-            panic!("Failed to create MouseSimulator: {}", e);
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
