@@ -94,6 +94,7 @@ export interface UnifiedChatState {
   messagesByConversation: ReturnType<typeof useChatStore.getState>['messagesByConversation'];
   messages: ReturnType<typeof useChatStore.getState>['messages'];
   isLoading: ReturnType<typeof useChatStore.getState>['isLoading'];
+  isLoadingMessages: ReturnType<typeof useChatStore.getState>['isLoadingMessages'];
   isStreaming: ReturnType<typeof useChatStore.getState>['isStreaming'];
   currentStreamingMessageId: ReturnType<typeof useChatStore.getState>['currentStreamingMessageId'];
   pendingMessages: ReturnType<typeof useChatStore.getState>['pendingMessages'];
@@ -315,6 +316,7 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       messagesByConversation: chatState.messagesByConversation,
       messages: chatState.messages,
       isLoading: chatState.isLoading,
+      isLoadingMessages: chatState.isLoadingMessages,
       isStreaming: chatState.isStreaming,
       currentStreamingMessageId: chatState.currentStreamingMessageId,
       pendingMessages: chatState.pendingMessages,
@@ -627,6 +629,7 @@ useUnifiedChatStore.setState = (
     'messagesByConversation',
     'messages',
     'isLoading',
+    'isLoadingMessages',
     'isStreaming',
     'currentStreamingMessageId',
     'pendingMessages',

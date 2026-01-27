@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { invoke } from '../../lib/tauri-mock';
 import { safeGetJSON, safeSetJSON } from '../../utils/localStorage';
 import type {
   EnhancedMessage,
@@ -46,6 +47,41 @@ export type {
   InlinePanelContent,
   SlashCommandMetadata,
 } from './types';
+
+/**
+ * Backend Message type from Tauri/SQLite
+ * Maps to the Rust Message struct in data/db/models.rs
+ */
+interface BackendMessage {
+  id: number;
+  conversation_id: number;
+  user_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  tokens: number | null;
+  cost: number | null;
+  provider: string | null;
+  model: string | null;
+  created_at: string;
+}
+
+/**
+ * Convert a backend message to EnhancedMessage format
+ */
+function convertBackendMessage(msg: BackendMessage): EnhancedMessage {
+  return {
+    id: msg.id.toString(),
+    role: msg.role,
+    content: msg.content,
+    timestamp: new Date(msg.created_at),
+    metadata: {
+      model: msg.model ?? undefined,
+      provider: msg.provider ?? undefined,
+      cost: msg.cost ?? undefined,
+      tokenCount: msg.tokens ?? undefined,
+    },
+  };
+}
 
 // ID mapping for conversation persistence
 interface IdMapping {
@@ -131,6 +167,7 @@ export interface ChatState {
 
   // Loading states
   isLoading: boolean;
+  isLoadingMessages: boolean;
   isStreaming: boolean;
   currentStreamingMessageId: string | null;
 
@@ -154,6 +191,8 @@ export interface ChatState {
   ensureActiveConversation: () => void;
   createConversation: (title?: string) => string;
   selectConversation: (id: string) => void;
+  loadConversationMessages: (id: string, userId: string) => Promise<void>;
+  setConversationMessages: (id: string, messages: EnhancedMessage[]) => void;
   renameConversation: (id: string, title: string) => void;
   setConversationCustomInstructions: (id: string, instructions: string) => void;
   getConversationCustomInstructions: (id?: string) => string | undefined;
@@ -180,6 +219,7 @@ export interface ChatState {
 
   // Actions - Streaming
   setIsLoading: (loading: boolean) => void;
+  setLoadingMessages: (loading: boolean) => void;
   setStreamingMessage: (id: string | null) => void;
   appendToStreamingMessage: (content: string) => void;
 
@@ -247,6 +287,7 @@ export const useChatStore = create<ChatState>()(
           messagesByConversation: {},
           messages: [],
           isLoading: false,
+          isLoadingMessages: false,
           isStreaming: false,
           currentStreamingMessageId: null,
           pendingMessages: [] as PendingUserMessage[],
@@ -324,12 +365,91 @@ export const useChatStore = create<ChatState>()(
               (state) => {
                 if (state.activeConversationId === id) return;
                 state.activeConversationId = id;
-                state.messages = state.messagesByConversation[id]?.slice() ?? [];
+                const cachedMessages = state.messagesByConversation[id];
+                // If messages are cached, use them; otherwise show loading state
+                // The caller should then call loadConversationMessages to fetch from backend
+                if (cachedMessages && cachedMessages.length > 0) {
+                  state.messages = cachedMessages.slice();
+                  state.isLoadingMessages = false;
+                } else {
+                  state.messages = [];
+                  // Set loading state - caller should fetch messages from backend
+                  state.isLoadingMessages = true;
+                }
                 state.isStreaming = false;
                 state.currentStreamingMessageId = null;
               },
               undefined,
               'chat/selectConversation',
+            ),
+
+          loadConversationMessages: async (id: string, userId: string) => {
+            // Get the database ID from the UUID mapping
+            const dbId = uuidToDbId(id);
+            if (!dbId) {
+              console.warn('[ChatStore] No database ID found for conversation:', id);
+              set(
+                (s) => {
+                  s.isLoadingMessages = false;
+                },
+                undefined,
+                'chat/loadConversationMessages/noDbId',
+              );
+              return;
+            }
+
+            set(
+              (s) => {
+                s.isLoadingMessages = true;
+              },
+              undefined,
+              'chat/loadConversationMessages/start',
+            );
+
+            try {
+              const backendMessages = await invoke<BackendMessage[]>('chat_get_messages', {
+                conversation_id: dbId,
+                user_id: userId,
+              });
+
+              const enhancedMessages = backendMessages.map(convertBackendMessage);
+
+              set(
+                (s) => {
+                  s.messagesByConversation[id] = enhancedMessages;
+                  // Only update current messages if this is still the active conversation
+                  if (s.activeConversationId === id) {
+                    s.messages = enhancedMessages;
+                  }
+                  s.isLoadingMessages = false;
+                },
+                undefined,
+                'chat/loadConversationMessages/success',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to load messages:', error);
+              set(
+                (s) => {
+                  s.isLoadingMessages = false;
+                },
+                undefined,
+                'chat/loadConversationMessages/error',
+              );
+            }
+          },
+
+          setConversationMessages: (id: string, messages: EnhancedMessage[]) =>
+            set(
+              (state) => {
+                state.messagesByConversation[id] = messages;
+                // Update current messages if this is the active conversation
+                if (state.activeConversationId === id) {
+                  state.messages = messages.slice();
+                }
+                state.isLoadingMessages = false;
+              },
+              undefined,
+              'chat/setConversationMessages',
             ),
 
           renameConversation: (id: string, title: string) =>
@@ -817,6 +937,15 @@ export const useChatStore = create<ChatState>()(
               'chat/setIsLoading',
             ),
 
+          setLoadingMessages: (loading) =>
+            set(
+              (state) => {
+                state.isLoadingMessages = loading;
+              },
+              undefined,
+              'chat/setLoadingMessages',
+            ),
+
           setStreamingMessage: (id) =>
             set(
               (state) => {
@@ -1232,6 +1361,7 @@ export const useChatStore = create<ChatState>()(
                 state.messagesByConversation = {};
                 state.messages = [];
                 state.isLoading = false;
+                state.isLoadingMessages = false;
                 state.isStreaming = false;
                 state.currentStreamingMessageId = null;
                 state.pendingMessages = [];
@@ -1294,6 +1424,7 @@ export const selectConversations = (state: ChatState) => state.conversations;
 export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
 export const selectMessages = (state: ChatState) => state.messages;
 export const selectIsLoading = (state: ChatState) => state.isLoading;
+export const selectIsLoadingMessages = (state: ChatState) => state.isLoadingMessages;
 export const selectIsStreaming = (state: ChatState) => state.isStreaming;
 export const selectCurrentStreamingMessageId = (state: ChatState) =>
   state.currentStreamingMessageId;

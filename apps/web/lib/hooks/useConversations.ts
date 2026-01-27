@@ -48,6 +48,9 @@ export function useConversations(): UseConversationsReturn {
   const updateConversationInStore = useChatStore((state) => state.updateConversation);
   const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
+  const setActiveConversationWithMessages = useChatStore(
+    (state) => state.setActiveConversationWithMessages,
+  );
   const setMessages = useChatStore((state) => state.setMessages);
   const setLoading = useChatStore((state) => state.setLoading);
   const setError = useChatStore((state) => state.setError);
@@ -167,16 +170,15 @@ export function useConversations(): UseConversationsReturn {
           model: m.model,
         }));
 
-        // Only set active conversation after successful load
-        setActiveConversation(id);
-        setMessages(messages);
+        // Atomically set active conversation and messages to avoid race conditions
+        setActiveConversationWithMessages(id, messages);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load conversation');
       } finally {
         setLoading(false);
       }
     },
-    [getAuthHeaders, setActiveConversation, setMessages, setLoading, setError],
+    [getAuthHeaders, setActiveConversationWithMessages, setLoading, setError],
   );
 
   // Update a conversation - returns true on success
