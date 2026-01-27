@@ -502,8 +502,8 @@ fn parse_time_from_captures_offset(
                 hour + 12
             }
         }
-        None => hour,        // Assume 24-hour format
-        Some(_) => hour,     // Unknown am/pm indicator, assume 24-hour format
+        None => hour,    // Assume 24-hour format
+        Some(_) => hour, // Unknown am/pm indicator, assume 24-hour format
     };
 
     if hour >= 24 {
@@ -1076,8 +1076,8 @@ mod tests {
         // The next_execution method uses the cron::Schedule which may fail for 5-field expressions
         // This test verifies the current behavior
         let schedule = ParsedSchedule::Cron("0 * * * *".to_string()); // 5-field: every hour at minute 0
-        // 5-field cron may not be supported by the cron crate, so next_execution might return None
-        // This is acceptable behavior - the scheduler implementation handles this appropriately
+                                                                      // 5-field cron may not be supported by the cron crate, so next_execution might return None
+                                                                      // This is acceptable behavior - the scheduler implementation handles this appropriately
         let _next = schedule.next_execution(); // May be Some or None depending on cron crate version
     }
 
