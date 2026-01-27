@@ -28,7 +28,5 @@ pub struct OcrResult {
 
 #[cfg(not(feature = "ocr"))]
 pub async fn perform_ocr(_path: &str) -> anyhow::Result<OcrResult> {
-    Err(anyhow!(
-        "OCR support not compiled (enable the 'ocr' feature to use automation_ocr)"
-    ))
+    Err(anyhow!("Text recognition is not available in this version"))
 }
