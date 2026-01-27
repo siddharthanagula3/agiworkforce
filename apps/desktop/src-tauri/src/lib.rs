@@ -11,15 +11,16 @@ use crate::data::settings::SettingsService;
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::{
     ai_native::{CodeGeneratorState, ContextManagerState},
+    gmail_oauth::GmailOAuthState,
     load_persisted_calendar_accounts,
     security::AuthManagerState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
     GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState, MemoryState,
-    NativeMessagingStateWrapper, ProductivityState, SettingsServiceState, SettingsState,
-    ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
-    WorkspaceIndexState,
+    NativeMessagingStateWrapper, NotificationState, ProductivityState, SchedulerState,
+    SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState,
+    VoiceState, WorkflowEngineState, WorkspaceIndexState,
 };
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
@@ -233,6 +234,31 @@ pub fn run() {
             }
             app.manage(calendar_state);
 
+            // Gmail OAuth state for handling Gmail OAuth 2.0 flows
+            let gmail_oauth_state = GmailOAuthState::new();
+            match Connection::open(&db_path) {
+                Ok(gmail_conn) => {
+                    match crate::sys::commands::gmail_oauth::load_persisted_gmail_accounts(&gmail_conn) {
+                        Ok(accounts) => {
+                            let mut restored = 0usize;
+                            for (account_id, info, _) in accounts {
+                                gmail_oauth_state
+                                    .manager
+                                    .upsert_account(account_id, info, None);
+                                restored += 1;
+                            }
+                            tracing::info!("Gmail OAuth manager restored {restored} account(s)");
+                        }
+                        Err(err) => {
+                            tracing::warn!("Failed to load Gmail accounts: {err}");
+                        }
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!("Failed to open database for Gmail restore: {err}");
+                }
+            }
+            app.manage(gmail_oauth_state);
 
             let session_manager = crate::features::terminal::SessionManager::new(app.handle().clone());
             app.manage(session_manager.clone());
@@ -287,6 +313,14 @@ pub fn run() {
 
             // Undo manager state for reversing AGI actions
             app.manage(UndoState::new());
+
+            // Notification state for scheduled notifications
+            app.manage(NotificationState::new());
+
+            // Scheduler state for proactive task scheduling
+            let scheduler_state = SchedulerState::new();
+            app.manage(scheduler_state);
+            tracing::info!("Scheduler initialized");
 
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
@@ -599,6 +633,13 @@ pub fn run() {
             crate::sys::commands::contact_import_vcard,
             crate::sys::commands::contact_export_vcard,
 
+            // Gmail OAuth
+            crate::sys::commands::gmail_oauth_start,
+            crate::sys::commands::gmail_oauth_complete,
+            crate::sys::commands::gmail_oauth_refresh,
+            crate::sys::commands::gmail_oauth_list_accounts,
+            crate::sys::commands::gmail_oauth_disconnect,
+            crate::sys::commands::gmail_oauth_get_account,
 
             crate::sys::commands::calendar_connect,
             crate::sys::commands::calendar_complete_oauth,
@@ -1159,6 +1200,28 @@ pub fn run() {
             crate::sys::commands::shortcuts_register_global,
             crate::sys::commands::shortcuts_unregister_global,
 
+            // Notifications
+            crate::sys::commands::notification_check_permission,
+            crate::sys::commands::notification_request_permission,
+            crate::sys::commands::notification_show,
+            crate::sys::commands::notification_show_with_actions,
+            crate::sys::commands::notification_schedule,
+            crate::sys::commands::notification_schedule_reminder,
+            crate::sys::commands::notification_cancel,
+            crate::sys::commands::notification_cancel_all,
+            crate::sys::commands::notification_get_scheduled,
+            crate::sys::commands::notification_get,
+            crate::sys::commands::notification_update,
+            crate::sys::commands::notification_register_actions,
+
+            // Scheduler (proactive task scheduling with cron expressions)
+            crate::sys::commands::scheduler_add_job,
+            crate::sys::commands::scheduler_remove_job,
+            crate::sys::commands::scheduler_list_jobs,
+            crate::sys::commands::scheduler_pause_job,
+            crate::sys::commands::scheduler_resume_job,
+            crate::sys::commands::scheduler_get_job,
+            crate::sys::commands::scheduler_get_next_runs,
 
             crate::sys::commands::workspace_index,
             crate::sys::commands::workspace_search_symbols,

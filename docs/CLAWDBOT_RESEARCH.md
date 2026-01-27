@@ -515,12 +515,14 @@ The calendar integration is complete with:
 
 | Task                              | File                                          | Status |
 | --------------------------------- | --------------------------------------------- | ------ |
-| Create ProactiveScheduler         | `src/core/scheduler/mod.rs`                   | TODO   |
-| Add cron job storage              | `src/data/db/migrations.rs`                   | TODO   |
-| Natural language schedule parsing | `src/core/scheduler/parser.rs`                | TODO   |
+| Create ProactiveScheduler         | `src/core/scheduler/mod.rs`                   | DONE   |
+| Add cron job storage              | `src/data/db/migrations.rs`                   | DONE   |
+| Natural language schedule parsing | `src/core/scheduler/nlp_parser.rs`            | DONE   |
+| Desktop notifications             | `src/sys/commands/notifications.rs`           | DONE   |
+| Scheduler Tauri commands          | `src/sys/commands/scheduler.rs`               | DONE   |
+| Register scheduler AGI tools      | `src/core/agi/tools.rs`                       | DONE   |
 | Gmail OAuth 2.0 flow              | `src/features/communications/oauth.rs`        | TODO   |
 | Gmail Pub/Sub integration         | `src/features/communications/gmail_pubsub.rs` | TODO   |
-| Desktop notifications             | `src/sys/commands/notifications.rs`           | TODO   |
 
 ### Phase 3: Calendar & Cleanup (Weeks 5-6)
 
@@ -540,25 +542,314 @@ The calendar integration is complete with:
 
 ---
 
+## Implementation Summary
+
+> **Implementation Date:** January 27, 2026
+
+### New Files Created
+
+**Memory System:**
+
+- `apps/desktop/src-tauri/src/core/agi/memory_manager.rs` - Core memory manager with SQLite persistence
+- `apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs` - Unit tests for memory system
+- `apps/desktop/src-tauri/src/sys/commands/memory.rs` - Tauri commands for frontend access
+
+**Scheduler System:**
+
+- `apps/desktop/src-tauri/src/core/scheduler/mod.rs` - Scheduler module entry point
+- `apps/desktop/src-tauri/src/core/scheduler/types.rs` - ScheduledJob, JobSchedule, JobAction types
+- `apps/desktop/src-tauri/src/core/scheduler/error.rs` - Scheduler error types
+- `apps/desktop/src-tauri/src/core/scheduler/proactive.rs` - ProactiveScheduler with tokio-cron-scheduler
+- `apps/desktop/src-tauri/src/core/scheduler/nlp_parser.rs` - Natural language schedule parsing
+- `apps/desktop/src-tauri/src/core/scheduler/briefing.rs` - Daily briefing generation
+- `apps/desktop/src-tauri/src/sys/commands/scheduler.rs` - Tauri commands for scheduling
+
+**Notifications:**
+
+- `apps/desktop/src-tauri/src/sys/commands/notifications.rs` - Desktop notification commands
+
+### Files Modified
+
+- `apps/desktop/src-tauri/src/data/db/migrations.rs` - Added `user_memory`, `daily_logs`, `scheduled_jobs` tables
+- `apps/desktop/src-tauri/src/core/agi/tools.rs` - Registered memory and scheduler AGI tools
+- `apps/desktop/src-tauri/src/lib.rs` - Registered new Tauri commands and state managers
+
+### New Tauri Commands
+
+**Memory Commands:**
+
+- `memory_remember` - Store or update a memory (upsert by category+topic)
+- `memory_recall` - Retrieve a specific memory by category and topic
+- `memory_search` - Search memories by keyword
+- `memory_get_by_category` - Get all memories in a category
+- `memory_get_important` - Get high-importance memories (>= threshold)
+- `memory_forget` - Delete a memory by ID
+- `memory_forget_topic` - Delete a memory by category+topic
+- `memory_log_context` - Append to today's daily log
+- `memory_get_daily_logs` - Get logs for a specific date
+- `memory_get_session_context` - Get combined context for AGI initialization
+- `memory_export_all` - Export all memories for backup
+- `memory_cleanup_logs` - Delete old daily logs
+
+**Scheduler Commands:**
+
+- `scheduler_add_job` - Add a new scheduled job (cron or interval)
+- `scheduler_remove_job` - Remove a job by ID
+- `scheduler_list_jobs` - List all scheduled jobs
+- `scheduler_pause_job` - Pause a scheduled job
+- `scheduler_resume_job` - Resume a paused job
+- `scheduler_get_job` - Get a specific job by ID
+- `scheduler_get_next_runs` - Get upcoming scheduled runs
+
+**Notification Commands:**
+
+- `notification_show` - Show an immediate notification
+- `notification_show_with_actions` - Show notification with action buttons
+- `notification_schedule` - Schedule a notification for a future time
+- `notification_schedule_reminder` - Schedule a reminder notification
+- `notification_cancel` - Cancel a scheduled notification
+- `notification_cancel_all` - Cancel all scheduled notifications
+- `notification_get_scheduled` - Get all pending notifications
+- `notification_get` - Get a specific notification
+- `notification_update` - Update a scheduled notification
+- `notification_check_permission` - Check notification permission
+- `notification_request_permission` - Request notification permission
+- `notification_register_actions` - Register action types for interactive notifications
+
+### New AGI Tools
+
+**Memory Tools:**
+
+- `memory_remember` - Store information in long-term memory
+- `memory_recall` - Retrieve a specific memory by category and topic
+- `memory_search` - Search through all memories by keyword
+- `memory_forget` - Remove a memory by category and topic
+
+**Scheduler Tools:**
+
+- `schedule_reminder` - Set a one-time reminder
+- `schedule_recurring_task` - Create recurring tasks (daily briefings, etc.)
+- `cancel_scheduled_task` - Cancel a scheduled task
+- `list_scheduled_tasks` - Show all scheduled tasks
+
+### Database Migrations Added
+
+**user_memory table:**
+
+```sql
+CREATE TABLE IF NOT EXISTS user_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL CHECK(category IN ('Preference', 'Fact', 'Decision', 'Context')),
+    topic TEXT NOT NULL,
+    content TEXT NOT NULL,
+    importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+    source TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(category, topic)
+);
+```
+
+**daily_logs table:**
+
+```sql
+CREATE TABLE IF NOT EXISTS daily_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_date TEXT NOT NULL,
+    timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    entry_type TEXT NOT NULL DEFAULT 'context' CHECK(entry_type IN ('context', 'action', 'note', 'milestone')),
+    content TEXT NOT NULL,
+    metadata TEXT
+);
+```
+
+**scheduled_jobs table:**
+
+```sql
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    schedule_type TEXT NOT NULL CHECK(schedule_type IN ('cron', 'interval', 'once')),
+    cron_expression TEXT,
+    interval_seconds INTEGER,
+    run_at TEXT,
+    timezone TEXT DEFAULT 'UTC',
+    action_type TEXT NOT NULL CHECK(action_type IN ('briefing', 'reminder', 'agent_task', 'custom')),
+    action_data TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_run TEXT,
+    next_run TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## Usage Examples
+
+### Memory System (Chat Examples)
+
+The memory system allows the AGI to remember information across sessions. Users interact naturally:
+
+**Storing Preferences:**
+
+```
+User: "I prefer dark mode in all my apps"
+AGI: [Uses memory_remember with category=Preference, topic="ui_theme", content="Prefers dark mode in all apps"]
+AGI: "Got it! I'll remember that you prefer dark mode."
+```
+
+**Storing Facts:**
+
+```
+User: "My project deadline is February 15th"
+AGI: [Uses memory_remember with category=Fact, topic="project_deadline", content="February 15th", importance=8]
+AGI: "Noted! I've saved your project deadline as February 15th."
+```
+
+**Recalling Information:**
+
+```
+User: "What's my project deadline?"
+AGI: [Uses memory_recall with category=Fact, topic="project_deadline"]
+AGI: "Your project deadline is February 15th."
+```
+
+**Searching Memories:**
+
+```
+User: "What do you know about my preferences?"
+AGI: [Uses memory_search with query="preference" or memory_get_by_category with category=Preference]
+AGI: "Here's what I remember about your preferences:
+- You prefer dark mode in all apps
+- You like tabs over spaces
+- You prefer TypeScript over JavaScript"
+```
+
+**Forgetting Information:**
+
+```
+User: "Forget about my old project deadline"
+AGI: [Uses memory_forget with category=Fact, topic="project_deadline"]
+AGI: "Done! I've removed the project deadline from my memory."
+```
+
+### Scheduler (Chat Examples)
+
+The scheduler enables proactive automation through natural language:
+
+**One-time Reminders:**
+
+```
+User: "Remind me in 2 hours to call mom"
+AGI: [Uses schedule_reminder with message="Call mom", time="in 2 hours"]
+AGI: "I've set a reminder for 2 hours from now to call mom."
+```
+
+**Tomorrow Reminders:**
+
+```
+User: "Remind me tomorrow at 9am about the meeting"
+AGI: [Uses schedule_reminder with message="Meeting reminder", time="tomorrow at 9am"]
+AGI: "You'll get a reminder tomorrow at 9 AM about the meeting."
+```
+
+**Recurring Tasks:**
+
+```
+User: "Every morning at 8am, summarize my calendar and emails"
+AGI: [Uses schedule_recurring_task with:
+     schedule="every day at 8am",
+     action_type="briefing",
+     config={include_calendar: true, include_email: true}]
+AGI: "I've set up a daily morning briefing at 8 AM. I'll summarize your calendar and emails each morning."
+```
+
+**Weekly Reports:**
+
+```
+User: "Every Friday at 5pm, remind me to submit my timesheet"
+AGI: [Uses schedule_recurring_task with:
+     schedule="every friday at 5pm",
+     action_type="reminder",
+     message="Submit your timesheet"]
+AGI: "Done! Every Friday at 5 PM I'll remind you to submit your timesheet."
+```
+
+**Listing Scheduled Tasks:**
+
+```
+User: "What tasks do I have scheduled?"
+AGI: [Uses list_scheduled_tasks]
+AGI: "You have 3 scheduled tasks:
+1. Daily morning briefing - Every day at 8:00 AM
+2. Timesheet reminder - Every Friday at 5:00 PM
+3. Call mom - Today at 3:30 PM (one-time)"
+```
+
+**Canceling Tasks:**
+
+```
+User: "Cancel my morning briefing"
+AGI: [Uses cancel_scheduled_task with task_id from list]
+AGI: "I've cancelled your daily morning briefing."
+```
+
+### Reminders (Chat Examples)
+
+Reminders use desktop notifications for timely alerts:
+
+**Natural Language Patterns Supported:**
+
+- "in 5 minutes", "in 2 hours", "in 3 days"
+- "at 3pm", "at 15:00", "tomorrow at 9am"
+- "next Monday", "this Friday at 2pm"
+- "every morning", "every evening", "every weekday"
+- "every day at 8am", "every Monday at 9am"
+- "weekly on Friday at 5pm"
+
+**Immediate Notification:**
+
+```
+User: "Notify me that the build is complete"
+AGI: [Uses notification_show with title="Build Complete", body="Your build has finished"]
+AGI: "Done! You should see the notification now."
+```
+
+**Future Notification:**
+
+```
+User: "In 30 minutes, remind me to take a break"
+AGI: [Uses notification_schedule with title="Break Time", body="Time to take a break!", at=now+30min]
+AGI: "I'll remind you to take a break in 30 minutes."
+```
+
+---
+
 ## File-by-File Implementation Guide
 
 ### 1. Memory Manager
 
-**File:** `apps/desktop/src-tauri/src/core/agent/memory_manager.rs`
+**File:** `apps/desktop/src-tauri/src/core/agi/memory_manager.rs`
+
+> **Note:** The actual implementation uses `rusqlite` (synchronous) instead of `sqlx` (async) for simplicity and to avoid async mutex complexity in Tauri state management.
 
 ```rust
-//! Persistent memory system for AGI Workforce
-//! Based on Clawdbot's two-layer memory architecture
+//! Persistent Memory Manager for AGI Workforce
+//!
+//! Based on Clawdbot's two-layer memory architecture:
+//! 1. Long-term memory: Curated facts, preferences, decisions (user_memory table)
+//! 2. Daily logs: Append-only context logs (daily_logs table)
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::Utc;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
-use std::path::PathBuf;
-use tokio::fs;
+use std::sync::Mutex;
 
-/// Memory categories for organization
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "TEXT")]
+/// Categories for organizing memories
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum MemoryCategory {
     Preference,
     Fact,
@@ -574,165 +865,156 @@ pub struct MemoryEntry {
     pub topic: String,
     pub content: String,
     pub importance: i32,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub source: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Types of daily log entries
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogEntryType {
+    Context,
+    Action,
+    Note,
+    Milestone,
 }
 
 /// Manages persistent memory across sessions
 pub struct MemoryManager {
-    db_pool: SqlitePool,
-    memory_dir: PathBuf,
+    conn: Mutex<Connection>,
 }
 
 impl MemoryManager {
-    pub async fn new(db_pool: SqlitePool, memory_dir: PathBuf) -> Result<Self, anyhow::Error> {
-        // Ensure memory directory exists
-        fs::create_dir_all(&memory_dir).await?;
-
-        Ok(Self { db_pool, memory_dir })
+    /// Create a new MemoryManager with a connection to the database
+    pub fn new(db_path: &str) -> Result<Self> {
+        let conn = Connection::open(db_path)?;
+        Ok(Self { conn: Mutex::new(conn) })
     }
 
-    /// Store or update a memory entry
-    pub async fn remember(
+    /// Store or update a memory entry (upsert by category+topic)
+    pub fn remember(
         &self,
         category: MemoryCategory,
         topic: &str,
         content: &str,
         importance: Option<i32>,
-    ) -> Result<i64, anyhow::Error> {
-        let importance = importance.unwrap_or(5);
-        let category_str = format!("{:?}", category);
+        source: Option<&str>,
+    ) -> Result<i64> {
+        let conn = self.conn.lock()?;
+        let importance = importance.unwrap_or(5).clamp(1, 10);
 
-        let result = sqlx::query!(
-            r#"
-            INSERT INTO user_memory (category, topic, content, importance, updated_at)
-            VALUES (?1, ?2, ?3, ?4, datetime('now'))
-            ON CONFLICT(category, topic) DO UPDATE SET
+        conn.execute(
+            "INSERT INTO user_memory (category, topic, content, importance, source, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
+             ON CONFLICT(category, topic) DO UPDATE SET
                 content = excluded.content,
                 importance = excluded.importance,
-                updated_at = datetime('now')
-            RETURNING id
-            "#,
-            category_str,
-            topic,
-            content,
-            importance
-        )
-        .fetch_one(&self.db_pool)
-        .await?;
+                source = excluded.source,
+                updated_at = datetime('now')",
+            params![category.as_str(), topic, content, importance, source],
+        )?;
 
-        Ok(result.id)
+        let id: i64 = conn.query_row(
+            "SELECT id FROM user_memory WHERE category = ?1 AND topic = ?2",
+            params![category.as_str(), topic],
+            |row| row.get(0),
+        )?;
+
+        Ok(id)
     }
 
-    /// Search memories by query (basic text search)
-    pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>, anyhow::Error> {
-        let search_pattern = format!("%{}%", query);
-        let limit = limit as i32;
+    /// Recall a specific memory by category and topic
+    pub fn recall(&self, category: MemoryCategory, topic: &str) -> Result<Option<MemoryEntry>> {
+        let conn = self.conn.lock()?;
+        let result = conn.query_row(
+            "SELECT id, category, topic, content, importance, source, created_at, updated_at
+             FROM user_memory WHERE category = ?1 AND topic = ?2",
+            params![category.as_str(), topic],
+            |row| Ok(map_memory_row(row)),
+        );
 
-        let entries = sqlx::query_as!(
-            MemoryEntry,
-            r#"
-            SELECT id, category, topic, content, importance, created_at, updated_at
-            FROM user_memory
-            WHERE content LIKE ?1 OR topic LIKE ?1
-            ORDER BY importance DESC, updated_at DESC
-            LIMIT ?2
-            "#,
-            search_pattern,
-            limit
-        )
-        .fetch_all(&self.db_pool)
-        .await?;
+        match result {
+            Ok(entry) => Ok(Some(entry)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Search memories by query (searches topic and content)
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryEntry>> {
+        let conn = self.conn.lock()?;
+        let search_pattern = format!("%{}%", query);
+
+        let mut stmt = conn.prepare(
+            "SELECT id, category, topic, content, importance, source, created_at, updated_at
+             FROM user_memory
+             WHERE content LIKE ?1 OR topic LIKE ?1
+             ORDER BY importance DESC, updated_at DESC
+             LIMIT ?2",
+        )?;
+
+        let entries = stmt
+            .query_map(params![search_pattern, limit as i32], |row| Ok(map_memory_row(row)))?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(entries)
     }
 
-    /// Recall a specific memory by category and topic
-    pub async fn recall(
-        &self,
-        category: MemoryCategory,
-        topic: &str,
-    ) -> Result<Option<MemoryEntry>, anyhow::Error> {
-        let category_str = format!("{:?}", category);
+    /// Append to today's daily log
+    pub fn log_context(&self, content: &str, entry_type: LogEntryType) -> Result<i64> {
+        let conn = self.conn.lock()?;
+        let today = Utc::now().format("%Y-%m-%d").to_string();
 
-        let entry = sqlx::query_as!(
-            MemoryEntry,
-            r#"
-            SELECT id, category, topic, content, importance, created_at, updated_at
-            FROM user_memory
-            WHERE category = ?1 AND topic = ?2
-            "#,
-            category_str,
-            topic
-        )
-        .fetch_optional(&self.db_pool)
-        .await?;
+        conn.execute(
+            "INSERT INTO daily_logs (log_date, entry_type, content) VALUES (?1, ?2, ?3)",
+            params![today, entry_type.as_str(), content],
+        )?;
 
-        Ok(entry)
+        Ok(conn.last_insert_rowid())
     }
 
-    /// Get recent context for session initialization
-    pub async fn get_recent_context(&self) -> Result<String, anyhow::Error> {
-        // Get today's and yesterday's daily logs
+    /// Get session context (recent logs + important memories) for AGI initialization
+    pub fn get_session_context(&self) -> Result<String> {
         let today = Utc::now().date_naive();
         let yesterday = today.pred_opt().unwrap_or(today);
 
         let mut context = String::new();
 
-        // Load daily logs
+        // Load today's and yesterday's logs
         for date in [yesterday, today] {
-            let log_path = self.memory_dir.join(format!("{}.md", date));
-            if log_path.exists() {
-                if let Ok(content) = fs::read_to_string(&log_path).await {
-                    context.push_str(&format!("\n## {} Log\n{}\n", date, content));
+            let logs = self.get_daily_logs(&date.format("%Y-%m-%d").to_string())?;
+            if !logs.is_empty() {
+                context.push_str(&format!("\n## {} Log\n", date));
+                for log in logs {
+                    context.push_str(&format!("[{}] {}\n", log.timestamp, log.content));
                 }
             }
         }
 
-        // Load high-importance memories
-        let important_memories = sqlx::query_as!(
-            MemoryEntry,
-            r#"
-            SELECT id, category, topic, content, importance, created_at, updated_at
-            FROM user_memory
-            WHERE importance >= 7
-            ORDER BY updated_at DESC
-            LIMIT 10
-            "#
-        )
-        .fetch_all(&self.db_pool)
-        .await?;
-
-        if !important_memories.is_empty() {
+        // Load important memories (importance >= 7)
+        let important = self.get_important_memories(7)?;
+        if !important.is_empty() {
             context.push_str("\n## Important Memories\n");
-            for memory in important_memories {
-                context.push_str(&format!("- **{}**: {}\n", memory.topic, memory.content));
+            for memory in important {
+                context.push_str(&format!(
+                    "- **{} ({})**: {}\n",
+                    memory.topic, memory.category.as_str(), memory.content
+                ));
             }
         }
 
         Ok(context)
     }
 
-    /// Append to today's daily log
-    pub async fn log_context(&self, entry: &str) -> Result<(), anyhow::Error> {
-        let today = Utc::now().date_naive();
-        let log_path = self.memory_dir.join(format!("{}.md", today));
-
-        let timestamp = Utc::now().format("%H:%M:%S");
-        let log_entry = format!("\n[{}] {}\n", timestamp, entry);
-
-        fs::write(&log_path, log_entry).await?;
-
-        Ok(())
-    }
-
-    /// Delete a memory entry
-    pub async fn forget(&self, id: i64) -> Result<(), anyhow::Error> {
-        sqlx::query!("DELETE FROM user_memory WHERE id = ?1", id)
-            .execute(&self.db_pool)
-            .await?;
-
-        Ok(())
+    /// Delete a memory by category and topic
+    pub fn forget_topic(&self, category: MemoryCategory, topic: &str) -> Result<bool> {
+        let conn = self.conn.lock()?;
+        let rows = conn.execute(
+            "DELETE FROM user_memory WHERE category = ?1 AND topic = ?2",
+            params![category.as_str(), topic],
+        )?;
+        Ok(rows > 0)
     }
 }
 ```
@@ -1153,6 +1435,64 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 git push -u origin feat/persistent-memory
 ```
+
+---
+
+## Remaining TODO Items
+
+> **Discovered during implementation on January 27, 2026**
+
+### High Priority
+
+| Task                      | Description                                           | Estimated Effort |
+| ------------------------- | ----------------------------------------------------- | ---------------- |
+| Frontend memory store     | Create `memoryStore.ts` with Zustand for memory UI    | 4 hours          |
+| Frontend tests            | Add integration tests for memory commands             | 4 hours          |
+| Scheduler persistence     | Persist scheduled jobs to SQLite on app close         | 4 hours          |
+| Scheduler restoration     | Load scheduled jobs from SQLite on app start          | 2 hours          |
+| Tool executor integration | Wire scheduler AGI tools to actual scheduler commands | 4 hours          |
+| Briefing template         | Implement morning briefing content generation         | 6 hours          |
+
+### Medium Priority
+
+| Task                    | Description                                      | Estimated Effort |
+| ----------------------- | ------------------------------------------------ | ---------------- |
+| Vector embeddings       | Add sqlite-vec for semantic memory search        | 8 hours          |
+| Memory importance decay | Reduce importance of old, unused memories        | 4 hours          |
+| Memory compaction       | Summarize old daily logs to long-term memory     | 6 hours          |
+| Snooze reminders        | Add "snooze" action to reminder notifications    | 4 hours          |
+| Timezone handling       | Improve timezone support in scheduler NLP parser | 4 hours          |
+| Job execution logging   | Store job execution history in SQLite            | 4 hours          |
+
+### Low Priority
+
+| Task                    | Description                                   | Estimated Effort |
+| ----------------------- | --------------------------------------------- | ---------------- |
+| Memory export formats   | Add JSON/Markdown export options              | 2 hours          |
+| Memory import           | Import memories from backup files             | 4 hours          |
+| Calendar briefings      | Include calendar events in morning briefings  | 4 hours          |
+| Email briefings         | Include email summary in morning briefings    | 6 hours          |
+| Weather briefings       | Add weather info to morning briefings         | 2 hours          |
+| Skills system           | Build plugin system on top of MCP (Phase 2)   | 3 weeks          |
+| Multi-channel messaging | WhatsApp/Telegram/Slack integration (Phase 2) | 4 weeks          |
+
+### Security (from Phase 3)
+
+| Task                 | Description                                      | Estimated Effort |
+| -------------------- | ------------------------------------------------ | ---------------- |
+| Keyring migration    | Move email credentials from SQLite to OS keyring | 4 hours          |
+| Gmail OAuth 2.0      | Replace app passwords with OAuth flow            | 1 week           |
+| Gmail Pub/Sub        | Real-time email notifications                    | 1 week           |
+| Remove panic! macros | Replace with proper error handling               | 4 hours          |
+| Form submission undo | Add undo support for web form submissions        | 1 week           |
+
+### Known Issues
+
+1. **Memory test isolation**: Unit tests need proper database cleanup between runs
+2. **Scheduler state**: In-memory scheduler state not persisted across app restarts
+3. **NLP parser edge cases**: Some natural language patterns not recognized (e.g., "in half an hour")
+4. **Notification permissions**: Need to handle macOS permission prompts gracefully
+5. **Briefing dependencies**: Briefing generator requires calendar and email services to be connected
 
 ---
 

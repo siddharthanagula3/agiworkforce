@@ -35,7 +35,7 @@ pub use audit_logger::{
 };
 pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
 pub use auth_db::{AuthAuditLog, AuthDatabaseManager};
-pub use encryption::{EncryptedSecret, SecretStore};
+pub use encryption::{decrypt_secret, encrypt_secret, EncryptedSecret, SecretStore};
 pub use machine_key::{derive_key, derive_key_base64, get_machine_id_hash, KeyPurpose};
 pub use oauth::{
     OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo,

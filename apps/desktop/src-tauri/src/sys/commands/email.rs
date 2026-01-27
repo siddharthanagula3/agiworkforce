@@ -1,10 +1,8 @@
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
 use chrono::Utc;
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager};
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::features::communications::{
     contacts::ContactManager,
@@ -14,9 +12,123 @@ use crate::features::communications::{
     Contact, Email, EmailAccount, EmailAddress, EmailFilter,
 };
 use crate::sys::error::{Error, Result};
+use crate::sys::security::{
+    encryption::{decrypt_secret, encrypt_secret, EncryptedSecret},
+    machine_key::{self, KeyPurpose},
+};
 use mailparse::parse_mail;
 
 const DEFAULT_FOLDER: &str = "INBOX";
+
+// =============================================================================
+// Secure Email Credential Storage
+// =============================================================================
+
+/// Get the encryption key for email credentials
+fn get_email_encryption_key() -> Vec<u8> {
+    machine_key::derive_key(KeyPurpose::EmailCredentials)
+}
+
+/// Store an email password securely using AES-256-GCM encryption
+///
+/// The password is encrypted with a machine-derived key and stored in the database
+/// as a JSON-serialized `EncryptedSecret` struct in the `password_encrypted` column.
+fn store_email_password(conn: &Connection, account_id: i64, password: &str) -> Result<()> {
+    let key = get_email_encryption_key();
+
+    let encrypted = encrypt_secret(&key, password)
+        .map_err(|e| Error::Generic(format!("Failed to encrypt email password: {}", e)))?;
+
+    let encrypted_json = serde_json::to_string(&encrypted)
+        .map_err(|e| Error::Generic(format!("Failed to serialize encrypted password: {}", e)))?;
+
+    conn.execute(
+        "UPDATE email_accounts SET password_encrypted = ?1 WHERE id = ?2",
+        params![encrypted_json, account_id],
+    )
+    .map_err(|e| Error::Generic(format!("Failed to store encrypted password: {}", e)))?;
+
+    debug!("Stored encrypted password for email account {}", account_id);
+    Ok(())
+}
+
+/// Retrieve and decrypt an email password
+///
+/// First attempts to decrypt the `password_encrypted` field as an `EncryptedSecret`.
+/// If that fails (legacy Base64 data), falls back to Base64 decoding and migrates
+/// the password to the new encrypted format.
+fn get_email_password(conn: &Connection, account_id: i64) -> Result<String> {
+    let encrypted_value: String = conn
+        .query_row(
+            "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+            params![account_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| Error::Database(format!("Failed to retrieve password: {}", e)))?;
+
+    // Try to parse as EncryptedSecret (new format)
+    if let Ok(encrypted) = serde_json::from_str::<EncryptedSecret>(&encrypted_value) {
+        let key = get_email_encryption_key();
+        return decrypt_secret(&key, &encrypted)
+            .map_err(|e| Error::Generic(format!("Failed to decrypt email password: {}", e)));
+    }
+
+    // Fallback: Legacy Base64 format - decode and migrate
+    debug!(
+        "Migrating legacy Base64 password for account {} to secure storage",
+        account_id
+    );
+    let password = decode_legacy_password(&encrypted_value)?;
+
+    // Migrate to new encrypted format
+    if let Err(e) = store_email_password(conn, account_id, &password) {
+        warn!(
+            "Failed to migrate password to secure storage for account {}: {}",
+            account_id, e
+        );
+        // Still return the password even if migration fails
+    } else {
+        info!(
+            "Successfully migrated password to secure storage for account {}",
+            account_id
+        );
+    }
+
+    Ok(password)
+}
+
+/// Delete the stored password for an email account
+///
+/// This is called when removing an email account to ensure credentials are cleaned up.
+fn delete_email_password(conn: &Connection, account_id: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE email_accounts SET password_encrypted = '' WHERE id = ?1",
+        params![account_id],
+    )
+    .map_err(|e| Error::Generic(format!("Failed to clear password: {}", e)))?;
+
+    debug!("Cleared password for email account {}", account_id);
+    Ok(())
+}
+
+/// Decode a legacy Base64-encoded password
+///
+/// This is kept for backward compatibility during migration from the old
+/// insecure Base64 storage to the new AES-256-GCM encrypted storage.
+fn decode_legacy_password(encoded: &str) -> Result<String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+    let bytes = BASE64
+        .decode(encoded)
+        .map_err(|e| Error::Generic(format!("Failed to decode legacy password: {}", e)))?;
+
+    String::from_utf8(bytes)
+        .map_err(|e| Error::Generic(format!("Legacy password invalid UTF-8: {}", e)))
+}
+
+// =============================================================================
+// Email Provider Configuration
+// =============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailProvider {
@@ -80,6 +192,7 @@ struct EmailAccountRecord {
     smtp_host: String,
     smtp_port: u16,
     smtp_use_tls: bool,
+    #[allow(dead_code)]
     password: String,
     created_at: i64,
     last_sync: Option<i64>,
@@ -201,6 +314,13 @@ pub async fn email_list_accounts(app_handle: AppHandle) -> Result<Vec<EmailAccou
 pub async fn email_remove_account(app_handle: AppHandle, account_id: i64) -> Result<()> {
     info!("Removing email account {}", account_id);
     let conn = open_connection(&app_handle)?;
+
+    // Clear the password before deleting the account
+    // This ensures credentials are cleaned up even if the delete fails
+    if let Err(e) = delete_email_password(&conn, account_id) {
+        warn!("Failed to clear password for account {}: {}", account_id, e);
+    }
+
     conn.execute(
         "DELETE FROM email_accounts WHERE id = ?1",
         params![account_id],
@@ -213,7 +333,7 @@ pub async fn email_remove_account(app_handle: AppHandle, account_id: i64) -> Res
 pub async fn email_list_folders(app_handle: AppHandle, account_id: i64) -> Result<Vec<String>> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, account_id)?;
 
     let mut imap = ImapClient::connect(
         &record.imap_host,
@@ -240,7 +360,7 @@ pub async fn email_fetch_inbox(
 ) -> Result<Vec<Email>> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, account_id)?;
 
     let mut imap = ImapClient::connect(
         &record.imap_host,
@@ -278,7 +398,7 @@ pub async fn email_mark_read(
 ) -> Result<()> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, account_id)?;
 
     let mut imap = ImapClient::connect(
         &record.imap_host,
@@ -299,7 +419,7 @@ pub async fn email_mark_read(
 pub async fn email_delete(app_handle: AppHandle, account_id: i64, uid: u32) -> Result<()> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, account_id)?;
 
     let mut imap = ImapClient::connect(
         &record.imap_host,
@@ -326,7 +446,7 @@ pub async fn email_download_attachment(
 ) -> Result<String> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, account_id)?;
 
     let mut imap = ImapClient::connect(
         &record.imap_host,
@@ -352,7 +472,7 @@ pub async fn email_download_attachment(
 pub async fn email_send(app_handle: AppHandle, request: SendEmailRequest) -> Result<String> {
     let conn = open_connection(&app_handle)?;
     let record = fetch_account(&conn, request.account_id)?;
-    let password = decode_password(&record.password)?;
+    let password = get_email_password(&conn, request.account_id)?;
 
     let smtp = SmtpClient::new(
         &record.smtp_host,
@@ -458,6 +578,11 @@ fn open_connection(app_handle: &AppHandle) -> Result<Connection> {
     Connection::open(db_path).map_err(|e| Error::Generic(format!("Database error: {}", e)))
 }
 
+/// Insert or update an email account in the database
+///
+/// The password is stored separately using secure AES-256-GCM encryption.
+/// We first insert/update the account metadata with an empty password placeholder,
+/// then store the password securely using `store_email_password`.
 fn upsert_email_account(
     conn: &Connection,
     provider: &EmailProvider,
@@ -466,13 +591,14 @@ fn upsert_email_account(
     display_name: Option<String>,
     password: &str,
 ) -> Result<i64> {
-    let encoded_password = BASE64.encode(password.as_bytes());
     let created_at = Utc::now().timestamp();
 
+    // Insert/update the account with an empty password placeholder
+    // The actual password will be stored securely after we have the account ID
     conn.execute(
         "INSERT INTO email_accounts (provider, email, display_name, imap_host, imap_port, imap_use_tls,
                                      smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at, last_sync)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, '', ?10, NULL)
          ON CONFLICT(email) DO UPDATE SET
             provider = excluded.provider,
             display_name = excluded.display_name,
@@ -481,8 +607,7 @@ fn upsert_email_account(
             imap_use_tls = excluded.imap_use_tls,
             smtp_host = excluded.smtp_host,
             smtp_port = excluded.smtp_port,
-            smtp_use_tls = excluded.smtp_use_tls,
-            password_encrypted = excluded.password_encrypted",
+            smtp_use_tls = excluded.smtp_use_tls",
         params![
             provider_key,
             email,
@@ -493,19 +618,21 @@ fn upsert_email_account(
             provider.smtp_host,
             provider.smtp_port,
             bool_to_int(provider.smtp_use_tls),
-            encoded_password,
             created_at
         ],
     )
     .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
-    let id = conn
+    let id: i64 = conn
         .query_row(
             "SELECT id FROM email_accounts WHERE email = ?1",
             params![email],
             |row| row.get(0),
         )
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
+
+    // Store the password securely with AES-256-GCM encryption
+    store_email_password(conn, id, password)?;
 
     Ok(id)
 }
@@ -540,14 +667,6 @@ fn map_account_row(row: &Row<'_>) -> rusqlite::Result<EmailAccountRecord> {
     })
 }
 
-fn decode_password(encoded: &str) -> Result<String> {
-    let bytes = BASE64
-        .decode(encoded)
-        .map_err(|err| Error::Generic(format!("Failed to decode stored credentials: {}", err)))?;
-    String::from_utf8(bytes)
-        .map_err(|err| Error::Generic(format!("Stored credentials invalid UTF-8: {}", err)))
-}
-
 const fn bool_to_int(value: bool) -> i64 {
     if value {
         1
@@ -563,12 +682,200 @@ const fn int_to_bool(value: i64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
+
+    fn create_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE email_accounts (
+                id INTEGER PRIMARY KEY,
+                provider TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                display_name TEXT,
+                imap_host TEXT NOT NULL,
+                imap_port INTEGER NOT NULL,
+                imap_use_tls INTEGER NOT NULL,
+                smtp_host TEXT NOT NULL,
+                smtp_port INTEGER NOT NULL,
+                smtp_use_tls INTEGER NOT NULL,
+                password_encrypted TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_sync INTEGER
+            )",
+            [],
+        )
+        .unwrap();
+        conn
+    }
 
     #[test]
-    fn password_round_trip() {
+    fn test_secure_password_storage_and_retrieval() {
+        let conn = create_test_db();
+        let original_password = "super-secret-password-123!@#";
+
+        // Insert a test account
+        conn.execute(
+            "INSERT INTO email_accounts (provider, email, imap_host, imap_port, imap_use_tls,
+                                         smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at)
+             VALUES ('gmail', 'test@example.com', 'imap.gmail.com', 993, 1,
+                     'smtp.gmail.com', 587, 1, '', 1234567890)",
+            [],
+        )
+        .unwrap();
+
+        let account_id = conn.last_insert_rowid();
+
+        // Store the password securely
+        store_email_password(&conn, account_id, original_password).unwrap();
+
+        // Verify the password is NOT stored as plain Base64
+        let stored_value: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        // The stored value should be JSON (starts with '{')
+        assert!(
+            stored_value.starts_with('{'),
+            "Password should be stored as JSON EncryptedSecret"
+        );
+
+        // Retrieve and verify the password
+        let retrieved = get_email_password(&conn, account_id).unwrap();
+        assert_eq!(original_password, retrieved);
+    }
+
+    #[test]
+    fn test_legacy_base64_migration() {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+        let conn = create_test_db();
+        let original_password = "legacy-password";
+        let legacy_base64 = BASE64.encode(original_password.as_bytes());
+
+        // Insert account with legacy Base64 password
+        conn.execute(
+            "INSERT INTO email_accounts (provider, email, imap_host, imap_port, imap_use_tls,
+                                         smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at)
+             VALUES ('gmail', 'legacy@example.com', 'imap.gmail.com', 993, 1,
+                     'smtp.gmail.com', 587, 1, ?1, 1234567890)",
+            params![legacy_base64],
+        )
+        .unwrap();
+
+        let account_id = conn.last_insert_rowid();
+
+        // Get password - should trigger migration
+        let retrieved = get_email_password(&conn, account_id).unwrap();
+        assert_eq!(original_password, retrieved);
+
+        // Verify the password was migrated to new format
+        let stored_value: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        // After migration, should be JSON format
+        assert!(
+            stored_value.starts_with('{'),
+            "Password should have been migrated to JSON EncryptedSecret"
+        );
+
+        // Verify we can still retrieve the password after migration
+        let retrieved_again = get_email_password(&conn, account_id).unwrap();
+        assert_eq!(original_password, retrieved_again);
+    }
+
+    #[test]
+    fn test_password_deletion() {
+        let conn = create_test_db();
+
+        conn.execute(
+            "INSERT INTO email_accounts (provider, email, imap_host, imap_port, imap_use_tls,
+                                         smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at)
+             VALUES ('gmail', 'delete@example.com', 'imap.gmail.com', 993, 1,
+                     'smtp.gmail.com', 587, 1, '', 1234567890)",
+            [],
+        )
+        .unwrap();
+
+        let account_id = conn.last_insert_rowid();
+
+        // Store a password
+        store_email_password(&conn, account_id, "to-be-deleted").unwrap();
+
+        // Verify it's stored
+        let stored: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!stored.is_empty());
+
+        // Delete the password
+        delete_email_password(&conn, account_id).unwrap();
+
+        // Verify it's cleared
+        let after_delete: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(after_delete.is_empty());
+    }
+
+    #[test]
+    fn test_decode_legacy_password() {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
         let original = "super-secret";
         let encoded = BASE64.encode(original.as_bytes());
-        let decoded = decode_password(&encoded).expect("Should decode");
+        let decoded = decode_legacy_password(&encoded).expect("Should decode");
         assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn test_password_with_special_characters() {
+        let conn = create_test_db();
+
+        // Test with various special characters that might cause issues
+        let passwords = [
+            "p@ssw0rd!#$%^&*()",
+            "password with spaces",
+            "unicode: \u{1F600}\u{1F389}",
+            r#"quotes "and' backslash\"#,
+            "newline\nand\ttab",
+        ];
+
+        for (i, original_password) in passwords.iter().enumerate() {
+            conn.execute(
+                "INSERT INTO email_accounts (provider, email, imap_host, imap_port, imap_use_tls,
+                                             smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at)
+                 VALUES ('gmail', ?1, 'imap.gmail.com', 993, 1,
+                         'smtp.gmail.com', 587, 1, '', 1234567890)",
+                params![format!("test{}@example.com", i)],
+            )
+            .unwrap();
+
+            let account_id = conn.last_insert_rowid();
+
+            store_email_password(&conn, account_id, original_password).unwrap();
+            let retrieved = get_email_password(&conn, account_id).unwrap();
+            assert_eq!(
+                *original_password, retrieved,
+                "Failed for password: {:?}",
+                original_password
+            );
+        }
     }
 }

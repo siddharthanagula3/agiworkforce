@@ -624,6 +624,13 @@ macro_rules! integration_command_handlers {
             $crate::sys::commands::contact_delete,
             $crate::sys::commands::contact_import_vcard,
             $crate::sys::commands::contact_export_vcard,
+            // Gmail OAuth
+            $crate::sys::commands::gmail_oauth_start,
+            $crate::sys::commands::gmail_oauth_complete,
+            $crate::sys::commands::gmail_oauth_refresh,
+            $crate::sys::commands::gmail_oauth_list_accounts,
+            $crate::sys::commands::gmail_oauth_disconnect,
+            $crate::sys::commands::gmail_oauth_get_account,
             // Calendar
             $crate::sys::commands::calendar_connect,
             $crate::sys::commands::calendar_complete_oauth,
