@@ -39,18 +39,21 @@ fn method_not_allowed_message() -> &'static str {
 
 impl Default for ManagedCloudProvider {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default ManagedCloudProvider: {}", e);
+            panic!("Failed to create default ManagedCloudProvider: {}", e);
+        })
     }
 }
 
 impl ManagedCloudProvider {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
-        Self { client }
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Ok(Self { client })
     }
 }
 

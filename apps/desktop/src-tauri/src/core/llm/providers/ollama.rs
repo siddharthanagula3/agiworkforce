@@ -51,16 +51,16 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
-    pub fn new(base_url: Option<String>) -> Self {
+    pub fn new(base_url: Option<String>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
-        Self {
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Ok(Self {
             client,
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
-        }
+        })
     }
 
     fn extract_images(multimodal: Option<&Vec<ContentPart>>) -> Option<Vec<String>> {
@@ -293,7 +293,7 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_real_ollama_connection_attempt() {
-        let provider = OllamaProvider::new(None);
+        let provider = OllamaProvider::new(None).expect("Failed to create provider");
 
         let request = LLMRequest {
             messages: vec![ChatMessage {

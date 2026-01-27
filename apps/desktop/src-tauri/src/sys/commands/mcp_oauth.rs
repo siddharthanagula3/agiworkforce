@@ -229,19 +229,22 @@ pub struct McpOAuthState {
 
 impl Default for McpOAuthState {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default McpOAuthState: {}", e);
+            panic!("Failed to create default McpOAuthState: {}", e);
+        })
     }
 }
 
 impl McpOAuthState {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
             pending_flows: Arc::new(RwLock::new(HashMap::new())),
             http_client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .expect("Failed to create HTTP client"),
-        }
+                .map_err(|e| format!("Failed to create HTTP client: {}", e))?,
+        })
     }
 
     /// Generate a random state parameter
@@ -255,7 +258,7 @@ impl McpOAuthState {
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     }
 

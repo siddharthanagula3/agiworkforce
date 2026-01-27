@@ -193,7 +193,7 @@ pub async fn gmail_oauth_complete(
     // Add to manager
     state
         .manager
-        .upsert_account(account_id.clone(), account_info.clone(), Some(client));
+        .upsert_account(account_id.clone(), account_info.clone(), Some(client))?;
 
     app.emit("gmail:connected", &account_id)
         .map_err(|e| Error::Other(format!("Failed to emit event: {}", e)))?;
@@ -221,7 +221,9 @@ pub async fn gmail_oauth_refresh(
     // Load account info from database if not in memory
     let conn = open_connection(&app)?;
     let (info, _) = fetch_gmail_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info, None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info, None)?;
 
     // Refresh the token
     let success = state.manager.refresh_account_token(&account_id).await?;
@@ -252,9 +254,12 @@ pub async fn gmail_oauth_list_accounts(
 
     // Load accounts into manager
     for (account_id, info, _) in &records {
-        state
+        if let Err(e) = state
             .manager
-            .upsert_account(account_id.clone(), info.clone(), None);
+            .upsert_account(account_id.clone(), info.clone(), None)
+        {
+            tracing::warn!("Failed to upsert Gmail account {}: {}", account_id, e);
+        }
     }
 
     let accounts = records
@@ -303,7 +308,7 @@ pub async fn gmail_oauth_get_account(
         Ok((info, created_at)) => {
             state
                 .manager
-                .upsert_account(account_id.clone(), info.clone(), None);
+                .upsert_account(account_id.clone(), info.clone(), None)?;
 
             Ok(Some(GmailAccount {
                 account_id,

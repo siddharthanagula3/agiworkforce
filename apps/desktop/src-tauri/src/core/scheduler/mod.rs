@@ -36,6 +36,7 @@ pub mod error;
 pub mod nlp_parser;
 pub mod proactive;
 pub mod types;
+pub mod weather;
 
 #[cfg(test)]
 mod tests;
@@ -54,6 +55,9 @@ pub use proactive::{ActionHandler, ProactiveScheduler};
 
 // Re-export job types
 pub use types::{
-    CallbackAction, JobAction, JobExecution, JobInterval, JobSchedule, JobState, JobSummary,
-    ScheduledJob, ScheduledJobBuilder,
+    CallbackAction, ExecutionStatus, JobAction, JobExecution, JobExecutionRecord, JobInterval,
+    JobSchedule, JobState, JobSummary, ScheduledJob, ScheduledJobBuilder,
 };
+
+// Re-export weather types
+pub use weather::{WeatherConfig, WeatherData, WeatherForecast, WeatherProvider, WeatherUnits};

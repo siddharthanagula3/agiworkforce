@@ -208,7 +208,7 @@ pub fn global_service() -> anyhow::Result<std::sync::MutexGuard<'static, Option<
 {
     let mut guard = AUTOMATION_SINGLETON
         .lock()
-        .expect("automation mutex poisoned");
+        .map_err(|e| anyhow::anyhow!("automation mutex poisoned: {}", e))?;
     if guard.is_none() {
         *guard = Some(AutomationService::new()?);
     }

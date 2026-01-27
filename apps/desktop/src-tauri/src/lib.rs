@@ -14,6 +14,7 @@ use crate::sys::commands::{
     gmail_oauth::GmailOAuthState,
     load_persisted_calendar_accounts,
     security::AuthManagerState,
+    skills::SkillsState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
@@ -217,10 +218,14 @@ pub fn run() {
                     Ok(accounts) => {
                         let mut restored = 0usize;
                         for (account_id, info, _) in accounts {
-                            calendar_state
+                            if let Err(e) = calendar_state
                                 .manager
-                                .upsert_account(account_id, info, None);
-                            restored += 1;
+                                .upsert_account(account_id, info, None)
+                            {
+                                tracing::warn!("Failed to restore calendar account: {e}");
+                            } else {
+                                restored += 1;
+                            }
                         }
                         tracing::info!("Calendar manager restored {restored} account(s)");
                     }
@@ -242,10 +247,13 @@ pub fn run() {
                         Ok(accounts) => {
                             let mut restored = 0usize;
                             for (account_id, info, _) in accounts {
-                                gmail_oauth_state
+                                if let Err(e) = gmail_oauth_state
                                     .manager
-                                    .upsert_account(account_id, info, None);
-                                restored += 1;
+                                    .upsert_account(account_id, info, None) {
+                                    tracing::warn!("Failed to restore Gmail account: {e}");
+                                } else {
+                                    restored += 1;
+                                }
                             }
                             tracing::info!("Gmail OAuth manager restored {restored} account(s)");
                         }
@@ -322,6 +330,18 @@ pub fn run() {
             app.manage(scheduler_state);
             tracing::info!("Scheduler initialized");
 
+            // Skills manager for AGI skill context
+            app.manage(SkillsState::default());
+            tracing::info!("Skills manager initialized");
+
+            // Messaging state for Discord, Telegram, Signal integrations
+            app.manage(crate::sys::commands::messaging::MessagingState::default());
+            tracing::info!("Messaging state initialized");
+
+            // Canvas state manager for visual canvas/A2UI operations
+            app.manage(crate::sys::commands::canvas::CanvasStateManager::default());
+            tracing::info!("Canvas state manager initialized");
+
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
 
@@ -370,7 +390,8 @@ pub fn run() {
 
             let template_conn = Connection::open(&db_path).context("Failed to open database for template manager")?;
             let template_db = Arc::new(Mutex::new(template_conn));
-            let template_manager = crate::sys::commands::templates::initialize_template_manager(template_db);
+            let template_manager = crate::sys::commands::templates::initialize_template_manager(template_db)
+                .map_err(|e| anyhow::anyhow!("Failed to initialize template manager: {}", e))?;
             app.manage(TemplateManagerState {
                 manager: Arc::new(Mutex::new(template_manager)),
             });
@@ -1107,6 +1128,27 @@ pub fn run() {
             crate::sys::commands::memory_get_session_context,
             crate::sys::commands::memory_export_all,
             crate::sys::commands::memory_cleanup_logs,
+            // Memory decay commands
+            crate::sys::commands::memory_run_decay,
+            crate::sys::commands::memory_get_decay_config,
+            crate::sys::commands::memory_set_decay_config,
+            crate::sys::commands::memory_get_decay_candidates,
+            crate::sys::commands::memory_boost_on_access,
+            crate::sys::commands::memory_recall_with_boost,
+            crate::sys::commands::memory_decay_single,
+            crate::sys::commands::memory_get_stats,
+            // Memory compaction commands
+            crate::sys::commands::memory_get_compaction_candidates,
+            crate::sys::commands::memory_get_logs_in_range,
+            crate::sys::commands::memory_compact_old_logs,
+            crate::sys::commands::memory_promote_extracted,
+            crate::sys::commands::memory_archive_compacted_logs,
+            crate::sys::commands::memory_get_extraction_prompt,
+            crate::sys::commands::memory_get_compaction_stats,
+            // Memory export/import commands
+            crate::sys::commands::memory_export_json,
+            crate::sys::commands::memory_export_markdown,
+            crate::sys::commands::memory_import_json,
 
             crate::sys::commands::mcp_initialize,
             crate::sys::commands::mcp_list_servers,
@@ -1199,6 +1241,52 @@ pub fn run() {
             crate::sys::commands::shortcuts_get_defaults,
             crate::sys::commands::shortcuts_register_global,
             crate::sys::commands::shortcuts_unregister_global,
+
+            // Skills
+            crate::sys::commands::skill_list,
+            crate::sys::commands::skill_get,
+            crate::sys::commands::skill_get_instructions,
+            crate::sys::commands::skill_check_requirements,
+            crate::sys::commands::skill_get_context,
+            crate::sys::commands::skill_set_workspace,
+            crate::sys::commands::skill_count,
+
+            // Messaging (Discord, Telegram, Signal)
+            crate::sys::commands::messaging::messaging_connect_discord,
+            crate::sys::commands::messaging::messaging_connect_telegram,
+            crate::sys::commands::messaging::messaging_connect_signal,
+            crate::sys::commands::messaging::messaging_send,
+            crate::sys::commands::messaging::messaging_get_status,
+            crate::sys::commands::messaging::messaging_disconnect,
+
+            // Voice (TTS, Wake Word, PTT)
+            crate::sys::commands::voice::voice_get_capabilities,
+            crate::sys::commands::voice::voice_tts_speak,
+            crate::sys::commands::voice::voice_tts_list_voices,
+            crate::sys::commands::voice::voice_tts_configure,
+            crate::sys::commands::voice::voice_wake_enable,
+            crate::sys::commands::voice::voice_wake_disable,
+            crate::sys::commands::voice::voice_wake_status,
+            crate::sys::commands::voice::voice_wake_configure,
+            crate::sys::commands::voice::voice_ptt_configure,
+            crate::sys::commands::voice::voice_ptt_state,
+            crate::sys::commands::voice::voice_ptt_key_down,
+            crate::sys::commands::voice::voice_ptt_key_up,
+
+            // Canvas (Visual Canvas / A2UI)
+            crate::sys::commands::canvas::canvas_create,
+            crate::sys::commands::canvas::canvas_get,
+            crate::sys::commands::canvas::canvas_list,
+            crate::sys::commands::canvas::canvas_destroy,
+            crate::sys::commands::canvas::canvas_set_active,
+            crate::sys::commands::canvas::canvas_get_active,
+            crate::sys::commands::canvas::canvas_add_element,
+            crate::sys::commands::canvas::canvas_remove_element,
+            crate::sys::commands::canvas::canvas_update_element,
+            crate::sys::commands::canvas::canvas_clear,
+            crate::sys::commands::canvas::canvas_export,
+            crate::sys::commands::canvas::canvas_a2ui_execute,
+            crate::sys::commands::canvas::canvas_add_text,
 
             // Notifications
             crate::sys::commands::notification_check_permission,
@@ -1546,6 +1634,17 @@ pub fn run() {
             crate::sys::commands::undo_last,
             crate::sys::commands::undo_task,
             crate::sys::commands::undo_can_undo,
+
+            // Form Undo (browser form submission reversal)
+            crate::sys::commands::undo::form_undo_record,
+            crate::sys::commands::undo::form_undo_attempt,
+            crate::sys::commands::undo::form_undo_can_undo,
+            crate::sys::commands::undo::form_undo_list,
+            crate::sys::commands::undo::form_undo_list_undoable,
+            crate::sys::commands::undo::form_undo_get,
+            crate::sys::commands::undo::form_undo_clear,
+            crate::sys::commands::undo::form_undo_clear_old,
+            crate::sys::commands::undo::form_undo_stats,
 
             // MySQL Database Commands
             crate::sys::commands::db_mysql_test_connection,

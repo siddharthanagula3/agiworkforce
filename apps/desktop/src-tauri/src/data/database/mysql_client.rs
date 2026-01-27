@@ -26,10 +26,15 @@ impl MySqlClient {
         let opts = Opts::from_url(&conn_str)
             .map_err(|e| Error::Other(format!("Failed to parse MySQL connection string: {}", e)))?;
 
-        let pool_opts =
-            PoolOpts::default().with_constraints(PoolConstraints::new(5, 100).unwrap_or_else(
-                || PoolConstraints::new(1, 10).expect("Failed to create fallback pool constraints"),
-            ));
+        let pool_opts = PoolOpts::default().with_constraints(
+            PoolConstraints::new(5, 100)
+                .or_else(|| PoolConstraints::new(1, 10))
+                .unwrap_or_else(|| {
+                    tracing::warn!("Using hardcoded pool constraints as fallback");
+                    // This is a valid constraint that should never fail
+                    PoolConstraints::new(1, 10).unwrap()
+                }),
+        );
 
         let pool = Pool::new(OptsBuilder::from_opts(opts).pool_opts(pool_opts));
 

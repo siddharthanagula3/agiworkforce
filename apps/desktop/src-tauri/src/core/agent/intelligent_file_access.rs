@@ -349,6 +349,9 @@ Provide a detailed analysis in a structured format."#
 
 impl Default for IntelligentFileAccess {
     fn default() -> Self {
-        Self::new().expect("Failed to create IntelligentFileAccess")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create IntelligentFileAccess: {}", e);
+            panic!("Failed to create IntelligentFileAccess: {}", e);
+        })
     }
 }

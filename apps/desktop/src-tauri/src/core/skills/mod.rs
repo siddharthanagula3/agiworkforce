@@ -181,7 +181,8 @@ Use this skill for Git operations.
             .requires_env_var("CUSTOM_TOKEN")
             .supported_os(vec!["darwin".to_string()])
             .source(SkillSource::Bundled)
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         assert_eq!(skill.name, "custom-skill");
         assert_eq!(skill.description, "A custom skill");
@@ -201,7 +202,8 @@ Use this skill for Git operations.
             .requires_bin("this-binary-does-not-exist-anywhere-12345")
             .requires_env_var("THIS_ENV_VAR_IS_NOT_SET_12345")
             .supported_os(vec!["nonexistent-os".to_string()])
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         let result = SkillLoader::check_requirements(&skill);
 

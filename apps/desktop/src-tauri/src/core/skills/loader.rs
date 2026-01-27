@@ -505,7 +505,8 @@ Instructions for skill two.
             .description("Needs a nonexistent binary")
             .instructions("Instructions")
             .requires_bin("nonexistent-binary-that-does-not-exist-12345")
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         let result = SkillLoader::check_requirements(&skill);
 
@@ -521,7 +522,8 @@ Instructions for skill two.
             .description("Needs an env var")
             .instructions("Instructions")
             .requires_env_var("NONEXISTENT_ENV_VAR_FOR_TESTING_12345")
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         let result = SkillLoader::check_requirements(&skill);
 
@@ -537,7 +539,8 @@ Instructions for skill two.
             .description("Wrong OS")
             .instructions("Instructions")
             .supported_os(vec!["nonexistent-os".to_string()])
-            .build();
+            .build()
+            .expect("Failed to build skill");
 
         let result = SkillLoader::check_requirements(&skill);
 

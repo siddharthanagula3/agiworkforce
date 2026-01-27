@@ -164,17 +164,15 @@ pub fn parse_schedule(input: &str) -> Result<ParsedSchedule, ParseError> {
 /// Attempts to parse a relative time expression like "in 5 minutes".
 fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
     let re = Regex::new(r"^in\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months)$")
-        .expect("Invalid regex");
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = re.captures(input) {
-        let amount: i64 = caps
-            .get(1)
-            .unwrap()
-            .as_str()
+        let amount_str = caps.get(1).map(|m| m.as_str()).unwrap_or("0");
+        let amount: i64 = amount_str
             .parse()
             .map_err(|_| ParseError::InvalidInterval("Invalid number".to_string()))?;
 
-        let unit = caps.get(2).unwrap().as_str();
+        let unit = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
         let duration = match unit {
             "second" | "seconds" => Duration::seconds(amount),
@@ -196,8 +194,8 @@ fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
 /// Attempts to parse an absolute time expression like "at 3pm" or "tomorrow at 9am".
 fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
     // Pattern: "at HH:MM" or "at Ham/pm"
-    let at_time_re =
-        Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("Invalid regex");
+    let at_time_re = Regex::new(r"^at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = at_time_re.captures(input) {
         let time = parse_time_from_captures(&caps)?;
@@ -218,8 +216,8 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     }
 
     // Pattern: "tomorrow at HH:MM"
-    let tomorrow_re =
-        Regex::new(r"^tomorrow\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("Invalid regex");
+    let tomorrow_re = Regex::new(r"^tomorrow\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = tomorrow_re.captures(input) {
         let time = parse_time_from_captures(&caps)?;
@@ -237,16 +235,16 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     let weekday_re = Regex::new(
         r"^(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
     )
-    .expect("Invalid regex");
+    .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = weekday_re.captures(input) {
-        let modifier = caps.get(1).unwrap().as_str();
-        let weekday = parse_weekday(caps.get(2).unwrap().as_str())?;
+        let modifier = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+        let weekday = parse_weekday(caps.get(2).map(|m| m.as_str()).unwrap_or(""))?;
 
         let time = if caps.get(3).is_some() {
             parse_time_from_captures_offset(&caps, 3)?
         } else {
-            NaiveTime::from_hms_opt(9, 0, 0).unwrap() // Default to 9am
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
 
         let target_date = find_next_weekday(weekday, modifier == "next");
@@ -263,10 +261,10 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
     let date_re = Regex::new(
         r"^on\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
     )
-    .expect("Invalid regex");
+    .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = date_re.captures(input) {
-        let month = parse_month(caps.get(1).unwrap().as_str())?;
+        let month = parse_month(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let day: u32 = caps
             .get(2)
             .unwrap()
@@ -277,7 +275,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
         let time = if caps.get(3).is_some() {
             parse_time_from_captures_offset(&caps, 3)?
         } else {
-            NaiveTime::from_hms_opt(9, 0, 0).unwrap() // Default to 9am
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
 
         let now = Local::now();
@@ -314,7 +312,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     let interval_re = Regex::new(
         r"^every\s+(\d+)\s+(second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$",
     )
-    .expect("Invalid regex");
+    .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = interval_re.captures(input) {
         let amount: i64 = caps
@@ -324,7 +322,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
             .parse()
             .map_err(|_| ParseError::InvalidInterval("Invalid number".to_string()))?;
 
-        let unit = caps.get(2).unwrap().as_str();
+        let unit = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
         let duration = match unit {
             "second" | "seconds" => Duration::seconds(amount),
@@ -339,11 +337,11 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     }
 
     // Pattern: "every <unit>" (singular, meaning every 1 unit)
-    let single_interval_re =
-        Regex::new(r"^every\s+(second|minute|hour|day|week)$").expect("Invalid regex");
+    let single_interval_re = Regex::new(r"^every\s+(second|minute|hour|day|week)$")
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = single_interval_re.captures(input) {
-        let unit = caps.get(1).unwrap().as_str();
+        let unit = caps.get(1).map(|m| m.as_str()).unwrap_or("");
 
         let duration = match unit {
             "second" => Duration::seconds(1),
@@ -359,7 +357,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
 
     // Pattern: "every day at HH:MM"
     let daily_at_re = Regex::new(r"^every\s+day\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
-        .expect("Invalid regex");
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = daily_at_re.captures(input) {
         let time = parse_time_from_captures(&caps)?;
@@ -370,10 +368,10 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     // Pattern: "every <weekday>"
     let weekly_day_re =
         Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$")
-            .expect("Invalid regex");
+            .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = weekly_day_re.captures(input) {
-        let weekday = parse_weekday(caps.get(1).unwrap().as_str())?;
+        let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let cron_day = weekday_to_cron(weekday);
         // Default to 9am
         let cron = format!("0 9 * * {cron_day}");
@@ -384,10 +382,10 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     let weekly_at_re = Regex::new(
         r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$",
     )
-    .expect("Invalid regex");
+    .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = weekly_at_re.captures(input) {
-        let weekday = parse_weekday(caps.get(1).unwrap().as_str())?;
+        let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let time = parse_time_from_captures_offset(&caps, 2)?;
         let cron_day = weekday_to_cron(weekday);
         let cron = format!("{} {} * * {cron_day}", time.minute(), time.hour());
@@ -398,14 +396,14 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     let weekly_on_re = Regex::new(
         r"^weekly\s+on\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$",
     )
-    .expect("Invalid regex");
+    .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = weekly_on_re.captures(input) {
-        let weekday = parse_weekday(caps.get(1).unwrap().as_str())?;
+        let weekday = parse_weekday(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let time = if caps.get(2).is_some() {
             parse_time_from_captures_offset(&caps, 2)?
         } else {
-            NaiveTime::from_hms_opt(9, 0, 0).unwrap() // Default to 9am
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
         let cron_day = weekday_to_cron(weekday);
         let cron = format!("{} {} * * {cron_day}", time.minute(), time.hour());
@@ -414,13 +412,13 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
 
     // Pattern: "daily" or "daily at HH:MM"
     let daily_re = Regex::new(r"^daily(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$")
-        .expect("Invalid regex");
+        .unwrap_or_else(|_| Regex::new("^$").unwrap());
 
     if let Some(caps) = daily_re.captures(input) {
         let time = if caps.get(1).is_some() {
             parse_time_from_captures(&caps)?
         } else {
-            NaiveTime::from_hms_opt(9, 0, 0).unwrap() // Default to 9am
+            NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
         let cron = format!("{} {} * * *", time.minute(), time.hour());
         return Ok(Some(ParsedSchedule::Cron(cron)));

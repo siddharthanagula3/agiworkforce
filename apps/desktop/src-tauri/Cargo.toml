@@ -89,7 +89,8 @@ portable-pty = "0.8"
 which = "6.0"
 
 
-# keyring removed - using machine-derived keys with SQLite storage instead
+# keyring for OS-level secure credential storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+keyring = "3"
 argon2 = "0.5"
 machine-uid = "0.3"  # For getting machine-unique identifiers
 hostname = "0.4"     # For getting machine hostname as part of key derivation salt

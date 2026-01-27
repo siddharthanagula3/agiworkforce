@@ -113,20 +113,28 @@ pub struct ConnectionGuard {
 
 impl ConnectionGuard {
     /// Get a reference to the underlying connection
+    /// Panics if the connection was already returned to the pool
     pub fn get(&self) -> &Connection {
         &self
             .conn
             .as_ref()
-            .expect("Connection already returned")
+            .unwrap_or_else(|| {
+                tracing::error!("Connection already returned to pool");
+                panic!("Connection already returned to pool");
+            })
             .conn
     }
 
     /// Get a mutable reference to the underlying connection
+    /// Panics if the connection was already returned to the pool
     pub fn get_mut(&mut self) -> &mut Connection {
         &mut self
             .conn
             .as_mut()
-            .expect("Connection already returned")
+            .unwrap_or_else(|| {
+                tracing::error!("Connection already returned to pool");
+                panic!("Connection already returned to pool");
+            })
             .conn
     }
 }

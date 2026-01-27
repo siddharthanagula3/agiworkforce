@@ -67,22 +67,22 @@ pub struct PerplexityProvider {
 }
 
 impl PerplexityProvider {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         // Perplexity API base URL
         let base_url = std::env::var("PERPLEXITY_API_BASE")
             .unwrap_or_else(|_| "https://api.perplexity.ai".to_string());
 
-        Self {
+        Ok(Self {
             api_key,
             client,
             base_url,
-        }
+        })
     }
 
     /// Calculate cost for Perplexity models (per million tokens)
