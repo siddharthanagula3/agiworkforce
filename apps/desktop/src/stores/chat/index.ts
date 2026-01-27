@@ -88,6 +88,7 @@ export {
   selectActiveConversationId,
   selectMessages,
   selectIsLoading,
+  selectIsLoadingMessages,
   selectIsStreaming,
   selectCurrentStreamingMessageId,
   selectPendingMessages,

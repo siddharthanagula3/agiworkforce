@@ -27,7 +27,9 @@ import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { useChatStore } from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
+import { supabaseAuth } from '../../services/supabaseAuth';
 import { UserProfile } from '../Layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -322,6 +324,10 @@ export function Sidebar({
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
   const getConversationStats = useUnifiedChatStore((state) => state.getConversationStats);
 
+  // Get message loading functions from the modular chat store
+  const messagesByConversation = useChatStore((state) => state.messagesByConversation);
+  const loadConversationMessages = useChatStore((state) => state.loadConversationMessages);
+
   // Get stats for active conversation - don't include getConversationStats in deps
   // as it's a stable store function that shouldn't trigger re-computation
   const stats = useMemo(() => {
@@ -475,8 +481,29 @@ export function Sidebar({
       if (isMobile && onCollapsedChange) {
         onCollapsedChange(true);
       }
+
+      // Check if messages need to be loaded from the backend
+      // selectConversation sets isLoadingMessages=true when cache is empty
+      const cachedMessages = messagesByConversation[id];
+      if (!cachedMessages || cachedMessages.length === 0) {
+        // Get user ID for the API call
+        const userId = supabaseAuth.getUser()?.id;
+        if (userId) {
+          // Load messages from backend asynchronously
+          loadConversationMessages(id, userId).catch((error) => {
+            console.error('[Sidebar] Failed to load conversation messages:', error);
+          });
+        }
+      }
     },
-    [selectConversation, setActiveView, isMobile, onCollapsedChange],
+    [
+      selectConversation,
+      setActiveView,
+      isMobile,
+      onCollapsedChange,
+      messagesByConversation,
+      loadConversationMessages,
+    ],
   );
 
   const handleRename = useCallback(
@@ -600,7 +627,7 @@ export function Sidebar({
         showArchived={showArchived}
         editingId={editingId}
         editingTitle={editingTitle}
-        onSelect={selectConversation}
+        onSelect={handleSelectConversation}
         onStartEdit={startEditing}
         onEditTitleChange={setEditingTitle}
         onRename={handleRename}
@@ -619,7 +646,7 @@ export function Sidebar({
       showArchived,
       editingId,
       editingTitle,
-      selectConversation,
+      handleSelectConversation,
       startEditing,
       handleRename,
       handleCancelEdit,
