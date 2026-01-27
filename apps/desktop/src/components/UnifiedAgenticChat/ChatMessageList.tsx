@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
-import { Search, Download, Trash2, Brain } from 'lucide-react';
+import { Search, Download, Trash2, Brain, Loader2 } from 'lucide-react';
 
 export interface ChatMessageListProps {
   className?: string;
@@ -17,6 +17,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onMessageRegenerate,
 }) => {
   const messages = useUnifiedChatStore((state) => state.messages);
+  const isLoadingMessages = useUnifiedChatStore((state) => state.isLoadingMessages);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const exportConversation = useUnifiedChatStore((state) => state.exportConversation);
   const clearHistory = useUnifiedChatStore((state) => state.clearHistory);
@@ -105,6 +106,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     [onMessageRegenerate],
   );
 
+  // Show loading indicator while messages are being loaded
+  if (isLoadingMessages) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full text-center ${className}`}>
+        <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
+        <p className="text-gray-600 dark:text-gray-400">Loading messages...</p>
+      </div>
+    );
+  }
+
+  // Only show empty/welcome state if not loading AND messages are empty
   if (filteredMessages.length === 0 && !searchQuery) {
     return (
       <div className={`flex flex-col items-center justify-center h-full text-center ${className}`}>

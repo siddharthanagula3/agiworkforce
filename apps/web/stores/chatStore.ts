@@ -95,6 +95,7 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
+  setActiveConversationWithMessages: (id: string, messages: Message[]) => void;
 
   // Actions - Messages
   setMessages: (messages: Message[]) => void;
@@ -188,6 +189,13 @@ export const useChatStore = create<ChatState>()(
             },
             undefined,
             'chat/setActiveConversation',
+          ),
+
+        setActiveConversationWithMessages: (id, messages) =>
+          set(
+            { activeConversationId: id, messages, error: null },
+            undefined,
+            'chat/setActiveConversationWithMessages',
           ),
 
         // Messages
