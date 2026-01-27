@@ -7,6 +7,7 @@ pub mod executor;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
+pub mod memory_manager;
 pub mod orchestrator;
 #[allow(dead_code)]
 pub mod orchestrator_examples;
@@ -30,6 +31,7 @@ pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
 pub use memory::AGIMemory;
+pub use memory_manager::{DailyLogEntry, LogEntryType, MemoryCategory, MemoryEntry, MemoryManager};
 pub use orchestrator::{
     AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,
     ResourceLock, UiGuard,
