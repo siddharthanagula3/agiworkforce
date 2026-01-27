@@ -134,7 +134,7 @@ export const UsageDashboard: React.FC = () => {
         {}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           {subscription?.plan_name && (
-            <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+            <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Current Plan</h3>
               <p className="text-2xl font-bold mt-2 text-primary capitalize">
                 {subscription.plan_name}
@@ -150,7 +150,7 @@ export const UsageDashboard: React.FC = () => {
             <>
               {/* Daily Credits Card */}
               {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
-                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     Daily Credits
                   </h3>
@@ -197,7 +197,7 @@ export const UsageDashboard: React.FC = () => {
 
               {/* Monthly Credits Card */}
               {credits.allocated_cents && credits.allocated_cents > 0 && (
-                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     Monthly Credits
                   </h3>
@@ -225,7 +225,7 @@ export const UsageDashboard: React.FC = () => {
             </>
           )}
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Usage</h3>
             {monthlyLimit > 0 ? (
               <>
@@ -255,7 +255,7 @@ export const UsageDashboard: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">LLM Tokens</h3>
             <p className="text-2xl font-bold mt-2 text-blue-500">
               {billingUsageStats?.llm_tokens_used.toLocaleString() ?? '0'}
@@ -263,7 +263,7 @@ export const UsageDashboard: React.FC = () => {
             <p className="text-xs text-gray-400 mt-1">Total tokens processing</p>
           </div>
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Automations Run
             </h3>

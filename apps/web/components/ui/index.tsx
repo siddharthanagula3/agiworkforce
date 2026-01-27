@@ -1,38 +1,46 @@
 import * as React from 'react';
 import { cn } from '../../utils/cn';
 
+// React 19: ref is now a regular prop - forwardRef is deprecated
+// https://react.dev/blog/2024/12/05/react-19#ref-as-a-prop
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', ...props }, ref) => {
-    return (
-      <button
-        ref={ref}
-        className={cn(
-          'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
-          variant === 'primary' && 'bg-white text-black hover:bg-zinc-200',
-          variant === 'outline' &&
-            'border border-zinc-800 bg-transparent hover:bg-zinc-900 text-white',
-          variant === 'ghost' && 'hover:bg-zinc-900 text-zinc-400 hover:text-white',
-          size === 'sm' && 'h-9 px-3 text-xs',
-          size === 'md' && 'h-10 px-4 py-2',
-          size === 'lg' && 'h-12 px-8 text-lg',
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
-Button.displayName = 'Button';
+export function Button({
+  className,
+  variant = 'primary',
+  size = 'md',
+  ref,
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      ref={ref}
+      className={cn(
+        'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
+        variant === 'primary' && 'bg-white text-black hover:bg-zinc-200',
+        variant === 'outline' &&
+          'border border-zinc-800 bg-transparent hover:bg-zinc-900 text-white',
+        variant === 'ghost' && 'hover:bg-zinc-900 text-zinc-400 hover:text-white',
+        size === 'sm' && 'h-9 px-3 text-xs',
+        size === 'md' && 'h-10 px-4 py-2',
+        size === 'lg' && 'h-12 px-8 text-lg',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-export const Input = React.forwardRef<
-  HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(({ className, type, ...props }, ref) => {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  ref?: React.Ref<HTMLInputElement>;
+}
+
+export function Input({ className, type, ref, ...props }: InputProps) {
   return (
     <input
       type={type}
@@ -44,7 +52,6 @@ export const Input = React.forwardRef<
       {...props}
     />
   );
-});
-Input.displayName = 'Input';
+}
 
 export * from './card';

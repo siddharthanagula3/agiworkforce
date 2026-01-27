@@ -18,7 +18,8 @@ test.describe('Visual Regression Tests', () => {
       await page.waitForLoadState('networkidle');
     }
 
-    await page.waitForTimeout(500);
+    // Wait for page content to stabilize before screenshot
+    await page.waitForLoadState('domcontentloaded');
     const currentPath = await screenshotHelper.captureFullPage('chat-interface');
 
     try {
@@ -37,7 +38,8 @@ test.describe('Visual Regression Tests', () => {
 
   test('should match AGI interface baseline', async ({ page, screenshotHelper, agiPage }) => {
     await agiPage.navigateToAGI();
-    await page.waitForTimeout(500);
+    // Wait for AGI interface content to be ready
+    await page.waitForLoadState('domcontentloaded');
     const currentPath = await screenshotHelper.captureFullPage('agi-interface');
 
     try {
@@ -59,7 +61,8 @@ test.describe('Visual Regression Tests', () => {
     automationPage,
   }) => {
     await automationPage.navigateToAutomation();
-    await page.waitForTimeout(500);
+    // Wait for automation interface content to be ready
+    await page.waitForLoadState('domcontentloaded');
     const currentPath = await screenshotHelper.captureFullPage('automation-interface');
 
     try {
@@ -81,7 +84,8 @@ test.describe('Visual Regression Tests', () => {
     settingsPage,
   }) => {
     await settingsPage.navigateToSettings();
-    await page.waitForTimeout(500);
+    // Wait for settings interface content to be ready
+    await page.waitForLoadState('domcontentloaded');
     const currentPath = await screenshotHelper.captureFullPage('settings-interface');
 
     try {
@@ -102,7 +106,10 @@ test.describe('Visual Regression Tests', () => {
 
     if (await settingsPage.themeSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
       await settingsPage.changeTheme('light');
-      await page.waitForTimeout(500);
+      // Wait for theme transition to complete by checking for theme class/attribute
+      await expect(page.locator('body, html, [data-theme]').first())
+        .toHaveAttribute('class', /light|theme/, { timeout: 2000 })
+        .catch(() => {});
     }
 
     const currentPath = await screenshotHelper.captureFullPage('theme-light');
@@ -125,7 +132,10 @@ test.describe('Visual Regression Tests', () => {
 
     if (await settingsPage.themeSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
       await settingsPage.changeTheme('dark');
-      await page.waitForTimeout(500);
+      // Wait for theme transition to complete by checking for theme class/attribute
+      await expect(page.locator('body, html, [data-theme]').first())
+        .toHaveAttribute('class', /dark|theme/, { timeout: 2000 })
+        .catch(() => {});
     }
 
     const currentPath = await screenshotHelper.captureFullPage('theme-dark');
@@ -148,9 +158,10 @@ test.describe('Visual Regression Tests', () => {
 
     if (await chatPage.newChatButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await chatPage.newChatButton.click();
-      await page.waitForTimeout(500);
 
       const modal = page.locator('[role="dialog"], .modal').first();
+      // Wait for modal to appear before checking visibility
+      await modal.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
       if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
         const currentPath = await screenshotHelper.captureElement(
           '[role="dialog"], .modal',
@@ -192,7 +203,8 @@ test.describe('Visual Regression Tests', () => {
     }
 
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.waitForTimeout(500);
+    // Wait for layout to stabilize after viewport resize
+    await page.waitForLoadState('domcontentloaded');
     currentPath = await screenshotHelper.captureViewport('layout-tablet-768x1024');
     try {
       const comparison = await screenshotHelper.compareVisual(
@@ -209,7 +221,8 @@ test.describe('Visual Regression Tests', () => {
     }
 
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.waitForTimeout(500);
+    // Wait for layout to stabilize after viewport resize
+    await page.waitForLoadState('domcontentloaded');
     currentPath = await screenshotHelper.captureViewport('layout-mobile-375x667');
     try {
       const comparison = await screenshotHelper.compareVisual('layout-mobile-375x667', currentPath);
@@ -230,7 +243,9 @@ test.describe('Visual Regression Tests', () => {
 
     if (await chatPage.chatInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await chatPage.sendMessage('trigger error test');
-      await page.waitForTimeout(2000);
+      // Wait for error state to appear in the UI
+      const errorIndicator = page.locator('[role="alert"], .error, [data-error]').first();
+      await errorIndicator.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
 
       const currentPath = await screenshotHelper.captureFullPage('error-state');
 
@@ -253,7 +268,11 @@ test.describe('Visual Regression Tests', () => {
     if (await agiPage.goalInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await agiPage.submitGoal('Test loading state');
 
-      await page.waitForTimeout(500);
+      // Wait for loading indicator to appear
+      const loadingIndicator = page
+        .locator('[data-loading], .loading, .spinner, [aria-busy="true"]')
+        .first();
+      await loadingIndicator.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
       const currentPath = await screenshotHelper.captureFullPage('loading-state');
 
       try {

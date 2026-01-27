@@ -443,7 +443,7 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
               className={cn(
                 'w-full rounded-md border px-3 py-2 text-left transition-colors',
                 account.id === selectedAccountId
-                  ? 'border-primary/80 bg-primary/10 text-foreground shadow-sm'
+                  ? 'border-primary/80 bg-primary/10 text-foreground shadow-xs'
                   : 'border-transparent hover:border-border hover:bg-muted/50',
               )}
             >

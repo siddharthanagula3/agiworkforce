@@ -13,7 +13,7 @@ import { z } from 'zod';
  *
  * SECURITY: Strict UUID format prevents path traversal and injection attacks.
  */
-export const UuidParamSchema = z.string().uuid('Invalid UUID format');
+export const UuidParamSchema = z.uuid();
 
 /**
  * Device ID parameter validation (non-UUID format used by some clients).

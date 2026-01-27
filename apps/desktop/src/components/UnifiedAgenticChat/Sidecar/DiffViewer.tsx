@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, Copy, FileCode, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../../lib/utils';
+import { defaultEditorOptions, getMonacoTheme } from '../../../lib/monaco-config';
+import { useThemeContext } from '../../../providers/ThemeProvider';
 
 interface DiffViewerProps {
   contextId?: string;
@@ -18,6 +20,7 @@ interface DiffData {
 }
 
 export function DiffViewer({ contextId, className }: DiffViewerProps) {
+  const { theme } = useThemeContext();
   const [diffData, setDiffData] = useState<DiffData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +29,8 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
     additions: number;
     deletions: number;
   } | null>(null);
+
+  const monacoTheme = getMonacoTheme(theme);
 
   useEffect(() => {
     const loadDiff = async () => {
@@ -184,13 +189,11 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
           original={diffData.originalContent}
           modified={diffData.modifiedContent}
           language={diffData.language}
-          theme="vs-dark"
+          theme={monacoTheme}
           options={{
+            ...defaultEditorOptions,
             renderSideBySide: true,
             readOnly: true,
-            fontSize: 14,
-            minimap: { enabled: true },
-            scrollBeyondLastLine: false,
             wordWrap: 'on',
             automaticLayout: true,
           }}

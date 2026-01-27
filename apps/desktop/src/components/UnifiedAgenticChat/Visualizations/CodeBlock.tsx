@@ -112,7 +112,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       className={`code-block relative rounded-lg overflow-hidden border border-gray-700 ${className}`}
     >
       {}
-      <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-sm px-3 py-2 text-sm border-b border-gray-700">
+      <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-xs px-3 py-2 text-sm border-b border-gray-700">
         <div className="flex items-center gap-2">
           {/* Language badge with color indicator */}
           <div

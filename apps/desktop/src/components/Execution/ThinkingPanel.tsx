@@ -1,6 +1,9 @@
+import 'katex/dist/katex.min.css';
 import { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { Check, Clock, Loader2, XCircle, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
@@ -194,7 +197,9 @@ function StepCard({ step, isLast, isExpanded, onToggleExpand }: StepCardProps) {
       {isExpanded && hasReasoning && (
         <div className="ml-9 mt-2 rounded-lg border border-border bg-card p-3">
           <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{step.llmReasoning || ''}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {step.llmReasoning || ''}
+            </ReactMarkdown>
           </div>
         </div>
       )}

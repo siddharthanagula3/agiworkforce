@@ -127,7 +127,7 @@ export function FloatingBriefStatus({ status, className }: FloatingBriefStatusPr
           'fixed top-4 left-1/2 -translate-x-1/2 z-50',
           'flex items-center gap-2 px-4 py-2 rounded-full',
           'text-sm font-medium',
-          'bg-zinc-900/95 backdrop-blur-sm',
+          'bg-zinc-900/95 backdrop-blur-xs',
           'border border-white/10',
           'shadow-lg',
           status.isError

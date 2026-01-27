@@ -106,7 +106,7 @@ export default function Home() {
           <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
             <div className="container relative mx-auto px-4 text-center">
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 mb-8 backdrop-blur-sm">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 mb-8 backdrop-blur-xs">
                 <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse" />
                 Now in Public Beta - Free to Start
               </div>
@@ -285,7 +285,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex-1">
-                  <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm">
+                  <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xs">
                     <div className="absolute inset-0 bg-blue-500/10 blur-3xl -z-10" />
                     <div className="space-y-4 font-mono text-sm text-zinc-400">
                       <div className="flex items-center gap-2 text-green-400">

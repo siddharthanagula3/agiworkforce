@@ -40,7 +40,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
   const content = (
     <div
       className={cn(
-        'rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm transition hover:border-primary/60',
+        'rounded-xl border border-border/60 bg-background/80 p-3 shadow-xs transition hover:border-primary/60',
         'backdrop-blur supports-[backdrop-filter]:bg-background/60',
       )}
     >

@@ -269,74 +269,94 @@ export const useChatStore = create<ChatState>()(
 
           // Conversation management
           ensureActiveConversation: () =>
-            set((state) => {
-              if (state.activeConversationId) {
-                const existing = state.messagesByConversation[state.activeConversationId];
-                if (existing && state.messages.length === 0) {
-                  state.messages = existing.slice();
+            set(
+              (state) => {
+                if (state.activeConversationId) {
+                  const existing = state.messagesByConversation[state.activeConversationId];
+                  if (existing && state.messages.length === 0) {
+                    state.messages = existing.slice();
+                  }
+                  return;
                 }
-                return;
-              }
-              const id = crypto.randomUUID();
-              const created: ConversationSummary = {
-                id,
-                title: 'New chat',
-                pinned: false,
-                lastMessage: '',
-                updatedAt: new Date(),
-              };
-              state.conversations.unshift(created);
-              state.activeConversationId = id;
-              state.messagesByConversation[id] = [];
-              state.messages = [];
-            }),
+                const id = crypto.randomUUID();
+                const created: ConversationSummary = {
+                  id,
+                  title: 'New chat',
+                  pinned: false,
+                  lastMessage: '',
+                  updatedAt: new Date(),
+                };
+                state.conversations.unshift(created);
+                state.activeConversationId = id;
+                state.messagesByConversation[id] = [];
+                state.messages = [];
+              },
+              undefined,
+              'chat/ensureActiveConversation',
+            ),
 
           createConversation: (title = 'New chat') => {
             const id = crypto.randomUUID();
-            set((state) => {
-              const convo: ConversationSummary = {
-                id,
-                title,
-                pinned: false,
-                lastMessage: '',
-                updatedAt: new Date(),
-              };
-              state.conversations.unshift(convo);
-              state.activeConversationId = id;
-              state.messagesByConversation[id] = [];
-              state.messages = [];
-              state.isStreaming = false;
-              state.currentStreamingMessageId = null;
-            });
+            set(
+              (state) => {
+                const convo: ConversationSummary = {
+                  id,
+                  title,
+                  pinned: false,
+                  lastMessage: '',
+                  updatedAt: new Date(),
+                };
+                state.conversations.unshift(convo);
+                state.activeConversationId = id;
+                state.messagesByConversation[id] = [];
+                state.messages = [];
+                state.isStreaming = false;
+                state.currentStreamingMessageId = null;
+              },
+              undefined,
+              'chat/createConversation',
+            );
             return id;
           },
 
           selectConversation: (id: string) =>
-            set((state) => {
-              if (state.activeConversationId === id) return;
-              state.activeConversationId = id;
-              state.messages = state.messagesByConversation[id]?.slice() ?? [];
-              state.isStreaming = false;
-              state.currentStreamingMessageId = null;
-            }),
+            set(
+              (state) => {
+                if (state.activeConversationId === id) return;
+                state.activeConversationId = id;
+                state.messages = state.messagesByConversation[id]?.slice() ?? [];
+                state.isStreaming = false;
+                state.currentStreamingMessageId = null;
+              },
+              undefined,
+              'chat/selectConversation',
+            ),
 
           renameConversation: (id: string, title: string) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === id);
-              if (convo) {
-                convo.title = title.trim() || convo.title;
-                convo.updatedAt = new Date();
-              }
-            }),
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === id);
+                if (convo) {
+                  convo.title = title.trim() || convo.title;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/renameConversation',
+            ),
 
           setConversationCustomInstructions: (id: string, instructions: string) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === id);
-              if (convo) {
-                convo.customInstructions = instructions;
-                convo.updatedAt = new Date();
-              }
-            }),
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === id);
+                if (convo) {
+                  convo.customInstructions = instructions;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/setConversationCustomInstructions',
+            ),
 
           getConversationCustomInstructions: (id?: string) => {
             const state = get();
@@ -347,48 +367,64 @@ export const useChatStore = create<ChatState>()(
           },
 
           deleteConversation: (id: string) =>
-            set((state) => {
-              state.conversations = state.conversations.filter((c) => c.id !== id);
-              delete state.messagesByConversation[id];
-              if (state.activeConversationId === id) {
-                const next = state.conversations[0];
-                state.activeConversationId = next ? next.id : null;
-                state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
-              }
-            }),
-
-          togglePinnedConversation: (id: string) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === id);
-              if (convo) {
-                convo.pinned = !convo.pinned;
-                convo.updatedAt = new Date();
-              }
-            }),
-
-          archiveConversation: (id: string) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === id);
-              if (convo) {
-                convo.archived = true;
-                convo.pinned = false;
-                convo.updatedAt = new Date();
+            set(
+              (state) => {
+                state.conversations = state.conversations.filter((c) => c.id !== id);
+                delete state.messagesByConversation[id];
                 if (state.activeConversationId === id) {
-                  const next = state.conversations.find((c) => c.id !== id && !c.archived);
+                  const next = state.conversations[0];
                   state.activeConversationId = next ? next.id : null;
                   state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/deleteConversation',
+            ),
+
+          togglePinnedConversation: (id: string) =>
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === id);
+                if (convo) {
+                  convo.pinned = !convo.pinned;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/togglePinnedConversation',
+            ),
+
+          archiveConversation: (id: string) =>
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === id);
+                if (convo) {
+                  convo.archived = true;
+                  convo.pinned = false;
+                  convo.updatedAt = new Date();
+                  if (state.activeConversationId === id) {
+                    const next = state.conversations.find((c) => c.id !== id && !c.archived);
+                    state.activeConversationId = next ? next.id : null;
+                    state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
+                  }
+                }
+              },
+              undefined,
+              'chat/archiveConversation',
+            ),
 
           restoreConversation: (id: string) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === id);
-              if (convo) {
-                convo.archived = false;
-                convo.updatedAt = new Date();
-              }
-            }),
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === id);
+                if (convo) {
+                  convo.archived = false;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/restoreConversation',
+            ),
 
           getArchivedConversations: () => {
             const state = get();
@@ -401,13 +437,17 @@ export const useChatStore = create<ChatState>()(
           },
 
           setConversationProject: (conversationId: string, projectId: string | null) =>
-            set((state) => {
-              const convo = state.conversations.find((c) => c.id === conversationId);
-              if (convo) {
-                convo.projectId = projectId || undefined;
-                convo.updatedAt = new Date();
-              }
-            }),
+            set(
+              (state) => {
+                const convo = state.conversations.find((c) => c.id === conversationId);
+                if (convo) {
+                  convo.projectId = projectId || undefined;
+                  convo.updatedAt = new Date();
+                }
+              },
+              undefined,
+              'chat/setConversationProject',
+            ),
 
           exportConversationToMarkdown: (id?: string) => {
             const state = get();
@@ -459,270 +499,306 @@ export const useChatStore = create<ChatState>()(
           // Message management
           addMessage: (message) => {
             const assignedId = message.id ?? crypto.randomUUID();
-            set((state) => {
-              if (!state.activeConversationId) {
-                const id = crypto.randomUUID();
-                const convo: ConversationSummary = {
-                  id,
-                  title: 'New chat',
-                  pinned: false,
-                  lastMessage: '',
-                  updatedAt: new Date(),
-                };
-                state.conversations.unshift(convo);
-                state.activeConversationId = id;
-                state.messagesByConversation[id] = [];
-              }
-              const convoId = state.activeConversationId as string;
-              const newMessage: EnhancedMessage = {
-                ...message,
-                id: assignedId,
-                timestamp: new Date(),
-              };
-              state.messages.push(newMessage);
-              if (!state.messagesByConversation[convoId]) {
-                state.messagesByConversation[convoId] = [];
-              }
-              state.messagesByConversation[convoId]!.push(newMessage);
-              const convo = state.conversations.find((c) => c.id === convoId);
-              if (convo) {
-                convo.lastMessage = newMessage.content;
-                convo.updatedAt = newMessage.timestamp;
-
-                if (
-                  convo.title === 'New chat' &&
-                  newMessage.role === 'user' &&
-                  newMessage.content
-                ) {
-                  const generatedTitle = generateTitleFromMessage(newMessage.content);
-                  convo.title = generatedTitle;
+            set(
+              (state) => {
+                if (!state.activeConversationId) {
+                  const id = crypto.randomUUID();
+                  const convo: ConversationSummary = {
+                    id,
+                    title: 'New chat',
+                    pinned: false,
+                    lastMessage: '',
+                    updatedAt: new Date(),
+                  };
+                  state.conversations.unshift(convo);
+                  state.activeConversationId = id;
+                  state.messagesByConversation[id] = [];
                 }
-              }
-            });
+                const convoId = state.activeConversationId as string;
+                const newMessage: EnhancedMessage = {
+                  ...message,
+                  id: assignedId,
+                  timestamp: new Date(),
+                };
+                state.messages.push(newMessage);
+                if (!state.messagesByConversation[convoId]) {
+                  state.messagesByConversation[convoId] = [];
+                }
+                state.messagesByConversation[convoId]!.push(newMessage);
+                const convo = state.conversations.find((c) => c.id === convoId);
+                if (convo) {
+                  convo.lastMessage = newMessage.content;
+                  convo.updatedAt = newMessage.timestamp;
+
+                  if (
+                    convo.title === 'New chat' &&
+                    newMessage.role === 'user' &&
+                    newMessage.content
+                  ) {
+                    const generatedTitle = generateTitleFromMessage(newMessage.content);
+                    convo.title = generatedTitle;
+                  }
+                }
+              },
+              undefined,
+              'chat/addMessage',
+            );
             return assignedId;
           },
 
           addOptimisticMessage: (message) => {
             const tempId = crypto.randomUUID();
-            set((state) => {
-              if (!state.activeConversationId) {
-                const id = crypto.randomUUID();
-                const convo: ConversationSummary = {
-                  id,
-                  title: 'New chat',
-                  pinned: false,
-                  lastMessage: '',
-                  updatedAt: new Date(),
+            set(
+              (state) => {
+                if (!state.activeConversationId) {
+                  const id = crypto.randomUUID();
+                  const convo: ConversationSummary = {
+                    id,
+                    title: 'New chat',
+                    pinned: false,
+                    lastMessage: '',
+                    updatedAt: new Date(),
+                  };
+                  state.conversations.unshift(convo);
+                  state.activeConversationId = id;
+                  state.messagesByConversation[id] = [];
+                }
+                const convoId = state.activeConversationId as string;
+                const optimisticMessage: EnhancedMessage = {
+                  ...message,
+                  id: tempId,
+                  timestamp: new Date(),
+                  pending: true,
                 };
-                state.conversations.unshift(convo);
-                state.activeConversationId = id;
-                state.messagesByConversation[id] = [];
-              }
-              const convoId = state.activeConversationId as string;
-              const optimisticMessage: EnhancedMessage = {
-                ...message,
-                id: tempId,
-                timestamp: new Date(),
-                pending: true,
-              };
-              state.messages.push(optimisticMessage);
-              if (!state.messagesByConversation[convoId]) {
-                state.messagesByConversation[convoId] = [];
-              }
-              state.messagesByConversation[convoId]!.push(optimisticMessage);
-              const convo = state.conversations.find((c) => c.id === convoId);
-              if (convo) {
-                convo.lastMessage = optimisticMessage.content;
-                convo.updatedAt = optimisticMessage.timestamp;
-              }
-            });
+                state.messages.push(optimisticMessage);
+                if (!state.messagesByConversation[convoId]) {
+                  state.messagesByConversation[convoId] = [];
+                }
+                state.messagesByConversation[convoId]!.push(optimisticMessage);
+                const convo = state.conversations.find((c) => c.id === convoId);
+                if (convo) {
+                  convo.lastMessage = optimisticMessage.content;
+                  convo.updatedAt = optimisticMessage.timestamp;
+                }
+              },
+              undefined,
+              'chat/addOptimisticMessage',
+            );
             return tempId;
           },
 
           confirmOptimisticMessage: (tempId, confirmedId) =>
-            set((state) => {
-              const convoId = state.activeConversationId;
-              const applyConfirmation = (list: EnhancedMessage[]) => {
-                const idx = list.findIndex((m) => m.id === tempId);
-                if (idx !== -1 && list[idx]) {
-                  delete list[idx]!.pending;
-                  delete list[idx]!.error;
-                  if (confirmedId) {
-                    list[idx]!.id = confirmedId;
+            set(
+              (state) => {
+                const convoId = state.activeConversationId;
+                const applyConfirmation = (list: EnhancedMessage[]) => {
+                  const idx = list.findIndex((m) => m.id === tempId);
+                  if (idx !== -1 && list[idx]) {
+                    delete list[idx]!.pending;
+                    delete list[idx]!.error;
+                    if (confirmedId) {
+                      list[idx]!.id = confirmedId;
+                    }
                   }
-                }
-              };
-              applyConfirmation(state.messages);
+                };
+                applyConfirmation(state.messages);
 
-              if (
-                convoId &&
-                convoId === state.activeConversationId &&
-                state.messagesByConversation[convoId]
-              ) {
-                applyConfirmation(state.messagesByConversation[convoId]!);
-              }
-            }),
+                if (
+                  convoId &&
+                  convoId === state.activeConversationId &&
+                  state.messagesByConversation[convoId]
+                ) {
+                  applyConfirmation(state.messagesByConversation[convoId]!);
+                }
+              },
+              undefined,
+              'chat/confirmOptimisticMessage',
+            ),
 
           failOptimisticMessage: (tempId, error) =>
-            set((state) => {
-              const applyFailure = (list: EnhancedMessage[]) => {
-                const idx = list.findIndex((m) => m.id === tempId);
-                if (idx !== -1 && list[idx]) {
-                  delete list[idx]!.pending;
-                  list[idx]!.error = error;
+            set(
+              (state) => {
+                const applyFailure = (list: EnhancedMessage[]) => {
+                  const idx = list.findIndex((m) => m.id === tempId);
+                  if (idx !== -1 && list[idx]) {
+                    delete list[idx]!.pending;
+                    list[idx]!.error = error;
+                  }
+                };
+                applyFailure(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyFailure(state.messagesByConversation[convoId]!);
                 }
-              };
-              applyFailure(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyFailure(state.messagesByConversation[convoId]!);
-              }
-            }),
+              },
+              undefined,
+              'chat/failOptimisticMessage',
+            ),
 
           retryFailedMessage: (id) =>
-            set((state) => {
-              const applyRetry = (list: EnhancedMessage[]) => {
-                const idx = list.findIndex((m) => m.id === id);
-                if (idx !== -1 && list[idx]) {
-                  delete list[idx]!.error;
-                  list[idx]!.pending = true;
+            set(
+              (state) => {
+                const applyRetry = (list: EnhancedMessage[]) => {
+                  const idx = list.findIndex((m) => m.id === id);
+                  if (idx !== -1 && list[idx]) {
+                    delete list[idx]!.error;
+                    list[idx]!.pending = true;
+                  }
+                };
+                applyRetry(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyRetry(state.messagesByConversation[convoId]!);
                 }
-              };
-              applyRetry(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyRetry(state.messagesByConversation[convoId]!);
-              }
-            }),
+              },
+              undefined,
+              'chat/retryFailedMessage',
+            ),
 
           updateMessage: (id, updates) =>
-            set((state) => {
-              const applyUpdate = (list: EnhancedMessage[]) => {
-                const idx = list.findIndex((m) => m.id === id);
-                if (idx !== -1 && list[idx]) {
-                  const message = list[idx]!;
-                  const mergedUpdates =
-                    updates.metadata && message.metadata
-                      ? {
-                          ...updates,
-                          metadata: { ...message.metadata, ...updates.metadata },
-                        }
-                      : updates;
-                  Object.assign(message, mergedUpdates);
-                  return true;
+            set(
+              (state) => {
+                const applyUpdate = (list: EnhancedMessage[]) => {
+                  const idx = list.findIndex((m) => m.id === id);
+                  if (idx !== -1 && list[idx]) {
+                    const message = list[idx]!;
+                    const mergedUpdates =
+                      updates.metadata && message.metadata
+                        ? {
+                            ...updates,
+                            metadata: { ...message.metadata, ...updates.metadata },
+                          }
+                        : updates;
+                    Object.assign(message, mergedUpdates);
+                    return true;
+                  }
+                  return false;
+                };
+
+                const updatedInMessages = applyUpdate(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyUpdate(state.messagesByConversation[convoId]!);
                 }
-                return false;
-              };
 
-              const updatedInMessages = applyUpdate(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyUpdate(state.messagesByConversation[convoId]!);
-              }
-
-              if (!updatedInMessages || !convoId) {
-                for (const [convId, messages] of Object.entries(state.messagesByConversation)) {
-                  if (messages && applyUpdate(messages)) {
-                    if (convId === state.activeConversationId) {
-                      const msgIdx = messages.findIndex((m) => m.id === id);
-                      if (msgIdx !== -1) {
-                        const existingMsgIdx = state.messages.findIndex((m) => m.id === id);
-                        if (existingMsgIdx !== -1) {
-                          state.messages[existingMsgIdx] = messages[msgIdx]!;
+                if (!updatedInMessages || !convoId) {
+                  for (const [convId, messages] of Object.entries(state.messagesByConversation)) {
+                    if (messages && applyUpdate(messages)) {
+                      if (convId === state.activeConversationId) {
+                        const msgIdx = messages.findIndex((m) => m.id === id);
+                        if (msgIdx !== -1) {
+                          const existingMsgIdx = state.messages.findIndex((m) => m.id === id);
+                          if (existingMsgIdx !== -1) {
+                            state.messages[existingMsgIdx] = messages[msgIdx]!;
+                          }
                         }
                       }
+                      break;
                     }
-                    break;
                   }
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/updateMessage',
+            ),
 
           deleteMessage: (id) =>
-            set((state) => {
-              state.messages = state.messages.filter((m) => m.id !== id);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                state.messagesByConversation[convoId] = state.messagesByConversation[
-                  convoId
-                ]!.filter((m) => m.id !== id);
-              }
-            }),
+            set(
+              (state) => {
+                state.messages = state.messages.filter((m) => m.id !== id);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  state.messagesByConversation[convoId] = state.messagesByConversation[
+                    convoId
+                  ]!.filter((m) => m.id !== id);
+                }
+              },
+              undefined,
+              'chat/deleteMessage',
+            ),
 
           editMessage: (messageId, newContent) =>
-            set((state) => {
-              const applyEdit = (messages: EnhancedMessage[]) => {
-                const msg = messages.find((m) => m.id === messageId);
-                if (msg && msg.role === 'user') {
-                  if (!msg.metadata?.originalContent) {
-                    msg.metadata = {
-                      ...msg.metadata,
-                      originalContent: msg.content,
-                    };
-                  }
-                  msg.content = newContent;
-                  msg.metadata = {
-                    ...msg.metadata,
-                    edited: true,
-                    editedAt: new Date(),
-                  };
-                }
-              };
-
-              applyEdit(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyEdit(state.messagesByConversation[convoId]!);
-              }
-            }),
-
-          editAndRegenerateFromMessage: (messageId, newContent) =>
-            set((state) => {
-              const messageIndex = state.messages.findIndex((m) => m.id === messageId);
-              if (messageIndex === -1) return;
-
-              const msg = state.messages[messageIndex];
-              if (!msg || msg.role !== 'user') return;
-
-              if (!msg.metadata?.originalContent) {
-                msg.metadata = {
-                  ...msg.metadata,
-                  originalContent: msg.content,
-                };
-              }
-              msg.content = newContent;
-              msg.metadata = {
-                ...msg.metadata,
-                edited: true,
-                editedAt: new Date(),
-              };
-
-              state.messages = state.messages.slice(0, messageIndex + 1);
-
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                const convoMsgs = state.messagesByConversation[convoId]!;
-                const convoMsgIndex = convoMsgs.findIndex((m) => m.id === messageId);
-                if (convoMsgIndex !== -1) {
-                  const convoMsg = convoMsgs[convoMsgIndex];
-                  if (convoMsg) {
-                    if (!convoMsg.metadata?.originalContent) {
-                      convoMsg.metadata = {
-                        ...convoMsg.metadata,
-                        originalContent: convoMsg.content,
+            set(
+              (state) => {
+                const applyEdit = (messages: EnhancedMessage[]) => {
+                  const msg = messages.find((m) => m.id === messageId);
+                  if (msg && msg.role === 'user') {
+                    if (!msg.metadata?.originalContent) {
+                      msg.metadata = {
+                        ...msg.metadata,
+                        originalContent: msg.content,
                       };
                     }
-                    convoMsg.content = newContent;
-                    convoMsg.metadata = {
-                      ...convoMsg.metadata,
+                    msg.content = newContent;
+                    msg.metadata = {
+                      ...msg.metadata,
                       edited: true,
                       editedAt: new Date(),
                     };
                   }
-                  state.messagesByConversation[convoId] = convoMsgs.slice(0, convoMsgIndex + 1);
+                };
+
+                applyEdit(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyEdit(state.messagesByConversation[convoId]!);
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/editMessage',
+            ),
+
+          editAndRegenerateFromMessage: (messageId, newContent) =>
+            set(
+              (state) => {
+                const messageIndex = state.messages.findIndex((m) => m.id === messageId);
+                if (messageIndex === -1) return;
+
+                const msg = state.messages[messageIndex];
+                if (!msg || msg.role !== 'user') return;
+
+                if (!msg.metadata?.originalContent) {
+                  msg.metadata = {
+                    ...msg.metadata,
+                    originalContent: msg.content,
+                  };
+                }
+                msg.content = newContent;
+                msg.metadata = {
+                  ...msg.metadata,
+                  edited: true,
+                  editedAt: new Date(),
+                };
+
+                state.messages = state.messages.slice(0, messageIndex + 1);
+
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  const convoMsgs = state.messagesByConversation[convoId]!;
+                  const convoMsgIndex = convoMsgs.findIndex((m) => m.id === messageId);
+                  if (convoMsgIndex !== -1) {
+                    const convoMsg = convoMsgs[convoMsgIndex];
+                    if (convoMsg) {
+                      if (!convoMsg.metadata?.originalContent) {
+                        convoMsg.metadata = {
+                          ...convoMsg.metadata,
+                          originalContent: convoMsg.content,
+                        };
+                      }
+                      convoMsg.content = newContent;
+                      convoMsg.metadata = {
+                        ...convoMsg.metadata,
+                        edited: true,
+                        editedAt: new Date(),
+                      };
+                    }
+                    state.messagesByConversation[convoId] = convoMsgs.slice(0, convoMsgIndex + 1);
+                  }
+                }
+              },
+              undefined,
+              'chat/editAndRegenerateFromMessage',
+            ),
 
           getMessagesAfter: (messageId) => {
             const state = get();
@@ -733,125 +809,165 @@ export const useChatStore = create<ChatState>()(
 
           // Streaming
           setIsLoading: (loading) =>
-            set((state) => {
-              state.isLoading = loading;
-            }),
+            set(
+              (state) => {
+                state.isLoading = loading;
+              },
+              undefined,
+              'chat/setIsLoading',
+            ),
 
           setStreamingMessage: (id) =>
-            set((state) => {
-              state.currentStreamingMessageId = id;
-              state.isStreaming = id !== null;
-            }),
+            set(
+              (state) => {
+                state.currentStreamingMessageId = id;
+                state.isStreaming = id !== null;
+              },
+              undefined,
+              'chat/setStreamingMessage',
+            ),
 
           appendToStreamingMessage: (content) =>
-            set((state) => {
-              const { currentStreamingMessageId, activeConversationId } = state;
-              if (currentStreamingMessageId) {
-                const messageInMessages = state.messages.find(
-                  (m) => m.id === currentStreamingMessageId,
-                );
-                if (messageInMessages) {
-                  messageInMessages.content += content;
-                }
-
-                if (activeConversationId && state.messagesByConversation[activeConversationId]) {
-                  const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
+            set(
+              (state) => {
+                const { currentStreamingMessageId, activeConversationId } = state;
+                if (currentStreamingMessageId) {
+                  const messageInMessages = state.messages.find(
                     (m) => m.id === currentStreamingMessageId,
                   );
-                  if (messageInConvo) {
-                    messageInConvo.content += content;
+                  if (messageInMessages) {
+                    messageInMessages.content += content;
+                  }
+
+                  if (activeConversationId && state.messagesByConversation[activeConversationId]) {
+                    const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
+                      (m) => m.id === currentStreamingMessageId,
+                    );
+                    if (messageInConvo) {
+                      messageInConvo.content += content;
+                    }
                   }
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/appendToStreamingMessage',
+            ),
 
           // Inline panels
           addInlinePanel: (messageId, panel) =>
-            set((state) => {
-              const applyPanelAdd = (list: EnhancedMessage[]) => {
-                const idx = list.findIndex((m) => m.id === messageId);
-                if (idx !== -1 && list[idx]) {
-                  if (!list[idx]!.inlinePanels) {
-                    list[idx]!.inlinePanels = [];
+            set(
+              (state) => {
+                const applyPanelAdd = (list: EnhancedMessage[]) => {
+                  const idx = list.findIndex((m) => m.id === messageId);
+                  if (idx !== -1 && list[idx]) {
+                    if (!list[idx]!.inlinePanels) {
+                      list[idx]!.inlinePanels = [];
+                    }
+                    list[idx]!.inlinePanels!.push(panel);
                   }
-                  list[idx]!.inlinePanels!.push(panel);
+                };
+                applyPanelAdd(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyPanelAdd(state.messagesByConversation[convoId]!);
                 }
-              };
-              applyPanelAdd(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyPanelAdd(state.messagesByConversation[convoId]!);
-              }
-            }),
+              },
+              undefined,
+              'chat/addInlinePanel',
+            ),
 
           updateInlinePanel: (messageId, panelId, content) =>
-            set((state) => {
-              const applyPanelUpdate = (list: EnhancedMessage[]) => {
-                const msgIdx = list.findIndex((m) => m.id === messageId);
-                if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
-                  const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
-                  if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
-                    list[msgIdx]!.inlinePanels![panelIdx]!.content = {
-                      ...list[msgIdx]!.inlinePanels![panelIdx]!.content,
-                      ...content,
-                    };
+            set(
+              (state) => {
+                const applyPanelUpdate = (list: EnhancedMessage[]) => {
+                  const msgIdx = list.findIndex((m) => m.id === messageId);
+                  if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
+                    const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
+                    if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
+                      list[msgIdx]!.inlinePanels![panelIdx]!.content = {
+                        ...list[msgIdx]!.inlinePanels![panelIdx]!.content,
+                        ...content,
+                      };
+                    }
                   }
+                };
+                applyPanelUpdate(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyPanelUpdate(state.messagesByConversation[convoId]!);
                 }
-              };
-              applyPanelUpdate(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyPanelUpdate(state.messagesByConversation[convoId]!);
-              }
-            }),
+              },
+              undefined,
+              'chat/updateInlinePanel',
+            ),
 
           toggleInlinePanelCollapse: (messageId, panelId) =>
-            set((state) => {
-              const applyToggleCollapse = (list: EnhancedMessage[]) => {
-                const msgIdx = list.findIndex((m) => m.id === messageId);
-                if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
-                  const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
-                  if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
-                    list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed =
-                      !list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed;
+            set(
+              (state) => {
+                const applyToggleCollapse = (list: EnhancedMessage[]) => {
+                  const msgIdx = list.findIndex((m) => m.id === messageId);
+                  if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
+                    const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
+                    if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
+                      list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed =
+                        !list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed;
+                    }
                   }
+                };
+                applyToggleCollapse(state.messages);
+                const convoId = state.activeConversationId;
+                if (convoId && state.messagesByConversation[convoId]) {
+                  applyToggleCollapse(state.messagesByConversation[convoId]!);
                 }
-              };
-              applyToggleCollapse(state.messages);
-              const convoId = state.activeConversationId;
-              if (convoId && state.messagesByConversation[convoId]) {
-                applyToggleCollapse(state.messagesByConversation[convoId]!);
-              }
-            }),
+              },
+              undefined,
+              'chat/toggleInlinePanelCollapse',
+            ),
 
           // Pending messages
           addPendingMessage: (message) =>
-            set((state) => {
-              state.pendingMessages.push(message);
-            }),
+            set(
+              (state) => {
+                state.pendingMessages.push(message);
+              },
+              undefined,
+              'chat/addPendingMessage',
+            ),
 
           removePendingMessage: (id) =>
-            set((state) => {
-              state.pendingMessages = state.pendingMessages.filter((m) => m.id !== id);
-            }),
+            set(
+              (state) => {
+                state.pendingMessages = state.pendingMessages.filter((m) => m.id !== id);
+              },
+              undefined,
+              'chat/removePendingMessage',
+            ),
 
           clearPendingMessages: () =>
-            set((state) => {
-              state.pendingMessages = [];
-            }),
+            set(
+              (state) => {
+                state.pendingMessages = [];
+              },
+              undefined,
+              'chat/clearPendingMessages',
+            ),
 
           getPendingMessagesCount: () => get().pendingMessages.length,
 
           // Citations
           addCitation: (citation) =>
-            set((state) => {
-              const newCitation: Citation = {
-                id: crypto.randomUUID(),
-                timestamp: new Date(),
-                ...citation,
-              };
-              state.citations.push(newCitation);
-            }),
+            set(
+              (state) => {
+                const newCitation: Citation = {
+                  id: crypto.randomUUID(),
+                  timestamp: new Date(),
+                  ...citation,
+                };
+                state.citations.push(newCitation);
+              },
+              undefined,
+              'chat/addCitation',
+            ),
 
           getCitationByIndex: (index) => {
             const state = get();
@@ -859,20 +975,28 @@ export const useChatStore = create<ChatState>()(
           },
 
           clearCitations: () =>
-            set((state) => {
-              state.citations = [];
-            }),
+            set(
+              (state) => {
+                state.citations = [];
+              },
+              undefined,
+              'chat/clearCitations',
+            ),
 
           // Token usage
           updateTokenUsage: (usage) =>
-            set((state) => {
-              state.tokenUsage = { ...state.tokenUsage, ...usage };
+            set(
+              (state) => {
+                state.tokenUsage = { ...state.tokenUsage, ...usage };
 
-              if (state.tokenUsage.max > 0) {
-                state.tokenUsage.percentage =
-                  (state.tokenUsage.current / state.tokenUsage.max) * 100;
-              }
-            }),
+                if (state.tokenUsage.max > 0) {
+                  state.tokenUsage.percentage =
+                    (state.tokenUsage.current / state.tokenUsage.max) * 100;
+                }
+              },
+              undefined,
+              'chat/updateTokenUsage',
+            ),
 
           getTokenPercentage: () => {
             const state = get();
@@ -881,94 +1005,134 @@ export const useChatStore = create<ChatState>()(
 
           // UI state
           setFocusMode: (mode) =>
-            set((state) => {
-              state.focusMode = mode;
-            }),
+            set(
+              (state) => {
+                state.focusMode = mode;
+              },
+              undefined,
+              'chat/setFocusMode',
+            ),
 
           setActiveView: (view) =>
-            set((state) => {
-              state.activeView = view;
-            }),
+            set(
+              (state) => {
+                state.activeView = view;
+              },
+              undefined,
+              'chat/setActiveView',
+            ),
 
           setConversationMode: (mode) =>
-            set((state) => {
-              state.conversationMode = mode;
-            }),
+            set(
+              (state) => {
+                state.conversationMode = mode;
+              },
+              undefined,
+              'chat/setConversationMode',
+            ),
 
           setDraftContent: (value) =>
-            set((state) => {
-              state.draftContent = value;
-            }),
+            set(
+              (state) => {
+                state.draftContent = value;
+              },
+              undefined,
+              'chat/setDraftContent',
+            ),
 
           startEditingMessage: (id, content) =>
-            set((state) => {
-              state.editingMessageId = id;
-              state.draftContent = content;
-            }),
+            set(
+              (state) => {
+                state.editingMessageId = id;
+                state.draftContent = content;
+              },
+              undefined,
+              'chat/startEditingMessage',
+            ),
 
           cancelEditing: () =>
-            set((state) => {
-              state.editingMessageId = null;
-              state.draftContent = '';
-            }),
+            set(
+              (state) => {
+                state.editingMessageId = null;
+                state.draftContent = '';
+              },
+              undefined,
+              'chat/cancelEditing',
+            ),
 
           setSelectedMessage: (id) =>
-            set((state) => {
-              state.selectedMessage = id;
-            }),
+            set(
+              (state) => {
+                state.selectedMessage = id;
+              },
+              undefined,
+              'chat/setSelectedMessage',
+            ),
 
           toggleMessageTimestamps: () =>
-            set((state) => {
-              state.showMessageTimestamps = !state.showMessageTimestamps;
-            }),
+            set(
+              (state) => {
+                state.showMessageTimestamps = !state.showMessageTimestamps;
+              },
+              undefined,
+              'chat/toggleMessageTimestamps',
+            ),
 
           toggleMessageBookmark: (messageId) =>
-            set((state) => {
-              const messageInMessages = state.messages.find((m) => m.id === messageId);
-              if (messageInMessages) {
-                messageInMessages.bookmarked = !messageInMessages.bookmarked;
-              }
+            set(
+              (state) => {
+                const messageInMessages = state.messages.find((m) => m.id === messageId);
+                if (messageInMessages) {
+                  messageInMessages.bookmarked = !messageInMessages.bookmarked;
+                }
 
-              for (const convoId of Object.keys(state.messagesByConversation)) {
-                const messages = state.messagesByConversation[convoId];
-                if (messages) {
-                  const message = messages.find((m) => m.id === messageId);
-                  if (message) {
-                    message.bookmarked = !message.bookmarked;
-                    break;
+                for (const convoId of Object.keys(state.messagesByConversation)) {
+                  const messages = state.messagesByConversation[convoId];
+                  if (messages) {
+                    const message = messages.find((m) => m.id === messageId);
+                    if (message) {
+                      message.bookmarked = !message.bookmarked;
+                      break;
+                    }
                   }
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/toggleMessageBookmark',
+            ),
 
           toggleMessageReaction: (messageId, reaction) =>
-            set((state) => {
-              const toggleReaction = (message: EnhancedMessage | undefined) => {
-                if (!message) return;
-                if (!message.reactions) {
-                  message.reactions = [];
-                }
-                const index = message.reactions.indexOf(reaction);
-                if (index >= 0) {
-                  message.reactions.splice(index, 1);
-                } else {
-                  message.reactions.push(reaction);
-                }
-              };
+            set(
+              (state) => {
+                const toggleReaction = (message: EnhancedMessage | undefined) => {
+                  if (!message) return;
+                  if (!message.reactions) {
+                    message.reactions = [];
+                  }
+                  const index = message.reactions.indexOf(reaction);
+                  if (index >= 0) {
+                    message.reactions.splice(index, 1);
+                  } else {
+                    message.reactions.push(reaction);
+                  }
+                };
 
-              toggleReaction(state.messages.find((m) => m.id === messageId));
+                toggleReaction(state.messages.find((m) => m.id === messageId));
 
-              for (const convoId of Object.keys(state.messagesByConversation)) {
-                const messages = state.messagesByConversation[convoId];
-                if (messages) {
-                  const message = messages.find((m) => m.id === messageId);
-                  if (message) {
-                    toggleReaction(message);
-                    break;
+                for (const convoId of Object.keys(state.messagesByConversation)) {
+                  const messages = state.messagesByConversation[convoId];
+                  if (messages) {
+                    const message = messages.find((m) => m.id === messageId);
+                    if (message) {
+                      toggleReaction(message);
+                      break;
+                    }
                   }
                 }
-              }
-            }),
+              },
+              undefined,
+              'chat/toggleMessageReaction',
+            ),
 
           getBookmarkedMessages: () => {
             const state = get();
@@ -1019,24 +1183,28 @@ export const useChatStore = create<ChatState>()(
 
           // Clear/export
           clearHistory: () => {
-            set((state) => {
-              const newId = crypto.randomUUID();
-              const convo: ConversationSummary = {
-                id: newId,
-                title: 'New chat',
-                pinned: false,
-                lastMessage: '',
-                updatedAt: new Date(),
-              };
-              state.conversations.unshift(convo);
-              state.activeConversationId = newId;
-              state.messages = [];
-              state.messagesByConversation[newId] = [];
-              state.isStreaming = false;
-              state.currentStreamingMessageId = null;
-              state.citations = [];
-              state.focusMode = null;
-            });
+            set(
+              (state) => {
+                const newId = crypto.randomUUID();
+                const convo: ConversationSummary = {
+                  id: newId,
+                  title: 'New chat',
+                  pinned: false,
+                  lastMessage: '',
+                  updatedAt: new Date(),
+                };
+                state.conversations.unshift(convo);
+                state.activeConversationId = newId;
+                state.messages = [];
+                state.messagesByConversation[newId] = [];
+                state.isStreaming = false;
+                state.currentStreamingMessageId = null;
+                state.citations = [];
+                state.focusMode = null;
+              },
+              undefined,
+              'chat/clearHistory',
+            );
           },
 
           exportConversation: async () => {
@@ -1057,31 +1225,35 @@ export const useChatStore = create<ChatState>()(
           },
 
           resetOnLogout: () => {
-            set((state) => {
-              state.conversations = [];
-              state.activeConversationId = null;
-              state.messagesByConversation = {};
-              state.messages = [];
-              state.isLoading = false;
-              state.isStreaming = false;
-              state.currentStreamingMessageId = null;
-              state.pendingMessages = [];
-              state.citations = [];
-              state.tokenUsage = {
-                current: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                max: 128000,
-                percentage: 0,
-                estimatedCost: 0,
-              };
-              state.focusMode = null;
-              state.activeView = 'chat';
-              state.conversationMode = 'auto';
-              state.draftContent = '';
-              state.editingMessageId = null;
-              state.selectedMessage = null;
-            });
+            set(
+              (state) => {
+                state.conversations = [];
+                state.activeConversationId = null;
+                state.messagesByConversation = {};
+                state.messages = [];
+                state.isLoading = false;
+                state.isStreaming = false;
+                state.currentStreamingMessageId = null;
+                state.pendingMessages = [];
+                state.citations = [];
+                state.tokenUsage = {
+                  current: 0,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  max: 128000,
+                  percentage: 0,
+                  estimatedCost: 0,
+                };
+                state.focusMode = null;
+                state.activeView = 'chat';
+                state.conversationMode = 'auto';
+                state.draftContent = '';
+                state.editingMessageId = null;
+                state.selectedMessage = null;
+              },
+              undefined,
+              'chat/resetOnLogout',
+            );
 
             if (typeof window !== 'undefined') {
               try {
@@ -1107,6 +1279,10 @@ export const useChatStore = create<ChatState>()(
           focusMode: state.focusMode,
           showMessageTimestamps: state.showMessageTimestamps,
         }),
+        migrate: (persistedState: unknown, _version: number) => {
+          // Handle future migrations here
+          return persistedState as ChatState;
+        },
       },
     ),
     { name: 'ChatStore', enabled: import.meta.env.DEV },

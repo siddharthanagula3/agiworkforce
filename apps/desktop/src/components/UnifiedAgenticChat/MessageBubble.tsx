@@ -703,7 +703,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div
           role="menu"
           aria-label="Message actions"
-          className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-800/95 backdrop-blur-sm py-1 shadow-xl"
+          className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-800/95 backdrop-blur-xs py-1 shadow-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -924,6 +924,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                       }
                       return <li>{children}</li>;
                     },
+                    img({ src, alt }) {
+                      if (src && !/^(https?:|data:image\/)/.test(src)) {
+                        return null;
+                      }
+                      return (
+                        <img
+                          src={src}
+                          alt={alt || ''}
+                          loading="lazy"
+                          className="max-w-full h-auto rounded-lg"
+                        />
+                      );
+                    },
                   }}
                 >
                   {message.content}
@@ -931,7 +944,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 {/* Streaming cursor */}
                 {message.metadata?.streaming && (
                   <span
-                    className="inline-block w-2 h-4 ml-0.5 bg-amber-400 animate-pulse rounded-sm"
+                    className="inline-block w-2 h-4 ml-0.5 bg-amber-400 animate-pulse rounded-xs"
                     style={{ animationDuration: '0.5s' }}
                   />
                 )}
