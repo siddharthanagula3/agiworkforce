@@ -1,14 +1,36 @@
+use once_cell::sync::Lazy;
 use reqwest::{Client, Method, Response};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 use crate::sys::error::{Error, Result};
+
+/// Default HTTP client with retry middleware, lazily initialized.
+/// This is shared across all `ApiClient::default()` instances.
+static DEFAULT_CLIENT: Lazy<Arc<ClientWithMiddleware>> = Lazy::new(|| {
+    let retry_policy = ExponentialBackoff::builder()
+        .retry_bounds(Duration::from_millis(500), Duration::from_millis(10000))
+        .build_with_max_retries(3);
+
+    // Use default reqwest client configuration which should never fail
+    let reqwest_client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create default HTTP client with standard configuration");
+
+    let client = ClientBuilder::new(reqwest_client)
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
+
+    Arc::new(client)
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -112,7 +134,7 @@ impl Default for RetryConfig {
 }
 
 pub struct ApiClient {
-    client: ClientWithMiddleware,
+    client: Arc<ClientWithMiddleware>,
     default_timeout: Duration,
 }
 
@@ -139,7 +161,7 @@ impl ApiClient {
             .build();
 
         Ok(Self {
-            client,
+            client: Arc::new(client),
             default_timeout: Duration::from_secs(30),
         })
     }
@@ -486,10 +508,10 @@ impl ApiClient {
 
 impl Default for ApiClient {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to construct default ApiClient: {}", e);
-            panic!("Failed to construct default ApiClient: {}", e);
-        })
+        Self {
+            client: Arc::clone(&DEFAULT_CLIENT),
+            default_timeout: Duration::from_secs(30),
+        }
     }
 }
 

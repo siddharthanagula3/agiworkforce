@@ -1,3 +1,4 @@
+use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -8,32 +9,38 @@ use crate::sys::api::{
 };
 
 pub struct ApiState {
-    pub client: ApiClient,
+    client: OnceCell<ApiClient>,
     oauth_clients: Mutex<HashMap<String, OAuth2Client>>,
     pkce_challenges: Mutex<HashMap<String, PkceChallenge>>,
 }
 
 impl Default for ApiState {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::error!("Failed to create default ApiState: {}", e);
-            panic!("Failed to create default ApiState: {}", e);
-        })
+        Self {
+            client: OnceCell::new(),
+            oauth_clients: Mutex::new(HashMap::new()),
+            pkce_challenges: Mutex::new(HashMap::new()),
+        }
     }
 }
 
 impl ApiState {
     pub fn new() -> Result<Self, String> {
-        Ok(Self {
-            client: ApiClient::new()
-                .map_err(|e| format!("Failed to initialize API client: {}", e))?,
-            oauth_clients: Mutex::new(HashMap::new()),
-            pkce_challenges: Mutex::new(HashMap::new()),
+        let state = Self::default();
+        // Eagerly initialize the client to catch errors early
+        state.get_client()?;
+        Ok(state)
+    }
+
+    /// Get or lazily initialize the API client
+    pub fn get_client(&self) -> Result<&ApiClient, String> {
+        self.client.get_or_try_init(|| {
+            ApiClient::new().map_err(|e| format!("Failed to initialize API client: {}", e))
         })
     }
 
     pub async fn execute_request(&self, request: ApiRequest) -> Result<ApiResponse, String> {
-        self.client
+        self.get_client()?
             .execute(request)
             .await
             .map_err(|e| format!("API request failed: {}", e))
@@ -52,7 +59,7 @@ pub async fn api_request(
     );
 
     state
-        .client
+        .get_client()?
         .execute(request)
         .await
         .map_err(|e| format!("API request failed: {}", e))
@@ -63,7 +70,7 @@ pub async fn api_get(url: String, state: State<'_, ApiState>) -> Result<ApiRespo
     tracing::info!("Executing GET request to {}", url);
 
     state
-        .client
+        .get_client()?
         .get(&url)
         .await
         .map_err(|e| format!("GET request failed: {}", e))
@@ -78,7 +85,7 @@ pub async fn api_post_json(
     tracing::info!("Executing POST request to {}", url);
 
     state
-        .client
+        .get_client()?
         .post_json(&url, &body)
         .await
         .map_err(|e| format!("POST request failed: {}", e))
@@ -93,7 +100,7 @@ pub async fn api_put_json(
     tracing::info!("Executing PUT request to {}", url);
 
     state
-        .client
+        .get_client()?
         .put_json(&url, &body)
         .await
         .map_err(|e| format!("PUT request failed: {}", e))
@@ -104,7 +111,7 @@ pub async fn api_delete(url: String, state: State<'_, ApiState>) -> Result<ApiRe
     tracing::info!("Executing DELETE request to {}", url);
 
     state
-        .client
+        .get_client()?
         .delete(&url)
         .await
         .map_err(|e| format!("DELETE request failed: {}", e))
