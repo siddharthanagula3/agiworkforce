@@ -187,6 +187,7 @@ pub enum Provider {
     DeepSeek,
     Qwen,
     Moonshot,
+    Zhipu,
     ManagedCloud,
 }
 
@@ -203,6 +204,7 @@ impl Provider {
             Provider::DeepSeek => "deepseek",
             Provider::Qwen => "qwen",
             Provider::Moonshot => "moonshot",
+            Provider::Zhipu => "zhipu",
             Provider::ManagedCloud => "managed_cloud",
         }
     }
@@ -219,6 +221,7 @@ impl Provider {
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
             "moonshot" | "kimi" => Some(Provider::Moonshot),
+            "zhipu" | "zhipuai" | "bigmodel" | "glm" => Some(Provider::Zhipu),
             "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
             _ => None,
         }
@@ -235,6 +238,7 @@ impl Provider {
             Provider::DeepSeek => "deepseek-v3",
             Provider::Qwen => "qwen3-max",
             Provider::Moonshot => "kimi-k2-thinking",
+            Provider::Zhipu => "glm-4.7", // GLM-4.7 is the flagship coding model
             Provider::ManagedCloud => "deepseek-v3", // Default to budget king via cloud
         }
     }
@@ -278,6 +282,13 @@ impl Provider {
             (Provider::Moonshot, _) => "kimi-k2-thinking",
 
             (Provider::Perplexity, _) => "sonar-deep-research",
+
+            // ZhipuAI - GLM-4.7 for coding (73.8% SWE-bench), GLM-4.6V for vision
+            (Provider::Zhipu, TaskType::FastCompletion) => "glm-4.6v-flash",
+            (Provider::Zhipu, TaskType::CodeGeneration) => "glm-4.7",
+            (Provider::Zhipu, TaskType::ComplexReasoning) => "glm-4.7",
+            (Provider::Zhipu, TaskType::Vision) => "glm-4.6v",
+            (Provider::Zhipu, _) => "glm-4.7",
 
             (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
             (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-coder",
