@@ -847,15 +847,32 @@ export const useUIStore = create<UIState>()(
 
           setMode: (mode) => set({ mode }, undefined, 'ui/mode/set'),
 
-          toggleMode: () =>
+          toggleMode: () => {
+            const currentMode = get().mode;
+            const newMode = currentMode === 'simple' ? 'advanced' : 'simple';
+
+            // When switching to simple mode, always use auto-economy for simplicity
+            // "Simple Mode: Just type and chat - we handle the rest!"
+            if (newMode === 'simple') {
+              // Dynamically import to avoid circular dependency
+              import('./modelStore').then(({ useModelStore }) => {
+                const modelStore = useModelStore.getState();
+                // Force auto-economy in Simple Mode for consistent, budget-friendly experience
+                if (modelStore.selectedModel !== 'auto-economy') {
+                  void modelStore.selectModel('auto-economy', 'managed_cloud');
+                }
+              });
+            }
+
             set(
-              (state) => ({
-                mode: state.mode === 'simple' ? 'advanced' : 'simple',
+              {
+                mode: newMode,
                 showModeSwitcherHint: false,
-              }),
+              },
               undefined,
               'ui/mode/toggle',
-            ),
+            );
+          },
 
           completeOnboarding: () =>
             set({ onboardingCompleted: true }, undefined, 'ui/onboarding/complete'),
