@@ -234,16 +234,22 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   };
 
   // Determine which auto modes to show based on plan tier
+  // Tier hierarchy: hobby/free → economy only, pro → +balanced, max/enterprise → +premium
   const availableAutoModes = useMemo(() => {
-    const plan = userPlanTier as string;
-    if (plan === 'hobby' || plan === 'free' || plan === 'none') {
-      return [AUTO_ECONOMY_ID];
-    } else if (plan === 'pro') {
-      return [AUTO_ECONOMY_ID, AUTO_BALANCED_ID];
-    } else if (plan === 'max' || plan === 'enterprise') {
+    const plan = (userPlanTier as string).toLowerCase();
+
+    // Max/Enterprise: All auto modes
+    if (plan === 'max' || plan === 'enterprise') {
       return [AUTO_ECONOMY_ID, AUTO_BALANCED_ID, AUTO_PREMIUM_ID];
     }
-    return [AUTO_BALANCED_ID];
+
+    // Pro: Economy + Balanced
+    if (plan === 'pro') {
+      return [AUTO_ECONOMY_ID, AUTO_BALANCED_ID];
+    }
+
+    // Hobby/Free/Unknown: Economy only (safe default)
+    return [AUTO_ECONOMY_ID];
   }, [userPlanTier]);
   const suggestedMetadata = suggestion
     ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
