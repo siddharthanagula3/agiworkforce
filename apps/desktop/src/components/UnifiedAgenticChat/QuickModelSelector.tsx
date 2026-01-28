@@ -17,8 +17,10 @@ import {
   PROVIDER_LABELS,
   PROVIDERS_IN_ORDER,
   THINKING_MODEL_VARIANTS,
+  isModelAllowedForTier,
   type ModelMetadata,
 } from '../../constants/llm';
+import type { SubscriptionTier } from '../../constants/planModels';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useModelStore, selectLastRoutingDecision } from '../../stores/modelStore';
@@ -106,13 +108,13 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     const groups: Record<string, ModelMetadata[]> = {};
     const allProviders: Provider[] = PROVIDERS_IN_ORDER;
     const query = searchQuery.toLowerCase().trim();
+    const tier = (userPlanTier as SubscriptionTier) || 'hobby';
 
     allProviders.forEach((p) => {
       groups[p] = [];
     });
 
     availableModels.forEach((model) => {
-      // All models are accessible through managed cloud - backend handles access control
       const group = groups[model.provider];
       if (group) {
         let metadata = getModelMetadata(model.id);
@@ -148,6 +150,12 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         }
 
         if (metadata) {
+          // Filter by subscription tier - only show models the user has access to
+          // Ollama models are always allowed (local, no subscription needed)
+          if (model.provider !== 'ollama' && !isModelAllowedForTier(model.id, tier)) {
+            return;
+          }
+
           // Filter by search query
           if (query) {
             const matchesName = metadata.name.toLowerCase().includes(query);
@@ -166,7 +174,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     });
 
     return groups;
-  }, [availableModels, searchQuery]);
+  }, [availableModels, searchQuery, userPlanTier]);
 
   // NOTE: Router suggestions feature has been replaced by Auto modes (Economy/Balanced/Premium).
   // The Auto modes use backend routing logic rather than client-side suggestions.

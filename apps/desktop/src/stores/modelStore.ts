@@ -172,6 +172,7 @@ const defaultUsageStats: UsageStats = {
     qwen: { tokens: 0, cost: 0, messages: 0 },
     moonshot: { tokens: 0, cost: 0, messages: 0 },
     perplexity: { tokens: 0, cost: 0, messages: 0 },
+    zhipu: { tokens: 0, cost: 0, messages: 0 },
     managed_cloud: { tokens: 0, cost: 0, messages: 0 },
   },
   byModel: {},
@@ -195,7 +196,7 @@ export const useModelStore = create<ModelState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        selectedModel: 'auto-balanced',
+        selectedModel: 'auto-economy',
         selectedProvider: 'managed_cloud',
         favorites: [],
         recentModels: [],
@@ -209,6 +210,7 @@ export const useModelStore = create<ModelState>()(
           qwen: null,
           moonshot: null,
           perplexity: null,
+          zhipu: null,
           managed_cloud: null,
         },
         availableModels: [],
@@ -559,6 +561,7 @@ export const useModelStore = create<ModelState>()(
                 qwen: null,
                 moonshot: null,
                 perplexity: null,
+                zhipu: null,
                 managed_cloud: null,
               },
               usageStats: null,
@@ -693,8 +696,9 @@ export const initializeModelStoreFromSettings = async () => {
 
     if (defaultProvider && defaultModel) {
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store
+      // Use 'auto-economy' as the default auto mode (lowest common denominator for all tiers)
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
-        await modelStore.selectModel('auto', 'managed_cloud');
+        await modelStore.selectModel('auto-economy', 'managed_cloud');
       } else {
         await modelStore.selectModel(defaultModel, defaultProvider);
       }
@@ -703,3 +707,61 @@ export const initializeModelStoreFromSettings = async () => {
     console.error('Failed to initialize model store from settings:', error);
   }
 };
+
+/**
+ * Enforce tier-appropriate model selection.
+ * Called when user's plan tier changes to ensure they're using an allowed auto mode.
+ *
+ * Tier restrictions:
+ * - hobby/free/none: Only 'auto-economy' allowed
+ * - pro: 'auto-economy' or 'auto-balanced' allowed
+ * - max/enterprise: All auto modes allowed
+ */
+export const enforceModelTierRestriction = (planTier: string | null): void => {
+  const modelStore = useModelStore.getState();
+  const { selectedModel, selectModel } = modelStore;
+
+  // Only enforce for auto modes
+  if (!selectedModel?.startsWith('auto')) {
+    return;
+  }
+
+  const tier = planTier?.toLowerCase() || 'free';
+
+  // Define which auto modes are allowed per tier
+  const allowedModes: Record<string, string[]> = {
+    free: ['auto-economy'],
+    none: ['auto-economy'],
+    hobby: ['auto-economy'],
+    pro: ['auto-economy', 'auto-balanced'],
+    max: ['auto-economy', 'auto-balanced', 'auto-premium'],
+    enterprise: ['auto-economy', 'auto-balanced', 'auto-premium'],
+  };
+
+  const allowed = allowedModes[tier] || ['auto-economy'];
+
+  // If current model is not in allowed list, switch to auto-economy
+  if (!allowed.includes(selectedModel)) {
+    console.log(
+      `[ModelStore] Enforcing tier restriction: ${tier} tier cannot use ${selectedModel}, switching to auto-economy`,
+    );
+    void selectModel('auto-economy', 'managed_cloud');
+  }
+};
+
+// Subscribe to auth store plan changes to enforce tier restrictions
+// This runs when the user's plan tier is loaded/changed
+if (typeof window !== 'undefined') {
+  // Dynamic import to avoid circular dependencies
+  import('./auth').then(({ useUnifiedAuthStore }) => {
+    useUnifiedAuthStore.subscribe(
+      (state) => state.plan,
+      (plan) => {
+        if (plan) {
+          console.log(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
+          enforceModelTierRestriction(plan);
+        }
+      },
+    );
+  });
+}

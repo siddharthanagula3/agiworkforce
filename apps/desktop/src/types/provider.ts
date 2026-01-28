@@ -8,4 +8,5 @@ export type Provider =
   | 'qwen'
   | 'moonshot'
   | 'perplexity'
+  | 'zhipu'
   | 'managed_cloud';
