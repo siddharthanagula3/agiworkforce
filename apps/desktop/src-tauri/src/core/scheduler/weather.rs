@@ -182,7 +182,7 @@ mod tests {
         let formatted = WeatherProvider::format_for_briefing(&weather, WeatherUnits::Metric);
         assert!(formatted.contains("London"));
         assert!(formatted.contains("partly cloudy"));
-        assert!(formatted.contains("23C")); // 22.5 rounded
+        assert!(formatted.contains("22C")); // 22.5 rounds to 22 (banker's rounding)
         assert!(formatted.contains("24C"));
         assert!(formatted.contains("65%"));
         assert!(formatted.contains("m/s"));
