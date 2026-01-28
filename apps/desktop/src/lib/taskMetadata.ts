@@ -1,10 +1,32 @@
 import type { Attachment } from '../stores/unifiedChatStore';
+import { routeIntelligentlySync, type IntentType, type AutoMode } from './modelRouter';
 
+/**
+ * Task metadata passed from frontend to Rust backend
+ * Contains intent classification and routing decisions
+ */
 export type TaskMetadata = {
+  // Legacy fields (backward compatible)
   intents: string[];
   requiresVision: boolean;
   tokenEstimate: number;
   costPriority: 'low' | 'balanced';
+
+  // New intelligent routing fields (January 2026)
+  /** Primary classified intent type */
+  intentType?: IntentType;
+  /** Model category for routing (chat, image, video, search, tts, stt, music) */
+  modelCategory?: 'chat' | 'image' | 'video' | 'search' | 'tts' | 'stt' | 'music';
+  /** Selected model from intelligent routing */
+  selectedModel?: string;
+  /** Tool categories that should be available */
+  suggestedToolCategories?: string[];
+  /** Whether tools should auto-execute (full autonomy mode) */
+  autoExecuteTools?: boolean;
+  /** Classification confidence (0-1) */
+  confidence?: number;
+  /** Routing reasoning for debugging */
+  routingReason?: string;
 };
 
 const CODE_KEYWORDS = [
@@ -79,14 +101,31 @@ const TERMINAL_KEYWORDS = [
   'pip',
 ];
 
+/**
+ * Derive task metadata from user content and attachments
+ *
+ * This function performs intelligent intent classification and routing:
+ * 1. Analyzes user message to determine intent (chat, coding, image-gen, etc.)
+ * 2. Selects the appropriate model category (chat, image, video, search, etc.)
+ * 3. Suggests tools that should be available for the task
+ * 4. Determines if tools should auto-execute (full autonomy mode)
+ *
+ * @param content - User's message content
+ * @param attachments - Optional file attachments
+ * @param preferredCost - Cost preference ('low' for Hobby, 'balanced' for Pro+)
+ * @param autoMode - Auto mode from user's selection (affects model pool)
+ * @returns TaskMetadata with intelligent routing information
+ */
 export function deriveTaskMetadata(
   content: string,
   attachments?: Attachment[],
   preferredCost: 'low' | 'balanced' = 'balanced',
+  autoMode?: AutoMode,
 ): TaskMetadata {
   const lowerContent = content.toLowerCase();
   const intents = new Set<string>();
 
+  // Legacy keyword-based intent detection (for backward compatibility)
   if (CODE_KEYWORDS.some((keyword) => lowerContent.includes(keyword))) {
     intents.add('code');
   }
@@ -115,18 +154,53 @@ export function deriveTaskMetadata(
     intents.add('general');
   }
 
-  const requiresVision =
+  const hasImages =
     attachments?.some(
       (attachment) => attachment.type === 'image' || attachment.type === 'screenshot',
     ) ?? false;
 
+  const hasAudio =
+    attachments?.some((attachment) => attachment.mimeType?.startsWith('audio/')) ?? false;
+
   const hasVideo =
     attachments?.some((attachment) => attachment.mimeType?.startsWith('video/')) ?? false;
 
-  return {
-    intents: Array.from(intents),
-    requiresVision: requiresVision || hasVideo,
-    tokenEstimate: Math.min(2000, Math.max(32, content.length)),
-    costPriority: preferredCost,
-  };
+  const requiresVision = hasImages || hasVideo;
+
+  // Use intelligent routing if auto mode is specified
+  const effectiveAutoMode =
+    autoMode || (preferredCost === 'low' ? 'auto-economy' : 'auto-balanced');
+
+  try {
+    const routingResult = routeIntelligentlySync(content, effectiveAutoMode, {
+      hasImages,
+      hasAudio,
+      hasVideo,
+    });
+
+    return {
+      // Legacy fields
+      intents: Array.from(intents),
+      requiresVision,
+      tokenEstimate: Math.min(2000, Math.max(32, content.length)),
+      costPriority: preferredCost,
+
+      // New intelligent routing fields
+      intentType: routingResult.intent.primary,
+      modelCategory: routingResult.modelCategory,
+      selectedModel: routingResult.selectedModel,
+      suggestedToolCategories: routingResult.suggestedTools.map((t) => t.tool.category),
+      autoExecuteTools: routingResult.autoExecuteTools,
+      confidence: routingResult.confidence,
+      routingReason: routingResult.reason,
+    };
+  } catch {
+    // Fallback to basic metadata if routing fails
+    return {
+      intents: Array.from(intents),
+      requiresVision,
+      tokenEstimate: Math.min(2000, Math.max(32, content.length)),
+      costPriority: preferredCost,
+    };
+  }
 }

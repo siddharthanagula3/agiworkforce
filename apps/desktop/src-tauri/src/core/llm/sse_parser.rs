@@ -175,6 +175,7 @@ fn parse_sse_event(
         crate::core::llm::Provider::DeepSeek => parse_openai_sse(event),
         crate::core::llm::Provider::Qwen => parse_openai_sse(event),
         crate::core::llm::Provider::Moonshot => parse_openai_sse(event),
+        crate::core::llm::Provider::Zhipu => parse_openai_sse(event), // ZhipuAI uses OpenAI-compatible format
         crate::core::llm::Provider::ManagedCloud => parse_openai_sse(event), // ManagedCloud uses OpenAI-compatible format
     }
 }
