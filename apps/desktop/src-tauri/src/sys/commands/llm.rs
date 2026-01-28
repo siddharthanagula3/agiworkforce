@@ -433,151 +433,94 @@ pub async fn llm_get_available_models(
 ) -> Result<Vec<ModelInfo>, String> {
     let router = state.router.read().await;
 
+    // All available models - IDs must match frontend constants/llm.ts
+    // Models are filtered by tier in the frontend
     let all_models = vec![
-        // OpenAI - Fast/Cheap
+        // =====================================================================
+        // OpenAI Models
+        // =====================================================================
+        // Economy
         ModelInfo {
             id: "gpt-5-nano".to_string(),
             name: "GPT-5 Nano".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
-        // OpenAI - Premium
+        // Pro
         ModelInfo {
             id: "gpt-5.2".to_string(),
             name: "GPT-5.2".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
+        // Premium
         ModelInfo {
-            id: "gpt-5.2-pro".to_string(),
-            name: "GPT-5.2 Pro".to_string(),
+            id: "gpt-5-pro".to_string(),
+            name: "GPT-5 Pro".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "gpt-5.2-chat-latest".to_string(),
-            name: "GPT-5.2 Chat".to_string(),
+            id: "o3".to_string(),
+            name: "o3".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
+        // =====================================================================
+        // Anthropic Models (note: use dots in version, e.g., 4.5 not 4-5)
+        // =====================================================================
+        // Economy
         ModelInfo {
-            id: "gpt-5.2-codex".to_string(),
-            name: "GPT-5.2 Codex".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "gpt-5.1".to_string(),
-            name: "GPT-5.1".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "gpt-5.1-chat-latest".to_string(),
-            name: "GPT-5.1 Instant".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "gpt-5.1-thinking".to_string(),
-            name: "GPT-5.1 Thinking".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "gpt-5.1-codex-max".to_string(),
-            name: "GPT-5.1-Codex-Max".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        // Anthropic
-        ModelInfo {
-            id: "claude-sonnet-4-5".to_string(),
-            name: "Claude Sonnet 4.5".to_string(),
-            provider: "anthropic".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "claude-haiku-4-5".to_string(),
+            id: "claude-haiku-4.5".to_string(),
             name: "Claude Haiku 4.5".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
+        // Pro
         ModelInfo {
-            id: "claude-opus-4-5".to_string(),
+            id: "claude-sonnet-4.5".to_string(),
+            name: "Claude Sonnet 4.5".to_string(),
+            provider: "anthropic".to_string(),
+            available: false,
+        },
+        // Premium
+        ModelInfo {
+            id: "claude-opus-4.5".to_string(),
             name: "Claude Opus 4.5".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
-        // Google
-        ModelInfo {
-            id: "gemini-3-pro".to_string(),
-            name: "Gemini 3 Pro".to_string(),
-            provider: "google".to_string(),
-            available: false,
-        },
+        // =====================================================================
+        // Google Models
+        // =====================================================================
+        // Economy
         ModelInfo {
             id: "gemini-3-flash".to_string(),
             name: "Gemini 3 Flash".to_string(),
             provider: "google".to_string(),
             available: false,
         },
+        // Pro
         ModelInfo {
-            id: "gemini-3-deep-think".to_string(),
-            name: "Gemini 3 Deep Think".to_string(),
+            id: "gemini-3-pro".to_string(),
+            name: "Gemini 3 Pro".to_string(),
             provider: "google".to_string(),
             available: false,
         },
-        // xAI
+        // Premium
         ModelInfo {
-            id: "grok-4.1".to_string(),
-            name: "Grok 4.1".to_string(),
-            provider: "xai".to_string(),
+            id: "gemini-3-ultra".to_string(),
+            name: "Gemini 3 Ultra".to_string(),
+            provider: "google".to_string(),
             available: false,
         },
+        // =====================================================================
+        // xAI (Grok) Models
+        // =====================================================================
+        // Economy
         ModelInfo {
-            id: "grok-4.1-fast".to_string(),
-            name: "Grok 4.1 Fast".to_string(),
-            provider: "xai".to_string(),
-            available: false,
-        },
-        // DeepSeek - Value coding models
-        ModelInfo {
-            id: "deepseek-v3".to_string(),
-            name: "DeepSeek V3".to_string(),
-            provider: "deepseek".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "deepseek-reasoner".to_string(),
-            name: "DeepSeek Reasoner".to_string(),
-            provider: "deepseek".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "deepseek-coder".to_string(),
-            name: "DeepSeek Coder".to_string(),
-            provider: "deepseek".to_string(),
-            available: false,
-        },
-        // Qwen
-        ModelInfo {
-            id: "qwen3-max".to_string(),
-            name: "Qwen3-Max".to_string(),
-            provider: "qwen".to_string(),
-            available: false,
-        },
-        // Moonshot
-        ModelInfo {
-            id: "kimi-k2-thinking".to_string(),
-            name: "Kimi K2 Thinking".to_string(),
-            provider: "moonshot".to_string(),
-            available: false,
-        },
-        // xAI - Grok 3 Mini for Hobby tier
-        ModelInfo {
-            id: "grok-3-mini".to_string(),
-            name: "Grok 3 Mini".to_string(),
+            id: "grok-4.1-mini".to_string(),
+            name: "Grok 4.1 Mini".to_string(),
             provider: "xai".to_string(),
             available: false,
         },
@@ -585,6 +528,133 @@ pub async fn llm_get_available_models(
             id: "grok-4.1-fast-reasoning".to_string(),
             name: "Grok 4.1 Fast Reasoning".to_string(),
             provider: "xai".to_string(),
+            available: false,
+        },
+        // Premium
+        ModelInfo {
+            id: "grok-4.1".to_string(),
+            name: "Grok 4.1".to_string(),
+            provider: "xai".to_string(),
+            available: false,
+        },
+        // =====================================================================
+        // DeepSeek Models
+        // =====================================================================
+        // Economy
+        ModelInfo {
+            id: "deepseek-v3.2".to_string(),
+            name: "DeepSeek V3.2".to_string(),
+            provider: "deepseek".to_string(),
+            available: false,
+        },
+        // Premium
+        ModelInfo {
+            id: "deepseek-r1".to_string(),
+            name: "DeepSeek R1".to_string(),
+            provider: "deepseek".to_string(),
+            available: false,
+        },
+        // =====================================================================
+        // Qwen Models
+        // =====================================================================
+        // Economy
+        ModelInfo {
+            id: "qwen-turbo".to_string(),
+            name: "Qwen Turbo".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "qwen-flash".to_string(),
+            name: "Qwen Flash".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "qwen3-coder-flash".to_string(),
+            name: "Qwen3 Coder Flash".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+        // Pro
+        ModelInfo {
+            id: "qwen3-max".to_string(),
+            name: "Qwen3 Max".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "qwen3-coder-plus".to_string(),
+            name: "Qwen3 Coder Plus".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+        // =====================================================================
+        // Moonshot (Kimi) Models
+        // =====================================================================
+        // Economy
+        ModelInfo {
+            id: "kimi-k2.5-thinking".to_string(),
+            name: "Kimi K2.5 Thinking".to_string(),
+            provider: "moonshot".to_string(),
+            available: false,
+        },
+        // Pro
+        ModelInfo {
+            id: "kimi-k2.5-turbo".to_string(),
+            name: "Kimi K2.5 Turbo".to_string(),
+            provider: "moonshot".to_string(),
+            available: false,
+        },
+        // =====================================================================
+        // Perplexity Search Models
+        // =====================================================================
+        // Economy
+        ModelInfo {
+            id: "sonar".to_string(),
+            name: "Sonar".to_string(),
+            provider: "perplexity".to_string(),
+            available: false,
+        },
+        // Pro
+        ModelInfo {
+            id: "sonar-pro".to_string(),
+            name: "Sonar Pro".to_string(),
+            provider: "perplexity".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "sonar-reasoning".to_string(),
+            name: "Sonar Reasoning".to_string(),
+            provider: "perplexity".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "sonar-deep-research".to_string(),
+            name: "Sonar Deep Research".to_string(),
+            provider: "perplexity".to_string(),
+            available: false,
+        },
+        // =====================================================================
+        // ZhipuAI (GLM) Models
+        // =====================================================================
+        // Economy
+        ModelInfo {
+            id: "glm-4.7".to_string(),
+            name: "GLM-4.7".to_string(),
+            provider: "zhipu".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "glm-4.6v".to_string(),
+            name: "GLM-4.6V".to_string(),
+            provider: "zhipu".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "glm-4.6v-flash".to_string(),
+            name: "GLM-4.6V Flash".to_string(),
+            provider: "zhipu".to_string(),
             available: false,
         },
     ];
@@ -602,6 +672,8 @@ pub async fn llm_get_available_models(
             "deepseek" => Provider::DeepSeek,
             "qwen" => Provider::Qwen,
             "moonshot" => Provider::Moonshot,
+            "perplexity" => Provider::Perplexity,
+            "zhipu" => Provider::Zhipu,
             _ => continue,
         };
 

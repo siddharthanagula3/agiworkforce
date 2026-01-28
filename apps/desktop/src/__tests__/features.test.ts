@@ -25,6 +25,7 @@ describe('modelStore', () => {
         qwen: null,
         moonshot: null,
         perplexity: null,
+        zhipu: null,
         managed_cloud: null,
       },
       availableModels: [],
@@ -332,7 +333,18 @@ describe('LLM Constants', () => {
       const { getAllModels } = await import('../constants/llm');
 
       const allModels = getAllModels();
-      const validTypes = ['chat', 'code', 'reasoning', 'multimodal', 'image', 'video', 'search'];
+      const validTypes = [
+        'chat',
+        'code',
+        'reasoning',
+        'multimodal',
+        'image',
+        'video',
+        'search',
+        'tts',
+        'stt',
+        'music',
+      ];
 
       allModels.forEach((model) => {
         expect(validTypes).toContain(model.modelType);
@@ -1539,6 +1551,7 @@ describe('modelStore selectors', () => {
         qwen: null,
         moonshot: null,
         perplexity: null,
+        zhipu: null,
         managed_cloud: null,
       },
       availableModels: [],
