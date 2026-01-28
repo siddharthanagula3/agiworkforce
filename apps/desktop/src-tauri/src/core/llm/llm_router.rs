@@ -151,6 +151,7 @@ pub enum CostPriority {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RouterContext {
+    // Legacy fields (backward compatible)
     #[serde(default)]
     pub intents: Vec<String>,
     #[serde(default)]
@@ -161,6 +162,29 @@ pub struct RouterContext {
     pub cost_priority: CostPriority,
     #[serde(default)]
     pub plan_tier: String, // 'free', 'hobby', 'pro', 'max', 'enterprise'
+
+    // New intelligent routing fields (January 2026)
+    /// Primary classified intent type (chat, coding, image-gen, video-gen, search, etc.)
+    #[serde(default)]
+    pub intent_type: Option<String>,
+    /// Model category for routing (chat, image, video, search, tts, stt, music)
+    #[serde(default)]
+    pub model_category: Option<String>,
+    /// Selected model from TypeScript intelligent routing
+    #[serde(default)]
+    pub selected_model: Option<String>,
+    /// Tool categories that should be available
+    #[serde(default)]
+    pub suggested_tool_categories: Option<Vec<String>>,
+    /// Whether tools should auto-execute (full autonomy mode)
+    #[serde(default)]
+    pub auto_execute_tools: Option<bool>,
+    /// Classification confidence (0-1)
+    #[serde(default)]
+    pub confidence: Option<f32>,
+    /// Routing reasoning for debugging
+    #[serde(default)]
+    pub routing_reason: Option<String>,
 }
 
 impl Default for RouterContext {
@@ -171,6 +195,13 @@ impl Default for RouterContext {
             token_estimate: 0,
             cost_priority: CostPriority::Balanced,
             plan_tier: "pro".to_string(),
+            intent_type: None,
+            model_category: None,
+            selected_model: None,
+            suggested_tool_categories: None,
+            auto_execute_tools: None,
+            confidence: None,
+            routing_reason: None,
         }
     }
 }
@@ -198,6 +229,44 @@ impl Default for LLMRouter {
 
 impl LLMRouter {
     pub fn suggest_for_context(&self, context: &RouterContext) -> RouterSuggestion {
+        // === INTELLIGENT ROUTING (January 2026) ===
+        // If TypeScript has already selected a model via intelligent routing, use it directly
+        if let Some(selected_model) = &context.selected_model {
+            if !selected_model.is_empty() {
+                let provider = self.infer_provider_from_model(selected_model);
+                let reason = context
+                    .routing_reason
+                    .clone()
+                    .unwrap_or_else(|| format!("Intelligent routing selected: {}", selected_model));
+
+                tracing::info!(
+                    "Using intelligent routing: model={}, provider={:?}, intent={:?}, confidence={:?}",
+                    selected_model,
+                    provider,
+                    context.intent_type,
+                    context.confidence
+                );
+
+                // Check if provider is available, otherwise fallback
+                if self.has_provider(provider) {
+                    return RouterSuggestion {
+                        provider,
+                        model: selected_model.clone(),
+                        reason,
+                    };
+                }
+                // Provider not available, fall through to legacy routing with intelligent context
+            }
+        }
+
+        // Use intent_type for smarter routing if available
+        if let Some(intent_type) = &context.intent_type {
+            if let Some(suggestion) = self.route_by_intent_type(intent_type, context) {
+                return suggestion;
+            }
+        }
+
+        // === LEGACY ROUTING (fallback) ===
         let normalized_intents: Vec<String> = context
             .intents
             .iter()
@@ -287,6 +356,208 @@ impl LLMRouter {
         self.prepare_context_suggestion(provider, task_category, reason)
     }
 
+    /// Route based on intent type from intelligent classification
+    fn route_by_intent_type(
+        &self,
+        intent_type: &str,
+        context: &RouterContext,
+    ) -> Option<RouterSuggestion> {
+        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
+
+        let (provider, model, reason) = match intent_type {
+            // === Search intents - route to Perplexity ===
+            "search" => (
+                Provider::Perplexity,
+                "sonar".to_string(),
+                "Search intent detected - routing to Perplexity Sonar for real-time web search."
+                    .to_string(),
+            ),
+            "deep-research" => (
+                Provider::Perplexity,
+                "sonar-deep-research".to_string(),
+                "Deep research intent detected - routing to Perplexity Sonar Deep Research."
+                    .to_string(),
+            ),
+
+            // === Coding intent - route to best coding models ===
+            "coding" => {
+                if is_budget_plan {
+                    (
+                        Provider::DeepSeek,
+                        "deepseek-v3.2".to_string(),
+                        "Coding intent + budget plan - routing to DeepSeek V3.2 (best coding value).".to_string(),
+                    )
+                } else {
+                    (
+                        Provider::Anthropic,
+                        "claude-sonnet-4-5".to_string(),
+                        "Coding intent detected - routing to Claude Sonnet 4.5 (excellent coding)."
+                            .to_string(),
+                    )
+                }
+            }
+
+            // === Reasoning intent - route to reasoning specialists ===
+            "reasoning" => {
+                if is_budget_plan {
+                    (
+                        Provider::XAI,
+                        "grok-4.1-fast-reasoning".to_string(),
+                        "Reasoning intent + budget plan - routing to Grok 4.1 Fast Reasoning."
+                            .to_string(),
+                    )
+                } else {
+                    (
+                        Provider::OpenAI,
+                        "o3".to_string(),
+                        "Reasoning intent detected - routing to OpenAI o3 (reasoning specialist)."
+                            .to_string(),
+                    )
+                }
+            }
+
+            // === Agentic intent - route to capable models with tool use ===
+            "agentic" => {
+                if is_budget_plan {
+                    (
+                        Provider::Google,
+                        "gemini-3-flash".to_string(),
+                        "Agentic intent + budget plan - routing to Gemini 3 Flash for tool use."
+                            .to_string(),
+                    )
+                } else {
+                    (
+                        Provider::Anthropic,
+                        "claude-sonnet-4-5".to_string(),
+                        "Agentic intent detected - routing to Claude Sonnet 4.5 for tool orchestration.".to_string(),
+                    )
+                }
+            }
+
+            // === Multimodal intent - route to vision-capable models ===
+            "multimodal" => (
+                Provider::Google,
+                if is_budget_plan {
+                    "gemini-3-flash".to_string()
+                } else {
+                    "gemini-3-pro".to_string()
+                },
+                "Multimodal intent detected - routing to Google Gemini for vision capabilities."
+                    .to_string(),
+            ),
+
+            // === Non-chat modalities (image, video, tts, stt, music) ===
+            // These are handled by the TypeScript multiModalRouter with selected_model
+            // If we reach here, fall back to chat model that can describe/plan the task
+            "image-gen" | "video-gen" | "tts" | "stt" | "music" => {
+                // These should have been handled by selected_model from TypeScript
+                // Fall back to a chat model to explain the task
+                return None;
+            }
+
+            // === Default chat intent ===
+            "chat" | _ => {
+                if is_budget_plan {
+                    (
+                        Provider::Google,
+                        "gemini-3-flash".to_string(),
+                        "Chat intent + budget plan - routing to Gemini 3 Flash.".to_string(),
+                    )
+                } else {
+                    (
+                        Provider::Google,
+                        "gemini-3-pro".to_string(),
+                        "Chat intent detected - routing to Gemini 3 Pro.".to_string(),
+                    )
+                }
+            }
+        };
+
+        // Check if provider is available
+        if self.has_provider(provider) {
+            Some(RouterSuggestion {
+                provider,
+                model,
+                reason,
+            })
+        } else {
+            // Try ManagedCloud as fallback
+            if self.has_provider(Provider::ManagedCloud) {
+                Some(RouterSuggestion {
+                    provider: Provider::ManagedCloud,
+                    model: model.clone(),
+                    reason: format!("{} (via ManagedCloud)", reason),
+                })
+            } else {
+                None // Fall through to legacy routing
+            }
+        }
+    }
+
+    /// Infer provider from model name for intelligent routing
+    fn infer_provider_from_model(&self, model: &str) -> Provider {
+        let model_lower = model.to_lowercase();
+
+        // OpenAI models
+        if model_lower.starts_with("gpt-")
+            || model_lower.starts_with("o1")
+            || model_lower.starts_with("o3")
+            || model_lower.starts_with("dall-e")
+            || model_lower.starts_with("tts-")
+            || model_lower.starts_with("whisper")
+        {
+            return Provider::OpenAI;
+        }
+
+        // Anthropic models
+        if model_lower.starts_with("claude") {
+            return Provider::Anthropic;
+        }
+
+        // Google models
+        if model_lower.starts_with("gemini") || model_lower.starts_with("imagen") {
+            return Provider::Google;
+        }
+
+        // DeepSeek models
+        if model_lower.starts_with("deepseek") {
+            return Provider::DeepSeek;
+        }
+
+        // xAI models
+        if model_lower.starts_with("grok") {
+            return Provider::XAI;
+        }
+
+        // Perplexity models
+        if model_lower.starts_with("sonar") {
+            return Provider::Perplexity;
+        }
+
+        // Qwen models
+        if model_lower.starts_with("qwen") || model_lower.starts_with("qwen3") {
+            return Provider::Qwen;
+        }
+
+        // Moonshot/Kimi models
+        if model_lower.starts_with("kimi") || model_lower.starts_with("moonshot") {
+            return Provider::Moonshot;
+        }
+
+        // ZhipuAI/GLM models
+        if model_lower.starts_with("glm") {
+            return Provider::Zhipu;
+        }
+
+        // Flux models (via ManagedCloud)
+        if model_lower.starts_with("flux") {
+            return Provider::ManagedCloud;
+        }
+
+        // Default to ManagedCloud for unknown models
+        Provider::ManagedCloud
+    }
+
     fn prepare_context_suggestion(
         &self,
         preferred: Provider,
@@ -311,6 +582,7 @@ impl LLMRouter {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Zhipu,
             Provider::XAI,
         ];
 
@@ -397,6 +669,10 @@ impl LLMRouter {
 
     pub fn set_moonshot(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::Moonshot, provider);
+    }
+
+    pub fn set_zhipu(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Zhipu, provider);
     }
 
     pub fn set_perplexity(&mut self, provider: Box<dyn LLMProvider>) {
@@ -514,6 +790,7 @@ impl LLMRouter {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Zhipu,
         ] {
             if order.iter().any(|c| c.provider == provider) {
                 continue;
@@ -1131,7 +1408,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-4o".to_string(),
+                                model: "gpt-5.2".to_string(),
                                 reason: "auto-balanced-performance",
                             },
                             RouteCandidate {
@@ -1443,6 +1720,12 @@ impl LLMRouter {
                 TaskCategory::Simple => "kimi-k2-thinking".to_string(),
                 TaskCategory::Complex => "kimi-k2-thinking".to_string(),
                 TaskCategory::Creative => "kimi-k2-thinking".to_string(),
+            },
+            // ZhipuAI - GLM-4.7 is excellent for coding (73.8% SWE-bench)
+            Provider::Zhipu => match task {
+                TaskCategory::Simple => "glm-4.6v-flash".to_string(), // Fast and free
+                TaskCategory::Complex => "glm-4.7".to_string(),       // Best for coding
+                TaskCategory::Creative => "glm-4.6v".to_string(),     // Vision for creative
             },
             Provider::Perplexity => match task {
                 TaskCategory::Simple => "sonar".to_string(),

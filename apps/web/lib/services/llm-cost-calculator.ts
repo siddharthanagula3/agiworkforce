@@ -4,7 +4,7 @@ import 'server-only';
  * LLM Cost Calculator
  * Calculates cost in cents based on provider, model, and token usage
  *
- * Last Updated: 2026-01-01
+ * Last Updated: 2026-01-28
  *
  * To add new models (e.g., Claude 5, GPT-6, Grok-5, Gemini 3.5):
  * 1. Add the model to MODEL_PRICING with input/output costs per 1M tokens
@@ -23,15 +23,17 @@ export interface ModelPricing {
 }
 
 // =============================================================================
-// MODEL PRICING (Updated 2026-01-03)
+// MODEL PRICING (Updated 2026-01-28)
 // Prices in USD per 1M tokens (input / output)
 // =============================================================================
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // ---------------------------------------------------------------------------
-  // OpenAI (Updated 2026-01-03)
+  // OpenAI (Updated 2026-01-28)
   // https://platform.openai.com/docs/models
   // ---------------------------------------------------------------------------
-  // GPT-5.2 Family (Flagship)
+  // GPT-5 Pro (Flagship)
+  'gpt-5-pro': { inputCostPer1MTokens: 5.0, outputCostPer1MTokens: 30.0 },
+  // GPT-5.2 Family
   'gpt-5.2': { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 },
   'gpt-5.2-pro': { inputCostPer1MTokens: 3.5, outputCostPer1MTokens: 28.0 },
   'gpt-5.2-codex': { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 },
@@ -47,8 +49,14 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-4o': { inputCostPer1MTokens: 2.5, outputCostPer1MTokens: 10.0 },
   'gpt-4o-mini': { inputCostPer1MTokens: 0.15, outputCostPer1MTokens: 0.6 },
   // Image Generation
-  'gpt-image-1.5': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 }, // $0.04/image std
-  'gpt-image-1': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 20.0 },
+  'dall-e-3': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
+  'gpt-image-1': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
+  'gpt-image-1.5': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 80.0 },
+  // TTS
+  'tts-1': { inputCostPer1MTokens: 15.0, outputCostPer1MTokens: 0.0 },
+  'tts-1-hd': { inputCostPer1MTokens: 30.0, outputCostPer1MTokens: 0.0 },
+  // STT
+  'whisper-1': { inputCostPer1MTokens: 0.006, outputCostPer1MTokens: 0.0 },
   // Video Generation (Sora)
   'sora-2': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 100.0 }, // ~$0.10/sec
   'sora-2-pro': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 500.0 },
@@ -73,10 +81,11 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-3-haiku': { inputCostPer1MTokens: 0.25, outputCostPer1MTokens: 1.25 },
 
   // ---------------------------------------------------------------------------
-  // Google Gemini (Updated 2026-01-03)
+  // Google Gemini (Updated 2026-01-28)
   // https://ai.google.dev/gemini-api/docs/models
   // ---------------------------------------------------------------------------
   // Gemini 3 Series (Latest)
+  'gemini-3-ultra': { inputCostPer1MTokens: 3.5, outputCostPer1MTokens: 14.0 },
   'gemini-3-pro-preview': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 12.0 },
   'gemini-3-flash-preview': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 },
   'gemini-3-pro': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 12.0 },
@@ -88,16 +97,21 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // Legacy Gemini 2.0
   'gemini-2.0-flash': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.4 },
   // Image Generation (Imagen 4)
+  'imagen-4': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
+  'imagen-4-ultra': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 80.0 },
   'imagen-4.0-generate-001': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
   'imagen-4.0-ultra-generate-001': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 80.0 },
   // Video Generation (Veo)
+  'veo-3': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 750.0 },
   'veo-3.1-generate-preview': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 750.0 }, // $0.75/sec
   'veo-3.0-generate-preview': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 750.0 },
 
   // ---------------------------------------------------------------------------
-  // xAI Grok 4.1 (Updated 2026-01-03)
+  // xAI Grok 4.1 (Updated 2026-01-28)
   // https://docs.x.ai/docs/models
   // ---------------------------------------------------------------------------
+  'grok-4.1-mini': { inputCostPer1MTokens: 0.05, outputCostPer1MTokens: 0.2 },
+  'grok-4.1-fast-reasoning': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.4 },
   'grok-4-1-fast-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
   'grok-4-1-fast-non-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
   'grok-4-1-fast': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
@@ -120,11 +134,11 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'deepseek-r1': { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 1.68 },
 
   // ---------------------------------------------------------------------------
-  // Qwen3 (Updated 2026-01-03)
+  // Qwen3 (Updated 2026-01-28)
   // https://www.alibabacloud.com/help/en/model-studio/models
   // ---------------------------------------------------------------------------
   'qwen3-max': { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 },
-  'qwen3-max-preview': { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 },
+  'qwen3-max-preview': { inputCostPer1MTokens: 2.15, outputCostPer1MTokens: 8.6 },
   'qwen-max': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 4.0 },
   'qwen-plus': { inputCostPer1MTokens: 0.4, outputCostPer1MTokens: 2.0 },
   'qwen-turbo': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.3 },
@@ -141,25 +155,39 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'qwen-image-max': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 35.0 },
 
   // ---------------------------------------------------------------------------
-  // Moonshot Kimi K2 (Updated 2026-01-03)
+  // Moonshot Kimi K2.5 (Updated 2026-01-28)
   // ---------------------------------------------------------------------------
-  'kimi-k2': { inputCostPer1MTokens: 0.6, outputCostPer1MTokens: 2.5 },
-  'kimi-k2-thinking': { inputCostPer1MTokens: 0.6, outputCostPer1MTokens: 2.5 },
-  'kimi-k2-thinking-turbo': { inputCostPer1MTokens: 1.15, outputCostPer1MTokens: 8.0 },
+  'kimi-k2.5': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 },
+  'kimi-k2.5-thinking': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 },
+  'kimi-k2.5-turbo': { inputCostPer1MTokens: 1.25, outputCostPer1MTokens: 8.5 },
 
   // ---------------------------------------------------------------------------
-  // Perplexity Sonar (Updated 2026-01-03)
+  // Perplexity Sonar (Updated 2026-01-28)
   // https://docs.perplexity.ai/getting-started/models
   // Note: Perplexity also charges per-search fees not reflected here
   // ---------------------------------------------------------------------------
   sonar: { inputCostPer1MTokens: 1.0, outputCostPer1MTokens: 1.0 },
   'sonar-pro': { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 },
+  'sonar-reasoning': { inputCostPer1MTokens: 1.0, outputCostPer1MTokens: 5.0 },
   'sonar-reasoning-pro': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 },
   'sonar-deep-research': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 },
+
+  // ---------------------------------------------------------------------------
+  // Third-party Image Generation (Updated 2026-01-28)
+  // ---------------------------------------------------------------------------
+  'flux-1.1-pro': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
+  'flux-2-pro': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 60.0 },
+  'ideogram-2': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 20.0 },
+
+  // ---------------------------------------------------------------------------
+  // Music Generation (Credit-based, use 0 for now)
+  // ---------------------------------------------------------------------------
+  'suno-v4': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 },
+  udio: { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 },
 };
 
 // =============================================================================
-// PROVIDER DEFAULTS (Updated 2026-01-03)
+// PROVIDER DEFAULTS (Updated 2026-01-28)
 // Used when a specific model is not found in MODEL_PRICING
 // These should reflect the most commonly used/recommended model per provider
 // =============================================================================
@@ -170,7 +198,7 @@ const PROVIDER_DEFAULTS: Record<string, ModelPricing> = {
   xai: { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 }, // Grok 4.1 Fast
   deepseek: { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 }, // V3.2
   qwen: { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 }, // Qwen3 Max
-  moonshot: { inputCostPer1MTokens: 0.6, outputCostPer1MTokens: 2.5 }, // Kimi K2
+  moonshot: { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 }, // Kimi K2.5
   perplexity: { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 }, // Sonar Deep Research
   ollama: { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 }, // Local models
 };

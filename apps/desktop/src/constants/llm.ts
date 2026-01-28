@@ -1,4 +1,5 @@
 import type { Provider } from '../types/provider';
+import type { SubscriptionTier } from './planModels';
 
 /**
  * LLM Constants with Intelligent Model Routing (January 2026)
@@ -70,6 +71,7 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   qwen: 'Qwen',
   moonshot: 'Moonshot AI',
   perplexity: 'Perplexity',
+  zhipu: 'ZhipuAI',
 };
 
 // Thinking model variants - models that support extended thinking/reasoning
@@ -86,27 +88,211 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   ],
   ollama: [], // Populated dynamically from local Ollama installation
   openai: [
+    { value: 'gpt-5-pro', label: 'GPT-5 Pro' },
     { value: 'gpt-5.2', label: 'GPT-5.2' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gpt-5-nano', label: 'GPT-5 Nano' },
   ],
   anthropic: [
     { value: 'claude-opus-4.5', label: 'Claude 4.5 Opus' },
     { value: 'claude-sonnet-4.5', label: 'Claude 4.5 Sonnet' },
+    { value: 'claude-haiku-4.5', label: 'Claude 4.5 Haiku' },
   ],
   google: [
+    { value: 'gemini-3-ultra', label: 'Gemini 3 Ultra' },
     { value: 'gemini-3-pro', label: 'Gemini 3 Pro' },
     { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
   ],
   xai: [
     { value: 'grok-4.1', label: 'Grok 4.1' },
-    { value: 'grok-4-fast', label: 'Grok 4 Fast (2M ctx)' },
+    { value: 'grok-4.1-fast-reasoning', label: 'Grok 4.1 Fast Reasoning' },
+    { value: 'grok-4.1-mini', label: 'Grok 4.1 Mini' },
   ],
-  deepseek: [{ value: 'deepseek-v3.2', label: 'DeepSeek V3.2' }],
-  qwen: [{ value: 'qwen-3', label: 'Qwen 3' }],
-  moonshot: [],
-  perplexity: [],
+  deepseek: [
+    { value: 'deepseek-v3.2', label: 'DeepSeek V3.2' },
+    { value: 'deepseek-r1', label: 'DeepSeek R1' },
+  ],
+  qwen: [
+    { value: 'qwen3-max', label: 'Qwen3 Max' },
+    { value: 'qwen3-coder-plus', label: 'Qwen3 Coder Plus' },
+    { value: 'qwen-flash', label: 'Qwen Flash' },
+  ],
+  moonshot: [
+    { value: 'kimi-k2.5-thinking', label: 'Kimi K2.5 Thinking' },
+    { value: 'kimi-k2.5-turbo', label: 'Kimi K2.5 Turbo' },
+  ],
+  perplexity: [
+    { value: 'sonar', label: 'Sonar' },
+    { value: 'sonar-reasoning', label: 'Sonar Reasoning' },
+    { value: 'sonar-pro', label: 'Sonar Pro' },
+    { value: 'sonar-deep-research', label: 'Sonar Deep Research' },
+  ],
+  zhipu: [
+    { value: 'glm-4.7', label: 'GLM-4.7' },
+    { value: 'glm-4.6v', label: 'GLM-4.6V (Vision)' },
+    { value: 'glm-4.6v-flash', label: 'GLM-4.6V Flash' },
+  ],
 };
+
+/**
+ * Tier-based model access control.
+ *
+ * Maps subscription tiers to the models users can manually select.
+ * This is separate from auto-mode routing (which also respects tiers).
+ *
+ * Tiers are cumulative: higher tiers include all lower tier models.
+ * - hobby/free: Budget-friendly models only
+ * - pro: Adds mid-tier models (Claude Sonnet, GPT-5.2, etc.)
+ * - max/enterprise: All models including flagships
+ */
+export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
+  // Free/Hobby: Economy tier models only (< $1/1M output tokens)
+  free: [
+    // Economy models - best value
+    'gemini-3-flash',
+    'glm-4.7',
+    'deepseek-v3.2',
+    'glm-4.6v',
+    'glm-4.6v-flash',
+    'kimi-k2.5-thinking',
+    'grok-4.1-fast-reasoning',
+    'claude-haiku-4.5',
+    'qwen3-coder-flash',
+    'grok-4.1-mini',
+    'qwen-turbo',
+    'qwen-flash',
+    'gpt-5-nano',
+    // Search models
+    'sonar',
+  ],
+  hobby: [
+    // Same as free
+    'gemini-3-flash',
+    'glm-4.7',
+    'deepseek-v3.2',
+    'glm-4.6v',
+    'glm-4.6v-flash',
+    'kimi-k2.5-thinking',
+    'grok-4.1-fast-reasoning',
+    'claude-haiku-4.5',
+    'qwen3-coder-flash',
+    'grok-4.1-mini',
+    'qwen-turbo',
+    'qwen-flash',
+    'gpt-5-nano',
+    'sonar',
+  ],
+  // Pro: Economy + balanced tier models ($1-15/1M output tokens)
+  pro: [
+    // Pro-tier additions
+    'gpt-5.2',
+    'claude-sonnet-4.5',
+    'gemini-3-pro',
+    'kimi-k2.5-turbo',
+    'qwen3-max',
+    'qwen3-coder-plus',
+    'sonar-pro',
+    'sonar-reasoning',
+    'sonar-deep-research',
+    // All economy models
+    'gemini-3-flash',
+    'glm-4.7',
+    'deepseek-v3.2',
+    'glm-4.6v',
+    'glm-4.6v-flash',
+    'kimi-k2.5-thinking',
+    'grok-4.1-fast-reasoning',
+    'claude-haiku-4.5',
+    'qwen3-coder-flash',
+    'grok-4.1-mini',
+    'qwen-turbo',
+    'qwen-flash',
+    'gpt-5-nano',
+    'sonar',
+  ],
+  // Max: All models including flagships
+  max: [
+    // Flagship models
+    'claude-opus-4.5',
+    'gpt-5-pro',
+    'gemini-3-ultra',
+    'o3',
+    'grok-4.1',
+    'deepseek-r1',
+    // Pro-tier models
+    'gpt-5.2',
+    'claude-sonnet-4.5',
+    'gemini-3-pro',
+    'kimi-k2.5-turbo',
+    'qwen3-max',
+    'qwen3-coder-plus',
+    'sonar-pro',
+    'sonar-reasoning',
+    'sonar-deep-research',
+    // Economy models
+    'gemini-3-flash',
+    'glm-4.7',
+    'deepseek-v3.2',
+    'glm-4.6v',
+    'glm-4.6v-flash',
+    'kimi-k2.5-thinking',
+    'grok-4.1-fast-reasoning',
+    'claude-haiku-4.5',
+    'qwen3-coder-flash',
+    'grok-4.1-mini',
+    'qwen-turbo',
+    'qwen-flash',
+    'gpt-5-nano',
+    'sonar',
+  ],
+  // Enterprise: Same as max (full access)
+  enterprise: [
+    'claude-opus-4.5',
+    'gpt-5-pro',
+    'gemini-3-ultra',
+    'o3',
+    'grok-4.1',
+    'deepseek-r1',
+    'gpt-5.2',
+    'claude-sonnet-4.5',
+    'gemini-3-pro',
+    'kimi-k2.5-turbo',
+    'qwen3-max',
+    'qwen3-coder-plus',
+    'sonar-pro',
+    'sonar-reasoning',
+    'sonar-deep-research',
+    'gemini-3-flash',
+    'glm-4.7',
+    'deepseek-v3.2',
+    'glm-4.6v',
+    'glm-4.6v-flash',
+    'kimi-k2.5-thinking',
+    'grok-4.1-fast-reasoning',
+    'claude-haiku-4.5',
+    'qwen3-coder-flash',
+    'grok-4.1-mini',
+    'qwen-turbo',
+    'qwen-flash',
+    'gpt-5-nano',
+    'sonar',
+  ],
+};
+
+/**
+ * Check if a model is allowed for a given subscription tier.
+ * Returns true if the model is in the tier's allowed list.
+ */
+export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
+  const allowedModels = TIER_ALLOWED_MODELS[tier];
+  return allowedModels?.includes(modelId) ?? false;
+}
+
+/**
+ * Get the list of allowed models for a subscription tier.
+ */
+export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
+  return TIER_ALLOWED_MODELS[tier] ?? TIER_ALLOWED_MODELS.free;
+}
 
 // Provider order for UI display
 export const PROVIDERS_IN_ORDER: Provider[] = [
@@ -130,21 +316,63 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'auto-premium': 400_000, // GPT-5.2 has 400K
   // OpenAI
   'gpt-5.2': 400_000, // Updated Jan 2026
-  'gpt-4o': 128_000,
-  'gpt-4o-mini': 128_000,
+  'gpt-5-pro': 512_000, // GPT-5 Pro - flagship OpenAI model
+  'gpt-5-nano': 128_000, // GPT-5 Nano - cheapest OpenAI model
   // Anthropic
   'claude-opus-4.5': 200_000,
   'claude-sonnet-4.5': 200_000,
+  'claude-haiku-4.5': 200_000, // Claude Haiku 4.5 - cheapest Anthropic
   // Google
+  'gemini-3-ultra': 2_000_000, // Gemini 3 Ultra - flagship Google model
   'gemini-3-pro': 2_000_000,
   'gemini-3-flash': 1_000_000,
   // xAI
   'grok-4.1': 256_000,
-  'grok-4-fast': 2_000_000, // Largest context available!
+  'grok-4.1-fast': 2_000_000, // Grok 4.1 Fast - cheapest xAI with 2M context
+  'grok-4.1-fast-reasoning': 2_000_000,
+  'grok-4.1-mini': 128_000,
   // DeepSeek
   'deepseek-v3.2': 128_000,
+  'deepseek-r1': 128_000,
   // Qwen
   'qwen-3': 128_000,
+  'qwen3-max': 128_000,
+  'qwen3-coder-plus': 128_000,
+  'qwen3-coder-flash': 128_000,
+  'qwen-flash': 128_000,
+  'qwen-turbo': 128_000,
+  // Moonshot K2.5 (replaces K2)
+  'kimi-k2.5': 256_000,
+  'kimi-k2.5-thinking': 256_000,
+  'kimi-k2.5-turbo': 256_000,
+  // Perplexity
+  sonar: 128_000,
+  'sonar-reasoning': 128_000,
+  'sonar-reasoning-pro': 128_000,
+  'sonar-pro': 200_000,
+  'sonar-deep-research': 128_000,
+  // OpenAI
+  o3: 200_000,
+  // Image models
+  'dall-e-3': 4000,
+  'gpt-image-1': 4000,
+  'gpt-image-1.5': 4000,
+  'imagen-4': 4000,
+  'imagen-4-ultra': 4000,
+  'flux-1.1-pro': 4000,
+  'flux-2-pro': 4000,
+  'ideogram-2': 4000,
+  // Video models
+  'sora-2': 4000,
+  'veo-3': 4000,
+  // TTS models
+  'tts-1': 4096,
+  'tts-1-hd': 4096,
+  // STT models
+  'whisper-1': 0,
+  // Music models
+  'suno-v4': 4000,
+  udio: 4000,
 };
 
 export function getModelContextWindow(modelId: string): number {
@@ -171,7 +399,17 @@ export interface ModelMetadata {
   apiModelId?: string;
   name: string;
   provider: Provider;
-  modelType: 'chat' | 'code' | 'reasoning' | 'multimodal' | 'image' | 'video' | 'search';
+  modelType:
+    | 'chat'
+    | 'code'
+    | 'reasoning'
+    | 'multimodal'
+    | 'image'
+    | 'video'
+    | 'search'
+    | 'tts'
+    | 'stt'
+    | 'music';
   contextWindow: number;
   inputCost: number;
   outputCost: number;
@@ -355,11 +593,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: true, // Code Interpreter sandbox
     },
     benchmarks: {
-      swebench: 65.2, // SWE-bench verified
-      humaneval: 96.8,
-      mmlu: 92.5,
-      gpqa: 78.3,
-      aime: 85.0,
+      swebench: 80.0, // SWE-bench verified (Jan 2026)
+      humaneval: 98.5,
+      mmlu: 93.2,
+      gpqa: 93.2, // GPQA Diamond
+      aime: 100.0, // AIME 2025 (with thinking)
     },
     speed: 'medium',
     quality: 'excellent',
@@ -367,77 +605,77 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['Agentic Tasks', 'Complex Reasoning', 'Research'],
     released: 'January 2026',
   },
-  'gpt-4o': {
-    id: 'gpt-4o',
-    apiModelId: 'gpt-4o-2024-11-20',
-    name: 'GPT-4o',
+  'gpt-5-pro': {
+    id: 'gpt-5-pro',
+    apiModelId: 'gpt-5-pro-2026-01',
+    name: 'GPT-5 Pro',
     provider: 'openai',
-    modelType: 'multimodal',
-    contextWindow: 128_000,
-    inputCost: 2.5, // $2.50/1M input
-    outputCost: 10.0, // $10/1M output
+    modelType: 'reasoning',
+    contextWindow: 512_000, // 512K context - flagship model
+    inputCost: 5.0, // $5/1M input
+    outputCost: 30.0, // $30/1M output
     capabilities: {
       streaming: true,
-      tools: true, // Full function calling
-      vision: true, // Native multimodal vision
+      tools: true, // Full function calling support
+      vision: true, // Native vision in GPT-5 series
       json: true, // Structured outputs
-      thinking: false, // No extended thinking (use o1 for that)
-      computerUse: false, // Not available in GPT-4o
-      agentic: true, // Good for agentic with tools
+      thinking: true, // Advanced reasoning mode
+      computerUse: true, // Full computer use support
+      agentic: true, // Optimized for multi-step autonomous tasks
       imageGen: false, // Separate DALL-E model
-      videoGen: false,
-      search: true, // Web browsing in ChatGPT
-      research: true, // Deep research available
-      codeExecution: true, // Code Interpreter available
+      videoGen: false, // Separate Sora model
+      search: true, // Web browsing capability
+      research: true, // Deep research mode
+      codeExecution: true, // Code Interpreter sandbox
     },
     benchmarks: {
-      swebench: 38.4,
-      humaneval: 90.2,
-      mmlu: 88.7,
-      gpqa: 53.6,
-      aime: 45.0,
+      swebench: 75.4, // SWE-bench verified (Jan 2026)
+      humaneval: 98.2,
+      mmlu: 94.8,
+      gpqa: 93.8, // GPQA Diamond (high reasoning)
+      aime: 94.6, // AIME 2025
     },
-    speed: 'fast',
+    speed: 'slow',
     quality: 'excellent',
-    qualityTier: 'balanced',
-    bestFor: ['General Tasks', 'Multimodal', 'Coding'],
-    released: 'November 2024',
+    qualityTier: 'best',
+    bestFor: ['Complex Research', 'Hard Reasoning', 'Long-form Analysis', 'Enterprise Tasks'],
+    released: 'January 2026',
   },
-  'gpt-4o-mini': {
-    id: 'gpt-4o-mini',
-    apiModelId: 'gpt-4o-mini-2024-07-18',
-    name: 'GPT-4o Mini',
+  'gpt-5-nano': {
+    id: 'gpt-5-nano',
+    apiModelId: 'gpt-5-nano-2025-09-15',
+    name: 'GPT-5 Nano',
     provider: 'openai',
     modelType: 'chat',
     contextWindow: 128_000,
-    inputCost: 0.15, // $0.15/1M input
-    outputCost: 0.6, // $0.60/1M output
+    inputCost: 0.05, // $0.05/1M input - CHEAPEST OpenAI
+    outputCost: 0.4, // $0.40/1M output
     capabilities: {
       streaming: true,
       tools: true, // Function calling supported
-      vision: true, // Vision supported (same as GPT-4o)
+      vision: true, // Vision supported
       json: true, // Structured outputs
       thinking: false, // No reasoning mode
       computerUse: false, // Not available
-      agentic: false, // Not optimized for long agentic tasks
+      agentic: false, // Not optimized for agentic tasks
       imageGen: false,
       videoGen: false,
-      search: false, // No web browsing in mini
+      search: false, // No web browsing
       research: false, // No deep research
       codeExecution: true, // Code Interpreter available
     },
     benchmarks: {
-      swebench: 22.0,
-      humaneval: 87.0,
-      mmlu: 82.0,
-      gpqa: 40.2,
-      aime: 25.0,
+      swebench: 18.0,
+      humaneval: 80.0,
+      mmlu: 78.0,
+      gpqa: 35.0,
+      aime: 20.0,
     },
     speed: 'very-fast',
     quality: 'good',
     qualityTier: 'fast',
-    bestFor: ['Quick Tasks', 'Cost-Sensitive', 'Simple Queries'],
-    released: 'July 2024',
+    bestFor: ['Simple Tasks', 'Classification', 'Summarization', 'High Volume'],
+    released: 'September 2025',
   },
 
   // ============================================
@@ -469,11 +707,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: false, // No sandbox execution (use MCP tools)
     },
     benchmarks: {
-      swebench: 80.9, // BEST for coding (Jan 2026)
+      swebench: 80.9, // BEST for coding (Jan 2026) - First to exceed 80%
       humaneval: 97.2,
-      mmlu: 91.8,
-      gpqa: 82.5,
-      aime: 78.0,
+      mmlu: 89.5, // MMLU-Pro
+      gpqa: 89.0, // GPQA Diamond
+      aime: 93.0, // AIME 2025 (with thinking)
     },
     speed: 'slow',
     quality: 'excellent',
@@ -505,16 +743,52 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: false, // No sandbox (use external tools)
     },
     benchmarks: {
-      swebench: 77.2, // Second best for coding
+      swebench: 77.2, // Second best for coding (Jan 2026)
       humaneval: 95.8,
       mmlu: 89.5,
       gpqa: 75.2,
-      aime: 68.0,
+      aime: 87.0, // AIME 2025
     },
     speed: 'fast',
     quality: 'excellent',
     qualityTier: 'balanced',
     bestFor: ['Coding', 'Tool Use', 'Computer Use'],
+    released: 'October 2025',
+  },
+  'claude-haiku-4.5': {
+    id: 'claude-haiku-4.5',
+    apiModelId: 'claude-haiku-4-5-20251015',
+    name: 'Claude 4.5 Haiku',
+    provider: 'anthropic',
+    modelType: 'chat',
+    contextWindow: 200_000,
+    inputCost: 1.0, // $1/1M input - Cheapest Anthropic
+    outputCost: 5.0, // $5/1M output
+    capabilities: {
+      streaming: true,
+      tools: true, // Full tool use support
+      vision: true, // Native vision
+      json: true, // Structured outputs
+      thinking: false, // No extended thinking
+      computerUse: false, // No computer use
+      agentic: false, // Not optimized for agentic
+      imageGen: false,
+      videoGen: false,
+      search: false, // No native web search
+      research: false, // No built-in research
+      codeExecution: false, // No sandbox
+    },
+    benchmarks: {
+      swebench: 45.0,
+      humaneval: 88.0,
+      mmlu: 85.0,
+      gpqa: 55.0,
+      aime: 40.0,
+    },
+    speed: 'very-fast',
+    quality: 'good',
+    qualityTier: 'fast',
+    bestFor: ['Quick Tasks', 'Simple Queries', 'High Volume', 'Cost-Sensitive'],
     released: 'October 2025',
   },
 
@@ -523,6 +797,42 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // Source: https://ai.google.dev/gemini-api/docs/models
   // Capabilities verified January 2026
   // ============================================
+  'gemini-3-ultra': {
+    id: 'gemini-3-ultra',
+    apiModelId: 'gemini-3.0-ultra',
+    name: 'Gemini 3 Ultra',
+    provider: 'google',
+    modelType: 'reasoning',
+    contextWindow: 2_000_000, // 2M context window
+    inputCost: 3.5, // $3.50/1M input
+    outputCost: 14.0, // $14/1M output
+    capabilities: {
+      streaming: true,
+      tools: true, // Full function calling
+      vision: true, // Native multimodal (images, video, audio)
+      json: true, // JSON mode supported
+      thinking: true, // Deep Think / reasoning mode
+      computerUse: false, // Not available
+      agentic: true, // Excellent for multi-step tasks
+      imageGen: false, // Separate Imagen model
+      videoGen: false, // Separate Veo model
+      search: true, // Google Search grounding
+      research: true, // Deep research via grounding
+      codeExecution: true, // Native code execution sandbox
+    },
+    benchmarks: {
+      swebench: 76.2, // SWE-bench verified (Jan 2026)
+      humaneval: 96.0,
+      mmlu: 90.1, // MMLU-Pro
+      gpqa: 93.8, // GPQA Diamond (Deep Think)
+      aime: 95.0, // AIME 2025 (with tools)
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Complex Research', 'Long Context', 'Multimodal Analysis', 'Enterprise Tasks'],
+    released: 'January 2026',
+  },
   'gemini-3-pro': {
     id: 'gemini-3-pro',
     apiModelId: 'gemini-3.0-pro',
@@ -547,11 +857,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: true, // Native code execution sandbox
     },
     benchmarks: {
-      swebench: 52.8,
+      swebench: 74.2, // SWE-bench verified (Jan 2026)
       humaneval: 93.5,
-      mmlu: 90.2, // Arena ELO: 1501 (top)
-      gpqa: 76.8,
-      aime: 72.0,
+      mmlu: 89.5, // MMLU-Pro, Arena ELO: 1501 (top)
+      gpqa: 91.9, // GPQA Diamond
+      aime: 95.0, // AIME 2025
     },
     speed: 'fast',
     quality: 'excellent',
@@ -566,8 +876,8 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     provider: 'google',
     modelType: 'chat',
     contextWindow: 1_000_000, // 1M context
-    inputCost: 0.08, // $0.075/1M input - CHEAPEST
-    outputCost: 0.3, // $0.30/1M output
+    inputCost: 0.5, // $0.50/1M input (verified Jan 2026)
+    outputCost: 3.0, // $3.00/1M output (verified Jan 2026)
     capabilities: {
       streaming: true,
       tools: true, // Function calling supported
@@ -583,11 +893,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: true, // Code execution sandbox
     },
     benchmarks: {
-      swebench: 35.2,
-      humaneval: 88.5,
-      mmlu: 85.8,
-      gpqa: 58.2,
-      aime: 42.0,
+      swebench: 76.2, // SWE-bench verified (Jan 2026) - outperforms Pro!
+      humaneval: 91.0,
+      mmlu: 88.6, // MMLU-Pro
+      gpqa: 60.0, // GPQA Diamond
+      aime: 88.0, // AIME 2025 (Flash Thinking)
     },
     speed: 'very-fast',
     quality: 'good',
@@ -639,11 +949,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2026',
   },
 
-  // Grok 4 Fast - Economy model with massive context
-  'grok-4-fast': {
-    id: 'grok-4-fast',
-    apiModelId: 'grok-4-fast',
-    name: 'Grok 4 Fast',
+  // Grok 4.1 Fast - Economy model with massive context (latest)
+  'grok-4.1-fast': {
+    id: 'grok-4.1-fast',
+    apiModelId: 'grok-4.1-fast',
+    name: 'Grok 4.1 Fast',
     provider: 'xai',
     modelType: 'chat',
     contextWindow: 2_000_000, // 2M context - largest available
@@ -707,11 +1017,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: false, // No sandbox (must use external tools)
     },
     benchmarks: {
-      swebench: 58.5, // Very competitive for price
+      swebench: 68.8, // SWE-bench verified (Jan 2026) - Thinking mode
       humaneval: 92.8,
-      mmlu: 87.5,
+      mmlu: 85.0, // MMLU-Pro
       gpqa: 68.3,
-      aime: 60.0,
+      aime: 70.0, // AIME 2025
     },
     speed: 'fast',
     quality: 'excellent',
@@ -760,6 +1070,1097 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     quality: 'good',
     qualityTier: 'balanced',
     bestFor: ['Multilingual', 'Chinese', 'General Tasks', 'Reasoning'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // NEW MODELS (January 2026 Update)
+  // ============================================
+
+  // OpenAI o3
+  o3: {
+    id: 'o3',
+    apiModelId: 'o3',
+    name: 'OpenAI o3',
+    provider: 'openai',
+    modelType: 'reasoning',
+    contextWindow: 200_000,
+    inputCost: 2.0,
+    outputCost: 8.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: true,
+    },
+    benchmarks: { swebench: 65, humaneval: 96, mmlu: 92, gpqa: 78, aime: 85 },
+    speed: 'slow',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Complex Reasoning', 'Math', 'Science', 'Hard Problems'],
+    released: 'January 2026',
+  },
+
+  // xAI Grok 4.1 Mini
+  'grok-4.1-mini': {
+    id: 'grok-4.1-mini',
+    apiModelId: 'grok-4.1-mini',
+    name: 'Grok 4.1 Mini',
+    provider: 'xai',
+    modelType: 'chat',
+    contextWindow: 128_000,
+    inputCost: 0.05,
+    outputCost: 0.2,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 35, humaneval: 75, mmlu: 78, gpqa: 42, aime: 30 },
+    speed: 'very-fast',
+    quality: 'fair',
+    qualityTier: 'fast',
+    bestFor: ['Quick Tasks', 'Simple Queries', 'Budget Usage'],
+    released: 'January 2026',
+  },
+
+  // xAI Grok 4.1 Fast Reasoning
+  'grok-4.1-fast-reasoning': {
+    id: 'grok-4.1-fast-reasoning',
+    apiModelId: 'grok-4.1-fast-reasoning',
+    name: 'Grok 4.1 Fast Reasoning',
+    provider: 'xai',
+    modelType: 'reasoning',
+    contextWindow: 2_000_000,
+    inputCost: 0.1,
+    outputCost: 0.4,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: false,
+      codeExecution: true,
+    },
+    benchmarks: { swebench: 48, humaneval: 85, mmlu: 85, gpqa: 60, aime: 55 },
+    speed: 'fast',
+    quality: 'good',
+    qualityTier: 'balanced',
+    bestFor: ['Reasoning', 'Real-time Data', 'Long Context'],
+    released: 'January 2026',
+  },
+
+  // DeepSeek R1
+  'deepseek-r1': {
+    id: 'deepseek-r1',
+    apiModelId: 'deepseek-reasoner',
+    name: 'DeepSeek R1',
+    provider: 'deepseek',
+    modelType: 'reasoning',
+    contextWindow: 128_000,
+    inputCost: 0.55,
+    outputCost: 1.68,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 55, humaneval: 90, mmlu: 87, gpqa: 68, aime: 75 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Reasoning', 'Math', 'Coding', 'Budget Reasoning'],
+    released: 'January 2025',
+  },
+
+  // ============================================
+  // QWEN MODELS (New)
+  // ============================================
+  'qwen-flash': {
+    id: 'qwen-flash',
+    apiModelId: 'qwen-flash',
+    name: 'Qwen Flash',
+    provider: 'qwen',
+    modelType: 'chat',
+    contextWindow: 128_000,
+    inputCost: 0.05,
+    outputCost: 0.15,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 25, humaneval: 70, mmlu: 75, gpqa: 35, aime: 25 },
+    speed: 'very-fast',
+    quality: 'fair',
+    qualityTier: 'fast',
+    bestFor: ['Quick Tasks', 'Budget Usage', 'Multilingual'],
+    released: 'January 2026',
+  },
+  'qwen-turbo': {
+    id: 'qwen-turbo',
+    apiModelId: 'qwen-turbo',
+    name: 'Qwen Turbo',
+    provider: 'qwen',
+    modelType: 'chat',
+    contextWindow: 128_000,
+    inputCost: 0.1,
+    outputCost: 0.3,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 30, humaneval: 75, mmlu: 78, gpqa: 40, aime: 30 },
+    speed: 'fast',
+    quality: 'fair',
+    qualityTier: 'fast',
+    bestFor: ['General Tasks', 'Multilingual', 'Fast Response'],
+    released: 'January 2026',
+  },
+  'qwen3-coder-flash': {
+    id: 'qwen3-coder-flash',
+    apiModelId: 'qwen3-coder-flash',
+    name: 'Qwen3 Coder Flash',
+    provider: 'qwen',
+    modelType: 'code',
+    contextWindow: 128_000,
+    inputCost: 0.22,
+    outputCost: 0.95,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 45, humaneval: 88, mmlu: 80, gpqa: 45, aime: 40 },
+    speed: 'fast',
+    quality: 'good',
+    qualityTier: 'balanced',
+    bestFor: ['Coding', 'Fast Code Generation', 'Budget Coding'],
+    released: 'January 2026',
+  },
+  'qwen3-coder-plus': {
+    id: 'qwen3-coder-plus',
+    apiModelId: 'qwen3-coder-plus',
+    name: 'Qwen3 Coder Plus',
+    provider: 'qwen',
+    modelType: 'code',
+    contextWindow: 128_000,
+    inputCost: 0.5,
+    outputCost: 2.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 55, humaneval: 92, mmlu: 85, gpqa: 55, aime: 50 },
+    speed: 'medium',
+    quality: 'good',
+    qualityTier: 'balanced',
+    bestFor: ['Advanced Coding', 'Code Review', 'Refactoring'],
+    released: 'January 2026',
+  },
+  'qwen3-max': {
+    id: 'qwen3-max',
+    apiModelId: 'qwen3-max-2026-01-23',
+    name: 'Qwen3 Max',
+    provider: 'qwen',
+    modelType: 'reasoning',
+    contextWindow: 128_000,
+    inputCost: 1.2,
+    outputCost: 6.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: false,
+      codeExecution: true,
+    },
+    benchmarks: { swebench: 58, humaneval: 93, mmlu: 88, gpqa: 65, aime: 60 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Complex Reasoning', 'Multilingual', 'Research'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // MOONSHOT K2.5 MODELS (replaces K2)
+  // ============================================
+  'kimi-k2.5': {
+    id: 'kimi-k2.5',
+    apiModelId: 'kimi-k2.5',
+    name: 'Kimi K2.5',
+    provider: 'moonshot',
+    modelType: 'multimodal',
+    contextWindow: 256_000,
+    inputCost: 0.8,
+    outputCost: 3.5,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 52, humaneval: 90, mmlu: 87, gpqa: 72, aime: 85 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Vision', 'Math', 'Reasoning', 'Agent Swarms'],
+    released: 'January 2026',
+  },
+  'kimi-k2.5-thinking': {
+    id: 'kimi-k2.5-thinking',
+    apiModelId: 'kimi-k2.5-thinking',
+    name: 'Kimi K2.5 Thinking',
+    provider: 'moonshot',
+    modelType: 'reasoning',
+    contextWindow: 256_000,
+    inputCost: 0.8,
+    outputCost: 3.5,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 55, humaneval: 92, mmlu: 88, gpqa: 84, aime: 99 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Complex Reasoning', 'Math', 'Agent Swarms'],
+    released: 'January 2026',
+  },
+  'kimi-k2.5-turbo': {
+    id: 'kimi-k2.5-turbo',
+    apiModelId: 'kimi-k2.5-turbo',
+    name: 'Kimi K2.5 Turbo',
+    provider: 'moonshot',
+    modelType: 'reasoning',
+    contextWindow: 256_000,
+    inputCost: 1.25,
+    outputCost: 8.5,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 58, humaneval: 93, mmlu: 89, gpqa: 85, aime: 99 },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Fast Reasoning', 'Math', 'Speed-Critical'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // ZHIPUAI MODELS (智谱AI / BigModel)
+  // Source: https://docs.z.ai/guides/llm/glm-4.7
+  // GLM-4.7 (December 2025): Flagship coding model
+  // SWE-bench Verified: 73.8%, LiveCodeBench v6: 84.9%, AIME 2025: 95.7%
+  // ============================================
+  'glm-4.7': {
+    id: 'glm-4.7',
+    apiModelId: 'glm-4.7',
+    name: 'GLM-4.7',
+    provider: 'zhipu' as Provider,
+    modelType: 'code',
+    contextWindow: 128_000,
+    inputCost: 0.14, // ~¥1/M tokens ($0.14/M)
+    outputCost: 0.42, // ~¥3/M tokens ($0.42/M)
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false, // Use glm-4.6v for vision
+      json: true,
+      thinking: true, // Supports thinking-before-acting
+      computerUse: false,
+      agentic: true, // Optimized for agent frameworks (Claude Code, Cline, etc.)
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    // January 2026 benchmarks from z.ai blog and SWE-bench
+    benchmarks: { swebench: 73.8, humaneval: 85, mmlu: 88, gpqa: 85.7, aime: 95.7 },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Coding', 'Agent Workflows', 'Open-Weight Alternative', 'Chinese Language'],
+    released: 'December 2025',
+  },
+  // GLM-4.6V (December 2025): Native multimodal with tool calling
+  // 128K context, arbitrary resolution support, MIT licensed
+  'glm-4.6v': {
+    id: 'glm-4.6v',
+    apiModelId: 'glm-4.6v',
+    name: 'GLM-4.6V (Vision)',
+    provider: 'zhipu' as Provider,
+    modelType: 'multimodal',
+    contextWindow: 128_000,
+    inputCost: 0.14, // ¥1/M tokens (~$0.14/M) - 50% cheaper than 4.5V
+    outputCost: 0.42, // ¥3/M tokens (~$0.42/M)
+    capabilities: {
+      streaming: true,
+      tools: true, // Native function calling with images!
+      vision: true, // Vision capable - arbitrary resolution support
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 68, humaneval: 82, mmlu: 86, gpqa: 58, aime: 75 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Vision + Tool Use', 'Image Analysis', 'Frontend Automation', 'Multimodal'],
+    released: 'December 2025',
+  },
+  // GLM-4.6V-Flash (December 2025): 9B lightweight vision model - FREE
+  // CRITICAL: This is a FREE model - prioritize in routing!
+  'glm-4.6v-flash': {
+    id: 'glm-4.6v-flash',
+    apiModelId: 'glm-4.6v-flash',
+    name: 'GLM-4.6V Flash (FREE)',
+    provider: 'zhipu' as Provider,
+    modelType: 'multimodal',
+    contextWindow: 128_000,
+    inputCost: 0.0, // FREE for commercial use (open-source MIT)
+    outputCost: 0.0, // FREE - ZERO COST!
+    capabilities: {
+      streaming: true,
+      tools: true, // Native function calling with images!
+      vision: true, // 9B parameter vision model
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false, // Not optimized for long agentic tasks
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 45, humaneval: 75, mmlu: 78, gpqa: 40, aime: 45 },
+    speed: 'very-fast',
+    quality: 'good',
+    qualityTier: 'fast',
+    bestFor: ['FREE Model', 'Vision Tasks', 'Simple Queries', 'High Volume', 'Budget Usage'],
+    released: 'December 2025',
+  },
+
+  // ============================================
+  // PERPLEXITY MODELS
+  // ============================================
+  sonar: {
+    id: 'sonar',
+    apiModelId: 'sonar',
+    name: 'Sonar',
+    provider: 'perplexity',
+    modelType: 'search',
+    contextWindow: 128_000,
+    inputCost: 1.0,
+    outputCost: 1.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { mmlu: 75 },
+    speed: 'fast',
+    quality: 'good',
+    qualityTier: 'fast',
+    bestFor: ['Web Search', 'Quick Research', 'Citations'],
+    released: 'January 2026',
+  },
+  'sonar-reasoning': {
+    id: 'sonar-reasoning',
+    apiModelId: 'sonar-reasoning',
+    name: 'Sonar Reasoning',
+    provider: 'perplexity',
+    modelType: 'search',
+    contextWindow: 128_000,
+    inputCost: 1.0,
+    outputCost: 5.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { mmlu: 82, gpqa: 55 },
+    speed: 'medium',
+    quality: 'good',
+    qualityTier: 'balanced',
+    bestFor: ['Search + Reasoning', 'Analysis', 'Citations'],
+    released: 'January 2026',
+  },
+  'sonar-reasoning-pro': {
+    id: 'sonar-reasoning-pro',
+    apiModelId: 'sonar-reasoning-pro',
+    name: 'Sonar Reasoning Pro',
+    provider: 'perplexity',
+    modelType: 'search',
+    contextWindow: 128_000,
+    inputCost: 2.0,
+    outputCost: 8.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: false,
+    },
+    benchmarks: { mmlu: 85, gpqa: 62 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Deep Research', 'Complex Analysis', 'Citations'],
+    released: 'January 2026',
+  },
+  'sonar-pro': {
+    id: 'sonar-pro',
+    apiModelId: 'sonar-pro',
+    name: 'Sonar Pro',
+    provider: 'perplexity',
+    modelType: 'search',
+    contextWindow: 200_000,
+    inputCost: 3.0,
+    outputCost: 15.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: true,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: false,
+    },
+    benchmarks: { mmlu: 88 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Professional Research', 'Long Context Search'],
+    released: 'January 2026',
+  },
+  'sonar-deep-research': {
+    id: 'sonar-deep-research',
+    apiModelId: 'sonar-deep-research',
+    name: 'Sonar Deep Research',
+    provider: 'perplexity',
+    modelType: 'search',
+    contextWindow: 128_000,
+    inputCost: 2.0,
+    outputCost: 8.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: false,
+    },
+    benchmarks: { mmlu: 88 },
+    speed: 'slow',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Deep Research', 'Multi-Source Synthesis', 'Comprehensive Analysis'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // IMAGE GENERATION MODELS
+  // ============================================
+  'dall-e-3': {
+    id: 'dall-e-3',
+    apiModelId: 'dall-e-3',
+    name: 'DALL-E 3',
+    provider: 'openai',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0, // Per-image pricing
+    outputCost: 40.0, // $0.04/image standard = $40/1000 images
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Image Generation', 'Creative Art', 'Illustrations'],
+    released: 'November 2023',
+  },
+  'gpt-image-1': {
+    id: 'gpt-image-1',
+    apiModelId: 'gpt-image-1',
+    name: 'GPT Image 1',
+    provider: 'openai',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 40.0, // $0.04/image
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: true,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Image Generation', 'Image Editing', 'Text in Images'],
+    released: 'March 2025',
+  },
+  'gpt-image-1.5': {
+    id: 'gpt-image-1.5',
+    apiModelId: 'gpt-image-1.5',
+    name: 'GPT Image 1.5',
+    provider: 'openai',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 80.0, // $0.08/image HD
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: true,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['HD Image Generation', 'Professional Art', 'Detailed Images'],
+    released: 'January 2026',
+  },
+  'imagen-4': {
+    id: 'imagen-4',
+    apiModelId: 'imagen-4.0-generate-001',
+    name: 'Imagen 4',
+    provider: 'google',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 40.0,
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Photorealistic Images', 'Creative Content'],
+    released: 'January 2026',
+  },
+  'imagen-4-ultra': {
+    id: 'imagen-4-ultra',
+    apiModelId: 'imagen-4.0-ultra-generate-001',
+    name: 'Imagen 4 Ultra',
+    provider: 'google',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 80.0,
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'slow',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Ultra HD Images', 'Professional Quality'],
+    released: 'January 2026',
+  },
+  'flux-1.1-pro': {
+    id: 'flux-1.1-pro',
+    apiModelId: 'flux-1.1-pro',
+    name: 'Flux 1.1 Pro',
+    provider: 'openai', // Using openai as placeholder, actual provider is Black Forest Labs
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 40.0, // $0.04/image
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Photorealistic Images', 'Fast Generation'],
+    released: 'January 2026',
+  },
+  'flux-2-pro': {
+    id: 'flux-2-pro',
+    apiModelId: 'flux-2-pro',
+    name: 'Flux 2 Pro',
+    provider: 'openai',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 60.0, // $0.06/image
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Professional Images', 'High Quality'],
+    released: 'January 2026',
+  },
+  'ideogram-2': {
+    id: 'ideogram-2',
+    apiModelId: 'ideogram-2.0',
+    name: 'Ideogram 2.0',
+    provider: 'openai',
+    modelType: 'image',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 20.0, // $0.02/image
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: true,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'fast',
+    quality: 'good',
+    qualityTier: 'fast',
+    bestFor: ['Text in Images', 'Logos', 'Typography'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // VIDEO GENERATION MODELS
+  // ============================================
+  'sora-2': {
+    id: 'sora-2',
+    apiModelId: 'sora-2',
+    name: 'Sora 2',
+    provider: 'openai',
+    modelType: 'video',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 100.0, // ~$0.10/sec of video
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: true,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'slow',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Video Generation', 'Cinematic Content', 'Up to 35s clips'],
+    released: 'January 2026',
+  },
+  'veo-3': {
+    id: 'veo-3',
+    apiModelId: 'veo-3.1-generate-preview',
+    name: 'Veo 3',
+    provider: 'google',
+    modelType: 'video',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 750.0, // $0.75/sec
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: true,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'slow',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Professional Video', 'High Quality Clips'],
+    released: 'January 2026',
+  },
+
+  // ============================================
+  // TEXT-TO-SPEECH MODELS
+  // ============================================
+  'tts-1': {
+    id: 'tts-1',
+    apiModelId: 'tts-1',
+    name: 'OpenAI TTS Standard',
+    provider: 'openai',
+    modelType: 'tts',
+    contextWindow: 4096,
+    inputCost: 15.0, // $15/1M chars
+    outputCost: 0.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'fast',
+    quality: 'good',
+    qualityTier: 'fast',
+    bestFor: ['Voice Generation', 'Narration', 'Accessibility'],
+    released: 'November 2023',
+  },
+  'tts-1-hd': {
+    id: 'tts-1-hd',
+    apiModelId: 'tts-1-hd',
+    name: 'OpenAI TTS HD',
+    provider: 'openai',
+    modelType: 'tts',
+    contextWindow: 4096,
+    inputCost: 30.0, // $30/1M chars
+    outputCost: 0.0,
+    capabilities: {
+      streaming: true,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Professional Audio', 'High Quality Voice'],
+    released: 'November 2023',
+  },
+
+  // ============================================
+  // SPEECH-TO-TEXT MODELS
+  // ============================================
+  'whisper-1': {
+    id: 'whisper-1',
+    apiModelId: 'whisper-1',
+    name: 'Whisper',
+    provider: 'openai',
+    modelType: 'stt',
+    contextWindow: 0,
+    inputCost: 0.006, // $0.006/min
+    outputCost: 0.0,
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Transcription', 'Speech Recognition', 'Multi-language'],
+    released: 'September 2022',
+  },
+
+  // ============================================
+  // MUSIC GENERATION MODELS
+  // ============================================
+  'suno-v4': {
+    id: 'suno-v4',
+    apiModelId: 'suno-v4',
+    name: 'Suno V4',
+    provider: 'openai', // Using openai as placeholder
+    modelType: 'music',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 0.0, // Credit-based
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Music Generation', 'Songs with Vocals', 'Full Productions'],
+    released: 'Late 2025',
+  },
+  udio: {
+    id: 'udio',
+    apiModelId: 'udio',
+    name: 'Udio',
+    provider: 'openai', // Using openai as placeholder
+    modelType: 'music',
+    contextWindow: 4000,
+    inputCost: 0.0,
+    outputCost: 0.0, // Credit-based
+    capabilities: {
+      streaming: false,
+      tools: false,
+      vision: false,
+      json: false,
+      thinking: false,
+      computerUse: false,
+      agentic: false,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Music Generation', 'Professional Audio', 'Stem Control'],
     released: 'January 2026',
   },
 };
