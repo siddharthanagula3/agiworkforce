@@ -167,9 +167,12 @@ pub struct ChatAttachment {
     pub path: Option<String>,
 }
 
+/// Task metadata containing intent classification and routing decisions
+/// Passed from TypeScript frontend to Rust backend
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskMetadata {
+    // Legacy fields (backward compatible)
     #[serde(default)]
     pub intents: Vec<String>,
     #[serde(default)]
@@ -178,6 +181,29 @@ pub struct TaskMetadata {
     pub token_estimate: Option<u32>,
     #[serde(default)]
     pub cost_priority: Option<String>,
+
+    // New intelligent routing fields (January 2026)
+    /// Primary classified intent type (chat, coding, image-gen, video-gen, search, etc.)
+    #[serde(default)]
+    pub intent_type: Option<String>,
+    /// Model category for routing (chat, image, video, search, tts, stt, music)
+    #[serde(default)]
+    pub model_category: Option<String>,
+    /// Selected model from intelligent routing
+    #[serde(default)]
+    pub selected_model: Option<String>,
+    /// Tool categories that should be available
+    #[serde(default)]
+    pub suggested_tool_categories: Option<Vec<String>>,
+    /// Whether tools should auto-execute (full autonomy mode)
+    #[serde(default)]
+    pub auto_execute_tools: Option<bool>,
+    /// Classification confidence (0-1)
+    #[serde(default)]
+    pub confidence: Option<f32>,
+    /// Routing reasoning for debugging
+    #[serde(default)]
+    pub routing_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

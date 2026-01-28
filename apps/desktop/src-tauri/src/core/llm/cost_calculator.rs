@@ -76,6 +76,13 @@ impl CostCalculator {
         // Google Gemini (Updated 2026-01-01)
         // ---------------------------------------------------------
         pricing.insert(
+            (Provider::Google, "gemini-3-ultra"),
+            Pricing {
+                input_per_million: 3.50,
+                output_per_million: 14.00,
+            },
+        );
+        pricing.insert(
             (Provider::Google, "gemini-3-flash"),
             Pricing {
                 input_per_million: 0.50,
@@ -117,6 +124,29 @@ impl CostCalculator {
                 output_per_million: 0.40,
             },
         );
+        // Image generation
+        pricing.insert(
+            (Provider::Google, "imagen-4"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 40.0,
+            },
+        );
+        pricing.insert(
+            (Provider::Google, "imagen-4-ultra"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 80.0,
+            },
+        );
+        // Video generation
+        pricing.insert(
+            (Provider::Google, "veo-3"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 750.0,
+            },
+        );
 
         // ---------------------------------------------------------
         // Anthropic Claude 4.5 (Updated 2026-01-01)
@@ -146,6 +176,20 @@ impl CostCalculator {
         // ---------------------------------------------------------
         // OpenAI (Updated 2026-01-01)
         // ---------------------------------------------------------
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5-pro"),
+            Pricing {
+                input_per_million: 5.00,
+                output_per_million: 30.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2"),
+            Pricing {
+                input_per_million: 1.75,
+                output_per_million: 14.00,
+            },
+        );
         pricing.insert(
             (Provider::OpenAI, "gpt-5"),
             Pricing {
@@ -179,6 +223,59 @@ impl CostCalculator {
             Pricing {
                 input_per_million: 1.10,
                 output_per_million: 4.40,
+            },
+        );
+        // Image generation (per 1000 images equivalent)
+        pricing.insert(
+            (Provider::OpenAI, "dall-e-3"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 40.0,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-image-1"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 40.0,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-image-1.5"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 80.0,
+            },
+        );
+        // TTS
+        pricing.insert(
+            (Provider::OpenAI, "tts-1"),
+            Pricing {
+                input_per_million: 15.0,
+                output_per_million: 0.0,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "tts-1-hd"),
+            Pricing {
+                input_per_million: 30.0,
+                output_per_million: 0.0,
+            },
+        );
+        // STT
+        pricing.insert(
+            (Provider::OpenAI, "whisper-1"),
+            Pricing {
+                input_per_million: 0.006,
+                output_per_million: 0.0,
+            },
+        );
+        // Video
+        pricing.insert(
+            (Provider::OpenAI, "sora-2"),
+            Pricing {
+                input_per_million: 0.0,
+                output_per_million: 100.0,
             },
         );
 
@@ -229,42 +326,49 @@ impl CostCalculator {
         );
 
         // ---------------------------------------------------------
-        // Moonshot Kimi K2 (Updated 2026-01-01)
+        // Moonshot Kimi K2.5 (Updated 2026-01-28)
         // ---------------------------------------------------------
         pricing.insert(
-            (Provider::Moonshot, "kimi-k2"),
+            (Provider::Moonshot, "kimi-k2.5"),
             Pricing {
-                input_per_million: 0.60, // Cache miss
-                output_per_million: 2.50,
+                input_per_million: 0.80,
+                output_per_million: 3.50,
             },
         );
         pricing.insert(
-            (Provider::Moonshot, "kimi-k2-thinking"),
+            (Provider::Moonshot, "kimi-k2.5-thinking"),
             Pricing {
-                input_per_million: 0.60,
-                output_per_million: 2.50,
+                input_per_million: 0.80,
+                output_per_million: 3.50,
             },
         );
         pricing.insert(
-            (Provider::Moonshot, "kimi-k2-thinking-turbo"),
+            (Provider::Moonshot, "kimi-k2.5-turbo"),
             Pricing {
-                input_per_million: 1.15,
-                output_per_million: 8.00,
+                input_per_million: 1.25,
+                output_per_million: 8.50,
             },
         );
 
         // ---------------------------------------------------------
-        // Qwen3 (Updated 2026-01-01)
+        // Qwen3 (Updated 2026-01-28)
         // ---------------------------------------------------------
         pricing.insert(
-            (Provider::Qwen, "qwen3-max"),
+            (Provider::Qwen, "qwen-flash"),
             Pricing {
-                input_per_million: 1.20,
-                output_per_million: 6.00,
+                input_per_million: 0.05,
+                output_per_million: 0.15,
             },
         );
         pricing.insert(
-            (Provider::Qwen, "qwen3-coder"),
+            (Provider::Qwen, "qwen-turbo"),
+            Pricing {
+                input_per_million: 0.10,
+                output_per_million: 0.30,
+            },
+        );
+        pricing.insert(
+            (Provider::Qwen, "qwen3-coder-flash"),
             Pricing {
                 input_per_million: 0.22,
                 output_per_million: 0.95,
@@ -277,9 +381,23 @@ impl CostCalculator {
                 output_per_million: 2.00,
             },
         );
+        pricing.insert(
+            (Provider::Qwen, "qwen3-max"),
+            Pricing {
+                input_per_million: 1.20,
+                output_per_million: 6.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Qwen, "qwen3-max-preview"),
+            Pricing {
+                input_per_million: 2.15,
+                output_per_million: 8.60,
+            },
+        );
 
         // ---------------------------------------------------------
-        // Perplexity Sonar (Updated 2026-01-01)
+        // Perplexity Sonar (Updated 2026-01-28)
         // Note: Perplexity also charges per-search fees
         // ---------------------------------------------------------
         pricing.insert(
@@ -297,10 +415,79 @@ impl CostCalculator {
             },
         );
         pricing.insert(
+            (Provider::Perplexity, "sonar-reasoning"),
+            Pricing {
+                input_per_million: 1.00,
+                output_per_million: 5.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Perplexity, "sonar-reasoning-pro"),
+            Pricing {
+                input_per_million: 2.00,
+                output_per_million: 8.00,
+            },
+        );
+        pricing.insert(
             (Provider::Perplexity, "sonar-deep-research"),
             Pricing {
                 input_per_million: 2.00,
                 output_per_million: 8.00,
+            },
+        );
+
+        // ---------------------------------------------------------
+        // ZhipuAI GLM Models (Updated 2026-01-28)
+        // GLM-4.6V-Flash is FREE (open-source MIT license)
+        // GLM-4.7 is the flagship coding model (73.8% SWE-bench)
+        // ---------------------------------------------------------
+        pricing.insert(
+            (Provider::Zhipu, "glm-4.6v-flash"),
+            Pricing {
+                input_per_million: 0.0,  // FREE! Open-source MIT license
+                output_per_million: 0.0, // FREE! Zero cost for commercial use
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4.7"),
+            Pricing {
+                input_per_million: 0.14, // Flagship coding model
+                output_per_million: 0.42,
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4.6v"),
+            Pricing {
+                input_per_million: 0.14, // Vision model
+                output_per_million: 0.42,
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4-plus"),
+            Pricing {
+                input_per_million: 0.50,
+                output_per_million: 0.50,
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4-air"),
+            Pricing {
+                input_per_million: 0.10,
+                output_per_million: 0.10,
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4-airx"),
+            Pricing {
+                input_per_million: 1.00,
+                output_per_million: 1.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Zhipu, "glm-4-flash"),
+            Pricing {
+                input_per_million: 0.01,
+                output_per_million: 0.01,
             },
         );
 
@@ -372,8 +559,8 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::Moonshot,
             Pricing {
-                input_per_million: 0.60, // Kimi K2 pricing as default
-                output_per_million: 2.50,
+                input_per_million: 0.80, // Kimi K2.5 pricing as default
+                output_per_million: 3.50,
             },
         );
         provider_defaults.insert(
@@ -395,6 +582,20 @@ impl CostCalculator {
             Pricing {
                 input_per_million: 0.0, // Local models are free
                 output_per_million: 0.0,
+            },
+        );
+        provider_defaults.insert(
+            Provider::Zhipu,
+            Pricing {
+                input_per_million: 0.0,  // GLM-4.6V-Flash FREE as default
+                output_per_million: 0.0, // Prioritize free model
+            },
+        );
+        provider_defaults.insert(
+            Provider::ManagedCloud,
+            Pricing {
+                input_per_million: 0.27, // DeepSeek V3 pricing as default
+                output_per_million: 0.42,
             },
         );
 

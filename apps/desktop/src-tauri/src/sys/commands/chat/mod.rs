@@ -1032,11 +1032,20 @@ pub async fn chat_send_message(
     let plan_tier = "free".to_string();
 
     let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
+        // Legacy fields
         intents: meta.intents.clone(),
         requires_vision: meta.requires_vision,
         token_estimate: meta.token_estimate.unwrap_or(0),
         cost_priority: Default::default(),
         plan_tier,
+        // New intelligent routing fields (January 2026)
+        intent_type: meta.intent_type.clone(),
+        model_category: meta.model_category.clone(),
+        selected_model: meta.selected_model.clone(),
+        suggested_tool_categories: meta.suggested_tool_categories.clone(),
+        auto_execute_tools: meta.auto_execute_tools,
+        confidence: meta.confidence,
+        routing_reason: meta.routing_reason.clone(),
     });
 
     let preferences = RouterPreferences {

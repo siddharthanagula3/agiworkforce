@@ -6,7 +6,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>AGI Workforce</string>
+    <string>agiworkforce-desktop</string>
     <key>CFBundleIdentifier</key>
     <string>com.agiworkforce.desktop</string>
     <key>CFBundleName</key>

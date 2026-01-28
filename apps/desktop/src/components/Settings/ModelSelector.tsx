@@ -72,6 +72,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       qwen: [],
       moonshot: [],
       perplexity: [],
+      zhipu: [],
       managed_cloud: [],
     };
 

@@ -95,6 +95,7 @@ impl TokenCounter {
             Provider::DeepSeek => (1.05, 1.05),
             Provider::Qwen => (1.0, 1.0),
             Provider::Moonshot => (1.0, 1.0),
+            Provider::Zhipu => (1.0, 1.0), // ZhipuAI uses similar tokenization
             Provider::ManagedCloud => (1.0, 1.0),
         };
 
