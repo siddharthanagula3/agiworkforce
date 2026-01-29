@@ -1271,8 +1271,7 @@ mod tests {
             let retrieved = get_email_password(&conn, account_id).unwrap();
             assert_eq!(
                 *original_password, retrieved,
-                "Failed for password: {:?}",
-                original_password
+                "Password storage/retrieval failed for test case"
             );
         }
     }

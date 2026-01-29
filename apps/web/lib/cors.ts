@@ -67,8 +67,13 @@ export function isOriginAllowed(origin: string | null): boolean {
     return true;
   }
 
-  // Check for Tauri desktop app (tauri:// or localhost)
-  if (origin.startsWith('tauri://') || origin.startsWith('https://tauri.localhost')) {
+  // Check for Tauri desktop app (tauri:// or tauri.localhost)
+  // SECURITY: Using regex with boundary to prevent bypass via tauri.localhost.attacker.com
+  if (origin.startsWith('tauri://')) {
+    return true;
+  }
+  const tauriLocalhostPattern = /^https:\/\/tauri\.localhost(:\d+)?$/;
+  if (tauriLocalhostPattern.test(origin)) {
     return true;
   }
 
