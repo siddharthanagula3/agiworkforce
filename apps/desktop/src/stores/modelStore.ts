@@ -763,14 +763,17 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
 if (typeof window !== 'undefined') {
   // Dynamic import to avoid circular dependencies
   import('./auth').then(({ useUnifiedAuthStore }) => {
-    useUnifiedAuthStore.subscribe(
-      (state) => state.plan,
-      (plan) => {
-        if (plan) {
-          console.log(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
-          enforceModelTierRestriction(plan);
-        }
-      },
-    );
+    // Guard against undefined in test environments where auth store may not be properly initialized
+    if (useUnifiedAuthStore?.subscribe) {
+      useUnifiedAuthStore.subscribe(
+        (state) => state.plan,
+        (plan) => {
+          if (plan) {
+            console.log(`[ModelStore] Plan changed to ${plan}, enforcing model tier restriction`);
+            enforceModelTierRestriction(plan);
+          }
+        },
+      );
+    }
   });
 }
