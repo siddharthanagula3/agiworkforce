@@ -291,25 +291,31 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Local & Privacy:</strong> Local LLMs (Ollama)
+                      <strong>Local LLMs:</strong> Ollama (Llama, Mistral, etc.)
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Code Execution:</strong> Generate Code
+                      <strong>Economy Models:</strong> GPT-5 Nano, Gemini Flash, DeepSeek
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Projects & Knowledge:</strong> Single Workspace
+                      <strong>Code Generation:</strong> Write code (no terminal)
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Analyze Images & Vision:</strong> Analyze Uploaded Images
+                      <strong>Vision:</strong> Analyze uploaded images
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Speech:</strong> Text-to-speech & transcription
                     </span>
                   </li>
                 </ul>
@@ -349,25 +355,37 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Search the Web & Browser Control:</strong> Autonomous Browser Agent
+                      <strong>Pro Models:</strong> Claude Sonnet, GPT-5.2, Gemini Pro
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Analyze Images & Vision:</strong> Real-time Screen Context
+                      <strong>Web Search:</strong> Perplexity with citations
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Projects & Knowledge:</strong> Unlimited RAG Projects
+                      <strong>Browser Agent:</strong> Autonomous web automation
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Code Execution:</strong> Run Code in Terminal
+                      <strong>Media Generation:</strong> Images & videos (Runway)
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Code Execution:</strong> Run code in terminal
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Unlimited Workspaces:</strong> RAG & knowledge base
                     </span>
                   </li>
                 </ul>
@@ -409,25 +427,37 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Computer Use & Automation:</strong> Full Desktop Automation
+                      <strong>Flagship Models:</strong> Claude Opus, GPT-5 Pro, Gemini Ultra
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Computer Use & Automation:</strong> Cross-App Workflows
+                      <strong>Computer Use:</strong> Full desktop automation
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Local & Privacy:</strong> Advanced Privacy Controls
+                      <strong>Premium Video:</strong> 4K with Veo 3 & Sora
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Projects & Knowledge:</strong> Extended Context Window
+                      <strong>Deep Research:</strong> Multi-source synthesis
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>2M Context:</strong> Process long documents
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Cross-App Workflows:</strong> Automate between apps
                     </span>
                   </li>
                 </ul>
@@ -465,10 +495,28 @@ function PricingContent() {
                         max: true,
                       },
                       {
-                        feature: 'Cloud LLMs (GPT, Claude, Gemini, etc.)',
+                        feature: 'Cloud Models',
+                        hobby: 'Economy',
+                        pro: 'Pro Models',
+                        max: 'All Models',
+                      },
+                      {
+                        feature: 'Web Search',
                         hobby: false,
-                        pro: true,
-                        max: true,
+                        pro: 'Perplexity',
+                        max: 'Deep Research',
+                      },
+                      {
+                        feature: 'Image Generation',
+                        hobby: false,
+                        pro: 'DALL-E, Flux, Imagen',
+                        max: '+ Midjourney',
+                      },
+                      {
+                        feature: 'Video Generation',
+                        hobby: false,
+                        pro: 'Runway Gen-4',
+                        max: '+ Veo 3, Sora',
                       },
                       {
                         feature: 'Browser Automation',
@@ -480,7 +528,7 @@ function PricingContent() {
                         feature: 'Desktop Automation',
                         hobby: false,
                         pro: false,
-                        max: true,
+                        max: 'Full Computer Use',
                       },
                       {
                         feature: 'Workspaces',
@@ -495,10 +543,22 @@ function PricingContent() {
                         max: 'Terminal',
                       },
                       {
-                        feature: 'Vision & Screen Analysis',
+                        feature: 'Context Window',
+                        hobby: '128K',
+                        pro: '200K',
+                        max: '2M',
+                      },
+                      {
+                        feature: 'Vision & Screen',
                         hobby: 'Upload Only',
                         pro: 'Real-time',
                         max: 'Real-time',
+                      },
+                      {
+                        feature: 'Music Generation',
+                        hobby: false,
+                        pro: 'Suno, Udio',
+                        max: 'Suno, Udio',
                       },
                       {
                         feature: 'Priority Support',
