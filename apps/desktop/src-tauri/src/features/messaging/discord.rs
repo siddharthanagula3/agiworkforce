@@ -3,21 +3,11 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DiscordConfig {
     pub bot_token: Option<String>,
     pub webhook_url: Option<String>,
     pub guild_id: Option<String>,
-}
-
-impl Default for DiscordConfig {
-    fn default() -> Self {
-        Self {
-            bot_token: None,
-            webhook_url: None,
-            guild_id: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1055,15 +1055,26 @@ export function routeMessage(
 /**
  * Check if the selected model is a manual selection (bypass auto routing)
  * Returns true if the model was manually selected from QuickModelSelector
+ *
+ * A manual selection is when the user explicitly chose a specific model
+ * (like 'claude-sonnet-4.5' or 'gpt-5.2'), NOT an auto mode.
+ *
+ * Auto modes that trigger routing:
+ * - 'auto' (legacy)
+ * - 'auto-economy'
+ * - 'auto-balanced'
+ * - 'auto-premium'
  */
 export function isManualSelection(selectedModel: string): boolean {
-  // Auto modes are not manual selections
-  if (selectedModel.startsWith('auto-')) {
+  // Auto modes are not manual selections - they trigger routing
+  if (selectedModel === 'auto' || selectedModel.startsWith('auto-')) {
     return false;
   }
 
   // Any specific model selection bypasses routing
-  return selectedModel in MODEL_METADATA;
+  // Even if the model is not in MODEL_METADATA, we treat it as a manual selection
+  // to respect the user's explicit choice
+  return true;
 }
 
 /**

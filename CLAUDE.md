@@ -110,11 +110,13 @@ agiworkforce/
 │   │   │   └── api/             # Tauri command wrappers
 │   │   ├── src-tauri/           # Rust backend
 │   │   │   └── src/
-│   │   │       ├── sys/         # System commands, security
-│   │   │       ├── core/        # Business logic (AGI, agents, MCP)
-│   │   │       ├── data/        # Data access layer
-│   │   │       ├── automation/  # Browser & workflow automation
-│   │   │       └── integrations/# Third-party APIs
+│   │   │       ├── sys/         # System commands, security, billing
+│   │   │       ├── core/        # Business logic (see below)
+│   │   │       ├── data/        # Data access layer, cache, settings
+│   │   │       ├── automation/  # Browser & screen automation
+│   │   │       ├── features/    # Feature modules (terminal, workflows, teams)
+│   │   │       ├── integrations/# Third-party APIs, realtime sync
+│   │   │       └── ui/          # Tray and window management
 │   │   └── e2e/                 # Playwright E2E tests
 │   ├── web/                     # Next.js SaaS platform
 │   │   ├── app/api/             # API routes (webhooks, checkout, LLM proxy)
@@ -129,17 +131,108 @@ agiworkforce/
     └── utils/                   # Shared utilities
 ```
 
+### Rust Backend Module Organization
+
+The `src-tauri/src/core/` directory contains the core business logic:
+
+```
+core/
+├── agent/        # Agent orchestration, approval, RAG system
+├── agi/          # AGI subsystem (see AGI Architecture below)
+├── artifacts/    # Live preview artifacts with versioning
+├── codebase/     # Codebase analysis and indexing
+├── embeddings/   # Vector embeddings and semantic search
+├── llm/          # LLM provider integrations, routing, fallback
+├── mcp/          # Model Context Protocol client, events, health
+├── models/       # Shared model definitions
+├── orchestration/# Workflow engine
+├── research/     # Multi-source research orchestration
+├── scheduler/    # Proactive task scheduling, cron jobs
+├── skills/       # Skill system for AGI context
+└── sync_utils/   # Async synchronization utilities
+```
+
+### AGI Subsystem Architecture
+
+The AGI (`core/agi/`) is the autonomous reasoning engine:
+
+- **AGICore** - Main entry point, goal lifecycle management
+- **AGIPlanner** - Decomposes goals into executable steps
+- **AGIExecutor** - Executes planned steps with tool calls
+- **ReflectionEngine** - Analyzes failures, suggests corrections
+- **LearningSystem** - Learns from past executions
+- **KnowledgeBase** - Stores and retrieves learned knowledge
+- **MemoryManager** - Persistent cross-session memory with decay
+- **ProcessReasoning** - Matches goals to process templates
+- **OutcomeTracker** - Tracks success rates by process type
+- **Sandbox** - Isolated code execution environment
+
+### Tauri State Management
+
+The app uses Tauri's managed state pattern. Each feature has a `*State` wrapper:
+
+```rust
+// In lib.rs setup():
+app.manage(McpState::new());           // MCP client state
+app.manage(MemoryState::new(&db_path)); // Memory manager
+app.manage(SchedulerState::new());     // Job scheduler
+```
+
+Access in commands via:
+
+```rust
+#[tauri::command]
+async fn my_command(state: State<'_, McpState>) -> Result<...> { ... }
+```
+
+### Feature Flags (Cargo)
+
+Some features are disabled for App Store builds:
+
+- `shell` - Shell plugin for terminal commands (sandbox restrictions)
+- `updater` - Auto-update plugin (App Store handles updates)
+
+Check with `#[cfg(feature = "shell")]` before using these features.
+
 ### Data Flow
 
 **Desktop App:**
-React Frontend → Tauri Commands → Rust Backend → SQLite/Remote APIs
-Rust Backend → Tauri Events → React Frontend (state updates)
+
+```
+React Frontend → invoke() → Tauri Commands → Rust Backend → SQLite/Remote APIs
+Rust Backend → emit() → Tauri Events → React Frontend (state updates)
+```
 
 **Web App:**
+
+```
 React Components → Next.js Server Components → Supabase SDK → PostgreSQL
+```
 
 **Real-time Sync:**
+
+```
 Desktop ↔ WebSocket Signaling Server ↔ Mobile/Web (6-digit pairing codes, 5-min TTL)
+```
+
+### Tauri Event System
+
+The backend emits events for async updates. Subscribe in React:
+
+```typescript
+import { listen } from '@tauri-apps/api/event';
+
+// Common events:
+// - agi:progress, agi:complete, agi:error
+// - mcp:tool_call, mcp:server_status
+// - chat:stream_chunk, chat:generation_complete
+// - browser:page_loaded, browser:screenshot
+
+useEffect(() => {
+  const unlisten = listen('agi:progress', (event) => { ... });
+  return () => { unlisten.then(f => f()); };
+}, []);
+```
 
 ### Key Files
 
@@ -192,11 +285,20 @@ Pragmas: WAL mode, 5s busy timeout, foreign keys ON, 64MB cache
 
 The AGI operates with **full autonomy** - it completes goals without asking for approval at each step.
 
+**Execution Flow:**
+
+```
+Goal → AGIPlanner (decompose) → Steps → AGIExecutor (execute) → Tools
+                                   ↑                              ↓
+                           ReflectionEngine ← ← ← ← ← ← ← ← Results
+```
+
 **Safety Limits:**
 
 - Max iterations: 1000 per goal
 - Absolute timeout: 5 minutes
 - Consecutive failure limit: 3 failures triggers abandonment
+- Resource limits: 80% CPU, 2GB RAM, 100 Mbps network
 
 **Undo System (Critical):**
 Every action must be reversible. Before implementing any tool:
@@ -204,6 +306,8 @@ Every action must be reversible. Before implementing any tool:
 1. Define how to undo/rollback the action
 2. Store the "before" state so it can be restored
 3. Provide user-friendly undo via chat
+
+The `UndoState` and `form_undo_*` commands manage reversibility. File operations automatically track undo state.
 
 ## MCP Integration
 
@@ -214,6 +318,16 @@ Every action must be reversible. Before implementing any tool:
 - Tool IDs: `mcp__{server_name}__{tool_name}` (exactly two underscores)
 - Servers auto-start based on detected intent
 - Credentials stored in OS keyring via `mcp_set_credential()`
+- OAuth flows for GitHub, Google Drive, Slack via `mcp_oauth_*` commands
+- MCP Bundles (MCPB) for installing pre-configured server packages
+
+**Error Translation:**
+MCP errors must be translated to user-friendly messages:
+
+```rust
+// Bad: "MCP server 'gmail' returned ECONNREFUSED"
+// Good: "Couldn't connect to your email. Please check your internet connection."
+```
 
 ## Plan Tiers
 
@@ -281,9 +395,76 @@ Never commit `.env.local` files.
 - **Desktop React errors:** Right-click for dev tools in dev mode
 - **WebSocket sync:** DevTools Network tab → WS (codes expire in 5 min)
 - **Service health:** `GET /health` endpoint
+- **Diagnostics:** Use `/doctor` command or `doctor_run_checks` Tauri command
+- **MCP server logs:** `mcp_get_server_logs(server_name)` command
+
+### Rust Tracing
+
+The Rust backend uses `tracing` for logging:
+
+```rust
+tracing::info!("Message initialized");
+tracing::warn!("Failed to load: {}", e);
+tracing::error!("Critical failure: {:?}", err);
+```
+
+View logs in the terminal running `pnpm dev:desktop`.
 
 ## Pinned Versions
 
 - Node.js 22.12.0+, pnpm 9.15.3+
 - TypeScript 5.9.3, React 19.2.3, Vite 7.3.1
 - Tauri 2.9, Rust 1.75+
+- Next.js 16, Supabase SDK 2.89+
+- Stripe SDK 20+
+
+## Adding New Tauri Commands
+
+1. Define the command in `src-tauri/src/sys/commands/`:
+
+```rust
+#[tauri::command]
+pub async fn my_new_command(
+    state: State<'_, MyState>,
+    param: String,
+) -> Result<MyResponse, String> {
+    // Implementation
+}
+```
+
+2. Register in `lib.rs` invoke_handler:
+
+```rust
+.invoke_handler(tauri::generate_handler![
+    // ... existing commands
+    crate::sys::commands::my_new_command,
+])
+```
+
+3. Create TypeScript wrapper in `apps/desktop/src/api/`:
+
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+export const myNewCommand = (param: string) => invoke<MyResponse>('my_new_command', { param });
+```
+
+## Adding New AGI Tools
+
+Tools extend AGI capabilities. Add to `core/agi/tools.rs`:
+
+```rust
+pub struct MyTool;
+
+impl Tool for MyTool {
+    fn name(&self) -> &str { "my_tool" }
+    fn description(&self) -> &str { "Does something useful" }
+    fn capabilities(&self) -> Vec<ToolCapability> { vec![ToolCapability::ReadFiles] }
+
+    async fn execute(&self, input: serde_json::Value) -> ToolResult {
+        // Must be reversible! Store undo state.
+        // Return user-friendly errors.
+    }
+}
+```
+
+Register in `ToolRegistry::new()`. Remember: all tools must support undo.
