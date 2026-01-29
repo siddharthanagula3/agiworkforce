@@ -47,7 +47,7 @@ export class StripeHelpers {
     }
 
     this.stripe = new Stripe(key, {
-      apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
+      apiVersion: '2026-01-28.clover' as Stripe.LatestApiVersion,
     });
   }
 
