@@ -242,14 +242,177 @@ impl CodeGenerator {
     async fn generate_with_mcp(
         &self,
         request: &CodeGenRequest,
-        _context_prompt: &str,
-        _existing_code: &HashMap<PathBuf, String>,
+        context_prompt: &str,
+        existing_code: &HashMap<PathBuf, String>,
     ) -> Result<Vec<GeneratedFile>> {
+        // Check if MCP registry is available
+        let registry = match &self.mcp_registry {
+            Some(reg) => reg,
+            None => {
+                tracing::error!(
+                    "[CodeGenerator] Code generation failed for task '{}': \
+                    Neither LLM router nor MCP registry is configured. \
+                    Code generation requires at least one of these to be available.",
+                    request.task_id
+                );
+                return Err(anyhow::anyhow!(
+                    "Code generation requires an LLM router or MCP registry. \
+                    Please configure an LLM provider to enable code generation."
+                ));
+            }
+        };
+
         tracing::info!(
             "[CodeGenerator] Generating code with MCP for task: {}",
             request.task_id
         );
-        Ok(Vec::new())
+
+        // Search for code generation tools in the MCP registry
+        let code_gen_tools = registry.search_tools("code");
+        let llm_tools = registry.search_tools("llm");
+        let ai_tools = registry.search_tools("generate");
+
+        // Combine all potential code generation tools
+        let all_tools: Vec<_> = code_gen_tools
+            .into_iter()
+            .chain(llm_tools)
+            .chain(ai_tools)
+            .collect();
+
+        if all_tools.is_empty() {
+            tracing::warn!(
+                "[CodeGenerator] No code generation MCP tools found for task '{}'. \
+                Consider configuring an LLM provider for code generation capabilities.",
+                request.task_id
+            );
+            return Err(anyhow::anyhow!(
+                "No code generation tools available. \
+                Code generation requires an LLM provider or a code-generation MCP server. \
+                Please configure an LLM provider to enable this feature."
+            ));
+        }
+
+        // Build a prompt for the code generation tool
+        let mut prompt = context_prompt.to_string();
+        prompt.push_str("\n\n## Task Description\n\n");
+        prompt.push_str(&request.description);
+        prompt.push_str("\n\n## Target Files\n\n");
+        for file in &request.target_files {
+            prompt.push_str(&format!("- {}\n", file.display()));
+        }
+
+        if !request.constraints.is_empty() {
+            prompt.push_str("\n## Constraints\n\n");
+            for constraint in &request.constraints {
+                prompt.push_str(&format!("- {}\n", constraint.description));
+            }
+        }
+
+        // Add existing code context
+        prompt.push_str("\n\n## Existing Code Context\n\n");
+        for (i, (path, content)) in existing_code.iter().enumerate() {
+            if i >= 5 {
+                prompt.push_str(&format!("... and {} more files\n", existing_code.len() - 5));
+                break;
+            }
+            let truncated_content = if content.len() > 2000 {
+                format!(
+                    "{}...\n[truncated {} chars]",
+                    &content[..2000],
+                    content.len() - 2000
+                )
+            } else {
+                content.clone()
+            };
+            prompt.push_str(&format!(
+                "### {}\n\n```\n{}\n```\n\n",
+                path.display(),
+                truncated_content
+            ));
+        }
+
+        prompt.push_str("\n## Output Format\n\n");
+        prompt.push_str("Return JSON array with this structure:\n");
+        prompt.push_str("[\n  {\n    \"path\": \"file/path\",\n    \"content\": \"file content\",\n    \"file_type\": \"source|test|config|documentation|type_definition\",\n    \"dependencies\": [\"dep1\"],\n    \"exports\": [\"export1\"]\n  }\n]\n");
+
+        // Try to use the first available tool that might support code generation
+        let tool = &all_tools[0];
+        tracing::info!(
+            "[CodeGenerator] Attempting to use MCP tool '{}' for code generation",
+            tool.name
+        );
+
+        // Build arguments for the tool call
+        let mut arguments = std::collections::HashMap::new();
+        arguments.insert(
+            "prompt".to_string(),
+            serde_json::Value::String(prompt.clone()),
+        );
+        arguments.insert(
+            "query".to_string(),
+            serde_json::Value::String(prompt.clone()),
+        );
+        arguments.insert(
+            "input".to_string(),
+            serde_json::Value::String(prompt),
+        );
+
+        // Execute the MCP tool
+        match registry.execute_tool(&tool.id, arguments).await {
+            Ok(result) => {
+                // Try to parse the result as JSON array of GeneratedFile
+                let result_str = result.to_string();
+
+                // Try direct parsing first
+                if let Ok(files) = serde_json::from_value::<Vec<GeneratedFile>>(result.clone()) {
+                    tracing::info!(
+                        "[CodeGenerator] MCP tool generated {} files for task '{}'",
+                        files.len(),
+                        request.task_id
+                    );
+                    return Ok(files);
+                }
+
+                // Try to extract JSON array from string response
+                if let Some(json_start) = result_str.find('[') {
+                    if let Some(json_end) = result_str.rfind(']') {
+                        if json_start < json_end {
+                            let json_str = &result_str[json_start..=json_end];
+                            if let Ok(files) = serde_json::from_str::<Vec<GeneratedFile>>(json_str) {
+                                tracing::info!(
+                                    "[CodeGenerator] MCP tool generated {} files for task '{}'",
+                                    files.len(),
+                                    request.task_id
+                                );
+                                return Ok(files);
+                            }
+                        }
+                    }
+                }
+
+                tracing::warn!(
+                    "[CodeGenerator] MCP tool returned unparseable result for task '{}': {}",
+                    request.task_id,
+                    result_str.chars().take(200).collect::<String>()
+                );
+                Err(anyhow::anyhow!(
+                    "MCP tool returned a response that could not be parsed as code generation output. \
+                    Consider using an LLM provider for more reliable code generation."
+                ))
+            }
+            Err(e) => {
+                tracing::error!(
+                    "[CodeGenerator] MCP tool execution failed for task '{}': {}",
+                    request.task_id,
+                    e
+                );
+                Err(anyhow::anyhow!(
+                    "MCP code generation failed: {}. \
+                    Consider configuring an LLM provider for code generation.",
+                    e
+                ))
+            }
+        }
     }
 
     async fn validate_code(
