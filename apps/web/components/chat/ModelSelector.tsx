@@ -71,6 +71,7 @@ function getModelTierCategory(tier: string): ModelTier {
 export const ModelSelector = memo(function ModelSelector({ className = '' }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
+  const [allowedAutoModes, setAllowedAutoModes] = useState<string[]>(['auto-economy']);
   const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +98,29 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
         if (response.ok) {
           const data = await response.json();
           setModels(data.data || []);
+          // Set allowed auto modes from API response
+          const allowedModes = data.x_agi_workforce?.allowed_auto_modes || ['auto-economy'];
+          setAllowedAutoModes(allowedModes);
+
+          // Reset selected model if it's no longer allowed
+          const currentModel = useChatStore.getState().selectedModel;
+          if (currentModel.startsWith('auto-')) {
+            if (!allowedModes.includes(currentModel)) {
+              // Reset to the first allowed auto mode
+              const firstAllowed = allowedModes[0] || 'auto-economy';
+              const autoModel = AUTO_MODELS[firstAllowed as keyof typeof AUTO_MODELS];
+              setSelectedModel(firstAllowed, autoModel?.tier || 'economy');
+            }
+          } else {
+            // Check if specific model is still in the filtered list
+            const modelIds = (data.data || []).map((m: Model) => m.id);
+            if (!modelIds.includes(currentModel)) {
+              // Reset to first allowed auto mode
+              const firstAllowed = allowedModes[0] || 'auto-economy';
+              const autoModel = AUTO_MODELS[firstAllowed as keyof typeof AUTO_MODELS];
+              setSelectedModel(firstAllowed, autoModel?.tier || 'economy');
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch models:', error);
@@ -106,7 +130,7 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
     };
 
     fetchModels();
-  }, []);
+  }, [setSelectedModel]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -190,37 +214,39 @@ export const ModelSelector = memo(function ModelSelector({ className = '' }: Mod
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1">
               Auto Selection
             </p>
-            {Object.entries(AUTO_MODELS).map(([id, model]) => {
-              const badge = TIER_BADGES[model.tier];
-              const BadgeIcon = badge.icon;
-              const isSelected = selectedModel === id;
+            {Object.entries(AUTO_MODELS)
+              .filter(([id]) => allowedAutoModes.includes(id))
+              .map(([id, model]) => {
+                const badge = TIER_BADGES[model.tier];
+                const BadgeIcon = badge.icon;
+                const isSelected = selectedModel === id;
 
-              return (
-                <button
-                  key={id}
-                  onClick={() => handleSelectModel(id, model.tier)}
-                  className={clsx(
-                    'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left',
-                    'hover:bg-gray-100 dark:hover:bg-charcoal-700',
-                    'transition-colors duration-150',
-                    isSelected && 'bg-teal-50 dark:bg-teal-900/30',
-                  )}
-                >
-                  <span className={clsx('p-1.5 rounded', badge.color)}>
-                    <BadgeIcon className="w-4 h-4" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {model.name}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal">
-                      {model.description}
-                    </p>
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-teal-500" />}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleSelectModel(id, model.tier)}
+                    className={clsx(
+                      'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left',
+                      'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                      'transition-colors duration-150',
+                      isSelected && 'bg-teal-50 dark:bg-teal-900/30',
+                    )}
+                  >
+                    <span className={clsx('p-1.5 rounded', badge.color)}>
+                      <BadgeIcon className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {model.name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-normal">
+                        {model.description}
+                      </p>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-teal-500" />}
+                  </button>
+                );
+              })}
           </div>
 
           {/* Specific models */}

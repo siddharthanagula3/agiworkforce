@@ -14,6 +14,10 @@ import { getCorsHeaders } from '@/lib/cors';
  */
 
 // Available models with their metadata
+// Tier assignments must match TIER_ALLOWED_MODELS in desktop/src/constants/llm.ts
+// - hobby: Budget models (< $1/1M output) - gemini-flash, gpt-5-nano, claude-haiku, etc.
+// - pro: Mid-tier models ($1-15/1M) - gpt-5.2, claude-sonnet, gemini-pro, etc.
+// - max: Flagship models - claude-opus, gpt-5-pro, o3, etc.
 const MODELS = [
   // OpenAI Models
   {
@@ -24,7 +28,7 @@ const MODELS = [
     permission: [],
     root: 'gpt-5.2',
     parent: null,
-    tier: 'hobby',
+    tier: 'pro', // Pro tier - mid-range model
     context_window: 128000,
     max_output: 16384,
   },
@@ -110,7 +114,7 @@ const MODELS = [
     permission: [],
     root: 'claude-sonnet-4-5',
     parent: null,
-    tier: 'hobby',
+    tier: 'pro', // Pro tier - mid-range model
     context_window: 200000,
     max_output: 16000,
   },
@@ -148,7 +152,7 @@ const MODELS = [
     permission: [],
     root: 'gemini-3-pro',
     parent: null,
-    tier: 'hobby',
+    tier: 'pro', // Pro tier - mid-range model
     context_window: 2000000,
     max_output: 8192,
   },
@@ -224,7 +228,7 @@ const MODELS = [
     permission: [],
     root: 'grok-4.1',
     parent: null,
-    tier: 'hobby',
+    tier: 'max', // Max tier - flagship model
     context_window: 131072,
     max_output: 16384,
   },
@@ -250,7 +254,7 @@ const MODELS = [
     permission: [],
     root: 'qwen-max',
     parent: null,
-    tier: 'hobby',
+    tier: 'pro', // Pro tier - mid-range model (maps to qwen3-max)
     context_window: 32000,
     max_output: 8192,
   },
@@ -302,7 +306,7 @@ const MODELS = [
     permission: [],
     root: 'sonar-pro',
     parent: null,
-    tier: 'hobby',
+    tier: 'pro', // Pro tier - premium search model
     context_window: 200000,
     max_output: 8192,
   },
@@ -329,6 +333,15 @@ const TIER_LEVELS: Record<string, number> = {
   enterprise: 4,
 };
 
+// Auto modes available per tier
+const AUTO_MODES_BY_TIER: Record<string, string[]> = {
+  free: ['auto-economy'],
+  hobby: ['auto-economy'],
+  pro: ['auto-economy', 'auto-balanced'],
+  max: ['auto-economy', 'auto-balanced', 'auto-premium'],
+  enterprise: ['auto-economy', 'auto-balanced', 'auto-premium'],
+};
+
 function filterModelsByTier(models: typeof MODELS, userTier: string) {
   const userLevel = TIER_LEVELS[userTier.toLowerCase()] || 0;
 
@@ -336,6 +349,10 @@ function filterModelsByTier(models: typeof MODELS, userTier: string) {
     const modelLevel = TIER_LEVELS[model.tier] || 0;
     return modelLevel <= userLevel;
   });
+}
+
+function getAllowedAutoModes(userTier: string): string[] {
+  return AUTO_MODES_BY_TIER[userTier.toLowerCase()] || AUTO_MODES_BY_TIER.free;
 }
 
 async function handleListModels(request: NextRequest) {
@@ -354,11 +371,17 @@ async function handleListModels(request: NextRequest) {
   // Authentication
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // Return all models without filtering for unauthenticated requests
+    // Return only free-tier models for unauthenticated requests
+    const freeTierModels = filterModelsByTier(MODELS, 'free');
     return NextResponse.json(
       {
         object: 'list',
-        data: MODELS,
+        data: freeTierModels,
+        x_agi_workforce: {
+          user_tier: 'free',
+          total_available: freeTierModels.length,
+          allowed_auto_modes: getAllowedAutoModes('free'),
+        },
       },
       {
         headers: getCorsHeaders(request),
@@ -382,11 +405,17 @@ async function handleListModels(request: NextRequest) {
   } = await supabase.auth.getUser(token);
 
   if (authError || !user) {
-    // Return all models for invalid tokens too
+    // Return only free-tier models for invalid tokens
+    const freeTierModels = filterModelsByTier(MODELS, 'free');
     return NextResponse.json(
       {
         object: 'list',
-        data: MODELS,
+        data: freeTierModels,
+        x_agi_workforce: {
+          user_tier: 'free',
+          total_available: freeTierModels.length,
+          allowed_auto_modes: getAllowedAutoModes('free'),
+        },
       },
       {
         headers: getCorsHeaders(request),
@@ -407,6 +436,7 @@ async function handleListModels(request: NextRequest) {
       x_agi_workforce: {
         user_tier: userTier,
         total_available: filteredModels.length,
+        allowed_auto_modes: getAllowedAutoModes(userTier),
       },
     },
     {
