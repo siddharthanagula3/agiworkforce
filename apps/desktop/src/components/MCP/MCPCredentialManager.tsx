@@ -147,7 +147,10 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         provider,
       });
 
-      // Store state for verification
+      // Store OAuth state for CSRF verification on callback.
+      // Note: This is a random nonce for CSRF protection, NOT a credential.
+      // It's ephemeral and only used to verify the OAuth callback originated
+      // from this same flow. Storing in sessionStorage is the standard approach.
       sessionStorage.setItem(`oauth_state_${provider}`, result.state);
 
       // Open browser for OAuth

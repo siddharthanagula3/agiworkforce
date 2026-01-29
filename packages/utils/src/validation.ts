@@ -356,13 +356,16 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
   }
 
   // XSS patterns
+  // Note: Script tag patterns must handle variations like </script > or </script/>
   const xssPatterns = [
-    /<script[\s\S]*?>[\s\S]*?<\/script>/i,
+    /<script\b/i, // Match opening script tag (catches all script tags)
+    /<\/script\s*\/?>/i, // Match closing script tag with optional space/slash
     /javascript:/i,
     /on\w+\s*=/i,
     /<iframe/i,
     /<object/i,
     /<embed/i,
+    /<svg\b[^>]*\bon\w+/i, // SVG with event handlers
   ];
 
   for (const pattern of xssPatterns) {
