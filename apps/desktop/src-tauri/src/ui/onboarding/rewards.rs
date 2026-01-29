@@ -1,3 +1,4 @@
+use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -61,7 +62,12 @@ impl RewardSystem {
     }
 
     pub fn grant_reward(&self, user_id: &str, reward_id: &str) -> Result<(), rusqlite::Error> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            )
+        })?;
         let now = Utc::now().timestamp();
 
         let exists: bool = conn
@@ -98,7 +104,10 @@ impl RewardSystem {
     }
 
     pub fn get_user_rewards(&self, user_id: &str) -> Vec<Reward> {
-        let conn = self.db.lock().unwrap();
+        let conn = match self.db.safe_lock() {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
 
         let stmt = conn
             .prepare("SELECT reward_id FROM user_rewards WHERE user_id = ?1")
@@ -123,7 +132,10 @@ impl RewardSystem {
     }
 
     pub fn has_reward(&self, user_id: &str, reward_id: &str) -> bool {
-        let conn = self.db.lock().unwrap();
+        let conn = match self.db.safe_lock() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
 
         conn.query_row(
             "SELECT COUNT(*) > 0 FROM user_rewards WHERE user_id = ?1 AND reward_id = ?2",
