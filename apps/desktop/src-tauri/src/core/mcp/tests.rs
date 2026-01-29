@@ -361,11 +361,7 @@ mod timeout_tests {
         // All requests should timeout
         for handle in handles {
             let (index, timed_out) = handle.await.unwrap();
-            assert!(
-                timed_out,
-                "Request {} should have timed out",
-                index
-            );
+            assert!(timed_out, "Request {} should have timed out", index);
         }
     }
 
@@ -408,7 +404,10 @@ mod timeout_tests {
 
         // Apply 100ms timeout - should succeed
         let result = timeout(Duration::from_millis(100), rx).await;
-        assert!(result.is_ok(), "Response sent within timeout window should succeed");
+        assert!(
+            result.is_ok(),
+            "Response sent within timeout window should succeed"
+        );
     }
 
     /// Test stale request cleanup scenario
@@ -431,7 +430,9 @@ mod timeout_tests {
 // ============================================================================
 #[cfg(test)]
 mod credential_tests {
-    use crate::core::mcp::config::{encrypt_mcp_credential, encrypt_oauth_token, McpServerConfig, McpServersConfig};
+    use crate::core::mcp::config::{
+        encrypt_mcp_credential, encrypt_oauth_token, McpServerConfig, McpServersConfig,
+    };
     use std::collections::HashMap;
 
     /// Test OAuth placeholder detection
@@ -494,8 +495,14 @@ mod credential_tests {
 
         assert!(encrypted.is_some(), "Encryption should produce a result");
         let encrypted_value = encrypted.unwrap();
-        assert!(!encrypted_value.is_empty(), "Encrypted value should not be empty");
-        assert_ne!(encrypted_value, plaintext, "Encrypted value should differ from plaintext");
+        assert!(
+            !encrypted_value.is_empty(),
+            "Encrypted value should not be empty"
+        );
+        assert_ne!(
+            encrypted_value, plaintext,
+            "Encrypted value should differ from plaintext"
+        );
     }
 
     /// Test OAuth token encryption produces non-empty result
@@ -506,8 +513,14 @@ mod credential_tests {
 
         assert!(encrypted.is_some(), "Encryption should produce a result");
         let encrypted_value = encrypted.unwrap();
-        assert!(!encrypted_value.is_empty(), "Encrypted value should not be empty");
-        assert_ne!(encrypted_value, plaintext, "Encrypted value should differ from plaintext");
+        assert!(
+            !encrypted_value.is_empty(),
+            "Encrypted value should not be empty"
+        );
+        assert_ne!(
+            encrypted_value, plaintext,
+            "Encrypted value should differ from plaintext"
+        );
     }
 
     /// Test that encryption produces base64-encoded output
@@ -517,7 +530,9 @@ mod credential_tests {
         let encrypted = encrypt_mcp_credential(plaintext).unwrap();
 
         // Base64 should only contain alphanumeric, +, /, and = characters
-        let is_base64 = encrypted.chars().all(|c| c.is_alphanumeric() || c == '+' || c == '/' || c == '=');
+        let is_base64 = encrypted
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '+' || c == '/' || c == '=');
         assert!(is_base64, "Encrypted output should be valid base64");
     }
 
@@ -529,7 +544,7 @@ mod credential_tests {
             "short",
             "medium_length_token",
             "a_very_long_api_key_that_exceeds_typical_token_length_12345678901234567890",
-            "",  // Empty input
+            "", // Empty input
         ];
 
         for input in inputs {
@@ -550,7 +565,10 @@ mod credential_tests {
         let env_key = "GITHUB_PERSONAL_ACCESS_TOKEN";
         let cred_key = format!("mcp_credential_{}_{}", server_name, env_key);
 
-        assert_eq!(cred_key, "mcp_credential_github_GITHUB_PERSONAL_ACCESS_TOKEN");
+        assert_eq!(
+            cred_key,
+            "mcp_credential_github_GITHUB_PERSONAL_ACCESS_TOKEN"
+        );
     }
 
     /// Test OAuth key format for database storage
@@ -578,7 +596,10 @@ mod credential_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-github".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-github".to_string(),
+            ],
             env,
             enabled: false,
             transport: None,
@@ -599,7 +620,10 @@ mod credential_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-stripe".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-stripe".to_string(),
+            ],
             env,
             enabled: false,
             transport: None,
@@ -615,11 +639,17 @@ mod credential_tests {
         let config = McpServersConfig::default();
 
         // Should have some default servers configured
-        assert!(!config.mcp_servers.is_empty(), "Should have default servers");
+        assert!(
+            !config.mcp_servers.is_empty(),
+            "Should have default servers"
+        );
 
         // Check filesystem server exists and is enabled by default
         if let Some(fs_server) = config.mcp_servers.get("filesystem") {
-            assert!(fs_server.enabled, "Filesystem server should be enabled by default");
+            assert!(
+                fs_server.enabled,
+                "Filesystem server should be enabled by default"
+            );
         }
     }
 
@@ -643,10 +673,7 @@ mod credential_tests {
         assert_eq!(original.command, deserialized.command);
         assert_eq!(original.args, deserialized.args);
         assert_eq!(original.enabled, deserialized.enabled);
-        assert_eq!(
-            original.env.get("API_KEY"),
-            deserialized.env.get("API_KEY")
-        );
+        assert_eq!(original.env.get("API_KEY"), deserialized.env.get("API_KEY"));
     }
 
     /// Test token expiry calculation
@@ -683,8 +710,8 @@ mod credential_tests {
 #[cfg(test)]
 mod malformed_message_tests {
     use crate::core::mcp::protocol::{
-        ErrorObject, JsonRpcError, JsonRpcRequest,
-        McpMessage, RequestId, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR, INTERNAL_ERROR,
+        ErrorObject, JsonRpcError, JsonRpcRequest, McpMessage, RequestId, INTERNAL_ERROR,
+        INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
     };
 
     /// Test parsing completely invalid JSON
@@ -700,20 +727,16 @@ mod malformed_message_tests {
     #[test]
     fn test_parse_json_syntax_errors() {
         let syntax_errors = vec![
-            r#"{"jsonrpc": "2.0", "method": "test""#,     // Missing closing brace
-            r#"{"jsonrpc": "2.0", method: "test"}"#,       // Unquoted key
-            r#"{"jsonrpc": "2.0", "method": test}"#,       // Unquoted value
-            r#"{jsonrpc: 2.0, method: test}"#,             // All unquoted
-            r#"["jsonrpc", "2.0"]"#,                       // Array instead of object
+            r#"{"jsonrpc": "2.0", "method": "test""#, // Missing closing brace
+            r#"{"jsonrpc": "2.0", method: "test"}"#,  // Unquoted key
+            r#"{"jsonrpc": "2.0", "method": test}"#,  // Unquoted value
+            r#"{jsonrpc: 2.0, method: test}"#,        // All unquoted
+            r#"["jsonrpc", "2.0"]"#,                  // Array instead of object
         ];
 
         for invalid in syntax_errors {
             let result = McpMessage::from_str(invalid);
-            assert!(
-                result.is_err(),
-                "Syntax error should fail: {}",
-                invalid
-            );
+            assert!(result.is_err(), "Syntax error should fail: {}", invalid);
         }
     }
 
@@ -872,7 +895,8 @@ mod malformed_message_tests {
     /// Test parsing with extra unexpected fields
     #[test]
     fn test_extra_fields_ignored() {
-        let extra_fields = r#"{"jsonrpc":"2.0","method":"test","id":1,"extra":"ignored","another":123}"#;
+        let extra_fields =
+            r#"{"jsonrpc":"2.0","method":"test","id":1,"extra":"ignored","another":123}"#;
         let result = McpMessage::from_str(extra_fields);
 
         // Extra fields should be ignored (not cause parse failure)
@@ -899,7 +923,8 @@ mod malformed_message_tests {
     /// Test parsing request with array params (positional)
     #[test]
     fn test_array_params() {
-        let array_params = r#"{"jsonrpc":"2.0","method":"test","params":["arg1","arg2",123],"id":1}"#;
+        let array_params =
+            r#"{"jsonrpc":"2.0","method":"test","params":["arg1","arg2",123],"id":1}"#;
         let result = McpMessage::from_str(array_params);
 
         assert!(result.is_ok(), "Array params should parse");
@@ -944,7 +969,8 @@ mod malformed_message_tests {
     /// Test parsing unicode in strings
     #[test]
     fn test_unicode_strings() {
-        let unicode = r#"{"jsonrpc":"2.0","method":"test","params":{"text":"Hello, \u4e16\u754c!"},"id":1}"#;
+        let unicode =
+            r#"{"jsonrpc":"2.0","method":"test","params":{"text":"Hello, \u4e16\u754c!"},"id":1}"#;
         let result = McpMessage::from_str(unicode);
 
         assert!(result.is_ok(), "Should handle unicode escape sequences");
@@ -978,7 +1004,8 @@ mod malformed_message_tests {
     #[test]
     fn test_response_with_both_result_and_error() {
         // Per spec, a response should have either result OR error, not both
-        let both = r#"{"jsonrpc":"2.0","result":{},"error":{"code":-32600,"message":"test"},"id":1}"#;
+        let both =
+            r#"{"jsonrpc":"2.0","result":{},"error":{"code":-32600,"message":"test"},"id":1}"#;
         let result = McpMessage::from_str(both);
 
         // Parser might accept this, preferring one over the other
@@ -1060,6 +1087,9 @@ mod malformed_message_tests {
         let whitespace = "   \n\t  ";
         let result = McpMessage::from_str(whitespace);
 
-        assert!(result.is_err(), "Whitespace-only input should fail to parse");
+        assert!(
+            result.is_err(),
+            "Whitespace-only input should fail to parse"
+        );
     }
 }
