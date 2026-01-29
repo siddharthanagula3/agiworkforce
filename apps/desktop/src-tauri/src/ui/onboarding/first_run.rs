@@ -1,3 +1,4 @@
+use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,10 @@ impl FirstRunExperience {
     }
 
     pub fn has_completed_first_run(&self, user_id: &str) -> bool {
-        let conn = self.db.lock().unwrap();
+        let conn = match self.db.safe_lock() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
 
         let count: i64 = conn
             .query_row(
@@ -65,7 +69,12 @@ impl FirstRunExperience {
             started_at: now,
         };
 
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         conn.execute(
             "INSERT INTO first_run_sessions (id, user_id, started_at, step, recommended_employees, selected_employee_id, demo_results, time_to_value_seconds, hired_employee)
              VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, 0, 0)",
@@ -287,7 +296,12 @@ impl FirstRunExperience {
     }
 
     pub fn update_step(&self, session_id: &str, step: OnboardingStep) -> Result<(), FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         conn.execute(
             "UPDATE first_run_sessions SET step = ?1, updated_at = ?2 WHERE id = ?3",
             params![
@@ -300,7 +314,12 @@ impl FirstRunExperience {
     }
 
     pub fn select_demo(&self, session_id: &str, demo_id: &str) -> Result<(), FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         conn.execute(
             "UPDATE first_run_sessions SET selected_employee_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![demo_id, Utc::now().timestamp(), session_id],
@@ -314,7 +333,12 @@ impl FirstRunExperience {
         results: &DemoResult,
     ) -> Result<(), FirstRunError> {
         let started_at = {
-            let conn = self.db.lock().unwrap();
+            let conn = self.db.safe_lock().map_err(|e| {
+                FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(1),
+                    Some(format!("Lock error: {}", e)),
+                ))
+            })?;
             let started_at: i64 = conn.query_row(
                 "SELECT started_at FROM first_run_sessions WHERE id = ?1",
                 [session_id],
@@ -325,7 +349,12 @@ impl FirstRunExperience {
 
         let time_to_value = (Utc::now().timestamp() - started_at) as u64;
 
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         conn.execute(
             "UPDATE first_run_sessions SET demo_results = ?1, time_to_value_seconds = ?2, updated_at = ?3 WHERE id = ?4",
             params![
@@ -340,7 +369,12 @@ impl FirstRunExperience {
     }
 
     pub fn mark_setup_completed(&self, session_id: &str) -> Result<(), FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         conn.execute(
             "UPDATE first_run_sessions SET hired_employee = 1, updated_at = ?1 WHERE id = ?2",
             params![Utc::now().timestamp(), session_id],
@@ -349,7 +383,12 @@ impl FirstRunExperience {
     }
 
     pub fn complete(&self, session_id: &str) -> Result<(), FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
         conn.execute(
             "UPDATE first_run_sessions SET completed_at = ?1, step = ?2, updated_at = ?1 WHERE id = ?3",
@@ -359,7 +398,12 @@ impl FirstRunExperience {
     }
 
     pub fn get_session(&self, session_id: &str) -> Result<FirstRunSession, FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let (id, user_id, step_json, recommended_json, demo_json, time_to_value, selected_demo_id, started_at):
             (String, String, String, String, Option<String>, i64, Option<String>, i64) = conn.query_row(
@@ -394,7 +438,12 @@ impl FirstRunExperience {
     }
 
     pub fn get_statistics(&self) -> Result<FirstRunStatistics, FirstRunError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            FirstRunError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let total_sessions: i64 = conn
             .query_row("SELECT COUNT(*) FROM first_run_sessions", [], |row| {
