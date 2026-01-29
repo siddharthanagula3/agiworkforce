@@ -1,6 +1,7 @@
 import { Heart, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { Button } from '../../../components/ui/Button';
+import { toast } from '@/hooks/useToast';
 import { invoke } from '../../../lib/tauri-mock';
 import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';
@@ -41,7 +42,11 @@ export function MyFavoritesTab() {
       setFavorites((prev) => prev.filter((w) => w.id !== workflowId));
     } catch (err) {
       console.error('Failed to unfavorite workflow:', err);
-      alert('Failed to unfavorite workflow. Please try again.');
+      toast({
+        title: 'Unfavorite failed',
+        description: 'Failed to unfavorite workflow. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
