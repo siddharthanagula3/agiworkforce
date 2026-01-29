@@ -335,13 +335,11 @@ export function Sidebar({
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
   const loadConversationMessages = useChatStore((state) => state.loadConversationMessages);
 
-  // Get stats for active conversation - don't include getConversationStats in deps
-  // as it's a stable store function that shouldn't trigger re-computation
+  // Get stats for active conversation
   const stats = useMemo(() => {
     if (!activeConversationId) return null;
     return getConversationStats(activeConversationId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversationId]);
+  }, [activeConversationId, getConversationStats]);
 
   const handleExportConversation = useCallback(
     (id: string, title: string) => {
@@ -401,12 +399,10 @@ export function Sidebar({
     [conversations],
   );
 
-  // Run once on mount - don't include ensureActiveConversation in deps
-  // as it's a stable store function that shouldn't trigger re-runs
+  // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
     ensureActiveConversation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureActiveConversation]);
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();

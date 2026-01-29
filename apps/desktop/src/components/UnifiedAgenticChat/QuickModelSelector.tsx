@@ -95,8 +95,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     }, 50);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [availableModels.length, getAvailableModels]);
 
   // Router suggestion feature is disabled - keeping state for potential future re-enablement
   const [suggestion] = useState<RouterSuggestion | null>(null);
