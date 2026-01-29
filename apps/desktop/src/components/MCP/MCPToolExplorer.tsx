@@ -33,7 +33,7 @@ interface ToolTestDialogProps {
 
 function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps) {
   const [args, setArgs] = useState('{}');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
@@ -121,7 +121,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
           </Alert>
         )}
 
-        {result && (
+        {result !== null && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-green-600 flex items-center gap-1">
