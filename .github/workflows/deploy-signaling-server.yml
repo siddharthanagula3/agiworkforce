@@ -33,6 +33,11 @@ env:
   IMAGE_NAME: ${{ github.repository }}/signaling-server
   SERVICE_DIR: services/signaling-server
 
+# Limit GITHUB_TOKEN permissions to minimum required
+permissions:
+  contents: read
+  packages: write # Required for pushing to GHCR
+
 jobs:
   # ===========================================================================
   # Test Job

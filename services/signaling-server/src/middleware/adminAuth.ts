@@ -181,12 +181,10 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
   let apiKey: string | undefined;
 
   // Check Authorization header (Bearer token)
+  // Note: Using startsWith + slice instead of regex to avoid ReDoS vulnerability
   const authHeader = req.headers['authorization'];
-  if (authHeader) {
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    if (match) {
-      apiKey = match[1];
-    }
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    apiKey = authHeader.slice(7).trim();
   }
 
   // Fall back to X-API-Key header

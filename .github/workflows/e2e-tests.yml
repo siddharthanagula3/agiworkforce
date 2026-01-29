@@ -15,6 +15,10 @@ on:
     # Run nightly tests at 2 AM UTC
     - cron: '0 2 * * *'
 
+# Limit GITHUB_TOKEN permissions to minimum required
+permissions:
+  contents: read
+
 jobs:
   e2e-tests:
     name: E2E Tests
