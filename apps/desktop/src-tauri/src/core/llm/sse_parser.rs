@@ -553,7 +553,12 @@ mod stream_tests {
                         break;
                     }
                 }
-                Err(e) => panic!("Error in parser: {}", e),
+                Err(e) => {
+                    // In tests, we want to fail explicitly rather than panic
+                    // This allows the test framework to report the failure properly
+                    assert!(false, "Error in parser: {}", e);
+                    break;
+                }
             }
         }
 
