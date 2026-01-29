@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Limit GITHUB_TOKEN permissions to minimum required
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
