@@ -735,7 +735,18 @@ export const UnifiedAgenticChat: React.FC<{
     // This replaces the old local classifyTask and applyRouting functions
     const hasImages = options.attachments?.some((a) => a.type === 'image') ?? false;
     const currentModel = options.modelOverride ?? selectedModel ?? 'auto';
-    const routingResult = getModelForRequest(currentModel, content, hasImages);
+
+    // Check if user explicitly selected a specific model (not an auto mode)
+    // User's explicit model selection should ALWAYS be respected over routing.
+    // Only use intelligent routing when:
+    // 1. User has selected "auto" mode (auto-economy, auto-balanced, auto-premium, or legacy 'auto')
+    // 2. No explicit model override was provided
+    const isExplicitModelSelection = currentModel !== 'auto' && !currentModel.startsWith('auto-');
+
+    // Only perform routing if user selected an auto mode
+    const routingResult = isExplicitModelSelection
+      ? { modelId: currentModel, reason: `User selected: ${currentModel}`, wasRouted: false }
+      : getModelForRequest(currentModel, content, hasImages);
 
     // Log routing decision for debugging
     if (routingResult.wasRouted) {
@@ -744,73 +755,81 @@ export const UnifiedAgenticChat: React.FC<{
         routedModel: routingResult.modelId,
         reason: routingResult.reason,
       });
+    } else if (isExplicitModelSelection) {
+      console.log('[UnifiedAgenticChat] Using explicit model selection:', currentModel);
     }
 
-    if (conversationMode === 'manual') {
-      // In manual mode, check for dangerous command patterns
-      const dangerousCommandPatterns = [
-        /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
-        /\b(shutdown|poweroff|reboot|halt)\b/i,
-        /(disable|disallow|stop|kill)\s+(antivirus|firewall|defender|av)/i,
-        /\b(registry\s+delete|regedit|reg\s+delete)\b/i,
-        /taskkill\s+\/f/i,
-        /\b(dd|shred)\b.*if=/i,
-      ];
+    // Risk detection runs in ALL modes - dangerous patterns should always be flagged
+    // The undo-based safety philosophy handles reversibility AFTER actions, but we still
+    // need upfront detection to warn users about potentially dangerous requests.
+    const dangerousCommandPatterns = [
+      /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
+      /\b(shutdown|poweroff|reboot|halt)\b/i,
+      /(disable|disallow|stop|kill)\s+(antivirus|firewall|defender|av)/i,
+      /\b(registry\s+delete|regedit|reg\s+delete)\b/i,
+      /taskkill\s+\/f/i,
+      /\b(dd|shred)\b.*if=/i,
+    ];
 
-      // Shell operators and redirection that could be dangerous with command injection
-      const dangerousOperatorPatterns = [/[;&|`$(){}[\]\\]/];
+    // Shell operators and redirection that could be dangerous with command injection
+    const dangerousOperatorPatterns = [/[;&|`$(){}[\]\\]/];
 
-      // Prompt injection patterns
-      const promptInjectionPatterns = [
-        /ignore\s+(previous\s+)?instructions/i,
-        /override\s+(system\s+)?prompt/i,
-        /system\s+prompt|system\s+message/i,
-        /forget\s+(everything|previous)/i,
-        /roleplay\s+as\s+(?!the assistant)/i,
-      ];
+    // Prompt injection patterns
+    const promptInjectionPatterns = [
+      /ignore\s+(previous\s+)?instructions/i,
+      /override\s+(system\s+)?prompt/i,
+      /system\s+prompt|system\s+message/i,
+      /forget\s+(everything|previous)/i,
+      /roleplay\s+as\s+(?!the assistant)/i,
+    ];
 
-      const lower = content.toLowerCase();
-      let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      let matchedRisk: string | null = null;
+    const lower = content.toLowerCase();
+    let riskLevel: 'low' | 'medium' | 'high' = 'low';
+    let matchedRisk: string | null = null;
 
-      // Check for dangerous commands (high risk)
-      for (const pattern of dangerousCommandPatterns) {
+    // Check for dangerous commands (high risk)
+    for (const pattern of dangerousCommandPatterns) {
+      if (pattern.test(lower)) {
+        riskLevel = 'high';
+        matchedRisk = pattern.source;
+        break;
+      }
+    }
+
+    // Check for prompt injection (medium risk)
+    if (riskLevel === 'low') {
+      for (const pattern of promptInjectionPatterns) {
         if (pattern.test(lower)) {
-          riskLevel = 'high';
+          riskLevel = 'medium';
           matchedRisk = pattern.source;
           break;
         }
       }
+    }
 
-      // Check for prompt injection (medium risk)
-      if (riskLevel === 'low') {
-        for (const pattern of promptInjectionPatterns) {
-          if (pattern.test(lower)) {
-            riskLevel = 'medium';
-            matchedRisk = pattern.source;
-            break;
-          }
-        }
+    // Check for shell operators combined with commands (medium risk)
+    if (riskLevel === 'low' && dangerousOperatorPatterns[0]!.test(content)) {
+      if (/\b(execute|run|system|shell|cmd|command|bash|sh|powershell)\b/i.test(lower)) {
+        riskLevel = 'medium';
+        matchedRisk = 'Shell operators with execution keywords';
       }
+    }
 
-      // Check for shell operators combined with commands (medium risk)
-      if (riskLevel === 'low' && dangerousOperatorPatterns[0]!.test(content)) {
-        if (/\b(execute|run|system|shell|cmd|command|bash|sh|powershell)\b/i.test(lower)) {
-          riskLevel = 'medium';
-          matchedRisk = 'Shell operators with execution keywords';
-        }
-      }
+    if (riskLevel !== 'low') {
+      // In auto mode, use stronger warning language since AGI operates autonomously
+      const modeContext =
+        conversationMode === 'auto'
+          ? ' The AI will execute this autonomously without step-by-step approval.'
+          : '';
 
-      if (riskLevel !== 'low') {
-        const riskMessage =
-          riskLevel === 'high'
-            ? `This request contains a HIGH-RISK instruction that could cause system damage: ${matchedRisk}. This is not recommended.`
-            : `This request may contain a potential security risk: ${matchedRisk}. Proceed with caution.`;
+      const riskMessage =
+        riskLevel === 'high'
+          ? `This request contains a HIGH-RISK instruction that could cause system damage: ${matchedRisk}.${modeContext} This is not recommended.`
+          : `This request may contain a potential security risk: ${matchedRisk}.${modeContext} Proceed with caution.`;
 
-        const confirmed = window.confirm(`${riskMessage}\n\nProceed anyway?`);
-        if (!confirmed) {
-          return;
-        }
+      const confirmed = window.confirm(`${riskMessage}\n\nProceed anyway?`);
+      if (!confirmed) {
+        return;
       }
     }
 

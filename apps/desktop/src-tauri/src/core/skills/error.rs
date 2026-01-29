@@ -57,6 +57,14 @@ pub enum SkillError {
         path1: PathBuf,
         path2: PathBuf,
     },
+
+    /// Skill exists but is not available due to unmet requirements.
+    #[error("Skill '{name}' is not available: {reason}")]
+    SkillNotAvailable { name: String, reason: String },
+
+    /// Invalid slash command format.
+    #[error("Invalid slash command: {message}")]
+    InvalidSlashCommand { message: String },
 }
 
 /// Result type alias for skill operations.

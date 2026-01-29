@@ -134,7 +134,7 @@ pub struct CompactionCandidate {
 }
 
 /// Result of a compaction operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MemoryCompactionResult {
     /// Number of daily logs that were processed
     pub logs_processed: usize,
@@ -148,19 +148,6 @@ pub struct MemoryCompactionResult {
     pub decisions_extracted: usize,
     /// Preferences extracted and promoted
     pub preferences_extracted: usize,
-}
-
-impl Default for MemoryCompactionResult {
-    fn default() -> Self {
-        Self {
-            logs_processed: 0,
-            dates_compacted: 0,
-            memories_created: 0,
-            facts_extracted: 0,
-            decisions_extracted: 0,
-            preferences_extracted: 0,
-        }
-    }
 }
 
 /// A memory to be promoted to long-term storage
@@ -464,7 +451,7 @@ impl MemoryManager {
              FROM user_memory
              WHERE category = ?1 AND topic = ?2",
             params![category_str, topic],
-            |row| map_memory_row(row),
+            map_memory_row,
         );
 
         match result {
@@ -494,7 +481,7 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let entries = stmt
-            .query_map(params![search_pattern, limit], |row| map_memory_row(row))
+            .query_map(params![search_pattern, limit], map_memory_row)
             .map_err(|e| Error::Database(format!("Failed to search memories: {}", e)))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
@@ -526,7 +513,7 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let entries = stmt
-            .query_map(params![category_str, limit], |row| map_memory_row(row))
+            .query_map(params![category_str, limit], map_memory_row)
             .map_err(|e| Error::Database(format!("Failed to get memories: {}", e)))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
@@ -552,7 +539,7 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let entries = stmt
-            .query_map(params![min_importance], |row| map_memory_row(row))
+            .query_map(params![min_importance], map_memory_row)
             .map_err(|e| Error::Database(format!("Failed to get memories: {}", e)))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
@@ -703,7 +690,7 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let entries = stmt
-            .query_map([], |row| map_memory_row(row))
+            .query_map([], map_memory_row)
             .map_err(|e| Error::Database(format!("Failed to export memories: {}", e)))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;

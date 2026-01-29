@@ -406,7 +406,7 @@ impl FormUndoManager {
         ));
         instructions.push("Clear existing form values".to_string());
 
-        for (field, _value) in &submission.field_values {
+        for field in submission.field_values.keys() {
             instructions.push(format!("Set field '{}' to original value", field));
         }
 

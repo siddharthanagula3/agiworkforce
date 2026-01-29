@@ -569,29 +569,43 @@ async function handleChatCompletions(request: NextRequest) {
       const userId = user.id;
       const modelUsed = chatRequest.model;
       const providerUsed = provider;
+      // Use the user-requested model name for responses, not the internal API model
+      // e.g., user requests "gpt-5-nano" -> internally uses "gpt-4o-mini" -> return "gpt-5-nano"
+      const responseModelName = usedFallback ? chatRequest.model : requestedModel;
 
       let inputTokens = 0;
       let outputTokens = 0;
       let buffer = '';
+      const encoder = new TextEncoder();
 
+      // Single transform that handles both model name replacement and credit tracking
       const transformStream = new TransformStream({
         transform(chunk, controller) {
-          controller.enqueue(chunk);
-
           const text = new TextDecoder().decode(chunk);
           buffer += text;
 
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
+          // Process complete lines and replace model names in SSE events
+          const processedLines: string[] = [];
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const jsonStr = line.slice(6).trim();
-              if (jsonStr === '[DONE]') continue;
+              if (jsonStr === '[DONE]') {
+                processedLines.push(line);
+                continue;
+              }
 
               try {
                 const event = JSON.parse(jsonStr);
 
+                // Replace the internal API model name with the user-requested model name
+                if (event.model) {
+                  event.model = responseModelName;
+                }
+
+                // Track usage metrics for credit reconciliation
                 if (event.type === 'message_delta' && event.usage) {
                   outputTokens = event.usage.output_tokens || outputTokens;
                 }
@@ -606,13 +620,31 @@ async function handleChatCompletions(request: NextRequest) {
                   inputTokens = event.usageMetadata.promptTokenCount || inputTokens;
                   outputTokens = event.usageMetadata.candidatesTokenCount || outputTokens;
                 }
+
+                // Re-serialize with the corrected model name
+                processedLines.push(`data: ${JSON.stringify(event)}`);
               } catch {
-                // Ignore parse errors
+                // If parse fails, pass through unchanged
+                processedLines.push(line);
               }
+            } else {
+              // Non-data lines (empty lines, etc.) pass through unchanged
+              processedLines.push(line);
             }
           }
+
+          // Enqueue the processed lines
+          if (processedLines.length > 0) {
+            controller.enqueue(encoder.encode(processedLines.join('\n') + '\n'));
+          }
         },
-        async flush() {
+        async flush(controller) {
+          // Handle any remaining buffer content
+          if (buffer.trim()) {
+            controller.enqueue(encoder.encode(buffer));
+          }
+
+          // Credit reconciliation at end of stream
           const totalTokens = inputTokens + outputTokens;
 
           if (totalTokens > 0) {
@@ -767,12 +799,16 @@ async function handleChatCompletions(request: NextRequest) {
   // Return OpenAI-compatible response
   const responseId = `chatcmpl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+  // Return the user-requested model name, not the internal API model name
+  // e.g., user requests "gpt-5-nano" -> internally uses "gpt-4o-mini" -> return "gpt-5-nano"
+  const responseModel = usedFallback ? chatRequest.model : requestedModel;
+
   return NextResponse.json(
     {
       id: responseId,
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
-      model: llmResponse.model,
+      model: responseModel,
       choices: [
         {
           index: 0,

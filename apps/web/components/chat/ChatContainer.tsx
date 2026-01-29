@@ -141,7 +141,7 @@ export const ChatContainer = memo(function ChatContainer({ className = '' }: Cha
           </div>
 
           {/* Chat stream */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ChatStream onSuggestionClick={handleSuggestionClick} />
           </div>
 
