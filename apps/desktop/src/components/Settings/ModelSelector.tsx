@@ -74,6 +74,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       perplexity: [],
       zhipu: [],
       managed_cloud: [],
+      'black-forest-labs': [],
+      suno: [],
+      udio: [],
     };
 
     filteredModels.forEach((model) => {
