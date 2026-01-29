@@ -352,10 +352,7 @@ impl CodeGenerator {
             "query".to_string(),
             serde_json::Value::String(prompt.clone()),
         );
-        arguments.insert(
-            "input".to_string(),
-            serde_json::Value::String(prompt),
-        );
+        arguments.insert("input".to_string(), serde_json::Value::String(prompt));
 
         // Execute the MCP tool
         match registry.execute_tool(&tool.id, arguments).await {
@@ -378,7 +375,8 @@ impl CodeGenerator {
                     if let Some(json_end) = result_str.rfind(']') {
                         if json_start < json_end {
                             let json_str = &result_str[json_start..=json_end];
-                            if let Ok(files) = serde_json::from_str::<Vec<GeneratedFile>>(json_str) {
+                            if let Ok(files) = serde_json::from_str::<Vec<GeneratedFile>>(json_str)
+                            {
                                 tracing::info!(
                                     "[CodeGenerator] MCP tool generated {} files for task '{}'",
                                     files.len(),
