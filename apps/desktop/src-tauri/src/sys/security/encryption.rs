@@ -1,3 +1,4 @@
+use crate::core::sync_utils::RwLockExt;
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
@@ -39,13 +40,19 @@ impl SecretStore {
 
     pub fn store_secret(&self, name: String, value: &str) -> Result<(), String> {
         let encrypted = encrypt_secret(&self.key, value)?;
-        let mut secrets = self.secrets.write().unwrap();
+        let mut secrets = self
+            .secrets
+            .safe_write()
+            .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
         secrets.insert(name, encrypted);
         Ok(())
     }
 
     pub fn retrieve_secret(&self, name: &str) -> Result<String, String> {
-        let secrets = self.secrets.read().unwrap();
+        let secrets = self
+            .secrets
+            .safe_read()
+            .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
         let encrypted = secrets
             .get(name)
             .ok_or_else(|| format!("Secret '{}' not found", name))?;
@@ -53,7 +60,10 @@ impl SecretStore {
     }
 
     pub fn delete_secret(&self, name: &str) -> Result<(), String> {
-        let mut secrets = self.secrets.write().unwrap();
+        let mut secrets = self
+            .secrets
+            .safe_write()
+            .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
         secrets
             .remove(name)
             .ok_or_else(|| format!("Secret '{}' not found", name))?;
@@ -61,8 +71,10 @@ impl SecretStore {
     }
 
     pub fn list_secrets(&self) -> Vec<String> {
-        let secrets = self.secrets.read().unwrap();
-        secrets.keys().cloned().collect()
+        self.secrets
+            .safe_read()
+            .map(|guard| guard.keys().cloned().collect())
+            .unwrap_or_default()
     }
 }
 

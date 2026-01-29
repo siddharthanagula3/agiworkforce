@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::sync::{Arc, Mutex};
@@ -30,7 +31,12 @@ impl ProgressTracker {
         user_id: &str,
         tutorial_id: &str,
     ) -> Result<OnboardingProgress, ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
 
         let exists: bool = conn
@@ -50,6 +56,7 @@ impl ProgressTracker {
             )?;
         }
 
+        drop(conn);
         self.get_progress(user_id, tutorial_id)
     }
 
@@ -59,7 +66,12 @@ impl ProgressTracker {
         tutorial_id: &str,
         step_id: &str,
     ) -> Result<OnboardingProgress, ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
 
         let (current_step, completed_steps_json): (usize, String) = conn.query_row(
@@ -95,7 +107,12 @@ impl ProgressTracker {
     }
 
     pub fn complete_tutorial(&self, user_id: &str, tutorial_id: &str) -> Result<(), ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
 
         conn.execute(
@@ -118,7 +135,12 @@ impl ProgressTracker {
     }
 
     pub fn reset_tutorial(&self, user_id: &str, tutorial_id: &str) -> Result<(), ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         conn.execute(
             "DELETE FROM tutorial_progress
@@ -134,7 +156,12 @@ impl ProgressTracker {
         user_id: &str,
         tutorial_id: &str,
     ) -> Result<OnboardingProgress, ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let result = conn.query_row(
             "SELECT user_id, tutorial_id, current_step, completed_steps, started_at, completed_at, last_updated
@@ -166,7 +193,12 @@ impl ProgressTracker {
     }
 
     pub fn get_user_progress(&self, user_id: &str) -> Result<UserTutorialProgress, ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let mut stmt = conn.prepare(
             "SELECT tutorial_id, completed_at FROM tutorial_progress
@@ -233,7 +265,12 @@ impl ProgressTracker {
     }
 
     pub fn get_tutorial_stats(&self, tutorial_id: &str) -> Result<TutorialStats, ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let total_starts: u32 = conn
             .query_row(
@@ -291,7 +328,12 @@ impl ProgressTracker {
         tutorial_id: &str,
         step_id: &str,
     ) -> Result<(), ProgressError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            ProgressError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
 
         conn.execute(

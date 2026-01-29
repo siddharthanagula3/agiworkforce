@@ -1,3 +1,4 @@
+use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -299,7 +300,12 @@ impl InstantDemo {
         user_id: Option<&str>,
         results: &DemoResult,
     ) -> Result<(), DemoError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            DemoError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         let now = Utc::now().timestamp();
         let run_id = Uuid::new_v4().to_string();
 
@@ -319,7 +325,12 @@ impl InstantDemo {
     }
 
     pub fn get_demo_statistics(&self, demo_id: Option<&str>) -> Result<DemoStatistics, DemoError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            DemoError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
 
         let (total_runs, hire_conversion): (i64, i64) = if let Some(d_id) = demo_id {
             (
