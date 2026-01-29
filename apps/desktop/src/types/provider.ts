@@ -9,4 +9,7 @@ export type Provider =
   | 'moonshot'
   | 'perplexity'
   | 'zhipu'
-  | 'managed_cloud';
+  | 'managed_cloud'
+  | 'black-forest-labs'
+  | 'suno'
+  | 'udio';
