@@ -36,7 +36,7 @@ import {
   PendingUserMessage,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
-import { SubscriptionGateResult } from '../../utils/subscriptionGate';
+import { SubscriptionGateResult, type SubscriptionStatus } from '../../utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../Subscription';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/auth';
@@ -122,6 +122,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const fileReadersRef = useRef<FileReader[]>([]);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
+  // Track whether user has modified content since last draft sync
+  const userModifiedContentRef = useRef(false);
 
   // Initialize slash command hooks
   const { isSlashCommandInput } = useSlashCommands();
@@ -260,14 +262,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const pendingCount = pendingMessages.length;
 
   // Sync draft content from store, but don't overwrite if user is actively editing
+  // Using ref to track user modifications prevents circular updates
   useEffect(() => {
-    // Only update content if draft is different AND content is empty or draft is more recent
+    // Only update content if draft is different AND user hasn't modified it
     // This prevents overwriting user input while they're typing
-    if (draftContent && draftContent !== content && content === '') {
+    if (draftContent && draftContent !== content && !userModifiedContentRef.current) {
       setContent(draftContent);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only run when draft changes, not on every content change to avoid circular updates
-  }, [draftContent]);
+    // Reset modified flag when draft changes externally (e.g., conversation switch)
+    if (draftContent === '') {
+      userModifiedContentRef.current = false;
+    }
+  }, [draftContent, content]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -550,6 +556,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       return;
     }
 
+    // Mark that user has modified content to prevent draft sync overwriting
+    userModifiedContentRef.current = true;
     setContent(value);
     setDraftContent(value);
 
@@ -634,7 +642,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           reason: 'Auto Mode requires a Hobby plan or higher.',
           requiresUpgrade: true,
           currentTier: plan,
-          currentStatus: (account as any)?.subscriptionStatus || 'none',
+          currentStatus: ((account as { subscriptionStatus?: SubscriptionStatus } | null)
+            ?.subscriptionStatus || 'none') as SubscriptionStatus,
         });
         setShowLockDialog(true);
         sendAbortControllerRef.current = null;
@@ -656,6 +665,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setSubmitError(null);
     const messageAttachments = attachments.length > 0 ? attachments : undefined;
 
+    // Reset user modification tracking when content is cleared
+    userModifiedContentRef.current = false;
     setContent('');
     setDraftContent('');
     setAttachments([]);

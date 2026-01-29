@@ -39,26 +39,31 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-// Notion page property types for type-safe extraction
+// Notion page property types for runtime type checking
 interface NotionTitleItem {
   plain_text?: string;
 }
 
-interface NotionPropertyValue {
+interface NotionPropertyValueWithTitle {
   type?: string;
   title?: NotionTitleItem[];
 }
 
-interface NotionPage {
-  properties?: Record<string, NotionPropertyValue>;
+// Type guard for checking if a value is a property with a title
+function isPropertyWithTitle(value: unknown): value is NotionPropertyValueWithTitle {
+  if (typeof value !== 'object' || value === null) return false;
+  const prop = value as Record<string, unknown>;
+  return prop['type'] === 'title' && Array.isArray(prop['title']);
 }
 
-const extractNotionTitle = (page: NotionPage | null | undefined): string | null => {
+const extractNotionTitle = (
+  page: { properties?: Record<string, unknown> } | null | undefined,
+): string | null => {
   const properties = page?.properties;
   if (!properties) return null;
   for (const value of Object.values(properties)) {
-    if (value?.type === 'title' && Array.isArray(value.title)) {
-      const text = value.title.find((item) => item?.plain_text)?.plain_text;
+    if (isPropertyWithTitle(value)) {
+      const text = value.title?.find((item) => item?.plain_text)?.plain_text;
       if (text) {
         return text;
       }

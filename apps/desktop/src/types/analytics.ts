@@ -55,7 +55,7 @@ export type EventName =
 
 export interface AnalyticsEvent {
   name: EventName;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
   timestamp: number;
   sessionId: string;
   userId?: string;
@@ -98,7 +98,7 @@ export interface MCPEventProperties {
   error_type?: string;
 }
 
-export interface ErrorEventProperties {
+export interface ErrorEventProperties extends Record<string, unknown> {
   error_type: string;
   error_message?: string;
   error_stack?: string;
