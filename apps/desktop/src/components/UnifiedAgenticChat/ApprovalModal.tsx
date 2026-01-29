@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle, Clock, Info, Shield, X, XCircle } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
@@ -39,46 +39,15 @@ export const ApprovalModal = () => {
     return currentApproval.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
   }, [currentApproval]);
 
-  // Initialize and run countdown timer
-  useEffect(() => {
-    if (!currentApproval || !timeoutSeconds) {
-      setRemainingSeconds(null);
-      return;
-    }
+  // Track if timeout rejection is in progress to prevent duplicate calls
+  const timeoutRejectInProgressRef = useRef(false);
 
-    // Calculate remaining time from when approval was created
-    const createdAt = new Date(currentApproval.createdAt).getTime();
-    const elapsed = Math.floor((Date.now() - createdAt) / 1000);
-    const initial = Math.max(0, timeoutSeconds - elapsed);
-    setRemainingSeconds(initial);
-
-    // If already timed out, auto-reject
-    if (initial <= 0) {
-      handleTimeoutReject();
-      return;
-    }
-
-    // Countdown interval
-    const interval = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(interval);
-          // Trigger timeout rejection
-          handleTimeoutReject();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentApproval?.id, timeoutSeconds]);
-
-  // Handle timeout rejection
-  const handleTimeoutReject = async () => {
+  // Handle timeout rejection - memoized to be stable for use in effect
+  const handleTimeoutReject = useCallback(async () => {
     if (!currentApproval || isRejecting || isApproving) return;
+    if (timeoutRejectInProgressRef.current) return;
 
+    timeoutRejectInProgressRef.current = true;
     setIsRejecting(true);
     try {
       await resolveApproval(currentApproval, 'reject', {
@@ -94,8 +63,44 @@ export const ApprovalModal = () => {
       console.error('[ApprovalModal] Timeout rejection failed:', error);
     } finally {
       setIsRejecting(false);
+      timeoutRejectInProgressRef.current = false;
     }
-  };
+  }, [currentApproval, isRejecting, isApproving, resolveApproval, showError]);
+
+  // Initialize and run countdown timer
+  useEffect(() => {
+    if (!currentApproval || !timeoutSeconds) {
+      setRemainingSeconds(null);
+      return;
+    }
+
+    // Calculate remaining time from when approval was created
+    const createdAt = new Date(currentApproval.createdAt).getTime();
+    const elapsed = Math.floor((Date.now() - createdAt) / 1000);
+    const initial = Math.max(0, timeoutSeconds - elapsed);
+    setRemainingSeconds(initial);
+
+    // If already timed out, auto-reject
+    if (initial <= 0) {
+      void handleTimeoutReject();
+      return;
+    }
+
+    // Countdown interval
+    const interval = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          // Trigger timeout rejection
+          void handleTimeoutReject();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentApproval, timeoutSeconds, handleTimeoutReject]);
 
   // Calculate progress percentage (remaining / total)
   const progressPercent = useMemo(() => {
