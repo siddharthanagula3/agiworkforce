@@ -126,7 +126,10 @@ mod tests {
             ChangeType::CommandExecuted { command: cmd, .. } if *cmd == command
         ));
         // Commands cannot be automatically undone
-        assert!(!change.can_revert, "Command execution should not be auto-revertible");
+        assert!(
+            !change.can_revert,
+            "Command execution should not be auto-revertible"
+        );
     }
 
     #[tokio::test]
@@ -138,7 +141,12 @@ mod tests {
         let task_id = "task-git".to_string();
 
         let change_id = tracker
-            .record_git_commit(repo_path.clone(), hash.clone(), message.clone(), task_id.clone())
+            .record_git_commit(
+                repo_path.clone(),
+                hash.clone(),
+                message.clone(),
+                task_id.clone(),
+            )
             .await;
 
         let changes = tracker.get_all_changes().await;
@@ -281,7 +289,10 @@ mod tests {
 
         // After marking as reverted
         let revertible = tracker.get_revertible_changes(None).await;
-        assert!(revertible.is_empty(), "Should have no revertible changes after marking reverted");
+        assert!(
+            revertible.is_empty(),
+            "Should have no revertible changes after marking reverted"
+        );
 
         // Verify the change is marked as reverted
         let changes = tracker.get_all_changes().await;
@@ -928,7 +939,10 @@ mod tests {
         );
 
         assert!(matches!(change.change_type, ChangeType::DirectoryCreated));
-        assert!(change.can_revert, "Directory creation should be marked as revertible");
+        assert!(
+            change.can_revert,
+            "Directory creation should be marked as revertible"
+        );
 
         let delete_change = Change::new(
             ChangeType::DirectoryDeleted,
@@ -938,7 +952,10 @@ mod tests {
             None,
         );
 
-        assert!(matches!(delete_change.change_type, ChangeType::DirectoryDeleted));
+        assert!(matches!(
+            delete_change.change_type,
+            ChangeType::DirectoryDeleted
+        ));
     }
 
     #[tokio::test]
@@ -953,11 +970,7 @@ mod tests {
             fs::write(&file, format!("content{}", i)).await.unwrap();
 
             let id = tracker
-                .record_file_created(
-                    file,
-                    format!("content{}", i),
-                    "task-concurrent".to_string(),
-                )
+                .record_file_created(file, format!("content{}", i), "task-concurrent".to_string())
                 .await;
             change_ids.push(id);
         }
@@ -1095,7 +1108,11 @@ mod tests {
 
         let tracker = Arc::new(ChangeTracker::new());
         let change_id = tracker
-            .record_file_deleted(nested_path.clone(), content.to_string(), "task-nested".to_string())
+            .record_file_deleted(
+                nested_path.clone(),
+                content.to_string(),
+                "task-nested".to_string(),
+            )
             .await;
 
         let manager = UndoManager::new(tracker);
