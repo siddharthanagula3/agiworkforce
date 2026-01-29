@@ -72,7 +72,14 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     if (!audioRef.current || audioContext) return;
 
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Safari fallback for webkitAudioContext
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        throw new Error('AudioContext not supported');
+      }
+      const ctx = new AudioContextClass();
       const analyserNode = ctx.createAnalyser();
       analyserNode.fftSize = 256;
 

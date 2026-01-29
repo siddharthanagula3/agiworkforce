@@ -959,7 +959,17 @@ export const UnifiedAgenticChat: React.FC<{
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
 
-        const response = await invoke<any>('chat_send_message', {
+        interface ChatSendMessageResponse {
+          conversation?: { id: number };
+          message?: { id: number; content: string };
+          credits?: {
+            remaining_cents: number;
+            daily_used?: number;
+            daily_limit?: number;
+            daily_reset_at?: string;
+          };
+        }
+        const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
           request: {
             content,
             userId,

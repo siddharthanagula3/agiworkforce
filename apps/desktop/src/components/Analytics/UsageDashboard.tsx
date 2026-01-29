@@ -352,12 +352,12 @@ export const UsageDashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={featureData as any}
+                  data={featureData}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry: any) =>
-                    `${entry.name || entry.category || 'Unknown'}: ${(entry.percent * 100).toFixed(1)}%`
+                  label={(entry: { name?: string; category?: string; percent?: number }) =>
+                    `${entry.name || entry.category || 'Unknown'}: ${((entry.percent ?? 0) * 100).toFixed(1)}%`
                   }
                   outerRadius={100}
                   fill="#8884d8"

@@ -108,7 +108,7 @@ class AnalyticsService {
     this.userId = userId;
   }
 
-  public track(eventName: EventName, properties: Record<string, any> = {}) {
+  public track(eventName: EventName, properties: Record<string, unknown> = {}) {
     if (!this.config.enabled) {
       return;
     }
@@ -132,7 +132,7 @@ class AnalyticsService {
     }
   }
 
-  public trackPageView(pageName: string, properties: Record<string, any> = {}) {
+  public trackPageView(pageName: string, properties: Record<string, unknown> = {}) {
     this.track('session_started', {
       page_name: pageName,
       ...properties,
@@ -283,7 +283,7 @@ class AnalyticsService {
     }
   }
 
-  private sanitizeProperties(properties: Record<string, any>) {
+  private sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
     const sanitized = { ...properties };
 
     const piiKeys = [
@@ -312,7 +312,7 @@ class AnalyticsService {
         sanitized[key] !== null &&
         !Array.isArray(sanitized[key])
       ) {
-        sanitized[key] = this.sanitizeProperties(sanitized[key]);
+        sanitized[key] = this.sanitizeProperties(sanitized[key] as Record<string, unknown>);
       }
     });
 

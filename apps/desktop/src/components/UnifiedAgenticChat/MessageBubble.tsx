@@ -22,7 +22,7 @@ import {
   ThumbsUp,
   Trash2,
 } from 'lucide-react';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { EditableMessage } from './EditableMessage';
 import ReactMarkdown from 'react-markdown';
@@ -49,6 +49,15 @@ import { DeepResearchPanel } from './DeepResearchPanel';
 import { CodeBlock } from './Visualizations/CodeBlock';
 import { ImageLightbox } from './ImageLightbox';
 import { InlinePanelRenderer } from './InlinePanels/InlinePanelRenderer';
+
+// Extended message metadata type for thinking-related fields
+interface ThinkingMessageMetadata {
+  thinkingSummary?: string;
+  summary?: string;
+  duration?: number;
+  steps?: number;
+  [key: string]: unknown;
+}
 
 export interface MessageBubbleProps {
   message: EnhancedMessage;
@@ -93,6 +102,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // Reaction picker state
   const [showReactionPicker, setShowReactionPicker] = React.useState(false);
 
+  // Track which message IDs we've already opened the sidecar for
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
+
   // Reaction config
   const REACTIONS: { type: MessageReaction; icon: React.ReactNode; label: string }[] = [
     { type: 'thumbsUp', icon: <ThumbsUp size={14} />, label: 'Like' },
@@ -114,15 +126,20 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const researchTasks = useExecutionStore((state) => state.researchTasks);
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
 
-  React.useEffect(() => {
+  // Open sidecar for new messages - using ref to track processed IDs prevents
+  // re-opening during streaming when message properties update
+  useEffect(() => {
     if (!sidecar.autoTrigger || sidecar.isOpen) return;
+
+    // Skip if we've already processed this message ID
+    if (processedMessageIdsRef.current.has(message.id)) return;
 
     const suggestedMode = getSuggestedSidecarMode(message);
     if (suggestedMode) {
+      processedMessageIdsRef.current.add(message.id);
       openSidecar(suggestedMode, message.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only re-run when message ID changes, not on every message property update to prevent unnecessary sidecar opens during streaming
-  }, [message.id, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
+  }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -513,10 +530,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   }
 
   if (thinkingMatch) {
-    const summary =
-      (message.metadata as any)?.thinkingSummary || (message.metadata as any)?.summary;
-    const duration = (message.metadata as any)?.duration;
-    const steps = (message.metadata as any)?.steps;
+    const thinkingMeta = message.metadata as ThinkingMessageMetadata | undefined;
+    const summary = thinkingMeta?.thinkingSummary || thinkingMeta?.summary;
+    const duration = thinkingMeta?.duration;
+    const steps = thinkingMeta?.steps;
 
     const thinkingBlock = thinkingMatch.content;
 
