@@ -2,6 +2,9 @@ use crate::integrations::api_integrations::image_gen::{
     GeneratedImage, ImageGenerationClient, ImageGenerationRequest, ImageProvider, ImageQuality,
     ImageSize,
 };
+use crate::integrations::api_integrations::runway::{
+    RunwayAspectRatio, RunwayClient, RunwayStatus, RunwayVideoModel, RunwayVideoRequest,
+};
 use crate::integrations::api_integrations::veo3::{
     Veo3Client, VideoGenerationRequest, VideoResolution, VideoStatus,
 };
@@ -62,6 +65,12 @@ pub struct MediaVideoRequest {
     pub model: Option<String>,
     #[serde(default)]
     pub plan: Option<String>,
+    /// Video provider: "runway" or "veo3" (default: "runway")
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Input image URL for image-to-video models (required for gen4_turbo)
+    #[serde(default)]
+    pub input_image_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -186,6 +195,121 @@ pub async fn media_generate_video(
         }
     }
 
+    let provider = request.provider.as_deref().unwrap_or("runway");
+    let started = Instant::now();
+
+    let response = match provider {
+        "runway" => generate_video_runway(&request).await?,
+        "veo3" | "google" => generate_video_veo3(&request).await?,
+        _ => generate_video_runway(&request).await?, // Default to Runway
+    };
+
+    let latency_ms = started.elapsed().as_millis() as u64;
+
+    // Save to history
+    let mut history = load_history(&app).unwrap_or_default();
+    let now = Utc::now().to_rfc3339();
+
+    history.push(MediaHistoryItem {
+        id: response.id.clone(),
+        type_: "video".to_string(),
+        title: request.prompt.chars().take(30).collect::<String>(),
+        prompt: request.prompt.clone(),
+        status: "completed".to_string(),
+        src: response.video_url.clone(),
+        created_at: now,
+    });
+    let _ = save_history(&app, &history);
+
+    Ok(MediaVideoResponse {
+        id: response.id,
+        status: response.status,
+        video_url: response.video_url,
+        thumbnail_url: response.thumbnail_url,
+        duration_secs: response.duration_secs,
+        cost_estimate: response.cost_estimate,
+        latency_ms,
+    })
+}
+
+/// Generate video using Runway API
+async fn generate_video_runway(request: &MediaVideoRequest) -> Result<VideoGenResult, String> {
+    let api_key =
+        resolve_api_key("runway").map_err(|e| format!("Runway API key missing: {}", e))?;
+
+    let client = RunwayClient::new(RequestConfig {
+        api_key,
+        timeout_secs: Some(300),
+        max_retries: Some(1),
+    })
+    .map_err(|e| format!("Failed to initialize Runway client: {}", e))?;
+
+    // Determine model based on whether an input image is provided
+    let model = match request.model.as_deref() {
+        Some("gen4_turbo") => RunwayVideoModel::Gen4Turbo,
+        Some("gen4_aleph") => RunwayVideoModel::Gen4Aleph,
+        Some("veo3.1") | Some("veo31") => RunwayVideoModel::Veo31,
+        Some("veo3.1_fast") | Some("veo31_fast") => RunwayVideoModel::Veo31Fast,
+        _ => {
+            // Default: use Veo31Fast for text-to-video, Gen4Turbo for image-to-video
+            if request.input_image_url.is_some() {
+                RunwayVideoModel::Gen4Turbo
+            } else {
+                RunwayVideoModel::Veo31Fast
+            }
+        }
+    };
+
+    // Parse aspect ratio from resolution
+    let aspect_ratio = match request.resolution.as_deref() {
+        Some("1080p") | Some("fhd") | Some("1920x1080") => Some(RunwayAspectRatio::Landscape1080),
+        Some("portrait") | Some("720x1280") => Some(RunwayAspectRatio::Portrait720),
+        Some("portrait_hd") | Some("1080x1920") => Some(RunwayAspectRatio::Portrait1080),
+        _ => Some(RunwayAspectRatio::Landscape720),
+    };
+
+    let duration = request.duration_secs.unwrap_or(5).min(10); // Max 10 seconds
+
+    let runway_request = RunwayVideoRequest {
+        prompt: request.prompt.clone(),
+        model,
+        duration_secs: Some(duration),
+        aspect_ratio,
+        input_image_url: request.input_image_url.clone(),
+        enable_audio: Some(true),
+    };
+
+    // Start generation
+    let initial = client
+        .generate_video(&runway_request)
+        .await
+        .map_err(|e| format!("Runway video generation failed: {}", e))?;
+
+    // Wait for completion (up to 5 minutes)
+    let final_response = client
+        .wait_for_completion(&initial.id, 300)
+        .await
+        .map_err(|e| format!("Runway video generation polling failed: {}", e))?;
+
+    let status = match final_response.status {
+        RunwayStatus::Succeeded => "completed",
+        RunwayStatus::Failed => "failed",
+        RunwayStatus::Throttled => "throttled",
+        _ => "processing",
+    };
+
+    Ok(VideoGenResult {
+        id: final_response.id,
+        status: status.to_string(),
+        video_url: final_response.video_url,
+        thumbnail_url: final_response.thumbnail_url,
+        duration_secs: Some(duration),
+        cost_estimate: Some(RunwayClient::estimate_cost(model, duration)),
+    })
+}
+
+/// Generate video using Google Veo3 API
+async fn generate_video_veo3(request: &MediaVideoRequest) -> Result<VideoGenResult, String> {
     let api_key =
         resolve_api_key("google").map_err(|e| format!("API key for Veo/Google missing: {}", e))?;
 
@@ -206,11 +330,10 @@ pub async fn media_generate_video(
         prompt: request.prompt.clone(),
         duration_secs: request.duration_secs.or(Some(8)),
         resolution,
-        style: request.style,
-        negative_prompt: request.negative_prompt,
+        style: request.style.clone(),
+        negative_prompt: request.negative_prompt.clone(),
     };
 
-    let started = Instant::now();
     let initial = client
         .generate_video(&build_request)
         .await
@@ -227,26 +350,15 @@ pub async fn media_generate_video(
             .map_err(|e| format!("Video generation polling failed: {}", e))?;
     }
 
-    let latency_ms = started.elapsed().as_millis() as u64;
+    let status = match final_response.status {
+        VideoStatus::Completed => "completed",
+        VideoStatus::Failed => "failed",
+        _ => "processing",
+    };
 
-    // Save to history
-    let mut history = load_history(&app).unwrap_or_default();
-    let now = Utc::now().to_rfc3339();
-
-    history.push(MediaHistoryItem {
-        id: final_response.id.clone(),
-        type_: "video".to_string(),
-        title: request.prompt.chars().take(30).collect::<String>(),
-        prompt: request.prompt.clone(),
-        status: "completed".to_string(),
-        src: final_response.video_url.clone(),
-        created_at: now,
-    });
-    let _ = save_history(&app, &history);
-
-    Ok(MediaVideoResponse {
+    Ok(VideoGenResult {
         id: final_response.id,
-        status: format!("{:?}", final_response.status).to_lowercase(),
+        status: status.to_string(),
         video_url: final_response.video_url,
         thumbnail_url: final_response.thumbnail_url,
         duration_secs: final_response.duration_secs,
@@ -254,8 +366,17 @@ pub async fn media_generate_video(
             build_request.duration_secs.unwrap_or(8),
             build_request.resolution.unwrap_or(VideoResolution::HD),
         )),
-        latency_ms,
     })
+}
+
+/// Internal result struct for video generation
+struct VideoGenResult {
+    id: String,
+    status: String,
+    video_url: Option<String>,
+    thumbnail_url: Option<String>,
+    duration_secs: Option<u32>,
+    cost_estimate: Option<f64>,
 }
 
 fn load_history(app: &tauri::AppHandle) -> anyhow::Result<Vec<MediaHistoryItem>> {
@@ -322,6 +443,7 @@ fn resolve_api_key(provider: &str) -> Result<String, APIError> {
         "openai" => vec!["OPENAI_API_KEY".to_string()],
         "stability" => vec!["STABILITY_API_KEY".to_string(), "STABILITY_KEY".to_string()],
         "midjourney" => vec!["MIDJOURNEY_API_KEY".to_string()],
+        "runway" => vec!["RUNWAY_API_KEY".to_string(), "RUNWAY_KEY".to_string()],
         "google" => vec![
             "GOOGLE_API_KEY".to_string(),
             "VERTEX_API_KEY".to_string(),

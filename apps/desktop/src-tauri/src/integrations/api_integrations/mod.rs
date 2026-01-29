@@ -1,5 +1,6 @@
 pub mod image_gen;
 pub mod perplexity;
+pub mod runway;
 pub mod veo3;
 
 use serde::{Deserialize, Serialize};

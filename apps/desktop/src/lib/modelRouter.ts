@@ -156,17 +156,17 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
   // =========================================================================
   'auto-economy': [
     // === TOP BENCHMARK (Best quality in economy tier) ===
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ E✓ (1M ctx)
+    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
     'deepseek-v3.2', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
     'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
 
     // === MID BENCHMARK (Good quality, very cheap) ===
     'kimi-k2.5-thinking', // 55% SWE-bench, 88% MMLU, 99% AIME - V✓ T✓ Th✓ A✓
-    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ E✓ (2M ctx)
-    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ (200K ctx)
+    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
+    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
     'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ (128K ctx)
+    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ A✓ (128K ctx)
 
     // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
     'grok-4.1-mini', // 35% SWE-bench, 78% MMLU - T✓ (128K ctx)
@@ -184,7 +184,7 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     // === TOP BENCHMARK (Pro-tier additions first) ===
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ E✓ (1M ctx)
+    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
     'gemini-3-pro', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx)
     'deepseek-v3.2', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
@@ -195,10 +195,10 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     'qwen3-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
     'kimi-k2.5-thinking', // 55% SWE-bench, 88% MMLU, 99% AIME - V✓ T✓ Th✓ A✓
     'qwen3-coder-plus', // 55% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ E✓ (2M ctx)
-    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ (200K ctx)
+    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
+    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
     'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ (128K ctx)
+    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ A✓ (128K ctx)
 
     // === LOWER BENCHMARK (fallbacks) ===
     'grok-4.1-mini',
@@ -220,7 +220,7 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU, 100% AIME - BEST REASONING
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU
     'gemini-3-ultra', // 76.2% SWE-bench, 93.8% GPQA - BEST MULTIMODAL
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality
+    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality + A✓
     'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
     'gemini-3-pro', // 74.2% SWE-bench, 91.9% GPQA
     'glm-4.7', // 73.8% SWE-bench - BEST OPEN-WEIGHT
@@ -235,10 +235,10 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     'kimi-k2.5-thinking', // 55% SWE-bench, 99% AIME
     'deepseek-r1', // 55% SWE-bench - BUDGET REASONING
     'qwen3-coder-plus', // 55% SWE-bench
-    'grok-4.1-fast-reasoning', // 48% SWE-bench - 2M CONTEXT
-    'claude-haiku-4.5', // 45% SWE-bench
+    'grok-4.1-fast-reasoning', // 48% SWE-bench - 2M CONTEXT + A✓
+    'claude-haiku-4.5', // 45% SWE-bench + A✓
     'glm-4.6v-flash', // 45% SWE-bench - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench
+    'qwen3-coder-flash', // 45% SWE-bench + A✓
 
     // === LOWER BENCHMARK (fast/cheap fallbacks) ===
     'grok-4.1-mini',
@@ -925,12 +925,23 @@ export function selectModelFromPool(
   }
 
   if (candidates.length === 0) {
-    // Fallback to first model in pool
+    // Fallback: Try to find ANY model with required capabilities (ignore benchmark thresholds)
+    for (const modelId of pool) {
+      const model = MODEL_METADATA[modelId];
+      if (model && hasRequiredCapabilities(model, taskType)) {
+        return {
+          modelId,
+          reason: `Fallback to ${model.name} - only model with required capabilities for ${taskType}`,
+        };
+      }
+    }
+
+    // Last resort: First model in pool (better than nothing)
     const firstModelId = pool[0] ?? 'gemini-3-flash';
     const fallback = MODEL_METADATA[firstModelId];
     return {
       modelId: firstModelId,
-      reason: `Fallback to ${fallback?.name ?? firstModelId} - no models met criteria`,
+      reason: `Last resort fallback to ${fallback?.name ?? firstModelId} - no models met criteria`,
     };
   }
 
