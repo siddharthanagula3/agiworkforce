@@ -532,6 +532,14 @@ impl HttpSseTransport {
             .connect_timeout(std::time::Duration::from_secs(10));
 
         if !config.verify_ssl {
+            // SECURITY WARNING: Disabling SSL verification exposes the connection to
+            // man-in-the-middle attacks. Only use this for local development or testing
+            // with self-signed certificates. Never disable in production.
+            tracing::warn!(
+                "[MCP HTTP Transport] SSL certificate verification DISABLED for server '{}'. \
+                 This is insecure and should only be used for local development.",
+                server_name
+            );
             client_builder = client_builder.danger_accept_invalid_certs(true);
         }
 
