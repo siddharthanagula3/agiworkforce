@@ -45,8 +45,7 @@ export function Sidebar({
   // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
     ensureActiveConversation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureActiveConversation]);
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();

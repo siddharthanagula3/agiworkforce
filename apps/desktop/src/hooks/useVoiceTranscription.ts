@@ -136,6 +136,55 @@ export function useVoiceTranscription(
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  /**
+   * Check available local Whisper implementations
+   */
+  const checkLocalWhisperImpl = useCallback(async (): Promise<string[]> => {
+    try {
+      const available = await invoke<string[]>('voice_check_local_whisper');
+      return available;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  /**
+   * Configure voice settings on the backend
+   */
+  const configureImpl = useCallback(
+    async (settings: Partial<VoiceSettings>): Promise<void> => {
+      try {
+        await invoke('voice_configure', {
+          provider: settings.provider || 'openai',
+          apiKey: settings.openai_api_key,
+          model: settings.model,
+          language: settings.language,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setState((prev) => ({ ...prev, error: errorMessage }));
+        onError?.(errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [onError],
+  );
+
+  /**
+   * Get current voice settings from the backend
+   */
+  const getSettingsImpl = useCallback(async (): Promise<VoiceSettings> => {
+    try {
+      const settings = await invoke<VoiceSettings>('voice_get_settings');
+      return settings;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setState((prev) => ({ ...prev, error: errorMessage }));
+      onError?.(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }, [onError]);
+
   // Check browser support on mount
   useEffect(() => {
     const supported =
@@ -159,7 +208,7 @@ export function useVoiceTranscription(
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [checkLocalWhisperImpl]);
 
   // Configure provider when preferLocal changes
   useEffect(() => {
@@ -169,64 +218,14 @@ export function useVoiceTranscription(
         configureImpl({ provider: 'openai' as const }).catch(() => {});
       });
     }
-    // configureImpl is stable and doesn't need to be in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preferLocal, availableLocalWhisper]);
+  }, [preferLocal, availableLocalWhisper, configureImpl]);
 
   // Configure language when it changes
   useEffect(() => {
     if (language) {
       configureImpl({ language }).catch(() => {});
     }
-    // configureImpl is stable and doesn't need to be in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
-
-  /**
-   * Check available local Whisper implementations
-   */
-  const checkLocalWhisperImpl = async (): Promise<string[]> => {
-    try {
-      const available = await invoke<string[]>('voice_check_local_whisper');
-      return available;
-    } catch {
-      return [];
-    }
-  };
-
-  /**
-   * Configure voice settings on the backend
-   */
-  const configureImpl = async (settings: Partial<VoiceSettings>): Promise<void> => {
-    try {
-      await invoke('voice_configure', {
-        provider: settings.provider || 'openai',
-        apiKey: settings.openai_api_key,
-        model: settings.model,
-        language: settings.language,
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setState((prev) => ({ ...prev, error: errorMessage }));
-      onError?.(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
-
-  /**
-   * Get current voice settings from the backend
-   */
-  const getSettingsImpl = async (): Promise<VoiceSettings> => {
-    try {
-      const settings = await invoke<VoiceSettings>('voice_get_settings');
-      return settings;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setState((prev) => ({ ...prev, error: errorMessage }));
-      onError?.(errorMessage);
-      throw new Error(errorMessage);
-    }
-  };
+  }, [language, configureImpl]);
 
   /**
    * Get the MIME type for the selected audio format
@@ -454,18 +453,19 @@ export function useVoiceTranscription(
   /**
    * Public API for configuring voice settings
    */
-  const configure = useCallback(async (settings: Partial<VoiceSettings>): Promise<void> => {
-    await configureImpl(settings);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // configureImpl is stable
+  const configure = useCallback(
+    async (settings: Partial<VoiceSettings>): Promise<void> => {
+      await configureImpl(settings);
+    },
+    [configureImpl],
+  );
 
   /**
    * Public API for getting voice settings
    */
   const getSettings = useCallback(async (): Promise<VoiceSettings> => {
     return getSettingsImpl();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // getSettingsImpl is stable
+  }, [getSettingsImpl]);
 
   /**
    * Public API for checking local Whisper availability
@@ -474,7 +474,7 @@ export function useVoiceTranscription(
     const available = await checkLocalWhisperImpl();
     setAvailableLocalWhisper(available);
     return available;
-  }, []);
+  }, [checkLocalWhisperImpl]);
 
   return {
     ...state,
