@@ -16,6 +16,7 @@
 //! - Salt is derived from machine_id to ensure consistency across restarts
 //! - Different key purposes get different derived keys via key stretching
 
+use crate::core::sync_utils::RwLockExt;
 use base64::{engine::general_purpose, Engine as _};
 use once_cell::sync::Lazy;
 use pbkdf2::pbkdf2_hmac_array;
@@ -118,14 +119,19 @@ impl MachineKeyManager {
     /// Set the install ID (should be called during app initialization)
     /// This ID is stored in the database and used for additional entropy
     pub fn set_install_id(&self, id: String) {
-        let mut install_id = self.install_id.write().unwrap();
-        *install_id = Some(id);
+        if let Ok(mut install_id) = self.install_id.safe_write() {
+            *install_id = Some(id);
+        }
     }
 
     /// Get or generate the install ID
     pub fn get_install_id(&self) -> String {
-        let install_id = self.install_id.read().unwrap();
-        install_id.clone().unwrap_or_else(|| {
+        let install_id = self
+            .install_id
+            .safe_read()
+            .ok()
+            .and_then(|guard| guard.clone());
+        install_id.unwrap_or_else(|| {
             // If not set, generate a deterministic one from machine_id
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
