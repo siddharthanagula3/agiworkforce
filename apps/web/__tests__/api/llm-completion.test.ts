@@ -93,7 +93,7 @@ describe('POST /api/llm/completion', () => {
     vi.clearAllMocks();
 
     // Default mock implementations
-    mockGetProviderFromModel.mockReturnValue('anthropic');
+    mockGetProviderFromModel.mockReturnValue('deepseek');
     mockGetSubscription.mockResolvedValue({
       id: 'sub_123',
       status: 'active',
@@ -106,14 +106,16 @@ describe('POST /api/llm/completion', () => {
     });
     mockGetBalance.mockResolvedValue({
       remaining_cents: 1000,
+      credits_remaining_cents: 1000,
       allocated_cents: 5000,
+      credits_allocated_cents: 5000,
       daily_limit_cents: 1500,
       daily_used_cents: 100,
       daily_remaining_cents: 1400,
     });
     mockSendRequest.mockResolvedValue({
       content: 'Hello, how can I help you?',
-      model: 'claude-sonnet-4-5',
+      model: 'deepseek-v3.2',
       promptTokens: 100,
       completionTokens: 50,
       totalTokens: 150,
@@ -143,7 +145,7 @@ describe('POST /api/llm/completion', () => {
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -163,7 +165,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Basic invalid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -187,7 +189,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer invalid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -209,7 +211,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -235,7 +237,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -261,7 +263,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -277,7 +279,16 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Provider Detection', () => {
     it('should detect Anthropic provider from claude model', async () => {
+      // claude-haiku-4.5 is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('anthropic');
+      mockSendRequest.mockResolvedValue({
+        content: 'Hello, how can I help you?',
+        model: 'claude-haiku-4.5',
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        finishReason: 'stop',
+      });
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
@@ -285,31 +296,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'claude-haiku-4.5',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('claude-sonnet-4-5');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('claude-haiku-4.5');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'anthropic',
-        expect.objectContaining({ model: 'claude-sonnet-4-5' }),
+        expect.objectContaining({ model: 'claude-haiku-4.5' }),
       );
     });
 
     it('should detect OpenAI provider from gpt model', async () => {
-      // Use max tier since gpt-5 requires max or enterprise tier
-      mockGetSubscription.mockResolvedValue({
-        id: 'sub_123',
-        status: 'active',
-        plan_tier: 'max',
-      });
+      // gpt-5-nano is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('openai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from GPT',
-        model: 'gpt-5',
+        model: 'gpt-5-nano',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -322,25 +328,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gpt-5',
+          model: 'gpt-5-nano',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5-nano');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'openai',
-        expect.objectContaining({ model: 'gpt-5' }),
+        expect.objectContaining({ model: 'gpt-5-nano' }),
       );
     });
 
     it('should detect Google provider from gemini model', async () => {
+      // gemini-3-flash is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('google');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Gemini',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -353,25 +360,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-2.5-flash');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-3-flash');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'google',
-        expect.objectContaining({ model: 'gemini-2.5-flash' }),
+        expect.objectContaining({ model: 'gemini-3-flash' }),
       );
     });
 
     it('should detect xAI provider from grok model', async () => {
+      // grok-4.1-mini is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4-1-fast',
+        model: 'grok-4.1-mini',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -384,25 +392,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4-1-fast',
+          model: 'grok-4.1-mini',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4-1-fast');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4.1-mini');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4-1-fast' }),
+        expect.objectContaining({ model: 'grok-4.1-mini' }),
       );
     });
 
     it('should detect DeepSeek provider from deepseek model', async () => {
+      // deepseek-v3.2 is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('deepseek');
       mockSendRequest.mockResolvedValue({
         content: 'Response from DeepSeek',
-        model: 'deepseek-chat',
+        model: 'deepseek-v3.2',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -415,17 +424,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('deepseek-chat');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('deepseek-v3.2');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'deepseek',
-        expect.objectContaining({ model: 'deepseek-chat' }),
+        expect.objectContaining({ model: 'deepseek-v3.2' }),
       );
     });
   });
@@ -435,7 +444,7 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Fallback Model Selection', () => {
     it('should return 402 when credits are insufficient and no fallback available', async () => {
-      // Use max tier since claude-opus-4-5 requires max or enterprise tier
+      // Use max tier since claude-opus-4.5 requires max or enterprise tier
       mockGetSubscription.mockResolvedValue({
         id: 'sub_123',
         status: 'active',
@@ -450,7 +459,9 @@ describe('POST /api/llm/completion', () => {
       });
       mockGetBalance.mockResolvedValue({
         remaining_cents: 0,
+        credits_remaining_cents: 0,
         allocated_cents: 5000,
+        credits_allocated_cents: 5000,
       });
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
@@ -459,7 +470,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-5',
+          model: 'claude-opus-4.5',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -482,11 +493,13 @@ describe('POST /api/llm/completion', () => {
       });
       mockGetBalance.mockResolvedValue({
         remaining_cents: 3500,
+        credits_remaining_cents: 3500,
         allocated_cents: 5000,
+        credits_allocated_cents: 5000,
         daily_limit_cents: 1500,
         daily_used_cents: 1500,
         daily_remaining_cents: 0,
-        daily_reset_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+        last_daily_reset_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
       });
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
@@ -495,7 +508,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -521,7 +534,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: false,
         }),
@@ -553,7 +566,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
         }),
@@ -576,7 +589,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
         }),
@@ -615,7 +628,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -647,7 +660,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -707,7 +720,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [],
         }),
       });
@@ -726,7 +739,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'x'.repeat(100001) }],
         }),
       });
@@ -752,7 +765,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages,
         }),
       });
@@ -777,7 +790,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -803,7 +816,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -825,7 +838,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -854,7 +867,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -882,7 +895,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
+          model: 'deepseek-v3.2',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -890,6 +903,7 @@ describe('POST /api/llm/completion', () => {
       const response = await POST(request);
       const data = await response.json();
 
+      expect(response.status).toBe(200);
       expect(data.cache).toBeDefined();
       expect(data.cache.cached_input_tokens).toBeDefined();
       expect(data.cache.cache_creation_input_tokens).toBeDefined();
