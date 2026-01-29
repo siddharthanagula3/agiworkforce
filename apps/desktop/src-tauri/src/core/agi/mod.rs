@@ -2,12 +2,14 @@ pub mod api_tools_impl;
 pub mod audio_processing;
 pub mod comparator;
 pub mod context_manager;
+pub mod conversation_summarizer;
 pub mod core;
 pub mod executor;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
 pub mod memory_manager;
+pub mod memory_persistence;
 pub mod orchestrator;
 #[allow(dead_code)]
 pub mod orchestrator_examples;
@@ -27,6 +29,10 @@ mod tests;
 
 pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
 pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
+pub use conversation_summarizer::{
+    ConversationSummarizer, ExtractedMemory, ExtractionResult, SummarizationRun,
+    SummarizationStatus, SummaryLLM, DEFAULT_EXTRACTION_PROMPT,
+};
 pub use core::AGICore;
 pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
@@ -35,6 +41,13 @@ pub use memory::AGIMemory;
 pub use memory_manager::{
     DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,
     MemoryEntry, MemoryManager, MemoryStats,
+};
+pub use memory_persistence::MemoryCategory as PersistentMemoryCategory;
+pub use memory_persistence::{
+    ConversationSummaryCandidate, HybridSearchResult, ImportResult, MemoryExport, MemoryStore,
+    PersistentMemory, SearchFilter, SummarizationStats, SummarizerConfig, DEFAULT_EMBEDDING_DIM,
+    FTS_SEARCH_WEIGHT, MAX_CONTENT_LENGTH_BEFORE_SUMMARY, SUMMARIZATION_INTERVAL_HOURS,
+    VECTOR_SEARCH_WEIGHT,
 };
 pub use orchestrator::{
     AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,

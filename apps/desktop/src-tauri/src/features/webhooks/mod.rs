@@ -173,7 +173,7 @@ impl WebhookManager {
                 let body = response.text().await.ok();
 
                 WebhookResult {
-                    success: status >= 200 && status < 300,
+                    success: (200..300).contains(&status),
                     status_code: Some(status),
                     response_body: body,
                     error: None,

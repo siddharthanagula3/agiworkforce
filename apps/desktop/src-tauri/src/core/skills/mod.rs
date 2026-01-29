@@ -65,8 +65,10 @@ mod skill;
 
 pub use error::{SkillError, SkillResult};
 pub use loader::{RequirementCheckResult, SkillLoader, SkillSourceType};
-pub use manager::{SkillManager, SkillManagerConfig, SkillSourceFilter};
-pub use skill::{Skill, SkillBuilder, SkillRequirements, SkillSource};
+pub use manager::{
+    SkillInvocation, SkillManager, SkillManagerConfig, SkillSourceFilter, SlashCommand,
+};
+pub use skill::{Skill, SkillBuilder, SkillContextMode, SkillRequirements, SkillSource};
 
 #[cfg(test)]
 mod tests {
@@ -83,27 +85,23 @@ mod tests {
         std::fs::create_dir_all(&skills_dir).unwrap();
 
         // Create a workspace skill
-        let git_skill_dir = skills_dir.join("git-workflow");
-        std::fs::create_dir_all(&git_skill_dir).unwrap();
-        let git_skill_content = r#"---
-name: git-workflow
-description: Manage Git repositories and version control
+        let custom_skill_dir = skills_dir.join("custom-skill");
+        std::fs::create_dir_all(&custom_skill_dir).unwrap();
+        let custom_skill_content = r#"---
+name: custom-skill
+description: A custom workspace skill
 metadata:
   agiworkforce:
     requires:
-      bins: ["git"]
+      bins: []
     os: ["darwin", "linux", "windows"]
 ---
 
-# Git Workflow
+# Custom Skill
 
-Use this skill for Git operations.
-
-## Commands
-- `git status` - Check status
-- `git commit` - Commit changes
+Use this skill for custom operations.
 "#;
-        std::fs::write(git_skill_dir.join("SKILL.md"), git_skill_content).unwrap();
+        std::fs::write(custom_skill_dir.join("SKILL.md"), custom_skill_content).unwrap();
 
         // Initialize the manager
         let manager = SkillManager::new();
@@ -116,24 +114,20 @@ Use this skill for Git operations.
         manager.set_workspace(Some(temp_dir.path().to_path_buf()));
 
         // Verify workspace skill was loaded
-        let git_skill = manager.get_skill("git-workflow");
-        assert!(git_skill.is_some(), "git-workflow skill should be loaded");
+        let custom_skill = manager.get_skill("custom-skill");
+        assert!(custom_skill.is_some(), "custom-skill should be loaded");
 
-        let skill = git_skill.unwrap();
-        assert_eq!(
-            skill.description,
-            "Manage Git repositories and version control"
-        );
+        let skill = custom_skill.unwrap();
+        assert_eq!(skill.description, "A custom workspace skill");
         assert!(skill.source.is_workspace());
-        assert_eq!(skill.requires_bins, vec!["git"]);
 
         // Check requirements
-        let requirements = manager.check_skill_requirements("git-workflow");
+        let requirements = manager.check_skill_requirements("custom-skill");
         assert!(requirements.is_some());
 
         // Generate context
         let context = manager.generate_skill_context();
-        assert!(context.contains("git-workflow") || context.contains("file-operations"));
+        assert!(context.contains("custom-skill") || context.contains("file-operations"));
 
         // Generate summary
         let summary = manager.generate_skill_summary();
@@ -141,8 +135,93 @@ Use this skill for Git operations.
 
         // Clear workspace
         manager.set_workspace(None);
-        assert!(manager.get_skill("git-workflow").is_none());
+        assert!(manager.get_skill("custom-skill").is_none());
         assert_eq!(manager.skill_count(), bundled_count);
+    }
+
+    /// Test that pre-built skill templates are available.
+    #[test]
+    fn test_prebuilt_skill_templates() {
+        let manager = SkillManager::new();
+        manager.initialize();
+
+        // Check for pre-built skill templates
+        assert!(manager.get_skill("explain-code").is_some());
+        assert!(manager.get_skill("create-document").is_some());
+        assert!(manager.get_skill("code-review").is_some());
+        assert!(manager.get_skill("debug-error").is_some());
+        assert!(manager.get_skill("git-workflow").is_some());
+        assert!(manager.get_skill("research-topic").is_some());
+        assert!(manager.get_skill("refactor-code").is_some());
+        assert!(manager.get_skill("write-tests").is_some());
+
+        // Check explain-code has correct configuration
+        let explain_code = manager.get_skill("explain-code").unwrap();
+        assert!(explain_code.context_mode.is_fork());
+        assert!(explain_code.is_tool_allowed("Read"));
+        assert!(explain_code.is_tool_allowed("Grep"));
+        assert!(explain_code.is_tool_allowed("Glob"));
+        assert!(!explain_code.is_tool_allowed("Write"));
+    }
+
+    /// Test slash command parsing.
+    #[test]
+    fn test_slash_command_parsing() {
+        let manager = SkillManager::new();
+        manager.initialize();
+
+        // Valid slash command with arguments
+        let result = manager.parse_slash_command("/explain-code src/main.rs");
+        assert!(result.is_some());
+        let invocation = result.unwrap().expect("Should parse successfully");
+        assert_eq!(invocation.skill_name, "explain-code");
+        assert!(invocation.instructions.contains("src/main.rs"));
+
+        // Valid slash command without arguments
+        let result = manager.parse_slash_command("/file-operations");
+        assert!(result.is_some());
+        let invocation = result.unwrap().expect("Should parse successfully");
+        assert_eq!(invocation.skill_name, "file-operations");
+
+        // Not a slash command
+        let result = manager.parse_slash_command("explain-code src/main.rs");
+        assert!(result.is_none());
+
+        // Unknown skill
+        let result = manager.parse_slash_command("/unknown-skill args");
+        assert!(result.is_none());
+    }
+
+    /// Test skill invocation with arguments.
+    #[test]
+    fn test_skill_invocation() {
+        let manager = SkillManager::new();
+        manager.initialize();
+
+        let invocation = manager
+            .invoke_skill("explain-code", "src/lib.rs")
+            .expect("Should invoke successfully");
+
+        assert_eq!(invocation.skill_name, "explain-code");
+        assert!(invocation.instructions.contains("src/lib.rs"));
+        assert!(invocation.is_fork());
+        assert!(invocation.is_tool_allowed("Read"));
+        assert!(!invocation.is_tool_allowed("Execute"));
+    }
+
+    /// Test get slash commands.
+    #[test]
+    fn test_get_slash_commands() {
+        let manager = SkillManager::new();
+        manager.initialize();
+
+        let commands = manager.get_slash_commands();
+        assert!(!commands.is_empty());
+
+        // Check that explain-code has arguments
+        let explain_code = commands.iter().find(|c| c.name == "explain-code");
+        assert!(explain_code.is_some());
+        assert!(explain_code.unwrap().has_arguments);
     }
 
     /// Test that skill sources work correctly.

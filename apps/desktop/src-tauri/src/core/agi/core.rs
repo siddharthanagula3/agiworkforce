@@ -476,6 +476,172 @@ impl AGICore {
         Ok(best_result.clone())
     }
 
+    /// Submits a goal for execution using the swarm orchestration system.
+    ///
+    /// This method uses the SwarmOrchestrator for massively parallel execution,
+    /// spawning up to 100 concurrent sub-agents to work on decomposed subtasks.
+    /// The swarm system is ideal for complex goals that can be broken into
+    /// many independent or semi-independent subtasks.
+    ///
+    /// Key features:
+    /// - Automatic task decomposition via LLM analysis
+    /// - Dynamic agent spawning with frozen weights (Kimi K2.5 pattern)
+    /// - Circuit breaker pattern for fault tolerance
+    /// - Critical path optimization for minimum execution time
+    /// - Result aggregation with multiple strategies
+    ///
+    /// # Arguments
+    /// * `goal` - The goal to achieve
+    ///
+    /// # Returns
+    /// * `SwarmResult` containing aggregated results, metrics, and speedup ratio
+    pub async fn submit_goal_swarm(&self, goal: Goal) -> Result<crate::core::swarm::SwarmResult> {
+        use crate::core::swarm::{SwarmConfig, SwarmOrchestrator};
+
+        tracing::info!("[AGI] Swarm goal submitted: {}", goal.description);
+
+        self.emit_event(
+            "agi:goal:swarm_submitted",
+            json!({
+                "goal_id": goal.id,
+                "description": goal.description,
+                "priority": goal.priority,
+            }),
+        );
+
+        // Create swarm configuration
+        let config = SwarmConfig {
+            max_agents: 20, // Start with conservative limit, can be increased
+            optimize_critical_path: true,
+            auto_spawn: true,
+            ..Default::default()
+        };
+
+        // Create swarm orchestrator
+        let orchestrator = SwarmOrchestrator::new(
+            config,
+            self.router.clone(),
+            self.automation.clone(),
+            self.app_handle.clone(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create swarm orchestrator: {}", e))?;
+
+        // Execute the goal using swarm
+        let result = orchestrator
+            .execute_swarm_task(goal.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("Swarm execution failed: {}", e))?;
+
+        self.emit_event(
+            "agi:goal:swarm_completed",
+            json!({
+                "goal_id": goal.id,
+                "success": result.success,
+                "succeeded": result.succeeded,
+                "failed": result.failed,
+                "wall_time_ms": result.wall_time.as_millis(),
+                "speedup_ratio": result.speedup_ratio,
+                "critical_path_length": result.critical_path_length,
+                "max_parallelism": result.max_parallelism,
+            }),
+        );
+
+        tracing::info!(
+            "[AGI] Swarm execution completed: {} ({}/{} subtasks, {:.2}x speedup)",
+            if result.success { "SUCCESS" } else { "FAILED" },
+            result.succeeded,
+            result.succeeded + result.failed,
+            result.speedup_ratio
+        );
+
+        Ok(result)
+    }
+
+    /// Determines whether a goal should use swarm execution.
+    ///
+    /// Returns true if the goal is complex enough to benefit from parallel
+    /// multi-agent execution. Uses heuristics based on:
+    /// - Goal description complexity
+    /// - Presence of parallelizable keywords
+    /// - Estimated task decomposition potential
+    pub fn should_use_swarm(&self, goal: &Goal) -> bool {
+        let description = goal.description.to_lowercase();
+
+        // Keywords suggesting parallelizable work
+        let parallel_keywords = [
+            "multiple",
+            "all",
+            "each",
+            "every",
+            "batch",
+            "files",
+            "documents",
+            "pages",
+            "items",
+            "records",
+            "analyze all",
+            "process all",
+            "check all",
+            "update all",
+            "across",
+            "simultaneously",
+            "in parallel",
+            "concurrently",
+        ];
+
+        // Check for parallel keywords
+        let has_parallel_keywords = parallel_keywords.iter().any(|kw| description.contains(kw));
+
+        // Check description length (longer descriptions often indicate complex tasks)
+        let is_complex = description.len() > 100;
+
+        // Check for multiple success criteria (indicates multi-step goals)
+        let has_multiple_criteria = goal.success_criteria.len() > 2;
+
+        // Use swarm if any strong indicator is present
+        has_parallel_keywords || (is_complex && has_multiple_criteria)
+    }
+
+    /// Submits a goal with automatic execution strategy selection.
+    ///
+    /// Automatically chooses between:
+    /// - Sequential execution (simple goals)
+    /// - Parallel plans (moderately complex goals)
+    /// - Swarm execution (highly parallelizable goals)
+    ///
+    /// This is the recommended entry point for goal submission when you want
+    /// the AGI to automatically optimize execution strategy.
+    pub async fn submit_goal_auto(&self, goal: Goal) -> Result<String> {
+        if self.should_use_swarm(&goal) {
+            tracing::info!(
+                "[AGI] Auto-selected swarm execution for goal: {}",
+                goal.description
+            );
+            let goal_id = goal.id.clone();
+            let core_clone = self.clone_for_execution();
+            let goal_clone = goal.clone();
+
+            tokio::spawn(async move {
+                match core_clone.submit_goal_swarm(goal_clone).await {
+                    Ok(result) => {
+                        tracing::info!(
+                            "[AGI] Swarm goal completed with speedup: {:.2}x",
+                            result.speedup_ratio
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!("[AGI] Swarm goal failed: {}", e);
+                    }
+                }
+            });
+
+            Ok(goal_id)
+        } else {
+            // Use standard sequential execution
+            self.submit_goal(goal).await
+        }
+    }
+
     async fn process_goals(&self) -> Result<()> {
         // CRITICAL-001 fix: Use recovery helpers
         let goals = lock_with_recovery(&self.active_goals, "process_goals:active_goals")?.clone();

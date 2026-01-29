@@ -12,7 +12,10 @@ use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::{
     ai_native::{CodeGeneratorState, ContextManagerState},
     gmail_oauth::GmailOAuthState,
+    intent::IntentState,
     load_persisted_calendar_accounts,
+    mcp_extensions::McpExtensionsState,
+    research::ResearchState,
     security::AuthManagerState,
     skills::SkillsState,
     undo::UndoState,
@@ -23,6 +26,7 @@ use crate::sys::commands::{
     SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState,
     VoiceState, WorkflowEngineState, WorkspaceIndexState,
 };
+use crate::sys::diagnostics::DiagnosticsState;
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
 use anyhow::Context;
@@ -319,6 +323,19 @@ pub fn run() {
             // MCP Bundle (MCPB) state for bundle management
             app.manage(McpbState::new());
 
+            // MCP Extensions state for desktop extension management
+            let mcp_state_ref: tauri::State<McpState> = app.state();
+            let mcp_client = mcp_state_ref.client.clone();
+            match McpExtensionsState::new(db_conn_arc.clone(), mcp_client) {
+                Ok(extensions_state) => {
+                    app.manage(extensions_state);
+                    tracing::info!("MCP Extensions state initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize MCP Extensions: {}. Extension features may be degraded.", e);
+                }
+            }
+
             // Undo manager state for reversing AGI actions
             app.manage(UndoState::new());
 
@@ -334,6 +351,10 @@ pub fn run() {
             app.manage(SkillsState::default());
             tracing::info!("Skills manager initialized");
 
+            // Research orchestration state for multi-source investigation
+            app.manage(ResearchState::new());
+            tracing::info!("Research state initialized");
+
             // Messaging state for Discord, Telegram, Signal integrations
             app.manage(crate::sys::commands::messaging::MessagingState::default());
             tracing::info!("Messaging state initialized");
@@ -341,6 +362,43 @@ pub fn run() {
             // Canvas state manager for visual canvas/A2UI operations
             app.manage(crate::sys::commands::canvas::CanvasStateManager::default());
             tracing::info!("Canvas state manager initialized");
+
+            // Diagnostics state for /doctor command
+            app.manage(DiagnosticsState::new());
+            tracing::info!("Diagnostics state initialized");
+
+            // Artifact state for live previews and versioned artifacts
+            app.manage(crate::sys::commands::artifacts::ArtifactState::new());
+            tracing::info!("Artifact state initialized");
+
+            // Background Agent Manager for "&" prefix background tasks
+            {
+                use crate::core::agent::{BackgroundAgentManager, BackgroundAgentManagerState};
+                let bg_agent_manager = BackgroundAgentManager::new(db_conn_arc.clone());
+                let mut bg_manager_with_handle = bg_agent_manager;
+                bg_manager_with_handle.set_app_handle(app.handle().clone());
+                let bg_state = BackgroundAgentManagerState::new(bg_manager_with_handle);
+
+                // Initialize and restore any persisted agents
+                let bg_state_clone = bg_state.0.clone();
+                tauri::async_runtime::spawn(async move {
+                    let manager = bg_state_clone.read().await;
+                    if let Err(e) = manager.initialize().await {
+                        tracing::warn!("Failed to initialize background agent manager: {}. Background agent features may be degraded.", e);
+                    }
+                });
+
+                app.manage(bg_state);
+                tracing::info!("Background Agent Manager initialized");
+            }
+
+            // Thinking state for extended thinking mode
+            app.manage(crate::sys::commands::thinking::ThinkingState::new());
+            tracing::info!("Thinking state initialized");
+
+            // Intent detection state for intelligent routing
+            app.manage(IntentState::new());
+            tracing::info!("Intent detection state initialized");
 
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
@@ -503,6 +561,9 @@ pub fn run() {
             crate::sys::commands::agi_init,
             crate::sys::commands::agi_submit_goal,
             crate::sys::commands::agi_submit_goal_parallel,
+            crate::sys::commands::agi_submit_goal_swarm,
+            crate::sys::commands::agi_submit_goal_auto,
+            crate::sys::commands::agi_should_use_swarm,
             crate::sys::commands::agi_get_goal_status,
             crate::sys::commands::agi_list_goals,
             crate::sys::commands::agi_stop,
@@ -1191,6 +1252,22 @@ pub fn run() {
             crate::sys::commands::mcpb_get_categories,
             crate::sys::commands::mcpb_get_featured,
 
+            // MCP Extensions (Desktop Extensions)
+            crate::sys::commands::extension_list,
+            crate::sys::commands::extension_get,
+            crate::sys::commands::extension_install,
+            crate::sys::commands::extension_uninstall,
+            crate::sys::commands::extension_enable,
+            crate::sys::commands::extension_disable,
+            crate::sys::commands::extension_get_config,
+            crate::sys::commands::extension_set_config,
+            crate::sys::commands::extension_validate,
+            crate::sys::commands::extension_list_by_status,
+            crate::sys::commands::extension_start_all,
+            crate::sys::commands::extension_stop_all,
+            crate::sys::commands::extension_get_directory,
+            crate::sys::commands::extension_select_package,
+
 
             crate::sys::commands::github_clone_repo,
             crate::sys::commands::github_get_repo_context,
@@ -1250,6 +1327,10 @@ pub fn run() {
             crate::sys::commands::skill_get_context,
             crate::sys::commands::skill_set_workspace,
             crate::sys::commands::skill_count,
+            crate::sys::commands::skill_invoke,
+            crate::sys::commands::skill_parse_slash_command,
+            crate::sys::commands::skill_get_slash_commands,
+            crate::sys::commands::skill_reload,
 
             // Messaging (Discord, Telegram, Signal)
             crate::sys::commands::messaging::messaging_connect_discord,
@@ -1310,6 +1391,26 @@ pub fn run() {
             crate::sys::commands::scheduler_resume_job,
             crate::sys::commands::scheduler_get_job,
             crate::sys::commands::scheduler_get_next_runs,
+
+            // Research (multi-source investigation with citations)
+            crate::sys::commands::research_start,
+            crate::sys::commands::research_cancel,
+            crate::sys::commands::research_get_config,
+            crate::sys::commands::research_set_config,
+            crate::sys::commands::research_get_modes,
+            crate::sys::commands::research_quick,
+            crate::sys::commands::research_check_availability,
+
+            // Intent Detection (intelligent routing and tool selection)
+            crate::sys::commands::intent::intent_detect,
+            crate::sys::commands::intent::intent_detect_with_llm,
+            crate::sys::commands::intent::intent_create_routing_plan,
+            crate::sys::commands::intent::intent_check_quick_win,
+            crate::sys::commands::intent::intent_get_categories,
+            crate::sys::commands::intent::intent_extract_entities,
+            crate::sys::commands::intent::intent_get_complexity_levels,
+            crate::sys::commands::intent::intent_detect_batch,
+            crate::sys::commands::intent::intent_configure,
 
             crate::sys::commands::workspace_index,
             crate::sys::commands::workspace_search_symbols,
@@ -1575,6 +1676,19 @@ pub fn run() {
             crate::sys::commands::agent::agent_stop,
             crate::sys::commands::security::auth_login,
 
+            // Background Agents (push to background with "&" prefix)
+            crate::sys::commands::background_agents::background_agent_push,
+            crate::sys::commands::background_agents::background_agent_list,
+            crate::sys::commands::background_agents::background_agent_list_active,
+            crate::sys::commands::background_agents::background_agent_get,
+            crate::sys::commands::background_agents::background_agent_pause,
+            crate::sys::commands::background_agents::background_agent_resume,
+            crate::sys::commands::background_agents::background_agent_cancel,
+            crate::sys::commands::background_agents::background_agent_take_over,
+            crate::sys::commands::background_agents::background_agent_stats,
+            crate::sys::commands::background_agents::background_agent_cleanup,
+            crate::sys::commands::background_agents::background_agent_should_push,
+
 
             crate::sys::commands::governance::get_audit_events,
             crate::sys::commands::governance::verify_audit_event,
@@ -1666,6 +1780,47 @@ pub fn run() {
 
             // Additional Automation
             crate::sys::commands::automation_get_text,
+
+            // Artifacts (live previews and versioned documents)
+            crate::sys::commands::artifacts::artifact_create,
+            crate::sys::commands::artifacts::artifact_create_streaming,
+            crate::sys::commands::artifacts::artifact_append_streaming,
+            crate::sys::commands::artifacts::artifact_finalize_streaming,
+            crate::sys::commands::artifacts::artifact_get,
+            crate::sys::commands::artifacts::artifact_get_rendered,
+            crate::sys::commands::artifacts::artifact_update,
+            crate::sys::commands::artifacts::artifact_rollback,
+            crate::sys::commands::artifacts::artifact_delete,
+            crate::sys::commands::artifacts::artifact_archive,
+            crate::sys::commands::artifacts::artifact_unarchive,
+            crate::sys::commands::artifacts::artifact_pin,
+            crate::sys::commands::artifacts::artifact_add_tags,
+            crate::sys::commands::artifacts::artifact_remove_tags,
+            crate::sys::commands::artifacts::artifact_list,
+            crate::sys::commands::artifacts::artifact_get_by_conversation,
+            crate::sys::commands::artifacts::artifact_get_versions,
+            crate::sys::commands::artifacts::artifact_get_diff,
+            crate::sys::commands::artifacts::artifact_get_stats,
+            crate::sys::commands::artifacts::artifact_export_all,
+            crate::sys::commands::artifacts::artifact_import_all,
+            crate::sys::commands::artifacts::artifact_clear_all,
+
+            // Diagnostics (/doctor command)
+            crate::sys::diagnostics::commands::doctor_run_checks,
+            crate::sys::diagnostics::commands::doctor_run_check,
+            crate::sys::diagnostics::commands::doctor_get_report,
+            crate::sys::diagnostics::commands::doctor_list_checks,
+            crate::sys::diagnostics::commands::doctor_is_running,
+            crate::sys::diagnostics::commands::doctor_format_report,
+
+            // Extended Thinking Mode
+            crate::sys::commands::thinking::thinking_get_config,
+            crate::sys::commands::thinking::thinking_set_config,
+            crate::sys::commands::thinking::thinking_toggle,
+            crate::sys::commands::thinking::thinking_set_budget,
+            crate::sys::commands::thinking::thinking_detect_trigger,
+            crate::sys::commands::thinking::thinking_model_supports,
+            crate::sys::commands::thinking::thinking_get_current,
 
             // Updater (only available when not building for App Store)
             #[cfg(feature = "updater")]

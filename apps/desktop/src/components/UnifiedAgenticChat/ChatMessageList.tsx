@@ -51,12 +51,20 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     });
   }, [messages, debouncedSearchQuery]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Compute a fingerprint of the last message content to detect streaming updates
+  const lastMessageFingerprint = React.useMemo(() => {
+    const lastMessage = filteredMessages[filteredMessages.length - 1];
+    if (!lastMessage) return '';
+    // Use content length as a lightweight fingerprint - changes during streaming
+    return `${lastMessage.id}-${lastMessage.content?.length ?? 0}`;
+  }, [filteredMessages]);
+
+  // Auto-scroll to bottom when new messages arrive or content changes during streaming
   useEffect(() => {
     if (autoScroll && listRef.current && filteredMessages.length > 0) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [filteredMessages.length, autoScroll]);
+  }, [filteredMessages.length, lastMessageFingerprint, isStreaming, autoScroll]);
 
   const handleExport = useCallback(async () => {
     try {
