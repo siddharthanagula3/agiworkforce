@@ -194,7 +194,10 @@ mod tests {
 
         assert_eq!(failed_step.step_id, "step_1");
         assert_eq!(failed_step.tool_id, "file_read");
-        assert_eq!(failed_step.failure_category, FailureCategory::ResourceUnavailable);
+        assert_eq!(
+            failed_step.failure_category,
+            FailureCategory::ResourceUnavailable
+        );
         assert!(failed_step.recoverable);
         assert!(failed_step.error.is_some());
     }
@@ -265,7 +268,11 @@ mod tests {
             pattern_id: "pattern_1".to_string(),
             category: FailureCategory::NetworkError,
             description: "Repeated network timeouts on API calls".to_string(),
-            affected_steps: vec!["step_3".to_string(), "step_5".to_string(), "step_7".to_string()],
+            affected_steps: vec![
+                "step_3".to_string(),
+                "step_5".to_string(),
+                "step_7".to_string(),
+            ],
             root_cause: Some("API rate limiting".to_string()),
             frequency: 3,
         };
@@ -393,7 +400,10 @@ mod tests {
             priority: 5,
         };
 
-        assert!(matches!(correction.correction_type, CorrectionType::Decompose));
+        assert!(matches!(
+            correction.correction_type,
+            CorrectionType::Decompose
+        ));
     }
 
     #[test]
@@ -472,7 +482,11 @@ mod tests {
         // Test various high failure counts to ensure cap at 30
         for failures in [5, 6, 7, 10] {
             let delay = std::cmp::min(2_u64.pow(failures), 30);
-            assert_eq!(delay, 30, "Delay should be capped at 30 for {} failures", failures);
+            assert_eq!(
+                delay, 30,
+                "Delay should be capped at 30 for {} failures",
+                failures
+            );
         }
     }
 
@@ -522,7 +536,11 @@ mod tests {
     fn test_execution_assessment_partial_success() {
         let assessment = ExecutionAssessment {
             success_rate: 0.75,
-            successful_steps: vec!["step_1".to_string(), "step_2".to_string(), "step_3".to_string()],
+            successful_steps: vec![
+                "step_1".to_string(),
+                "step_2".to_string(),
+                "step_3".to_string(),
+            ],
             failed_steps: vec![FailedStep {
                 step_id: "step_4".to_string(),
                 tool_id: "api_call".to_string(),
@@ -753,10 +771,7 @@ mod tests {
                 "Add error handling".to_string(),
                 "Implement retries".to_string(),
             ],
-            missing_elements: vec![
-                "Rollback mechanism".to_string(),
-                "Logging".to_string(),
-            ],
+            missing_elements: vec!["Rollback mechanism".to_string(), "Logging".to_string()],
         };
 
         assert!(critique.quality_score < 50);

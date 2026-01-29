@@ -443,7 +443,10 @@ mod tests {
             },
         ];
 
-        let total_cpu: f64 = steps.iter().map(|s| s.estimated_resources.cpu_percent).sum();
+        let total_cpu: f64 = steps
+            .iter()
+            .map(|s| s.estimated_resources.cpu_percent)
+            .sum();
         let total_memory: u64 = steps.iter().map(|s| s.estimated_resources.memory_mb).sum();
         let total_network: f64 = steps.iter().map(|s| s.estimated_resources.network_mb).sum();
 
@@ -524,12 +527,7 @@ mod tests {
         for (i, (id, deps)) in steps.iter().enumerate() {
             for dep in deps {
                 let dep_index = steps.iter().position(|(sid, _)| sid == dep).unwrap();
-                assert!(
-                    dep_index < i,
-                    "Step {} depends on later step {}",
-                    id,
-                    dep
-                );
+                assert!(dep_index < i, "Step {} depends on later step {}", id, dep);
             }
         }
     }
@@ -623,12 +621,14 @@ mod tests {
 
         for (description, expected_tool) in test_cases {
             let desc_lower = description.to_lowercase();
-            let suggested =
-                if desc_lower.contains("navigate") || desc_lower.contains("url") || desc_lower.contains("browse") {
-                    "browser_navigate"
-                } else {
-                    "unknown"
-                };
+            let suggested = if desc_lower.contains("navigate")
+                || desc_lower.contains("url")
+                || desc_lower.contains("browse")
+            {
+                "browser_navigate"
+            } else {
+                "unknown"
+            };
 
             assert_eq!(suggested, expected_tool, "Failed for: {}", description);
         }
