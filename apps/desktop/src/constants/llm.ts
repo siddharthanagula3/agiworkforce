@@ -72,6 +72,9 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   moonshot: 'Moonshot AI',
   perplexity: 'Perplexity',
   zhipu: 'ZhipuAI',
+  'black-forest-labs': 'Black Forest Labs',
+  suno: 'Suno',
+  udio: 'Udio',
 };
 
 // Thinking model variants - models that support extended thinking/reasoning
@@ -131,6 +134,9 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'glm-4.6v', label: 'GLM-4.6V (Vision)' },
     { value: 'glm-4.6v-flash', label: 'GLM-4.6V Flash' },
   ],
+  'black-forest-labs': [],
+  suno: [],
+  udio: [],
 };
 
 /**
@@ -771,7 +777,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true, // Structured outputs
       thinking: false, // No extended thinking
       computerUse: false, // No computer use
-      agentic: false, // Not optimized for agentic
+      agentic: true, // Anthropic parallel tool execution, sub-agent orchestration
       imageGen: false,
       videoGen: false,
       search: false, // No native web search
@@ -788,7 +794,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'good',
     qualityTier: 'fast',
-    bestFor: ['Quick Tasks', 'Simple Queries', 'High Volume', 'Cost-Sensitive'],
+    bestFor: ['Agentic Tasks', 'Quick Tasks', 'Simple Queries', 'High Volume', 'Cost-Sensitive'],
     released: 'October 2025',
   },
 
@@ -885,7 +891,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true, // JSON mode
       thinking: false, // Flash Thinking exists but limited
       computerUse: false, // Not available
-      agentic: false, // Not optimized for long agentic
+      agentic: true, // Google "Agentic Vision" feature, 78% SWE-bench
       imageGen: false,
       videoGen: false,
       search: true, // Search grounding available
@@ -902,7 +908,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'good',
     qualityTier: 'fast',
-    bestFor: ['Speed', 'Cost-Sensitive', 'Long Context'],
+    bestFor: ['Agentic Tasks', 'Speed', 'Cost-Sensitive', 'Long Context'],
     released: 'December 2025',
   },
 
@@ -1158,7 +1164,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
       thinking: true,
       computerUse: false,
-      agentic: false,
+      agentic: true, // xAI Agent Tools API, reduced hallucinations
       imageGen: false,
       videoGen: false,
       search: true,
@@ -1169,7 +1175,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'fast',
     quality: 'good',
     qualityTier: 'balanced',
-    bestFor: ['Reasoning', 'Real-time Data', 'Long Context'],
+    bestFor: ['Agentic Tasks', 'Reasoning', 'Real-time Data', 'Long Context'],
     released: 'January 2026',
   },
 
@@ -1284,7 +1290,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
       thinking: false,
       computerUse: false,
-      agentic: false,
+      agentic: true, // Alibaba "agentic coding model", task decomposition
       imageGen: false,
       videoGen: false,
       search: false,
@@ -1295,7 +1301,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'fast',
     quality: 'good',
     qualityTier: 'balanced',
-    bestFor: ['Coding', 'Fast Code Generation', 'Budget Coding'],
+    bestFor: ['Agentic Tasks', 'Coding', 'Fast Code Generation', 'Budget Coding'],
     released: 'January 2026',
   },
   'qwen3-coder-plus': {
@@ -1861,7 +1867,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     id: 'flux-1.1-pro',
     apiModelId: 'flux-1.1-pro',
     name: 'Flux 1.1 Pro',
-    provider: 'openai', // Using openai as placeholder, actual provider is Black Forest Labs
+    provider: 'black-forest-labs',
     modelType: 'image',
     contextWindow: 4000,
     inputCost: 0.0,
@@ -2109,7 +2115,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     id: 'suno-v4',
     apiModelId: 'suno-v4',
     name: 'Suno V4',
-    provider: 'openai', // Using openai as placeholder
+    provider: 'suno',
     modelType: 'music',
     contextWindow: 4000,
     inputCost: 0.0,
@@ -2138,7 +2144,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     id: 'udio',
     apiModelId: 'udio',
     name: 'Udio',
-    provider: 'openai', // Using openai as placeholder
+    provider: 'udio',
     modelType: 'music',
     contextWindow: 4000,
     inputCost: 0.0,
