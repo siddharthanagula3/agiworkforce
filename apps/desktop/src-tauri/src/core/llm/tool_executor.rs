@@ -1640,6 +1640,15 @@ impl ToolExecutor {
                     .map(|v| v as u32);
 
                 if let Some(ref app) = self.app_handle {
+                    let provider = args
+                        .get("provider")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let input_image_url = args
+                        .get("input_image_url")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
                     let request = crate::sys::commands::media::MediaVideoRequest {
                         prompt: prompt.clone(),
                         negative_prompt: None,
@@ -1648,6 +1657,8 @@ impl ToolExecutor {
                         style: None,
                         model: None,
                         plan: None,
+                        provider,
+                        input_image_url,
                     };
 
                     match crate::sys::commands::media::media_generate_video(app.clone(), request)
