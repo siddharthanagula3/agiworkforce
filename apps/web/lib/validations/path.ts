@@ -7,7 +7,8 @@ import path from 'path';
  */
 
 // Characters that are dangerous in file paths
-const DANGEROUS_PATH_CHARS = /[\0<>:"|?*]/;
+// Note: Global flag 'g' is required for .replace() to remove ALL occurrences
+const DANGEROUS_PATH_CHARS = /[\0<>:"|?*]/g;
 
 // Path traversal patterns
 const PATH_TRAVERSAL_PATTERNS = [
