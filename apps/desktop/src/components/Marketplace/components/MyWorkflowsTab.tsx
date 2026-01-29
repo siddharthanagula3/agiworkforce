@@ -1,5 +1,6 @@
 import { Copy, Edit, Eye, Share2, Star, Trash2, TrendingUp, Upload } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { toast } from '@/hooks/useToast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +44,11 @@ export function MyWorkflowsTab() {
       setSelectedForDelete(null);
     } catch (error) {
       console.error('Failed to unpublish workflow:', error);
-      alert('Failed to unpublish workflow. Please try again.');
+      toast({
+        title: 'Unpublish failed',
+        description: 'Failed to unpublish workflow. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
