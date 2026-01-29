@@ -211,9 +211,18 @@ mod tests {
     #[test]
     fn test_image_tokens_low_detail() {
         // Low detail is always 85 tokens regardless of dimensions
-        assert_eq!(TokenCounter::estimate_image_tokens(100, 100, ImageDetail::Low), 85);
-        assert_eq!(TokenCounter::estimate_image_tokens(1920, 1080, ImageDetail::Low), 85);
-        assert_eq!(TokenCounter::estimate_image_tokens(4000, 3000, ImageDetail::Low), 85);
+        assert_eq!(
+            TokenCounter::estimate_image_tokens(100, 100, ImageDetail::Low),
+            85
+        );
+        assert_eq!(
+            TokenCounter::estimate_image_tokens(1920, 1080, ImageDetail::Low),
+            85
+        );
+        assert_eq!(
+            TokenCounter::estimate_image_tokens(4000, 3000, ImageDetail::Low),
+            85
+        );
     }
 
     #[test]
@@ -294,7 +303,9 @@ mod tests {
     #[test]
     fn test_text_tokens_longer() {
         // Longer strings use actual tokenizer
-        let tokens = TokenCounter::estimate_text_tokens("This is a longer sentence that should be tokenized properly.");
+        let tokens = TokenCounter::estimate_text_tokens(
+            "This is a longer sentence that should be tokenized properly.",
+        );
         assert!(tokens > 10);
     }
 }

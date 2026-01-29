@@ -37,7 +37,10 @@ impl RunwayVideoModel {
 
     /// Returns true if the model requires an input image
     pub fn requires_image(&self) -> bool {
-        matches!(self, RunwayVideoModel::Gen4Turbo | RunwayVideoModel::Gen4Aleph)
+        matches!(
+            self,
+            RunwayVideoModel::Gen4Turbo | RunwayVideoModel::Gen4Aleph
+        )
     }
 
     /// Cost per second in credits
@@ -396,18 +399,21 @@ mod tests {
     #[test]
     fn test_cost_estimation() {
         // Gen4Turbo: 5 credits/sec * $0.01/credit = $0.05/sec
-        assert_eq!(RunwayClient::estimate_cost(RunwayVideoModel::Gen4Turbo, 10), 0.5);
+        assert_eq!(
+            RunwayClient::estimate_cost(RunwayVideoModel::Gen4Turbo, 10),
+            0.5
+        );
 
         // Veo31Fast: 15 credits/sec * $0.01/credit = $0.15/sec
-        assert_eq!(RunwayClient::estimate_cost(RunwayVideoModel::Veo31Fast, 10), 1.5);
+        assert_eq!(
+            RunwayClient::estimate_cost(RunwayVideoModel::Veo31Fast, 10),
+            1.5
+        );
     }
 
     #[test]
     fn test_aspect_ratio_strings() {
-        assert_eq!(
-            RunwayAspectRatio::Landscape1080.as_api_str(),
-            "1920:1080"
-        );
+        assert_eq!(RunwayAspectRatio::Landscape1080.as_api_str(), "1920:1080");
         assert_eq!(RunwayAspectRatio::Portrait720.as_api_str(), "720:1280");
     }
 
