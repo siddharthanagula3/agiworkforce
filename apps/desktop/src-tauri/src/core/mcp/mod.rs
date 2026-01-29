@@ -2,6 +2,7 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod events;
+pub mod extensions;
 pub mod health;
 pub mod logs;
 pub mod manager;
@@ -18,6 +19,10 @@ pub use client::{McpClient, McpTool};
 pub use config::{McpServerConfig, McpServersConfig};
 pub use error::{McpError, McpResult};
 pub use events::{emit_mcp_event, McpEvent};
+pub use extensions::{
+    ExtensionError, ExtensionInstaller, ExtensionManager, ExtensionManifest, ExtensionPackage,
+    ExtensionRepository, ExtensionResult,
+};
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
 pub use manager::{ManagedServer, McpServerManager, ServerStatus};
 pub use protocol::{McpToolDefinition, ToolCallResult, ToolContent};

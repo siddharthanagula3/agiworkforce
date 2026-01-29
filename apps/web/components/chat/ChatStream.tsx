@@ -67,7 +67,7 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className="relative h-full flex flex-col">
       {/* Thinking indicator */}
       {isLoading && !isStreaming && (
         <div
@@ -86,7 +86,7 @@ export const ChatStream = memo(function ChatStream({ onSuggestionClick }: ChatSt
         ref={scrollContainerRef}
         onScroll={handleScroll}
         data-testid="chat-stream"
-        className="h-full overflow-y-auto scroll-smooth"
+        className="flex-1 min-h-0 overflow-y-auto scroll-smooth"
       >
         <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
           {messages.map((message) => (

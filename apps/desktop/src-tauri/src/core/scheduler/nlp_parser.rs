@@ -209,7 +209,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
 
         // If the time has passed today, schedule for tomorrow
         if target <= now {
-            target = target + Duration::days(1);
+            target += Duration::days(1);
         }
 
         return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));

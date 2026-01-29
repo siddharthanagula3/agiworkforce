@@ -1,6 +1,7 @@
 //! Core Skill data structures.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Represents the source location of a skill.
@@ -15,6 +16,34 @@ pub enum SkillSource {
 
     /// Skill bundled with the application.
     Bundled,
+}
+
+/// Context mode for skill execution.
+///
+/// Determines how the skill is loaded into the AGI context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SkillContextMode {
+    /// Main context - skill instructions are loaded into the primary AGI context.
+    #[default]
+    Main,
+
+    /// Fork context - skill runs in a subagent with isolated context.
+    Fork,
+}
+
+impl SkillContextMode {
+    /// Returns true if this is the main context mode.
+    #[must_use]
+    pub fn is_main(&self) -> bool {
+        matches!(self, Self::Main)
+    }
+
+    /// Returns true if this is the fork context mode.
+    #[must_use]
+    pub fn is_fork(&self) -> bool {
+        matches!(self, Self::Fork)
+    }
 }
 
 impl SkillSource {
@@ -122,6 +151,15 @@ pub struct Skill {
 
     /// Where this skill was loaded from.
     pub source: SkillSource,
+
+    /// Tools that are allowed to be used within this skill.
+    /// Empty means all tools are allowed.
+    #[serde(default)]
+    pub allowed_tools: Vec<String>,
+
+    /// Context mode for skill execution.
+    #[serde(default)]
+    pub context_mode: SkillContextMode,
 }
 
 impl Skill {
@@ -140,6 +178,30 @@ impl Skill {
             requires_env: Vec::new(),
             supported_os: Vec::new(),
             source: SkillSource::Bundled,
+            allowed_tools: Vec::new(),
+            context_mode: SkillContextMode::Main,
+        }
+    }
+
+    /// Creates a new bundled skill with allowed tools and context mode.
+    #[must_use]
+    pub fn bundled_with_config(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        instructions: impl Into<String>,
+        allowed_tools: Vec<String>,
+        context_mode: SkillContextMode,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            instructions: instructions.into(),
+            requires_bins: Vec::new(),
+            requires_env: Vec::new(),
+            supported_os: Vec::new(),
+            source: SkillSource::Bundled,
+            allowed_tools,
+            context_mode,
         }
     }
 
@@ -179,6 +241,41 @@ impl Skill {
             && self.supported_os.is_empty()
     }
 
+    /// Returns true if a tool is allowed for this skill.
+    ///
+    /// If `allowed_tools` is empty, all tools are allowed.
+    #[must_use]
+    pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
+        if self.allowed_tools.is_empty() {
+            return true;
+        }
+        self.allowed_tools
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(tool_name))
+    }
+
+    /// Substitutes `$ARGUMENTS` placeholder in instructions with provided arguments.
+    ///
+    /// Also supports named arguments in the format `$ARG_NAME`.
+    #[must_use]
+    pub fn substitute_arguments(&self, arguments: &str) -> String {
+        self.instructions.replace("$ARGUMENTS", arguments)
+    }
+
+    /// Substitutes named arguments in instructions.
+    ///
+    /// Arguments should be a map of name to value. Placeholders in the format
+    /// `$ARG_NAME` will be replaced with the corresponding value.
+    #[must_use]
+    pub fn substitute_named_arguments(&self, args: &HashMap<String, String>) -> String {
+        let mut result = self.instructions.clone();
+        for (name, value) in args {
+            let placeholder = format!("${}", name.to_uppercase());
+            result = result.replace(&placeholder, value);
+        }
+        result
+    }
+
     /// Returns a formatted context string for including in AGI prompts.
     #[must_use]
     pub fn to_context_string(&self) -> String {
@@ -199,8 +296,51 @@ impl Skill {
             ));
         }
 
+        if !self.allowed_tools.is_empty() {
+            context.push_str(&format!(
+                "**Allowed tools:** {}\n\n",
+                self.allowed_tools.join(", ")
+            ));
+        }
+
+        if self.context_mode.is_fork() {
+            context.push_str("**Execution mode:** Fork (runs in isolated subagent)\n\n");
+        }
+
         context.push_str("### Instructions\n\n");
         context.push_str(&self.instructions);
+        context
+    }
+
+    /// Returns a formatted context string with argument substitution.
+    #[must_use]
+    pub fn to_context_string_with_args(&self, arguments: &str) -> String {
+        let mut context = format!("## Skill: {}\n\n", self.name);
+        context.push_str(&format!("**Description:** {}\n\n", self.description));
+
+        if !self.requires_bins.is_empty() {
+            context.push_str(&format!(
+                "**Required binaries:** {}\n\n",
+                self.requires_bins.join(", ")
+            ));
+        }
+
+        if !self.requires_env.is_empty() {
+            context.push_str(&format!(
+                "**Required environment variables:** {}\n\n",
+                self.requires_env.join(", ")
+            ));
+        }
+
+        if !self.allowed_tools.is_empty() {
+            context.push_str(&format!(
+                "**Allowed tools:** {}\n\n",
+                self.allowed_tools.join(", ")
+            ));
+        }
+
+        context.push_str("### Instructions\n\n");
+        context.push_str(&self.substitute_arguments(arguments));
         context
     }
 }
@@ -215,6 +355,8 @@ pub struct SkillBuilder {
     requires_env: Vec<String>,
     supported_os: Vec<String>,
     source: SkillSource,
+    allowed_tools: Vec<String>,
+    context_mode: SkillContextMode,
 }
 
 impl SkillBuilder {
@@ -229,6 +371,8 @@ impl SkillBuilder {
             requires_env: Vec::new(),
             supported_os: Vec::new(),
             source: SkillSource::Bundled,
+            allowed_tools: Vec::new(),
+            context_mode: SkillContextMode::Main,
         }
     }
 
@@ -288,6 +432,41 @@ impl SkillBuilder {
         self
     }
 
+    /// Sets the allowed tools for this skill.
+    #[must_use]
+    pub fn allowed_tools(mut self, tools: Vec<String>) -> Self {
+        self.allowed_tools = tools;
+        self
+    }
+
+    /// Adds a single allowed tool.
+    #[must_use]
+    pub fn allow_tool(mut self, tool: impl Into<String>) -> Self {
+        self.allowed_tools.push(tool.into());
+        self
+    }
+
+    /// Sets the context mode for this skill.
+    #[must_use]
+    pub fn context_mode(mut self, mode: SkillContextMode) -> Self {
+        self.context_mode = mode;
+        self
+    }
+
+    /// Sets the context mode to fork (isolated subagent).
+    #[must_use]
+    pub fn fork_context(mut self) -> Self {
+        self.context_mode = SkillContextMode::Fork;
+        self
+    }
+
+    /// Sets the context mode to main (primary context).
+    #[must_use]
+    pub fn main_context(mut self) -> Self {
+        self.context_mode = SkillContextMode::Main;
+        self
+    }
+
     /// Builds the skill.
     /// Returns Result with error if required fields are missing.
     pub fn build(self) -> Result<Skill, &'static str> {
@@ -299,6 +478,8 @@ impl SkillBuilder {
             requires_env: self.requires_env,
             supported_os: self.supported_os,
             source: self.source,
+            allowed_tools: self.allowed_tools,
+            context_mode: self.context_mode,
         })
     }
 
@@ -313,6 +494,8 @@ impl SkillBuilder {
             requires_env: self.requires_env,
             supported_os: self.supported_os,
             source: self.source,
+            allowed_tools: self.allowed_tools,
+            context_mode: self.context_mode,
         })
     }
 }
@@ -343,6 +526,24 @@ mod tests {
     }
 
     #[test]
+    fn test_skill_builder_with_tools_and_context() {
+        let skill = Skill::builder("advanced-skill")
+            .description("An advanced skill")
+            .instructions("Do something with $ARGUMENTS")
+            .allow_tool("Read")
+            .allow_tool("Write")
+            .fork_context()
+            .build()
+            .expect("Failed to build skill");
+
+        assert_eq!(skill.allowed_tools, vec!["Read", "Write"]);
+        assert!(skill.context_mode.is_fork());
+        assert!(skill.is_tool_allowed("Read"));
+        assert!(skill.is_tool_allowed("read")); // Case insensitive
+        assert!(!skill.is_tool_allowed("Execute"));
+    }
+
+    #[test]
     fn test_skill_bundled_constructor() {
         let skill = Skill::bundled("my-skill", "Does stuff", "Instructions here");
 
@@ -353,6 +554,62 @@ mod tests {
         assert!(skill.requires_env.is_empty());
         assert!(skill.supported_os.is_empty());
         assert!(skill.source.is_bundled());
+        assert!(skill.allowed_tools.is_empty());
+        assert!(skill.context_mode.is_main());
+    }
+
+    #[test]
+    fn test_skill_argument_substitution() {
+        let skill = Skill::bundled(
+            "test-skill",
+            "Test",
+            "Analyze the following: $ARGUMENTS\n\nProvide detailed output.",
+        );
+
+        let result = skill.substitute_arguments("my_file.rs");
+        assert_eq!(
+            result,
+            "Analyze the following: my_file.rs\n\nProvide detailed output."
+        );
+    }
+
+    #[test]
+    fn test_skill_named_argument_substitution() {
+        let skill = Skill::bundled(
+            "test-skill",
+            "Test",
+            "Create a $DOCUMENT_TYPE for $PROJECT_NAME with $STYLE style.",
+        );
+
+        let mut args = HashMap::new();
+        args.insert("DOCUMENT_TYPE".to_string(), "report".to_string());
+        args.insert("PROJECT_NAME".to_string(), "AGI Workforce".to_string());
+        args.insert("STYLE".to_string(), "professional".to_string());
+
+        let result = skill.substitute_named_arguments(&args);
+        assert_eq!(
+            result,
+            "Create a report for AGI Workforce with professional style."
+        );
+    }
+
+    #[test]
+    fn test_skill_tool_allowed_empty_allows_all() {
+        let skill = Skill::bundled("test-skill", "Test", "Instructions");
+
+        // Empty allowed_tools means all tools are allowed
+        assert!(skill.is_tool_allowed("Read"));
+        assert!(skill.is_tool_allowed("Write"));
+        assert!(skill.is_tool_allowed("Execute"));
+        assert!(skill.is_tool_allowed("anything"));
+    }
+
+    #[test]
+    fn test_context_mode() {
+        assert!(SkillContextMode::Main.is_main());
+        assert!(!SkillContextMode::Main.is_fork());
+        assert!(SkillContextMode::Fork.is_fork());
+        assert!(!SkillContextMode::Fork.is_main());
     }
 
     #[test]

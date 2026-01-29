@@ -617,21 +617,21 @@ pub async fn messaging_get_status(
     let discord = state.discord.read().await;
     statuses.push(PlatformStatus {
         platform: "discord".to_string(),
-        connected: discord.as_ref().map_or(false, |c| c.is_connected()),
+        connected: discord.as_ref().is_some_and(|c| c.is_connected()),
         error: None,
     });
 
     let telegram = state.telegram.read().await;
     statuses.push(PlatformStatus {
         platform: "telegram".to_string(),
-        connected: telegram.as_ref().map_or(false, |c| c.is_connected()),
+        connected: telegram.as_ref().is_some_and(|c| c.is_connected()),
         error: None,
     });
 
     let signal = state.signal.read().await;
     statuses.push(PlatformStatus {
         platform: "signal".to_string(),
-        connected: signal.as_ref().map_or(false, |c| c.is_registered()),
+        connected: signal.as_ref().is_some_and(|c| c.is_registered()),
         error: None,
     });
 
