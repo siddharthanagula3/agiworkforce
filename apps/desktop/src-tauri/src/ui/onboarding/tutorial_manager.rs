@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::sync_utils::MutexExt;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -57,7 +58,12 @@ impl TutorialManager {
             return Ok(true);
         }
 
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.safe_lock().map_err(|e| {
+            TutorialError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            ))
+        })?;
         for prereq_id in &tutorial.prerequisites {
             let completed: bool = conn
                 .query_row(

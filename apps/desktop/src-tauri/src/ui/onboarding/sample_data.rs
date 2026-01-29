@@ -1,3 +1,4 @@
+use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,10 @@ impl SampleDataGenerator {
     }
 
     pub fn has_sample_data(&self, user_id: &str) -> bool {
-        let conn = self.db.lock().unwrap();
+        let conn = match self.db.safe_lock() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
 
         let count: i64 = conn
             .query_row(
@@ -46,7 +50,13 @@ impl SampleDataGenerator {
             return Err(SampleDataError::AlreadyExists);
         }
 
-        let conn = self.db.lock().unwrap();
+        let conn = self
+            .db
+            .safe_lock()
+            .map_err(|e| SampleDataError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            )))?;
         let now = Utc::now().timestamp();
 
         conn.execute(
@@ -245,7 +255,13 @@ impl SampleDataGenerator {
     }
 
     pub fn clear_sample_data(&self, user_id: &str) -> Result<(), SampleDataError> {
-        let conn = self.db.lock().unwrap();
+        let conn = self
+            .db
+            .safe_lock()
+            .map_err(|e| SampleDataError::Database(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Lock error: {}", e)),
+            )))?;
 
         conn.execute(
             "DELETE FROM sample_data_marker WHERE user_id = ?1",

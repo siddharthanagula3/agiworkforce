@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::sync_utils::MutexExt;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -188,7 +189,7 @@ impl ProcessReasoning {
 
     pub async fn identify_process_type(&self, goal: &Goal) -> Result<ProcessType> {
         {
-            let cache = self.process_cache.lock().unwrap();
+            let cache = self.process_cache.safe_lock()?;
             if let Some(cached_type) = cache.get(&goal.id) {
                 tracing::info!(
                     "[ProcessReasoning] Using cached process type for goal {}",
@@ -207,7 +208,7 @@ impl ProcessReasoning {
             );
 
             {
-                let mut cache = self.process_cache.lock().unwrap();
+                let mut cache = self.process_cache.safe_lock()?;
                 cache.insert(goal.id.clone(), pt);
             }
 
@@ -218,7 +219,7 @@ impl ProcessReasoning {
         let llm_type = self.classify_by_llm(goal).await?;
 
         {
-            let mut cache = self.process_cache.lock().unwrap();
+            let mut cache = self.process_cache.safe_lock()?;
             cache.insert(goal.id.clone(), llm_type);
         }
 

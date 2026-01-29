@@ -5,6 +5,7 @@
 //! while maintaining strong encryption.
 
 use super::machine_key::{self, KeyPurpose};
+use crate::core::sync_utils::{MutexExt, RwLockExt};
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
@@ -63,7 +64,10 @@ impl SecureStorage {
         let salt = generate_salt();
         let key = derive_key_from_password(password, &salt);
 
-        let mut master = self.master_key.write().unwrap();
+        let mut master = self
+            .master_key
+            .safe_write()
+            .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
         *master = Some(key);
 
         // Store salt in database if available
@@ -77,7 +81,10 @@ impl SecureStorage {
     /// Initialize with machine-derived key (no password required)
     pub fn init_with_machine_key(&self) -> Result<(), String> {
         let key = machine_key::derive_key(KeyPurpose::MasterEncryption);
-        let mut master = self.master_key.write().unwrap();
+        let mut master = self
+            .master_key
+            .safe_write()
+            .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
         *master = Some(key);
         Ok(())
     }
@@ -92,7 +99,10 @@ impl SecureStorage {
         };
 
         let key = derive_key_from_password(password, &salt);
-        let mut master = self.master_key.write().unwrap();
+        let mut master = self
+            .master_key
+            .safe_write()
+            .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
         *master = Some(key);
 
         Ok(())
@@ -100,23 +110,30 @@ impl SecureStorage {
 
     /// Lock storage (clear master key from memory)
     pub fn lock(&self) {
-        let mut master = self.master_key.write().unwrap();
-        if let Some(ref mut key) = *master {
-            // Zero out the key before dropping
-            key.iter_mut().for_each(|b| *b = 0);
+        if let Ok(mut master) = self.master_key.safe_write() {
+            if let Some(ref mut key) = *master {
+                // Zero out the key before dropping
+                key.iter_mut().for_each(|b| *b = 0);
+            }
+            *master = None;
         }
-        *master = None;
     }
 
     /// Check if storage is unlocked
     pub fn is_unlocked(&self) -> bool {
-        self.master_key.read().unwrap().is_some()
+        self.master_key
+            .safe_read()
+            .map(|guard| guard.is_some())
+            .unwrap_or(false)
     }
 
     /// Encrypt and store data
     #[allow(deprecated)]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<EncryptedData, String> {
-        let master = self.master_key.read().unwrap();
+        let master = self
+            .master_key
+            .safe_read()
+            .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
         let key = master
             .as_ref()
             .ok_or("Storage is locked. Call unlock() or init_with_machine_key() first")?;
@@ -145,7 +162,10 @@ impl SecureStorage {
     /// Decrypt data
     #[allow(deprecated)]
     pub fn decrypt(&self, encrypted: &EncryptedData) -> Result<Vec<u8>, String> {
-        let master = self.master_key.read().unwrap();
+        let master = self
+            .master_key
+            .safe_read()
+            .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
         let key = master
             .as_ref()
             .ok_or("Storage is locked. Call unlock() or init_with_machine_key() first")?;
@@ -180,7 +200,9 @@ impl SecureStorage {
             serde_json::to_string(&encrypted).map_err(|e| format!("Failed to serialize: {}", e))?;
 
         if let Some(ref db) = self.db_conn {
-            let conn = db.lock().unwrap();
+            let conn = db
+                .safe_lock()
+                .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
             conn.execute(
                 "INSERT OR REPLACE INTO api_keys (provider, encrypted_key) VALUES (?1, ?2)",
                 rusqlite::params![provider, encrypted_json],
@@ -199,7 +221,9 @@ impl SecureStorage {
         }
 
         let encrypted_json = if let Some(ref db) = self.db_conn {
-            let conn = db.lock().unwrap();
+            let conn = db
+                .safe_lock()
+                .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
             conn.query_row(
                 "SELECT encrypted_key FROM api_keys WHERE provider = ?1",
                 rusqlite::params![provider],
@@ -220,7 +244,9 @@ impl SecureStorage {
     /// Delete API key from database
     pub fn delete_api_key(&self, provider: &str) -> Result<(), String> {
         if let Some(ref db) = self.db_conn {
-            let conn = db.lock().unwrap();
+            let conn = db
+                .safe_lock()
+                .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
             conn.execute(
                 "DELETE FROM api_keys WHERE provider = ?1",
                 rusqlite::params![provider],
@@ -236,7 +262,9 @@ impl SecureStorage {
         db: &Arc<Mutex<Connection>>,
         salt: &[u8],
     ) -> Result<(), String> {
-        let conn = db.lock().unwrap();
+        let conn = db
+            .safe_lock()
+            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
         let salt_b64 = general_purpose::STANDARD.encode(salt);
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES ('master_salt', ?1, 0)",
@@ -248,7 +276,9 @@ impl SecureStorage {
 
     /// Retrieve salt from database
     fn retrieve_salt_from_database(&self, db: &Arc<Mutex<Connection>>) -> Result<Vec<u8>, String> {
-        let conn = db.lock().unwrap();
+        let conn = db
+            .safe_lock()
+            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
         let salt_b64: String = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'master_salt'",
