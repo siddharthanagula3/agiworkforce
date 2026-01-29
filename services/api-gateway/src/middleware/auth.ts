@@ -28,12 +28,13 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     next();
   } catch (error) {
     // Handle JWT-specific errors
-    if (error instanceof jwt.JsonWebTokenError) {
-      res.status(403).json({ error: 'Invalid token' });
-      return;
-    }
+    // Note: TokenExpiredError extends JsonWebTokenError, so check it first
     if (error instanceof jwt.TokenExpiredError) {
       res.status(403).json({ error: 'Token expired' });
+      return;
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.status(403).json({ error: 'Invalid token' });
       return;
     }
     // Handle Zod validation errors or other unexpected errors
