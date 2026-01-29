@@ -43,7 +43,10 @@ mod tests {
     #[test]
     fn test_max_iterations_reasonable_upper_bound() {
         // Iteration limit should not be excessive to prevent runaway processes
-        assert!(MAX_ITERATIONS <= 10000, "Iteration limit should not be excessive");
+        assert!(
+            MAX_ITERATIONS <= 10000,
+            "Iteration limit should not be excessive"
+        );
     }
 
     #[test]
