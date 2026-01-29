@@ -1,7 +1,12 @@
 import { ChevronLeft, ChevronRight, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { cn } from '../../lib/utils';
-import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import {
+  useChatStore,
+  selectConversations,
+  selectActiveConversationId,
+  type ConversationSummary,
+} from '../../stores/chat/chatStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -22,15 +27,16 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
-  // Use individual selectors to avoid re-renders on unrelated state changes
-  const conversations = useUnifiedChatStore((state) => state.conversations);
-  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
-  const createConversation = useUnifiedChatStore((state) => state.createConversation);
-  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
-  const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
-  const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
-  const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
+  // Use exported selectors from useChatStore for optimal re-render performance
+  // Migration: Changed from useUnifiedChatStore to useChatStore (modular store)
+  const conversations = useChatStore(selectConversations);
+  const activeConversationId = useChatStore(selectActiveConversationId);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const selectConversationFn = useChatStore((state) => state.selectConversation);
+  const renameConversation = useChatStore((state) => state.renameConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const togglePinnedConversation = useChatStore((state) => state.togglePinnedConversation);
+  const ensureActiveConversation = useChatStore((state) => state.ensureActiveConversation);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,14 +68,14 @@ export function Sidebar({
 
   const handleNewChat = useCallback(async () => {
     const id = await createConversation('New chat');
-    selectConversation(id);
-  }, [createConversation, selectConversation]);
+    selectConversationFn(id);
+  }, [createConversation, selectConversationFn]);
 
   const handleSelect = useCallback(
     (id: string) => {
-      selectConversation(id);
+      selectConversationFn(id);
     },
-    [selectConversation],
+    [selectConversationFn],
   );
 
   const handleRename = useCallback(
