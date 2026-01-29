@@ -199,11 +199,21 @@ function MarkdownPreview({ content }: { content: string }) {
 }
 
 function HtmlPreview({ content }: { content: string }) {
+  // Sanitize HTML content to prevent XSS attacks
+  // SECURITY: Removed 'allow-same-origin' from sandbox which was allowing
+  // scripts to access parent window context (CVE-potential, fixed 2026-01-28)
+  const sanitizedContent = DOMPurify.sanitize(content, {
+    ADD_TAGS: ['style'],
+    ADD_ATTR: ['target'],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
+  });
+
   return (
     <iframe
-      srcDoc={content}
+      srcDoc={sanitizedContent}
       className="w-full h-full border-0 bg-white dark:bg-gray-900"
-      sandbox="allow-scripts allow-same-origin"
+      sandbox="allow-scripts allow-modals"
       title="HTML Preview"
     />
   );
