@@ -23,8 +23,7 @@ export const FloatingChat = () => {
   // Initialize conversation on mount - run once, ensureActiveConversation is stable
   useEffect(() => {
     ensureActiveConversation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureActiveConversation]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
