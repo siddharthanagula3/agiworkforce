@@ -558,16 +558,27 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
   );
 }
 
+interface DatabaseConnection {
+  id: string;
+  type: string;
+  name?: string;
+}
+
+interface TableSchemaResult {
+  rows: unknown[][];
+  columns?: string[];
+}
+
 function SchemaExplorer({
   activeConnection,
   loading: _loading,
 }: {
-  activeConnection: any;
+  activeConnection: DatabaseConnection | null;
   loading: boolean;
 }) {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [tableSchema, setTableSchema] = useState<any>(null);
+  const [tableSchema, setTableSchema] = useState<TableSchemaResult | null>(null);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingSchema, setLoadingSchema] = useState(false);
 
@@ -599,8 +610,8 @@ function SchemaExplorer({
     setLoadingSchema(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke('db_mysql_describe_table', {
-        connectionId: activeConnection.id,
+      const result = await invoke<TableSchemaResult>('db_mysql_describe_table', {
+        connectionId: activeConnection!.id,
         tableName,
       });
       setTableSchema(result);
@@ -679,16 +690,18 @@ function SchemaExplorer({
                   </thead>
                   <tbody>
                     {Array.isArray(tableSchema.rows) &&
-                      tableSchema.rows.map((row: any[], i: number) => (
+                      tableSchema.rows.map((row: unknown[], i: number) => (
                         <tr key={i} className="border-b border-border hover:bg-muted/30">
-                          <td className="px-3 py-2 font-mono text-xs font-semibold">{row[0]}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                            {row[1]}
+                          <td className="px-3 py-2 font-mono text-xs font-semibold">
+                            {String(row[0] ?? '')}
                           </td>
-                          <td className="px-3 py-2 text-xs">{row[2]}</td>
-                          <td className="px-3 py-2 text-xs">{row[3]}</td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                            {row[4] ?? '-'}
+                            {String(row[1] ?? '')}
+                          </td>
+                          <td className="px-3 py-2 text-xs">{String(row[2] ?? '')}</td>
+                          <td className="px-3 py-2 text-xs">{String(row[3] ?? '')}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                            {String(row[4] ?? '-')}
                           </td>
                         </tr>
                       ))}

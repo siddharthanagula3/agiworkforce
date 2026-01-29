@@ -33,6 +33,20 @@ interface ChatStreamProps {
   onSuggestionClick?: (prompt: string) => void;
 }
 
+import type { Artifact } from '../../types/chat';
+
+// Extended artifact type for message artifacts that may have additional properties
+interface MessageArtifact extends Partial<Artifact> {
+  toolName?: string;
+  status?: 'running' | 'completed' | 'failed';
+}
+
+// Type for message metadata that may include artifacts
+interface MessageMetadataWithArtifacts {
+  artifacts?: MessageArtifact[];
+  [key: string]: unknown;
+}
+
 const card =
   'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.35)]';
 
@@ -271,8 +285,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
   const renderInlineToolResult = (
     toolName: string,
-    result: any,
-    status?: 'running' | 'completed' | 'failed',
+    result: unknown,
+    status?: 'running' | 'completed' | 'failed' | 'success' | 'error' | 'idle',
   ) => {
     if (!hasInlineRenderer(toolName)) {
       return null;
@@ -283,6 +297,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       return null;
     }
 
+    // Cast result to the expected ToolResultProps format
+    const typedResult = result as { data?: unknown; status?: typeof status; error?: string };
+
     return (
       <Suspense
         fallback={
@@ -291,7 +308,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
           </div>
         }
       >
-        <Renderer result={result} status={status} />
+        <Renderer result={typedResult} status={status} />
       </Suspense>
     );
   };
@@ -565,65 +582,70 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   onEdit={(content) => handleRetry(message.id, content)}
                   onEditSave={handleEditSave}
                 />
-                {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
+                {(
+                  message.artifacts || (message.metadata as MessageMetadataWithArtifacts)?.artifacts
+                )?.length ? (
                   <div className="grid grid-cols-1 gap-2">
-                    {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
-                      (artifact: any, idx: number) => {
-                        // Check if this artifact has an inline renderer
-                        const toolName = artifact.toolName || artifact.type;
-                        const inlineRenderer =
-                          toolName && hasInlineRenderer(toolName)
-                            ? renderInlineToolResult(
-                                toolName,
-                                { data: artifact },
-                                artifact.status || 'completed',
-                              )
-                            : null;
+                    {(
+                      message.artifacts ||
+                      (message.metadata as MessageMetadataWithArtifacts)?.artifacts ||
+                      []
+                    ).map((artifact, idx) => {
+                      const art = artifact as MessageArtifact;
+                      // Check if this artifact has an inline renderer
+                      const toolName = art.toolName || art.type;
+                      const inlineRenderer =
+                        toolName && hasInlineRenderer(toolName)
+                          ? renderInlineToolResult(
+                              toolName,
+                              { data: art },
+                              art.status || 'completed',
+                            )
+                          : null;
 
-                        // If inline renderer exists, use it
-                        if (inlineRenderer) {
-                          return (
-                            <div key={idx} className="space-y-2">
-                              {inlineRenderer}
-                            </div>
-                          );
-                        }
-
-                        // Fallback to clickable card
+                      // If inline renderer exists, use it
+                      if (inlineRenderer) {
                         return (
-                          <div
-                            key={idx}
-                            onClick={() => onOpenSidecar?.('preview', { artifact })}
-                            className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
-                                {artifact.type === 'image' ? (
-                                  <FileText className="w-4 h-4" />
-                                ) : (
-                                  <Braces className="w-4 h-4" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-zinc-200">
-                                  {artifact.title || 'Generated Artifact'}
-                                </div>
-                                <div className="text-xs text-zinc-400">
-                                  {artifact.type === 'code' ? artifact.language : artifact.type}
-                                </div>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-zinc-400 group-hover:text-white"
-                            >
-                              View <PanelTopOpen className="ml-2 w-3 h-3" />
-                            </Button>
+                          <div key={idx} className="space-y-2">
+                            {inlineRenderer}
                           </div>
                         );
-                      },
-                    )}
+                      }
+
+                      // Fallback to clickable card
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => onOpenSidecar?.('preview', { artifact: art })}
+                          className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                              {art.type === 'image' ? (
+                                <FileText className="w-4 h-4" />
+                              ) : (
+                                <Braces className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-zinc-200">
+                                {art.title || 'Generated Artifact'}
+                              </div>
+                              <div className="text-xs text-zinc-400">
+                                {art.type === 'code' ? art.language : art.type}
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 group-hover:text-white"
+                          >
+                            View <PanelTopOpen className="ml-2 w-3 h-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

@@ -45,8 +45,8 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
   }: {
     label: string;
     icon?: React.ElementType;
-    getValue: (model: ModelMetadata) => any;
-    format?: (value: any) => string;
+    getValue: (model: ModelMetadata) => string | number | boolean | null | undefined;
+    format?: (value: string | number | boolean | null | undefined) => string;
     highlight?: boolean;
   }) => (
     <div className="grid grid-cols-4 border-b border-gray-200 dark:border-gray-700">
@@ -180,14 +180,14 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
                 label="Context Window"
                 icon={TrendingUp}
                 getValue={(m) => m.contextWindow}
-                format={(v) => `${(v / 1000).toFixed(0)}K tokens`}
+                format={(v) => `${((v as number) / 1000).toFixed(0)}K tokens`}
                 highlight
               />
               {selectedModels.some((m) => m.benchmarks?.swebench) && (
                 <ComparisonRow
                   label="SWE-bench Score"
                   getValue={(m) => m.benchmarks?.swebench ?? 0}
-                  format={(v) => `${v.toFixed(1)}%`}
+                  format={(v) => `${(v as number).toFixed(1)}%`}
                   highlight
                 />
               )}
@@ -195,7 +195,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
                 <ComparisonRow
                   label="HumanEval Score"
                   getValue={(m) => m.benchmarks?.humaneval ?? 0}
-                  format={(v) => `${v.toFixed(1)}%`}
+                  format={(v) => `${(v as number).toFixed(1)}%`}
                   highlight
                 />
               )}
@@ -203,7 +203,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
                 <ComparisonRow
                   label="MMLU Score"
                   getValue={(m) => m.benchmarks?.mmlu ?? 0}
-                  format={(v) => `${v.toFixed(1)}%`}
+                  format={(v) => `${(v as number).toFixed(1)}%`}
                   highlight
                 />
               )}
@@ -218,19 +218,19 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
               <ComparisonRow
                 label="Input Cost"
                 getValue={(m) => m.inputCost}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
+                format={(v) => (v === 0 ? 'Free' : `$${(v as number).toFixed(2)}`)}
                 highlight
               />
               <ComparisonRow
                 label="Output Cost"
                 getValue={(m) => m.outputCost}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
+                format={(v) => (v === 0 ? 'Free' : `$${(v as number).toFixed(2)}`)}
                 highlight
               />
               <ComparisonRow
                 label="Total (Avg)"
                 getValue={(m) => (m.inputCost + m.outputCost) / 2}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
+                format={(v) => (v === 0 ? 'Free' : `$${(v as number).toFixed(2)}`)}
                 highlight
               />
             </div>
