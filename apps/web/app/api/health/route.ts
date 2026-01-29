@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, {
-        apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
+        apiVersion: '2026-01-28.clover' as Stripe.LatestApiVersion,
       });
 
       // Simple API call to check connectivity
