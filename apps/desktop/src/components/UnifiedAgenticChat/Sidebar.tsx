@@ -26,8 +26,13 @@ import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
-import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
-import { useChatStore } from '../../stores/chat/chatStore';
+import {
+  useChatStore,
+  selectConversations,
+  selectActiveConversationId,
+  selectActiveView,
+  type ConversationSummary,
+} from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { UserProfile } from '../Layout/UserProfile';
@@ -304,27 +309,29 @@ export function Sidebar({
   width = 260,
   onResize,
 }: SidebarProps) {
-  const conversations = useUnifiedChatStore((state) => state.conversations);
-  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
-  const activeView = useUnifiedChatStore((state) => state.activeView);
+  // Migration: All store hooks now use useChatStore (modular store) instead of useUnifiedChatStore
+  // Using exported selectors for optimal re-render performance
+  const conversations = useChatStore(selectConversations);
+  const activeConversationId = useChatStore(selectActiveConversationId);
+  const activeView = useChatStore(selectActiveView);
 
   // Simple mode state - hide advanced features
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
-  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
-  const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
-  const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
-  const archiveConversation = useUnifiedChatStore((state) => state.archiveConversation);
-  const restoreConversation = useUnifiedChatStore((state) => state.restoreConversation);
-  const exportConversationToMarkdown = useUnifiedChatStore(
-    (state) => state.exportConversationToMarkdown,
-  );
-  const createConversation = useUnifiedChatStore((state) => state.createConversation);
-  const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
-  const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
-  const getConversationStats = useUnifiedChatStore((state) => state.getConversationStats);
 
-  // Get message loading functions from the modular chat store
+  // Conversation actions - renamed selectConversation to avoid conflict with selector
+  const selectConversationFn = useChatStore((state) => state.selectConversation);
+  const renameConversation = useChatStore((state) => state.renameConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const togglePinnedConversation = useChatStore((state) => state.togglePinnedConversation);
+  const archiveConversation = useChatStore((state) => state.archiveConversation);
+  const restoreConversation = useChatStore((state) => state.restoreConversation);
+  const exportConversationToMarkdown = useChatStore((state) => state.exportConversationToMarkdown);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const setActiveView = useChatStore((state) => state.setActiveView);
+  const ensureActiveConversation = useChatStore((state) => state.ensureActiveConversation);
+  const getConversationStats = useChatStore((state) => state.getConversationStats);
+
+  // Message loading functions
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
   const loadConversationMessages = useChatStore((state) => state.loadConversationMessages);
 
@@ -476,7 +483,7 @@ export function Sidebar({
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      selectConversation(id);
+      selectConversationFn(id);
       setActiveView('chat');
       if (isMobile && onCollapsedChange) {
         onCollapsedChange(true);
@@ -497,7 +504,7 @@ export function Sidebar({
       }
     },
     [
-      selectConversation,
+      selectConversationFn,
       setActiveView,
       isMobile,
       onCollapsedChange,
@@ -754,7 +761,7 @@ export function Sidebar({
                       <button
                         key={conv.id}
                         onClick={() => {
-                          selectConversation(conv.id);
+                          selectConversationFn(conv.id);
                           setShowSearch(false);
                           setSearchQuery('');
                         }}
