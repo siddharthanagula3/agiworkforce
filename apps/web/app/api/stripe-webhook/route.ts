@@ -75,7 +75,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
+      apiVersion: '2026-01-28.clover' as Stripe.LatestApiVersion,
     })
   : null;
 
