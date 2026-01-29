@@ -8,6 +8,7 @@ pub mod models;
 pub mod orchestration;
 pub mod scheduler;
 pub mod skills;
+pub mod sync_utils;
 
 // Re-export scheduler types
 pub use scheduler::nlp_parser::parse_schedule;
