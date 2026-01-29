@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 49;
+const CURRENT_VERSION: i32 = 50;
 
 // =============================================================================
 // SQL INJECTION PREVENTION
@@ -135,6 +135,8 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         // Scheduling
         "scheduled_jobs",
         "job_executions",
+        // Background Agents
+        "background_agents",
     ])
 });
 
@@ -449,6 +451,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 49 {
         run_migration_in_transaction(conn, 49, apply_migration_v49)?;
+    }
+
+    if current_version < 50 {
+        run_migration_in_transaction(conn, 50, apply_migration_v50)?;
     }
 
     Ok(())
@@ -4248,6 +4254,49 @@ fn apply_migration_v49(conn: &Connection) -> Result<()> {
 
     tracing::info!(
         "Applied migration v49: Created job_executions table for scheduler execution logging"
+    );
+
+    Ok(())
+}
+
+/// Migration v50: Create background_agents table for "&" prefix background execution
+fn apply_migration_v50(conn: &Connection) -> Result<()> {
+    // Create background_agents table for persistent background agent state
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS background_agents (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            goal TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'paused', 'completed', 'failed', 'cancelled', 'taken_over')),
+            progress_json TEXT NOT NULL,
+            summary_json TEXT,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            context_json TEXT NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 0,
+            timeout_secs INTEGER NOT NULL DEFAULT 300
+        )",
+        [],
+    )?;
+
+    // Create indexes for efficient querying
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_background_agents_status ON background_agents(status)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_background_agents_conversation_id ON background_agents(conversation_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_background_agents_created_at ON background_agents(created_at DESC)",
+        [],
+    )?;
+
+    tracing::info!(
+        "Applied migration v50: Created background_agents table for background execution"
     );
 
     Ok(())

@@ -5,21 +5,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 /// Configuration for Telegram bot connection
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TelegramConfig {
     /// Bot token from BotFather
     pub bot_token: Option<String>,
     /// Default chat ID for sending messages
     pub default_chat_id: Option<i64>,
-}
-
-impl Default for TelegramConfig {
-    fn default() -> Self {
-        Self {
-            bot_token: None,
-            default_chat_id: None,
-        }
-    }
 }
 
 /// Represents a Telegram message

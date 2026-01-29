@@ -18,6 +18,42 @@ interface UseChatStreamReturn {
 }
 
 /**
+ * Save a message to the database
+ */
+async function saveMessageToDb(
+  conversationId: string,
+  message: { role: string; content: string; model?: string },
+  authToken: string,
+): Promise<{ id: string } | null> {
+  try {
+    const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        role: message.role,
+        content: message.content,
+        model: message.model,
+        skipLlm: true, // Flag to save message without triggering LLM call
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[useChatStream] Failed to save message to DB:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.message || data.userMessage || { id: crypto.randomUUID() };
+  } catch (error) {
+    console.error('[useChatStream] Error saving message to DB:', error);
+    return null;
+  }
+}
+
+/**
  * Hook for handling SSE streaming chat with the LLM API
  */
 export function useChatStream(): UseChatStreamReturn {
@@ -48,6 +84,14 @@ export function useChatStream(): UseChatStreamReturn {
     async (content: string, options: SendMessageOptions = {}) => {
       if (!content.trim()) return;
 
+      // Get conversation ID - either from options or read fresh from store to avoid stale closures
+      const conversationId = options.conversationId || useChatStore.getState().activeConversationId;
+      if (!conversationId) {
+        console.error('[useChatStream] No conversation ID available');
+        setError('No active conversation. Please create a new conversation first.');
+        return;
+      }
+
       // Cancel any existing stream
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -55,8 +99,9 @@ export function useChatStream(): UseChatStreamReturn {
       abortControllerRef.current = new AbortController();
 
       const model = options.model || selectedModel;
+      const authToken = await getAuthToken();
 
-      // Add user message
+      // Add user message to UI immediately
       const userMessageId = crypto.randomUUID();
       const userMessage: Message = {
         id: userMessageId,
@@ -66,6 +111,11 @@ export function useChatStream(): UseChatStreamReturn {
         attachments: options.attachments,
       };
       addMessage(userMessage);
+
+      // Save user message to database (fire and forget, don't block)
+      saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
+        (err) => console.error('[useChatStream] Failed to save user message:', err),
+      );
 
       // Create assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
@@ -123,7 +173,7 @@ export function useChatStream(): UseChatStreamReturn {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${await getAuthToken()}`,
+            Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             model,
@@ -148,6 +198,7 @@ export function useChatStream(): UseChatStreamReturn {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let fullAssistantContent = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -164,6 +215,16 @@ export function useChatStream(): UseChatStreamReturn {
 
             const data = trimmedLine.slice(6);
             if (data === '[DONE]') {
+              // Save the complete assistant message to database
+              if (fullAssistantContent) {
+                saveMessageToDb(
+                  conversationId,
+                  { role: 'assistant', content: fullAssistantContent, model },
+                  authToken,
+                ).catch((err) =>
+                  console.error('[useChatStream] Failed to save assistant message:', err),
+                );
+              }
               stopStreaming();
               setLoading(false);
               return;
@@ -174,25 +235,40 @@ export function useChatStream(): UseChatStreamReturn {
 
               // Handle OpenAI-compatible format
               if (parsed.choices?.[0]?.delta?.content) {
-                appendToMessage(assistantMessageId, parsed.choices[0].delta.content);
+                const chunk = parsed.choices[0].delta.content;
+                fullAssistantContent += chunk;
+                appendToMessage(assistantMessageId, chunk);
               }
 
               // Handle Anthropic format
               if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                appendToMessage(assistantMessageId, parsed.delta.text);
+                const chunk = parsed.delta.text;
+                fullAssistantContent += chunk;
+                appendToMessage(assistantMessageId, chunk);
               }
 
               // Handle finish reason
+              // Note: We keep the originally selected model name for display consistency.
+              // The API may return a different model name (e.g., due to fallback, version
+              // differences, or auto-model resolution), but users should see what they selected.
               if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
                 updateMessage(assistantMessageId, {
                   isStreaming: false,
-                  model: parsed.model || model,
                 });
               }
             } catch {
               // Ignore parse errors for incomplete chunks
             }
           }
+        }
+
+        // Save the complete assistant message to database (in case [DONE] wasn't received)
+        if (fullAssistantContent) {
+          saveMessageToDb(
+            conversationId,
+            { role: 'assistant', content: fullAssistantContent, model },
+            authToken,
+          ).catch((err) => console.error('[useChatStream] Failed to save assistant message:', err));
         }
 
         // Ensure streaming is stopped

@@ -456,7 +456,7 @@ impl LLMRouter {
             }
 
             // === Default chat intent ===
-            "chat" | _ => {
+            _ => {
                 if is_budget_plan {
                     (
                         Provider::Google,
