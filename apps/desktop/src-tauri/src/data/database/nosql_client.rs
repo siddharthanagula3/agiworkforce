@@ -1,5 +1,5 @@
 use bson::{doc, Bson, Document as BsonDocument};
-use mongodb::options::{ClientOptions, FindOptions};
+use mongodb::options::ClientOptions;
 use mongodb::{Client, Collection, Database};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -63,7 +63,7 @@ impl MongoClient {
         let database = client.database(&database_name);
 
         database
-            .list_collection_names(None)
+            .list_collection_names()
             .await
             .map_err(|e| Error::Other(format!("Failed to connect to MongoDB: {}", e)))?;
 
@@ -101,13 +101,12 @@ impl MongoClient {
 
         let bson_filter = json_to_bson_document(filter)?;
 
-        let mut options = FindOptions::default();
+        let mut find_action = collection.find(bson_filter);
         if let Some(limit_val) = limit {
-            options.limit = Some(limit_val as i64);
+            find_action = find_action.limit(limit_val as i64);
         }
 
-        let mut cursor = collection
-            .find(bson_filter, options)
+        let mut cursor = find_action
             .await
             .map_err(|e| Error::Other(format!("MongoDB find error: {}", e)))?;
 
@@ -150,7 +149,7 @@ impl MongoClient {
         let bson_filter = json_to_bson_document(filter)?;
 
         let result = collection
-            .find_one(bson_filter, None)
+            .find_one(bson_filter)
             .await
             .map_err(|e| Error::Other(format!("MongoDB findOne error: {}", e)))?;
 
@@ -178,7 +177,7 @@ impl MongoClient {
         let bson_doc = json_to_bson_document(document)?;
 
         let result = collection
-            .insert_one(bson_doc, None)
+            .insert_one(bson_doc)
             .await
             .map_err(|e| Error::Other(format!("MongoDB insertOne error: {}", e)))?;
 
@@ -215,7 +214,7 @@ impl MongoClient {
         let bson_docs = bson_docs?;
 
         let result = collection
-            .insert_many(bson_docs, None)
+            .insert_many(bson_docs)
             .await
             .map_err(|e| Error::Other(format!("MongoDB insertMany error: {}", e)))?;
 
@@ -254,7 +253,7 @@ impl MongoClient {
         let bson_update = json_to_bson_document(update)?;
 
         let result = collection
-            .update_many(bson_filter, bson_update, None)
+            .update_many(bson_filter, bson_update)
             .await
             .map_err(|e| Error::Other(format!("MongoDB updateMany error: {}", e)))?;
 
@@ -284,7 +283,7 @@ impl MongoClient {
         let bson_filter = json_to_bson_document(filter)?;
 
         let result = collection
-            .delete_many(bson_filter, None)
+            .delete_many(bson_filter)
             .await
             .map_err(|e| Error::Other(format!("MongoDB deleteMany error: {}", e)))?;
 
@@ -317,7 +316,7 @@ impl MongoClient {
         let bson_pipeline = bson_pipeline?;
 
         let mut cursor = collection
-            .aggregate(bson_pipeline, None)
+            .aggregate(bson_pipeline)
             .await
             .map_err(|e| Error::Other(format!("MongoDB aggregate error: {}", e)))?;
 
@@ -352,7 +351,7 @@ impl MongoClient {
 
         let collection_names = conn
             .database
-            .list_collection_names(None)
+            .list_collection_names()
             .await
             .map_err(|e| Error::Other(format!("MongoDB list collections error: {}", e)))?;
 
