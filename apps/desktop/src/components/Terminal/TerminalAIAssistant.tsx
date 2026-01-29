@@ -173,7 +173,10 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
                 <Button
                   onClick={() => {
                     navigator.clipboard.writeText(suggestedCommand);
-                    alert('Command copied to clipboard!');
+                    toast({
+                      title: 'Copied',
+                      description: 'Command copied to clipboard!',
+                    });
                   }}
                   size="sm"
                   variant="outline"

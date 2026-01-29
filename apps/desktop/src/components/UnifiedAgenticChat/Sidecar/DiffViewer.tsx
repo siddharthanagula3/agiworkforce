@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
+import { toast } from '@/hooks/useToast';
 import { DiffEditor } from '@monaco-editor/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, Copy, FileCode, Loader2, X } from 'lucide-react';
@@ -121,7 +122,10 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
         content: diffData.modifiedContent,
       });
 
-      alert('Changes applied successfully!');
+      toast({
+        title: 'Changes applied',
+        description: 'Changes applied successfully!',
+      });
     } catch (err) {
       setError(`Failed to apply changes: ${err}`);
     } finally {
