@@ -104,7 +104,7 @@ impl ScheduledJob {
             .map_err(|e| Error::Generic(format!("Invalid cron expression: {}", e)))?;
 
         let now = Utc::now();
-        let next_run = cron_schedule.upcoming(Utc).next().map(|dt| dt.into());
+        let next_run = cron_schedule.upcoming(Utc).next();
 
         Ok(Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -128,7 +128,6 @@ impl ScheduledJob {
         Schedule::from_str(&self.schedule)
             .ok()
             .and_then(|s| s.upcoming(Utc).next())
-            .map(|dt| dt.into())
     }
 }
 

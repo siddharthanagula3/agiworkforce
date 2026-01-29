@@ -4,6 +4,7 @@ pub mod function_executor;
 pub mod llm_router;
 pub mod providers;
 pub mod sse_parser;
+pub mod thinking;
 pub mod token_counter;
 pub mod tool_executor;
 

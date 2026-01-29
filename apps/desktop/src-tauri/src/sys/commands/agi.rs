@@ -1263,3 +1263,152 @@ fn convert_sub_goal(sub_goal: &crate::core::agi::SubGoal) -> SubGoalResponse {
         priority: sub_goal.priority,
     }
 }
+
+// === Swarm Coordination Commands ===
+// These commands provide access to the swarm orchestration system for
+// massively parallel multi-agent execution. The swarm is transparent to
+// users - it's an internal optimization for complex parallelizable goals.
+
+/// Response from swarm goal execution.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwarmGoalResponse {
+    pub success: bool,
+    pub goal_id: String,
+    pub succeeded: usize,
+    pub failed: usize,
+    pub wall_time_ms: u64,
+    pub speedup_ratio: f64,
+    pub critical_path_length: usize,
+    pub max_parallelism: usize,
+    pub summary: String,
+}
+
+/// Submits a goal for swarm execution with parallel multi-agent processing.
+///
+/// The swarm system decomposes the goal into parallelizable subtasks and
+/// spawns multiple agents to execute them concurrently. This is ideal for
+/// complex goals that can be broken into independent work units.
+#[tauri::command]
+pub async fn agi_submit_goal_swarm(
+    request: SubmitGoalRequest,
+) -> Result<SwarmGoalResponse, String> {
+    let agi_arc = {
+        let agi_guard = AGI_CORE.lock();
+        agi_guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let priority = match request.priority.as_deref() {
+        Some("low") => Priority::Low,
+        Some("medium") => Priority::Medium,
+        Some("high") => Priority::High,
+        Some("critical") => Priority::Critical,
+        _ => Priority::Medium,
+    };
+
+    let goal = Goal {
+        id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
+        description: request.description,
+        priority,
+        deadline: request.deadline,
+        constraints: vec![],
+        success_criteria: request.success_criteria.unwrap_or_default(),
+    };
+
+    let goal_id = goal.id.clone();
+
+    let agi = agi_arc.lock().await;
+    let result = agi
+        .submit_goal_swarm(goal)
+        .await
+        .map_err(|e| format!("Swarm execution failed: {}", e))?;
+
+    Ok(SwarmGoalResponse {
+        success: result.success,
+        goal_id,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        wall_time_ms: result.wall_time.as_millis() as u64,
+        speedup_ratio: result.speedup_ratio,
+        critical_path_length: result.critical_path_length,
+        max_parallelism: result.max_parallelism,
+        summary: result.summary,
+    })
+}
+
+/// Submits a goal with automatic execution strategy selection.
+///
+/// The AGI automatically determines whether to use:
+/// - Sequential execution (simple goals)
+/// - Parallel plans (moderately complex goals)
+/// - Swarm execution (highly parallelizable goals)
+///
+/// This is the recommended entry point for goal submission.
+#[tauri::command]
+pub async fn agi_submit_goal_auto(
+    request: SubmitGoalRequest,
+) -> Result<SubmitGoalResponse, String> {
+    let agi_arc = {
+        let agi_guard = AGI_CORE.lock();
+        agi_guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let priority = match request.priority.as_deref() {
+        Some("low") => Priority::Low,
+        Some("medium") => Priority::Medium,
+        Some("high") => Priority::High,
+        Some("critical") => Priority::Critical,
+        _ => Priority::Medium,
+    };
+
+    let goal = Goal {
+        id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
+        description: request.description,
+        priority,
+        deadline: request.deadline,
+        constraints: vec![],
+        success_criteria: request.success_criteria.unwrap_or_default(),
+    };
+
+    let goal_id = goal.id.clone();
+
+    let agi = agi_arc.lock().await;
+    agi.submit_goal_auto(goal)
+        .await
+        .map_err(|e| format!("Failed to submit goal: {}", e))?;
+
+    Ok(SubmitGoalResponse { goal_id })
+}
+
+/// Checks if a goal would benefit from swarm execution.
+///
+/// Returns true if the goal description indicates parallelizable work.
+/// This is useful for UI components to show appropriate feedback.
+#[tauri::command]
+pub async fn agi_should_use_swarm(description: String) -> Result<bool, String> {
+    let agi_arc = {
+        let agi_guard = AGI_CORE.lock();
+        agi_guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let goal = Goal {
+        id: "check".to_string(),
+        description,
+        priority: Priority::Medium,
+        deadline: None,
+        constraints: vec![],
+        success_criteria: vec![],
+    };
+
+    let agi = agi_arc.lock().await;
+    Ok(agi.should_use_swarm(&goal))
+}

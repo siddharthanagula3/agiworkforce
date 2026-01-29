@@ -1,10 +1,12 @@
 pub mod ai_orchestrator;
 pub mod approval;
 pub mod autonomous;
+pub mod background_agent;
 pub mod change_tracker;
 pub mod code_generator;
 pub mod context_compactor;
 pub mod context_manager;
+pub mod continuous_executor;
 pub mod executor;
 pub mod form_undo;
 pub mod intelligent_file_access;
@@ -20,7 +22,17 @@ mod tests;
 
 pub use approval::ApprovalManager;
 pub use autonomous::AutonomousAgent;
+pub use background_agent::{
+    AgentProgress, AgentSummary, BackgroundAgent, BackgroundAgentContext, BackgroundAgentManager,
+    BackgroundAgentManagerState, BackgroundAgentStatus, ConversationMessage,
+    DEFAULT_AGENT_TIMEOUT_SECS, MAX_BACKGROUND_AGENTS,
+};
 pub use change_tracker::ChangeTracker;
+pub use continuous_executor::{
+    ContinuousExecutor, ContinuousExecutorConfig, ContinuousTask, ContinuousTaskStatus,
+    DailyLimitTracker, DailyUsageStats, ExecutionCheckpoint, ExecutionProgress,
+    ExecutionStatePersistence,
+};
 pub use executor::TaskExecutor;
 pub use form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 pub use planner::TaskPlanner;

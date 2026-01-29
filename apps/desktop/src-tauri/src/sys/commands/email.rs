@@ -1302,11 +1302,7 @@ mod tests {
     #[test]
     fn test_keyring_availability_check() {
         // Test that the keyring availability check doesn't panic
-        let available = is_keyring_available();
-        // Just verify it returns a boolean without panicking
-        assert!(
-            available || !available,
-            "is_keyring_available should return a boolean"
-        );
+        // Just verify it runs without panicking and returns a boolean
+        let _available: bool = is_keyring_available();
     }
 }

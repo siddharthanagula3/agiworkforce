@@ -82,7 +82,17 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const { id: conversationId } = await context.params;
   const body = await request.json();
 
-  const { content, model = 'auto' } = body as { content: string; model?: string };
+  const {
+    content,
+    model = 'auto',
+    role = 'user',
+    skipLlm = false,
+  } = body as {
+    content: string;
+    model?: string;
+    role?: 'user' | 'assistant' | 'system';
+    skipLlm?: boolean;
+  };
 
   if (!content?.trim()) {
     throw createError.badRequest('Message content is required');
@@ -104,6 +114,43 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   if (convError || !conversation) {
     throw createError.notFound('Conversation not found');
   }
+
+  // If skipLlm is true, just save the message and return (used for streaming where LLM is called separately)
+  if (skipLlm) {
+    const { data: message, error: msgError } = await supabase
+      .from('web_messages')
+      .insert({
+        conversation_id: conversationId,
+        role,
+        content: content.trim(),
+        model: role === 'assistant' ? model : undefined,
+      })
+      .select()
+      .single();
+
+    if (msgError) {
+      logger.error({ error: msgError }, 'Failed to save message');
+      throw createError.internal('Failed to save message');
+    }
+
+    // Auto-title conversation from first user message
+    if (role === 'user') {
+      const { count } = await supabase
+        .from('web_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('conversation_id', conversationId);
+
+      if (count && count <= 1) {
+        // First message - generate title
+        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+        await supabase.from('web_conversations').update({ title }).eq('id', conversationId);
+      }
+    }
+
+    return NextResponse.json({ message });
+  }
+
+  // Normal flow: save user message, call LLM, save assistant message
 
   // Check credits
   const hasCredits = await CreditService.checkAvailable(user.id, 0.01);

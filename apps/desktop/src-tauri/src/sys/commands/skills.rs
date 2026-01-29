@@ -1,6 +1,8 @@
 //! Tauri commands for skills management.
 
-use crate::core::skills::{RequirementCheckResult, Skill, SkillManager, SkillSourceFilter};
+use crate::core::skills::{
+    RequirementCheckResult, Skill, SkillInvocation, SkillManager, SkillSourceFilter, SlashCommand,
+};
 use serde::Serialize;
 use tauri::State;
 
@@ -27,6 +29,8 @@ pub struct SkillInfo {
     pub requires_bins: Vec<String>,
     pub requires_env: Vec<String>,
     pub supported_os: Vec<String>,
+    pub allowed_tools: Vec<String>,
+    pub context_mode: String,
 }
 
 impl From<&Skill> for SkillInfo {
@@ -42,6 +46,13 @@ impl From<&Skill> for SkillInfo {
         }
         .to_string();
 
+        let context_mode = if skill.context_mode.is_fork() {
+            "fork"
+        } else {
+            "main"
+        }
+        .to_string();
+
         Self {
             name: skill.name.clone(),
             description: skill.description.clone(),
@@ -49,6 +60,33 @@ impl From<&Skill> for SkillInfo {
             requires_bins: skill.requires_bins.clone(),
             requires_env: skill.requires_env.clone(),
             supported_os: skill.supported_os.clone(),
+            allowed_tools: skill.allowed_tools.clone(),
+            context_mode,
+        }
+    }
+}
+
+/// Serializable skill invocation result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInvocationResult {
+    pub skill_name: String,
+    pub instructions: String,
+    pub allowed_tools: Vec<String>,
+    pub context_mode: String,
+}
+
+impl From<SkillInvocation> for SkillInvocationResult {
+    fn from(invocation: SkillInvocation) -> Self {
+        Self {
+            skill_name: invocation.skill_name,
+            instructions: invocation.instructions,
+            allowed_tools: invocation.allowed_tools,
+            context_mode: if invocation.context_mode.is_fork() {
+                "fork".to_string()
+            } else {
+                "main".to_string()
+            },
         }
     }
 }
@@ -139,4 +177,47 @@ pub fn skill_set_workspace(state: State<'_, SkillsState>, path: Option<String>) 
 #[tauri::command]
 pub fn skill_count(state: State<'_, SkillsState>) -> usize {
     state.manager.skill_count()
+}
+
+/// Invokes a skill with the provided arguments.
+///
+/// Returns the skill instructions with arguments substituted.
+#[tauri::command]
+pub fn skill_invoke(
+    state: State<'_, SkillsState>,
+    name: String,
+    arguments: String,
+) -> Result<SkillInvocationResult, String> {
+    state
+        .manager
+        .invoke_skill(&name, &arguments)
+        .map(SkillInvocationResult::from)
+        .map_err(|e| e.to_string())
+}
+
+/// Parses a slash command and returns skill invocation if valid.
+///
+/// Slash commands have the format: `/skill-name [arguments]`
+#[tauri::command]
+pub fn skill_parse_slash_command(
+    state: State<'_, SkillsState>,
+    input: String,
+) -> Option<Result<SkillInvocationResult, String>> {
+    state.manager.parse_slash_command(&input).map(|result| {
+        result
+            .map(SkillInvocationResult::from)
+            .map_err(|e| e.to_string())
+    })
+}
+
+/// Returns a list of available slash commands.
+#[tauri::command]
+pub fn skill_get_slash_commands(state: State<'_, SkillsState>) -> Vec<SlashCommand> {
+    state.manager.get_slash_commands()
+}
+
+/// Reloads all skills from disk.
+#[tauri::command]
+pub fn skill_reload(state: State<'_, SkillsState>) {
+    state.manager.reload();
 }

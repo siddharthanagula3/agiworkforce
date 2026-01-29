@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 use which::which;
 
 use super::error::{SkillError, SkillResult};
-use super::skill::{Skill, SkillSource};
+use super::skill::{Skill, SkillContextMode, SkillSource};
 
 /// Frontmatter structure for AGI Workforce skill metadata.
 #[derive(Debug, Deserialize)]
@@ -17,6 +17,12 @@ struct SkillFrontmatter {
     description: String,
     #[serde(default)]
     metadata: Option<SkillMetadata>,
+    /// Allowed tools for this skill (Claude Code compatible).
+    #[serde(default, alias = "allowed-tools")]
+    allowed_tools: Vec<String>,
+    /// Context mode: "main" or "fork" (Claude Code compatible).
+    #[serde(default)]
+    context: Option<String>,
 }
 
 /// Metadata container for skill requirements.
@@ -203,6 +209,12 @@ impl SkillLoader {
         let (requires_bins, requires_env, supported_os) =
             Self::extract_requirements(&frontmatter.metadata);
 
+        // Parse context mode
+        let context_mode = match frontmatter.context.as_deref() {
+            Some("fork") => SkillContextMode::Fork,
+            _ => SkillContextMode::Main,
+        };
+
         // Determine the skill source
         let source = match source_type {
             SkillSourceType::Workspace => SkillSource::Workspace {
@@ -221,6 +233,8 @@ impl SkillLoader {
             requires_env,
             supported_os,
             source,
+            allowed_tools: frontmatter.allowed_tools,
+            context_mode,
         })
     }
 
@@ -593,5 +607,101 @@ Instructions
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "my-skill");
+    }
+
+    #[test]
+    fn test_parse_skill_with_allowed_tools() {
+        let content = r#"---
+name: explain-code
+description: Explains code with diagrams and analogies
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+context: fork
+---
+
+When explaining code:
+1. Start with an analogy
+2. Draw ASCII diagram
+3. Walk through step-by-step
+"#;
+
+        let temp_dir = TempDir::new().unwrap();
+        let skill_path = create_skill_file(temp_dir.path(), "explain-code", content);
+
+        let skill = SkillLoader::parse_skill_md(&skill_path, &SkillSourceType::Workspace).unwrap();
+
+        assert_eq!(skill.name, "explain-code");
+        assert_eq!(skill.allowed_tools, vec!["Read", "Grep", "Glob"]);
+        assert!(skill.context_mode.is_fork());
+        assert!(skill.is_tool_allowed("Read"));
+        assert!(skill.is_tool_allowed("Grep"));
+        assert!(!skill.is_tool_allowed("Write"));
+    }
+
+    #[test]
+    fn test_parse_skill_with_main_context() {
+        let content = r#"---
+name: main-context-skill
+description: A skill that runs in main context
+context: main
+---
+
+Instructions here.
+"#;
+
+        let temp_dir = TempDir::new().unwrap();
+        let skill_path = create_skill_file(temp_dir.path(), "main-context-skill", content);
+
+        let skill = SkillLoader::parse_skill_md(&skill_path, &SkillSourceType::Workspace).unwrap();
+
+        assert!(skill.context_mode.is_main());
+    }
+
+    #[test]
+    fn test_parse_skill_default_context() {
+        let content = r#"---
+name: default-context-skill
+description: A skill without explicit context mode
+---
+
+Instructions here.
+"#;
+
+        let temp_dir = TempDir::new().unwrap();
+        let skill_path = create_skill_file(temp_dir.path(), "default-context-skill", content);
+
+        let skill = SkillLoader::parse_skill_md(&skill_path, &SkillSourceType::Workspace).unwrap();
+
+        // Default should be main context
+        assert!(skill.context_mode.is_main());
+    }
+
+    #[test]
+    fn test_parse_skill_with_arguments_placeholder() {
+        let content = r#"---
+name: analyze-file
+description: Analyze a file with arguments
+allowed-tools:
+  - Read
+  - Grep
+---
+
+Analyze the following file: $ARGUMENTS
+
+Provide a detailed breakdown of:
+- Structure
+- Dependencies
+- Potential issues
+"#;
+
+        let temp_dir = TempDir::new().unwrap();
+        let skill_path = create_skill_file(temp_dir.path(), "analyze-file", content);
+
+        let skill = SkillLoader::parse_skill_md(&skill_path, &SkillSourceType::Workspace).unwrap();
+
+        let substituted = skill.substitute_arguments("src/main.rs");
+        assert!(substituted.contains("Analyze the following file: src/main.rs"));
     }
 }
