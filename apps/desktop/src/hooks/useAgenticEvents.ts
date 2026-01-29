@@ -557,9 +557,15 @@ export function useAgenticEvents() {
       });
       push(unlistenAgentSpawned);
 
-      const unlistenAgentAction = await listen<any>('agent:action', (event) => {
+      interface AgentActionPayload {
+        type?: string;
+        tool?: string;
+        tool_name?: string;
+        name?: string;
+      }
+      const unlistenAgentAction = await listen<AgentActionPayload>('agent:action', (event) => {
         if (!isMountedRef.current) return;
-        const payload = event.payload as any;
+        const payload = event.payload;
         const actionType =
           payload?.type || payload?.tool || payload?.tool_name || payload?.name || 'action';
         focusSidecar(String(actionType));
@@ -600,18 +606,31 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalRequired);
 
-      const unlistenApprovalRequest = await listen<any>('approval:request', (event) => {
-        if (!isMountedRef.current) return;
-        const approval = {
-          id: event.payload.id,
-          type: event.payload.type || 'terminal_command',
-          description: event.payload.description || 'Agent operation requires approval',
-          riskLevel: (event.payload.riskLevel || 'high') as 'low' | 'medium' | 'high',
-          details: event.payload.details || {},
-          impact: event.payload.impact,
-        };
-        handlersRef.current.addApprovalRequest(approval);
-      });
+      interface ApprovalRequestPayload {
+        id: string;
+        type?: string;
+        description?: string;
+        riskLevel?: 'low' | 'medium' | 'high';
+        details?: Record<string, unknown>;
+        impact?: string;
+      }
+      const unlistenApprovalRequest = await listen<ApprovalRequestPayload>(
+        'approval:request',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const approvalType = (event.payload.type ||
+            'terminal_command') as ApprovalRequest['type'];
+          const approval: Omit<ApprovalRequest, 'status' | 'createdAt'> = {
+            id: event.payload.id,
+            type: approvalType,
+            description: event.payload.description || 'Agent operation requires approval',
+            riskLevel: (event.payload.riskLevel || 'high') as 'low' | 'medium' | 'high',
+            details: event.payload.details || {},
+            impact: event.payload.impact,
+          };
+          handlersRef.current.addApprovalRequest(approval);
+        },
+      );
       push(unlistenApprovalRequest);
 
       const unlistenApprovalGranted = await listen<ApprovalRequestEvent>(
@@ -948,7 +967,11 @@ export function useAgenticEvents() {
       try {
         const { useMcpStore } = await import('../stores/mcpStore');
 
-        const unlistenMcpServerUnhealthy = await listen<any>(
+        interface McpServerUnhealthyPayload {
+          server_name: string;
+          error?: string;
+        }
+        const unlistenMcpServerUnhealthy = await listen<McpServerUnhealthyPayload>(
           'mcp:server_unhealthy',
           safeHandler('mcp:server_unhealthy', () => {
             // Refresh servers when a server becomes unhealthy
@@ -957,7 +980,11 @@ export function useAgenticEvents() {
         );
         push(unlistenMcpServerUnhealthy);
 
-        const unlistenMcpToolsUpdated = await listen<any>(
+        interface McpToolsUpdatedPayload {
+          server_name: string;
+          tools_count?: number;
+        }
+        const unlistenMcpToolsUpdated = await listen<McpToolsUpdatedPayload>(
           'mcp:tools_updated',
           safeHandler('mcp:tools_updated', () => {
             // Refresh tools when tools are updated on any server
@@ -966,7 +993,11 @@ export function useAgenticEvents() {
         );
         push(unlistenMcpToolsUpdated);
 
-        const unlistenMcpSystemInitialized = await listen<any>(
+        interface McpSystemInitializedPayload {
+          servers_count?: number;
+          tools_count?: number;
+        }
+        const unlistenMcpSystemInitialized = await listen<McpSystemInitializedPayload>(
           'mcp:system_initialized',
           safeHandler('mcp:system_initialized', () => {
             // When MCP system is initialized, refresh everything

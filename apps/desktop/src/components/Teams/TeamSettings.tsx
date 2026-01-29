@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
-import type { Team } from '../../types/teams';
+import { TeamRole, type Team } from '../../types/teams';
 import { Button } from '../ui/Button';
 import { Save, Trash2 } from 'lucide-react';
 
@@ -99,7 +99,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
             </label>
             <select
               value={defaultMemberRole}
-              onChange={(e) => setDefaultMemberRole(e.target.value as any)}
+              onChange={(e) => setDefaultMemberRole(e.target.value as TeamRole)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <option value="viewer">Viewer</option>
