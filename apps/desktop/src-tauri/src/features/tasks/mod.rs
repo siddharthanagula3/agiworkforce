@@ -14,6 +14,11 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 use types::{Priority, Task, TaskFilter, TaskResult, TaskStatus};
 
+// AUDIT-004-012: Added cleanup configuration for old completed tasks
+// Previously held all tasks indefinitely; now supports periodic cleanup
+/// Maximum age (in seconds) for completed/failed/cancelled tasks before cleanup
+const COMPLETED_TASK_MAX_AGE_SECS: i64 = 24 * 60 * 60; // 24 hours
+
 pub struct TaskManager {
     queue: Arc<TaskQueue>,
     executor: Arc<TaskExecutor>,
@@ -300,20 +305,71 @@ impl TaskManager {
     pub async fn shutdown(&self) {
         self.executor.shutdown().await;
     }
-}
 
-pub async fn start_task_loop(manager: Arc<TaskManager>) {
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+    // AUDIT-004-012: Cleanup old completed/failed/cancelled tasks
+    /// Remove tasks that have been in a terminal state for longer than the max age
+    pub async fn cleanup_old_tasks(&self) -> anyhow::Result<usize> {
+        let now = chrono::Utc::now();
+        let cutoff = now - chrono::Duration::seconds(COMPLETED_TASK_MAX_AGE_SECS);
 
-    loop {
-        interval.tick().await;
+        let mut tasks = self.tasks.write().await;
+        let initial_count = tasks.len();
 
-        if let Err(e) = manager.poll_completions().await {
-            tracing::error!("Error polling completions: {}", e);
+        tasks.retain(|_id, task| {
+            // Keep tasks that are not in a terminal state
+            if !matches!(
+                task.status,
+                TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled
+            ) {
+                return true;
+            }
+
+            // Keep tasks that completed recently
+            if let Some(completed_at) = task.completed_at {
+                completed_at > cutoff
+            } else {
+                // No completion time recorded, keep if created recently
+                task.created_at > cutoff
+            }
+        });
+
+        let removed_count = initial_count - tasks.len();
+
+        if removed_count > 0 {
+            tracing::info!(
+                "[TaskManager] Cleaned up {} old completed tasks",
+                removed_count
+            );
         }
 
-        if let Err(e) = manager.poll_progress().await {
-            tracing::error!("Error polling progress: {}", e);
+        Ok(removed_count)
+    }
+}
+
+// AUDIT-004-012: Task loop now includes periodic cleanup of old tasks
+pub async fn start_task_loop(manager: Arc<TaskManager>) {
+    let mut poll_interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+    let mut cleanup_interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // 1 hour
+
+    // Don't run cleanup immediately on startup
+    cleanup_interval.tick().await;
+
+    loop {
+        tokio::select! {
+            _ = poll_interval.tick() => {
+                if let Err(e) = manager.poll_completions().await {
+                    tracing::error!("Error polling completions: {}", e);
+                }
+
+                if let Err(e) = manager.poll_progress().await {
+                    tracing::error!("Error polling progress: {}", e);
+                }
+            }
+            _ = cleanup_interval.tick() => {
+                if let Err(e) = manager.cleanup_old_tasks().await {
+                    tracing::error!("Error cleaning up old tasks: {}", e);
+                }
+            }
         }
     }
 }

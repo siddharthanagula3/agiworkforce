@@ -135,6 +135,8 @@ export function useVoiceTranscription(
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  // HKS-005 fix: Track mount state to prevent setState after unmount
+  const isMountedRef = useRef(true);
 
   /**
    * Check available local Whisper implementations
@@ -203,6 +205,8 @@ export function useVoiceTranscription(
     }
 
     return () => {
+      // HKS-005 fix: Mark as unmounted to prevent setState calls
+      isMountedRef.current = false;
       // Cleanup on unmount
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -213,9 +217,13 @@ export function useVoiceTranscription(
   // Configure provider when preferLocal changes
   useEffect(() => {
     if (preferLocal && availableLocalWhisper.length > 0) {
-      configureImpl({ provider: 'local' as const }).catch(() => {
-        // Fallback to OpenAI if local fails
-        configureImpl({ provider: 'openai' as const }).catch(() => {});
+      configureImpl({ provider: 'local' as const }).catch((err) => {
+        // AUDIT-P3-ERROR: Log local provider failure, then fallback to OpenAI
+        console.debug('[VoiceTranscription] Local provider failed, falling back to OpenAI:', err);
+        configureImpl({ provider: 'openai' as const }).catch((fallbackErr) => {
+          // AUDIT-P3-ERROR: Both providers failed - error state already set by configureImpl
+          console.debug('[VoiceTranscription] OpenAI fallback also failed:', fallbackErr);
+        });
       });
     }
   }, [preferLocal, availableLocalWhisper, configureImpl]);
@@ -223,7 +231,10 @@ export function useVoiceTranscription(
   // Configure language when it changes
   useEffect(() => {
     if (language) {
-      configureImpl({ language }).catch(() => {});
+      configureImpl({ language }).catch((err) => {
+        // AUDIT-P3-ERROR: Language configuration failure - error state already set by configureImpl
+        console.debug('[VoiceTranscription] Language configuration failed:', err);
+      });
     }
   }, [language, configureImpl]);
 
@@ -368,23 +379,29 @@ export function useVoiceTranscription(
 
         if (audioBlob.size === 0) {
           const error = 'No audio recorded';
-          setState((prev) => ({
-            ...prev,
-            isRecording: false,
-            error,
-          }));
+          // HKS-005 fix: Check if still mounted before setState
+          if (isMountedRef.current) {
+            setState((prev) => ({
+              ...prev,
+              isRecording: false,
+              error,
+            }));
+          }
           onError?.(error);
           resolve('');
           return;
         }
 
         // Start transcription
-        setState((prev) => ({
-          ...prev,
-          isRecording: false,
-          isTranscribing: true,
-          error: null,
-        }));
+        // HKS-005 fix: Check if still mounted before setState
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            isTranscribing: true,
+            error: null,
+          }));
+        }
 
         try {
           // Convert blob to array buffer
@@ -402,22 +419,28 @@ export function useVoiceTranscription(
 
           const transcript = result.text.trim();
 
-          setState((prev) => ({
-            ...prev,
-            isTranscribing: false,
-            transcript: prev.transcript ? `${prev.transcript} ${transcript}` : transcript,
-            error: null,
-          }));
+          // HKS-005 fix: Check if still mounted before setState
+          if (isMountedRef.current) {
+            setState((prev) => ({
+              ...prev,
+              isTranscribing: false,
+              transcript: prev.transcript ? `${prev.transcript} ${transcript}` : transcript,
+              error: null,
+            }));
+          }
 
           onResult?.(transcript);
           resolve(transcript);
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          setState((prev) => ({
-            ...prev,
-            isTranscribing: false,
-            error: errorMessage,
-          }));
+          // HKS-005 fix: Check if still mounted before setState
+          if (isMountedRef.current) {
+            setState((prev) => ({
+              ...prev,
+              isTranscribing: false,
+              error: errorMessage,
+            }));
+          }
           onError?.(errorMessage);
           resolve('');
         }

@@ -113,11 +113,27 @@ export const useCodeStore = create<CodeState>()(
                 isDirty: false,
               };
 
-              const nextOpenFiles = [...state.openFiles, newFile];
+              let nextOpenFiles = [...state.openFiles, newFile];
+              // AUDIT-006-004 fix: Cap openFiles at 50 entries, close oldest non-dirty files first
+              if (nextOpenFiles.length > 50) {
+                // Find and remove the oldest non-dirty file (excluding the new one and active file)
+                const oldestNonDirtyIndex = nextOpenFiles.findIndex(
+                  (f) => !f.isDirty && f.path !== path && f.path !== state.activeFilePath,
+                );
+                if (oldestNonDirtyIndex >= 0) {
+                  nextOpenFiles = nextOpenFiles.filter((_, i) => i !== oldestNonDirtyIndex);
+                } else {
+                  // If all files are dirty or active, just drop the oldest one (excluding new file)
+                  nextOpenFiles = nextOpenFiles.slice(-50);
+                }
+              }
               const alreadyPersisted = state.persistedOpenPaths.includes(path);
-              const nextPersisted = alreadyPersisted
+              let nextPersisted = alreadyPersisted
                 ? state.persistedOpenPaths
                 : [...state.persistedOpenPaths, path];
+              // Keep persistedOpenPaths in sync with actual open files
+              const openPaths = new Set(nextOpenFiles.map((f) => f.path));
+              nextPersisted = nextPersisted.filter((p) => openPaths.has(p));
 
               set(
                 {
@@ -393,19 +409,44 @@ export const useCodeStore = create<CodeState>()(
               return;
             }
 
-            for (const path of state.persistedOpenPaths) {
-              try {
-                await get().openFile(path, { activate: false });
-              } catch (error) {
-                console.warn('Failed to reopen tab', path, error);
+            // WRK-005 fix: Load files in batches to prevent UI freezing
+            const BATCH_SIZE = 3; // Load 3 files at a time
+            const MAX_HYDRATE_FILES = 20; // Limit total files to restore
+
+            // Limit the number of files to hydrate
+            const pathsToHydrate = state.persistedOpenPaths.slice(0, MAX_HYDRATE_FILES);
+            if (pathsToHydrate.length < state.persistedOpenPaths.length) {
+              console.warn(
+                `[CodeStore] WRK-005: Limiting hydration to ${MAX_HYDRATE_FILES} files (had ${state.persistedOpenPaths.length})`,
+              );
+            }
+
+            // Process files in batches with yielding to prevent UI blocking
+            for (let i = 0; i < pathsToHydrate.length; i += BATCH_SIZE) {
+              const batch = pathsToHydrate.slice(i, i + BATCH_SIZE);
+
+              // Load batch in parallel
+              await Promise.all(
+                batch.map(async (path) => {
+                  try {
+                    await get().openFile(path, { activate: false });
+                  } catch (error) {
+                    console.warn('Failed to reopen tab', path, error);
+                  }
+                }),
+              );
+
+              // WRK-005 fix: Yield to the event loop between batches to allow UI updates
+              if (i + BATCH_SIZE < pathsToHydrate.length) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
               }
             }
 
             if (state.activeFilePath) {
               set({ activeFilePath: state.activeFilePath }, undefined, 'code/hydrateActiveFile');
-            } else if (state.persistedOpenPaths.length > 0) {
+            } else if (pathsToHydrate.length > 0) {
               set(
-                { activeFilePath: state.persistedOpenPaths[0] ?? null },
+                { activeFilePath: pathsToHydrate[0] ?? null },
                 undefined,
                 'code/hydrateActiveFile',
               );

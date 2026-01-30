@@ -29,14 +29,26 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get('host') || 'unknown';
 
   // Check environment configuration (DO NOT expose actual keys)
+  // AUDIT-P3-008-011: Mask supabaseUrl to prevent info disclosure
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let maskedSupabaseUrl = 'NOT_SET';
+  if (supabaseUrl) {
+    try {
+      const url = new URL(supabaseUrl);
+      maskedSupabaseUrl = url.hostname; // Only show domain, not full URL
+    } catch {
+      maskedSupabaseUrl = 'INVALID_URL';
+    }
+  }
+
   const config = {
     environment: process.env.NODE_ENV,
     host,
     hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
     hasStripeWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-    hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    hasSupabaseUrl: !!supabaseUrl,
     hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'NOT_SET',
+    supabaseHost: maskedSupabaseUrl,
     timestamp: new Date().toISOString(),
   };
 

@@ -32,14 +32,30 @@ export function WorkflowDetailModal() {
 
   if (!selectedWorkflow) return null;
 
-  const workflowDef = selectedWorkflow.workflow_definition
-    ? (JSON.parse(selectedWorkflow.workflow_definition) as WorkflowDefinition)
-    : null;
+  // MKT-005 fix: Wrap JSON.parse in try-catch to prevent crashes on malformed data
+  let workflowDef: WorkflowDefinition | null = null;
+  if (selectedWorkflow.workflow_definition) {
+    try {
+      workflowDef = JSON.parse(selectedWorkflow.workflow_definition) as WorkflowDefinition;
+    } catch (error) {
+      console.error('Failed to parse workflow definition:', error);
+      // workflowDef remains null, will show "steps not available" message
+    }
+  }
 
   const handleClone = async () => {
     setIsCloning(true);
     try {
+      // MKT-003 fix: Validate user ID before attempting clone
       const userId = useAuthStore.getState().getCurrentUserId();
+      if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+        toast({
+          title: 'Authentication required',
+          description: 'Please sign in to clone workflows.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const userName = 'Current User';
 
       await cloneWorkflow({
@@ -78,7 +94,16 @@ export function WorkflowDetailModal() {
 
     setIsSubmittingReview(true);
     try {
+      // MKT-003 fix: Validate user ID before attempting review submission
       const userId = useAuthStore.getState().getCurrentUserId();
+      if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+        toast({
+          title: 'Authentication required',
+          description: 'Please sign in to submit reviews.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       await rateWorkflow({
         workflow_id: selectedWorkflow.id,

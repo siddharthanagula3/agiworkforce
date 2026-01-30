@@ -298,10 +298,13 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   cloneWorkflow: async (request: CloneWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const clonedId = await invoke<string>(
-        'clone_marketplace_workflow',
-        request as unknown as Record<string, unknown>,
-      );
+      // MKT-007 fix: Use explicit parameter object to avoid type bypass
+      const clonedId = await invoke<string>('clone_marketplace_workflow', {
+        workflowId: request.workflow_id,
+        userId: request.user_id,
+        userName: request.user_name,
+        customizeTitle: request.customize_title,
+      });
 
       const { workflows, featuredWorkflows, trendingWorkflows } = get();
       const updateCloneCount = (w: PublishedWorkflow) =>
@@ -325,10 +328,18 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   publishWorkflow: async (request: PublishWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const published = await invoke<PublishedWorkflow>(
-        'publish_workflow',
-        request as unknown as Record<string, unknown>,
-      );
+      // MKT-007 fix: Use explicit parameter object to avoid type bypass
+      const published = await invoke<PublishedWorkflow>('publish_workflow', {
+        workflowId: request.workflow_id,
+        title: request.title,
+        description: request.description,
+        category: request.category,
+        tags: request.tags,
+        thumbnailUrl: request.thumbnail_url,
+        estimatedTimeSaved: request.estimated_time_saved,
+        estimatedCostSaved: request.estimated_cost_saved,
+        license: request.license,
+      });
       set((state) => ({
         myPublishedWorkflows: [published, ...state.myPublishedWorkflows],
         isLoading: false,
@@ -358,7 +369,13 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   rateWorkflow: async (request: RateWorkflowRequest) => {
     try {
-      await invoke('rate_workflow', request as unknown as Record<string, unknown>);
+      // MKT-007 fix: Use explicit parameter object to avoid type bypass
+      await invoke('rate_workflow', {
+        workflowId: request.workflow_id,
+        userId: request.user_id,
+        rating: request.rating,
+        reviewText: request.review_text,
+      });
 
       await get().fetchWorkflowReviews(request.workflow_id);
 

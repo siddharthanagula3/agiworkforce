@@ -28,8 +28,25 @@ async function handleDownload(request: NextRequest) {
     return rateLimitResponse;
   }
 
+  // AUDIT-P3-008-018: Log download requests for abuse detection
+  const clientIp =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    'unknown';
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform');
+
+  logger.info(
+    {
+      clientIp,
+      userAgent: userAgent.substring(0, 200), // Truncate to prevent log injection
+      platform,
+      timestamp: new Date().toISOString(),
+    },
+    'Download request received',
+  );
 
   if (!platform || !['mac', 'windows', 'linux'].includes(platform)) {
     throw createError.validation('Invalid platform requested. Must be mac, windows, or linux.');

@@ -623,7 +623,12 @@ async function handleChatCompletions(request: NextRequest) {
 
                 // Re-serialize with the corrected model name
                 processedLines.push(`data: ${JSON.stringify(event)}`);
-              } catch {
+              } catch (parseError) {
+                // AUDIT-P3-008-014: Log JSON parsing errors at debug level for monitoring
+                logger.debug(
+                  { jsonStr: jsonStr.substring(0, 100), error: parseError },
+                  'Stream JSON parse error - passing through unchanged',
+                );
                 // If parse fails, pass through unchanged
                 processedLines.push(line);
               }

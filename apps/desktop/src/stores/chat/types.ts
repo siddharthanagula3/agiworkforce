@@ -7,6 +7,16 @@
 
 import type { Artifact } from '../../types/chat';
 
+/**
+ * Widget data type for embedded widgets (INT-001)
+ * Widgets can be forms, data tables, charts, confirmations, etc.
+ */
+export interface ChatWidgetData {
+  id: string;
+  type: string;
+  [key: string]: unknown;
+}
+
 export interface MessageMetadata {
   tokenCount?: number;
   inputTokens?: number;
@@ -28,6 +38,8 @@ export interface MessageMetadata {
   editedAt?: Date;
   /** Original content before editing (for history) */
   originalContent?: string;
+  /** Embedded widgets in this message (INT-001) */
+  widgets?: ChatWidgetData[];
 
   tool?: string;
   tool_call?: string;
@@ -126,7 +138,7 @@ export interface InlinePanel {
 }
 
 export interface SlashCommandMetadata {
-  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo';
+  command: 'browser' | 'terminal' | 'code' | 'database' | 'undo' | 'compact';
   args: string;
   rawInput: string;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Wrench,
   Check,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { ToolExecution } from '../../../stores/unifiedChatStore';
 import { CodeBlock } from '../Visualizations/CodeBlock';
+import { getFriendlyError } from '@agiworkforce/utils';
+import { toast } from '../../../hooks/useToast';
 
 export interface ToolExecutionCardProps {
   execution: ToolExecution;
@@ -45,12 +47,16 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
+      // AUDIT-005-012 fix: Show success toast on copy
+      toast({ title: 'Copied to clipboard' });
     } catch (err) {
       console.error('Failed to copy:', err);
+      // AUDIT-005-012 fix: Show toast notification on copy failure
+      toast({ variant: 'destructive', title: 'Failed to copy to clipboard' });
     }
   };
 
-  const formatJson = (data: any): string => {
+  const formatJson = (data: unknown): string => {
     try {
       return JSON.stringify(data, null, 2);
     } catch {
@@ -60,6 +66,13 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
 
   const inputJson = execution.input ? formatJson(execution.input) : '';
   const outputJson = execution.output ? formatJson(execution.output) : '';
+
+  // ERR-002: Translate MCP/technical errors to user-friendly messages
+  const friendlyError = useMemo(() => {
+    if (!execution.error) return null;
+    const friendly = getFriendlyError(execution.error);
+    return friendly.message;
+  }, [execution.error]);
 
   return (
     <div
@@ -114,9 +127,9 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
             </div>
 
             {}
-            {!execution.success && execution.error && (
+            {!execution.success && friendlyError && (
               <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-700 dark:text-red-300">
-                {execution.error}
+                {friendlyError}
               </div>
             )}
           </div>
@@ -139,8 +152,10 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
       {}
       {showInputOutput && (
         <div className="border-t border-gray-200 dark:border-gray-700">
-          {}
-          {Object.keys(execution.input).length > 0 ? (
+          {/* CHT-004 fix: Add null guard for execution.input */}
+          {execution.input &&
+          typeof execution.input === 'object' &&
+          Object.keys(execution.input).length > 0 ? (
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setShowInput(!showInput)}

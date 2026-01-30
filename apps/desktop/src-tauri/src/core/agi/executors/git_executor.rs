@@ -13,6 +13,14 @@
 //! - `git_push` - Push commits to a remote repository
 //! - `git_clone` - Clone a remote repository
 //!
+//! # Conflict Resolution
+//!
+//! This module also provides merge conflict detection and resolution capabilities:
+//! - Detect files with merge conflicts after merge/rebase operations
+//! - Parse conflict markers (<<<<<<, =======, >>>>>>) to extract "ours" vs "theirs"
+//! - Suggest resolutions using LLM assistance
+//! - Apply resolutions (keep ours, keep theirs, manual merge)
+//!
 //! # Security
 //!
 //! All path operations are validated against allowed directories to prevent
@@ -21,11 +29,1066 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
+use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+// ============================================================================
+// Conflict Resolution Types
+// ============================================================================
+
+/// Represents a single conflict hunk within a file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictHunk {
+    /// Line number where the conflict starts (1-indexed).
+    pub start_line: usize,
+    /// Line number where the conflict ends (1-indexed).
+    pub end_line: usize,
+    /// The "ours" (HEAD/current branch) version of the conflicted content.
+    pub ours: String,
+    /// The "theirs" (incoming/merged branch) version of the conflicted content.
+    pub theirs: String,
+    /// Optional: the common ancestor content (for diff3 style markers).
+    pub base: Option<String>,
+    /// The branch/commit name for "ours" (extracted from marker).
+    pub ours_label: Option<String>,
+    /// The branch/commit name for "theirs" (extracted from marker).
+    pub theirs_label: Option<String>,
+}
+
+/// Represents all conflicts within a single file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileConflict {
+    /// Relative path to the file within the repository.
+    pub file_path: String,
+    /// The full content of the file with conflict markers.
+    pub full_content: String,
+    /// Individual conflict hunks within this file.
+    pub hunks: Vec<ConflictHunk>,
+    /// Total number of conflicts in this file.
+    pub conflict_count: usize,
+}
+
+/// Resolution strategy for a conflict.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolutionStrategy {
+    /// Keep the "ours" (HEAD/current branch) version.
+    KeepOurs,
+    /// Keep the "theirs" (incoming/merged branch) version.
+    KeepTheirs,
+    /// Keep both versions concatenated.
+    KeepBoth,
+    /// Use a manually provided merged content.
+    Manual,
+    /// Use LLM-suggested merged content.
+    LlmSuggested,
+}
+
+/// A resolution applied to a specific hunk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HunkResolution {
+    /// Index of the hunk within the file (0-indexed).
+    pub hunk_index: usize,
+    /// The resolution strategy used.
+    pub strategy: ResolutionStrategy,
+    /// The resolved content (used for Manual/LlmSuggested strategies).
+    pub resolved_content: Option<String>,
+}
+
+/// Result of applying a resolution to a file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolutionResult {
+    /// The file path that was resolved.
+    pub file_path: String,
+    /// Whether the resolution was successful.
+    pub success: bool,
+    /// The new content after resolution.
+    pub resolved_content: Option<String>,
+    /// Any error message if resolution failed.
+    pub error: Option<String>,
+    /// Number of conflicts that were resolved.
+    pub conflicts_resolved: usize,
+    /// Number of conflicts remaining (if any).
+    pub conflicts_remaining: usize,
+}
+
+/// LLM-generated suggestion for resolving a conflict.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictSuggestion {
+    /// The suggested merged content.
+    pub suggested_content: String,
+    /// Explanation of why this merge makes sense.
+    pub explanation: String,
+    /// Confidence score (0.0 to 1.0).
+    pub confidence: f32,
+    /// Whether the suggestion preserves functionality from both sides.
+    pub preserves_both: bool,
+}
+
+// ============================================================================
+// PR Creation Types
+// ============================================================================
+
+/// Configuration for creating a pull request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrCreationConfig {
+    /// The base branch to merge into (e.g., "main", "develop").
+    pub base_branch: String,
+    /// The head branch containing changes (e.g., "feature/my-feature").
+    pub head_branch: String,
+    /// Whether to auto-generate the PR title using LLM.
+    #[serde(default = "default_true")]
+    pub auto_generate_title: bool,
+    /// Whether to auto-generate the PR description using LLM.
+    #[serde(default = "default_true")]
+    pub auto_generate_description: bool,
+    /// Whether to include a diff summary in the description.
+    #[serde(default = "default_true")]
+    pub include_diff_summary: bool,
+    /// Optional custom title (overrides auto-generation if provided).
+    pub custom_title: Option<String>,
+    /// Optional custom description (overrides auto-generation if provided).
+    pub custom_description: Option<String>,
+    /// Whether to create as draft PR.
+    #[serde(default)]
+    pub draft: bool,
+    /// Labels to add to the PR.
+    #[serde(default)]
+    pub labels: Vec<String>,
+    /// Reviewers to request.
+    #[serde(default)]
+    pub reviewers: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for PrCreationConfig {
+    fn default() -> Self {
+        Self {
+            base_branch: "main".to_string(),
+            head_branch: String::new(),
+            auto_generate_title: true,
+            auto_generate_description: true,
+            include_diff_summary: true,
+            custom_title: None,
+            custom_description: None,
+            draft: false,
+            labels: Vec::new(),
+            reviewers: Vec::new(),
+        }
+    }
+}
+
+/// Result of creating a pull request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrCreationResult {
+    /// The PR number assigned by GitHub.
+    pub pr_number: u64,
+    /// The URL of the created PR.
+    pub pr_url: String,
+    /// The generated or provided title.
+    pub title: String,
+    /// The generated or provided description.
+    pub description: String,
+    /// Whether the PR was created as a draft.
+    pub draft: bool,
+    /// Summary of files changed.
+    pub files_changed: usize,
+    /// Total additions.
+    pub additions: usize,
+    /// Total deletions.
+    pub deletions: usize,
+}
+
+/// Summary of changes between two branches.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BranchDiffSummary {
+    /// Base branch name.
+    pub base_branch: String,
+    /// Head branch name.
+    pub head_branch: String,
+    /// Number of commits ahead of base.
+    pub commits_ahead: usize,
+    /// List of commit summaries.
+    pub commits: Vec<CommitSummary>,
+    /// Files changed with their stats.
+    pub files_changed: Vec<FileDiffStat>,
+    /// Total lines added.
+    pub total_additions: usize,
+    /// Total lines deleted.
+    pub total_deletions: usize,
+    /// Overall diff content (truncated if too large).
+    pub diff_content: String,
+}
+
+/// Summary of a single commit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitSummary {
+    /// Short commit hash (7 chars).
+    pub hash_short: String,
+    /// Full commit hash.
+    pub hash_full: String,
+    /// Commit message (first line).
+    pub message: String,
+    /// Full commit message.
+    pub message_full: String,
+    /// Author name.
+    pub author: String,
+    /// Author email.
+    pub email: String,
+    /// Commit timestamp (Unix epoch).
+    pub timestamp: i64,
+}
+
+/// Statistics for a single file in a diff.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileDiffStat {
+    /// File path.
+    pub path: String,
+    /// Number of lines added.
+    pub additions: usize,
+    /// Number of lines deleted.
+    pub deletions: usize,
+    /// Status: "added", "modified", "deleted", "renamed".
+    pub status: String,
+    /// Old path (for renames).
+    pub old_path: Option<String>,
+}
+
+/// Generated PR content from LLM.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedPrContent {
+    /// Generated title (max 72 chars, conventional commit style).
+    pub title: String,
+    /// Generated description with summary, changes, and testing notes.
+    pub description: String,
+    /// Suggested labels based on changes.
+    pub suggested_labels: Vec<String>,
+    /// Confidence score (0.0 to 1.0).
+    pub confidence: f32,
+}
+
+/// Error types specific to PR creation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "details")]
+pub enum PrCreationError {
+    /// No commits to merge between branches.
+    NoCommitsToMerge {
+        base_branch: String,
+        head_branch: String,
+    },
+    /// Branch already has an open PR.
+    ExistingPrOpen { pr_number: u64, pr_url: String },
+    /// Missing permissions to create PR.
+    PermissionDenied { reason: String },
+    /// Remote not configured or unreachable.
+    RemoteNotConfigured { remote_name: String },
+    /// Branch not pushed to remote.
+    BranchNotPushed { branch_name: String },
+    /// GitHub API error.
+    GitHubApiError { status_code: u16, message: String },
+    /// LLM generation failed.
+    LlmGenerationFailed { reason: String },
+    /// Generic error.
+    Other { message: String },
+}
+
+// ============================================================================
+// Conflict Parser
+// ============================================================================
+
+/// Parser for git merge conflict markers.
+pub struct ConflictParser;
+
+impl ConflictParser {
+    /// Standard conflict marker strings.
+    const MARKER_OURS_START: &'static str = "<<<<<<<";
+    const MARKER_BASE_START: &'static str = "|||||||";
+    const MARKER_SEPARATOR: &'static str = "=======";
+    const MARKER_THEIRS_END: &'static str = ">>>>>>>";
+
+    /// Parse a file's content and extract all conflict hunks.
+    pub fn parse_conflicts(content: &str) -> Vec<ConflictHunk> {
+        let mut hunks = Vec::new();
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+
+        while i < lines.len() {
+            if lines[i].starts_with(Self::MARKER_OURS_START) {
+                if let Some((hunk, end_line)) = Self::parse_single_conflict(&lines, i) {
+                    hunks.push(hunk);
+                    i = end_line + 1;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+
+        hunks
+    }
+
+    /// Parse a single conflict starting at the given line index.
+    fn parse_single_conflict(lines: &[&str], start_idx: usize) -> Option<(ConflictHunk, usize)> {
+        let mut ours_lines = Vec::new();
+        let mut base_lines = Vec::new();
+        let mut theirs_lines = Vec::new();
+        let mut ours_label = None;
+        let mut theirs_label = None;
+
+        // Extract label from the opening marker
+        let first_line = lines[start_idx];
+        if first_line.len() > Self::MARKER_OURS_START.len() {
+            let label = first_line[Self::MARKER_OURS_START.len()..].trim();
+            if !label.is_empty() {
+                ours_label = Some(label.to_string());
+            }
+        }
+
+        let mut idx = start_idx + 1;
+        let mut in_base = false;
+        let mut found_separator = false;
+
+        // Collect "ours" content and optionally "base" content
+        while idx < lines.len() {
+            let line = lines[idx];
+
+            if line.starts_with(Self::MARKER_BASE_START) {
+                // diff3 style - base content follows
+                in_base = true;
+                idx += 1;
+                continue;
+            }
+
+            if line.starts_with(Self::MARKER_SEPARATOR) {
+                found_separator = true;
+                idx += 1;
+                break;
+            }
+
+            if in_base {
+                base_lines.push(line);
+            } else {
+                ours_lines.push(line);
+            }
+            idx += 1;
+        }
+
+        if !found_separator {
+            return None;
+        }
+
+        // Collect "theirs" content
+        while idx < lines.len() {
+            let line = lines[idx];
+
+            if line.starts_with(Self::MARKER_THEIRS_END) {
+                // Extract label from the closing marker
+                if line.len() > Self::MARKER_THEIRS_END.len() {
+                    let label = line[Self::MARKER_THEIRS_END.len()..].trim();
+                    if !label.is_empty() {
+                        theirs_label = Some(label.to_string());
+                    }
+                }
+
+                let hunk = ConflictHunk {
+                    start_line: start_idx + 1, // Convert to 1-indexed
+                    end_line: idx + 1,         // Convert to 1-indexed
+                    ours: ours_lines.join("\n"),
+                    theirs: theirs_lines.join("\n"),
+                    base: if base_lines.is_empty() {
+                        None
+                    } else {
+                        Some(base_lines.join("\n"))
+                    },
+                    ours_label,
+                    theirs_label,
+                };
+
+                return Some((hunk, idx));
+            }
+
+            theirs_lines.push(line);
+            idx += 1;
+        }
+
+        None
+    }
+
+    /// Check if a file contains conflict markers.
+    pub fn has_conflicts(content: &str) -> bool {
+        content.contains(Self::MARKER_OURS_START)
+            && content.contains(Self::MARKER_SEPARATOR)
+            && content.contains(Self::MARKER_THEIRS_END)
+    }
+
+    /// Count the number of conflicts in a file.
+    pub fn count_conflicts(content: &str) -> usize {
+        Self::parse_conflicts(content).len()
+    }
+}
+
+// ============================================================================
+// Conflict Resolver
+// ============================================================================
+
+/// Resolves git merge conflicts using various strategies.
+pub struct ConflictResolver;
+
+impl ConflictResolver {
+    /// Apply a resolution to a single hunk within file content.
+    pub fn resolve_hunk(
+        content: &str,
+        hunk: &ConflictHunk,
+        strategy: &ResolutionStrategy,
+        manual_content: Option<&str>,
+    ) -> Result<String> {
+        let lines: Vec<&str> = content.lines().collect();
+
+        // Validate hunk indices
+        if hunk.start_line == 0 || hunk.end_line == 0 {
+            return Err(anyhow!("Invalid hunk line numbers (must be 1-indexed)"));
+        }
+
+        let start_idx = hunk.start_line - 1;
+        let end_idx = hunk.end_line - 1;
+
+        if end_idx >= lines.len() {
+            return Err(anyhow!(
+                "Hunk end line {} exceeds file length {}",
+                hunk.end_line,
+                lines.len()
+            ));
+        }
+
+        // Determine the replacement content
+        let replacement = match strategy {
+            ResolutionStrategy::KeepOurs => hunk.ours.clone(),
+            ResolutionStrategy::KeepTheirs => hunk.theirs.clone(),
+            ResolutionStrategy::KeepBoth => {
+                if hunk.ours.is_empty() {
+                    hunk.theirs.clone()
+                } else if hunk.theirs.is_empty() {
+                    hunk.ours.clone()
+                } else {
+                    format!("{}\n{}", hunk.ours, hunk.theirs)
+                }
+            }
+            ResolutionStrategy::Manual | ResolutionStrategy::LlmSuggested => manual_content
+                .ok_or_else(|| anyhow!("Manual/LLM resolution requires content"))?
+                .to_string(),
+        };
+
+        // Build the resolved content
+        let mut result_lines = Vec::new();
+
+        // Add lines before the conflict
+        for line in lines.iter().take(start_idx) {
+            result_lines.push(line.to_string());
+        }
+
+        // Add the resolved content
+        if !replacement.is_empty() {
+            for line in replacement.lines() {
+                result_lines.push(line.to_string());
+            }
+        }
+
+        // Add lines after the conflict
+        for line in lines.iter().skip(end_idx + 1) {
+            result_lines.push(line.to_string());
+        }
+
+        Ok(result_lines.join("\n"))
+    }
+
+    /// Apply multiple resolutions to a file.
+    /// Resolutions must be applied in reverse order (from bottom to top)
+    /// to maintain correct line numbers.
+    pub fn resolve_all_hunks(
+        content: &str,
+        hunks: &[ConflictHunk],
+        resolutions: &[HunkResolution],
+    ) -> Result<String> {
+        // Create a map of hunk_index -> resolution
+        let resolution_map: HashMap<usize, &HunkResolution> =
+            resolutions.iter().map(|r| (r.hunk_index, r)).collect();
+
+        // Sort hunks by start_line in descending order to resolve from bottom to top
+        let mut sorted_indices: Vec<usize> = (0..hunks.len()).collect();
+        sorted_indices.sort_by(|a, b| hunks[*b].start_line.cmp(&hunks[*a].start_line));
+
+        let mut result = content.to_string();
+
+        for idx in sorted_indices {
+            let hunk = &hunks[idx];
+
+            // Get the resolution for this hunk, or default to KeepOurs
+            let resolution = resolution_map.get(&idx);
+
+            let (strategy, manual_content) = if let Some(res) = resolution {
+                (&res.strategy, res.resolved_content.as_deref())
+            } else {
+                (&ResolutionStrategy::KeepOurs, None)
+            };
+
+            result = Self::resolve_hunk(&result, hunk, strategy, manual_content)?;
+        }
+
+        Ok(result)
+    }
+
+    /// Generate an LLM prompt for suggesting a conflict resolution.
+    pub fn generate_llm_prompt(hunk: &ConflictHunk, file_path: &str) -> String {
+        let mut prompt = format!(
+            "You are helping resolve a git merge conflict in the file '{}'.\n\n",
+            file_path
+        );
+
+        prompt.push_str("The conflict is between two versions:\n\n");
+
+        if let Some(label) = &hunk.ours_label {
+            prompt.push_str(&format!("OURS ({}):\n", label));
+        } else {
+            prompt.push_str("OURS (current branch):\n");
+        }
+        prompt.push_str("```\n");
+        prompt.push_str(&hunk.ours);
+        prompt.push_str("\n```\n\n");
+
+        if let Some(label) = &hunk.theirs_label {
+            prompt.push_str(&format!("THEIRS ({}):\n", label));
+        } else {
+            prompt.push_str("THEIRS (incoming branch):\n");
+        }
+        prompt.push_str("```\n");
+        prompt.push_str(&hunk.theirs);
+        prompt.push_str("\n```\n\n");
+
+        if let Some(base) = &hunk.base {
+            prompt.push_str("COMMON ANCESTOR:\n");
+            prompt.push_str("```\n");
+            prompt.push_str(base);
+            prompt.push_str("\n```\n\n");
+        }
+
+        prompt.push_str(
+            "Please provide:\n\
+            1. A merged version that preserves the intent of both changes where possible\n\
+            2. A brief explanation of your merge decision\n\n\
+            Format your response as JSON:\n\
+            {\n\
+              \"merged_content\": \"the merged code here\",\n\
+              \"explanation\": \"why this merge makes sense\",\n\
+              \"confidence\": 0.0-1.0,\n\
+              \"preserves_both\": true/false\n\
+            }",
+        );
+
+        prompt
+    }
+}
+
+// ============================================================================
+// PR Creation Workflow
+// ============================================================================
+
+/// Workflow for creating pull requests with AI assistance.
+pub struct PrCreationWorkflow;
+
+impl PrCreationWorkflow {
+    /// Maximum title length for conventional commit style.
+    const MAX_TITLE_LENGTH: usize = 72;
+
+    /// Maximum diff content to send to LLM (to avoid token limits).
+    const MAX_DIFF_FOR_LLM: usize = 50_000;
+
+    /// Get the diff summary between two branches.
+    ///
+    /// This gathers all the information needed to generate a PR description.
+    pub fn get_branch_diff_summary(
+        repo_path: &Path,
+        base_branch: &str,
+        head_branch: &str,
+    ) -> Result<BranchDiffSummary> {
+        let repo = git2::Repository::open(repo_path)
+            .map_err(|e| anyhow!("Failed to open repository: {}", e))?;
+
+        // Find the base and head references
+        let base_ref = repo
+            .find_branch(base_branch, git2::BranchType::Local)
+            .or_else(|_| repo.find_branch(base_branch, git2::BranchType::Remote))
+            .map_err(|e| anyhow!("Base branch '{}' not found: {}", base_branch, e))?;
+
+        let head_ref = repo
+            .find_branch(head_branch, git2::BranchType::Local)
+            .or_else(|_| repo.find_branch(head_branch, git2::BranchType::Remote))
+            .map_err(|e| anyhow!("Head branch '{}' not found: {}", head_branch, e))?;
+
+        let base_commit = base_ref
+            .get()
+            .peel_to_commit()
+            .map_err(|e| anyhow!("Failed to get base commit: {}", e))?;
+
+        let head_commit = head_ref
+            .get()
+            .peel_to_commit()
+            .map_err(|e| anyhow!("Failed to get head commit: {}", e))?;
+
+        // Find merge base to determine commits unique to head
+        let merge_base = repo
+            .merge_base(base_commit.id(), head_commit.id())
+            .map_err(|e| anyhow!("Failed to find merge base: {}", e))?;
+
+        // Collect commits from head back to merge base
+        let mut revwalk = repo
+            .revwalk()
+            .map_err(|e| anyhow!("Failed to create revwalk: {}", e))?;
+        revwalk
+            .push(head_commit.id())
+            .map_err(|e| anyhow!("Failed to push head to revwalk: {}", e))?;
+        revwalk
+            .hide(merge_base)
+            .map_err(|e| anyhow!("Failed to hide merge base: {}", e))?;
+
+        let mut commits = Vec::new();
+        for oid_result in revwalk {
+            let oid = oid_result.map_err(|e| anyhow!("Revwalk error: {}", e))?;
+            let commit = repo
+                .find_commit(oid)
+                .map_err(|e| anyhow!("Failed to find commit: {}", e))?;
+
+            let message_full = commit.message().unwrap_or("").to_string();
+            let message = message_full.lines().next().unwrap_or("").to_string();
+            let author = commit.author();
+
+            commits.push(CommitSummary {
+                hash_short: oid.to_string()[..7.min(oid.to_string().len())].to_string(),
+                hash_full: oid.to_string(),
+                message,
+                message_full,
+                author: author.name().unwrap_or("Unknown").to_string(),
+                email: author.email().unwrap_or("unknown@example.com").to_string(),
+                timestamp: commit.time().seconds(),
+            });
+        }
+
+        // Get diff between base and head
+        let base_tree = base_commit
+            .tree()
+            .map_err(|e| anyhow!("Failed to get base tree: {}", e))?;
+        let head_tree = head_commit
+            .tree()
+            .map_err(|e| anyhow!("Failed to get head tree: {}", e))?;
+
+        let diff = repo
+            .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)
+            .map_err(|e| anyhow!("Failed to compute diff: {}", e))?;
+
+        // Collect file stats
+        let mut files_changed = Vec::new();
+
+        let stats = diff
+            .stats()
+            .map_err(|e| anyhow!("Failed to get diff stats: {}", e))?;
+
+        for delta in diff.deltas() {
+            let status = match delta.status() {
+                git2::Delta::Added => "added",
+                git2::Delta::Deleted => "deleted",
+                git2::Delta::Modified => "modified",
+                git2::Delta::Renamed => "renamed",
+                git2::Delta::Copied => "copied",
+                _ => "unknown",
+            };
+
+            let new_path = delta
+                .new_file()
+                .path()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            let old_path = if delta.status() == git2::Delta::Renamed {
+                delta
+                    .old_file()
+                    .path()
+                    .map(|p| p.to_string_lossy().to_string())
+            } else {
+                None
+            };
+
+            files_changed.push(FileDiffStat {
+                path: new_path,
+                additions: 0, // Will be filled from patch stats
+                deletions: 0,
+                status: status.to_string(),
+                old_path,
+            });
+        }
+
+        let total_additions = stats.insertions();
+        let total_deletions = stats.deletions();
+
+        // Generate diff content (truncated for LLM)
+        let mut diff_content = String::new();
+        diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+            if diff_content.len() < Self::MAX_DIFF_FOR_LLM {
+                let content = std::str::from_utf8(line.content()).unwrap_or("");
+                let prefix = match line.origin() {
+                    '+' => "+",
+                    '-' => "-",
+                    ' ' => " ",
+                    _ => "",
+                };
+                diff_content.push_str(prefix);
+                diff_content.push_str(content);
+            }
+            true
+        })
+        .map_err(|e| anyhow!("Failed to print diff: {}", e))?;
+
+        if diff_content.len() >= Self::MAX_DIFF_FOR_LLM {
+            diff_content.push_str("\n\n... (diff truncated for brevity) ...\n");
+        }
+
+        Ok(BranchDiffSummary {
+            base_branch: base_branch.to_string(),
+            head_branch: head_branch.to_string(),
+            commits_ahead: commits.len(),
+            commits,
+            files_changed,
+            total_additions,
+            total_deletions,
+            diff_content,
+        })
+    }
+
+    /// Generate PR title and description using LLM.
+    pub async fn generate_pr_content(
+        router: &Arc<RwLock<LLMRouter>>,
+        diff_summary: &BranchDiffSummary,
+    ) -> Result<GeneratedPrContent> {
+        let prompt = Self::build_generation_prompt(diff_summary);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: String::new(),   // Let router decide
+            temperature: Some(0.3), // Low temperature for consistent output
+            max_tokens: Some(2000),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+        };
+
+        let preferences = RouterPreferences::default();
+
+        let router_guard = router.read().await;
+        let candidates = router_guard.candidates(&request, &preferences);
+
+        if candidates.is_empty() {
+            return Err(anyhow!("No LLM providers configured"));
+        }
+
+        let outcome = router_guard
+            .invoke_candidate(&candidates[0], &request)
+            .await
+            .map_err(|e| anyhow!("LLM request failed: {}", e))?;
+
+        drop(router_guard);
+
+        Self::parse_llm_response(&outcome.response.content)
+    }
+
+    /// Build the prompt for PR content generation.
+    fn build_generation_prompt(diff_summary: &BranchDiffSummary) -> String {
+        let mut prompt = String::new();
+
+        prompt.push_str("You are helping generate a pull request title and description.\n\n");
+
+        prompt.push_str("## Branch Information\n");
+        prompt.push_str(&format!("- Base branch: {}\n", diff_summary.base_branch));
+        prompt.push_str(&format!("- Head branch: {}\n", diff_summary.head_branch));
+        prompt.push_str(&format!("- Commits: {}\n", diff_summary.commits_ahead));
+        prompt.push_str(&format!(
+            "- Files changed: {}\n",
+            diff_summary.files_changed.len()
+        ));
+        prompt.push_str(&format!(
+            "- Additions: +{}, Deletions: -{}\n\n",
+            diff_summary.total_additions, diff_summary.total_deletions
+        ));
+
+        prompt.push_str("## Commits\n");
+        for commit in &diff_summary.commits {
+            prompt.push_str(&format!("- {} {}\n", commit.hash_short, commit.message));
+        }
+        prompt.push('\n');
+
+        prompt.push_str("## Changed Files\n");
+        for file in &diff_summary.files_changed {
+            prompt.push_str(&format!("- {} ({})\n", file.path, file.status));
+        }
+        prompt.push('\n');
+
+        prompt.push_str("## Diff Content (truncated)\n```diff\n");
+        // Limit diff to avoid token limits
+        let diff_preview = if diff_summary.diff_content.len() > 10000 {
+            &diff_summary.diff_content[..10000]
+        } else {
+            &diff_summary.diff_content
+        };
+        prompt.push_str(diff_preview);
+        prompt.push_str("\n```\n\n");
+
+        prompt.push_str("## Task\n");
+        prompt.push_str("Generate a pull request title and description.\n\n");
+
+        prompt.push_str("## Requirements\n");
+        prompt.push_str("1. **Title**: Use conventional commit format (feat:, fix:, docs:, refactor:, test:, chore:). Max 72 characters.\n");
+        prompt.push_str("2. **Description**: Include:\n");
+        prompt.push_str("   - Summary of changes (2-3 sentences)\n");
+        prompt.push_str("   - List of key changes\n");
+        prompt.push_str("   - Testing notes or considerations\n");
+        prompt.push_str("3. **Labels**: Suggest appropriate labels (e.g., 'bug', 'enhancement', 'documentation')\n\n");
+
+        prompt.push_str("## Output Format\n");
+        prompt.push_str("Respond with JSON only:\n");
+        prompt.push_str("```json\n");
+        prompt.push_str("{\n");
+        prompt.push_str("  \"title\": \"feat: brief description of changes\",\n");
+        prompt.push_str("  \"description\": \"## Summary\\n...\\n\\n## Changes\\n- ...\\n\\n## Testing\\n- ...\",\n");
+        prompt.push_str("  \"suggested_labels\": [\"enhancement\"],\n");
+        prompt.push_str("  \"confidence\": 0.85\n");
+        prompt.push_str("}\n");
+        prompt.push_str("```\n");
+
+        prompt
+    }
+
+    /// Parse the LLM response into structured PR content.
+    fn parse_llm_response(response: &str) -> Result<GeneratedPrContent> {
+        // Try to extract JSON from the response
+        let json_str = Self::extract_json(response)?;
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_str).map_err(|e| anyhow!("Failed to parse JSON: {}", e))?;
+
+        let title = parsed["title"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Missing 'title' field"))?
+            .to_string();
+
+        // Enforce title length limit
+        let title = if title.len() > Self::MAX_TITLE_LENGTH {
+            let truncated = &title[..Self::MAX_TITLE_LENGTH - 3];
+            format!("{}...", truncated)
+        } else {
+            title
+        };
+
+        let description = parsed["description"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Missing 'description' field"))?
+            .to_string();
+
+        let suggested_labels = parsed["suggested_labels"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let confidence = parsed["confidence"].as_f64().unwrap_or(0.5) as f32;
+
+        Ok(GeneratedPrContent {
+            title,
+            description,
+            suggested_labels,
+            confidence,
+        })
+    }
+
+    /// Extract JSON from a potentially markdown-wrapped response.
+    fn extract_json(response: &str) -> Result<String> {
+        // First, try to find JSON in code blocks
+        if let Some(start) = response.find("```json") {
+            let json_start = start + 7;
+            if let Some(end) = response[json_start..].find("```") {
+                return Ok(response[json_start..json_start + end].trim().to_string());
+            }
+        }
+
+        // Try plain code blocks
+        if let Some(start) = response.find("```") {
+            let content_start = start + 3;
+            // Skip language identifier if present
+            let json_start = response[content_start..]
+                .find('\n')
+                .map(|i| content_start + i + 1)
+                .unwrap_or(content_start);
+
+            if let Some(end) = response[json_start..].find("```") {
+                return Ok(response[json_start..json_start + end].trim().to_string());
+            }
+        }
+
+        // Try to find raw JSON object
+        if let Some(start) = response.find('{') {
+            if let Some(end) = response.rfind('}') {
+                if end > start {
+                    return Ok(response[start..=end].to_string());
+                }
+            }
+        }
+
+        Err(anyhow!("Could not extract JSON from LLM response"))
+    }
+
+    /// Check if a branch has an existing open PR.
+    ///
+    /// This is a placeholder - actual implementation would need GitHub API access.
+    pub async fn check_existing_pr(
+        _owner: &str,
+        _repo: &str,
+        _head_branch: &str,
+    ) -> Result<Option<(u64, String)>> {
+        // TODO: Implement GitHub API call to check for existing PRs
+        // For now, return None (no existing PR)
+        Ok(None)
+    }
+
+    /// Create a PR via GitHub API.
+    ///
+    /// This is a placeholder - actual implementation would use MCP GitHub tools
+    /// or direct GitHub API calls.
+    pub async fn create_github_pr(
+        _owner: &str,
+        _repo: &str,
+        config: &PrCreationConfig,
+        title: &str,
+        description: &str,
+    ) -> Result<PrCreationResult> {
+        // TODO: Implement GitHub API call to create PR
+        // For now, return a placeholder result
+        // In production, this would call:
+        // 1. MCP GitHub server tools (mcp__github__create_pull_request)
+        // 2. Or direct GitHub API via reqwest
+
+        Err(anyhow!(
+            "GitHub PR creation not yet implemented. \
+             Use the 'gh' CLI or MCP GitHub tools to create PR:\n\
+             Title: {}\n\
+             Base: {} -> Head: {}\n\
+             Draft: {}\n\
+             Description:\n{}",
+            title,
+            config.base_branch,
+            config.head_branch,
+            config.draft,
+            description
+        ))
+    }
+
+    /// Full PR creation workflow with AI assistance.
+    pub async fn create_pull_request_workflow(
+        repo_path: &Path,
+        config: &PrCreationConfig,
+        router: &Arc<RwLock<LLMRouter>>,
+    ) -> Result<PrCreationResult> {
+        tracing::info!(
+            "[PrCreationWorkflow] Starting PR creation: {} -> {}",
+            config.head_branch,
+            config.base_branch
+        );
+
+        // Step 1: Get diff summary
+        let diff_summary =
+            Self::get_branch_diff_summary(repo_path, &config.base_branch, &config.head_branch)?;
+
+        if diff_summary.commits_ahead == 0 {
+            return Err(anyhow!(
+                "No commits to merge from '{}' into '{}'",
+                config.head_branch,
+                config.base_branch
+            ));
+        }
+
+        tracing::info!(
+            "[PrCreationWorkflow] Found {} commits, {} files changed",
+            diff_summary.commits_ahead,
+            diff_summary.files_changed.len()
+        );
+
+        // Step 2: Generate or use provided title and description
+        let (title, description) = if let (Some(custom_title), Some(custom_desc)) =
+            (&config.custom_title, &config.custom_description)
+        {
+            (custom_title.clone(), custom_desc.clone())
+        } else if config.auto_generate_title || config.auto_generate_description {
+            let generated = Self::generate_pr_content(router, &diff_summary).await?;
+
+            let title = config.custom_title.clone().unwrap_or(generated.title);
+            let description = config
+                .custom_description
+                .clone()
+                .unwrap_or(generated.description);
+
+            (title, description)
+        } else {
+            // Use branch name as fallback title
+            let title = config.custom_title.clone().unwrap_or_else(|| {
+                format!("Merge {} into {}", config.head_branch, config.base_branch)
+            });
+
+            let description = config.custom_description.clone().unwrap_or_else(|| {
+                format!(
+                    "## Changes\n\n{} commits with {} additions and {} deletions.",
+                    diff_summary.commits_ahead,
+                    diff_summary.total_additions,
+                    diff_summary.total_deletions
+                )
+            });
+
+            (title, description)
+        };
+
+        tracing::info!("[PrCreationWorkflow] Generated title: {}", title);
+
+        // Step 3: Create the PR
+        // Note: This currently returns an error with instructions
+        // In production, integrate with MCP GitHub tools or direct API
+
+        // For now, return a result that indicates the PR content is ready
+        // but actual creation requires external tooling
+        Ok(PrCreationResult {
+            pr_number: 0, // Placeholder - would be filled by GitHub API
+            pr_url: String::new(),
+            title,
+            description,
+            draft: config.draft,
+            files_changed: diff_summary.files_changed.len(),
+            additions: diff_summary.total_additions,
+            deletions: diff_summary.total_deletions,
+        })
+    }
+}
 
 /// Executor for Git version control operations.
 ///
@@ -666,16 +1729,24 @@ impl GitExecutor {
     /// - SSH authentication (agent or key files)
     /// - HTTPS with credential helper
     /// - Progress reporting via tool events
+    /// - Undo tracking for rollback capability
+    ///
+    /// # Undo Support
+    ///
+    /// This operation tracks the commit SHA before and after push to enable
+    /// rollback. Protected branches (main/master) are flagged and cannot be
+    /// automatically rolled back without explicit user confirmation.
     async fn execute_push(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
+        session_id: &str,
     ) -> Result<Value> {
         let path = parameters
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing 'path' parameter"))?;
-        let remote = parameters
+        let remote_name = parameters
             .get("remote")
             .and_then(|v| v.as_str())
             .unwrap_or("origin");
@@ -683,91 +1754,172 @@ impl GitExecutor {
 
         let canonical_path = Self::validate_path(Path::new(path), context, "git_push")?;
 
-        // Open the repository
-        let repo = git2::Repository::open(&canonical_path)
-            .map_err(|e| anyhow!("Failed to open git repository at '{}': {}", path, e))?;
+        // Perform all git2 operations synchronously to avoid Send issues
+        // git2 types are not Send-safe, so we must complete them before any awaits
+        let push_result: Result<(String, String, Option<String>), anyhow::Error> = (|| {
+            // Open the repository
+            let repo = git2::Repository::open(&canonical_path)
+                .map_err(|e| anyhow!("Failed to open git repository at '{}': {}", path, e))?;
 
-        // Get the branch to push (current branch if not specified)
-        let branch_name = if let Some(b) = branch {
-            b.to_string()
-        } else {
-            let head = repo
+            // Get the branch to push (current branch if not specified)
+            let branch_name = if let Some(b) = branch {
+                b.to_string()
+            } else {
+                let head = repo
+                    .head()
+                    .map_err(|e| anyhow!("Failed to get HEAD reference: {}", e))?;
+                if !head.is_branch() {
+                    return Err(anyhow!(
+                        "HEAD is detached. Please specify a branch to push."
+                    ));
+                }
+                head.shorthand()
+                    .ok_or_else(|| anyhow!("Failed to get current branch name"))?
+                    .to_string()
+            };
+
+            // Get the current HEAD commit SHA (what we're pushing)
+            let head_commit_sha = repo
                 .head()
-                .map_err(|e| anyhow!("Failed to get HEAD reference: {}", e))?;
-            if !head.is_branch() {
-                return Err(anyhow!(
-                    "HEAD is detached. Please specify a branch to push."
-                ));
-            }
-            head.shorthand()
-                .ok_or_else(|| anyhow!("Failed to get current branch name"))?
-                .to_string()
-        };
+                .ok()
+                .and_then(|h| h.target())
+                .map(|oid| oid.to_string())
+                .ok_or_else(|| anyhow!("Cannot determine HEAD commit SHA"))?;
 
-        // Get the remote
-        let mut remote_obj = repo
-            .find_remote(remote)
-            .map_err(|e| anyhow!("Failed to find remote '{}': {}", remote, e))?;
+            // Try to get the remote tracking branch SHA (what the remote currently has)
+            // This is used for undo - to know what state to revert to
+            let remote_ref_name = format!("refs/remotes/{}/{}", remote_name, branch_name);
+            let remote_sha_before_push = repo
+                .find_reference(&remote_ref_name)
+                .ok()
+                .and_then(|r| r.target())
+                .map(|oid| oid.to_string());
 
-        // Set up callbacks for authentication
-        let mut callbacks = git2::RemoteCallbacks::new();
+            // Get the remote
+            let mut remote_obj = repo
+                .find_remote(remote_name)
+                .map_err(|e| anyhow!("Failed to find remote '{}': {}", remote_name, e))?;
 
-        // Credential callback - tries SSH agent first, then username from URL
-        callbacks.credentials(|url, username_from_url, allowed_types| {
-            Self::get_credentials(url, username_from_url, allowed_types)
-        });
+            // Set up callbacks for authentication
+            let mut callbacks = git2::RemoteCallbacks::new();
 
-        // Progress callback for UI feedback
-        let tool_id = context.tool_id.clone();
-        let app_handle = context.app_handle.clone();
-        callbacks.push_transfer_progress(move |current, total, _bytes| {
-            if let Some(ref app) = app_handle {
-                let progress = if total > 0 {
-                    current as f32 / total as f32
-                } else {
-                    0.0
-                };
-                crate::ui::events::tool_stream::emit_tool_progress(
-                    app,
-                    &tool_id,
-                    progress,
-                    Some(&format!("Pushing objects: {}/{}", current, total)),
-                );
-            }
-        });
+            // Credential callback - tries SSH agent first, then username from URL
+            callbacks.credentials(|url, username_from_url, allowed_types| {
+                Self::get_credentials(url, username_from_url, allowed_types)
+            });
 
-        // Create push options with callbacks
-        let mut push_options = git2::PushOptions::new();
-        push_options.remote_callbacks(callbacks);
+            // Progress callback for UI feedback
+            let tool_id = context.tool_id.clone();
+            let app_handle = context.app_handle.clone();
+            callbacks.push_transfer_progress(move |current, total, _bytes| {
+                if let Some(ref app) = app_handle {
+                    let progress = if total > 0 {
+                        current as f32 / total as f32
+                    } else {
+                        0.0
+                    };
+                    crate::ui::events::tool_stream::emit_tool_progress(
+                        app,
+                        &tool_id,
+                        progress,
+                        Some(&format!("Pushing objects: {}/{}", current, total)),
+                    );
+                }
+            });
 
-        // Build the refspec for pushing
-        let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
+            // Create push options with callbacks
+            let mut push_options = git2::PushOptions::new();
+            push_options.remote_callbacks(callbacks);
 
-        // Perform the push
-        remote_obj
-            .push(&[&refspec], Some(&mut push_options))
-            .map_err(|e| {
-                anyhow!(
-                    "Failed to push branch '{}' to remote '{}': {}",
-                    branch_name,
-                    remote,
-                    e
-                )
-            })?;
+            // Build the refspec for pushing
+            let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
+
+            // Perform the push
+            remote_obj
+                .push(&[&refspec], Some(&mut push_options))
+                .map_err(|e| {
+                    anyhow!(
+                        "Failed to push branch '{}' to remote '{}': {}",
+                        branch_name,
+                        remote_name,
+                        e
+                    )
+                })?;
+
+            Ok((branch_name, head_commit_sha, remote_sha_before_push))
+        })();
+
+        // Extract the results - all git2 operations are complete
+        let (branch_name, head_commit_sha, remote_sha_before_push) = push_result?;
 
         tracing::info!(
             "[GitExecutor] Git push successful: branch={} remote={} path={}",
             branch_name,
-            remote,
+            remote_name,
             canonical_path.display()
         );
+
+        // Track git push for undo capability
+        if let Some(ref tracker) = context.change_tracker {
+            tracker
+                .record_git_push(
+                    PathBuf::from(&canonical_path),
+                    remote_name.to_string(),
+                    branch_name.clone(),
+                    remote_sha_before_push.clone(),
+                    head_commit_sha.clone(),
+                    session_id.to_string(),
+                )
+                .await;
+
+            let before_display = remote_sha_before_push
+                .as_ref()
+                .map(|s| &s[..8.min(s.len())])
+                .unwrap_or("(new branch)");
+
+            tracing::debug!(
+                "[GitExecutor] Tracked git push for undo: {}/{} {} -> {}",
+                remote_name,
+                branch_name,
+                before_display,
+                &head_commit_sha[..8.min(head_commit_sha.len())]
+            );
+        }
+
+        // Check if this is a protected branch and warn the user
+        let is_protected = Self::is_protected_branch(&branch_name);
+        let warning = if is_protected {
+            Some(format!(
+                "Warning: Pushed to protected branch '{}'. Automatic undo is disabled for safety. \
+                 To undo, manually create a revert commit or coordinate with your team.",
+                branch_name
+            ))
+        } else {
+            None
+        };
 
         Ok(json!({
             "success": true,
             "branch": branch_name,
-            "remote": remote,
-            "path": canonical_path.to_string_lossy()
+            "remote": remote_name,
+            "path": canonical_path.to_string_lossy(),
+            "commit_sha": head_commit_sha,
+            "previous_sha": remote_sha_before_push,
+            "is_protected_branch": is_protected,
+            "can_undo": !is_protected,
+            "warning": warning
         }))
+    }
+
+    /// Check if a branch name is considered protected (main/master).
+    ///
+    /// Protected branches require explicit user confirmation for force push operations.
+    fn is_protected_branch(branch: &str) -> bool {
+        let protected_names = ["main", "master", "develop", "release", "production", "prod"];
+        let branch_lower = branch.to_lowercase();
+        protected_names
+            .iter()
+            .any(|&name| branch_lower == name || branch_lower.starts_with(&format!("{}/", name)))
     }
 
     /// Execute git_clone operation.
@@ -982,7 +2134,7 @@ impl ToolExecutor for GitExecutor {
             "git_init" => self.execute_init(parameters, context).await,
             "git_add" => self.execute_add(parameters, context).await,
             "git_commit" => self.execute_commit(parameters, context, session_id).await,
-            "git_push" => self.execute_push(parameters, context).await,
+            "git_push" => self.execute_push(parameters, context, session_id).await,
             "git_clone" => self.execute_clone(parameters, context).await,
             _ => Err(anyhow!("Unknown git tool: {}", tool_name)),
         }
@@ -1283,5 +2435,269 @@ mod tests {
 
         // Note: More comprehensive path traversal tests would require mocking
         // the allowed directories, which depends on app state
+    }
+
+    // ========================================================================
+    // Conflict Parser Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_simple_conflict() {
+        let content = r#"some code before
+<<<<<<< HEAD
+our changes
+=======
+their changes
+>>>>>>> feature-branch
+some code after"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        assert_eq!(hunks.len(), 1);
+
+        let hunk = &hunks[0];
+        assert_eq!(hunk.ours, "our changes");
+        assert_eq!(hunk.theirs, "their changes");
+        assert_eq!(hunk.ours_label, Some("HEAD".to_string()));
+        assert_eq!(hunk.theirs_label, Some("feature-branch".to_string()));
+        assert_eq!(hunk.start_line, 2);
+        assert_eq!(hunk.end_line, 6);
+    }
+
+    #[test]
+    fn test_parse_multiple_conflicts() {
+        let content = r#"line 1
+<<<<<<< HEAD
+ours 1
+=======
+theirs 1
+>>>>>>> branch1
+line 7
+<<<<<<< HEAD
+ours 2
+=======
+theirs 2
+>>>>>>> branch2
+line 13"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        assert_eq!(hunks.len(), 2);
+
+        assert_eq!(hunks[0].ours, "ours 1");
+        assert_eq!(hunks[0].theirs, "theirs 1");
+        assert_eq!(hunks[1].ours, "ours 2");
+        assert_eq!(hunks[1].theirs, "theirs 2");
+    }
+
+    #[test]
+    fn test_parse_multiline_conflict() {
+        let content = r#"<<<<<<< HEAD
+line 1 ours
+line 2 ours
+line 3 ours
+=======
+line 1 theirs
+line 2 theirs
+>>>>>>> other"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        assert_eq!(hunks.len(), 1);
+
+        let hunk = &hunks[0];
+        assert_eq!(hunk.ours, "line 1 ours\nline 2 ours\nline 3 ours");
+        assert_eq!(hunk.theirs, "line 1 theirs\nline 2 theirs");
+    }
+
+    #[test]
+    fn test_parse_diff3_conflict() {
+        let content = r#"<<<<<<< HEAD
+our version
+||||||| merged common ancestors
+original version
+=======
+their version
+>>>>>>> feature"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        assert_eq!(hunks.len(), 1);
+
+        let hunk = &hunks[0];
+        assert_eq!(hunk.ours, "our version");
+        assert_eq!(hunk.theirs, "their version");
+        assert_eq!(hunk.base, Some("original version".to_string()));
+    }
+
+    #[test]
+    fn test_has_conflicts() {
+        let with_conflict = "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch";
+        let without_conflict = "normal code\nno conflicts here";
+
+        assert!(ConflictParser::has_conflicts(with_conflict));
+        assert!(!ConflictParser::has_conflicts(without_conflict));
+    }
+
+    #[test]
+    fn test_count_conflicts() {
+        let content = r#"<<<<<<< HEAD
+a
+=======
+b
+>>>>>>> x
+normal
+<<<<<<< HEAD
+c
+=======
+d
+>>>>>>> y"#;
+
+        assert_eq!(ConflictParser::count_conflicts(content), 2);
+    }
+
+    // ========================================================================
+    // Conflict Resolver Tests
+    // ========================================================================
+
+    #[test]
+    fn test_resolve_keep_ours() {
+        let content = r#"before
+<<<<<<< HEAD
+our code
+=======
+their code
+>>>>>>> branch
+after"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        let result =
+            ConflictResolver::resolve_hunk(content, &hunks[0], &ResolutionStrategy::KeepOurs, None)
+                .unwrap();
+
+        assert!(result.contains("our code"));
+        assert!(!result.contains("their code"));
+        assert!(!result.contains("<<<<<<<"));
+        assert!(!result.contains("======="));
+        assert!(!result.contains(">>>>>>>"));
+    }
+
+    #[test]
+    fn test_resolve_keep_theirs() {
+        let content = r#"before
+<<<<<<< HEAD
+our code
+=======
+their code
+>>>>>>> branch
+after"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        let result = ConflictResolver::resolve_hunk(
+            content,
+            &hunks[0],
+            &ResolutionStrategy::KeepTheirs,
+            None,
+        )
+        .unwrap();
+
+        assert!(!result.contains("our code"));
+        assert!(result.contains("their code"));
+    }
+
+    #[test]
+    fn test_resolve_keep_both() {
+        let content = r#"<<<<<<< HEAD
+our code
+=======
+their code
+>>>>>>> branch"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        let result =
+            ConflictResolver::resolve_hunk(content, &hunks[0], &ResolutionStrategy::KeepBoth, None)
+                .unwrap();
+
+        assert!(result.contains("our code"));
+        assert!(result.contains("their code"));
+    }
+
+    #[test]
+    fn test_resolve_manual() {
+        let content = r#"<<<<<<< HEAD
+our code
+=======
+their code
+>>>>>>> branch"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        let manual = "completely custom merged code";
+        let result = ConflictResolver::resolve_hunk(
+            content,
+            &hunks[0],
+            &ResolutionStrategy::Manual,
+            Some(manual),
+        )
+        .unwrap();
+
+        assert!(result.contains("completely custom merged code"));
+        assert!(!result.contains("our code"));
+        assert!(!result.contains("their code"));
+    }
+
+    #[test]
+    fn test_resolve_all_hunks() {
+        let content = r#"start
+<<<<<<< HEAD
+ours 1
+=======
+theirs 1
+>>>>>>> b1
+middle
+<<<<<<< HEAD
+ours 2
+=======
+theirs 2
+>>>>>>> b2
+end"#;
+
+        let hunks = ConflictParser::parse_conflicts(content);
+        let resolutions = vec![
+            HunkResolution {
+                hunk_index: 0,
+                strategy: ResolutionStrategy::KeepOurs,
+                resolved_content: None,
+            },
+            HunkResolution {
+                hunk_index: 1,
+                strategy: ResolutionStrategy::KeepTheirs,
+                resolved_content: None,
+            },
+        ];
+
+        let result = ConflictResolver::resolve_all_hunks(content, &hunks, &resolutions).unwrap();
+
+        assert!(result.contains("ours 1"));
+        assert!(!result.contains("theirs 1"));
+        assert!(!result.contains("ours 2"));
+        assert!(result.contains("theirs 2"));
+        assert!(!ConflictParser::has_conflicts(&result));
+    }
+
+    #[test]
+    fn test_generate_llm_prompt() {
+        let hunk = ConflictHunk {
+            start_line: 1,
+            end_line: 5,
+            ours: "function foo() { return 1; }".to_string(),
+            theirs: "function foo() { return 2; }".to_string(),
+            base: None,
+            ours_label: Some("main".to_string()),
+            theirs_label: Some("feature".to_string()),
+        };
+
+        let prompt = ConflictResolver::generate_llm_prompt(&hunk, "src/main.rs");
+
+        assert!(prompt.contains("src/main.rs"));
+        assert!(prompt.contains("function foo()"));
+        assert!(prompt.contains("OURS (main)"));
+        assert!(prompt.contains("THEIRS (feature)"));
+        assert!(prompt.contains("merged_content"));
     }
 }

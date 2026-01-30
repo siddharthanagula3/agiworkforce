@@ -980,6 +980,114 @@ Do not repeat the error message."#,
                     tracing::info!("[AgentRuntime] Reverted directory deletion: {:?}", path);
                 }
             }
+            ChangeType::GitPush {
+                remote,
+                branch,
+                before_sha,
+                after_sha,
+                is_protected_branch,
+            } => {
+                // Git pushes can be reverted in two ways:
+                // 1. Create a revert commit and push it (safest)
+                // 2. Force push the previous SHA (only for non-protected branches)
+                if *is_protected_branch {
+                    tracing::warn!(
+                        "[AgentRuntime] Cannot auto-revert push to protected branch '{}/{}'. \
+                         Please manually create a revert commit or coordinate with your team.",
+                        remote,
+                        branch
+                    );
+                    return Err(format!(
+                        "Cannot automatically revert push to protected branch '{}'. \
+                         Please manually create a revert commit.",
+                        branch
+                    ));
+                }
+
+                if let Some(path) = &change.path {
+                    // Try to create a revert commit first
+                    let revert_output = tokio::process::Command::new("git")
+                        .current_dir(path)
+                        .args(["revert", "--no-edit", after_sha])
+                        .output()
+                        .await
+                        .map_err(|e| format!("Failed to create revert commit: {}", e))?;
+
+                    if revert_output.status.success() {
+                        // Push the revert commit
+                        let push_output = tokio::process::Command::new("git")
+                            .current_dir(path)
+                            .args(["push", remote, branch])
+                            .output()
+                            .await
+                            .map_err(|e| format!("Failed to push revert: {}", e))?;
+
+                        if push_output.status.success() {
+                            tracing::info!(
+                                "[AgentRuntime] Reverted git push via revert commit: {}/{} ({})",
+                                remote,
+                                branch,
+                                &after_sha[..8.min(after_sha.len())]
+                            );
+                        } else {
+                            let stderr = String::from_utf8_lossy(&push_output.stderr);
+                            return Err(format!("Failed to push revert commit: {}", stderr));
+                        }
+                    } else if let Some(prev_sha) = before_sha {
+                        // Revert failed (possibly conflicts), try force push with lease
+                        tracing::warn!(
+                            "[AgentRuntime] Revert commit failed, attempting force push with lease"
+                        );
+
+                        // First, reset to the previous SHA
+                        let reset_output = tokio::process::Command::new("git")
+                            .current_dir(path)
+                            .args(["reset", "--hard", prev_sha])
+                            .output()
+                            .await
+                            .map_err(|e| format!("Failed to reset: {}", e))?;
+
+                        if !reset_output.status.success() {
+                            let stderr = String::from_utf8_lossy(&reset_output.stderr);
+                            return Err(format!("Failed to reset to previous commit: {}", stderr));
+                        }
+
+                        // Force push with lease (safe - fails if remote has changed)
+                        let force_push_output = tokio::process::Command::new("git")
+                            .current_dir(path)
+                            .args([
+                                "push",
+                                "--force-with-lease",
+                                remote,
+                                &format!("{}:{}", branch, branch),
+                            ])
+                            .output()
+                            .await
+                            .map_err(|e| format!("Failed to force push: {}", e))?;
+
+                        if force_push_output.status.success() {
+                            tracing::info!(
+                                "[AgentRuntime] Reverted git push via force push: {}/{} ({} -> {})",
+                                remote,
+                                branch,
+                                &after_sha[..8.min(after_sha.len())],
+                                &prev_sha[..8.min(prev_sha.len())]
+                            );
+                        } else {
+                            let stderr = String::from_utf8_lossy(&force_push_output.stderr);
+                            return Err(format!(
+                                "Failed to force push: {}. Remote may have changed.",
+                                stderr
+                            ));
+                        }
+                    } else {
+                        return Err(
+                            "Cannot revert push: revert failed and no previous SHA recorded"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
         }
 
         Ok(change.id.clone())

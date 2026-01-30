@@ -77,7 +77,7 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
           </div>
 
           {/* View Mode */}
-          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as any)}>
+          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'diff' | 'preview')}>
             <TabsList>
               <TabsTrigger value="diff" className="gap-1">
                 <Code className="h-4 w-4" />

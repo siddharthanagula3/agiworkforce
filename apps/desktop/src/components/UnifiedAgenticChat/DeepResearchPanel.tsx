@@ -261,7 +261,15 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                             {source.title}
                           </div>
                           <div className="text-xs text-zinc-500 truncate">
-                            {source.domain || new URL(source.url).hostname}
+                            {/* AUDIT-005-011 fix: Wrap URL parsing in try/catch with fallback */}
+                            {source.domain ||
+                              (() => {
+                                try {
+                                  return new URL(source.url).hostname;
+                                } catch {
+                                  return source.url;
+                                }
+                              })()}
                           </div>
                         </div>
                         <ExternalLink className="h-3 w-3 text-zinc-600 group-hover:text-zinc-400" />

@@ -117,6 +117,9 @@ interface DatabaseState {
   addToHistory: (query: string) => void;
   clearResults: () => void;
   clearError: () => void;
+
+  // AUDIT-006-022: Cleanup function for logout
+  resetOnLogout: () => void;
 }
 
 export interface SelectQuery {
@@ -711,5 +714,18 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   clearError: () => {
     set({ error: null });
+  },
+
+  // AUDIT-006-022 fix: Add resetOnLogout function for cleanup
+  resetOnLogout: () => {
+    set({
+      connections: [],
+      activeConnectionId: null,
+      currentQuery: '',
+      queryResults: null,
+      queryHistory: [],
+      loading: false,
+      error: null,
+    });
   },
 }));

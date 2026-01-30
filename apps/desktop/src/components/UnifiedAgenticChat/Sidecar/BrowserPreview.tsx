@@ -31,17 +31,20 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
   const tabId = activeTab?.id;
 
   useEffect(() => {
-    if (contextId) {
-      try {
-        const parsedUrl = new URL(contextId);
-        setUrl(parsedUrl.toString());
-        setInputUrl(parsedUrl.toString());
-      } catch {
-        // If contextId is not a valid URL, use it as a Google search query
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(contextId)}`;
-        setUrl(searchUrl);
-        setInputUrl(searchUrl);
-      }
+    // AUDIT-005-013 fix: Early return for undefined or empty contextId
+    if (contextId === undefined || contextId === '') {
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(contextId);
+      setUrl(parsedUrl.toString());
+      setInputUrl(parsedUrl.toString());
+    } catch {
+      // If contextId is not a valid URL, use it as a Google search query
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(contextId)}`;
+      setUrl(searchUrl);
+      setInputUrl(searchUrl);
     }
   }, [contextId]);
 

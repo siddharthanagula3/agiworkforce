@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useAutomationStore } from '../../stores/automationStore';
 import type {
   AutomationElementInfo,
@@ -9,6 +9,7 @@ import type {
 } from '../../types/automation';
 import type { CaptureResult } from '../../types/capture';
 
+// AUDIT-P3-TEST-TYPE: Properly typed mock functions for automation API
 vi.mock('../../api/automation', () => ({
   listAutomationWindows: vi.fn(),
   findAutomationElements: vi.fn(),
@@ -22,6 +23,26 @@ vi.mock('../../api/automation', () => ({
   emitOverlayRegion: vi.fn(),
   replayOverlayEvents: vi.fn(),
 }));
+
+// AUDIT-P3-TEST-TYPE: Type-safe mock accessor for automation API functions
+type AutomationApiMocks = {
+  listAutomationWindows: Mock<() => Promise<AutomationElementInfo[]>>;
+  findAutomationElements: Mock<(query: AutomationQuery) => Promise<AutomationElementInfo[]>>;
+  clickAutomation: Mock<() => Promise<void>>;
+  sendKeys: Mock<(text: string, options?: Record<string, unknown>) => Promise<void>>;
+  sendHotkey: Mock<(key: number, modifiers: string[]) => Promise<void>>;
+  automationScreenshot: Mock<(options?: AutomationScreenshotOptions) => Promise<CaptureResult>>;
+  automationOcr: Mock<(imagePath: string) => Promise<AutomationOcrResult>>;
+  emitOverlayClick: Mock<() => Promise<void>>;
+  emitOverlayType: Mock<(payload: OverlayTypePayload) => Promise<void>>;
+  emitOverlayRegion: Mock<() => Promise<void>>;
+  replayOverlayEvents: Mock<(limit?: number) => Promise<void>>;
+};
+
+async function getAutomationMocks(): Promise<AutomationApiMocks> {
+  const api = await import('../../api/automation');
+  return api as unknown as AutomationApiMocks;
+}
 
 describe('automationStore', () => {
   beforeEach(() => {
@@ -81,8 +102,8 @@ describe('automationStore', () => {
         },
       ];
 
-      const { listAutomationWindows } = await import('../../api/automation');
-      (listAutomationWindows as any).mockResolvedValue(mockWindows);
+      const mocks = await getAutomationMocks();
+      mocks.listAutomationWindows.mockResolvedValue(mockWindows);
 
       await useAutomationStore.getState().loadWindows();
 
@@ -95,8 +116,8 @@ describe('automationStore', () => {
     });
 
     it('should handle window load error', async () => {
-      const { listAutomationWindows } = await import('../../api/automation');
-      (listAutomationWindows as any).mockRejectedValue(new Error('Failed to enumerate windows'));
+      const mocks = await getAutomationMocks();
+      mocks.listAutomationWindows.mockRejectedValue(new Error('Failed to enumerate windows'));
 
       await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(
         'Failed to enumerate windows',
@@ -131,8 +152,8 @@ describe('automationStore', () => {
         },
       ];
 
-      const { findAutomationElements } = await import('../../api/automation');
-      (findAutomationElements as any).mockResolvedValue(mockElements);
+      const mocks = await getAutomationMocks();
+      mocks.findAutomationElements.mockResolvedValue(mockElements);
 
       await useAutomationStore.getState().searchElements(query);
 
@@ -148,8 +169,8 @@ describe('automationStore', () => {
         name: 'Nonexistent Element',
       };
 
-      const { findAutomationElements } = await import('../../api/automation');
-      (findAutomationElements as any).mockRejectedValue(new Error('Element not found'));
+      const mocks = await getAutomationMocks();
+      mocks.findAutomationElements.mockRejectedValue(new Error('Element not found'));
 
       await useAutomationStore.getState().searchElements(query);
 
@@ -168,12 +189,12 @@ describe('automationStore', () => {
         button: 'left' as const,
       };
 
-      const { clickAutomation } = await import('../../api/automation');
-      (clickAutomation as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.clickAutomation.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().click(clickRequest);
 
-      expect(clickAutomation).toHaveBeenCalledWith(clickRequest);
+      expect(mocks.clickAutomation).toHaveBeenCalledWith(clickRequest);
       const state = useAutomationStore.getState();
       expect(state.runningAction).toBe(false);
       expect(state.error).toBeNull();
@@ -185,12 +206,12 @@ describe('automationStore', () => {
         button: 'left' as const,
       };
 
-      const { clickAutomation } = await import('../../api/automation');
-      (clickAutomation as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.clickAutomation.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().click(clickRequest);
 
-      expect(clickAutomation).toHaveBeenCalledWith(clickRequest);
+      expect(mocks.clickAutomation).toHaveBeenCalledWith(clickRequest);
       const state = useAutomationStore.getState();
       expect(state.runningAction).toBe(false);
     });
@@ -202,8 +223,8 @@ describe('automationStore', () => {
         button: 'left' as const,
       };
 
-      const { clickAutomation } = await import('../../api/automation');
-      (clickAutomation as any).mockRejectedValue(new Error('Click failed'));
+      const mocks = await getAutomationMocks();
+      mocks.clickAutomation.mockRejectedValue(new Error('Click failed'));
 
       await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow();
 
@@ -215,31 +236,31 @@ describe('automationStore', () => {
 
   describe('Type Action', () => {
     it('should type text', async () => {
-      const { sendKeys } = await import('../../api/automation');
-      (sendKeys as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.sendKeys.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().typeText('Hello World');
 
-      expect(sendKeys).toHaveBeenCalledWith('Hello World', undefined);
+      expect(mocks.sendKeys).toHaveBeenCalledWith('Hello World', undefined);
       const state = useAutomationStore.getState();
       expect(state.runningAction).toBe(false);
       expect(state.error).toBeNull();
     });
 
     it('should type text with element focus', async () => {
-      const { sendKeys } = await import('../../api/automation');
-      (sendKeys as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.sendKeys.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().typeText('Test', { elementId: 'input1', focus: true });
 
-      expect(sendKeys).toHaveBeenCalledWith('Test', { elementId: 'input1', focus: true });
+      expect(mocks.sendKeys).toHaveBeenCalledWith('Test', { elementId: 'input1', focus: true });
       const state = useAutomationStore.getState();
       expect(state.runningAction).toBe(false);
     });
 
     it('should handle type error', async () => {
-      const { sendKeys } = await import('../../api/automation');
-      (sendKeys as any).mockRejectedValue(new Error('Type failed'));
+      const mocks = await getAutomationMocks();
+      mocks.sendKeys.mockRejectedValue(new Error('Type failed'));
 
       await expect(useAutomationStore.getState().typeText('Test')).rejects.toThrow();
 
@@ -251,19 +272,19 @@ describe('automationStore', () => {
 
   describe('Hotkey Action', () => {
     it('should send hotkey combination', async () => {
-      const { sendHotkey } = await import('../../api/automation');
-      (sendHotkey as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.sendHotkey.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().hotkey(67, ['ctrl']);
 
-      expect(sendHotkey).toHaveBeenCalledWith(67, ['ctrl']);
+      expect(mocks.sendHotkey).toHaveBeenCalledWith(67, ['ctrl']);
       const state = useAutomationStore.getState();
       expect(state.runningAction).toBe(false);
     });
 
     it('should handle hotkey error', async () => {
-      const { sendHotkey } = await import('../../api/automation');
-      (sendHotkey as any).mockRejectedValue(new Error('Hotkey failed'));
+      const mocks = await getAutomationMocks();
+      mocks.sendHotkey.mockRejectedValue(new Error('Hotkey failed'));
 
       await expect(useAutomationStore.getState().hotkey(67, ['ctrl'])).rejects.toThrow();
 
@@ -285,8 +306,8 @@ describe('automationStore', () => {
         createdAt: Date.now(),
       };
 
-      const { automationScreenshot } = await import('../../api/automation');
-      (automationScreenshot as any).mockResolvedValue(mockCapture);
+      const mocks = await getAutomationMocks();
+      mocks.automationScreenshot.mockResolvedValue(mockCapture);
 
       const result = await useAutomationStore.getState().screenshot();
 
@@ -316,19 +337,19 @@ describe('automationStore', () => {
         createdAt: Date.now(),
       };
 
-      const { automationScreenshot } = await import('../../api/automation');
-      (automationScreenshot as any).mockResolvedValue(mockCapture);
+      const mocks = await getAutomationMocks();
+      mocks.automationScreenshot.mockResolvedValue(mockCapture);
 
       const result = await useAutomationStore.getState().screenshot(options);
 
-      expect(automationScreenshot).toHaveBeenCalledWith(options);
+      expect(mocks.automationScreenshot).toHaveBeenCalledWith(options);
       expect(result.metadata.width).toBe(800);
       expect(result.metadata.height).toBe(600);
     });
 
     it('should handle screenshot error', async () => {
-      const { automationScreenshot } = await import('../../api/automation');
-      (automationScreenshot as any).mockRejectedValue(new Error('Screenshot failed'));
+      const mocks = await getAutomationMocks();
+      mocks.automationScreenshot.mockRejectedValue(new Error('Screenshot failed'));
 
       await expect(useAutomationStore.getState().screenshot()).rejects.toThrow();
 
@@ -345,8 +366,8 @@ describe('automationStore', () => {
         confidence: 0.95,
       };
 
-      const { automationOcr } = await import('../../api/automation');
-      (automationOcr as any).mockResolvedValue(mockOcrResult);
+      const mocks = await getAutomationMocks();
+      mocks.automationOcr.mockResolvedValue(mockOcrResult);
 
       const result = await useAutomationStore.getState().ocr('/tmp/test.png');
 
@@ -358,8 +379,8 @@ describe('automationStore', () => {
     });
 
     it('should handle OCR error', async () => {
-      const { automationOcr } = await import('../../api/automation');
-      (automationOcr as any).mockRejectedValue(new Error('OCR failed'));
+      const mocks = await getAutomationMocks();
+      mocks.automationOcr.mockRejectedValue(new Error('OCR failed'));
 
       await expect(useAutomationStore.getState().ocr('/tmp/test.png')).rejects.toThrow();
 
@@ -378,12 +399,12 @@ describe('automationStore', () => {
         timestamp: Date.now(),
       };
 
-      const { emitOverlayClick } = await import('../../api/automation');
-      (emitOverlayClick as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.emitOverlayClick.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().emitOverlayClick(payload);
 
-      expect(emitOverlayClick).toHaveBeenCalledWith(payload);
+      expect(mocks.emitOverlayClick).toHaveBeenCalledWith(payload);
     });
 
     it('should emit overlay type event', async () => {
@@ -393,12 +414,12 @@ describe('automationStore', () => {
         text: 'Test input',
       };
 
-      const { emitOverlayType } = await import('../../api/automation');
-      (emitOverlayType as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.emitOverlayType.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().emitOverlayType(payload);
 
-      expect(emitOverlayType).toHaveBeenCalledWith(payload);
+      expect(mocks.emitOverlayType).toHaveBeenCalledWith(payload);
     });
 
     it('should emit overlay region event', async () => {
@@ -411,21 +432,21 @@ describe('automationStore', () => {
         timestamp: Date.now(),
       };
 
-      const { emitOverlayRegion } = await import('../../api/automation');
-      (emitOverlayRegion as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.emitOverlayRegion.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().emitOverlayRegion(payload);
 
-      expect(emitOverlayRegion).toHaveBeenCalledWith(payload);
+      expect(mocks.emitOverlayRegion).toHaveBeenCalledWith(payload);
     });
 
     it('should replay overlay events', async () => {
-      const { replayOverlayEvents } = await import('../../api/automation');
-      (replayOverlayEvents as any).mockResolvedValue(undefined);
+      const mocks = await getAutomationMocks();
+      mocks.replayOverlayEvents.mockResolvedValue(undefined);
 
       await useAutomationStore.getState().replayOverlay(10);
 
-      expect(replayOverlayEvents).toHaveBeenCalledWith(10);
+      expect(mocks.replayOverlayEvents).toHaveBeenCalledWith(10);
     });
   });
 
@@ -506,54 +527,57 @@ describe('automationStore', () => {
 
   describe('Loading States', () => {
     it('should set loadingWindows while loading', async () => {
-      const { listAutomationWindows } = await import('../../api/automation');
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => {
+      const mocks = await getAutomationMocks();
+      // AUDIT-P3-TEST-TYPE: Use proper typed resolve function
+      let resolvePromise: (value: AutomationElementInfo[]) => void;
+      const promise = new Promise<AutomationElementInfo[]>((resolve) => {
         resolvePromise = resolve;
       });
-      (listAutomationWindows as any).mockReturnValue(promise);
+      mocks.listAutomationWindows.mockReturnValue(promise);
 
       const loadPromise = useAutomationStore.getState().loadWindows();
 
       expect(useAutomationStore.getState().loadingWindows).toBe(true);
 
-      resolvePromise([]);
+      resolvePromise!([]);
       await loadPromise;
 
       expect(useAutomationStore.getState().loadingWindows).toBe(false);
     });
 
     it('should set loadingElements while searching', async () => {
-      const { findAutomationElements } = await import('../../api/automation');
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => {
+      const mocks = await getAutomationMocks();
+      // AUDIT-P3-TEST-TYPE: Use proper typed resolve function
+      let resolvePromise: (value: AutomationElementInfo[]) => void;
+      const promise = new Promise<AutomationElementInfo[]>((resolve) => {
         resolvePromise = resolve;
       });
-      (findAutomationElements as any).mockReturnValue(promise);
+      mocks.findAutomationElements.mockReturnValue(promise);
 
       const searchPromise = useAutomationStore.getState().searchElements({ name: 'Test' });
 
       expect(useAutomationStore.getState().loadingElements).toBe(true);
 
-      resolvePromise([]);
+      resolvePromise!([]);
       await searchPromise;
 
       expect(useAutomationStore.getState().loadingElements).toBe(false);
     });
 
     it('should set runningAction during actions', async () => {
-      const { clickAutomation } = await import('../../api/automation');
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => {
+      const mocks = await getAutomationMocks();
+      // AUDIT-P3-TEST-TYPE: Use proper typed resolve function
+      let resolvePromise: (value: void) => void;
+      const promise = new Promise<void>((resolve) => {
         resolvePromise = resolve;
       });
-      (clickAutomation as any).mockReturnValue(promise);
+      mocks.clickAutomation.mockReturnValue(promise);
 
       const clickPromise = useAutomationStore.getState().click({ x: 100, y: 200, button: 'left' });
 
       expect(useAutomationStore.getState().runningAction).toBe(true);
 
-      resolvePromise();
+      resolvePromise!();
       await clickPromise;
 
       expect(useAutomationStore.getState().runningAction).toBe(false);

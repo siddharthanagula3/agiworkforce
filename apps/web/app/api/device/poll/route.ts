@@ -48,9 +48,10 @@ async function handleDevicePoll(request: NextRequest) {
       auth: { persistSession: false },
     });
 
+    // AUDIT-008-008: Use explicit column selection instead of SELECT *
     const { data, error } = await supabase
       .from('device_authorization_codes')
-      .select('*')
+      .select('device_id, device_fingerprint, status, user_id, expires_at, updated_at')
       .eq('device_id', device_id)
       .single();
 

@@ -180,6 +180,21 @@ export const useAgentStore = create<AgentState>()(
                 return;
               }
               state.backgroundTasks.push({ ...task, createdAt: new Date() });
+              // AUDIT-006-015 fix: Cap backgroundTasks at 100 and auto-remove completed tasks older than 24h
+              const now = Date.now();
+              const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+              state.backgroundTasks = state.backgroundTasks.filter((t) => {
+                // Keep if not completed/failed, or if completed/failed within last 24h
+                if (t.status !== 'completed' && t.status !== 'failed') {
+                  return true;
+                }
+                const completedTime = t.completedAt?.getTime() ?? t.createdAt.getTime();
+                return completedTime > twentyFourHoursAgo;
+              });
+              // After filtering old completed, cap at 100
+              if (state.backgroundTasks.length > 100) {
+                state.backgroundTasks = state.backgroundTasks.slice(-100);
+              }
             },
             undefined,
             'agent/addBackgroundTask',
@@ -216,6 +231,20 @@ export const useAgentStore = create<AgentState>()(
                 ...entry,
               };
               state.actionTrail.push(newEntry);
+
+              // STR-004 fix: Cap actionTrail at 5000 entries to prevent unbounded growth
+              if (state.actionTrail.length > 5000) {
+                // Get IDs of entries being removed to clean up their timers
+                const entriesToRemove = state.actionTrail.slice(0, state.actionTrail.length - 5000);
+                for (const oldEntry of entriesToRemove) {
+                  const timerId = state.fadeTimers.get(oldEntry.id);
+                  if (timerId !== undefined) {
+                    clearTimeout(timerId);
+                    state.fadeTimers.delete(oldEntry.id);
+                  }
+                }
+                state.actionTrail = state.actionTrail.slice(-5000);
+              }
 
               if (entry.fadeAfter) {
                 const timerId = setTimeout(() => {

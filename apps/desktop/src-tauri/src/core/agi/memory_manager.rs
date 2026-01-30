@@ -1102,42 +1102,39 @@ impl MemoryManager {
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
-        let sql = match (start_date, end_date) {
-            (Some(start), Some(end)) => {
-                format!(
-                    "SELECT id, log_date, timestamp, entry_type, content, metadata
-                     FROM daily_logs WHERE log_date >= '{}' AND log_date <= '{}'
-                     ORDER BY log_date, timestamp",
-                    start, end
-                )
-            }
-            (Some(start), None) => {
-                format!(
-                    "SELECT id, log_date, timestamp, entry_type, content, metadata
-                     FROM daily_logs WHERE log_date >= '{}'
-                     ORDER BY log_date, timestamp",
-                    start
-                )
-            }
-            (None, Some(end)) => {
-                format!(
-                    "SELECT id, log_date, timestamp, entry_type, content, metadata
-                     FROM daily_logs WHERE log_date <= '{}'
-                     ORDER BY log_date, timestamp",
-                    end
-                )
-            }
-            (None, None) => "SELECT id, log_date, timestamp, entry_type, content, metadata
-                 FROM daily_logs ORDER BY log_date, timestamp"
-                .to_string(),
+        // Use parameterized queries to prevent SQL injection (MEM-012 fix)
+        let (sql, params): (&str, Vec<&str>) = match (start_date, end_date) {
+            (Some(start), Some(end)) => (
+                "SELECT id, log_date, timestamp, entry_type, content, metadata
+                 FROM daily_logs WHERE log_date >= ?1 AND log_date <= ?2
+                 ORDER BY log_date, timestamp",
+                vec![start, end],
+            ),
+            (Some(start), None) => (
+                "SELECT id, log_date, timestamp, entry_type, content, metadata
+                 FROM daily_logs WHERE log_date >= ?1
+                 ORDER BY log_date, timestamp",
+                vec![start],
+            ),
+            (None, Some(end)) => (
+                "SELECT id, log_date, timestamp, entry_type, content, metadata
+                 FROM daily_logs WHERE log_date <= ?1
+                 ORDER BY log_date, timestamp",
+                vec![end],
+            ),
+            (None, None) => (
+                "SELECT id, log_date, timestamp, entry_type, content, metadata
+                 FROM daily_logs ORDER BY log_date, timestamp",
+                vec![],
+            ),
         };
 
         let mut stmt = conn
-            .prepare(&sql)
+            .prepare(sql)
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let logs = stmt
-            .query_map([], |row| {
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
                 Ok(DailyLogEntry {
                     id: row.get(0)?,
                     log_date: row.get(1)?,

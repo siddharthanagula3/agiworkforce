@@ -9,15 +9,25 @@ vi.mock('../lib/tauri-mock', () => ({
   isTauri: true,
 }));
 
+// AUDIT-P3-TEST-TYPE: Define properly typed window state interface for test mocks
+interface WindowState {
+  pinned: boolean;
+  alwaysOnTop: boolean;
+  dock: 'left' | 'right' | null;
+  maximized: boolean;
+  fullscreen: boolean;
+}
+
+// AUDIT-P3-TEST-TYPE: Match the EventCallback type from tauri-mock
+interface TauriEvent<T> {
+  payload: T;
+  id: number;
+}
+
 describe('Window State Persistence - Integration Tests', () => {
-  let stateEventCallback: ((event: any) => void) | null = null;
-  let persistedState: {
-    pinned: boolean;
-    alwaysOnTop: boolean;
-    dock: 'left' | 'right' | null;
-    maximized: boolean;
-    fullscreen: boolean;
-  } = {
+  // AUDIT-P3-TEST-TYPE: Properly typed event callback using TauriEvent
+  let stateEventCallback: ((event: TauriEvent<WindowState>) => void) | null = null;
+  let persistedState: WindowState = {
     pinned: true,
     alwaysOnTop: false,
     dock: null,
@@ -37,39 +47,43 @@ describe('Window State Persistence - Integration Tests', () => {
       fullscreen: false,
     };
 
-    vi.mocked(invoke).mockImplementation((command: string, args?: any) => {
+    // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for invoke
+    vi.mocked(invoke).mockImplementation((command: string, args?: Record<string, unknown>) => {
       if (command === 'window_get_state') {
-        return Promise.resolve({ ...persistedState } as any);
+        return Promise.resolve({ ...persistedState });
       }
       if (command === 'window_set_fullscreen') {
-        persistedState.fullscreen = args.fullscreen;
-        return Promise.resolve(undefined as any);
+        persistedState.fullscreen = (args as { fullscreen: boolean }).fullscreen;
+        return Promise.resolve(undefined);
       }
       if (command === 'window_toggle_maximize') {
         persistedState.maximized = !persistedState.maximized;
-        return Promise.resolve(undefined as any);
+        return Promise.resolve(undefined);
       }
       if (command === 'window_set_pinned') {
-        persistedState.pinned = args.pinned;
-        return Promise.resolve(undefined as any);
+        persistedState.pinned = (args as { pinned: boolean }).pinned;
+        return Promise.resolve(undefined);
       }
       if (command === 'window_set_always_on_top') {
-        persistedState.alwaysOnTop = args.value;
-        return Promise.resolve(undefined as any);
+        persistedState.alwaysOnTop = (args as { value: boolean }).value;
+        return Promise.resolve(undefined);
       }
       if (command === 'window_dock') {
-        persistedState.dock = args.position;
-        return Promise.resolve(undefined as any);
+        persistedState.dock = (args as { position: 'left' | 'right' | null }).position;
+        return Promise.resolve(undefined);
       }
-      return Promise.resolve(undefined as any);
+      return Promise.resolve(undefined);
     });
 
-    vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
-      if (eventName === 'window:state') {
-        stateEventCallback = callback;
-      }
-      return Promise.resolve(() => {});
-    });
+    // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for listen using TauriEvent
+    vi.mocked(listen).mockImplementation(
+      (eventName: string, callback: (event: TauriEvent<WindowState>) => void) => {
+        if (eventName === 'window:state') {
+          stateEventCallback = callback;
+        }
+        return Promise.resolve(() => {});
+      },
+    );
   });
 
   afterEach(() => {
@@ -135,6 +149,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, maximized: true },
+            id: 1,
           });
         }
       });
@@ -162,6 +177,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, maximized: true },
+            id: 1,
           });
         }
       });
@@ -175,6 +191,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, maximized: false },
+            id: 2,
           });
         }
       });
@@ -215,6 +232,7 @@ describe('Window State Persistence - Integration Tests', () => {
               maximized: true,
               fullscreen: false,
             },
+            id: 3,
           });
         }
       });
@@ -238,6 +256,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, dock: 'left' },
+            id: 4,
           });
         }
       });
@@ -251,6 +270,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, dock: 'left', maximized: true },
+            id: 5,
           });
         }
       });
@@ -269,14 +289,15 @@ describe('Window State Persistence - Integration Tests', () => {
     it('should maintain state when toggle fails', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
+      // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for error handling
       vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_toggle_maximize') {
           return Promise.reject(new Error('Window operation failed'));
         }
         if (command === 'window_get_state') {
-          return Promise.resolve({ ...persistedState } as any);
+          return Promise.resolve({ ...persistedState });
         }
-        return Promise.resolve(undefined as any);
+        return Promise.resolve(undefined);
       });
 
       const { result } = renderHook(() => useWindowManager());
@@ -309,6 +330,7 @@ describe('Window State Persistence - Integration Tests', () => {
         if (stateEventCallback) {
           stateEventCallback({
             payload: { ...persistedState, fullscreen: true },
+            id: 6,
           });
         }
       });

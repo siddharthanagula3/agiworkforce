@@ -25,6 +25,21 @@ pub enum ChangeType {
     GitCheckout {
         branch: String,
     },
+    /// Tracks a git push operation for potential rollback.
+    ///
+    /// Stores the commit SHA before push so we can revert or force-push back.
+    GitPush {
+        /// The remote name (e.g., "origin")
+        remote: String,
+        /// The branch that was pushed
+        branch: String,
+        /// The local commit SHA before push (what the remote was pointing to)
+        before_sha: Option<String>,
+        /// The local commit SHA after push (what was pushed)
+        after_sha: String,
+        /// Whether this is a protected branch (main/master)
+        is_protected_branch: bool,
+    },
     DirectoryCreated,
     DirectoryDeleted,
 }
@@ -259,6 +274,100 @@ impl ChangeTracker {
         let mut state = self.state.write().await;
         state.changes.push(change);
         id
+    }
+
+    /// Record a git push operation for potential rollback.
+    ///
+    /// Git pushes can be rolled back in two ways:
+    /// 1. Creating a revert commit and pushing it (safe for shared branches)
+    /// 2. Force pushing the previous SHA (only for single-user branches)
+    ///
+    /// Protected branches (main/master) are marked as non-revertible by default
+    /// unless explicitly confirmed by the user.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_path` - Path to the git repository
+    /// * `remote` - Name of the remote (e.g., "origin")
+    /// * `branch` - Name of the branch that was pushed
+    /// * `before_sha` - The commit SHA the remote was pointing to before push (None for new branches)
+    /// * `after_sha` - The commit SHA that was pushed
+    /// * `task_id` - ID of the task that performed this operation
+    pub async fn record_git_push(
+        &self,
+        repo_path: PathBuf,
+        remote: String,
+        branch: String,
+        before_sha: Option<String>,
+        after_sha: String,
+        task_id: String,
+    ) -> String {
+        // Check if this is a protected branch
+        let is_protected_branch = Self::is_protected_branch(&branch);
+
+        let mut change = Change::new(
+            ChangeType::GitPush {
+                remote: remote.clone(),
+                branch: branch.clone(),
+                before_sha: before_sha.clone(),
+                after_sha: after_sha.clone(),
+                is_protected_branch,
+            },
+            Some(repo_path),
+            task_id,
+            None,
+            None,
+        );
+
+        // Git pushes to protected branches cannot be auto-reverted
+        // Other pushes can be reverted with appropriate warnings
+        change.can_revert = !is_protected_branch;
+
+        // Store metadata for undo operations
+        change
+            .metadata
+            .insert("remote".to_string(), serde_json::json!(remote));
+        change
+            .metadata
+            .insert("branch".to_string(), serde_json::json!(branch));
+        if let Some(ref sha) = before_sha {
+            change
+                .metadata
+                .insert("before_sha".to_string(), serde_json::json!(sha));
+        }
+        change
+            .metadata
+            .insert("after_sha".to_string(), serde_json::json!(after_sha));
+        change.metadata.insert(
+            "is_protected_branch".to_string(),
+            serde_json::json!(is_protected_branch),
+        );
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+
+        tracing::info!(
+            "[ChangeTracker] Recorded git push: remote={}, branch={}, before={:?}, after={}, protected={}",
+            remote,
+            branch,
+            before_sha,
+            &after_sha[..8.min(after_sha.len())],
+            is_protected_branch
+        );
+
+        id
+    }
+
+    /// Check if a branch name is considered protected (main/master).
+    ///
+    /// Protected branches require explicit user confirmation for force push operations.
+    pub fn is_protected_branch(branch: &str) -> bool {
+        let protected_names = ["main", "master", "develop", "release", "production", "prod"];
+        let branch_lower = branch.to_lowercase();
+        protected_names
+            .iter()
+            .any(|&name| branch_lower == name || branch_lower.starts_with(&format!("{}/", name)))
     }
 
     pub async fn create_snapshot(

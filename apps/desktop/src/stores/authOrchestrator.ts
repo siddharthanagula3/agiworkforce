@@ -28,7 +28,19 @@ import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/supabase';
 import { accountApi } from '../api/accountApi';
 import { API_BASE_URL } from '../api/client';
 
-const isTauri = !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+/**
+ * Type guard for checking if running in Tauri environment.
+ * AUDIT-P3-TYPE: Proper type narrowing instead of unsafe cast.
+ */
+function checkIsTauri(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    '__TAURI_INTERNALS__' in window &&
+    window.__TAURI_INTERNALS__ !== undefined
+  );
+}
+
+const isTauri = checkIsTauri();
 
 // Singleton guard - ensures only one orchestrator instance exists
 let orchestratorInitialized = false;

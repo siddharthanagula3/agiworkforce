@@ -25,6 +25,7 @@ import {
   useSettingsStore,
 } from '../../stores/settingsStore';
 import { useModelStore } from '../../stores/modelStore';
+import { errorTracking } from '../../services/errorTracking';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
@@ -35,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
+import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { UpdateSettings } from './UpdateSettings';
 import MCPCredentialManager from '../MCP/MCPCredentialManager';
 
@@ -55,6 +57,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const setStartupPosition = useSettingsStore((state) => state.setStartupPosition);
   const setDockOnStartup = useSettingsStore((state) => state.setDockOnStartup);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
+  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
   const loading = useSettingsStore((state) => state.loading);
@@ -63,7 +66,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   // Ollama status from model store
   const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
   const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
-  const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
   const [checkingOllama, setCheckingOllama] = useState(false);
@@ -74,11 +76,35 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const ollamaStatus = providerStatuses.ollama;
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
 
-  // Suppress unused variable warnings - these are used in the JSX
-  void ollamaEnabled;
-  void ollamaModels;
-  void checkingOllama;
-  void isOllamaAvailable;
+  // SET-001 fix: Derive ollamaEnabled from persisted settings, not local state
+  const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
+
+  // SET-001 fix: Handler that persists Ollama enabled state
+  const handleOllamaEnabledChange = useCallback(
+    (enabled: boolean) => {
+      if (enabled) {
+        // When enabling, set the selected model (or first available model)
+        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
+        setDefaultModel('ollama', modelToSet);
+        setSelectedOllamaModel(modelToSet);
+      } else {
+        // When disabling, clear the Ollama model
+        setDefaultModel('ollama', '');
+      }
+    },
+    [selectedOllamaModel, ollamaModels, setDefaultModel],
+  );
+
+  // SET-001 fix: Handler that persists selected Ollama model
+  const handleOllamaModelChange = useCallback(
+    (model: string) => {
+      setSelectedOllamaModel(model);
+      if (ollamaEnabled) {
+        setDefaultModel('ollama', model);
+      }
+    },
+    [ollamaEnabled, setDefaultModel],
+  );
 
   useEffect(() => {
     if (open) {
@@ -93,7 +119,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           invoke<string[]>('llm_get_ollama_models')
             .then((models) => {
               setOllamaModels(models || []);
-              if (models && models.length > 0 && !selectedOllamaModel) {
+              // SET-001 fix: Initialize from persisted settings first, then fallback to first available
+              const persistedModel = resolvedLLMConfig.defaultModels?.ollama;
+              if (persistedModel && models?.includes(persistedModel)) {
+                setSelectedOllamaModel(persistedModel);
+              } else if (models && models.length > 0 && !selectedOllamaModel) {
                 setSelectedOllamaModel(models[0] || '');
               }
             })
@@ -103,15 +133,95 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
         })
         .finally(() => setCheckingOllama(false));
     }
-  }, [open, loadSettings, checkProviderStatus, selectedOllamaModel]);
+  }, [
+    open,
+    loadSettings,
+    checkProviderStatus,
+    selectedOllamaModel,
+    resolvedLLMConfig.defaultModels?.ollama,
+  ]);
+
+  // Track if settings have been modified (for warning on cancel)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // SET-004: Wrapped handlers that track unsaved changes
+  const handleTemperatureChange = useCallback(
+    (value: number) => {
+      setTemperature(value);
+      setHasUnsavedChanges(true);
+    },
+    [setTemperature],
+  );
+
+  const handleMaxTokensChange = useCallback(
+    (value: number) => {
+      setMaxTokens(value);
+      setHasUnsavedChanges(true);
+    },
+    [setMaxTokens],
+  );
+
+  const handleThemeChange = useCallback(
+    (value: 'light' | 'dark' | 'system') => {
+      setTheme(value);
+      setHasUnsavedChanges(true);
+    },
+    [setTheme],
+  );
+
+  const handleStartupPositionChange = useCallback(
+    (value: 'center' | 'remember') => {
+      setStartupPosition(value);
+      setHasUnsavedChanges(true);
+    },
+    [setStartupPosition],
+  );
+
+  const handleDockOnStartupChange = useCallback(
+    (value: 'left' | 'right' | 'none') => {
+      setDockOnStartup(value === 'none' ? null : value);
+      setHasUnsavedChanges(true);
+    },
+    [setDockOnStartup],
+  );
+
+  const handleAgentModeChange = useCallback(
+    (value: boolean) => {
+      setAlwaysUseAgentMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAlwaysUseAgentMode],
+  );
+
+  // Reset hasUnsavedChanges when panel opens (fresh state)
+  useEffect(() => {
+    if (open) {
+      setHasUnsavedChanges(false);
+    }
+  }, [open]);
 
   const handleSaveSettings = async () => {
     try {
       await saveSettings();
+      setHasUnsavedChanges(false);
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
+  };
+
+  // SET-004: Handler for canceling - reload settings from backend to discard changes
+  const handleCancel = async () => {
+    if (hasUnsavedChanges) {
+      // Reload settings from backend to discard local changes
+      try {
+        await loadSettings();
+      } catch (error) {
+        console.error('Failed to reload settings:', error);
+      }
+    }
+    setHasUnsavedChanges(false);
+    onOpenChange(false);
   };
 
   return (
@@ -237,7 +347,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                                     </Label>
                                     <Select
                                       value={selectedOllamaModel}
-                                      onValueChange={setSelectedOllamaModel}
+                                      onValueChange={handleOllamaModelChange}
                                     >
                                       <SelectTrigger id="ollamaModel" className="h-8 text-xs">
                                         <SelectValue placeholder="Select an Ollama model" />
@@ -266,7 +376,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         <div className="shrink-0">
                           <Switch
                             checked={ollamaEnabled}
-                            onCheckedChange={setOllamaEnabled}
+                            onCheckedChange={handleOllamaEnabledChange}
                             disabled={!isOllamaAvailable}
                           />
                         </div>
@@ -288,7 +398,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                             max="2"
                             step="0.1"
                             value={resolvedLLMConfig.temperature}
-                            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                            onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
                             className="w-full accent-primary"
                           />
                           <p className="text-xs text-muted-foreground">
@@ -299,17 +409,19 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
                         <div className="space-y-2">
                           <Label htmlFor="maxTokens">Max Tokens</Label>
+                          {/* SET-002 fix: Align with backend validation (1-200000) */}
                           <Input
                             id="maxTokens"
                             type="number"
-                            min="256"
-                            max="32768"
+                            min="1"
+                            max="200000"
                             step="256"
                             value={resolvedLLMConfig.maxTokens}
-                            onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                            onChange={(e) => handleMaxTokensChange(parseInt(e.target.value))}
                           />
                           <p className="text-xs text-muted-foreground">
-                            Maximum number of tokens to generate in responses
+                            Maximum number of tokens to generate (1-200,000). Most models use
+                            1,000-8,000.
                           </p>
                         </div>
                       </div>
@@ -331,12 +443,17 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <Switch
                             id="alwaysAgentMode"
                             checked={chatPreferences.alwaysUseAgentMode}
-                            onCheckedChange={setAlwaysUseAgentMode}
+                            onCheckedChange={handleAgentModeChange}
                           />
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Task Routing Settings */}
+                <div className="border-t border-border pt-6">
+                  <TaskRoutingSettings />
                 </div>
               </TabsContent>
 
@@ -370,7 +487,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       <Label htmlFor="theme">Theme</Label>
                       <Select
                         value={resolvedWindowPreferences.theme}
-                        onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+                        onValueChange={(value) =>
+                          handleThemeChange(value as 'light' | 'dark' | 'system')
+                        }
                       >
                         <SelectTrigger id="theme">
                           <SelectValue />
@@ -388,7 +507,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       <Select
                         value={resolvedWindowPreferences.startupPosition}
                         onValueChange={(value) =>
-                          setStartupPosition(value as 'center' | 'remember')
+                          handleStartupPositionChange(value as 'center' | 'remember')
                         }
                       >
                         <SelectTrigger id="startupPosition">
@@ -406,7 +525,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       <Select
                         value={resolvedWindowPreferences.dockOnStartup || 'none'}
                         onValueChange={(value) =>
-                          setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
+                          handleDockOnStartupChange(value as 'left' | 'right' | 'none')
                         }
                       >
                         <SelectTrigger id="dockOnStartup">
@@ -443,10 +562,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           )}
 
           <div className="flex justify-end gap-3 mt-6 pt-6 border-t px-6 pb-6">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => void handleCancel()}>
               Cancel
             </Button>
-            <Button onClick={handleSaveSettings}>Save Changes</Button>
+            <Button onClick={() => void handleSaveSettings()} disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -458,7 +579,10 @@ function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [crashReportingEnabled, setCrashReportingEnabled] = useState(true);
+  // SET-007: Initialize from errorTracking service to ensure consistency
+  const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
+    return errorTracking.getConfig().enabled;
+  });
   const [savingCrashReporting, setSavingCrashReporting] = useState(false);
 
   useEffect(() => {
@@ -466,15 +590,21 @@ function DataPrivacyTab() {
 
     const loadPreference = async () => {
       try {
+        // Try to load from Tauri backend (source of truth)
         const result = await invoke<{ value: string } | null>('get_user_preference', {
           key: 'crash_reporting_enabled',
         });
         if (result && mounted) {
-          setCrashReportingEnabled(result.value === 'true');
+          const enabled = result.value === 'true';
+          setCrashReportingEnabled(enabled);
+          // SET-007: Sync with errorTracking service
+          errorTracking.updateConfig({ enabled });
         }
       } catch (error) {
         if (mounted) {
           console.error('Failed to load crash reporting preference:', error);
+          // Fall back to errorTracking service state
+          setCrashReportingEnabled(errorTracking.getConfig().enabled);
         }
       }
     };
@@ -488,6 +618,7 @@ function DataPrivacyTab() {
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
     setSavingCrashReporting(true);
     try {
+      // SET-007: Update both Tauri backend and errorTracking service
       await invoke('set_user_preference', {
         key: 'crash_reporting_enabled',
         value: enabled.toString(),
@@ -495,6 +626,8 @@ function DataPrivacyTab() {
         dataType: 'boolean',
         description: 'Enable automatic crash reporting via Sentry',
       });
+      // Sync with errorTracking service
+      errorTracking.updateConfig({ enabled });
       setCrashReportingEnabled(enabled);
     } catch (error) {
       console.error('Failed to save crash reporting preference:', error);

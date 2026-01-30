@@ -16,7 +16,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../types/chat';
@@ -62,6 +62,53 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   canvas: <Braces className="h-4 w-4 text-pink-400" />,
   artifact: <Code2 className="h-4 w-4 text-amber-400" />,
 };
+
+// AUDIT-005-018 fix: Separate component to handle video autoPlay with error handling
+function VideoPanel({ src, title }: { src?: string; title?: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [autoPlayFailed, setAutoPlayFailed] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    // AUDIT-005-018 fix: Handle autoPlay promise rejection
+    // Browsers may block autoplay due to various policies
+    const attemptAutoPlay = async () => {
+      try {
+        await video.play();
+        setAutoPlayFailed(false);
+      } catch (err) {
+        // AutoPlay was blocked - this is expected behavior in many browsers
+        // The video will still be playable via controls
+        console.log('[DynamicSidecar] Video autoPlay was blocked:', err);
+        setAutoPlayFailed(true);
+      }
+    };
+
+    attemptAutoPlay();
+  }, [src]);
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      {title && <div className="text-sm font-medium text-zinc-200">{title}</div>}
+      <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/60">
+        <video
+          ref={videoRef}
+          className="h-auto w-full"
+          src={src}
+          controls
+          aria-label={title || 'Video output'}
+        />
+        {autoPlayFailed && (
+          <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/70 rounded text-xs text-zinc-400">
+            Click play to start video
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const springConfig = {
   type: 'spring' as const,
@@ -155,26 +202,12 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 
       case 'video':
         return (
-          <div className="flex h-full flex-col gap-3">
-            {typeof payload?.['title'] === 'string' ? (
-              <div className="text-sm font-medium text-zinc-200">
-                {payload?.['title'] as string}
-              </div>
-            ) : null}
-            <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/60">
-              <video
-                className="h-auto w-full"
-                src={payload?.['src'] as string | undefined}
-                controls
-                autoPlay
-                aria-label={
-                  typeof payload?.['title'] === 'string'
-                    ? (payload?.['title'] as string)
-                    : 'Video output'
-                }
-              />
-            </div>
-          </div>
+          <VideoPanel
+            src={payload?.['src'] as string | undefined}
+            title={
+              typeof payload?.['title'] === 'string' ? (payload?.['title'] as string) : undefined
+            }
+          />
         );
 
       case 'artifact':

@@ -364,4 +364,21 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
 }
 
 export const GET = withErrorHandler(handleExportUserData);
-export const OPTIONS = handleExportUserData;
+
+/**
+ * OPTIONS handler for CORS preflight requests
+ * AUDIT-008-001: Fixed - OPTIONS was incorrectly assigned to handleExportUserData
+ * which processes GET requests with auth. Now returns proper 204 with CORS headers.
+ */
+export function OPTIONS(request: NextRequest) {
+  return (
+    handleCorsPreflightRequest(request) ??
+    new NextResponse(null, {
+      status: 204,
+      headers: {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      },
+    })
+  );
+}

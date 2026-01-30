@@ -10,7 +10,7 @@ pub struct KnowledgeBase {
     _memory_limit_mb: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KnowledgeEntry {
     pub id: String,
     pub category: String,
@@ -34,7 +34,10 @@ impl KnowledgeBase {
 
     pub fn new(memory_limit_mb: u64) -> Result<Self> {
         let db_path = Self::get_db_path()?;
-        std::fs::create_dir_all(db_path.parent().unwrap())?;
+        // AUDIT-P3-008: Handle missing parent directory gracefully
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
         let conn = Connection::open(&db_path)?;
         let kb = Self {
@@ -203,10 +206,75 @@ impl KnowledgeBase {
         let category_results = self.query(&format!("goal:{}", goal.id), limit).await?;
         all_results.extend(category_results);
 
-        all_results.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
+        // AUDIT-P3-010: Handle NaN gracefully in importance comparison
+        all_results.sort_by(|a, b| {
+            b.importance
+                .partial_cmp(&a.importance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         all_results.dedup_by(|a, b| a.id == b.id);
 
         Ok(all_results.into_iter().take(limit).collect())
+    }
+
+    /// MEM-013 fix: Export entries that will be deleted before pruning
+    /// Returns list of entries that will be removed for potential backup
+    fn get_entries_to_prune(&self, keep_count: i64) -> Result<Vec<KnowledgeEntry>> {
+        let conn = self.lock_db()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, category, content, metadata, timestamp, importance
+             FROM knowledge
+             WHERE id NOT IN (
+                 SELECT id FROM knowledge
+                 ORDER BY importance DESC, timestamp DESC
+                 LIMIT ?1
+             )
+             ORDER BY timestamp ASC",
+        )?;
+
+        let rows = stmt.query_map(params![keep_count], |row| {
+            Ok(KnowledgeEntry {
+                id: row.get(0)?,
+                category: row.get(1)?,
+                content: row.get(2)?,
+                metadata: serde_json::from_str(row.get::<_, String>(3)?.as_str())
+                    .unwrap_or_default(),
+                timestamp: row.get(4)?,
+                importance: row.get(5)?,
+            })
+        })?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            entries.push(row?);
+        }
+
+        Ok(entries)
+    }
+
+    /// MEM-013 fix: Create backup of entries before pruning
+    fn backup_entries(&self, entries: &[KnowledgeEntry]) -> Result<PathBuf> {
+        // AUDIT-P3-009: Handle missing parent directory gracefully
+        let db_path = Self::get_db_path()?;
+        let backup_dir = db_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Database path has no parent directory"))?
+            .join("backups");
+        std::fs::create_dir_all(&backup_dir)?;
+
+        let timestamp = Self::current_timestamp()?;
+        let backup_path = backup_dir.join(format!("knowledge_backup_{}.json", timestamp));
+
+        let backup_data = serde_json::to_string_pretty(entries)?;
+        std::fs::write(&backup_path, backup_data)?;
+
+        tracing::info!(
+            "[Knowledge] Created backup of {} entries at {:?}",
+            entries.len(),
+            backup_path
+        );
+
+        Ok(backup_path)
     }
 
     async fn enforce_memory_limit(&self) -> Result<()> {
@@ -225,23 +293,61 @@ impl KnowledgeBase {
 
         // Only prune if over limit - single lock acquisition to avoid deadlock
         if file_size_mb > self._memory_limit_mb {
+            // MEM-013 fix: Warn at higher level so users are aware data is being pruned
             tracing::warn!(
-                "[Knowledge] Database size ({}MB) exceeds limit ({}MB), pruning entries",
+                "[Knowledge] Database size ({}MB) exceeds limit ({}MB), pruning entries. \
+                 Consider increasing the memory limit or exporting important data.",
                 file_size_mb,
                 self._memory_limit_mb
             );
 
-            // Single lock scope for all database operations
-            let conn = self.lock_db()?;
-
-            let count: i64 =
-                conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+            // Get count first to calculate keep_count
+            let count: i64 = {
+                let conn = self.lock_db()?;
+                conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?
+            };
 
             if count > 0 {
                 // Calculate how many entries to keep based on size ratio
                 let avg_entry_size = (file_size_mb * 1024 * 1024) / count as u64;
                 let target_count = (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
                 let keep_count = ((target_count * 80 / 100) as i64).max(100);
+                let prune_count = count - keep_count;
+
+                // MEM-013 fix: Log how many entries will be deleted
+                if prune_count > 0 {
+                    tracing::warn!(
+                        "[Knowledge] Will delete {} entries (keeping top {} by importance). \
+                         A backup will be created.",
+                        prune_count,
+                        keep_count
+                    );
+
+                    // MEM-013 fix: Create backup before deletion
+                    match self.get_entries_to_prune(keep_count) {
+                        Ok(entries_to_delete) => {
+                            if !entries_to_delete.is_empty() {
+                                if let Err(e) = self.backup_entries(&entries_to_delete) {
+                                    tracing::error!(
+                                        "[Knowledge] Failed to create backup: {}. \
+                                         Proceeding with pruning anyway to prevent database growth.",
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "[Knowledge] Failed to get entries for backup: {}. \
+                                 Proceeding with pruning anyway.",
+                                e
+                            );
+                        }
+                    }
+                }
+
+                // Single lock scope for delete operations
+                let conn = self.lock_db()?;
 
                 tracing::info!(
                     "[Knowledge] Keeping top {} entries (out of {})",
@@ -249,7 +355,7 @@ impl KnowledgeBase {
                     count
                 );
 
-                conn.execute(
+                let deleted = conn.execute(
                     "DELETE FROM knowledge
                      WHERE id NOT IN (
                          SELECT id FROM knowledge
@@ -261,7 +367,10 @@ impl KnowledgeBase {
 
                 conn.execute("VACUUM", [])?;
 
-                tracing::info!("[Knowledge] Database pruned successfully");
+                tracing::info!(
+                    "[Knowledge] Database pruned successfully. Deleted {} entries.",
+                    deleted
+                );
             }
         }
 

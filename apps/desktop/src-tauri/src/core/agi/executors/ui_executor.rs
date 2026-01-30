@@ -146,8 +146,35 @@ impl UiExecutor {
 
         // Handle coordinate-based click
         if let Some(coords) = target.get("coordinates") {
-            let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            // EXE-006 fix: Require explicit coordinates, don't silently default to (0,0)
+            let x = coords
+                .get("x")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| anyhow!("Missing or invalid 'x' coordinate"))?;
+            let y = coords
+                .get("y")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| anyhow!("Missing or invalid 'y' coordinate"))?;
+
+            // EXE-006 fix: Validate coordinate bounds (typical screen max is 32767)
+            const MAX_COORDINATE: i64 = 32767;
+            if x < 0 || x > MAX_COORDINATE {
+                return Err(anyhow!(
+                    "X coordinate {} out of bounds (must be 0-{})",
+                    x,
+                    MAX_COORDINATE
+                ));
+            }
+            if y < 0 || y > MAX_COORDINATE {
+                return Err(anyhow!(
+                    "Y coordinate {} out of bounds (must be 0-{})",
+                    y,
+                    MAX_COORDINATE
+                ));
+            }
+
+            let x = x as i32;
+            let y = y as i32;
 
             context.emit_progress(&format!("Clicking at ({}, {})...", x, y), Some(0.5));
 

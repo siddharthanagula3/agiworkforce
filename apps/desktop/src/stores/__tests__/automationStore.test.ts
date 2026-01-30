@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, type MockInstance } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useAutomationStore } from '../automationStore';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -9,11 +9,13 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
+// AUDIT-P3-TEST-TYPE: Use Mock type with explicit function signature for better type safety
+type InvokeMock = Mock<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke as unknown as InvokeMock;
+  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn()
+  return invoke as InvokeMock;
 }
 
 describe('automationStore', () => {
@@ -40,7 +42,14 @@ describe('automationStore', () => {
   });
 
   it('should load windows successfully', async () => {
-    const mockWindows: any[] = [
+    // AUDIT-P3-TEST-TYPE: Use proper raw automation element type matching backend response
+    interface RawAutomationElement {
+      id: string;
+      name: string;
+      class_name: string;
+      control_type: string;
+    }
+    const mockWindows: RawAutomationElement[] = [
       { id: 'w1', name: 'Window 1', class_name: 'Window', control_type: 'Window' },
     ];
 

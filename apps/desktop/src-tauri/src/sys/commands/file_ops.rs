@@ -152,6 +152,31 @@ fn validate_path_security(path: &str) -> Result<PathBuf, String> {
     Ok(canonical_path)
 }
 
+// AUDIT-003-014 fix: Escape glob special characters in path strings.
+// This prevents directory names containing glob metacharacters from being
+// interpreted as patterns, which could lead to unintended file access.
+fn escape_glob_special_chars(path: &str) -> String {
+    let mut escaped = String::with_capacity(path.len() * 2);
+    for c in path.chars() {
+        match c {
+            // Glob metacharacters that need escaping
+            '*' | '?' | '[' | ']' | '{' | '}' => {
+                escaped.push('[');
+                escaped.push(c);
+                escaped.push(']');
+            }
+            // Escape backslash on non-Windows (on Windows it's a path separator)
+            '\\' if !cfg!(windows) => {
+                escaped.push('[');
+                escaped.push('\\');
+                escaped.push(']');
+            }
+            _ => escaped.push(c),
+        }
+    }
+    escaped
+}
+
 pub(crate) fn is_blacklisted_path(path: &str) -> bool {
     let path_lower = path.to_lowercase();
     let blacklist = [
@@ -834,10 +859,15 @@ pub async fn dir_traverse(
         return Err("Permission denied".to_string());
     }
 
+    // AUDIT-003-014 fix: Escape glob special characters in the base path to prevent
+    // unintended pattern matching. Special characters in the base path should be
+    // treated literally, not as glob metacharacters.
+    let escaped_path = escape_glob_special_chars(&path);
+
     let full_pattern = if glob_pattern.is_empty() {
-        format!("{}*", path)
+        format!("{}*", escaped_path)
     } else {
-        format!("{}/{}", path, glob_pattern)
+        format!("{}/{}", escaped_path, glob_pattern)
     };
 
     let mut results = Vec::new();

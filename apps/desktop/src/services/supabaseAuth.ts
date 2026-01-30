@@ -12,7 +12,9 @@ import {
   type Subscription,
   type FeatureFlag,
   type PlanTier,
+  type FallbackProfileData,
   asPlanTier,
+  isValidProfileData,
 } from '../lib/supabase';
 import { API_BASE_URL } from '../api/client';
 
@@ -40,7 +42,9 @@ function getCachedData<T>(key: string, userId: string): T | null {
     if (cached.userId !== userId) return null;
     if (Date.now() - cached.cachedAt > AUTH_CACHE_MAX_AGE_MS) return null;
     return cached.data;
-  } catch {
+  } catch (err) {
+    // AUDIT-P3-ERROR: Cache read failure - graceful degradation to null
+    console.debug('[Auth] Failed to read cached data for key:', key, err);
     return null;
   }
 }
@@ -49,8 +53,9 @@ function setCachedData<T>(key: string, userId: string, data: T): void {
   try {
     const cached: CachedAuthData<T> = { data, userId, cachedAt: Date.now() };
     localStorage.setItem(`${AUTH_CACHE_PREFIX}${key}`, JSON.stringify(cached));
-  } catch {
-    // Ignore storage errors
+  } catch (err) {
+    // AUDIT-P3-ERROR: Cache write failure - non-critical, app continues without caching
+    console.debug('[Auth] Failed to cache data for key:', key, err);
   }
 }
 
@@ -59,8 +64,9 @@ function clearAuthCache(): void {
     Object.keys(localStorage)
       .filter((k) => k.startsWith(AUTH_CACHE_PREFIX))
       .forEach((k) => localStorage.removeItem(k));
-  } catch {
-    // Ignore
+  } catch (err) {
+    // AUDIT-P3-ERROR: Cache clear failure - non-critical during logout
+    console.debug('[Auth] Failed to clear auth cache:', err);
   }
 }
 
@@ -666,7 +672,8 @@ class SupabaseAuthService {
       if (timeoutId) clearTimeout(timeoutId);
 
       if (error) {
-        if ((error as any).code === 'TIMEOUT') {
+        const errorWithCode = error as { code?: string; message?: string };
+        if (errorWithCode.code === 'TIMEOUT') {
           console.warn(`[Auth] fetchProfile timed out after ${timeoutMs / 1000}s`);
         } else {
           console.warn(`[Auth] Error fetching profile (${error.message}), using fallback`);
@@ -675,7 +682,8 @@ class SupabaseAuthService {
         // This ensures the APP DOES NOT HANG even if the profiles table is missing/locked
         const currentUser = this.currentState.user;
         if (currentUser && currentUser.id === userId) {
-          const fallbackProfile: Profile = {
+          // AUDIT-P3-TYPE: Build fallback data and validate before casting
+          const fallbackData: FallbackProfileData = {
             id: userId,
             email: currentUser.email || '',
             display_name:
@@ -683,16 +691,20 @@ class SupabaseAuthService {
               (currentUser.user_metadata?.['name'] as string) ||
               currentUser.email?.split('@')[0] ||
               'User',
-            avatar_url: currentUser.user_metadata?.['avatar_url'] as string,
+            avatar_url: (currentUser.user_metadata?.['avatar_url'] as string) ?? null,
             created_at: currentUser.created_at,
             updated_at: currentUser.updated_at || new Date().toISOString(),
             stripe_customer_id: null,
-            // Add other required fields with defaults
             credits: null,
-          } as unknown as Profile; // Cast to Profile as we might be missing some fields
+          };
 
-          console.log('[Auth] Constructed fallback profile from auth metadata');
-          return fallbackProfile;
+          // Validate the constructed data has required fields
+          if (isValidProfileData(fallbackData)) {
+            console.log('[Auth] Constructed fallback profile from auth metadata');
+            // Safe cast: Profile extends FallbackProfileData structure
+            return fallbackData as unknown as Profile;
+          }
+          console.warn('[Auth] Fallback profile validation failed');
         }
         return this.currentState.profile;
       }
@@ -715,9 +727,14 @@ class SupabaseAuthService {
       this.subscriptionFailureCount >= SupabaseAuthService.MAX_CONSECUTIVE_FAILURES &&
       Date.now() - this.lastSubscriptionFailure < circuitBreakerCooldown
     ) {
+      // AUDIT-P3-ERROR: Circuit breaker active - log and indicate degraded service
       console.warn(
-        `[Auth] Circuit breaker active: skipping subscription fetch (${this.subscriptionFailureCount} consecutive failures)`,
+        `[Auth] Circuit breaker active: skipping subscription fetch (${this.subscriptionFailureCount} consecutive failures). Using cached data if available.`,
       );
+      // Update status to indicate we're using cached/fallback data
+      if (this.currentState.subscriptionFetchStatus !== 'failed') {
+        this.updateState({ subscriptionFetchStatus: 'failed' });
+      }
       return this.currentState.subscription; // Return cached value
     }
 
@@ -810,7 +827,8 @@ class SupabaseAuthService {
       }
 
       // "No rows" is expected for free users - but we should still try web API to confirm
-      if (error?.message?.includes('no rows') || (error as any)?.code === 'PGRST116') {
+      const errorWithCode = error as { code?: string; message?: string } | null;
+      if (error?.message?.includes('no rows') || errorWithCode?.code === 'PGRST116') {
         console.log('[Auth] No subscription in Supabase, trying web API to confirm...');
       } else if (error) {
         console.warn('[Auth] Supabase query failed:', error.message);
@@ -874,7 +892,8 @@ class SupabaseAuthService {
       if (timeoutId) clearTimeout(timeoutId);
 
       if (error) {
-        if ((error as any).code === 'TIMEOUT') {
+        const errorWithCode = error as { code?: string; message?: string };
+        if (errorWithCode.code === 'TIMEOUT') {
           console.warn(`[Auth] fetchFeatureFlags timed out after ${timeoutMs / 1000}s`);
         } else {
           console.warn(`[Auth] Error fetching feature flags (${error.message}), using defaults`);
