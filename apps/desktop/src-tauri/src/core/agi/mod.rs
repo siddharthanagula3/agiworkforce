@@ -5,6 +5,7 @@ pub mod context_manager;
 pub mod conversation_summarizer;
 pub mod core;
 pub mod executor;
+pub mod executors;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
@@ -71,6 +72,15 @@ pub use templates::{
 pub use tools::{
     create_list_skills_tool, create_skill_use_tool, SkillTool, SkillToolInput, Tool,
     ToolCapability, ToolRegistry, ToolResult,
+};
+
+// Export the new modular executor architecture
+pub use executors::{
+    ApiExecutor, BrowserExecutor, CalendarExecutor, CloudExecutor, CodeExecutor, DatabaseExecutor,
+    EmailExecutor, ExecutorContext, ExecutorRegistry, FileExecutor, GitExecutor, LlmExecutor,
+    McpExecutor, McpExecutorExt, McpExecutorStats, McpToolResult, OcrExecutor, OutcomeExecutor,
+    OutcomeMeasurement, OutcomeSummary, ProductivityExecutor, SearchExecutor, TerminalExecutor,
+    ToolExecutor, UiExecutor,
 };
 
 use serde::{Deserialize, Serialize};
