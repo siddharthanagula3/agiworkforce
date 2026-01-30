@@ -10,6 +10,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 import type { User } from '@supabase/supabase-js';
 
 /**
@@ -39,6 +40,12 @@ async function handleDeleteUserData(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
+  }
+
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
   }
 
   // Rate limiting - strict for this sensitive operation (3 requests per hour)

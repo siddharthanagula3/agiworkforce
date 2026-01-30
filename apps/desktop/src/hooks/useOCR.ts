@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/tauri-mock';
 
 export interface BoundingBox {
@@ -50,11 +50,23 @@ export function useOCR(): UseOCRReturn {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OCRResult | null>(null);
+  // AUDIT-007-006 fix: Track mounted state to prevent setState after unmount
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const processImage = useCallback(
     async (captureId: string, imagePath: string, language = 'eng'): Promise<OCRResult> => {
-      setIsProcessing(true);
-      setError(null);
+      // AUDIT-007-006 fix: Check isMounted before setState calls
+      if (isMountedRef.current) {
+        setIsProcessing(true);
+        setError(null);
+      }
 
       try {
         const ocrResult = await invoke<OCRResult>('ocr_process_image', {
@@ -62,14 +74,20 @@ export function useOCR(): UseOCRReturn {
           imagePath,
           language,
         });
-        setResult(ocrResult);
+        if (isMountedRef.current) {
+          setResult(ocrResult);
+        }
         return ocrResult;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(errorMessage);
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
         throw new Error(errorMessage);
       } finally {
-        setIsProcessing(false);
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+        }
       }
     },
     [],
@@ -84,8 +102,11 @@ export function useOCR(): UseOCRReturn {
       height: number,
       language = 'eng',
     ): Promise<OCRResult> => {
-      setIsProcessing(true);
-      setError(null);
+      // AUDIT-007-006 fix: Check isMounted before setState calls
+      if (isMountedRef.current) {
+        setIsProcessing(true);
+        setError(null);
+      }
 
       try {
         const ocrResult = await invoke<OCRResult>('ocr_process_region', {
@@ -96,14 +117,20 @@ export function useOCR(): UseOCRReturn {
           height,
           language,
         });
-        setResult(ocrResult);
+        if (isMountedRef.current) {
+          setResult(ocrResult);
+        }
         return ocrResult;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(errorMessage);
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
         throw new Error(errorMessage);
       } finally {
-        setIsProcessing(false);
+        if (isMountedRef.current) {
+          setIsProcessing(false);
+        }
       }
     },
     [],
@@ -115,7 +142,10 @@ export function useOCR(): UseOCRReturn {
       return languages;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      // AUDIT-007-006 fix: Check isMounted before setState
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       return [];
     }
   }, []);
@@ -125,13 +155,17 @@ export function useOCR(): UseOCRReturn {
       const ocrResult = await invoke<OCRResult | null>('ocr_get_result', {
         captureId,
       });
-      if (ocrResult) {
+      // AUDIT-007-006 fix: Check isMounted before setState
+      if (ocrResult && isMountedRef.current) {
         setResult(ocrResult);
       }
       return ocrResult;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      // AUDIT-007-006 fix: Check isMounted before setState
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       return null;
     }
   }, []);

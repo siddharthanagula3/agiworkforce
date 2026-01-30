@@ -308,6 +308,32 @@ pub async fn db_mysql_call_procedure(
     params: Vec<serde_json::Value>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<Vec<serde_json::Value>, String> {
+    // AUDIT-003-006 fix: Validate procedure_name against alphanumeric pattern
+    // SQL identifiers should only contain alphanumeric characters, underscores, and optionally a schema prefix
+    let is_valid_identifier = procedure_name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '.');
+
+    if !is_valid_identifier || procedure_name.is_empty() {
+        return Err(format!(
+            "Invalid procedure name '{}': must contain only alphanumeric characters, underscores, or dots",
+            procedure_name
+        ));
+    }
+
+    // Additional check: prevent SQL injection via schema.procedure format
+    if procedure_name.matches('.').count() > 1 {
+        return Err("Invalid procedure name: too many dots".to_string());
+    }
+
+    // Prevent excessively long names
+    if procedure_name.len() > 128 {
+        return Err(format!(
+            "Procedure name too long: {} characters. Maximum is 128",
+            procedure_name.len()
+        ));
+    }
+
     let state = state.lock().await;
 
     state
@@ -331,6 +357,60 @@ pub async fn db_mysql_bulk_insert(
     rows: Vec<Vec<serde_json::Value>>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<u64, String> {
+    // AUDIT-003-012 fix: Validate table_name and columns against injection
+    // SQL identifiers should only contain alphanumeric characters, underscores, and optionally a schema prefix
+
+    // Validate table name
+    let is_valid_table = table_name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '.');
+
+    if !is_valid_table || table_name.is_empty() {
+        return Err(format!(
+            "Invalid table name '{}': must contain only alphanumeric characters, underscores, or dots",
+            table_name
+        ));
+    }
+
+    if table_name.matches('.').count() > 1 {
+        return Err("Invalid table name: too many dots".to_string());
+    }
+
+    if table_name.len() > 128 {
+        return Err(format!(
+            "Table name too long: {} characters. Maximum is 128",
+            table_name.len()
+        ));
+    }
+
+    // Validate column names
+    for col in &columns {
+        let is_valid_col = col.chars().all(|c| c.is_alphanumeric() || c == '_');
+
+        if !is_valid_col || col.is_empty() {
+            return Err(format!(
+                "Invalid column name '{}': must contain only alphanumeric characters or underscores",
+                col
+            ));
+        }
+
+        if col.len() > 128 {
+            return Err(format!(
+                "Column name '{}' too long: {} characters. Maximum is 128",
+                col,
+                col.len()
+            ));
+        }
+    }
+
+    if columns.is_empty() {
+        return Err("Columns array cannot be empty".to_string());
+    }
+
+    if rows.is_empty() {
+        return Err("Rows array cannot be empty".to_string());
+    }
+
     let state = state.lock().await;
 
     let column_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
@@ -746,6 +826,155 @@ pub async fn db_redis_disconnect(
         .disconnect(&connection_id)
         .await
         .map_err(|e| format!("Redis disconnect failed: {}", e))
+}
+
+/// Store a database connection password securely using encrypted storage.
+/// The password is encrypted with machine-derived keys and stored in the database.
+/// This prevents passwords from being visible in React DevTools or memory dumps.
+#[tauri::command]
+pub async fn db_store_password(connection_id: String, password: String) -> Result<(), String> {
+    use crate::core::mcp::config::encrypt_mcp_credential;
+
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    if connection_id.len() > 500 {
+        return Err(format!(
+            "Connection ID too long: {} characters. Maximum is 500",
+            connection_id.len()
+        ));
+    }
+
+    // Encrypt the password using machine-derived keys
+    let encrypted = encrypt_mcp_credential(&password)
+        .ok_or_else(|| "Failed to encrypt password".to_string())?;
+
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Store in database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("db_connection_password_{}", connection_id);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings_v2 (key, value, category, encrypted, created_at, updated_at)
+         VALUES (?1, ?2, 'db_credentials', 1, ?3, ?3)",
+        rusqlite::params![cred_key, encrypted, now],
+    )
+    .map_err(|e| format!("Failed to store password: {}", e))?;
+
+    tracing::info!(
+        "Database password stored securely for connection: {}",
+        connection_id
+    );
+    Ok(())
+}
+
+/// Check if a password exists for a database connection.
+/// Returns true if a password is stored, false otherwise.
+/// Does NOT return the actual password for security reasons.
+#[tauri::command]
+pub async fn db_has_stored_password(connection_id: String) -> Result<bool, String> {
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Check in database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("db_connection_password_{}", connection_id);
+
+    let exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM settings_v2 WHERE key = ?1 AND encrypted = 1)",
+            rusqlite::params![cred_key],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    Ok(exists)
+}
+
+/// Retrieve a stored database password for creating a connection.
+/// This should only be called when actually establishing a connection,
+/// not for display purposes.
+#[tauri::command]
+pub async fn db_get_stored_password(connection_id: String) -> Result<Option<String>, String> {
+    use crate::core::mcp::config::decrypt_mcp_credential;
+
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Retrieve from database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("db_connection_password_{}", connection_id);
+
+    let encrypted: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1 AND encrypted = 1",
+            rusqlite::params![cred_key],
+            |row| row.get(0),
+        )
+        .ok();
+
+    match encrypted {
+        Some(enc_value) => {
+            let decrypted = decrypt_mcp_credential(&enc_value);
+            Ok(decrypted)
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete a stored database password.
+#[tauri::command]
+pub async fn db_delete_stored_password(connection_id: String) -> Result<(), String> {
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Get the database path
+    let app_data =
+        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
+    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
+
+    // Delete from database
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let cred_key = format!("db_connection_password_{}", connection_id);
+
+    conn.execute(
+        "DELETE FROM settings_v2 WHERE key = ?1",
+        rusqlite::params![cred_key],
+    )
+    .map_err(|e| format!("Failed to delete password: {}", e))?;
+
+    tracing::info!(
+        "Database password deleted for connection: {}",
+        connection_id
+    );
+    Ok(())
 }
 
 #[cfg(test)]

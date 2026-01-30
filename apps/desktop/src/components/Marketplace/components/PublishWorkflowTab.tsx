@@ -117,7 +117,15 @@ export function PublishWorkflowTab() {
         workflow_id: selectedWorkflowId,
         title: title.trim(),
         description: description.trim(),
-        category: category as any,
+        category: category as
+          | 'CustomerSupport'
+          | 'SalesMarketing'
+          | 'Development'
+          | 'Operations'
+          | 'PersonalProductivity'
+          | 'DataAnalysis'
+          | 'ContentCreation'
+          | 'Finance',
         tags,
         thumbnail_url: thumbnailUrl || undefined,
         estimated_time_saved: parseInt(estimatedTimeSaved) || 0,

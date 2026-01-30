@@ -13,6 +13,7 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
+use parking_lot::RwLock;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -48,7 +49,8 @@ pub enum SettingsServiceError {
 pub struct SettingsService {
     conn: Arc<Mutex<Connection>>,
     cipher: Arc<Mutex<Aes256Gcm>>,
-    cache: Arc<Mutex<HashMap<String, SettingValue>>>,
+    // DAT-002 fix: Use RwLock instead of Mutex for cache to reduce lock contention on reads
+    cache: Arc<RwLock<HashMap<String, SettingValue>>>,
 }
 
 impl SettingsService {
@@ -66,7 +68,7 @@ impl SettingsService {
         Ok(Self {
             conn,
             cipher: Arc::new(Mutex::new(cipher)),
-            cache: Arc::new(Mutex::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -143,21 +145,16 @@ impl SettingsService {
 
         repository::upsert_setting(&conn, key.clone(), value_to_store, category, encrypted)?;
 
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        cache.insert(key, value);
+        // DAT-002: Use write lock for cache update
+        self.cache.write().insert(key, value);
 
         Ok(())
     }
 
     pub fn get(&self, key: &str) -> Result<SettingValue, SettingsServiceError> {
+        // DAT-002: Use read lock for cache lookup (allows concurrent reads)
         {
-            let cache = self
-                .cache
-                .lock()
-                .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
+            let cache = self.cache.read();
             if let Some(value) = cache.get(key) {
                 return Ok(value.clone());
             }
@@ -182,11 +179,8 @@ impl SettingsService {
             stored_value
         };
 
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        cache.insert(key.to_string(), value.clone());
+        // DAT-002: Use write lock for cache population
+        self.cache.write().insert(key.to_string(), value.clone());
 
         Ok(value)
     }
@@ -215,11 +209,8 @@ impl SettingsService {
 
             processed_settings.push((key.clone(), value_to_store, category, encrypted));
 
-            let mut cache = self
-                .cache
-                .lock()
-                .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-            cache.insert(key, value);
+            // DAT-002: Use write lock for cache update
+            self.cache.write().insert(key, value);
         }
 
         let conn = self
@@ -238,11 +229,8 @@ impl SettingsService {
             .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
         repository::delete_setting(&conn, key)?;
 
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        cache.remove(key);
+        // DAT-002: Use write lock for cache removal
+        self.cache.write().remove(key);
 
         Ok(())
     }
@@ -267,9 +255,8 @@ impl SettingsService {
     }
 
     pub fn clear_cache(&self) {
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.clear();
-        }
+        // DAT-002: parking_lot RwLock doesn't use poisoning, so no error handling needed
+        self.cache.write().clear();
     }
 
     fn validate_setting(

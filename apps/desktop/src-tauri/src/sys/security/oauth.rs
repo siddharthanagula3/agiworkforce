@@ -6,6 +6,13 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+/// SECSYS-007 fix: TTL for pending OAuth verifiers (10 minutes)
+const VERIFIER_TTL: Duration = Duration::from_secs(600);
+
+/// SECSYS-007 fix: Maximum number of pending verifiers to prevent memory exhaustion
+const MAX_PENDING_VERIFIERS: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -84,9 +91,23 @@ pub struct OAuthTokenResult {
     pub scope: Option<String>,
 }
 
+/// SECSYS-007 fix: Pending verifier with expiration time
+struct PendingVerifier {
+    provider: OAuthProvider,
+    verifier: String,
+    created_at: Instant,
+}
+
+impl PendingVerifier {
+    fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > VERIFIER_TTL
+    }
+}
+
 pub struct OAuthManager {
     providers: Arc<parking_lot::RwLock<HashMap<OAuthProvider, OAuthConfig>>>,
-    pending_verifiers: Arc<parking_lot::RwLock<HashMap<String, (OAuthProvider, String)>>>,
+    /// SECSYS-007 fix: Pending verifiers now include expiration tracking
+    pending_verifiers: Arc<parking_lot::RwLock<HashMap<String, PendingVerifier>>>,
 }
 
 impl OAuthManager {
@@ -154,10 +175,32 @@ impl OAuthManager {
 
         let (auth_url, csrf_state) = auth_request.url();
 
+        // SECSYS-007 fix: Store verifier with expiration tracking
         let mut verifiers = self.pending_verifiers.write();
+
+        // SECSYS-007 fix: Clean up expired verifiers before adding new one
+        verifiers.retain(|_, v| !v.is_expired());
+
+        // SECSYS-007 fix: Limit pending verifiers to prevent memory exhaustion
+        if verifiers.len() >= MAX_PENDING_VERIFIERS {
+            // Remove the oldest verifier
+            if let Some(oldest_key) = verifiers
+                .iter()
+                .min_by_key(|(_, v)| v.created_at)
+                .map(|(k, _)| k.clone())
+            {
+                verifiers.remove(&oldest_key);
+                tracing::warn!("SECSYS-007: Removed oldest verifier due to limit, may affect in-progress OAuth");
+            }
+        }
+
         verifiers.insert(
             csrf_state.secret().clone(),
-            (provider, pkce_verifier.secret().clone()),
+            PendingVerifier {
+                provider,
+                verifier: pkce_verifier.secret().clone(),
+                created_at: Instant::now(),
+            },
         );
 
         Ok(OAuthAuthorizationUrl {
@@ -173,16 +216,30 @@ impl OAuthManager {
         code: String,
         state: String,
     ) -> Result<OAuthTokenResult> {
-        let (stored_provider, verifier) = {
+        // SECSYS-007 fix: Extract and validate verifier with expiration check
+        let pending = {
             let mut verifiers = self.pending_verifiers.write();
+
+            // Clean up expired verifiers
+            verifiers.retain(|_, v| !v.is_expired());
+
             verifiers
                 .remove(&state)
                 .ok_or_else(|| anyhow!("Invalid or expired state"))?
         };
 
-        if stored_provider != provider {
+        // SECSYS-007 fix: Check if verifier expired
+        if pending.is_expired() {
+            return Err(anyhow!(
+                "OAuth state expired. Please restart the authorization process."
+            ));
+        }
+
+        if pending.provider != provider {
             return Err(anyhow!("Provider mismatch"));
         }
+
+        let verifier = pending.verifier;
 
         // Clone config before await to avoid holding lock across async boundary
         let config = {

@@ -47,14 +47,18 @@ async function verifyAdminAccess(
     return { isAdmin: false, error: 'Invalid or expired token' };
   }
 
-  // Check for admin role in user metadata or profiles table
-  const isAdminMeta = user.user_metadata?.role === 'admin' || user.app_metadata?.role === 'admin';
+  // AUDIT-008-013: Verify admin via app_metadata (set by service role only, not user-editable)
+  // app_metadata is secure because it can only be modified via service role key or admin API
+  // user_metadata is NOT secure as users can modify it themselves
+  const isAdminFromAppMetadata = user.app_metadata?.role === 'admin';
 
-  if (isAdminMeta) {
+  if (isAdminFromAppMetadata) {
     return { isAdmin: true, userId: user.id };
   }
 
-  // Check profiles table for admin flag
+  // Fallback: Check profiles table for admin flag
+  // Note: This is less secure than app_metadata if RLS policies are misconfigured
+  // Consider removing this fallback or ensuring strict RLS on profiles.is_admin
   const { data: profile } = await supabase
     .from('profiles')
     .select('is_admin')
@@ -62,6 +66,11 @@ async function verifyAdminAccess(
     .single();
 
   if (profile?.is_admin) {
+    // Log a warning when using profiles table fallback (AUDIT-008-013)
+    logger.warn(
+      { userId: user.id },
+      'Admin access granted via profiles table - consider migrating to app_metadata',
+    );
     return { isAdmin: true, userId: user.id };
   }
 

@@ -13,7 +13,12 @@ const redis =
       })
     : null;
 
-// Rate limit configurations per endpoint
+// AUDIT-008-016: Rate limit configurations per endpoint
+// failClosed: true = block requests when Redis unavailable (security-sensitive endpoints)
+// failClosed: false = allow requests when Redis unavailable (business-critical endpoints)
+// In production serverless environments, in-memory rate limiting is ineffective as each
+// function instance has its own memory space. For security-sensitive endpoints, we fail
+// closed (block requests) when Redis is unavailable to prevent abuse.
 export const rateLimitConfigs = {
   checkout: {
     limit: 15,
@@ -366,18 +371,21 @@ export async function checkRateLimit(
   if (!redis) {
     const isProduction = process.env.NODE_ENV === 'production';
 
+    // AUDIT-008-016: Fail-closed behavior for security-sensitive endpoints when Redis unavailable
     if (isProduction) {
       logger.error(
         { key, failClosed: config.failClosed },
-        'SECURITY: Redis not configured in production - in-memory rate limiting is ineffective in distributed deployments',
+        'SECURITY: Redis not configured in production - in-memory rate limiting is ineffective in distributed/serverless deployments',
       );
 
-      // For security-sensitive endpoints, fail closed when Redis isn't available in production
-      // In-memory rate limiting doesn't work across serverless instances/edge functions
+      // For security-sensitive endpoints (failClosed: true), block all requests when
+      // Redis isn't available in production. In-memory rate limiting doesn't work across
+      // serverless instances/edge functions because each instance has isolated memory.
+      // This is a critical security measure to prevent brute force attacks.
       if (config.failClosed) {
         logger.warn(
           { key, identifier },
-          'Blocking request to security-sensitive endpoint - Redis not configured in production',
+          'AUDIT-008-016: Blocking request to security-sensitive endpoint - Redis not configured in production',
         );
         return {
           success: false,

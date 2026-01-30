@@ -89,6 +89,16 @@ portable-pty = "0.8"
 which = "6.0"
 
 
+# Audio capture and voice activity detection
+cpal = "0.15"
+# WebRTC VAD - simple and reliable voice activity detection
+# Note: As an alternative to Silero VAD via ONNX, webrtc-vad is simpler to integrate
+webrtc-vad = { version = "0.4", optional = true }
+# Local speech-to-text with Whisper.cpp (offline transcription)
+whisper-rs = { version = "0.11", optional = true }
+# For extracting Piper binary archives
+tar = "0.4"
+
 # keyring for OS-level secure credential storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 keyring = "3"
 argon2 = "0.5"
@@ -237,7 +247,12 @@ shell = ["dep:tauri-plugin-shell"]
 # Updater plugin - App Store handles updates, so this is disabled for appstore builds
 updater = ["dep:tauri-plugin-updater"]
 # App Store build - disables shell execution, auto-updater, and other sandbox-restricted features
-appstore = []  
+appstore = []
+# Voice Activity Detection with WebRTC VAD
+vad = ["dep:webrtc-vad"]
+# Local Whisper STT (offline speech-to-text)
+# Requires whisper.cpp to be built - see whisper-rs docs
+local-whisper = ["dep:whisper-rs"]  
 
 
 [build-dependencies]

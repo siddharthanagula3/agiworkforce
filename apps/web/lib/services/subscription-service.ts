@@ -6,6 +6,8 @@ import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
+// AUDIT-P3: Use shared Stripe type helpers for safer period access
+import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -362,18 +364,20 @@ export class SubscriptionService {
         'Found valid subscription in Stripe',
       );
 
-      // Extract period timestamps (Stripe SDK v20 type changes)
-      const periodStart = (stripeSubscription as unknown as { current_period_start: number })
-        .current_period_start;
-      const periodEnd = (stripeSubscription as unknown as { current_period_end: number })
-        .current_period_end;
+      // AUDIT-P3: Use type-safe helpers for period extraction (Stripe SDK v20 changes)
+      const period = getSubscriptionPeriod(stripeSubscription);
+      if (!period) {
+        logger.error(
+          { subscriptionId: stripeSubscription.id },
+          'Could not extract period from Stripe subscription',
+        );
+        return null;
+      }
+      const periodStart = period.start;
+      const periodEnd = period.end;
 
-      // Get coupon ID from discounts array (v20 API change: discount -> discounts)
-      const discounts = (
-        stripeSubscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> }
-      ).discounts;
-      const stripeCouponId =
-        discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
+      // AUDIT-P3: Use type-safe helper for coupon ID (v20 API: discount -> discounts)
+      const stripeCouponId = getSubscriptionCouponId(stripeSubscription);
 
       // Ensure profile exists before creating subscription (FK constraint)
       await this.ensureProfileExists(userId, email);

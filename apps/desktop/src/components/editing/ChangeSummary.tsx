@@ -36,7 +36,10 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
           <FileText className="h-5 w-5 text-primary" />
           <h3 className="text-lg font-semibold">Changes Summary</h3>
         </div>
-        <Badge variant={riskLevel.variant as any} className="gap-1">
+        <Badge
+          variant={riskLevel.variant as 'destructive' | 'default' | 'secondary'}
+          className="gap-1"
+        >
           <AlertTriangle className="h-3 w-3" />
           {riskLevel.label}
         </Badge>

@@ -16,9 +16,12 @@ import { useUnifiedAuthStore, cleanupUnifiedAuthStore } from './auth';
 import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
 import { useBrowserStore } from './browserStore';
 import { useCodeStore } from './codeStore';
+import { useDatabaseStore } from './databaseStore';
+import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
 // Orchestration store archived - visual workflow builder removed
+import { useProductivityStore } from './productivityStore';
 import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
@@ -53,6 +56,11 @@ export function cleanupAllStoresOnLogout(): void {
     automationStore.reset();
     console.log('[LogoutCleanup] Automation store cleaned up');
 
+    // AUDIT-006-011: Productivity store cleanup
+    const productivityStore = useProductivityStore.getState();
+    productivityStore.resetOnLogout();
+    console.log('[LogoutCleanup] Productivity store cleaned up');
+
     // 2. Clean up data stores
 
     // Unified chat store - clears conversations, messages, pending state
@@ -60,19 +68,21 @@ export function cleanupAllStoresOnLogout(): void {
     chatStore.resetOnLogout();
     console.log('[LogoutCleanup] Chat store cleaned up');
 
-    // MCP store - clear server connections and config
-    useMcpStore.setState({
-      servers: [],
-      tools: [],
-      config: null,
-      stats: {},
-      isInitialized: false,
-      isLoading: false,
-      error: null,
-      selectedServer: null,
-      searchQuery: '',
-    });
+    // AUDIT-006-019: MCP store - use dedicated resetOnLogout function
+    const mcpStore = useMcpStore.getState();
+    mcpStore.resetOnLogout();
     console.log('[LogoutCleanup] MCP store cleaned up');
+
+    // AUDIT-006-022: Database store - clear connections and state
+    const databaseStore = useDatabaseStore.getState();
+    databaseStore.resetOnLogout();
+    console.log('[LogoutCleanup] Database store cleaned up');
+
+    // AUDIT-006-028: Execution store - cleanup event listeners and reset
+    cleanupExecutionListeners();
+    const executionStore = useExecutionStore.getState();
+    executionStore.reset();
+    console.log('[LogoutCleanup] Execution store cleaned up');
 
     // Orchestration store archived - visual workflow builder removed
     console.log('[LogoutCleanup] Orchestration store skipped (archived)');

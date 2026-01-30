@@ -13,6 +13,17 @@ const NOTION_BASE_URL: &str = "https://api.notion.com/v1";
 
 const MAX_REQUESTS_PER_SECOND: usize = 3;
 
+/// IMP-001 fix: Configurable rate limit delay between requests (in milliseconds).
+/// Notion's rate limit is 3 requests/second for most endpoints.
+/// Default: 350ms provides safety margin below 333ms (1000ms / 3).
+/// Can be overridden via NOTION_RATE_LIMIT_DELAY_MS env var.
+fn get_rate_limit_delay_ms() -> u64 {
+    std::env::var("NOTION_RATE_LIMIT_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(350)
+}
+
 struct RateLimiter {
     semaphore: Arc<Semaphore>,
 }
@@ -31,8 +42,9 @@ impl RateLimiter {
             .map_err(|_| Error::Other("Semaphore closed".to_string()))
     }
 
+    /// IMP-001 fix: Use configurable delay instead of hard-coded 350ms
     async fn wait_for_rate_limit(&self) {
-        sleep(Duration::from_millis(350)).await;
+        sleep(Duration::from_millis(get_rate_limit_delay_ms())).await;
     }
 }
 
@@ -123,36 +135,63 @@ impl NotionClient {
         }
     }
 
+    /// INC-002 fix: Add pagination support using has_more and next_cursor
+    /// This ensures we get all pages, not just the first 100
     pub async fn list_pages(&self) -> Result<Vec<NotionPage>> {
-        let _permit = self.rate_limiter.acquire().await?;
+        let mut all_pages = Vec::new();
+        let mut next_cursor: Option<String> = None;
+        const MAX_PAGES_TO_FETCH: usize = 10; // Safety limit: 10 * 100 = 1000 max items
+        let mut page_count = 0;
 
-        let response = self
-            .client
-            .post(format!("{}/search", NOTION_BASE_URL))
-            .bearer_auth(&self.token)
-            .json(&serde_json::json!({
+        loop {
+            let _permit = self.rate_limiter.acquire().await?;
+
+            let mut request_body = serde_json::json!({
                 "filter": {
                     "property": "object",
                     "value": "page"
                 },
                 "page_size": 100
-            }))
-            .send()
-            .await
-            .map_err(Error::from)?;
+            });
 
-        self.rate_limiter.wait_for_rate_limit().await;
+            // Add cursor for pagination if we have one
+            if let Some(cursor) = &next_cursor {
+                request_body["start_cursor"] = serde_json::Value::String(cursor.clone());
+            }
 
-        if response.status().is_success() {
-            let data: NotionListResponse<NotionPage> =
-                response.json().await.map_err(Error::from)?;
-            Ok(data.results)
-        } else {
-            Err(Error::Provider(format!(
-                "Failed to list Notion pages: {}",
-                response.status()
-            )))
+            let response = self
+                .client
+                .post(format!("{}/search", NOTION_BASE_URL))
+                .bearer_auth(&self.token)
+                .json(&request_body)
+                .send()
+                .await
+                .map_err(Error::from)?;
+
+            self.rate_limiter.wait_for_rate_limit().await;
+
+            if response.status().is_success() {
+                let data: NotionListResponse<NotionPage> =
+                    response.json().await.map_err(Error::from)?;
+
+                all_pages.extend(data.results);
+                page_count += 1;
+
+                // Check if there are more pages and we haven't hit our safety limit
+                if data.has_more && page_count < MAX_PAGES_TO_FETCH {
+                    next_cursor = data.next_cursor;
+                } else {
+                    break;
+                }
+            } else {
+                return Err(Error::Provider(format!(
+                    "Failed to list Notion pages: {}",
+                    response.status()
+                )));
+            }
         }
+
+        Ok(all_pages)
     }
 
     pub async fn get_page_content(&self, page_id: &str) -> Result<serde_json::Value> {
@@ -324,19 +363,62 @@ impl NotionClient {
             .unwrap_or_else(|| "Untitled".to_string())
     }
 
+    /// FIX-003: Try multiple common property names for status field
+    /// Notion databases can use different property names for status
     fn extract_status(properties: &serde_json::Value) -> TaskStatus {
-        properties
-            .as_object()
-            .and_then(|props| props.get("Status").or_else(|| props.get("status")))
-            .and_then(|status_prop| {
-                status_prop
+        // Common status property names in different languages and conventions
+        const STATUS_PROPERTY_NAMES: &[&str] = &[
+            "Status", "status", "Estado",  // Spanish
+            "Statut",  // French
+            "État",    // French
+            "Stato",   // Italian
+            "Zustand", // German
+            "State", "state", "Progress", "progress", "Stage", "stage", "Phase", "phase",
+            "Workflow", "workflow",
+        ];
+
+        let props = match properties.as_object() {
+            Some(p) => p,
+            None => return TaskStatus::Todo,
+        };
+
+        // Try each potential status property name
+        for name in STATUS_PROPERTY_NAMES {
+            if let Some(status_prop) = props.get(*name) {
+                // Try to extract status value from different Notion property types
+                let status_value = status_prop
                     .get("status")
                     .or_else(|| status_prop.get("select"))
-                    .and_then(|status| status.get("name"))
-                    .and_then(|name| name.as_str())
-            })
-            .map(TaskStatus::from_notion_status)
-            .unwrap_or(TaskStatus::Todo)
+                    .or_else(|| {
+                        status_prop
+                            .get("multi_select")
+                            .and_then(|ms| ms.as_array()?.first())
+                    })
+                    .and_then(|s| s.get("name"))
+                    .and_then(|n| n.as_str());
+
+                if let Some(value) = status_value {
+                    return TaskStatus::from_notion_status(value);
+                }
+            }
+        }
+
+        // If no status property found, try to find any property with "status" type
+        for (_key, prop) in props {
+            if let Some(prop_type) = prop.get("type").and_then(|t| t.as_str()) {
+                if prop_type == "status" {
+                    if let Some(status_name) = prop
+                        .get("status")
+                        .and_then(|s| s.get("name"))
+                        .and_then(|n| n.as_str())
+                    {
+                        return TaskStatus::from_notion_status(status_name);
+                    }
+                }
+            }
+        }
+
+        TaskStatus::Todo
     }
 
     fn page_to_task(&self, page: &serde_json::Value) -> Option<Task> {
@@ -364,7 +446,9 @@ impl NotionClient {
             description: None,
             status,
             due_date: None,
+            // FIX-005: Notion people properties could be extracted here if needed
             assignee: None,
+            assignee_name: None,
             priority: None,
             tags: Vec::new(),
             url,
@@ -396,12 +480,86 @@ impl UnifiedTaskProvider for NotionClient {
         ))
     }
 
-    async fn update_task(&self, _task: Task) -> Result<()> {
-        Err(Error::Provider("Not yet implemented".to_string()))
+    /// INC-001 fix: Implement Notion update operation using PATCH /pages/{id}
+    async fn update_task(&self, task: Task) -> Result<()> {
+        let _permit = self.rate_limiter.acquire().await?;
+
+        // Build properties object for update
+        let mut properties = serde_json::json!({});
+
+        // Update title if present
+        if !task.title.is_empty() {
+            properties["Name"] = serde_json::json!({
+                "title": [{
+                    "text": { "content": task.title }
+                }]
+            });
+        }
+
+        // Update status if we can map it
+        let status_name = task.status.to_notion_status();
+        properties["Status"] = serde_json::json!({
+            "status": { "name": status_name }
+        });
+
+        let body = serde_json::json!({
+            "properties": properties
+        });
+
+        let response = self
+            .client
+            .patch(format!("{}/pages/{}", NOTION_BASE_URL, task.id))
+            .bearer_auth(&self.token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(Error::from)?;
+
+        self.rate_limiter.wait_for_rate_limit().await;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            Err(Error::Provider(format!(
+                "Failed to update Notion page ({}): {}",
+                status, error_text
+            )))
+        }
     }
 
-    async fn delete_task(&self, _task_id: &str) -> Result<()> {
-        Err(Error::Provider("Not yet implemented".to_string()))
+    /// INC-001 fix: Implement Notion delete operation by archiving the page
+    /// Note: Notion API doesn't support permanent deletion, pages are archived instead
+    async fn delete_task(&self, task_id: &str) -> Result<()> {
+        let _permit = self.rate_limiter.acquire().await?;
+
+        // Archive the page (Notion's equivalent of soft delete)
+        let body = serde_json::json!({
+            "archived": true
+        });
+
+        let response = self
+            .client
+            .patch(format!("{}/pages/{}", NOTION_BASE_URL, task_id))
+            .bearer_auth(&self.token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(Error::from)?;
+
+        self.rate_limiter.wait_for_rate_limit().await;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            Err(Error::Provider(format!(
+                "Failed to archive Notion page ({}): {}",
+                status, error_text
+            )))
+        }
     }
 
     async fn get_task(&self, page_id: &str) -> Result<Task> {

@@ -30,7 +30,7 @@ export interface CreateTaskRequest {
 
 export interface NotionPage {
   id: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
   url: string;
   created_time: string;
   last_edited_time: string;
@@ -38,13 +38,13 @@ export interface NotionPage {
 
 export interface NotionDatabaseQueryRequest {
   database_id: string;
-  filter?: Record<string, any> | null;
-  sorts?: Array<Record<string, any>> | null;
+  filter?: Record<string, unknown> | null;
+  sorts?: Array<Record<string, unknown>> | null;
 }
 
 export interface NotionCreateRowRequest {
   database_id: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }
 
 export interface TrelloBoard {

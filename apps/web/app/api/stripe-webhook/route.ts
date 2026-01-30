@@ -9,52 +9,8 @@ import { CreditService } from '@/lib/services/credit-service';
 import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
-
-// Type helpers for Stripe API version compatibility (v19 -> v20 changes)
-// These types handle the transition where period dates moved from top-level to items array
-interface StripeSubscriptionWithPeriod extends Stripe.Subscription {
-  current_period_start?: number;
-  current_period_end?: number;
-}
-
-interface StripeSubscriptionItemWithPeriod {
-  current_period_start?: number;
-  current_period_end?: number;
-  price: { id: string };
-}
-
-// Type for accessing discounts property safely across Stripe SDK versions
-// Note: Does not extend Stripe.Subscription to avoid type conflicts with base class
-interface SubscriptionDiscounts {
-  discounts?: Array<{ coupon?: { id?: string } }>;
-}
-
-// Type guard helpers for safer Stripe data access
-// Returns period values if they exist at top level, null otherwise
-function getTopLevelPeriod(sub: Stripe.Subscription): { start: number; end: number } | null {
-  const s = sub as unknown as StripeSubscriptionWithPeriod;
-  if (typeof s.current_period_start === 'number' && typeof s.current_period_end === 'number') {
-    return { start: s.current_period_start, end: s.current_period_end };
-  }
-  return null;
-}
-
-function getItemPeriod(sub: Stripe.Subscription): StripeSubscriptionItemWithPeriod | null {
-  const item = sub.items?.data?.[0] as StripeSubscriptionItemWithPeriod | undefined;
-  if (
-    item &&
-    typeof item.current_period_start === 'number' &&
-    typeof item.current_period_end === 'number'
-  ) {
-    return item;
-  }
-  return null;
-}
-
-function getDiscountCouponId(sub: Stripe.Subscription): string | null {
-  const s = sub as unknown as SubscriptionDiscounts;
-  return s.discounts?.[0]?.coupon?.id ?? null;
-}
+// AUDIT-P3: Use shared Stripe type helpers for type safety
+import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -484,24 +440,11 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       const subscription = await stripe.subscriptions.retrieve(stripeSubId);
       status = subscription.status;
 
-      // Handle both top-level and items-level period dates (Stripe v20+ flexible billing)
-      // Using helper functions for safer access across API versions
-      const topLevelPeriod = getTopLevelPeriod(subscription);
-      if (topLevelPeriod) {
-        // Top-level fields exist (standard billing)
-        currentPeriodStart = new Date(topLevelPeriod.start * 1000);
-        currentPeriodEnd = new Date(topLevelPeriod.end * 1000);
-      } else {
-        // Fallback to items array (flexible billing - Stripe v20+)
-        const itemPeriod = getItemPeriod(subscription);
-        if (itemPeriod) {
-          currentPeriodStart = new Date(itemPeriod.current_period_start! * 1000);
-          currentPeriodEnd = new Date(itemPeriod.current_period_end! * 1000);
-          logger.debug(
-            { subscriptionId: stripeSubId, periodStart: itemPeriod.current_period_start },
-            'Using period dates from subscription items (flexible billing)',
-          );
-        }
+      // AUDIT-P3: Use shared type-safe helper for period extraction (Stripe v20+ flexible billing)
+      const period = getSubscriptionPeriod(subscription);
+      if (period) {
+        currentPeriodStart = new Date(period.start * 1000);
+        currentPeriodEnd = new Date(period.end * 1000);
       }
 
       cancelAtPeriodEnd = subscription.cancel_at_period_end;
@@ -517,8 +460,8 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         );
       }
 
-      // Check discounts array (v20 API change: discount -> discounts)
-      stripeCouponId = getDiscountCouponId(subscription);
+      // AUDIT-P3: Use shared type-safe helper for coupon ID (v20 API: discount -> discounts)
+      stripeCouponId = getSubscriptionCouponId(subscription);
     } catch (error) {
       logger.error(
         { error, subscriptionId: stripeSubId },
@@ -765,35 +708,13 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     );
   }
 
-  // Extract period timestamps (Stripe SDK v20 type changes)
-  // Handle both top-level and items-level period dates (Stripe v20+ flexible billing)
-  const subAsAny = subscription as unknown as { current_period_start?: number };
-  let periodStart = subAsAny.current_period_start;
-  let periodEnd = (subscription as unknown as { current_period_end?: number }).current_period_end;
+  // AUDIT-P3: Use shared type-safe helper for period extraction (Stripe SDK v20 flexible billing)
+  const period = getSubscriptionPeriod(subscription);
+  const periodStart = period?.start;
+  const periodEnd = period?.end;
 
-  // Fallback to items array if top-level fields don't exist (flexible billing - Stripe v20+)
-  if (!periodStart || !periodEnd) {
-    if (subscription.items?.data?.length > 0) {
-      const item = subscription.items.data[0] as unknown as {
-        current_period_start?: number;
-        current_period_end?: number;
-      };
-      if (item.current_period_start && item.current_period_end) {
-        periodStart = item.current_period_start;
-        periodEnd = item.current_period_end;
-        logger.debug(
-          { subscriptionId: subscription.id, periodStart },
-          'Using period dates from subscription items (flexible billing)',
-        );
-      }
-    }
-  }
-
-  // Get coupon ID from discounts array (v20 API change: discount -> discounts)
-  const discounts = (subscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> })
-    .discounts;
-  const stripeCouponId =
-    discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
+  // AUDIT-P3: Use shared type-safe helper for coupon ID (v20 API: discount -> discounts)
+  const stripeCouponId = getSubscriptionCouponId(subscription);
 
   // Force update plan tier if we found one
   const updateData: {
@@ -1263,15 +1184,14 @@ export async function POST(request: Request) {
 
           if (stripeSubId) {
             try {
-              const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubId);
-              const subscription = subscriptionResponse as unknown as Stripe.Subscription;
+              const subscription = await stripe.subscriptions.retrieve(stripeSubId);
               updateData.status = subscription.status;
-              const periodStart = (subscription as unknown as { current_period_start: number })
-                .current_period_start;
-              const periodEnd = (subscription as unknown as { current_period_end: number })
-                .current_period_end;
-              updateData.current_period_start = new Date(periodStart * 1000).toISOString();
-              updateData.current_period_end = new Date(periodEnd * 1000).toISOString();
+              // AUDIT-P3: Use shared type-safe helper for period extraction
+              const period = getSubscriptionPeriod(subscription);
+              if (period) {
+                updateData.current_period_start = new Date(period.start * 1000).toISOString();
+                updateData.current_period_end = new Date(period.end * 1000).toISOString();
+              }
             } catch (error) {
               logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
             }

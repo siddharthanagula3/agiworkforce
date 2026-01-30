@@ -45,6 +45,10 @@ const PUBSUB_API_BASE: &str = "https://pubsub.googleapis.com/v1";
 /// Maximum number of messages to pull at once
 const MAX_MESSAGES_PER_PULL: i32 = 10;
 
+// AUDIT-004-015: Added limit for history sync to prevent unbounded fetching
+/// Maximum number of history items to fetch in a single sync operation
+const MAX_HISTORY_ITEMS: usize = 1000;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -514,16 +518,17 @@ impl GmailPubSubClient {
     /// Sync emails since the given history ID
     ///
     /// This fetches all changes (added, deleted, label changes) since the
-    /// specified history ID.
+    /// specified history ID, up to MAX_HISTORY_ITEMS.
     ///
     /// # Arguments
     /// * `history_id` - The history ID to start syncing from
     ///
     /// # Returns
-    /// List of history records containing all changes
+    /// List of history records containing all changes (limited to MAX_HISTORY_ITEMS)
     ///
     /// # Errors
     /// Returns an error if the API call fails
+    // AUDIT-004-015: Added MAX_HISTORY_ITEMS limit to prevent unbounded fetching
     pub async fn sync_from_history(&mut self, history_id: &str) -> Result<Vec<HistoryRecord>> {
         info!("Syncing emails from history ID: {}", history_id);
 
@@ -531,6 +536,15 @@ impl GmailPubSubClient {
         let mut page_token: Option<String> = None;
 
         loop {
+            // Stop if we've reached the maximum history items limit
+            if all_history.len() >= MAX_HISTORY_ITEMS {
+                warn!(
+                    "Reached maximum history items limit ({}), stopping sync",
+                    MAX_HISTORY_ITEMS
+                );
+                break;
+            }
+
             let mut url = format!(
                 "{}/users/me/history?startHistoryId={}",
                 GMAIL_API_BASE, history_id
@@ -577,6 +591,13 @@ impl GmailPubSubClient {
             self.last_history_id = Some(history_response.history_id.clone());
 
             all_history.extend(history_response.history);
+
+            // Check limit again after extending
+            if all_history.len() >= MAX_HISTORY_ITEMS {
+                all_history.truncate(MAX_HISTORY_ITEMS);
+                warn!("Truncated history to {} items", MAX_HISTORY_ITEMS);
+                break;
+            }
 
             match history_response.next_page_token {
                 Some(token) => page_token = Some(token),

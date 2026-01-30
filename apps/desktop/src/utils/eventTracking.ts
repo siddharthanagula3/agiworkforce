@@ -252,7 +252,7 @@ export const trackFeatureEvents = {
 };
 
 export const trackSettingsEvents = {
-  changed: (settingType: string, _newValue: any) => {
+  changed: (settingType: string, _newValue: unknown) => {
     analytics.track('settings_changed', {
       setting_type: settingType,
     });
@@ -330,7 +330,7 @@ export const trackTimedOperation = async <T>(
   operationName: string,
   operation: () => Promise<T>,
   eventName: EventName,
-  additionalProps?: Record<string, any>,
+  additionalProps?: Record<string, unknown>,
 ): Promise<T> => {
   return await performanceMonitor.timeOperation(operationName, async () => {
     const result = await operation();

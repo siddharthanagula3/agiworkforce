@@ -1,6 +1,7 @@
 use crate::core::sync_utils::RwLockExt;
+use crate::sys::security::machine_key::{self, KeyPurpose};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{rand_core::OsRng, Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
@@ -22,8 +23,11 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
+    // AUDIT-003-009 fix: Derive key from machine_key instead of generating random key.
+    // This ensures secrets remain recoverable after application restart by using
+    // a deterministic key derived from machine-specific identifiers.
     pub fn new() -> Result<Self, String> {
-        let key = Self::generate_key();
+        let key = Self::derive_persistent_key();
 
         Ok(Self {
             key,
@@ -31,11 +35,13 @@ impl SecretStore {
         })
     }
 
-    fn generate_key() -> Vec<u8> {
-        use aes_gcm::aead::rand_core::RngCore;
-        let mut key = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key);
-        key
+    // AUDIT-003-009 fix: Derive a persistent encryption key from machine identifiers
+    // rather than generating a random key that would be lost on restart.
+    fn derive_persistent_key() -> Vec<u8> {
+        // Use the machine_key module to derive a deterministic key
+        // This key is derived from machine-specific identifiers and is consistent
+        // across restarts, ensuring encrypted secrets remain accessible.
+        machine_key::derive_key(KeyPurpose::MasterEncryption)
     }
 
     pub fn store_secret(&self, name: String, value: &str) -> Result<(), String> {
@@ -127,13 +133,22 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let key = SecretStore::generate_key();
+        // AUDIT-003-009: Test uses derive_persistent_key instead of random generation
+        let key = SecretStore::derive_persistent_key();
         let plaintext = "my secret password 123";
 
         let encrypted = encrypt_secret(&key, plaintext).unwrap();
         let decrypted = decrypt_secret(&key, &encrypted).unwrap();
 
         assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn test_key_consistency() {
+        // AUDIT-003-009: Verify that derived keys are consistent across calls
+        let key1 = SecretStore::derive_persistent_key();
+        let key2 = SecretStore::derive_persistent_key();
+        assert_eq!(key1, key2, "Derived keys should be consistent");
     }
 
     #[test]

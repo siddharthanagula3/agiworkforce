@@ -249,7 +249,10 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
       if (unlistenRef) {
         unlistenRef();
       }
-      void invoke('file_watch_stop', { path: rootPath }).catch(() => {});
+      void invoke('file_watch_stop', { path: rootPath }).catch((err) => {
+        // AUDIT-P3-ERROR: Cleanup failure - watcher may already be stopped
+        console.debug('[FileTree] Failed to stop file watcher on cleanup:', err);
+      });
       setTree(null);
     };
   }, [rootPath, normalizedRoot, loadDirectory]);

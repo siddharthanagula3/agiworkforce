@@ -125,13 +125,23 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       .filter(({ msg }) => msg.content.toLowerCase().includes(query));
   }, [items, searchQuery]);
 
+  // AUDIT-005-002 fix: Ref to track focus timeout for cleanup
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Handle Cmd/Ctrl+F to open search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         setShowSearch(true);
-        setTimeout(() => searchInputRef.current?.focus(), 50);
+        // AUDIT-005-002 fix: Store timeout ID for cleanup
+        if (focusTimeoutRef.current) {
+          clearTimeout(focusTimeoutRef.current);
+        }
+        focusTimeoutRef.current = setTimeout(() => {
+          searchInputRef.current?.focus();
+          focusTimeoutRef.current = null;
+        }, 50);
       }
       if (e.key === 'Escape' && showSearch) {
         setShowSearch(false);
@@ -140,7 +150,14 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      // AUDIT-005-002 fix: Clear timeout on cleanup
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+        focusTimeoutRef.current = null;
+      }
+    };
   }, [showSearch]);
 
   // Scroll to current match
