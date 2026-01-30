@@ -158,11 +158,24 @@ export async function retryWithTimeout<T>(
   retryOptions: RetryOptions = {},
 ): Promise<T> {
   return retry(async () => {
+    // AUDIT-007-013 fix: Store timeout ID so it can be cleared when operation succeeds
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
+      timeoutId = setTimeout(
+        () => reject(new Error(`Operation timeout after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
     });
 
-    return Promise.race([operation(), timeoutPromise]);
+    try {
+      return await Promise.race([operation(), timeoutPromise]);
+    } finally {
+      // AUDIT-007-013 fix: Always clear the timeout to prevent timer leak
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   }, retryOptions);
 }
 

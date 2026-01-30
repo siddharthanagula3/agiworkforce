@@ -1,6 +1,6 @@
 use super::types::{Priority, Task};
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
@@ -32,10 +32,17 @@ impl Ord for QueueItem {
     }
 }
 
+// AUDIT-004-004: Added removed_ids set for mark-and-sweep removal pattern
+// Previously O(n) per removal due to heap rebuild; now O(1) mark + amortized cleanup
+/// Threshold for triggering heap compaction (removed items / total items)
+const COMPACTION_THRESHOLD: f64 = 0.25;
+
 pub struct TaskQueue {
     heap: RwLock<BinaryHeap<QueueItem>>,
     sequence: RwLock<u64>,
     task_index: RwLock<HashMap<String, Task>>,
+    /// Set of task IDs that have been logically removed but not yet cleaned from heap
+    removed_ids: RwLock<HashSet<String>>,
 }
 
 impl TaskQueue {
@@ -44,6 +51,7 @@ impl TaskQueue {
             heap: RwLock::new(BinaryHeap::new()),
             sequence: RwLock::new(0),
             task_index: RwLock::new(HashMap::new()),
+            removed_ids: RwLock::new(HashSet::new()),
         }
     }
 
@@ -67,40 +75,76 @@ impl TaskQueue {
     pub async fn dequeue(&self) -> Option<Task> {
         let mut heap = self.heap.write().await;
         let mut index = self.task_index.write().await;
+        let mut removed = self.removed_ids.write().await;
 
-        if let Some(item) = heap.pop() {
+        // Skip over logically removed items (mark-and-sweep pattern)
+        while let Some(item) = heap.pop() {
+            if removed.remove(&item.task.id) {
+                // This item was marked as removed, skip it
+                continue;
+            }
             index.remove(&item.task.id);
-            Some(item.task)
-        } else {
-            None
+            // Compact heap if too many removed items accumulated
+            self.maybe_compact_heap(&mut heap, &mut removed);
+            return Some(item.task);
+        }
+
+        None
+    }
+
+    /// Compact the heap by removing all logically deleted entries
+    /// Called when removed_ids exceeds threshold of heap size
+    fn maybe_compact_heap(&self, heap: &mut BinaryHeap<QueueItem>, removed: &mut HashSet<String>) {
+        if removed.is_empty() {
+            return;
+        }
+
+        let heap_len = heap.len();
+        let removed_len = removed.len();
+
+        // Only compact if removed items exceed threshold
+        if heap_len > 0 && (removed_len as f64 / heap_len as f64) > COMPACTION_THRESHOLD {
+            let items: Vec<_> = heap
+                .drain()
+                .filter(|item| !removed.contains(&item.task.id))
+                .collect();
+            *heap = items.into_iter().collect();
+            removed.clear();
         }
     }
 
     pub async fn peek(&self) -> Option<Task> {
         let heap = self.heap.read().await;
-        heap.peek().map(|item| item.task.clone())
+        let removed = self.removed_ids.read().await;
+
+        // Find first non-removed item
+        for item in heap.iter() {
+            if !removed.contains(&item.task.id) {
+                return Some(item.task.clone());
+            }
+        }
+        None
     }
 
     pub async fn len(&self) -> usize {
-        let heap = self.heap.read().await;
-        heap.len()
+        let index = self.task_index.read().await;
+        index.len()
     }
 
     pub async fn is_empty(&self) -> bool {
-        let heap = self.heap.read().await;
-        heap.is_empty()
+        let index = self.task_index.read().await;
+        index.is_empty()
     }
 
+    // AUDIT-004-004: O(1) removal using mark-and-sweep pattern
+    // Previously drained and rebuilt entire heap O(n); now marks for lazy removal O(1)
     pub async fn remove(&self, task_id: &str) -> Option<Task> {
-        let mut heap = self.heap.write().await;
         let mut index = self.task_index.write().await;
+        let mut removed = self.removed_ids.write().await;
 
         if let Some(task) = index.remove(task_id) {
-            let items: Vec<_> = heap
-                .drain()
-                .filter(|item| item.task.id != task_id)
-                .collect();
-            *heap = items.into_iter().collect();
+            // Mark as removed; will be cleaned up during dequeue or compaction
+            removed.insert(task_id.to_string());
             Some(task)
         } else {
             None
@@ -120,8 +164,10 @@ impl TaskQueue {
     pub async fn clear(&self) {
         let mut heap = self.heap.write().await;
         let mut index = self.task_index.write().await;
+        let mut removed = self.removed_ids.write().await;
         heap.clear();
         index.clear();
+        removed.clear();
     }
 
     pub async fn get_by_priority(&self, priority: Priority) -> Vec<Task> {

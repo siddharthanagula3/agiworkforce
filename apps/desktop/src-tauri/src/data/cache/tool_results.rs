@@ -371,26 +371,37 @@ impl ToolResultCache {
         Ok(())
     }
 
+    // AUDIT-004-002: Optimized LRU eviction using BinaryHeap
+    // Previously O(n log n) for sorting all entries; now O(k log n) where k = entries to evict
     fn evict_lru(&self, bytes_to_free: usize) -> Result<()> {
+        use std::cmp::Reverse;
+        use std::collections::BinaryHeap;
+
         let mut freed_bytes = 0;
-        let mut eviction_count = 0;
+        let mut eviction_count = 0u64;
 
-        let mut entries: Vec<_> = self
-            .entries
-            .iter()
-            .map(|entry| (entry.key().clone(), entry.cached_at, entry.size_bytes))
-            .collect();
+        // Build a min-heap by cached_at (oldest first) using Reverse
+        // Only collect what we need - stop early if we've freed enough
+        let mut heap: BinaryHeap<Reverse<(chrono::DateTime<chrono::Utc>, String, usize)>> =
+            BinaryHeap::new();
 
-        entries.sort_by_key(|(_, cached_at, _)| *cached_at);
+        for entry in self.entries.iter() {
+            heap.push(Reverse((
+                entry.cached_at,
+                entry.key().clone(),
+                entry.size_bytes,
+            )));
+        }
 
-        for (key, _, size) in entries {
-            if freed_bytes >= bytes_to_free {
+        // Pop oldest entries until we've freed enough bytes
+        while freed_bytes < bytes_to_free {
+            if let Some(Reverse((_, key, size))) = heap.pop() {
+                self.invalidate_key(&key);
+                freed_bytes += size;
+                eviction_count += 1;
+            } else {
                 break;
             }
-
-            self.invalidate_key(&key);
-            freed_bytes += size;
-            eviction_count += 1;
         }
 
         {

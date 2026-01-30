@@ -931,6 +931,25 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                   });
                 }
               }
+
+              // STR-001 fix: Cap budgetAlerts array at 100 entries, removing oldest dismissed alerts first
+              if (state.budgetAlerts.length > 100) {
+                // First try to remove dismissed alerts
+                const dismissedAlerts = state.budgetAlerts.filter((a) => a.dismissed);
+                if (dismissedAlerts.length > 0) {
+                  // Remove oldest dismissed alerts (prioritize removing dismissed ones)
+                  state.budgetAlerts = state.budgetAlerts
+                    .sort((a, b) => {
+                      // Keep non-dismissed alerts first, then sort by timestamp
+                      if (a.dismissed !== b.dismissed) return a.dismissed ? 1 : -1;
+                      return b.timestamp - a.timestamp;
+                    })
+                    .slice(0, 100);
+                } else {
+                  // No dismissed alerts, just keep the most recent 100
+                  state.budgetAlerts = state.budgetAlerts.slice(-100);
+                }
+              }
             });
           },
 
@@ -998,6 +1017,21 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                     timestamp: Date.now(),
                     dismissed: false,
                   });
+                }
+              }
+
+              // STR-001 fix: Cap budgetAlerts array at 100 entries
+              if (state.budgetAlerts.length > 100) {
+                const dismissedAlerts = state.budgetAlerts.filter((a) => a.dismissed);
+                if (dismissedAlerts.length > 0) {
+                  state.budgetAlerts = state.budgetAlerts
+                    .sort((a, b) => {
+                      if (a.dismissed !== b.dismissed) return a.dismissed ? 1 : -1;
+                      return b.timestamp - a.timestamp;
+                    })
+                    .slice(0, 100);
+                } else {
+                  state.budgetAlerts = state.budgetAlerts.slice(-100);
                 }
               }
             });
@@ -1100,7 +1134,9 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           loadFeatureUsage: async () => {
             try {
               const usage = await invoke<FeatureUsageStats[]>('analytics_get_feature_usage');
-              set({ featureUsage: usage });
+              // STR-006 fix: Cap featureUsage at 500 entries to prevent unbounded growth
+              const cappedUsage = Array.isArray(usage) ? usage.slice(0, 500) : [];
+              set({ featureUsage: cappedUsage });
             } catch (error) {
               console.error('Failed to load feature usage:', error);
               errorTracking.captureError(
@@ -1273,7 +1309,18 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
                 metric,
                 days,
               });
+              // STR-007 fix: Cap trends dictionary at 20 metrics to prevent unbounded growth
+              // Each metric can have up to 365 data points, so 20 metrics × 365 = 7,300 points max
+              const MAX_TREND_METRICS = 20;
               set((state) => {
+                const currentKeys = Object.keys(state.trends);
+                // If we're at capacity and adding a new metric, remove the first (oldest) one
+                if (currentKeys.length >= MAX_TREND_METRICS && !state.trends[metric]) {
+                  const keyToRemove = currentKeys[0];
+                  if (keyToRemove) {
+                    delete state.trends[keyToRemove];
+                  }
+                }
                 state.trends[metric] = trendsData || [];
               });
               return trendsData || [];

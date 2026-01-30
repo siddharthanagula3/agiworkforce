@@ -18,16 +18,34 @@ function getSupabaseClient() {
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
+  const nodeEnv = process.env.NODE_ENV;
 
-  // In production, CRON_SECRET is required
+  // AUDIT-008-010: Explicit NODE_ENV check to block production without secret
+  // This prevents accidental deployment of dev-mode bypass to production
+  const isProduction = nodeEnv === 'production';
+  const isVercelProduction = process.env.VERCEL_ENV === 'production';
+  const shouldRequireSecret = isProduction || isVercelProduction;
+
+  // In production (or Vercel production), CRON_SECRET is required
   if (!cronSecret) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    if (isProduction) {
-      logger.error('CRON_SECRET not set in production - denying request');
+    if (shouldRequireSecret) {
+      logger.error(
+        { nodeEnv, vercelEnv: process.env.VERCEL_ENV },
+        'CRON_SECRET not set in production environment - denying request',
+      );
       return false;
     }
-    logger.warn('CRON_SECRET not set in development - allowing request');
-    return true;
+    // Only allow in true development (local dev)
+    if (nodeEnv === 'development') {
+      logger.warn('CRON_SECRET not set in development - allowing request');
+      return true;
+    }
+    // Default deny for any other environment (staging, preview, etc.)
+    logger.error(
+      { nodeEnv },
+      'CRON_SECRET not set in non-development environment - denying request',
+    );
+    return false;
   }
 
   return authHeader === `Bearer ${cronSecret}`;

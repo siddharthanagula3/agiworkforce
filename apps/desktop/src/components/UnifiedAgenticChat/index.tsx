@@ -11,6 +11,7 @@
  */
 import { invoke, listen } from '../../lib/tauri-mock';
 import React, { useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
@@ -28,12 +29,15 @@ import { supabaseAuth } from '../../services/supabaseAuth';
 import type { ResearchTask } from '../../types/chat';
 import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
+import { toast } from '../../hooks/useToast';
+import { ChatErrorBoundary } from '../ErrorBoundary';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
+import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
 import {
   executeTerminalCommand,
   executeBrowserCommand,
@@ -56,29 +60,69 @@ export const UnifiedAgenticChat: React.FC<{
   onSendMessage,
   onOpenSettings,
 }) => {
-  const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
-  const openSidecarStore = useUnifiedChatStore((state) => state.openSidecar);
-  const addMessage = useUnifiedChatStore((state) => state.addMessage);
-  const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
-  const setIsLoading = useUnifiedChatStore((state) => state.setIsLoading);
-  const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
-  const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
-  const messages = useUnifiedChatStore((state) => state.messages);
-  const activeView = useUnifiedChatStore((state) => state.activeView);
+  // CHT-008 fix: Consolidated selectors to reduce subscription overhead
+  // Using useShallow for object selections prevents unnecessary re-renders
+  const {
+    setSidecarOpen,
+    openSidecar: openSidecarStore,
+    addMessage,
+    updateMessage,
+    setIsLoading,
+    setStreamingMessage,
+    conversationMode,
+    messages,
+    activeView,
+    setWorkflowContext,
+  } = useUnifiedChatStore(
+    useShallow((state) => ({
+      setSidecarOpen: state.setSidecarOpen,
+      openSidecar: state.openSidecar,
+      addMessage: state.addMessage,
+      updateMessage: state.updateMessage,
+      setIsLoading: state.setIsLoading,
+      setStreamingMessage: state.setStreamingMessage,
+      conversationMode: state.conversationMode,
+      messages: state.messages,
+      activeView: state.activeView,
+      setWorkflowContext: state.setWorkflowContext,
+    })),
+  );
 
-  const llmConfig = useSettingsStore((state) => state.llmConfig);
-  const selectedProvider = useModelStore((state) => state.selectedProvider);
-  const selectedModel = useModelStore((state) => state.selectedModel);
-  const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
+  // CHT-008 fix: Consolidated settings and model store selectors
+  const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
+  const { selectedProvider, selectedModel } = useModelStore(
+    useShallow((state) => ({
+      selectedProvider: state.selectedProvider,
+      selectedModel: state.selectedModel,
+    })),
+  );
+
+  // CHT-008 fix: Consolidated billing store selectors
   const budget = useBillingUsageStore(selectBudget);
-  const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
-  const loadOverview = useBillingUsageStore((state) => state.loadCostOverview);
+  const { addTokenUsage, loadCostOverview: loadOverview } = useBillingUsageStore(
+    useShallow((state) => ({
+      addTokenUsage: state.addTokenUsage,
+      loadCostOverview: state.loadCostOverview,
+    })),
+  );
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // Ref to store unlisten functions for synchronous cleanup
   const unlistenFnsRef = useRef<Array<() => void>>([]);
   const isMountedRef = useRef(true);
+
+  // CHT-005 fix: Track active stream sessions to prevent race conditions
+  // Maps conversation_id to the message_id being streamed for that conversation
+  const activeStreamSessionsRef = useRef<Map<number, string>>(new Map());
+
+  // CHT-003 fix: Custom confirmation dialog to replace window.confirm()
+  const {
+    state: riskConfirmState,
+    confirm: confirmRisk,
+    handleConfirm: handleRiskConfirm,
+    handleCancel: handleRiskCancel,
+  } = useRiskConfirmation();
 
   useAgenticEvents();
 
@@ -119,6 +163,14 @@ export const UnifiedAgenticChat: React.FC<{
             // This allows handleStopGeneration to cancel the current stream
             abortControllerRef.current = new AbortController();
 
+            // CHT-005 fix: Register this stream session with conversation-to-message mapping
+            // This prevents race conditions when multiple streams are active
+            const messageId = String(payload.message_id);
+            activeStreamSessionsRef.current.set(payload.conversation_id, messageId);
+            console.log(
+              `[UnifiedAgenticChat] CHT-005: Registered stream session conv=${payload.conversation_id} msg=${messageId}`,
+            );
+
             // Stream has started, but we keep isLoading true until stream-end
             // This allows the UI to show streaming state
             useUnifiedChatStore.getState().setIsLoading(true);
@@ -144,44 +196,62 @@ export const UnifiedAgenticChat: React.FC<{
           // Handle both string (UUID) and number (backend ID) message IDs
           const targetMessageId = String(payload.message_id);
 
-          // First priority: verify message exists with this ID
-          const messageExists = state.messages.some((m) => m.id === targetMessageId);
+          // CHT-005 fix: Use the stream session mapping to find the correct target
+          // This is the authoritative source for which message should receive updates
+          const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
 
+          // Priority 1: Use the session-tracked message ID (most reliable)
+          if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
+            state.updateMessage(sessionMessageId, {
+              content: payload.content,
+              metadata: { streaming: true },
+            });
+            return;
+          }
+
+          // Priority 2: Use the payload message_id if it exists in messages
+          const messageExists = state.messages.some((m) => m.id === targetMessageId);
           if (messageExists) {
             state.updateMessage(targetMessageId, {
               content: payload.content,
               metadata: { streaming: true },
             });
-          } else {
-            // Fallback: use currentStreamingMessageId if available
-            const currentStreamingId = state.currentStreamingMessageId;
-            if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
-              state.updateMessage(currentStreamingId, {
-                content: payload.content,
-                metadata: { streaming: true },
-              });
-            } else {
-              // Last resort fallback (should rarely happen)
-              const lastStreaming = state.messages
-                .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
-                .pop();
+            return;
+          }
 
-              if (lastStreaming) {
-                state.updateMessage(lastStreaming.id, {
-                  content: payload.content,
-                  metadata: { streaming: true },
-                });
-              } else {
-                console.error(
-                  '[UnifiedAgenticChat] No streaming message found to update. Payload message_id does not match any existing message.',
-                  {
-                    payloadMessageId: payload.message_id,
-                    currentStreamingId: state.currentStreamingMessageId,
-                    availableMessageIds: state.messages.map((m) => m.id),
-                  },
-                );
-              }
-            }
+          // Priority 3: Fallback to currentStreamingMessageId
+          const currentStreamingId = state.currentStreamingMessageId;
+          if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
+            console.warn(
+              `[UnifiedAgenticChat] CHT-005: Using fallback currentStreamingId (session: ${sessionMessageId}, payload: ${targetMessageId}, current: ${currentStreamingId})`,
+            );
+            state.updateMessage(currentStreamingId, {
+              content: payload.content,
+              metadata: { streaming: true },
+            });
+            return;
+          }
+
+          // Last resort: find any streaming assistant message (should rarely happen)
+          const lastStreaming = state.messages
+            .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
+            .pop();
+
+          if (lastStreaming) {
+            console.warn(
+              `[UnifiedAgenticChat] CHT-005: Using last-resort streaming message ${lastStreaming.id}`,
+            );
+            state.updateMessage(lastStreaming.id, {
+              content: payload.content,
+              metadata: { streaming: true },
+            });
+          } else {
+            console.error('[UnifiedAgenticChat] CHT-005: No streaming message found to update.', {
+              payloadMessageId: payload.message_id,
+              sessionMessageId,
+              currentStreamingId: state.currentStreamingMessageId,
+              availableMessageIds: state.messages.map((m) => m.id),
+            });
           }
         }),
       );
@@ -205,20 +275,37 @@ export const UnifiedAgenticChat: React.FC<{
           const messageId = String(payload.message_id);
           const currentStreamingId = state.currentStreamingMessageId;
 
-          // Update the message that was streaming
-          const targetId = state.messages.some((m) => m.id === messageId)
-            ? messageId
-            : currentStreamingId;
+          // CHT-005 fix: Use session tracking for reliable message identification
+          const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
+
+          // Determine target message ID with priority: session > payload > fallback
+          let targetId: string | null = null;
+          if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
+            targetId = sessionMessageId;
+          } else if (state.messages.some((m) => m.id === messageId)) {
+            targetId = messageId;
+          } else if (
+            currentStreamingId &&
+            state.messages.some((m) => m.id === currentStreamingId)
+          ) {
+            targetId = currentStreamingId;
+          }
 
           if (targetId) {
             state.updateMessage(targetId, {
               metadata: {
                 streaming: false,
                 tokenCount: payload.usage?.total_tokens,
-                cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined, // Convert cents to dollars if needed, or store as is. Metadata usually stores cost in dollars or cents? Existing code used tokens/cost.
+                cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
               },
             });
           }
+
+          // CHT-005 fix: Clean up stream session tracking
+          activeStreamSessionsRef.current.delete(payload.conversation_id);
+          console.log(
+            `[UnifiedAgenticChat] CHT-005: Cleaned up stream session for conv=${payload.conversation_id}`,
+          );
 
           // Update billing store with new credit info
           if (payload.credits) {
@@ -243,10 +330,21 @@ export const UnifiedAgenticChat: React.FC<{
             const messageId = String(payload.message_id);
             const currentStreamingId = state.currentStreamingMessageId;
 
-            // Update the message that was streaming with error
-            const targetId = state.messages.some((m) => m.id === messageId)
-              ? messageId
-              : currentStreamingId;
+            // CHT-005 fix: Use session tracking for reliable message identification
+            const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
+
+            // Determine target message ID with priority: session > payload > fallback
+            let targetId: string | null = null;
+            if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
+              targetId = sessionMessageId;
+            } else if (state.messages.some((m) => m.id === messageId)) {
+              targetId = messageId;
+            } else if (
+              currentStreamingId &&
+              state.messages.some((m) => m.id === currentStreamingId)
+            ) {
+              targetId = currentStreamingId;
+            }
 
             if (targetId) {
               // Use friendly error messages in simple mode
@@ -261,6 +359,12 @@ export const UnifiedAgenticChat: React.FC<{
                 error: payload.error,
               });
             }
+
+            // CHT-005 fix: Clean up stream session tracking on error
+            activeStreamSessionsRef.current.delete(payload.conversation_id);
+            console.log(
+              `[UnifiedAgenticChat] CHT-005: Cleaned up stream session on error for conv=${payload.conversation_id}`,
+            );
 
             // Clear the abort controller since streaming errored
             abortControllerRef.current = null;
@@ -349,6 +453,13 @@ export const UnifiedAgenticChat: React.FC<{
               await invoke('chat_pop_pending_message');
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
+              // CHT-002 fix: Show user-visible error for pending message processing failure
+              toast({
+                variant: 'destructive',
+                title: 'Failed to process queued message. Please try again.',
+              });
+              // AUDIT-005-010 fix: Abort processing this message on pop failure to prevent inconsistent state
+              continue;
             }
 
             // Actually send the pending message as a follow-up
@@ -366,6 +477,11 @@ export const UnifiedAgenticChat: React.FC<{
               );
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to send pending message:', err);
+              // CHT-002 fix: Show user-visible error for pending message send failure
+              toast({
+                variant: 'destructive',
+                title: 'Failed to send queued message. Please try again.',
+              });
             }
           }
 
@@ -577,7 +693,10 @@ export const UnifiedAgenticChat: React.FC<{
       });
       unlistenFnsRef.current = [];
     };
-  }, [updateMessage, setStreamingMessage]);
+    // AUDIT-005-014 fix: Remove stable store actions from dependency array
+    // updateMessage and setStreamingMessage are stable zustand actions that don't change
+    // Including them causes unnecessary re-registrations of event listeners
+  }, []);
 
   useEffect(() => {
     if (defaultSidecarOpen === false) {
@@ -827,7 +946,8 @@ export const UnifiedAgenticChat: React.FC<{
           ? `This request contains a HIGH-RISK instruction that could cause system damage: ${matchedRisk}.${modeContext} This is not recommended.`
           : `This request may contain a potential security risk: ${matchedRisk}.${modeContext} Proceed with caution.`;
 
-      const confirmed = window.confirm(`${riskMessage}\n\nProceed anyway?`);
+      // CHT-003 fix: Use custom dialog instead of window.confirm()
+      const confirmed = await confirmRisk(riskLevel as 'medium' | 'high', riskMessage);
       if (!confirmed) {
         return;
       }
@@ -1119,29 +1239,41 @@ export const UnifiedAgenticChat: React.FC<{
     openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
   };
 
+  // CHT-001 fix: Wrap entire chat interface with error boundary to prevent crashes
   return (
-    <div
-      className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
-    >
-      <AppLayout onOpenSettings={onOpenSettings}>
-        {activeView === 'chat' ? (
-          <>
-            <BudgetAlertsPanel />
-            <ChatStream
-              onOpenSidecar={openSidecar}
-              onSuggestionClick={(prompt) => {
-                useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
-              }}
-            />
-            <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
-          </>
-        ) : activeView === 'projects' ? (
-          <ProjectsView />
-        ) : null}
-      </AppLayout>
+    <ChatErrorBoundary>
+      <div
+        className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
+      >
+        <AppLayout onOpenSettings={onOpenSettings}>
+          {activeView === 'chat' ? (
+            <>
+              <BudgetAlertsPanel />
+              <ChatStream
+                onOpenSidecar={openSidecar}
+                onSuggestionClick={(prompt) => {
+                  useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
+                }}
+              />
+              <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
+            </>
+          ) : activeView === 'projects' ? (
+            <ProjectsView />
+          ) : null}
+        </AppLayout>
 
-      <ApprovalModal />
-    </div>
+        <ApprovalModal />
+
+        {/* CHT-003 fix: Custom risk confirmation dialog */}
+        <RiskConfirmationDialog
+          isOpen={riskConfirmState.isOpen}
+          riskLevel={riskConfirmState.riskLevel}
+          message={riskConfirmState.message}
+          onConfirm={handleRiskConfirm}
+          onCancel={handleRiskCancel}
+        />
+      </div>
+    </ChatErrorBoundary>
   );
 };
 

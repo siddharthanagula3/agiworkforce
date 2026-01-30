@@ -15,6 +15,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { UpdateConversationSchema } from '@/lib/validations/chat';
 import type { User } from '@supabase/supabase-js';
 
 async function getAuthenticatedUser(request: NextRequest): Promise<User> {
@@ -120,7 +121,14 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 
   const user = await getAuthenticatedUser(request);
   const { id } = await context.params;
-  const body = await request.json();
+  const rawBody = await request.json();
+
+  // AUDIT-008-002: Validate input with Zod schema (title max 500 chars, model enum)
+  const validationResult = UpdateConversationSchema.safeParse(rawBody);
+  if (!validationResult.success) {
+    throw createError.validation('Invalid request body', validationResult.error);
+  }
+  const body = validationResult.data;
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');

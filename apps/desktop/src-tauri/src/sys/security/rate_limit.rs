@@ -1,6 +1,7 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,8 +19,12 @@ impl Default for RateLimitConfig {
     }
 }
 
+// AUDIT-003-007 fix: Use VecDeque with bounded capacity as a ring buffer
+// to prevent unbounded memory growth within each rate limit window.
 struct RequestRecord {
-    timestamps: Vec<Instant>,
+    // Ring buffer with fixed capacity equal to max_requests + 1
+    // This bounds memory usage while maintaining accurate rate limiting
+    timestamps: VecDeque<Instant>,
 }
 
 pub struct RateLimiter {
@@ -35,6 +40,7 @@ impl RateLimiter {
         }
     }
 
+    // AUDIT-003-007 fix: Bounded ring buffer implementation to prevent memory exhaustion
     pub fn check_rate_limit(&self, key: &str) -> Result<(), String> {
         let now = Instant::now();
         let mut records = self.records.lock();
@@ -42,12 +48,18 @@ impl RateLimiter {
         let record = records
             .entry(key.to_string())
             .or_insert_with(|| RequestRecord {
-                timestamps: Vec::new(),
+                // Pre-allocate with bounded capacity
+                timestamps: VecDeque::with_capacity(self.config.max_requests + 1),
             });
 
-        record
-            .timestamps
-            .retain(|&timestamp| now.duration_since(timestamp) < self.config.window);
+        // Remove expired timestamps from front of deque (oldest first)
+        while let Some(&oldest) = record.timestamps.front() {
+            if now.duration_since(oldest) >= self.config.window {
+                record.timestamps.pop_front();
+            } else {
+                break;
+            }
+        }
 
         if record.timestamps.len() >= self.config.max_requests {
             return Err(format!(
@@ -56,7 +68,14 @@ impl RateLimiter {
             ));
         }
 
-        record.timestamps.push(now);
+        // Add new timestamp; VecDeque handles capacity efficiently
+        record.timestamps.push_back(now);
+
+        // Safety cap: if somehow capacity is exceeded, remove oldest
+        // This ensures bounded memory even under edge cases
+        while record.timestamps.len() > self.config.max_requests + 1 {
+            record.timestamps.pop_front();
+        }
 
         Ok(())
     }

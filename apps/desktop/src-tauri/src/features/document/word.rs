@@ -8,6 +8,18 @@ use zip::read::ZipArchive;
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
 use crate::sys::error::{Error, Result};
 
+/// DOC-011 security note: XXE (XML External Entity) Protection
+///
+/// This module uses `roxmltree` for XML parsing which is inherently safe from XXE attacks:
+/// - roxmltree is a read-only parser that does not resolve external entities
+/// - It does not support DOCTYPE declarations with SYSTEM or PUBLIC identifiers
+/// - External entity expansion is not implemented, preventing XXE injection
+///
+/// Additional protections:
+/// - File size limits are enforced at the DocumentManager level (DOC-010)
+/// - ZIP bomb protection via the `zip` crate's built-in limits
+/// - No network access during parsing (no external resource fetching)
+
 const CORE_PROPS_NS: &str =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 

@@ -75,9 +75,12 @@ export function ShareModal() {
     if (platformId === 'direct') {
       handleCopyUrl();
     } else if (platformId === 'email') {
-      window.location.href = url;
+      // MKT-002 fix: Use window.open instead of location.href to prevent
+      // email header injection via newlines in title. Also add noopener,noreferrer.
+      window.open(url, '_blank', 'noopener,noreferrer');
     } else {
-      window.open(url, '_blank', 'width=600,height=400');
+      // MKT-004 fix: Add noopener,noreferrer to prevent window.opener access
+      window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
     }
   };
 

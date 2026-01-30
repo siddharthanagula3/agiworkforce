@@ -782,6 +782,10 @@ pub fn overlay_emit_region(
     Ok(())
 }
 
+/// AUDIT-004-001 fix: Updated to use paginated overlay events query.
+/// Maximum events to replay to prevent unbounded memory usage.
+const MAX_REPLAY_EVENTS: i64 = 100;
+
 #[tauri::command]
 pub async fn overlay_replay_recent(
     app: AppHandle,
@@ -789,14 +793,22 @@ pub async fn overlay_replay_recent(
     limit: Option<usize>,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
-    let events = {
+
+    // AUDIT-004-001: Use paginated query with explicit limit
+    let replay_limit = limit.unwrap_or(10).min(MAX_REPLAY_EVENTS as usize) as i64;
+
+    let paginated_result = {
         let conn = db.connection()?;
-        repository::list_overlay_events(&conn, None, None).map_err(|e| e.to_string())?
+        // Request only the events we need, starting from the most recent
+        // Note: list_overlay_events returns events in ASC order by timestamp,
+        // so we fetch a reasonable batch and take from the end
+        repository::list_overlay_events(&conn, None, None, MAX_REPLAY_EVENTS, None)
+            .map_err(|e| e.to_string())?
     };
 
-    let limit = limit.unwrap_or(10);
+    let events = paginated_result.events;
     let count = events.len();
-    let start = count.saturating_sub(limit);
+    let start = count.saturating_sub(replay_limit as usize);
 
     for event in events.into_iter().skip(start) {
         if let Some(animation) = animation_from_event(event) {

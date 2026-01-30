@@ -687,6 +687,11 @@ export const getOllamaModelDisplayName = (model: OllamaModel): string => {
   return model.name;
 };
 
+/**
+ * STR-009 fix: Wait for settings hydration before reading from settings store.
+ * This prevents race conditions where modelStore might initialize with stale
+ * defaults before settings have been loaded from localStorage.
+ */
 export const initializeModelStoreFromSettings = async () => {
   const modelStore = useModelStore.getState();
 
@@ -695,6 +700,10 @@ export const initializeModelStoreFromSettings = async () => {
   }
 
   try {
+    // STR-009 fix: Wait for settings to hydrate before reading from store
+    const { waitForSettingsHydration } = await import('./settingsStore');
+    await waitForSettingsHydration();
+
     const settingsStore = useSettingsStore.getState();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;

@@ -42,7 +42,12 @@ impl ResultComparator {
             })
             .collect();
 
-        scored_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        // AUDIT-P3-007: Handle NaN gracefully in score comparison
+        scored_results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         for (idx, scored) in scored_results.iter_mut().enumerate() {
             scored.rank = idx + 1;

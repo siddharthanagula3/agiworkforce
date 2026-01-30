@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { useBrowserStore, cleanupBrowserStore } from '../browserStore';
 
 vi.mock('../../lib/tauri-mock', () => ({
@@ -7,11 +7,13 @@ vi.mock('../../lib/tauri-mock', () => ({
   isTauri: true,
 }));
 
-type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
+// AUDIT-P3-TEST-TYPE: Use Mock type with explicit function signature for better type safety
+type InvokeMock = Mock<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('../../lib/tauri-mock');
-  return invoke as unknown as InvokeMock;
+  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn()
+  return invoke as InvokeMock;
 }
 
 describe('browserStore', () => {

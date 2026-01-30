@@ -14,6 +14,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { CreateConversationSchema } from '@/lib/validations/chat';
 import type { User } from '@supabase/supabase-js';
 
 async function getAuthenticatedUser(request: NextRequest): Promise<User> {
@@ -101,12 +102,19 @@ async function handleCreateConversation(request: NextRequest) {
 
   const user = await getAuthenticatedUser(request);
 
-  let body: { title?: string; model?: string } = {};
+  // AUDIT-008-003: Validate input with Zod schema
+  let rawBody: unknown = {};
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
-    // Empty body is fine
+    // Empty body is fine - defaults will be applied by schema
   }
+
+  const validationResult = CreateConversationSchema.safeParse(rawBody);
+  if (!validationResult.success) {
+    throw createError.validation('Invalid request body', validationResult.error);
+  }
+  const body = validationResult.data;
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -116,8 +124,8 @@ async function handleCreateConversation(request: NextRequest) {
     .from('web_conversations')
     .insert({
       user_id: user.id,
-      title: body.title || 'New conversation',
-      model: body.model || 'auto',
+      title: body.title,
+      model: body.model,
     })
     .select()
     .single();

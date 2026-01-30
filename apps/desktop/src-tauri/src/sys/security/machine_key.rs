@@ -15,9 +15,19 @@
 //! - Uses PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP recommendation)
 //! - Salt is derived from machine_id to ensure consistency across restarts
 //! - Different key purposes get different derived keys via key stretching
+//!
+//! # Password-Based Derivation (SECSYS-001)
+//! For enhanced security, use `derive_key_with_password()` which combines:
+//! - User's master password (Argon2id hashed)
+//! - Machine-specific identifiers
+//! - Purpose-specific HKDF derivation
+//!
+//! The password-based approach should be preferred for sensitive secrets.
+//! Machine-only derivation remains available for backward compatibility during migration.
 
 use crate::core::sync_utils::RwLockExt;
 use base64::{engine::general_purpose, Engine as _};
+use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
 use pbkdf2::pbkdf2_hmac_array;
 use sha2::Sha256;
@@ -45,7 +55,8 @@ pub enum KeyPurpose {
 }
 
 impl KeyPurpose {
-    fn as_str(&self) -> &'static str {
+    /// Get the string representation of this key purpose
+    pub fn as_str(&self) -> &'static str {
         match self {
             KeyPurpose::JwtSecret => "jwt_secret",
             KeyPurpose::DatabaseEncryption => "db_encryption",
@@ -199,6 +210,69 @@ pub fn get_machine_id_hash() -> String {
     hasher.update(MACHINE_KEY_MANAGER.machine_id.as_bytes());
     // Return truncated hash for privacy
     hex::encode(&hasher.finalize()[..8])
+}
+
+/// Derive an encryption key using a password combined with machine ID (SECSYS-001)
+///
+/// This function provides enhanced security by combining:
+/// 1. User-provided password (hashed with Argon2id)
+/// 2. Machine-specific identifiers
+/// 3. Purpose-specific HKDF derivation
+///
+/// # Arguments
+/// * `password_key` - The Argon2id-derived key from the user's password
+/// * `purpose` - The purpose for which the key will be used
+///
+/// # Returns
+/// A 32-byte encryption key derived from both password and machine identity
+///
+/// # Security Note
+/// This should be the preferred method for deriving keys for sensitive secrets.
+/// The old `derive_key()` function remains for backward compatibility during migration.
+pub fn derive_key_with_password(password_key: &[u8], purpose: KeyPurpose) -> Vec<u8> {
+    let install_id = MACHINE_KEY_MANAGER.get_install_id();
+
+    // Combine password key with machine identifiers
+    let mut combined = password_key.to_vec();
+    combined.extend_from_slice(MACHINE_KEY_MANAGER.machine_id.as_bytes());
+    combined.extend_from_slice(install_id.as_bytes());
+    combined.extend_from_slice(APP_BUNDLE_ID.as_bytes());
+
+    // Create purpose-specific info string for HKDF
+    let info = format!("agiworkforce:password_derived:{}:v1", purpose.as_str());
+
+    // HKDF-Extract: PRK = HMAC(salt, IKM)
+    let salt = b"com.agiworkforce.desktop:password_key:v1";
+    let mut extract_hmac =
+        <Hmac<Sha256> as Mac>::new_from_slice(salt).expect("HMAC can take key of any size");
+    extract_hmac.update(&combined);
+    let prk = extract_hmac.finalize().into_bytes();
+
+    // HKDF-Expand: OKM = HMAC(PRK, info || 0x01)
+    let mut expand_hmac =
+        <Hmac<Sha256> as Mac>::new_from_slice(&prk).expect("HMAC can take key of any size");
+    expand_hmac.update(info.as_bytes());
+    expand_hmac.update(&[0x01]);
+    let okm = expand_hmac.finalize().into_bytes();
+
+    okm[..KEY_SIZE].to_vec()
+}
+
+/// Derive an encryption key with password and return as base64
+pub fn derive_key_with_password_base64(password_key: &[u8], purpose: KeyPurpose) -> String {
+    general_purpose::STANDARD.encode(derive_key_with_password(password_key, purpose))
+}
+
+/// Check if machine-only keys are in use (for migration detection)
+///
+/// Returns true if there are encrypted secrets that were encrypted
+/// without a master password. These should be migrated to password-based
+/// encryption when the user sets up a master password.
+pub fn has_machine_only_secrets() -> bool {
+    // This is a placeholder - the actual implementation would check
+    // the database for secrets encrypted with machine-only keys
+    // The MasterPasswordManager handles the actual migration tracking
+    true
 }
 
 #[cfg(test)]

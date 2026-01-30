@@ -127,7 +127,7 @@ class ErrorTrackingService {
       component?: string;
       severity?: ErrorSeverity;
       tags?: Record<string, string>;
-      extra?: Record<string, any>;
+      extra?: Record<string, unknown>;
     },
   ) {
     if (!this.config.enabled) {
@@ -177,7 +177,7 @@ class ErrorTrackingService {
     }
   }
 
-  public addBreadcrumb(category: string, message: string, data?: Record<string, any>) {
+  public addBreadcrumb(category: string, message: string, data?: Record<string, unknown>) {
     if (!this.config.enabled) {
       return;
     }
@@ -194,7 +194,7 @@ class ErrorTrackingService {
     }
   }
 
-  public setUser(userId?: string, userData?: Record<string, any>) {
+  public setUser(userId?: string, userData?: Record<string, unknown>) {
     if (!this.config.enabled) {
       return;
     }

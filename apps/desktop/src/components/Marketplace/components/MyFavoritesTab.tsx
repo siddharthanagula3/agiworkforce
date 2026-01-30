@@ -29,7 +29,8 @@ export function MyFavoritesTab() {
       setFavorites(favoritedWorkflows);
     } catch (err) {
       console.error('Failed to load favorites:', err);
-      setError(String(err));
+      // MKT-006 fix: Translate technical errors to user-friendly messages
+      setError('Unable to load your favorites. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -60,8 +61,11 @@ export function MyFavoritesTab() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-destructive">Error: {error}</div>
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="text-lg text-destructive">{error}</div>
+        <Button variant="outline" onClick={loadFavorites}>
+          Try Again
+        </Button>
       </div>
     );
   }

@@ -367,6 +367,20 @@ impl OverlayEvent {
     }
 }
 
+/// AUDIT-004-001 fix: Paginated response for overlay events.
+/// Includes total count to support UI pagination controls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginatedOverlayEvents {
+    /// The overlay events for the current page
+    pub events: Vec<OverlayEvent>,
+    /// Total count of events matching the filter (before pagination)
+    pub total_count: i64,
+    /// The limit used for this query
+    pub limit: i64,
+    /// The offset used for this query
+    pub offset: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PermissionType {

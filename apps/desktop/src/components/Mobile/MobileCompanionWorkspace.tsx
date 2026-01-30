@@ -51,7 +51,13 @@ export function MobileCompanionWorkspace() {
 
     if (stream) {
       video.srcObject = stream;
-      void video.play().catch(() => {});
+      void video.play().catch((err) => {
+        // AUDIT-P3-ERROR: Video autoplay may be blocked by browser policy - not critical
+        console.debug(
+          '[MobileCompanion] Video autoplay blocked (user interaction may be required):',
+          err,
+        );
+      });
     } else {
       video.srcObject = null;
     }

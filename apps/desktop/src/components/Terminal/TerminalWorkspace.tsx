@@ -151,41 +151,56 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     };
   }, [availableShells, handleCreateSession, initialSessionSpawned, isCreating, sessions.length]);
 
-  const handleToggleHistory = () => {
+  // WRK-007 fix: Memoize handlers to prevent unnecessary re-renders
+  const handleToggleHistory = useCallback(() => {
     if (!activeSessionId) {
       toast.error('Open a terminal session to view history');
       return;
     }
 
     setIsHistoryOpen((prev) => !prev);
-  };
+  }, [activeSessionId]);
 
-  const handleReplayCommand = async (command: string) => {
-    if (!activeSessionId) {
-      toast.error('No active terminal session');
-      return;
-    }
+  // WRK-007 fix: Memoize handlers to prevent unnecessary re-renders
+  const handleReplayCommand = useCallback(
+    async (command: string) => {
+      if (!activeSessionId) {
+        toast.error('No active terminal session');
+        return;
+      }
 
-    const trimmed = command.trim();
-    if (!trimmed) {
-      return;
-    }
+      const trimmed = command.trim();
+      if (!trimmed) {
+        return;
+      }
 
-    try {
-      await sendInput(activeSessionId, `${trimmed}\n`);
-      toast.success(`Re-ran: ${trimmed}`);
-    } catch (error) {
-      console.error('Failed to replay command:', error);
-      toast.error('Failed to replay command');
-    }
-  };
+      try {
+        await sendInput(activeSessionId, `${trimmed}\n`);
+        toast.success(`Re-ran: ${trimmed}`);
+      } catch (error) {
+        console.error('Failed to replay command:', error);
+        toast.error('Failed to replay command');
+      }
+    },
+    [activeSessionId, sendInput],
+  );
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   return (
-    <div className={cn('flex flex-col h-full bg-background min-h-0 min-w-0', className)}>
+    <div
+      className={cn('flex flex-col h-full bg-background min-h-0 min-w-0', className)}
+      // WRK-008 fix: ARIA labels for accessibility
+      role="region"
+      aria-label="Terminal workspace"
+    >
       {}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10">
+      <div
+        className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10"
+        // WRK-008 fix: ARIA labels for accessibility
+        role="toolbar"
+        aria-label="Terminal controls"
+      >
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">Terminal</span>
