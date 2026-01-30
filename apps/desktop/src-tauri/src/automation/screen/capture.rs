@@ -35,6 +35,17 @@ pub struct CapturedImage {
     pub display: ScreenInfo,
 }
 
+impl std::fmt::Debug for CapturedImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CapturedImage")
+            .field("width", &self.pixels.width())
+            .field("height", &self.pixels.height())
+            .field("screen_index", &self.screen_index)
+            .field("display", &self.display)
+            .finish()
+    }
+}
+
 #[derive(Clone)]
 pub struct CapturedRegion {
     pub pixels: RgbaImage,

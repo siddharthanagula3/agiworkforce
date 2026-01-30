@@ -7,6 +7,9 @@ use chrono::{Duration as ChronoDuration, NaiveDate, NaiveDateTime};
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
 use crate::sys::error::{Error, Result};
 
+/// DOC-015 fix: Maximum text extraction size to prevent memory exhaustion (10 MB)
+const MAX_EXTRACTION_SIZE: usize = 10 * 1024 * 1024;
+
 struct ExcelExtraction {
     text: String,
     sheet_count: usize,
@@ -54,12 +57,17 @@ impl ExcelHandler {
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 
-        for (line_num, line) in extraction.text.lines().enumerate() {
-            if line.to_lowercase().contains(&query_lower) {
+        // DOC-013 fix: Pre-lowercase the entire content once for O(n) instead of O(n*m)
+        let text_lower = extraction.text.to_lowercase();
+        let lines: Vec<&str> = extraction.text.lines().collect();
+        let lines_lower: Vec<&str> = text_lower.lines().collect();
+
+        for (line_num, (line, line_lower)) in lines.iter().zip(lines_lower.iter()).enumerate() {
+            if line_lower.contains(&query_lower) {
                 results.push(SearchResult {
                     page: None,
                     line: Some(line_num + 1),
-                    context: line.to_string(),
+                    context: line.to_string(), // Return original case for display
                     match_text: query.to_string(),
                 });
             }
@@ -81,8 +89,15 @@ impl ExcelHandler {
         let mut aggregated = String::new();
         let mut sheet_count = 0usize;
         let mut non_empty_cells = 0usize;
+        let mut size_limit_reached = false;
 
-        for sheet_name in sheet_names {
+        'sheets: for sheet_name in sheet_names {
+            // DOC-015 fix: Check size limit before processing more sheets
+            if aggregated.len() >= MAX_EXTRACTION_SIZE {
+                size_limit_reached = true;
+                break 'sheets;
+            }
+
             sheet_count += 1;
             if !aggregated.is_empty() {
                 aggregated.push_str("\n\n");
@@ -91,6 +106,12 @@ impl ExcelHandler {
 
             if let Some(Ok(range)) = workbook.worksheet_range(&sheet_name) {
                 for row in range.rows() {
+                    // DOC-015 fix: Check size limit per row to prevent unbounded growth
+                    if aggregated.len() >= MAX_EXTRACTION_SIZE {
+                        size_limit_reached = true;
+                        break 'sheets;
+                    }
+
                     let mut row_values = Vec::with_capacity(row.len());
                     for cell in row {
                         let cell_text = data_type_to_string(cell);
@@ -112,6 +133,16 @@ impl ExcelHandler {
                     }
                 }
             }
+        }
+
+        // DOC-015 fix: Add truncation message if size limit was reached
+        if size_limit_reached {
+            aggregated.push_str("\n\n[Content truncated due to size limit]");
+            tracing::warn!(
+                "[ExcelHandler] Content truncated at {} bytes for file: {}",
+                aggregated.len(),
+                file_path
+            );
         }
 
         Ok(ExcelExtraction {

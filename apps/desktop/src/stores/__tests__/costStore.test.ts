@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { useBillingUsageStore } from '../billingUsage';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -47,13 +47,15 @@ vi.mock('../../services/performance', () => ({
   },
 }));
 
-type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
+// AUDIT-P3-TEST-TYPE: Use Mock type with explicit function signature for better type safety
+type InvokeMock = Mock<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>>;
 
 let invokeMock: InvokeMock;
 
 beforeEach(async () => {
   const { invoke } = await import('@tauri-apps/api/core');
-  invokeMock = invoke as unknown as InvokeMock;
+  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn()
+  invokeMock = invoke as InvokeMock;
   invokeMock.mockReset();
 
   useBillingUsageStore.setState({

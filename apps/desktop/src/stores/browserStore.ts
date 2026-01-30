@@ -116,7 +116,7 @@ interface BrowserState {
   typeText: (tabId: string, selector: string, text: string) => Promise<void>;
   screenshot: (tabId: string) => Promise<string>;
   getPageContent: (tabId: string) => Promise<string>;
-  executeScript: (tabId: string, script: string) => Promise<any>;
+  executeScript: (tabId: string, script: string) => Promise<unknown>;
   setActiveSession: (sessionId: string) => void;
 
   addAction: (action: BrowserAction) => void;
@@ -167,6 +167,19 @@ export const useBrowserStore = create<BrowserState>()(
 
         initialize: async () => {
           try {
+            // STR-005 fix: Clean up any existing listeners before re-initializing
+            // This prevents duplicate listeners if initialize() is called multiple times
+            if (unlistenFunctions.length > 0) {
+              unlistenFunctions.forEach((unlisten) => {
+                try {
+                  unlisten();
+                } catch (error) {
+                  console.error('[browserStore] Error cleaning up existing listener:', error);
+                }
+              });
+              unlistenFunctions.length = 0;
+            }
+
             await invoke('browser_init');
             set({ initialized: true }, undefined, 'browser/initialize');
 
@@ -189,6 +202,10 @@ export const useBrowserStore = create<BrowserState>()(
                   set(
                     (state) => {
                       state.consoleLogs.push(log);
+                      // STR-003 fix: Cap consoleLogs at 5000 entries (matching terminalLogs pattern)
+                      if (state.consoleLogs.length > 5000) {
+                        state.consoleLogs = state.consoleLogs.slice(-5000);
+                      }
                     },
                     undefined,
                     'browser/consoleLog',
@@ -207,6 +224,10 @@ export const useBrowserStore = create<BrowserState>()(
                   set(
                     (state) => {
                       state.networkRequests.push(request);
+                      // STR-003 fix: Cap networkRequests at 5000 entries
+                      if (state.networkRequests.length > 5000) {
+                        state.networkRequests = state.networkRequests.slice(-5000);
+                      }
                     },
                     undefined,
                     'browser/networkRequest',
@@ -312,6 +333,8 @@ export const useBrowserStore = create<BrowserState>()(
                     break;
                   }
                 }
+                // WRK-004 fix: Clear screenshots for this tab to prevent memory leak
+                state.screenshots = state.screenshots.filter((s) => s.tabId !== tabId);
               },
               undefined,
               'browser/closeTab',
@@ -402,6 +425,10 @@ export const useBrowserStore = create<BrowserState>()(
           set(
             (state) => {
               state.actions.push(action);
+              // STR-003 fix: Cap actions array at 1000 entries
+              if (state.actions.length > 1000) {
+                state.actions = state.actions.slice(-1000);
+              }
             },
             undefined,
             'browser/addAction',
@@ -456,6 +483,10 @@ export const useBrowserStore = create<BrowserState>()(
             set(
               (state) => {
                 state.domSnapshots.push(snapshot);
+                // AUDIT-006-002 fix: Cap domSnapshots at 50 entries
+                if (state.domSnapshots.length > 50) {
+                  state.domSnapshots = state.domSnapshots.slice(-50);
+                }
               },
               undefined,
               'browser/getDOMSnapshot',
@@ -538,6 +569,10 @@ export const useBrowserStore = create<BrowserState>()(
           set(
             (state) => {
               state.recordedSteps.push(step);
+              // AUDIT-006-003 fix: Cap recordedSteps at 1000 entries
+              if (state.recordedSteps.length > 1000) {
+                state.recordedSteps = state.recordedSteps.slice(-1000);
+              }
             },
             undefined,
             'browser/addRecordedStep',
@@ -594,13 +629,9 @@ test('recorded automation', async ({ page }) => {
           const { streamIntervalId } = get();
           if (streamIntervalId !== null) {
             window.clearInterval(streamIntervalId);
-            set(
-              { isStreaming: false, streamIntervalId: null },
-              undefined,
-              'browser/cleanup/stopStreaming',
-            );
           }
 
+          // STR-005 fix: Clean up all event listeners
           unlistenFunctions.forEach((unlisten) => {
             try {
               unlisten();
@@ -610,7 +641,26 @@ test('recorded automation', async ({ page }) => {
           });
           unlistenFunctions.length = 0;
 
-          set({ initialized: false }, undefined, 'browser/cleanup');
+          // STR-005 fix: Reset all state to prevent data leaking across sessions
+          set(
+            {
+              sessions: [],
+              activeSessionId: null,
+              initialized: false,
+              screenshots: [],
+              actions: [],
+              domSnapshots: [],
+              consoleLogs: [],
+              networkRequests: [],
+              highlightedElement: null,
+              isRecording: false,
+              recordedSteps: [],
+              isStreaming: false,
+              streamIntervalId: null,
+            },
+            undefined,
+            'browser/cleanup',
+          );
         },
       })),
     ),

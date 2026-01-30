@@ -68,7 +68,47 @@ const storageFallback: Storage = {
 };
 
 // Version for storage migration
-const MEMORY_STORE_VERSION = 1;
+// Version 2: AUDIT-006-024 - Added memory caps and size limits
+const MEMORY_STORE_VERSION = 2;
+
+// AUDIT-006-024: Memory limits to prevent unbounded localStorage growth
+const MEMORY_LIMITS = {
+  maxEntries: 100,
+  maxTotalSizeBytes: 1024 * 1024, // 1MB
+} as const;
+
+/**
+ * Calculate the approximate size of a memory entry in bytes.
+ */
+function estimateMemoryEntrySize(entry: MemoryEntry): number {
+  return JSON.stringify(entry).length * 2; // UTF-16 encoding
+}
+
+/**
+ * Prune memories to fit within limits.
+ * Removes oldest entries first (by created_at timestamp).
+ */
+function pruneMemories(memories: MemoryEntry[]): MemoryEntry[] {
+  // Sort by created_at (oldest first) for consistent pruning
+  const sorted = [...memories].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  // First pass: enforce max entries limit (keep newest)
+  let pruned =
+    sorted.length > MEMORY_LIMITS.maxEntries ? sorted.slice(-MEMORY_LIMITS.maxEntries) : sorted;
+
+  // Second pass: enforce total size limit (remove oldest until under limit)
+  let totalSize = pruned.reduce((acc, entry) => acc + estimateMemoryEntrySize(entry), 0);
+  while (totalSize > MEMORY_LIMITS.maxTotalSizeBytes && pruned.length > 0) {
+    const removed = pruned.shift();
+    if (removed) {
+      totalSize -= estimateMemoryEntrySize(removed);
+    }
+  }
+
+  return pruned;
+}
 
 export const useMemoryStore = create<MemoryState>()(
   devtools(
@@ -235,7 +275,19 @@ export const useMemoryStore = create<MemoryState>()(
           try {
             const memories = await invoke<MemoryEntry[]>('memory_list_all');
 
-            set({ memories, isLoading: false }, undefined, 'memory/loadAll/success');
+            // AUDIT-006-024: Apply memory limits to prevent unbounded growth
+            const prunedMemories = pruneMemories(memories);
+            if (prunedMemories.length < memories.length) {
+              console.log(
+                `[memoryStore] Pruned ${memories.length - prunedMemories.length} memories to fit within limits`,
+              );
+            }
+
+            set(
+              { memories: prunedMemories, isLoading: false },
+              undefined,
+              'memory/loadAll/success',
+            );
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to load all memories:', message);
@@ -269,6 +321,25 @@ export const useMemoryStore = create<MemoryState>()(
         partialize: (state) => ({
           memories: state.memories,
         }),
+        // AUDIT-006-024: Migration logic for existing users
+        migrate: (persistedState, version) => {
+          const state = persistedState as { memories?: MemoryEntry[] };
+
+          if (version < 2) {
+            // Version 2: Apply memory limits to existing data
+            if (state.memories && Array.isArray(state.memories)) {
+              const originalCount = state.memories.length;
+              state.memories = pruneMemories(state.memories);
+              if (state.memories.length < originalCount) {
+                console.log(
+                  `[MemoryStore] Migration v2: Pruned ${originalCount - state.memories.length} memories to fit within new limits`,
+                );
+              }
+            }
+          }
+
+          return state as MemoryState;
+        },
         // Called when rehydration finishes (with or without errors)
         onRehydrateStorage: () => (state) => {
           if (state) {

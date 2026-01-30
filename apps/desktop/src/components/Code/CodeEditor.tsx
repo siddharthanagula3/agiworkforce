@@ -101,7 +101,10 @@ export function CodeEditor({
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      handleSave({ auto: false }).catch(() => {});
+      handleSave({ auto: false }).catch((err) => {
+        // AUDIT-P3-ERROR: Save error - handleSave already shows toast notification
+        console.debug('[CodeEditor] Save failed:', err);
+      });
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => {
@@ -220,7 +223,10 @@ export function CodeEditor({
                 variant="default"
                 size="sm"
                 onClick={() => {
-                  handleSave({ auto: false }).catch(() => {});
+                  handleSave({ auto: false }).catch((err) => {
+                    // AUDIT-P3-ERROR: Save error - handleSave already shows toast notification
+                    console.debug('[CodeEditor] Save button failed:', err);
+                  });
                 }}
                 disabled={saved}
                 title="Save (Ctrl+S)"

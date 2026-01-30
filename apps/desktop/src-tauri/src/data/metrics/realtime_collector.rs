@@ -447,11 +447,35 @@ impl RealtimeMetricsCollector {
         Ok(employees)
     }
 
+    // AUDIT-004-003: Added pagination with limit and offset parameters
+    // Previously loaded all metrics without bounds; now supports pagination
     pub async fn get_metrics_history(
         &self,
         user_id: &str,
         days: i64,
     ) -> Result<Vec<MetricsSnapshot>, String> {
+        // Default limit for backward compatibility
+        self.get_metrics_history_paginated(user_id, days, 1000, 0)
+            .await
+    }
+
+    /// Get metrics history with pagination support
+    ///
+    /// # Arguments
+    /// * `user_id` - The user ID to filter by
+    /// * `days` - Number of days to look back
+    /// * `limit` - Maximum number of records to return (capped at 10000)
+    /// * `offset` - Number of records to skip
+    pub async fn get_metrics_history_paginated(
+        &self,
+        user_id: &str,
+        days: i64,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<MetricsSnapshot>, String> {
+        const MAX_LIMIT: usize = 10000;
+        let limit = limit.min(MAX_LIMIT);
+
         let conn = self
             .db
             .lock()
@@ -464,25 +488,29 @@ impl RealtimeMetricsCollector {
                         cost_saved_usd, tasks_completed, errors_prevented, quality_score, timestamp
                  FROM realtime_metrics
                  WHERE user_id = ?1 AND timestamp >= ?2
-                 ORDER BY timestamp DESC",
+                 ORDER BY timestamp DESC
+                 LIMIT ?3 OFFSET ?4",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let metrics = stmt
-            .query_map(rusqlite::params![user_id, cutoff], |row| {
-                Ok(MetricsSnapshot {
-                    id: row.get(0)?,
-                    user_id: row.get(1)?,
-                    automation_id: row.get(2)?,
-                    employee_id: row.get(3)?,
-                    time_saved_minutes: row.get::<_, i64>(4)? as u64,
-                    cost_saved_usd: row.get(5)?,
-                    tasks_completed: row.get::<_, i64>(6)? as u64,
-                    errors_prevented: row.get::<_, i64>(7)? as u64,
-                    quality_score: row.get(8)?,
-                    timestamp: row.get(9)?,
-                })
-            })
+            .query_map(
+                rusqlite::params![user_id, cutoff, limit as i64, offset as i64],
+                |row| {
+                    Ok(MetricsSnapshot {
+                        id: row.get(0)?,
+                        user_id: row.get(1)?,
+                        automation_id: row.get(2)?,
+                        employee_id: row.get(3)?,
+                        time_saved_minutes: row.get::<_, i64>(4)? as u64,
+                        cost_saved_usd: row.get(5)?,
+                        tasks_completed: row.get::<_, i64>(6)? as u64,
+                        errors_prevented: row.get::<_, i64>(7)? as u64,
+                        quality_score: row.get(8)?,
+                        timestamp: row.get(9)?,
+                    })
+                },
+            )
             .map_err(|e| format!("Failed to query metrics: {}", e))?
             .collect::<SqliteResult<Vec<_>>>()
             .map_err(|e| format!("Failed to collect metrics: {}", e))?;

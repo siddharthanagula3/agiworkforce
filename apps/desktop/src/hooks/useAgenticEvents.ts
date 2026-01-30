@@ -151,6 +151,10 @@ export function useAgenticEvents() {
   const unlistenFns = useRef<UnlistenFn[]>([]);
   const isMountedRef = useRef(false);
   const setupInProgressRef = useRef(false);
+  // AUDIT-007-001 fix: Track tool stream cleanup timeouts for proper cleanup on unmount
+  const toolStreamCleanupTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
 
   const handlersRef = useRef({
     addFileOperation: useUnifiedChatStore.getState().addFileOperation,
@@ -407,12 +411,14 @@ export function useAgenticEvents() {
                 entryPoint,
               });
               if (isTauri) {
+                // AUDIT-007-002 fix: Store timeout ID and clear in finally block to prevent timer leak
+                let timeoutId: ReturnType<typeof setTimeout> | undefined;
                 try {
                   const INVOKE_TIMEOUT_MS = 10000;
                   await Promise.race([
                     invoke('agent_set_workflow_hash', { workflow_hash: workflowHash }),
-                    new Promise<never>((_, reject) =>
-                      setTimeout(
+                    new Promise<never>((_, reject) => {
+                      timeoutId = setTimeout(
                         () =>
                           reject(
                             new Error(
@@ -420,11 +426,15 @@ export function useAgenticEvents() {
                             ),
                           ),
                         INVOKE_TIMEOUT_MS,
-                      ),
-                    ),
+                      );
+                    }),
                   ]);
                 } catch (error) {
                   console.error('[useAgenticEvents] Failed to push workflow hash', error);
+                } finally {
+                  if (timeoutId !== undefined) {
+                    clearTimeout(timeoutId);
+                  }
                 }
               }
             } else if (workflowHash && !entryPoint) {
@@ -920,10 +930,20 @@ export function useAgenticEvents() {
                 message: `${stream?.tool_name || 'Tool'} completed (${completedEvent.duration_ms}ms)`,
               });
 
-              // Clean up after a delay
-              setTimeout(() => {
-                handlersRef.current.removeToolStream(completedEvent.tool_id);
+              // AUDIT-007-001 fix: Store timeout ID for cleanup on unmount
+              const existingTimeout = toolStreamCleanupTimeoutsRef.current.get(
+                completedEvent.tool_id,
+              );
+              if (existingTimeout) {
+                clearTimeout(existingTimeout);
+              }
+              const timeoutId = setTimeout(() => {
+                if (isMountedRef.current) {
+                  handlersRef.current.removeToolStream(completedEvent.tool_id);
+                }
+                toolStreamCleanupTimeoutsRef.current.delete(completedEvent.tool_id);
               }, 5000);
+              toolStreamCleanupTimeoutsRef.current.set(completedEvent.tool_id, timeoutId);
               break;
             }
 
@@ -1020,11 +1040,17 @@ export function useAgenticEvents() {
       setupInProgressRef.current = false;
     });
 
+    // AUDIT-007-001 fix: Capture ref values inside effect for cleanup function
+    const timeoutsMap = toolStreamCleanupTimeoutsRef.current;
+
     return () => {
       isMountedRef.current = false;
       setupInProgressRef.current = false;
       unlistenFns.current.forEach((fn) => fn());
       unlistenFns.current = [];
+      // AUDIT-007-001 fix: Clear all pending tool stream cleanup timeouts on unmount
+      timeoutsMap.forEach((timeoutId) => clearTimeout(timeoutId));
+      timeoutsMap.clear();
     };
   }, []);
 

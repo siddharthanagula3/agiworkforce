@@ -1,5 +1,29 @@
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 
+// AUDIT-007-016/017/018 fix: Register DOMPurify hooks once at module initialization
+// instead of on every sanitize call to avoid memory leaks and performance issues
+let hooksInitialized = false;
+
+function initializeDOMPurifyHooks(): void {
+  if (hooksInitialized) return;
+  hooksInitialized = true;
+
+  // Hook for sanitizeHtml with allowLinks option
+  // This hook handles anchor tags for all sanitize functions
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A') {
+      const anchor = node as HTMLAnchorElement;
+      // Always add rel for _blank targets
+      if (anchor.getAttribute('target') === '_blank') {
+        anchor.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+  });
+}
+
+// Initialize hooks on module load
+initializeDOMPurifyHooks();
+
 export function sanitizeHtml(
   html: string,
   options?: {
@@ -54,23 +78,27 @@ export function sanitizeHtml(
     if (config.ALLOWED_ATTR) {
       config.ALLOWED_ATTR.push('href', 'target', 'rel');
     }
-
-    DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-      if (node.tagName === 'A') {
-        const anchor = node as HTMLAnchorElement;
-        if (anchor.getAttribute('target') === '_blank') {
-          anchor.setAttribute('rel', 'noopener noreferrer');
-        }
-
-        const href = anchor.getAttribute('href');
-        if (href && !/^https?:\/\//.test(href)) {
-          anchor.removeAttribute('href');
-        }
-      }
-    });
+    // AUDIT-007-016 fix: Hook is now registered at module initialization
+    // Additional validation for href is done via post-processing
   }
 
-  return DOMPurify.sanitize(html, config);
+  const sanitized = DOMPurify.sanitize(html, config);
+
+  // AUDIT-007-016 fix: Post-process to validate href attributes when allowLinks is true
+  if (options?.allowLinks) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = sanitized;
+    const anchors = tempDiv.querySelectorAll('a');
+    anchors.forEach((anchor) => {
+      const href = anchor.getAttribute('href');
+      if (href && !/^https?:\/\//.test(href)) {
+        anchor.removeAttribute('href');
+      }
+    });
+    return tempDiv.innerHTML;
+  }
+
+  return sanitized;
 }
 
 export function sanitizeEmailHtml(html: string): string {
@@ -115,28 +143,35 @@ export function sanitizeEmailHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A') {
-      const anchor = node as HTMLAnchorElement;
-      anchor.setAttribute('target', '_blank');
-      anchor.setAttribute('rel', 'noopener noreferrer');
+  // AUDIT-007-017 fix: Hooks are registered at module initialization
+  // Post-process to apply email-specific anchor and image rules
+  const sanitized = DOMPurify.sanitize(html, config);
 
-      const href = anchor.getAttribute('href');
-      if (href && !/^(?:https?:|mailto:|tel:)/i.test(href)) {
-        anchor.removeAttribute('href');
-      }
-    }
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = sanitized;
 
-    if (node.tagName === 'IMG') {
-      const img = node as HTMLImageElement;
-      const src = img.getAttribute('src');
-      if (src && !/^(?:https?:|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,)/i.test(src)) {
-        img.removeAttribute('src');
-      }
+  // Process anchors
+  const anchors = tempDiv.querySelectorAll('a');
+  anchors.forEach((anchor) => {
+    anchor.setAttribute('target', '_blank');
+    anchor.setAttribute('rel', 'noopener noreferrer');
+
+    const href = anchor.getAttribute('href');
+    if (href && !/^(?:https?:|mailto:|tel:)/i.test(href)) {
+      anchor.removeAttribute('href');
     }
   });
 
-  return DOMPurify.sanitize(html, config);
+  // Process images
+  const images = tempDiv.querySelectorAll('img');
+  images.forEach((img) => {
+    const src = img.getAttribute('src');
+    if (src && !/^(?:https?:|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,)/i.test(src)) {
+      img.removeAttribute('src');
+    }
+  });
+
+  return tempDiv.innerHTML;
 }
 
 export function sanitizeMarkdownHtml(html: string): string {
@@ -176,20 +211,26 @@ export function sanitizeMarkdownHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A') {
-      const anchor = node as HTMLAnchorElement;
-      anchor.setAttribute('target', '_blank');
-      anchor.setAttribute('rel', 'noopener noreferrer');
+  // AUDIT-007-018 fix: Hooks are registered at module initialization
+  // Post-process to apply markdown-specific anchor rules
+  const sanitized = DOMPurify.sanitize(html, config);
 
-      const href = anchor.getAttribute('href');
-      if (href && !/^https?:\/\//.test(href)) {
-        anchor.removeAttribute('href');
-      }
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = sanitized;
+
+  // Process anchors
+  const anchors = tempDiv.querySelectorAll('a');
+  anchors.forEach((anchor) => {
+    anchor.setAttribute('target', '_blank');
+    anchor.setAttribute('rel', 'noopener noreferrer');
+
+    const href = anchor.getAttribute('href');
+    if (href && !/^https?:\/\//.test(href)) {
+      anchor.removeAttribute('href');
     }
   });
 
-  return DOMPurify.sanitize(html, config);
+  return tempDiv.innerHTML;
 }
 
 // Security hooks for enhanced XSS protection - initialized on module load

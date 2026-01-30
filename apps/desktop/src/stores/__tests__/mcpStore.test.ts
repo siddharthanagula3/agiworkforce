@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi, type MockInstance } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useMcpStore } from '../mcpStore';
+import type { McpServersConfig } from '../../types/mcp';
 
-// Mock the MCP API module
+// AUDIT-P3-TEST-TYPE: Properly typed mock functions for MCP API
 vi.mock('../../api/mcp', () => ({
   McpClient: {
     initialize: vi.fn(),
@@ -19,22 +20,42 @@ vi.mock('../../api/mcp', () => ({
   },
 }));
 
-async function getMcpClientMock() {
+// AUDIT-P3-TEST-TYPE: Partial mock types for test data (allow testing with minimal required fields)
+interface MockServerInfo {
+  name: string;
+  status?: string;
+  enabled?: boolean;
+  connected?: boolean;
+  tool_count?: number;
+}
+
+interface MockToolInfo {
+  id: string;
+  name: string;
+  description?: string;
+  server?: string;
+}
+
+// AUDIT-P3-TEST-TYPE: Type-safe mock accessor for MCP client methods with flexible return types
+interface McpClientMocks {
+  initialize: Mock<() => Promise<string>>;
+  listServers: Mock<() => Promise<MockServerInfo[]>>;
+  listTools: Mock<() => Promise<MockToolInfo[]>>;
+  getStats: Mock<() => Promise<Record<string, number>>>;
+  getConfig: Mock<() => Promise<Partial<McpServersConfig> | { servers: Record<string, unknown> }>>;
+  connect: Mock<(serverName: string) => Promise<string>>;
+  disconnect: Mock<(serverName: string) => Promise<string>>;
+  enableServer: Mock<(serverName: string) => Promise<string>>;
+  disableServer: Mock<(serverName: string) => Promise<string>>;
+  updateConfig: Mock<(config: McpServersConfig) => Promise<string>>;
+  storeCredential: Mock<(serverName: string, key: string, value: string) => Promise<string>>;
+  searchTools: Mock<(query: string) => Promise<MockToolInfo[]>>;
+}
+
+async function getMcpClientMock(): Promise<McpClientMocks> {
   const { McpClient } = await import('../../api/mcp');
-  return McpClient as unknown as {
-    initialize: MockInstance;
-    listServers: MockInstance;
-    listTools: MockInstance;
-    getStats: MockInstance;
-    getConfig: MockInstance;
-    connect: MockInstance;
-    disconnect: MockInstance;
-    enableServer: MockInstance;
-    disableServer: MockInstance;
-    updateConfig: MockInstance;
-    storeCredential: MockInstance;
-    searchTools: MockInstance;
-  };
+  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn() implementations
+  return McpClient as unknown as McpClientMocks;
 }
 
 describe('mcpStore', () => {

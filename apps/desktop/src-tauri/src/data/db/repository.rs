@@ -3,8 +3,8 @@ use rusqlite::{params, Connection, Result, Row};
 
 use super::models::{
     AutomationHistory, Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message,
-    MessageRole, OverlayEvent, OverlayEventType, ProviderCostBreakdown, Setting, TaskType,
-    TokenUsage,
+    MessageRole, OverlayEvent, OverlayEventType, PaginatedOverlayEvents, ProviderCostBreakdown,
+    Setting, TaskType, TokenUsage,
 };
 
 pub fn create_conversation(conn: &Connection, title: String, user_id: String) -> Result<i64> {
@@ -336,7 +336,9 @@ pub fn list_top_conversations_by_cost_filtered(
     }
 
     sql.push_str(" GROUP BY m.conversation_id, c.title ORDER BY total_cost DESC");
-    sql.push_str(&format!(" LIMIT {}", limit));
+    let placeholder = params.len() + 1;
+    sql.push_str(&format!(" LIMIT ?{}", placeholder));
+    params.push(limit.to_string());
 
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
@@ -477,44 +479,124 @@ pub fn get_overlay_event(conn: &Connection, id: i64) -> Result<OverlayEvent> {
     )
 }
 
+/// Maximum allowed limit for overlay events pagination.
+/// AUDIT-004-001: Prevents unbounded result sets that could cause memory issues.
+pub const MAX_OVERLAY_EVENTS_LIMIT: i64 = 1000;
+
+/// AUDIT-004-001 fix: List overlay events with required pagination.
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `start_time` - Optional start time filter (inclusive)
+/// * `end_time` - Optional end time filter (inclusive)
+/// * `limit` - Required limit, clamped to MAX_OVERLAY_EVENTS_LIMIT (1000)
+/// * `offset` - Optional offset for pagination (defaults to 0)
+///
+/// # Returns
+/// Paginated result with events, total count, limit, and offset for UI pagination.
 pub fn list_overlay_events(
     conn: &Connection,
     start_time: Option<DateTime<Utc>>,
     end_time: Option<DateTime<Utc>>,
-) -> Result<Vec<OverlayEvent>> {
-    let query = match (start_time, end_time) {
-        (Some(_), Some(_)) => {
-            "SELECT id, event_type, x, y, data, timestamp
-             FROM overlay_events
-             WHERE timestamp >= ?1 AND timestamp <= ?2
-             ORDER BY timestamp ASC"
-        }
-        (Some(_), None) => {
-            "SELECT id, event_type, x, y, data, timestamp
-             FROM overlay_events
-             WHERE timestamp >= ?1
-             ORDER BY timestamp ASC"
-        }
-        _ => {
-            "SELECT id, event_type, x, y, data, timestamp
-             FROM overlay_events
-             ORDER BY timestamp ASC"
+    limit: i64,
+    offset: Option<i64>,
+) -> Result<PaginatedOverlayEvents> {
+    // AUDIT-004-001: Enforce maximum limit to prevent unbounded queries
+    let effective_limit = limit.min(MAX_OVERLAY_EVENTS_LIMIT).max(1);
+    let effective_offset = offset.unwrap_or(0).max(0);
+
+    // First, get the total count for pagination UI
+    let total_count = match (start_time, end_time) {
+        (Some(start), Some(end)) => conn.query_row(
+            "SELECT COUNT(*) FROM overlay_events WHERE timestamp >= ?1 AND timestamp <= ?2",
+            params![start.to_rfc3339(), end.to_rfc3339()],
+            |row| row.get(0),
+        )?,
+        (Some(start), None) => conn.query_row(
+            "SELECT COUNT(*) FROM overlay_events WHERE timestamp >= ?1",
+            params![start.to_rfc3339()],
+            |row| row.get(0),
+        )?,
+        (None, Some(end)) => conn.query_row(
+            "SELECT COUNT(*) FROM overlay_events WHERE timestamp <= ?1",
+            params![end.to_rfc3339()],
+            |row| row.get(0),
+        )?,
+        (None, None) => {
+            conn.query_row("SELECT COUNT(*) FROM overlay_events", [], |row| row.get(0))?
         }
     };
 
-    let mut stmt = conn.prepare(query)?;
+    // Build the paginated query - collect results before stmt is dropped
+    let events: Vec<OverlayEvent> = match (start_time, end_time) {
+        (Some(start), Some(end)) => {
+            let mut stmt = conn.prepare(
+                "SELECT id, event_type, x, y, data, timestamp
+                 FROM overlay_events
+                 WHERE timestamp >= ?1 AND timestamp <= ?2
+                 ORDER BY timestamp ASC
+                 LIMIT ?3 OFFSET ?4",
+            )?;
+            let rows = stmt.query_map(
+                params![
+                    start.to_rfc3339(),
+                    end.to_rfc3339(),
+                    effective_limit,
+                    effective_offset
+                ],
+                map_overlay_event,
+            )?;
+            rows.collect::<Result<Vec<_>>>()?
+        }
+        (Some(start), None) => {
+            let mut stmt = conn.prepare(
+                "SELECT id, event_type, x, y, data, timestamp
+                 FROM overlay_events
+                 WHERE timestamp >= ?1
+                 ORDER BY timestamp ASC
+                 LIMIT ?2 OFFSET ?3",
+            )?;
+            let rows = stmt.query_map(
+                params![start.to_rfc3339(), effective_limit, effective_offset],
+                map_overlay_event,
+            )?;
+            rows.collect::<Result<Vec<_>>>()?
+        }
+        (None, Some(end)) => {
+            let mut stmt = conn.prepare(
+                "SELECT id, event_type, x, y, data, timestamp
+                 FROM overlay_events
+                 WHERE timestamp <= ?1
+                 ORDER BY timestamp ASC
+                 LIMIT ?2 OFFSET ?3",
+            )?;
+            let rows = stmt.query_map(
+                params![end.to_rfc3339(), effective_limit, effective_offset],
+                map_overlay_event,
+            )?;
+            rows.collect::<Result<Vec<_>>>()?
+        }
+        (None, None) => {
+            let mut stmt = conn.prepare(
+                "SELECT id, event_type, x, y, data, timestamp
+                 FROM overlay_events
+                 ORDER BY timestamp ASC
+                 LIMIT ?1 OFFSET ?2",
+            )?;
+            let rows = stmt.query_map(
+                params![effective_limit, effective_offset],
+                map_overlay_event,
+            )?;
+            rows.collect::<Result<Vec<_>>>()?
+        }
+    };
 
-    let events = match (start_time, end_time) {
-        (Some(start), Some(end)) => stmt.query_map(
-            params![start.to_rfc3339(), end.to_rfc3339()],
-            map_overlay_event,
-        )?,
-        (Some(start), None) => stmt.query_map(params![start.to_rfc3339()], map_overlay_event)?,
-        _ => stmt.query_map([], map_overlay_event)?,
-    }
-    .collect::<Result<Vec<_>>>()?;
-
-    Ok(events)
+    Ok(PaginatedOverlayEvents {
+        events,
+        total_count,
+        limit: effective_limit,
+        offset: effective_offset,
+    })
 }
 
 pub fn delete_overlay_events_before(conn: &Connection, before: DateTime<Utc>) -> Result<usize> {

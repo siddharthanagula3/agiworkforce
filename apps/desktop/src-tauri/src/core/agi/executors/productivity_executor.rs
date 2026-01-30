@@ -78,18 +78,43 @@ impl ProductivityExecutor {
 
     /// Map a status string to the unified `TaskStatus` enum.
     ///
-    /// Handles various status representations from different providers
+    /// INC-004 fix: Uses a generic mapper that works across all providers (Notion, Trello, Asana)
+    /// instead of always using Notion-specific mapping. This handles various status representations
     /// and normalizes them to the internal `TaskStatus` type.
     ///
     /// # Arguments
     ///
-    /// * `status` - The status string (e.g., "todo", "in_progress", "done")
+    /// * `status` - The status string (e.g., "todo", "in_progress", "done", "To Do", "Doing")
     ///
     /// # Returns
     ///
     /// The corresponding `TaskStatus` variant
     fn map_task_status(status: &str) -> crate::features::productivity::TaskStatus {
-        crate::features::productivity::TaskStatus::from_notion_status(status)
+        use crate::features::productivity::TaskStatus;
+
+        let status_lower = status.to_lowercase();
+        match status_lower.as_str() {
+            // Common "not started" variations
+            "todo" | "to do" | "to-do" | "not started" | "backlog" | "open" | "new" => {
+                TaskStatus::Todo
+            }
+            // Common "in progress" variations
+            "in progress" | "in_progress" | "doing" | "active" | "working" | "started" => {
+                TaskStatus::InProgress
+            }
+            // Common "done" variations
+            "done" | "complete" | "completed" | "finished" | "closed" | "resolved" => {
+                TaskStatus::Completed
+            }
+            // Common "blocked" variations
+            "blocked" | "waiting" | "on hold" | "on_hold" | "pending" => TaskStatus::Blocked,
+            // Common "cancelled" variations
+            "cancelled" | "canceled" | "archived" | "dropped" | "wont do" | "won't do" => {
+                TaskStatus::Cancelled
+            }
+            // Default to Todo for unknown statuses
+            _ => TaskStatus::Todo,
+        }
     }
 
     /// Parse an RFC3339 timestamp string into a `DateTime<Utc>`.

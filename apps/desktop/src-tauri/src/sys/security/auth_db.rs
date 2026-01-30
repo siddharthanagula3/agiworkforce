@@ -76,9 +76,10 @@ impl AuthDatabaseManager {
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
                     role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
+                    // AUDIT-003-003 fix: Use unwrap_or_default to prevent panic on malformed dates
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     last_login_at: row
                         .get::<_, Option<String>>(5)?
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -109,9 +110,10 @@ impl AuthDatabaseManager {
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
                     role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
+                    // AUDIT-003-003 fix: Use unwrap_or_default to prevent panic on malformed dates
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     last_login_at: row
                         .get::<_, Option<String>>(5)?
                         .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -198,20 +200,21 @@ impl AuthDatabaseManager {
              FROM auth_sessions WHERE access_token = ?1",
             [access_token],
             |row| {
+                // AUDIT-003-003 fix: Use unwrap_or_else to prevent panic on malformed dates
                 Ok(Session {
                     session_id: row.get(0)?,
                     user_id: row.get(1)?,
                     access_token: row.get(2)?,
                     refresh_token: row.get(3)?,
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     expires_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     last_activity_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                 })
             },
         )?;
@@ -228,20 +231,21 @@ impl AuthDatabaseManager {
              FROM auth_sessions WHERE refresh_token = ?1",
             [refresh_token],
             |row| {
+                // AUDIT-003-003 fix: Use unwrap_or_else to prevent panic on malformed dates
                 Ok(Session {
                     session_id: row.get(0)?,
                     user_id: row.get(1)?,
                     access_token: row.get(2)?,
                     refresh_token: row.get(3)?,
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     expires_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                     last_activity_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(6)?)
-                        .unwrap()
-                        .with_timezone(&Utc),
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                 })
             },
         )?;

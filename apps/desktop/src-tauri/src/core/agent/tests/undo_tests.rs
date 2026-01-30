@@ -1123,4 +1123,288 @@ mod tests {
         let restored = fs::read_to_string(&nested_path).await.unwrap();
         assert_eq!(restored, content);
     }
+
+    // =========================================================================
+    // Git Push Undo Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_record_git_push() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        let change_id = tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "feature-branch".to_string(),
+                Some("abc1234".to_string()),
+                "def5678".to_string(),
+                "task-push".to_string(),
+            )
+            .await;
+
+        let changes = tracker.get_all_changes().await;
+        assert_eq!(changes.len(), 1);
+
+        let change = &changes[0];
+        assert_eq!(change.id, change_id);
+        assert_eq!(change.task_id, "task-push");
+
+        // Verify it's a GitPush change type
+        if let ChangeType::GitPush {
+            remote,
+            branch,
+            before_sha,
+            after_sha,
+            is_protected_branch,
+        } = &change.change_type
+        {
+            assert_eq!(remote, "origin");
+            assert_eq!(branch, "feature-branch");
+            assert_eq!(before_sha.as_deref(), Some("abc1234"));
+            assert_eq!(after_sha, "def5678");
+            assert!(!is_protected_branch);
+        } else {
+            panic!("Expected GitPush change type");
+        }
+
+        // Non-protected branch pushes should be revertible
+        assert!(change.can_revert);
+    }
+
+    #[tokio::test]
+    async fn test_record_git_push_to_protected_branch() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        // Test push to main branch
+        tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "main".to_string(),
+                Some("abc1234".to_string()),
+                "def5678".to_string(),
+                "task-push-main".to_string(),
+            )
+            .await;
+
+        let changes = tracker.get_all_changes().await;
+        let change = &changes[0];
+
+        // Protected branch pushes should NOT be auto-revertible
+        assert!(!change.can_revert);
+
+        if let ChangeType::GitPush {
+            is_protected_branch,
+            ..
+        } = &change.change_type
+        {
+            assert!(*is_protected_branch);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_record_git_push_new_branch() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        // Push to a new branch (no before_sha)
+        let change_id = tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "new-feature".to_string(),
+                None, // No previous SHA for new branches
+                "abc1234".to_string(),
+                "task-new-branch".to_string(),
+            )
+            .await;
+
+        let changes = tracker.get_all_changes().await;
+        let change = changes.iter().find(|c| c.id == change_id).unwrap();
+
+        if let ChangeType::GitPush { before_sha, .. } = &change.change_type {
+            assert!(before_sha.is_none());
+        }
+
+        assert!(change.can_revert);
+    }
+
+    #[tokio::test]
+    async fn test_protected_branch_detection() {
+        let protected_branches = vec![
+            "main",
+            "master",
+            "develop",
+            "release",
+            "production",
+            "prod",
+            "release/v1.0",
+        ];
+
+        for branch in protected_branches {
+            assert!(
+                ChangeTracker::is_protected_branch(branch),
+                "'{}' should be detected as protected",
+                branch
+            );
+        }
+
+        let unprotected_branches = vec![
+            "feature/my-feature",
+            "bugfix/fix-123",
+            "user/john/experiment",
+            "hotfix-urgent",
+            "maintenance",
+        ];
+
+        for branch in unprotected_branches {
+            assert!(
+                !ChangeTracker::is_protected_branch(branch),
+                "'{}' should NOT be detected as protected",
+                branch
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_git_push_metadata_stored() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "upstream".to_string(),
+                "develop".to_string(),
+                Some("previous123".to_string()),
+                "current456".to_string(),
+                "task-meta".to_string(),
+            )
+            .await;
+
+        let changes = tracker.get_all_changes().await;
+        let change = &changes[0];
+
+        // Verify metadata is stored
+        assert_eq!(
+            change.metadata.get("remote").and_then(|v| v.as_str()),
+            Some("upstream")
+        );
+        assert_eq!(
+            change.metadata.get("branch").and_then(|v| v.as_str()),
+            Some("develop")
+        );
+        assert_eq!(
+            change.metadata.get("before_sha").and_then(|v| v.as_str()),
+            Some("previous123")
+        );
+        assert_eq!(
+            change.metadata.get("after_sha").and_then(|v| v.as_str()),
+            Some("current456")
+        );
+        assert_eq!(
+            change
+                .metadata
+                .get("is_protected_branch")
+                .and_then(|v| v.as_bool()),
+            Some(true) // "develop" is protected
+        );
+    }
+
+    #[tokio::test]
+    async fn test_git_push_in_undo_summary() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "feature".to_string(),
+                Some("abc".to_string()),
+                "def".to_string(),
+                "task-summary".to_string(),
+            )
+            .await;
+
+        let manager = UndoManager::new(tracker);
+        let summary = manager.get_undo_summary(None).await;
+
+        assert_eq!(summary.total_changes, 1);
+        assert_eq!(summary.revertible_changes, 1);
+
+        // Check recent changes contains the push
+        assert!(!summary.recent_changes.is_empty());
+        let recent = &summary.recent_changes[0];
+        assert!(recent.description.contains("Git push"));
+        assert!(recent.description.contains("origin/feature"));
+    }
+
+    #[tokio::test]
+    async fn test_git_push_protected_branch_not_in_revertible() {
+        let tracker = Arc::new(ChangeTracker::new());
+
+        // Add a protected branch push
+        tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "master".to_string(),
+                Some("abc".to_string()),
+                "def".to_string(),
+                "task-protected".to_string(),
+            )
+            .await;
+
+        // Add a non-protected branch push
+        tracker
+            .record_git_push(
+                PathBuf::from("/tmp/repo"),
+                "origin".to_string(),
+                "feature".to_string(),
+                Some("123".to_string()),
+                "456".to_string(),
+                "task-feature".to_string(),
+            )
+            .await;
+
+        let manager = UndoManager::new(tracker);
+        let summary = manager.get_undo_summary(None).await;
+
+        assert_eq!(summary.total_changes, 2);
+        assert_eq!(
+            summary.revertible_changes, 1,
+            "Only non-protected push should be revertible"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_undoable_change_description_for_git_push() {
+        // Test that UndoableChange properly formats GitPush descriptions
+        let change = Change::new(
+            ChangeType::GitPush {
+                remote: "origin".to_string(),
+                branch: "main".to_string(),
+                before_sha: Some("abc".to_string()),
+                after_sha: "def".to_string(),
+                is_protected_branch: true,
+            },
+            Some(PathBuf::from("/tmp/repo")),
+            "task-desc".to_string(),
+            None,
+            None,
+        );
+
+        let undoable = UndoableChange::from(&change);
+
+        // Should show protected branch indicator
+        assert!(
+            undoable.description.contains("(protected)"),
+            "Description should indicate protected branch: {}",
+            undoable.description
+        );
+        assert!(
+            undoable.description.contains("origin/main"),
+            "Description should contain remote/branch: {}",
+            undoable.description
+        );
+    }
 }

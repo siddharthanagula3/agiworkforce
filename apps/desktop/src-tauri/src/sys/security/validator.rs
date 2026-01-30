@@ -246,10 +246,18 @@ impl CommandValidator {
         Ok(())
     }
 
+    // AUDIT-003-013 fix: Normalize Unicode before sanitization to handle
+    // Unicode lookalike characters that could bypass security checks.
+    // This prevents confusable character attacks (e.g., using Cyrillic 'а' instead of Latin 'a').
     pub fn sanitize_args(&self, args: &[String]) -> Vec<String> {
         args.iter()
             .map(|arg| {
-                let sanitized = arg.replace(['|', '&', ';', '>', '<', '`', '$', '(', ')'], "");
+                // First, normalize Unicode to catch lookalike characters
+                let normalized = Self::normalize_unicode(arg);
+
+                // Then apply the original sanitization
+                let sanitized =
+                    normalized.replace(['|', '&', ';', '>', '<', '`', '$', '(', ')'], "");
 
                 if sanitized != *arg {
                     warn!("Sanitized argument: {} -> {}", arg, sanitized);
@@ -258,6 +266,69 @@ impl CommandValidator {
                 sanitized
             })
             .collect()
+    }
+
+    // AUDIT-003-013 fix: Normalize Unicode to prevent homoglyph/lookalike attacks.
+    // This function converts potentially confusable Unicode characters to their
+    // ASCII equivalents or removes them entirely.
+    fn normalize_unicode(input: &str) -> String {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        let mut result = String::with_capacity(input.len());
+
+        for grapheme in input.graphemes(true) {
+            // Check for common dangerous Unicode lookalikes
+            let normalized = match grapheme {
+                // Cyrillic lookalikes for Latin letters often used in attacks
+                "\u{0430}" => "a", // Cyrillic small a
+                "\u{0435}" => "e", // Cyrillic small e
+                "\u{043E}" => "o", // Cyrillic small o
+                "\u{0440}" => "p", // Cyrillic small er (looks like p)
+                "\u{0441}" => "c", // Cyrillic small es (looks like c)
+                "\u{0445}" => "x", // Cyrillic small ha (looks like x)
+                "\u{0443}" => "y", // Cyrillic small u (looks like y)
+                "\u{0410}" => "A", // Cyrillic capital A
+                "\u{0412}" => "B", // Cyrillic capital Ve (looks like B)
+                "\u{0415}" => "E", // Cyrillic capital E
+                "\u{041A}" => "K", // Cyrillic capital Ka
+                "\u{041C}" => "M", // Cyrillic capital Em
+                "\u{041D}" => "H", // Cyrillic capital En (looks like H)
+                "\u{041E}" => "O", // Cyrillic capital O
+                "\u{0420}" => "P", // Cyrillic capital Er
+                "\u{0421}" => "C", // Cyrillic capital Es
+                "\u{0422}" => "T", // Cyrillic capital Te
+                "\u{0425}" => "X", // Cyrillic capital Ha
+                // Greek lookalikes
+                "\u{03B1}" => "a", // Greek small alpha
+                "\u{03BF}" => "o", // Greek small omicron
+                // Fullwidth characters (often used in attacks)
+                "\u{FF5C}" => "|", // Fullwidth vertical line
+                "\u{FF1B}" => ";", // Fullwidth semicolon
+                "\u{FF06}" => "&", // Fullwidth ampersand
+                "\u{FF1E}" => ">", // Fullwidth greater-than
+                "\u{FF1C}" => "<", // Fullwidth less-than
+                "\u{FF04}" => "$", // Fullwidth dollar
+                "\u{FF08}" => "(", // Fullwidth left paren
+                "\u{FF09}" => ")", // Fullwidth right paren
+                "\u{FF40}" => "`", // Fullwidth grave accent
+                // Invisible/zero-width characters - remove entirely
+                "\u{200B}" => "", // Zero-width space
+                "\u{200C}" => "", // Zero-width non-joiner
+                "\u{200D}" => "", // Zero-width joiner
+                "\u{FEFF}" => "", // Byte order mark
+                "\u{00AD}" => "", // Soft hyphen
+                // Right-to-left override - dangerous for display manipulation
+                "\u{202E}" => "", // RLO
+                "\u{202D}" => "", // LRO
+                "\u{202C}" => "", // PDF
+                // Pass through other characters unchanged
+                _ => grapheme,
+            };
+
+            result.push_str(normalized);
+        }
+
+        result
     }
 
     pub fn is_command_allowed(&self, safety_level: SafetyLevel, user_approved: bool) -> bool {

@@ -23,6 +23,15 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// EXE-005 fix: Maximum file write size (10 MB) to prevent resource exhaustion
+const MAX_FILE_WRITE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+
+/// EXE-005 fix: Maximum file read size (50 MB) to prevent memory exhaustion
+const MAX_FILE_READ_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+
+/// EXE-002 fix: Maximum path length to prevent path-based attacks
+const MAX_PATH_LENGTH: usize = 4096;
+
 /// Executor for file system operations.
 ///
 /// Handles `file_read`, `file_write`, and `file_delete` tools with comprehensive
@@ -54,6 +63,29 @@ impl FileExecutor {
     /// The canonicalized path if validation succeeds, or an error if the path
     /// is invalid or outside allowed directories.
     fn validate_path(path: &Path, context: &ExecutorContext, operation: &str) -> Result<PathBuf> {
+        // EXE-002 fix: Validate path length to prevent overflow attacks
+        let path_str = path.to_string_lossy();
+        if path_str.len() > MAX_PATH_LENGTH {
+            tracing::error!(
+                "[FileExecutor] Path too long: {} chars (max {})",
+                path_str.len(),
+                MAX_PATH_LENGTH
+            );
+            return Err(anyhow!(
+                "Path exceeds maximum length of {} characters",
+                MAX_PATH_LENGTH
+            ));
+        }
+
+        // EXE-002 fix: Check for null bytes that could cause path truncation in C libraries
+        if path_str.contains('\0') {
+            tracing::error!(
+                "[FileExecutor] Null byte in path blocked: '{}'",
+                path.display()
+            );
+            return Err(anyhow!("Invalid path: contains null byte"));
+        }
+
         // SECURITY: Canonicalize the path to resolve symlinks and prevent path traversal attacks
         // This converts relative paths to absolute and resolves "..", ".", and symlinks
         let canonical_path = std::fs::canonicalize(path)
@@ -90,6 +122,52 @@ impl FileExecutor {
         }
 
         Ok(canonical_path)
+    }
+
+    /// EXE-002 fix: Re-validate path immediately before operation to detect TOCTOU attacks.
+    ///
+    /// This function re-canonicalizes the path and verifies it still matches the expected
+    /// canonical path. If the path changed between initial validation and this check,
+    /// it indicates a potential symlink race attack.
+    ///
+    /// # Arguments
+    ///
+    /// * `original_path` - The original user-provided path
+    /// * `expected_canonical` - The canonical path from initial validation
+    /// * `operation` - The operation name for logging
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) if the path is still valid, or an error if a race condition was detected.
+    fn verify_path_unchanged(
+        original_path: &Path,
+        expected_canonical: &Path,
+        operation: &str,
+    ) -> Result<()> {
+        // Re-canonicalize to detect if the path changed
+        let current_canonical = std::fs::canonicalize(original_path).map_err(|e| {
+            anyhow!(
+                "Path became inaccessible during {}: {} - {}",
+                operation,
+                original_path.display(),
+                e
+            )
+        })?;
+
+        if current_canonical != expected_canonical {
+            tracing::error!(
+                "[FileExecutor] TOCTOU attack detected during {}: path '{}' changed from '{}' to '{}'",
+                operation,
+                original_path.display(),
+                expected_canonical.display(),
+                current_canonical.display()
+            );
+            return Err(anyhow!(
+                "Security violation: path changed during operation (possible symlink race attack)"
+            ));
+        }
+
+        Ok(())
     }
 
     /// Validate a path for new file creation.
@@ -198,6 +276,21 @@ impl FileExecutor {
         // SECURITY: Validate the path is within allowed directories
         let canonical_path = Self::validate_path(Path::new(path), context, "file_read")?;
 
+        // EXE-005 fix: Check file size before reading to prevent memory exhaustion
+        let file_size = std::fs::metadata(&canonical_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        if file_size > MAX_FILE_READ_SIZE {
+            return Err(anyhow!(
+                "File too large to read: {} bytes (max {} bytes). Consider reading in chunks.",
+                file_size,
+                MAX_FILE_READ_SIZE
+            ));
+        }
+
+        // EXE-002 fix: Re-validate path immediately before read to detect TOCTOU attacks
+        Self::verify_path_unchanged(Path::new(path), &canonical_path, "file_read")?;
+
         let result = std::fs::read_to_string(&canonical_path);
 
         // Emit file operation event for UI
@@ -270,12 +363,27 @@ impl FileExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing required 'content' parameter"))?;
 
+        // EXE-005 fix: Validate file size before write to prevent resource exhaustion
+        if content.len() > MAX_FILE_WRITE_SIZE {
+            return Err(anyhow!(
+                "File content too large: {} bytes (max {} bytes). Consider splitting into smaller files.",
+                content.len(),
+                MAX_FILE_WRITE_SIZE
+            ));
+        }
+
         // SECURITY: Validate the path (handles both existing and new files)
         let canonical_path = Self::validate_new_path(Path::new(path), context, "file_write")?;
 
         // Store old content for undo capability (CRITICAL for safety model)
         let old_content = std::fs::read_to_string(&canonical_path).ok();
         let was_new_file = old_content.is_none();
+
+        // EXE-002 fix: For existing files, re-validate path immediately before write
+        // to detect TOCTOU attacks where a symlink is swapped in between validation and write
+        if !was_new_file {
+            Self::verify_path_unchanged(Path::new(path), &canonical_path, "file_write")?;
+        }
 
         let result = std::fs::write(&canonical_path, content);
 
@@ -399,6 +507,9 @@ impl FileExecutor {
         // This enables the reversibility principle - users can undo file deletions
         let content_before = std::fs::read_to_string(&canonical_path).ok();
         let size_bytes = metadata.len() as usize;
+
+        // EXE-002 fix: Re-validate path immediately before delete to detect TOCTOU attacks
+        Self::verify_path_unchanged(Path::new(path), &canonical_path, "file_delete")?;
 
         // Perform the deletion
         let result = std::fs::remove_file(&canonical_path);

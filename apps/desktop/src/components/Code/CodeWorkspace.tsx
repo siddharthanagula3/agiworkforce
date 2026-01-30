@@ -434,6 +434,9 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         'flex h-full overflow-hidden border border-border rounded-lg bg-background min-h-0 min-w-0',
         className,
       )}
+      // WRK-008 fix: ARIA labels for accessibility
+      role="region"
+      aria-label="Code editor workspace"
     >
       {/* Sidebar */}
       <div
@@ -442,6 +445,9 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           sidebarVisible ? 'opacity-100' : 'w-0 opacity-0',
         )}
         style={{ width: sidebarVisible ? sidebarWidth : 0 }}
+        // WRK-008 fix: ARIA labels for accessibility
+        role="navigation"
+        aria-label="File explorer"
       >
         {sidebarVisible && rootPath ? (
           <FileTree

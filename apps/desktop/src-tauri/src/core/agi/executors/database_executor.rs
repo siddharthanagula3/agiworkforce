@@ -10,6 +10,13 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::time::Duration;
+
+/// EXE-004 fix: Default query timeout in seconds to prevent indefinite hangs
+const DEFAULT_QUERY_TIMEOUT_SECS: u64 = 30;
+
+/// EXE-004 fix: Maximum allowed query timeout (5 minutes)
+const MAX_QUERY_TIMEOUT_SECS: u64 = 300;
 
 /// Executor for database operations.
 ///
@@ -143,23 +150,42 @@ impl DatabaseExecutor {
     ///
     /// Multiple statements are not allowed to prevent SQL injection attacks
     /// that append malicious commands after legitimate queries.
+    ///
+    /// # EXE-001 fix: Improved tokenization to handle SQL escape sequences
+    ///
+    /// SQL uses doubled quotes for escaping (e.g., 'test''s' or "say ""hello""")
+    /// in addition to backslash escaping in some databases. This implementation
+    /// handles both cases.
     pub(crate) fn check_multiple_statements(query: &str) -> Result<()> {
         let mut in_string = false;
         let mut string_char = ' ';
+        let chars: Vec<char> = query.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
 
-        for (i, c) in query.chars().enumerate() {
+        while i < len {
+            let c = chars[i];
+
             if !in_string && (c == '\'' || c == '"') {
                 in_string = true;
                 string_char = c;
             } else if in_string && c == string_char {
-                // Check for escaped quote (basic handling)
-                let prev_char = query.chars().nth(i.saturating_sub(1));
-                if prev_char != Some('\\') {
-                    in_string = false;
+                // EXE-001 fix: Check for SQL-style doubled quote escape ('' or "")
+                // This is the standard SQL way to escape quotes
+                if i + 1 < len && chars[i + 1] == string_char {
+                    // Doubled quote - skip the next character (it's part of the escape)
+                    i += 1;
+                } else {
+                    // Check for backslash escape (used by MySQL and others)
+                    let is_backslash_escaped = i > 0 && chars[i - 1] == '\\';
+                    if !is_backslash_escaped {
+                        in_string = false;
+                    }
                 }
             } else if !in_string && c == ';' {
                 // Found semicolon outside string - check if there's more SQL after it
-                let remaining = query[i + 1..].trim();
+                let remaining: String = chars[i + 1..].iter().collect();
+                let remaining = remaining.trim();
                 if !remaining.is_empty() {
                     tracing::error!(
                         "[DatabaseExecutor] SQL injection attempt blocked: multiple statements detected"
@@ -169,6 +195,7 @@ impl DatabaseExecutor {
                     ));
                 }
             }
+            i += 1;
         }
 
         Ok(())
@@ -211,10 +238,23 @@ impl DatabaseExecutor {
         let db_state = app.state::<Mutex<DatabaseState>>();
         let db_guard = db_state.lock().await;
 
-        let result = db_guard
-            .sql_client
-            .execute_query(database_id, query)
+        // EXE-004 fix: Get timeout from parameters or use default
+        let timeout_secs = parameters
+            .get("timeout_secs")
+            .and_then(|v| v.as_u64())
+            .map(|t| t.min(MAX_QUERY_TIMEOUT_SECS))
+            .unwrap_or(DEFAULT_QUERY_TIMEOUT_SECS);
+
+        // EXE-004 fix: Wrap query execution with timeout to prevent indefinite hangs
+        let query_future = db_guard.sql_client.execute_query(database_id, query);
+        let result = tokio::time::timeout(Duration::from_secs(timeout_secs), query_future)
             .await
+            .map_err(|_| {
+                anyhow!(
+                    "Query timed out after {} seconds. Consider optimizing the query or increasing the timeout.",
+                    timeout_secs
+                )
+            })?
             .map_err(|e| anyhow!("Database query failed: {}", e))?;
 
         let result_json = serde_json::to_value(&result)

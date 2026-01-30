@@ -10,6 +10,7 @@ pub mod encryption;
 pub mod guardrails;
 pub mod injection_detector;
 pub mod machine_key;
+pub mod master_password;
 pub mod oauth;
 pub mod permissions;
 pub mod policy;
@@ -40,7 +41,11 @@ pub use dm_protection::{
     AllowlistedSender, DmProtection, DmProtectionConfig, PairingCode, VerificationMethod,
 };
 pub use encryption::{decrypt_secret, encrypt_secret, EncryptedSecret, SecretStore};
-pub use machine_key::{derive_key, derive_key_base64, get_machine_id_hash, KeyPurpose};
+pub use machine_key::{
+    derive_key, derive_key_base64, derive_key_with_password, derive_key_with_password_base64,
+    get_machine_id_hash, KeyPurpose,
+};
+pub use master_password::{MasterPasswordError, MasterPasswordManager, MasterPasswordStatus};
 pub use oauth::{
     OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo,
 };

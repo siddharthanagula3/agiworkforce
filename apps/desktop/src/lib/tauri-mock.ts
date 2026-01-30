@@ -63,7 +63,10 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_create_conversation':
       return {
         id: 0,
-        title: (args?.['request'] as any)?.title ?? args?.['title'] ?? 'New Conversation',
+        title:
+          (args?.['request'] as { title?: string } | undefined)?.title ??
+          args?.['title'] ??
+          'New Conversation',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as T;
@@ -81,6 +84,22 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'orchestrator_spawn_agent':
       throw new Error('Agent orchestration requires the desktop application');
+
+    // MCP Extension commands
+    case 'extension_list':
+      return [] as T;
+
+    case 'extension_get':
+      return null as T;
+
+    case 'extension_select_package':
+      return null as T;
+
+    case 'extension_install':
+    case 'extension_uninstall':
+    case 'extension_enable':
+    case 'extension_disable':
+      throw new Error('Extension management requires the desktop application');
 
     default:
       console.warn(`[Tauri] Command not available in web mode: ${command}`);
@@ -160,8 +179,17 @@ export async function openUrl(url: string): Promise<void> {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+// Update check result interface
+interface UpdateCheckResult {
+  available: boolean;
+  currentVersion?: string;
+  version?: string;
+  body?: string;
+  downloadAndInstall?: () => Promise<void>;
+}
+
 // Updater plugin - check for updates
-export async function checkForUpdates(): Promise<any> {
+export async function checkForUpdates(): Promise<UpdateCheckResult | null> {
   if (isTauri) {
     const { check } = await import('@tauri-apps/plugin-updater');
     return check();

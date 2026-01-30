@@ -66,7 +66,11 @@ interface BackendMessage {
 }
 
 /**
- * Convert a backend message to EnhancedMessage format
+ * Converts a backend message from the Rust/SQLite layer to the frontend EnhancedMessage format.
+ * Maps snake_case fields to camelCase and transforms timestamps from ISO strings to Date objects.
+ *
+ * @param msg - The raw message from the Tauri backend (matches Rust Message struct)
+ * @returns An EnhancedMessage suitable for React components and Zustand state
  */
 function convertBackendMessage(msg: BackendMessage): EnhancedMessage {
   return {
@@ -89,6 +93,9 @@ interface IdMapping {
   uuidToDbId: Record<string, number>;
 }
 
+// STR-002 fix: Cap maximum mappings to prevent unbounded memory growth
+const MAX_ID_MAPPINGS = 1000;
+
 let idMappings: IdMapping = { dbIdToUuid: {}, uuidToDbId: {} };
 
 if (typeof window !== 'undefined') {
@@ -104,22 +111,86 @@ function persistIdMappings() {
   }
 }
 
+/**
+ * Prunes the ID mapping cache when it exceeds MAX_ID_MAPPINGS (1000 entries).
+ * Removes the oldest entries (by database ID) to prevent unbounded memory growth.
+ * Called automatically after each new mapping is created.
+ *
+ * @internal
+ */
+function pruneIdMappingsIfNeeded() {
+  const dbIds = Object.keys(idMappings.dbIdToUuid).map(Number);
+  if (dbIds.length <= MAX_ID_MAPPINGS) return;
+
+  // Sort by dbId (ascending) and remove oldest entries
+  dbIds.sort((a, b) => a - b);
+  const toRemove = dbIds.slice(0, dbIds.length - MAX_ID_MAPPINGS);
+
+  for (const dbId of toRemove) {
+    const uuid = idMappings.dbIdToUuid[dbId];
+    if (uuid) {
+      delete idMappings.uuidToDbId[uuid];
+    }
+    delete idMappings.dbIdToUuid[dbId];
+  }
+}
+
+/**
+ * Converts a database ID to a UUID, creating a new mapping if one does not exist.
+ * UUIDs are used in the frontend for React keys and URL routing while database IDs
+ * are used for backend persistence.
+ *
+ * @param dbId - The numeric database ID from SQLite
+ * @returns A UUID string, either existing or newly generated
+ */
 export function dbIdToUuid(dbId: number): string {
   if (!idMappings.dbIdToUuid[dbId]) {
     const uuid = crypto.randomUUID();
     idMappings.dbIdToUuid[dbId] = uuid;
     idMappings.uuidToDbId[uuid] = dbId;
+    pruneIdMappingsIfNeeded();
     persistIdMappings();
   }
   return idMappings.dbIdToUuid[dbId]!;
 }
 
+/**
+ * Looks up the database ID for a given UUID.
+ * Returns undefined if no mapping exists (e.g., for new unsaved conversations).
+ *
+ * @param uuid - The frontend UUID to look up
+ * @returns The corresponding database ID, or undefined if not found
+ */
 export function uuidToDbId(uuid: string): number | undefined {
   return idMappings.uuidToDbId[uuid];
 }
 
 /**
- * Generate a conversation title from the first user message
+ * Clears all ID mappings from memory and localStorage.
+ * Called during logout to ensure user data isolation between sessions.
+ */
+export function clearIdMappings() {
+  idMappings = { dbIdToUuid: {}, uuidToDbId: {} };
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('id-mappings');
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
+}
+
+/**
+ * Generates a conversation title from the user's first message content.
+ * Strips markdown formatting, code blocks, and special characters, then
+ * truncates to 50 characters with word-boundary awareness.
+ *
+ * @param content - The raw message content (may contain markdown)
+ * @returns A clean, truncated title string (max 50 chars)
+ *
+ * @example
+ * generateTitleFromMessage('Can you help me fix this `bug`?')
+ * // Returns: 'Can you help me fix this bug?'
  */
 function generateTitleFromMessage(content: string): string {
   const cleaned = content
@@ -348,6 +419,19 @@ export const useChatStore = create<ChatState>()(
                   updatedAt: new Date(),
                 };
                 state.conversations.unshift(convo);
+                // AUDIT-006-012 fix: Cap active conversations at 500
+                if (state.conversations.length > 500) {
+                  // Remove oldest non-pinned, non-active conversations
+                  const toRemove = state.conversations
+                    .filter((c) => !c.pinned && c.id !== id)
+                    .slice(499);
+                  for (const conv of toRemove) {
+                    delete state.messagesByConversation[conv.id];
+                  }
+                  state.conversations = state.conversations.filter(
+                    (c) => c.pinned || c.id === id || !toRemove.some((r) => r.id === c.id),
+                  );
+                }
                 state.activeConversationId = id;
                 state.messagesByConversation[id] = [];
                 state.messages = [];
@@ -645,6 +729,14 @@ export const useChatStore = create<ChatState>()(
                   state.messagesByConversation[convoId] = [];
                 }
                 state.messagesByConversation[convoId]!.push(newMessage);
+                // AUDIT-006-013 fix: Cap messages per conversation at 1000
+                if (state.messagesByConversation[convoId]!.length > 1000) {
+                  state.messagesByConversation[convoId] =
+                    state.messagesByConversation[convoId]!.slice(-1000);
+                }
+                if (state.messages.length > 1000) {
+                  state.messages = state.messages.slice(-1000);
+                }
                 const convo = state.conversations.find((c) => c.id === convoId);
                 if (convo) {
                   convo.lastMessage = newMessage.content;
@@ -1385,14 +1477,8 @@ export const useChatStore = create<ChatState>()(
               'chat/resetOnLogout',
             );
 
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.removeItem('id-mappings');
-              } catch {
-                // Ignore localStorage errors
-              }
-            }
-            idMappings = { dbIdToUuid: {}, uuidToDbId: {} };
+            // STR-002 fix: Use centralized cleanup function
+            clearIdMappings();
           },
         })),
       ),
