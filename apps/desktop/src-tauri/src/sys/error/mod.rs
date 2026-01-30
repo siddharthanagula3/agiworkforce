@@ -7,6 +7,7 @@ pub mod commands;
 pub mod integration;
 pub mod recovery;
 pub mod retry;
+pub mod translator;
 
 pub use categorization::{Categorizable, ErrorCategory};
 pub use commands::{
@@ -19,6 +20,7 @@ pub use integration::{
 };
 pub use recovery::{RecoveryAction, RecoveryManager, RecoveryStrategy};
 pub use retry::{retry_with_policy, BackoffStrategy, RetryPolicy};
+pub use translator::{translate_mcp_error, ErrorTranslator, FriendlyError, FriendlyErrorCategory};
 
 #[derive(Debug, Error, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "details")]
