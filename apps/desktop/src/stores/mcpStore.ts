@@ -56,6 +56,9 @@ interface McpState {
   setSelectedServer: (name: string | null) => void;
   setSearchQuery: (query: string) => void;
   clearError: () => void;
+
+  // AUDIT-006-019: Cleanup function for logout
+  resetOnLogout: () => void;
 }
 
 export const useMcpStore = create<McpState>()(
@@ -294,6 +297,25 @@ export const useMcpStore = create<McpState>()(
 
       clearError: () => {
         set({ error: null }, undefined, 'mcp/clearError');
+      },
+
+      // AUDIT-006-019 fix: Add resetOnLogout function for cleanup
+      resetOnLogout: () => {
+        set(
+          {
+            servers: [],
+            tools: [],
+            config: null,
+            stats: {},
+            isInitialized: false,
+            isLoading: false,
+            error: null,
+            selectedServer: null,
+            searchQuery: '',
+          },
+          undefined,
+          'mcp/resetOnLogout',
+        );
       },
     })),
     { name: 'McpStore', enabled: import.meta.env.DEV },

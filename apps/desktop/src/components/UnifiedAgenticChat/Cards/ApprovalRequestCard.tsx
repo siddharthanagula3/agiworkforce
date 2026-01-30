@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -82,12 +82,22 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const [pendingDecision, setPendingDecision] = useState<'approve' | 'reject' | null>(null);
   const { resolveApproval } = useApprovalActions();
 
+  // AUDIT-005-005 fix: Store interval ID in ref for proper cleanup
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const TypeIcon = TYPE_ICONS[approval.type];
   const riskConfig = RISK_LEVEL_CONFIG[approval.riskLevel];
   const RiskIcon = riskConfig.icon;
   const statusConfig = STATUS_CONFIG[approval.status];
 
+  // AUDIT-005-005 fix: Ensure interval is cleared when status changes and on unmount
   useEffect(() => {
+    // Clear any existing interval when status or dependencies change
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
     if (approval.status !== 'pending' || !approval.timeoutSeconds) {
       setTimeRemaining(null);
       return;
@@ -96,12 +106,25 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     const calculateRemaining = () => {
       const elapsed = (Date.now() - new Date(approval.createdAt).getTime()) / 1000;
       const remaining = approval.timeoutSeconds! - elapsed;
-      setTimeRemaining(Math.max(0, Math.floor(remaining)));
+      const newRemaining = Math.max(0, Math.floor(remaining));
+      setTimeRemaining(newRemaining);
+
+      // AUDIT-005-005 fix: Clear interval when countdown reaches 0
+      if (newRemaining <= 0 && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
 
     calculateRemaining();
-    const interval = setInterval(calculateRemaining, 1000);
-    return () => clearInterval(interval);
+    intervalRef.current = setInterval(calculateRemaining, 1000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [approval.createdAt, approval.timeoutSeconds, approval.status]);
 
   const formattedTime = new Date(approval.createdAt).toLocaleTimeString('en-US', {
@@ -152,7 +175,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     setShowRejectReason(true);
   };
 
-  const formatJson = (data: any): string => {
+  const formatJson = (data: unknown): string => {
     try {
       return JSON.stringify(data, null, 2);
     } catch {

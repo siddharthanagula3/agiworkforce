@@ -571,27 +571,29 @@ export function Sidebar({
     [restoreConversation],
   );
 
+  // AUDIT-005-016 fix: Combine two separate keydown listeners into single handler
+  // This is more efficient and prevents potential race conditions between handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle Cmd/Ctrl+K for search
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setShowSearch(true);
+        return;
       }
+
+      // Handle Escape - close search and reset state
       if (e.key === 'Escape') {
         setShowSearch(false);
         setSearchQuery('');
         setFocusedIndex(-1);
+        return;
       }
-    };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip arrow navigation if editing or in search mode
       if (editingId || showSearch) return;
 
+      // Handle arrow navigation
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setFocusedIndex((prev) => {

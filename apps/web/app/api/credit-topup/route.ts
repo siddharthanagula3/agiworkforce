@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, isOriginAllowed } from '@/lib/cors';
 
 // Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 function getStripeClient(): Stripe {
@@ -100,16 +100,30 @@ async function handleCreditTopup(request: NextRequest) {
     }
   }
 
-  // Get the success and cancel URLs
-  const baseUrl =
-    request.headers.get('origin') ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL;
+  // AUDIT-008-005: Validate origin against allowed list to prevent open redirect
+  // Get the success and cancel URLs - only use origin if it's in the allowed list
+  const requestOrigin = request.headers.get('origin');
+  let baseUrl: string | undefined;
+
+  // Only use request origin if it passes our CORS validation
+  if (requestOrigin && isOriginAllowed(requestOrigin)) {
+    baseUrl = requestOrigin;
+  } else {
+    // Fall back to configured app URL
+    baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
+    if (requestOrigin) {
+      logger.warn(
+        { origin: requestOrigin },
+        'Credit topup: rejected untrusted origin, using configured APP_URL',
+      );
+    }
+  }
+
   if (!baseUrl) {
     throw createError.internal('Missing base URL for redirect (set NEXT_PUBLIC_APP_URL)');
   }
 
-  // Basic validation to avoid returning malformed redirect URLs
+  // Validate URL format
   try {
     new URL(baseUrl);
   } catch {

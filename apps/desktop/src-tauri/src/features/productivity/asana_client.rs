@@ -1,15 +1,87 @@
 use crate::features::productivity::unified_task::{Task, TaskStatus, UnifiedTaskProvider};
 use crate::sys::error::{Error, Result};
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 const ASANA_BASE_URL: &str = "https://app.asana.com/api/1.0";
+
+/// RTL-002 fix: Sliding window rate limiter for Asana API
+/// Asana allows 150 requests per minute per token
+struct AsanaRateLimiter {
+    /// Timestamps of recent requests
+    request_times: Arc<Mutex<VecDeque<Instant>>>,
+    /// Maximum requests allowed in the window
+    max_requests: usize,
+    /// Time window duration
+    window_duration: Duration,
+}
+
+impl AsanaRateLimiter {
+    fn new() -> Self {
+        Self {
+            request_times: Arc::new(Mutex::new(VecDeque::with_capacity(150))),
+            max_requests: 150,
+            window_duration: Duration::from_secs(60),
+        }
+    }
+
+    /// Wait if necessary to respect rate limits, then record the request
+    async fn acquire(&self) {
+        loop {
+            let should_wait = {
+                let mut times = self.request_times.lock();
+                let now = Instant::now();
+
+                // Remove expired timestamps outside the window
+                while let Some(front) = times.front() {
+                    if now.duration_since(*front) > self.window_duration {
+                        times.pop_front();
+                    } else {
+                        break;
+                    }
+                }
+
+                // Check if we're at the limit
+                if times.len() >= self.max_requests {
+                    // Calculate how long to wait until the oldest request expires
+                    if let Some(oldest) = times.front() {
+                        let wait_time = self
+                            .window_duration
+                            .saturating_sub(now.duration_since(*oldest));
+                        if wait_time > Duration::ZERO {
+                            Some(wait_time)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    // We have capacity, record this request
+                    times.push_back(now);
+                    None
+                }
+            };
+
+            if let Some(wait_duration) = should_wait {
+                tokio::time::sleep(wait_duration + Duration::from_millis(100)).await;
+            } else {
+                break;
+            }
+        }
+    }
+}
 
 pub struct AsanaClient {
     client: Client,
     token: String,
+    /// RTL-002: Rate limiter for Asana API
+    rate_limiter: AsanaRateLimiter,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,10 +152,15 @@ impl AsanaClient {
             .build()
             .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
-        Ok(Self { client, token })
+        Ok(Self {
+            client,
+            token,
+            rate_limiter: AsanaRateLimiter::new(),
+        })
     }
 
     pub async fn verify_connection(&mut self) -> Result<String> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .get(format!("{}/users/me", ASANA_BASE_URL))
@@ -109,6 +186,7 @@ impl AsanaClient {
     }
 
     pub async fn list_workspaces(&self) -> Result<Vec<AsanaWorkspace>> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .get(format!("{}/workspaces", ASANA_BASE_URL))
@@ -130,6 +208,7 @@ impl AsanaClient {
     }
 
     pub async fn list_projects(&self, workspace_id: &str) -> Result<Vec<AsanaProject>> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .get(format!(
@@ -154,6 +233,7 @@ impl AsanaClient {
     }
 
     pub async fn list_project_tasks(&self, project_id: &str) -> Result<Vec<AsanaTask>> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .get(format!(
@@ -188,6 +268,7 @@ impl AsanaClient {
         assignee_id: Option<&str>,
         due_on: Option<&str>,
     ) -> Result<String> {
+        self.rate_limiter.acquire().await;
         let task = AsanaTaskCreate {
             name: name.to_string(),
             notes: notes.map(|s| s.to_string()),
@@ -225,6 +306,7 @@ impl AsanaClient {
     }
 
     pub async fn assign_task(&self, task_id: &str, assignee_id: &str) -> Result<()> {
+        self.rate_limiter.acquire().await;
         let body = serde_json::json!({
             "data": {
                 "assignee": assignee_id
@@ -251,6 +333,7 @@ impl AsanaClient {
     }
 
     pub async fn mark_task_complete(&self, task_id: &str, completed: bool) -> Result<()> {
+        self.rate_limiter.acquire().await;
         let body = serde_json::json!({
             "data": {
                 "completed": completed
@@ -277,6 +360,7 @@ impl AsanaClient {
     }
 
     pub async fn get_task_raw(&self, task_id: &str) -> Result<AsanaTask> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .get(format!(
@@ -312,7 +396,9 @@ impl AsanaClient {
             .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
-        let assignee = task.assignee.as_ref().map(|a| a.name.clone());
+        // FIX-005: Store both ID and name for proper update/display
+        let assignee_id = task.assignee.as_ref().map(|a| a.gid.clone());
+        let assignee_name = task.assignee.as_ref().map(|a| a.name.clone());
 
         let tags = task
             .tags
@@ -341,7 +427,10 @@ impl AsanaClient {
             description: task.notes.clone(),
             status,
             due_date,
-            assignee,
+            // FIX-005: Use gid for assignee (for API operations)
+            assignee: assignee_id,
+            // FIX-005: Use name for display
+            assignee_name,
             priority: None,
             tags,
             url: Some(task.permalink_url.clone()),
@@ -412,6 +501,7 @@ impl UnifiedTaskProvider for AsanaClient {
     }
 
     async fn delete_task(&self, task_id: &str) -> Result<()> {
+        self.rate_limiter.acquire().await;
         let response = self
             .client
             .delete(format!("{}/tasks/{}", ASANA_BASE_URL, task_id))

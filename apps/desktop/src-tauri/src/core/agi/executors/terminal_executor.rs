@@ -130,6 +130,30 @@ impl TerminalExecutor {
         "del /f /s /q c:\\",
         "rd /s /q c:\\",
         "format c: /y",
+        // EXE-003 fix: Additional dangerous patterns
+        // Command substitution with dangerous commands
+        "$(rm ",
+        "$(dd ",
+        "$(curl ",
+        "$(wget ",
+        "`rm ",
+        "`dd ",
+        "`curl ",
+        "`wget ",
+        // Dangerous file descriptors
+        "exec 2>&-",
+        "exec 1>&-",
+        // More fork bomb variations
+        "bomb(){ bomb|bomb& };bomb",
+        ".() { .|.& };.",
+        // Overwrite MBR
+        "dd of=/dev/sda",
+        "dd of=/dev/hda",
+        "dd of=/dev/nvme",
+        // Perl/Python one-liners for remote execution
+        "perl -e",
+        "python -c 'import os;os.system",
+        "python3 -c 'import os;os.system",
     ];
 
     /// Additional blocked command prefixes for extra safety.

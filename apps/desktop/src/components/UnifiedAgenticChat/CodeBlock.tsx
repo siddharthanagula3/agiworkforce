@@ -1,9 +1,9 @@
 import { Check, ChevronDown, ChevronUp, Copy, FileCode, Minus, Plus } from 'lucide-react';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '../../lib/utils';
-import { toast } from 'sonner';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface CodeBlockProps {
   code: string;
@@ -64,6 +64,17 @@ export function CodeBlock({
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+  // CHT-007 fix: Track copy timer for cleanup on unmount
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // CHT-007 fix: Clear timer on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const lineCount = code.split('\n').length;
   const shouldCollapse = collapsible && lineCount > 10;
@@ -80,14 +91,19 @@ export function CodeBlock({
     return getDiffStats(code);
   }, [code, isDiff]);
 
+  // CHT-006 fix: Use clipboard utility with proper error handling and fallback
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    toast.success('Copied to clipboard', {
-      icon: <Check className="h-4 w-4" />,
-      duration: 2000,
+    const success = await copyToClipboard(code, {
+      successMessage: 'Copied to clipboard',
     });
-    setTimeout(() => setCopied(false), 2000);
+    if (success) {
+      setCopied(true);
+      // CHT-007 fix: Store timer ref for cleanup on unmount
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const languageIcon = getLanguageIcon(language);

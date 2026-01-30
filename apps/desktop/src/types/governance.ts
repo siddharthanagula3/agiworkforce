@@ -44,7 +44,7 @@ export interface AuditEvent {
   resourceId: string | null;
   action: string;
   details: string | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   ipAddress: string | null;
   userAgent: string | null;
 }
@@ -73,7 +73,7 @@ export interface ApprovalRequest {
   resourceType: string | null;
   resourceId: string | null;
   description: string;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   createdAt: number;
   expiresAt: number | null;
   reviewedBy: string | null;
@@ -92,7 +92,7 @@ export interface SecurityAlert {
   resolved: boolean;
   resolvedBy: string | null;
   resolvedAt: number | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface ComplianceReport {
@@ -110,7 +110,7 @@ export interface ComplianceReport {
     securityViolations: number;
     approvalRequests: number;
   };
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
 export interface AuditFilter {

@@ -208,6 +208,13 @@ macro_rules! core_command_handlers {
             $crate::sys::commands::voice_start_recording,
             $crate::sys::commands::voice_stop_recording,
             $crate::sys::commands::voice_check_local_whisper,
+            // Deepgram Streaming STT
+            $crate::sys::commands::voice_deepgram_configure,
+            $crate::sys::commands::voice_start_deepgram_stream,
+            $crate::sys::commands::voice_stop_deepgram_stream,
+            $crate::sys::commands::voice_deepgram_send_audio,
+            $crate::sys::commands::voice_deepgram_status,
+            $crate::sys::commands::voice_convert_audio_to_pcm,
             // Prompt enhancement
             $crate::sys::commands::detect_use_case,
             $crate::sys::commands::enhance_prompt,

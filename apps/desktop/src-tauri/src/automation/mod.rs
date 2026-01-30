@@ -1,5 +1,6 @@
 pub mod browser;
 pub mod codegen;
+pub mod computer_use;
 pub mod executor;
 pub mod input;
 pub mod inspector;

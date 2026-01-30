@@ -267,6 +267,15 @@ pub async fn terminal_send_input(
     Ok(())
 }
 
+// AUDIT-003-010 fix: Terminal resize bounds constants
+// These prevent potential issues with extreme terminal dimensions
+const MIN_TERMINAL_COLS: u16 = 1;
+const MIN_TERMINAL_ROWS: u16 = 1;
+// AUDIT-P3-012: Practical limits to prevent resource exhaustion
+// (removed u16::MAX constants as they're redundant - u16 cannot exceed its max)
+const PRACTICAL_MAX_COLS: u16 = 1000;
+const PRACTICAL_MAX_ROWS: u16 = 500;
+
 #[tauri::command]
 pub async fn terminal_resize(
     session_id: String,
@@ -274,6 +283,32 @@ pub async fn terminal_resize(
     rows: u16,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    // AUDIT-003-010 fix: Add bounds checking for terminal dimensions
+    // Validate minimum bounds
+    if cols < MIN_TERMINAL_COLS {
+        return Err(format!(
+            "Invalid terminal width: {}. Minimum is {}",
+            cols, MIN_TERMINAL_COLS
+        ));
+    }
+    if rows < MIN_TERMINAL_ROWS {
+        return Err(format!(
+            "Invalid terminal height: {}. Minimum is {}",
+            rows, MIN_TERMINAL_ROWS
+        ));
+    }
+
+    // AUDIT-P3-012: Validate practical bounds and warn for impractical values
+    // Note: Maximum u16 bounds removed as they were always-false comparisons
+    if cols > PRACTICAL_MAX_COLS || rows > PRACTICAL_MAX_ROWS {
+        tracing::warn!(
+            session_id = %session_id,
+            cols = cols,
+            rows = rows,
+            "Terminal resize with unusually large dimensions"
+        );
+    }
+
     state
         .resize_session(&session_id, cols, rows)
         .await

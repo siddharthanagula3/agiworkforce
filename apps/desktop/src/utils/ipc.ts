@@ -54,6 +54,14 @@ const buckets = new Map<string, number[]>();
 
 const rateLimitLocks = new Map<string, Promise<void>>();
 
+/**
+ * Calculates the byte length of an object when serialized to JSON.
+ * Used to enforce payload size limits on IPC calls.
+ *
+ * @param obj - The object to measure
+ * @returns The byte length of the JSON-serialized object
+ * @throws Error if the object cannot be serialized to JSON
+ */
 function byteLength(obj: unknown): number {
   try {
     return new TextEncoder().encode(JSON.stringify(obj)).length;
@@ -64,6 +72,19 @@ function byteLength(obj: unknown): number {
   }
 }
 
+/**
+ * Wraps a promise with a timeout, rejecting if the operation takes too long.
+ * Useful for preventing hung IPC calls from blocking the UI indefinitely.
+ *
+ * @param promise - The promise to wrap with a timeout
+ * @param timeoutMs - Maximum time to wait in milliseconds
+ * @param operation - Name of the operation for error messages
+ * @returns The resolved value of the original promise
+ * @throws CodedError with code 'TIMEOUT' if the operation exceeds the timeout
+ *
+ * @example
+ * const result = await withTimeout(fetchData(), 5000, 'fetchData');
+ */
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -185,15 +206,32 @@ async function withRetry<T>(
   throw lastError;
 }
 
+/**
+ * Enforces rate limiting for IPC commands using a sliding window algorithm.
+ * Prevents excessive calls to the same command within a time window.
+ *
+ * @param key - The command name or key to rate limit
+ * @throws CodedError with code 'RATE_LIMIT' if the rate limit is exceeded
+ *
+ * @example
+ * await rateLimit('auth_login');
+ * // Proceeds if under limit, throws if exceeded
+ */
 async function rateLimit(key: string): Promise<void> {
+  // Wait for any existing lock on this key to be released
   while (rateLimitLocks.has(key)) {
     await rateLimitLocks.get(key);
   }
 
-  let resolveLock: () => void;
+  // HKS-002 fix: Initialize resolveLock with a no-op to ensure it's always defined
+  // This prevents potential deadlocks if an error occurs during lock setup
+  let resolveLock: () => void = () => {};
   const lockPromise = new Promise<void>((resolve) => {
     resolveLock = resolve;
   });
+
+  // AUDIT-007-020 fix: Set the lock and immediately wrap in try/finally
+  // to guarantee lock release even if any subsequent operation fails
   rateLimitLocks.set(key, lockPromise);
 
   try {
@@ -209,11 +247,29 @@ async function rateLimit(key: string): Promise<void> {
     pruned.push(now);
     buckets.set(key, pruned);
   } finally {
+    // HKS-002 + AUDIT-007-020 fix: Always delete lock first, then resolve
+    // This ensures cleanup happens even if any operation throws
+    // The lock MUST be released to prevent deadlock on subsequent calls
     rateLimitLocks.delete(key);
-    resolveLock!();
+    resolveLock();
   }
 }
 
+/**
+ * Invokes a Tauri backend command with automatic rate limiting, timeout, and retry handling.
+ * This is the primary way to communicate between the React frontend and Rust backend.
+ *
+ * @param command - The Tauri command name to invoke
+ * @param args - Optional JSON-serializable arguments to pass to the command
+ * @returns The response from the Tauri command
+ * @throws CodedError with code 'PAYLOAD_TOO_LARGE' if args exceed 256KB
+ * @throws CodedError with code 'RATE_LIMIT' if too many calls to the same command
+ * @throws CodedError with code 'TIMEOUT' if the command exceeds its timeout
+ *
+ * @example
+ * const settings = await invoke<Settings>('get_settings');
+ * await invoke('write_file', { path: '/tmp/test.txt', content: 'Hello' });
+ */
 export async function invoke<T = unknown>(command: string, args?: Json): Promise<T> {
   if (!command || typeof command !== 'string' || command.trim().length === 0) {
     throw new Error('Invalid command name');

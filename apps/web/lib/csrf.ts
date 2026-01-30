@@ -111,7 +111,7 @@ export function getSessionIdFromRequest(request: Request): string {
 }
 
 /**
- * Validate CSRF token from request
+ * Validate CSRF token from request (returns boolean for backwards compatibility)
  */
 export async function validateCsrfFromRequest(
   request: Request,
@@ -127,4 +127,46 @@ export async function validateCsrfFromRequest(
   const sid = sessionId || getSessionIdFromRequest(request);
 
   return verifyCsrfToken(token, sid);
+}
+
+/**
+ * AUDIT-008-006: Validate CSRF token and return error response if invalid
+ *
+ * Use this at the start of state-changing handlers (POST, PUT, DELETE).
+ * Returns null if CSRF validation passes, or a 403 Response if it fails.
+ *
+ * @example
+ * const csrfError = await requireCsrfToken(request);
+ * if (csrfError) return csrfError;
+ */
+export async function requireCsrfToken(
+  request: Request,
+  sessionId?: string,
+): Promise<Response | null> {
+  // Only validate for state-changing methods
+  const method = request.method.toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    return null; // GET requests don't need CSRF protection
+  }
+
+  const token = request.headers.get(CSRF_HEADER);
+  const sid = sessionId || getSessionIdFromRequest(request);
+
+  if (!verifyCsrfToken(token, sid)) {
+    return new Response(
+      JSON.stringify({
+        error: 'Invalid or missing CSRF token',
+        code: 'CSRF_VALIDATION_FAILED',
+      }),
+      {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      },
+    );
+  }
+
+  return null;
 }

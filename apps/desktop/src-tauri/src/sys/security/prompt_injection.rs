@@ -31,7 +31,7 @@ impl Default for PromptInjectionDetector {
 impl PromptInjectionDetector {
     pub fn new() -> Self {
         let patterns = vec![
-
+            // System prompt override patterns
             (
                 Regex::new(r"(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?|directions?)").unwrap(),
                 "System prompt override attempt",
@@ -48,6 +48,7 @@ impl PromptInjectionDetector {
                 0.8,
             ),
 
+            // Instruction injection patterns
             (
                 Regex::new(r"(?i)new\s+(instructions?|task|goal)\s*[:=]").unwrap(),
                 "Instruction injection attempt",
@@ -59,6 +60,7 @@ impl PromptInjectionDetector {
                 0.8,
             ),
 
+            // Role manipulation patterns
             (
                 Regex::new(r"(?i)(you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as)(\s+now)?\s+(a\s+)?(developer|administrator|root|sudo|system)").unwrap(),
                 "Role manipulation attempt",
@@ -70,6 +72,7 @@ impl PromptInjectionDetector {
                 0.85,
             ),
 
+            // Encoding obfuscation patterns
             (
                 Regex::new(r"(?i)(base64|hex|unicode|rot13)\s+(decode|encoded?|string)").unwrap(),
                 "Encoding obfuscation detected",
@@ -81,6 +84,7 @@ impl PromptInjectionDetector {
                 0.8,
             ),
 
+            // Jailbreak patterns
             (
                 Regex::new(r"(?i)(DAN|do\s+anything\s+now)").unwrap(),
                 "Known jailbreak keyword detected",
@@ -97,6 +101,7 @@ impl PromptInjectionDetector {
                 0.75,
             ),
 
+            // Code injection patterns
             (
                 Regex::new(r"(?i)```\s*(python|bash|sh|javascript|code)\s*\n").unwrap(),
                 "Code block injection attempt",
@@ -108,26 +113,121 @@ impl PromptInjectionDetector {
                 0.95,
             ),
 
+            // Nested instruction patterns
             (
                 Regex::new(r"(?i)\[SYSTEM\]|\[INST\]|\[/INST\]|\[USER\]|\[ASSISTANT\]").unwrap(),
                 "Nested instruction block detected",
                 0.8,
             ),
 
+            // Data exfiltration patterns
             (
                 Regex::new(r"(?i)(send|post|upload|exfiltrate)\s+(to|this\s+to)\s+(http|https?:)").unwrap(),
                 "Data exfiltration attempt",
                 0.9,
             ),
 
+            // Token manipulation patterns
             (
                 Regex::new(r"(?i)(token|context)\s+(limit|window|size)\s*(is|=)").unwrap(),
                 "Token manipulation attempt",
                 0.65,
             ),
+
+            // SECSYS-008 fix: Additional jailbreak patterns
+            (
+                Regex::new(r"(?i)(evil\s*mode|chaos\s*mode|unrestricted\s*mode)").unwrap(),
+                "Jailbreak mode activation attempt",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)(anti-?ai|bypass|circumvent|evade)\s+(filter|safety|guardrail|protection)").unwrap(),
+                "Safety bypass attempt",
+                0.9,
+            ),
+            (
+                Regex::new(r"(?i)from\s+now\s+on[,\s]+(you\s+)?(will|must|should)").unwrap(),
+                "Behavioral override attempt",
+                0.8,
+            ),
+            (
+                Regex::new(r"(?i)your\s+real\s+(purpose|goal|objective|mission)").unwrap(),
+                "Identity confusion attempt",
+                0.75,
+            ),
+            (
+                Regex::new(r"(?i)(opposite|reverse)\s+(of\s+)?(what|your)\s+(instructions?|rules?)").unwrap(),
+                "Instruction reversal attempt",
+                0.85,
+            ),
+
+            // SECSYS-008 fix: Delimiter injection patterns
+            (
+                Regex::new(r"```+\s*system|```+\s*assistant").unwrap(),
+                "Role delimiter injection",
+                0.9,
+            ),
+            (
+                Regex::new(r"<\|im_(start|end)\|>|<\|system\|>|<\|user\|>").unwrap(),
+                "ChatML delimiter injection",
+                0.95,
+            ),
+            (
+                Regex::new(r"Human:|Assistant:|System:").unwrap(),
+                "Anthropic format injection",
+                0.85,
+            ),
+
+            // SECSYS-008 fix: Invisible/special character patterns
+            (
+                Regex::new(r"[\u200B-\u200D\uFEFF]").unwrap(),
+                "Zero-width character injection",
+                0.8,
+            ),
+            (
+                Regex::new(r"[\u0000-\u001F\u007F]").unwrap(),
+                "Control character injection",
+                0.7,
+            ),
         ];
 
         Self { patterns }
+    }
+
+    /// SECSYS-008 fix: Normalize Unicode lookalikes to detect evasion
+    fn normalize_unicode(&self, input: &str) -> String {
+        input
+            .chars()
+            .map(|c| match c {
+                // Cyrillic lookalikes
+                'а' => 'a', // Cyrillic a
+                'е' => 'e', // Cyrillic e
+                'о' => 'o', // Cyrillic o
+                'р' => 'p', // Cyrillic r
+                'с' => 'c', // Cyrillic s
+                'у' => 'y', // Cyrillic u
+                'х' => 'x', // Cyrillic x
+                'і' => 'i', // Cyrillic i
+                'ј' => 'j', // Cyrillic j
+                // Greek lookalikes
+                'α' => 'a', // Greek alpha
+                'ο' => 'o', // Greek omicron
+                'ρ' => 'p', // Greek rho
+                // Full-width characters
+                c if ('\u{FF01}'..='\u{FF5E}').contains(&c) => {
+                    ((c as u32 - 0xFF01 + 0x21) as u8) as char
+                }
+                // Keep other characters
+                _ => c,
+            })
+            .collect()
+    }
+
+    /// SECSYS-008 fix: Normalize spacing variations for detection
+    fn normalize_spacing(&self, input: &str) -> String {
+        // Replace multiple spaces, tabs, and various whitespace with single space
+        let whitespace_regex = Regex::new(r"[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+").unwrap();
+        whitespace_regex.replace_all(input, " ").to_string()
     }
 
     pub fn analyze(&self, input: &str) -> SecurityAnalysis {
@@ -136,11 +236,32 @@ impl PromptInjectionDetector {
             input.len()
         );
 
-        let (pattern_score, detected) = self.check_patterns(input);
+        // SECSYS-008 fix: Check both original and normalized versions
+        let (pattern_score, mut detected) = self.check_patterns(input);
+
+        // SECSYS-008 fix: Also check normalized version to catch evasion attempts
+        let normalized = self.normalize_unicode(&self.normalize_spacing(input));
+        if normalized != input {
+            let (norm_score, norm_detected) = self.check_patterns(&normalized);
+            if norm_score > pattern_score {
+                debug!(
+                    "SECSYS-008: Evasion attempt detected via normalization (score: {:.2} -> {:.2})",
+                    pattern_score, norm_score
+                );
+                detected.extend(norm_detected);
+                detected.push("Unicode/spacing evasion detected".to_string());
+            }
+        }
 
         let structure_score = self.check_structure(input);
 
-        let risk_score = pattern_score.max(structure_score * 0.5).min(1.0);
+        // SECSYS-008 fix: Include normalization evasion in score
+        let pattern_score_final = {
+            let (norm_score, _) = self.check_patterns(&normalized);
+            pattern_score.max(norm_score)
+        };
+
+        let risk_score = pattern_score_final.max(structure_score * 0.5).min(1.0);
 
         let confidence = if detected.is_empty() {
             0.95

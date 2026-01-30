@@ -357,7 +357,9 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
                 <label className="text-sm font-medium">Auth Type</label>
                 <select
                   value={authType}
-                  onChange={(e) => setAuthType(e.target.value as any)}
+                  onChange={(e) =>
+                    setAuthType(e.target.value as 'none' | 'bearer' | 'basic' | 'apikey')
+                  }
                   className="w-full px-3 py-2 border border-border rounded-md bg-background"
                 >
                   <option value="none">No Auth</option>
@@ -424,7 +426,7 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
                     <label className="text-sm font-medium">Add To</label>
                     <select
                       value={authPlacement}
-                      onChange={(e) => setAuthPlacement(e.target.value as any)}
+                      onChange={(e) => setAuthPlacement(e.target.value as 'header' | 'query')}
                       className="w-full px-3 py-2 border border-border rounded-md bg-background"
                     >
                       <option value="header">Header</option>

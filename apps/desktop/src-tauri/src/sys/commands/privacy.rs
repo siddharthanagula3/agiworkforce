@@ -2,6 +2,49 @@ use crate::sys::commands::chat::AppDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+/// AUDIT-003-001 fix: Enum of allowed tables for privacy deletion.
+/// Using an enum prevents SQL injection by ensuring only known table names
+/// can be used in DELETE queries.
+#[derive(Debug, Clone, Copy)]
+enum PrivacyTable {
+    Messages,
+    Conversations,
+    Projects,
+    MessageDrafts,
+    CustomInstructions,
+    SettingsV2,
+    UsageStats,
+}
+
+impl PrivacyTable {
+    /// Returns all tables that should be cleared during account deletion.
+    const fn all() -> &'static [PrivacyTable] {
+        &[
+            PrivacyTable::Messages,
+            PrivacyTable::Conversations,
+            PrivacyTable::Projects,
+            PrivacyTable::MessageDrafts,
+            PrivacyTable::CustomInstructions,
+            PrivacyTable::SettingsV2,
+            PrivacyTable::UsageStats,
+        ]
+    }
+
+    /// Returns the table name as a static string.
+    /// This is safe because we control all variants.
+    const fn as_str(&self) -> &'static str {
+        match self {
+            PrivacyTable::Messages => "messages",
+            PrivacyTable::Conversations => "conversations",
+            PrivacyTable::Projects => "projects",
+            PrivacyTable::MessageDrafts => "message_drafts",
+            PrivacyTable::CustomInstructions => "custom_instructions",
+            PrivacyTable::SettingsV2 => "settings_v2",
+            PrivacyTable::UsageStats => "usage_stats",
+        }
+    }
+}
+
 /// Privacy preferences structure matching the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,32 +232,49 @@ pub async fn privacy_delete_account(
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    // Delete all user data from local database
-    let tables = [
-        "messages",
-        "conversations",
-        "projects",
-        "message_drafts",
-        "custom_instructions",
-        "settings_v2",
-        "usage_stats",
-    ];
+    // AUDIT-003-001 fix: Delete all user data using type-safe table enum.
+    // Each table uses a dedicated parameterized query to prevent SQL injection.
+    for table in PrivacyTable::all() {
+        // Use match to select the correct parameterized query for each table.
+        // This ensures we never use format!() with table names, eliminating
+        // any possibility of SQL injection even if the enum were somehow extended.
+        let result = match table {
+            PrivacyTable::Messages => {
+                conn.execute("DELETE FROM messages WHERE user_id = ?1", [&user_id])
+            }
+            PrivacyTable::Conversations => {
+                conn.execute("DELETE FROM conversations WHERE user_id = ?1", [&user_id])
+            }
+            PrivacyTable::Projects => {
+                conn.execute("DELETE FROM projects WHERE user_id = ?1", [&user_id])
+            }
+            PrivacyTable::MessageDrafts => {
+                conn.execute("DELETE FROM message_drafts WHERE user_id = ?1", [&user_id])
+            }
+            PrivacyTable::CustomInstructions => conn.execute(
+                "DELETE FROM custom_instructions WHERE user_id = ?1",
+                [&user_id],
+            ),
+            PrivacyTable::SettingsV2 => {
+                conn.execute("DELETE FROM settings_v2 WHERE user_id = ?1", [&user_id])
+            }
+            PrivacyTable::UsageStats => {
+                conn.execute("DELETE FROM usage_stats WHERE user_id = ?1", [&user_id])
+            }
+        };
 
-    for table in tables {
-        // Use parameterized query to prevent SQL injection
-        let query = format!("DELETE FROM {} WHERE user_id = ?1", table);
-        match conn.execute(&query, [&user_id]) {
+        match result {
             Ok(rows) => {
                 tracing::info!(
                     "[Privacy] Deleted {} rows from table {} for user {}",
                     rows,
-                    table,
+                    table.as_str(),
                     user_id
                 );
             }
             Err(e) => {
                 // Log but continue - some tables might not exist or have user_id column
-                tracing::warn!("[Privacy] Could not delete from {}: {}", table, e);
+                tracing::warn!("[Privacy] Could not delete from {}: {}", table.as_str(), e);
             }
         }
     }

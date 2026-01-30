@@ -625,7 +625,7 @@ pub fn encrypt_oauth_token(plaintext: &str) -> Option<String> {
 }
 
 /// Decrypt an MCP credential using machine-derived keys
-fn decrypt_mcp_credential(encrypted: &str) -> Option<String> {
+pub fn decrypt_mcp_credential(encrypted: &str) -> Option<String> {
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use base64::{engine::general_purpose, Engine as _};

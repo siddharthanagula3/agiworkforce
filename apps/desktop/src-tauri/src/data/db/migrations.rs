@@ -2,7 +2,36 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 50;
+const CURRENT_VERSION: i32 = 51;
+
+/// FIX-002: Helper for FTS table creation with better error handling
+/// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
+/// or an error if something else went wrong
+fn create_fts_table_with_fallback(conn: &Connection, sql: &str, table_name: &str) -> Result<bool> {
+    match conn.execute(sql, []) {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            let err_msg = e.to_string().to_lowercase();
+            // Check if the error indicates FTS5 is not available
+            if err_msg.contains("no such module: fts5")
+                || err_msg.contains("fts5 is not compiled")
+                || err_msg.contains("unknown tokenizer")
+            {
+                tracing::warn!(
+                    table = table_name,
+                    error = %e,
+                    "FTS5 full-text search is not available on this SQLite build. \
+                     Search functionality will be limited. This is not critical - \
+                     the application will continue to work but text search may be slower."
+                );
+                Ok(false)
+            } else {
+                // Re-raise other errors
+                Err(e)
+            }
+        }
+    }
+}
 
 // =============================================================================
 // SQL INJECTION PREVENTION
@@ -137,6 +166,9 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "job_executions",
         // Background Agents
         "background_agents",
+        // Master Password (SECSYS-001)
+        "master_password",
+        "master_password_migration",
     ])
 });
 
@@ -252,7 +284,17 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )
         .unwrap_or(0);
 
+    // FIX-001: Properly handle database version mismatch instead of silently ignoring
     if current_version > CURRENT_VERSION {
+        tracing::warn!(
+            current_db_version = current_version,
+            app_schema_version = CURRENT_VERSION,
+            "Database schema version is newer than application supports. \
+             This may happen if you downgraded the application. \
+             Some features may not work correctly."
+        );
+        // Return Ok to allow the app to continue, but with a warning
+        // The app can still read data, but writes may fail if schema changed
         return Ok(());
     }
 
@@ -457,14 +499,20 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         run_migration_in_transaction(conn, 50, apply_migration_v50)?;
     }
 
+    if current_version < 51 {
+        run_migration_in_transaction(conn, 51, apply_migration_v51)?;
+    }
+
     Ok(())
 }
 
 /// Migration v45: Create FTS sync triggers for messages and conversations
 /// These triggers automatically keep the FTS index in sync with the main tables
 fn apply_migration_v45(conn: &Connection) -> Result<()> {
+    // FIX-002: Use helper with better error handling for FTS table creation
     // First ensure the FTS tables exist (they may have been created by fts.rs)
-    conn.execute(
+    let messages_fts_created = create_fts_table_with_fallback(
+        conn,
         "CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
             message_id UNINDEXED,
             conversation_id UNINDEXED,
@@ -474,10 +522,11 @@ fn apply_migration_v45(conn: &Connection) -> Result<()> {
             timestamp UNINDEXED,
             tokenize = 'porter unicode61 remove_diacritics 2'
         )",
-        [],
+        "messages_fts",
     )?;
 
-    conn.execute(
+    let conversations_fts_created = create_fts_table_with_fallback(
+        conn,
         "CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
             conversation_id UNINDEXED,
             title,
@@ -486,8 +535,17 @@ fn apply_migration_v45(conn: &Connection) -> Result<()> {
             timestamp UNINDEXED,
             tokenize = 'porter unicode61 remove_diacritics 2'
         )",
-        [],
+        "conversations_fts",
     )?;
+
+    // Only create triggers if FTS tables were successfully created
+    if !messages_fts_created || !conversations_fts_created {
+        tracing::info!(
+            "Skipping FTS trigger creation because FTS5 is not available. \
+             Search will fall back to LIKE-based queries."
+        );
+        return Ok(());
+    }
 
     // Triggers for messages FTS sync
     // Note: We use CAST(new.id AS TEXT) because FTS stores text values
@@ -4297,6 +4355,45 @@ fn apply_migration_v50(conn: &Connection) -> Result<()> {
 
     tracing::info!(
         "Applied migration v50: Created background_agents table for background execution"
+    );
+
+    Ok(())
+}
+
+/// Migration v51: Create master password tables for SECSYS-001 security enhancement
+///
+/// This migration adds:
+/// - master_password: Stores password verifier hash and Argon2 parameters
+/// - master_password_migration: Tracks migration progress from machine-only to password-based keys
+fn apply_migration_v51(conn: &Connection) -> Result<()> {
+    // Create master_password table for storing password verifier
+    // Note: We never store the actual password, only the Argon2 hash for verification
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS master_password (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            verifier_hash TEXT NOT NULL,
+            verifier_salt TEXT NOT NULL,
+            argon2_params TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Create migration tracking table to track transition from machine-only to password-based keys
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS master_password_migration (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            migration_started_at TEXT,
+            migration_completed_at TEXT,
+            secrets_migrated INTEGER DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'failed'))
+        )",
+        [],
+    )?;
+
+    tracing::info!(
+        "Applied migration v51: Created master_password tables for SECSYS-001 security enhancement"
     );
 
     Ok(())

@@ -5,6 +5,9 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
+// AUDIT-004-005 fix: Add maximum session limit to prevent unbounded memory growth
+const MAX_SESSIONS: usize = 50;
+
 #[derive(Clone, Debug)]
 pub struct SessionContext {
     pub shell_type: ShellType,
@@ -30,6 +33,17 @@ impl SessionManager {
         shell_type: ShellType,
         cwd: Option<String>,
     ) -> Result<String> {
+        // AUDIT-004-005 fix: Check session count before creating new session
+        {
+            let sessions = self.sessions.lock().await;
+            if sessions.len() >= MAX_SESSIONS {
+                return Err(Error::Other(format!(
+                    "Maximum number of terminal sessions ({}) reached. Please close some sessions first.",
+                    MAX_SESSIONS
+                )));
+            }
+        }
+
         let session = PtySession::new(shell_type, cwd)?;
         let session_id = session.id.clone();
 

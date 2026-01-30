@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   spawnAgent,
   cancelAgent as tauriCancelAgent,
@@ -17,25 +17,46 @@ export function useOrchestratorActions(): UseOrchestratorActionsResult {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastAgentId, setLastAgentId] = useState<string>();
   const [error, setError] = useState<string>();
+  // AUDIT-007-007 fix: Track mounted state to prevent setState after unmount
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleSpawn = useCallback(async (payload: SpawnAgentPayload) => {
-    setIsSubmitting(true);
-    setError(undefined);
+    // AUDIT-007-007 fix: Check isMounted before setState calls
+    if (isMountedRef.current) {
+      setIsSubmitting(true);
+      setError(undefined);
+    }
     try {
       const agentId = await spawnAgent(payload);
-      setLastAgentId(agentId);
+      if (isMountedRef.current) {
+        setLastAgentId(agentId);
+      }
       return agentId;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      if (isMountedRef.current) {
+        setError(message);
+      }
       throw err;
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) {
+        setIsSubmitting(false);
+      }
     }
   }, []);
 
   const handleCancel = useCallback(async (agentId: string) => {
-    setError(undefined);
+    // AUDIT-007-007 fix: Check isMounted before setState
+    if (isMountedRef.current) {
+      setError(undefined);
+    }
     await tauriCancelAgent(agentId);
   }, []);
 

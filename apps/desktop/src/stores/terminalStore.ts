@@ -89,10 +89,29 @@ export const useTerminalStore = create<TerminalState>()(
             };
 
             set(
-              (state) => ({
-                sessions: [...state.sessions, newSession],
-                activeSessionId: sessionId,
-              }),
+              (state) => {
+                const newSessions = [...state.sessions, newSession];
+                // AUDIT-006-021 fix: Cap sessions at 20
+                if (newSessions.length > 20) {
+                  // Close oldest inactive session
+                  const oldestInactive = newSessions.find((s) => s.id !== sessionId && !s.active);
+                  if (oldestInactive) {
+                    return {
+                      sessions: newSessions.filter((s) => s.id !== oldestInactive.id),
+                      activeSessionId: sessionId,
+                    };
+                  }
+                  // If all sessions are active, just cap at 20
+                  return {
+                    sessions: newSessions.slice(-20),
+                    activeSessionId: sessionId,
+                  };
+                }
+                return {
+                  sessions: newSessions,
+                  activeSessionId: sessionId,
+                };
+              },
               undefined,
               'terminal/createSession',
             );

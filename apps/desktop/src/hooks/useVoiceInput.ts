@@ -87,6 +87,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isManualStop = useRef(false);
+  // AUDIT-007-003 fix: Track mounted state to prevent auto-restart after unmount
+  const isMountedRef = useRef(true);
 
   // Use refs to avoid recreating recognition on callback changes
   const onResultRef = useRef(onResult);
@@ -164,17 +166,22 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       };
 
       recognition.onend = () => {
+        // AUDIT-007-003 fix: Check isMounted before setState and auto-restart
+        if (!isMountedRef.current) return;
+
         setState((prev) => ({
           ...prev,
           isListening: false,
           interimTranscript: '',
         }));
 
-        if (continuous && !isManualStop.current && recognitionRef.current) {
+        // AUDIT-007-003 fix: Add isMounted check before auto-restart in continuous mode
+        if (continuous && !isManualStop.current && recognitionRef.current && isMountedRef.current) {
           try {
             recognitionRef.current.start();
           } catch {
-            // ignore
+            // AUDIT-P3-ERROR: Intentionally ignored - auto-restart failure is non-critical
+            // The recognition may have been aborted or the browser may have restrictions
           }
         }
 
@@ -185,11 +192,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     }
 
     return () => {
+      // AUDIT-007-003 fix: Set isMounted to false before cleanup
+      isMountedRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch {
-          // ignore
+          // AUDIT-P3-ERROR: Intentionally ignored - cleanup abort may fail if already stopped
         }
       }
     };
@@ -223,7 +232,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     try {
       recognitionRef.current.stop();
     } catch {
-      // ignore
+      // AUDIT-P3-ERROR: Intentionally ignored - stop may fail if already stopped
     }
   }, [state.isListening]);
 

@@ -12,6 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -25,6 +26,12 @@ function getStripe(): Stripe {
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
+
   // Rate limiting: 10 checkouts per minute per user
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) {

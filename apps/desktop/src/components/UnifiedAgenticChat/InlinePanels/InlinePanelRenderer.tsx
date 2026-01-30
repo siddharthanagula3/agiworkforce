@@ -62,7 +62,7 @@ const InlinePanelRendererComponent: React.FC<InlinePanelRendererProps> = memo(
         return (
           <div className="p-4 rounded border border-gray-300 dark:border-gray-700 bg-yellow-50 dark:bg-yellow-900/20">
             <div className="text-sm text-yellow-700 dark:text-yellow-300">
-              Unknown panel type: {(panel as any).type}
+              Unknown panel type: {(panel as { type: string }).type}
             </div>
           </div>
         );
