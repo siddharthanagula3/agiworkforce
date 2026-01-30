@@ -378,14 +378,21 @@ pub fn decrypt_file(input_path: &str, output_path: &str, password: &str) -> Resu
 mod tests {
     use super::*;
 
+    /// Generate a random test password to avoid CodeQL hardcoded credential alerts
+    fn generate_test_password() -> String {
+        use aes_gcm::aead::rand_core::RngCore;
+        let mut bytes = [0u8; 16];
+        OsRng.fill_bytes(&mut bytes);
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes)
+    }
+
     #[test]
     fn test_password_based_encryption() {
-        // lgtm[rust/hardcoded-credentials]
-        let password = "test_password_123!@#"; // Test value only
+        let password = generate_test_password();
         let plaintext = b"This is a secret message";
 
         let salt = generate_salt();
-        let key = derive_key_from_password(password, &salt);
+        let key = derive_key_from_password(&password, &salt);
         assert_eq!(key.len(), 32);
 
         // Encrypt
@@ -422,8 +429,8 @@ mod tests {
     #[test]
     fn test_secure_storage_with_password() {
         let storage = SecureStorage::new("test_service");
-        // lgtm[rust/hardcoded-credentials]
-        storage.init_with_password("my_secure_password").ok(); // Test value only
+        let password = generate_test_password();
+        storage.init_with_password(&password).ok();
 
         assert!(storage.is_unlocked());
 
@@ -450,14 +457,13 @@ mod tests {
         let original_content = b"This is the original file content";
         fs::write(&input_path, original_content).unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let password = "file_encryption_password"; // Test value only
+        let password = generate_test_password();
 
         // Encrypt
         encrypt_file(
             input_path.to_str().unwrap(),
             encrypted_path.to_str().unwrap(),
-            password,
+            &password,
         )
         .unwrap();
 
@@ -469,7 +475,7 @@ mod tests {
         decrypt_file(
             encrypted_path.to_str().unwrap(),
             decrypted_path.to_str().unwrap(),
-            password,
+            &password,
         )
         .unwrap();
 
@@ -490,20 +496,21 @@ mod tests {
 
         fs::write(&input_path, b"secret content").unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
+        let correct_password = generate_test_password();
+        let wrong_password = generate_test_password();
+
         encrypt_file(
             input_path.to_str().unwrap(),
             encrypted_path.to_str().unwrap(),
-            "correct_password", // Test value only
+            &correct_password,
         )
         .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
         // Try to decrypt with wrong password
         let result = decrypt_file(
             encrypted_path.to_str().unwrap(),
             decrypted_path.to_str().unwrap(),
-            "wrong_password", // Test value only
+            &wrong_password,
         );
 
         assert!(result.is_err());
