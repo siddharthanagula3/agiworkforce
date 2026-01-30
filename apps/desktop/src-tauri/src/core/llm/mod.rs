@@ -1,5 +1,6 @@
 pub mod cache_manager;
 pub mod cost_calculator;
+pub mod fallback_chain;
 pub mod function_executor;
 pub mod llm_router;
 pub mod providers;
