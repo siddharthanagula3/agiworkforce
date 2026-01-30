@@ -363,6 +363,17 @@ mod tests {
     use rusqlite::Connection;
     use std::sync::Mutex;
 
+    /// Generate a random test password to avoid CodeQL hardcoded credential alerts.
+    /// Each call generates a unique password suitable for testing authentication flows.
+    fn generate_test_password() -> String {
+        use base64::{engine::general_purpose, Engine as _};
+        use rand::RngCore;
+
+        let mut bytes = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+    }
+
     fn create_test_auth_manager() -> AuthManager {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute(
@@ -381,24 +392,20 @@ mod tests {
 
     #[test]
     fn test_password_hashing() {
-        // lgtm[rust/hardcoded-credentials]
-        let password = "test_password_123"; // Test value only
-        let hash = hash_password(password).unwrap();
+        let password = generate_test_password();
+        let wrong_password = generate_test_password();
+        let hash = hash_password(&password).unwrap();
 
-        assert!(verify_password(password, &hash).unwrap());
-        assert!(!verify_password("wrong_password", &hash).unwrap());
+        assert!(verify_password(&password, &hash).unwrap());
+        assert!(!verify_password(&wrong_password, &hash).unwrap());
     }
 
     #[test]
     fn test_user_registration() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
         let user = manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
         assert_eq!(user.email, "test@example.com");
@@ -408,38 +415,27 @@ mod tests {
     #[test]
     fn test_duplicate_registration() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password1 = generate_test_password();
+        let password2 = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password1, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let result = manager.register(
-            "test@example.com".to_string(),
-            "password456", // Test value only
-            UserRole::Editor,
-        );
+        let result = manager.register("test@example.com".to_string(), &password2, UserRole::Editor);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_login_success() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let token = manager.login("test@example.com", "password123").unwrap(); // Test value only
+        let token = manager.login("test@example.com", &password).unwrap();
         assert!(!token.access_token.is_empty());
         assert!(!token.refresh_token.is_empty());
     }
@@ -447,39 +443,33 @@ mod tests {
     #[test]
     fn test_login_failure() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+        let wrong_password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let result = manager.login("test@example.com", "wrong_password"); // Test value only
+        let result = manager.login("test@example.com", &wrong_password);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_account_lockout() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+        let wrong_password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
         for _ in 0..MAX_FAILED_ATTEMPTS {
-            let _ = manager.login("test@example.com", "wrong_password"); // Test value only
+            let _ = manager.login("test@example.com", &wrong_password);
         }
 
-        // lgtm[rust/hardcoded-credentials]
-        let result = manager.login("test@example.com", "password123"); // Test value only
+        // Even with correct password, account should be locked
+        let result = manager.login("test@example.com", &password);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("locked"));
     }
@@ -487,17 +477,13 @@ mod tests {
     #[test]
     fn test_token_validation() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let token = manager.login("test@example.com", "password123").unwrap(); // Test value only
+        let token = manager.login("test@example.com", &password).unwrap();
         let user = manager.validate_token(&token.access_token).unwrap();
 
         assert_eq!(user.email, "test@example.com");
@@ -506,17 +492,13 @@ mod tests {
     #[test]
     fn test_refresh_token() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let token = manager.login("test@example.com", "password123").unwrap(); // Test value only
+        let token = manager.login("test@example.com", &password).unwrap();
         let old_access_token = token.access_token.clone();
 
         let new_token = manager.refresh_token(&token.refresh_token).unwrap();
@@ -526,17 +508,13 @@ mod tests {
     #[test]
     fn test_logout() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let password = generate_test_password();
+
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let token = manager.login("test@example.com", "password123").unwrap(); // Test value only
+        let token = manager.login("test@example.com", &password).unwrap();
         manager.logout(&token.access_token).unwrap();
 
         let result = manager.validate_token(&token.access_token);
@@ -546,26 +524,27 @@ mod tests {
     #[test]
     fn test_password_change() {
         let manager = create_test_auth_manager();
-        // lgtm[rust/hardcoded-credentials]
+        let old_password = generate_test_password();
+        let new_password = generate_test_password();
+
         let user = manager
             .register(
                 "test@example.com".to_string(),
-                "old_password", // Test value only
+                &old_password,
                 UserRole::Editor,
             )
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
         manager
-            .change_password(&user.id, "old_password", "new_password") // Test values only
+            .change_password(&user.id, &old_password, &new_password)
             .unwrap();
 
-        // lgtm[rust/hardcoded-credentials]
-        let result = manager.login("test@example.com", "old_password"); // Test value only
+        // Old password should no longer work
+        let result = manager.login("test@example.com", &old_password);
         assert!(result.is_err());
 
-        // lgtm[rust/hardcoded-credentials]
-        let result = manager.login("test@example.com", "new_password"); // Test value only
+        // New password should work
+        let result = manager.login("test@example.com", &new_password);
         assert!(result.is_ok());
     }
 
@@ -584,17 +563,12 @@ mod tests {
     #[test]
     fn test_jwt_secret_rotation() {
         let manager = create_test_auth_manager();
+        let password = generate_test_password();
 
-        // lgtm[rust/hardcoded-credentials]
         manager
-            .register(
-                "test@example.com".to_string(),
-                "password123", // Test value only
-                UserRole::Editor,
-            )
+            .register("test@example.com".to_string(), &password, UserRole::Editor)
             .unwrap();
-        // lgtm[rust/hardcoded-credentials]
-        let _token = manager.login("test@example.com", "password123").unwrap(); // Test value only
+        let _token = manager.login("test@example.com", &password).unwrap();
 
         let secret1 = manager.get_jwt_secret().unwrap();
 
