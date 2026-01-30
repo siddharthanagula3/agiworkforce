@@ -14,6 +14,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
+import { CreateMessageSchema } from '@/lib/validations/chat';
 import type { User } from '@supabase/supabase-js';
 
 async function getAuthenticatedUser(request: NextRequest): Promise<User> {
@@ -80,23 +81,15 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const user = await getAuthenticatedUser(request);
   const { id: conversationId } = await context.params;
-  const body = await request.json();
+  const rawBody = await request.json();
 
-  const {
-    content,
-    model = 'auto',
-    role = 'user',
-    skipLlm = false,
-  } = body as {
-    content: string;
-    model?: string;
-    role?: 'user' | 'assistant' | 'system';
-    skipLlm?: boolean;
-  };
-
-  if (!content?.trim()) {
-    throw createError.badRequest('Message content is required');
+  // AUDIT-008-004: Validate input with Zod schema (max content length 100k chars)
+  const validationResult = CreateMessageSchema.safeParse(rawBody);
+  if (!validationResult.success) {
+    throw createError.validation('Invalid request body', validationResult.error);
   }
+
+  const { content, model, role, skipLlm } = validationResult.data;
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');

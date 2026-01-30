@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/tauri-mock';
 import type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
 import {
@@ -24,10 +24,22 @@ export interface UseScreenCaptureReturn {
 export function useScreenCapture(): UseScreenCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // AUDIT-007-005 fix: Track mounted state to prevent setState after unmount
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const captureFullScreen = useCallback(async (conversationId?: number): Promise<CaptureResult> => {
-    setIsCapturing(true);
-    setError(null);
+    // AUDIT-007-005 fix: Check isMounted before setState calls
+    if (isMountedRef.current) {
+      setIsCapturing(true);
+      setError(null);
+    }
 
     try {
       const params: Record<string, unknown> = {};
@@ -38,17 +50,24 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       return normalizeCaptureResult(result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       throw new Error(errorMessage);
     } finally {
-      setIsCapturing(false);
+      if (isMountedRef.current) {
+        setIsCapturing(false);
+      }
     }
   }, []);
 
   const captureRegion = useCallback(
     async (region: Region, conversationId?: number): Promise<CaptureResult> => {
-      setIsCapturing(true);
-      setError(null);
+      // AUDIT-007-005 fix: Check isMounted before setState calls
+      if (isMountedRef.current) {
+        setIsCapturing(true);
+        setError(null);
+      }
 
       try {
         const params: Record<string, unknown> = {
@@ -64,10 +83,14 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         return normalizeCaptureResult(result);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(errorMessage);
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
         throw new Error(errorMessage);
       } finally {
-        setIsCapturing(false);
+        if (isMountedRef.current) {
+          setIsCapturing(false);
+        }
       }
     },
     [],
@@ -79,7 +102,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       return windows;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      // AUDIT-007-005 fix: Check isMounted before setState
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       return [];
     }
   }, []);
@@ -98,7 +124,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         return history.map((entry) => normalizeCaptureRecord(entry));
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(errorMessage);
+        // AUDIT-007-005 fix: Check isMounted before setState
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
         return [];
       }
     },
@@ -110,7 +139,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       await invoke('capture_delete', { capture_id: captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      // AUDIT-007-005 fix: Check isMounted before setState
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       throw new Error(errorMessage);
     }
   }, []);
@@ -120,7 +152,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       await invoke('capture_save_to_clipboard', { capture_id: captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
+      // AUDIT-007-005 fix: Check isMounted before setState
+      if (isMountedRef.current) {
+        setError(errorMessage);
+      }
       throw new Error(errorMessage);
     }
   }, []);

@@ -283,11 +283,19 @@ impl CodebaseCache {
 
         let file_path_str = file_path.to_string_lossy().to_string();
 
+        // DAT-001 fix: Escape SQL LIKE special characters to prevent wildcard matching issues
+        // Note: The LIKE clause on id is ineffective since id is a SHA256 hash,
+        // but we escape for safety if the schema changes in the future.
+        let escaped_path = file_path_str
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+
         let deleted = db
             .execute(
                 "DELETE FROM codebase_cache
-             WHERE project_path = ?1 OR id LIKE ?2",
-                params![file_path_str, format!("%:{}:%", file_path_str)],
+                 WHERE project_path = ?1 OR id LIKE ?2 ESCAPE '\\'",
+                params![file_path_str, format!("%:{}:%", escaped_path)],
             )
             .context("Failed to invalidate file cache")?;
 

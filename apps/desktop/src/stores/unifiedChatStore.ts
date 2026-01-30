@@ -489,8 +489,10 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
     return selector(unifiedState);
   }
 
-  // When no selector is provided, T defaults to UnifiedChatState
-  return unifiedState as unknown as T;
+  // AUDIT-P3-TYPE: When no selector is provided, T defaults to UnifiedChatState.
+  // The function signature guarantees T = UnifiedChatState when selector is undefined.
+  // This is a safe cast due to the generic default and conditional logic above.
+  return unifiedState as T;
 }
 
 // Create the exported hook with static methods attached
@@ -696,18 +698,26 @@ useUnifiedChatStore.setState = (
     }
   }
 
+  // AUDIT-P3-TYPE: Route partial updates to individual stores.
+  // The casts below are necessary because we're splitting a unified partial
+  // into per-store partials. The key filtering above ensures only valid keys
+  // are included in each update object.
   if (Object.keys(chatUpdates).length > 0) {
-    useChatStore.setState(chatUpdates as unknown as Parameters<typeof useChatStore.setState>[0]);
+    // Type assertion: chatUpdates contains only ChatState keys (filtered above)
+    useChatStore.setState(chatUpdates as Partial<ReturnType<typeof useChatStore.getState>>);
   }
   if (Object.keys(agentUpdates).length > 0) {
-    useAgentStore.setState(agentUpdates as unknown as Parameters<typeof useAgentStore.setState>[0]);
+    // Type assertion: agentUpdates contains only AgentState keys (filtered above)
+    useAgentStore.setState(agentUpdates as Partial<ReturnType<typeof useAgentStore.getState>>);
   }
   if (Object.keys(toolUpdates).length > 0) {
-    useToolStore.setState(toolUpdates as unknown as Parameters<typeof useToolStore.setState>[0]);
+    // Type assertion: toolUpdates contains only ToolState keys (filtered above)
+    useToolStore.setState(toolUpdates as Partial<ReturnType<typeof useToolStore.getState>>);
   }
   if (Object.keys(sidecarUpdates).length > 0) {
+    // Type assertion: sidecarUpdates contains only SidecarState keys (filtered above)
     useSidecarStore.setState(
-      sidecarUpdates as unknown as Parameters<typeof useSidecarStore.setState>[0],
+      sidecarUpdates as Partial<ReturnType<typeof useSidecarStore.getState>>,
     );
   }
 };

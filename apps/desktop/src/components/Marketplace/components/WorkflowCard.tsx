@@ -15,6 +15,21 @@ import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
 
+/**
+ * Validate thumbnail URL to prevent XSS attacks (MKT-001 fix)
+ * Only allows https: URLs to prevent data: URLs, javascript:, etc.
+ */
+function isValidThumbnailUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    // Only allow https URLs to prevent XSS via data: or javascript: protocols
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 interface WorkflowCardProps {
   workflow: PublishedWorkflow;
   showAnalytics?: boolean;
@@ -45,7 +60,16 @@ export const WorkflowCard = memo(function WorkflowCard({
       e.stopPropagation();
       setIsCloning(true);
       try {
+        // MKT-003 fix: Validate user ID before attempting clone
         const userId = useAuthStore.getState().getCurrentUserId();
+        if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+          toast({
+            title: 'Authentication required',
+            description: 'Please sign in to clone workflows.',
+            variant: 'destructive',
+          });
+          return;
+        }
         const userName = 'Current User';
 
         await cloneWorkflow({
@@ -81,7 +105,7 @@ export const WorkflowCard = memo(function WorkflowCard({
 
       {}
       <div className="relative aspect-video bg-linear-to-br from-primary/20 via-primary/10 to-primary/5 overflow-hidden">
-        {workflow.thumbnail_url ? (
+        {isValidThumbnailUrl(workflow.thumbnail_url) ? (
           <img
             src={workflow.thumbnail_url}
             alt={workflow.title}

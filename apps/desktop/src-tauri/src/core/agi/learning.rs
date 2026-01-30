@@ -4,11 +4,29 @@ use anyhow::Result;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 
+/// MEM-011 fix: Maximum number of experiences to keep in memory
+/// Prevents OOM in long-running sessions while maintaining enough history for learning
+const MAX_EXPERIENCES: usize = 10_000;
+
+/// MEM-011 fix: Number of oldest experiences to remove when limit is reached
+/// Removes in batches for efficiency
+const EXPERIENCE_CLEANUP_BATCH: usize = 1_000;
+
+/// MEM-014 fix: Track per-tool statistics incrementally to avoid O(n²) scans
+#[derive(Debug, Clone, Default)]
+struct ToolStats {
+    success_count: u64,
+    total_time_ms: u64,
+    usage_count: u64,
+}
+
 pub struct LearningSystem {
     enabled: bool,
     self_improvement_enabled: bool,
     experiences: RwLock<Vec<Experience>>,
     strategies: RwLock<HashMap<String, Strategy>>,
+    /// MEM-014 fix: Per-tool running statistics for O(1) updates
+    tool_stats: RwLock<HashMap<String, ToolStats>>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +55,7 @@ impl LearningSystem {
             self_improvement_enabled,
             experiences: RwLock::new(Vec::new()),
             strategies: RwLock::new(HashMap::new()),
+            tool_stats: RwLock::new(HashMap::new()),
         })
     }
 
@@ -49,6 +68,7 @@ impl LearningSystem {
             return Ok(());
         }
 
+        // AUDIT-P3-006: Use unwrap_or(0) for timestamp to avoid panic
         let experience = Experience {
             _goal_description: step.description.clone(),
             tool_id: step.tool_id.clone(),
@@ -57,18 +77,50 @@ impl LearningSystem {
             resources_used: result.resources_used.clone(),
             _timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
         };
 
-        self.experiences.write().await.push(experience.clone());
+        {
+            let mut experiences = self.experiences.write().await;
+
+            // MEM-011 fix: Enforce maximum experiences limit to prevent OOM
+            if experiences.len() >= MAX_EXPERIENCES {
+                let remove_count = EXPERIENCE_CLEANUP_BATCH.min(experiences.len());
+                tracing::info!(
+                    current_count = experiences.len(),
+                    removing = remove_count,
+                    "Experience limit reached, removing oldest entries"
+                );
+                // Remove oldest experiences (drain from start is O(n) but happens infrequently)
+                let _ = experiences.drain(0..remove_count);
+            }
+
+            experiences.push(experience.clone());
+        }
 
         self.update_strategy(&experience).await?;
 
         Ok(())
     }
 
+    /// MEM-014 fix: O(1) incremental strategy update instead of O(n) full scan
     async fn update_strategy(&self, experience: &Experience) -> Result<()> {
+        // Update running statistics incrementally (O(1))
+        let (success_count, total_time_ms, usage_count) = {
+            let mut tool_stats = self.tool_stats.write().await;
+            let stats = tool_stats.entry(experience.tool_id.clone()).or_default();
+
+            stats.usage_count += 1;
+            stats.total_time_ms += experience.execution_time_ms;
+            if experience.success {
+                stats.success_count += 1;
+            }
+
+            (stats.success_count, stats.total_time_ms, stats.usage_count)
+        };
+
+        // Update strategy with pre-computed stats (O(1))
         let mut strategies = self.strategies.write().await;
         let strategy = strategies
             .entry(experience.tool_id.clone())
@@ -84,21 +136,11 @@ impl LearningSystem {
                 usage_count: 0,
             });
 
-        strategy.usage_count += 1;
-        let experiences = self.experiences.read().await;
-        let success_count = experiences
-            .iter()
-            .filter(|e| e.tool_id == experience.tool_id && e.success)
-            .count();
-        strategy.success_rate = success_count as f64 / strategy.usage_count as f64;
+        strategy.usage_count = usage_count;
+        strategy.success_rate = success_count as f64 / usage_count as f64;
+        strategy.avg_execution_time_ms = total_time_ms / usage_count;
 
-        let total_time: u64 = experiences
-            .iter()
-            .filter(|e| e.tool_id == experience.tool_id)
-            .map(|e| e.execution_time_ms)
-            .sum();
-        strategy.avg_execution_time_ms = total_time / strategy.usage_count;
-
+        // Update resources with latest values (could use exponential moving average for smoothing)
         strategy.avg_resources.cpu_percent = experience.resources_used.cpu_percent;
         strategy.avg_resources.memory_mb = experience.resources_used.memory_mb;
         strategy.avg_resources.network_mb = experience.resources_used.network_mb;

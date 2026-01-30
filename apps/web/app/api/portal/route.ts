@@ -143,15 +143,23 @@ async function handlePortal(request: NextRequest) {
           'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
       } else {
-        // SECURITY: Email fallback for legacy data only
+        // AUDIT-008-015: Email fallback for legacy data only
+        // DEPRECATION NOTICE: This fallback will be removed in a future version.
+        // All users should have stripe_customer_id stored in profiles table.
         // This is safer for portal access than payment processing, but still risky
+        // because email addresses can be changed or associated with multiple accounts.
         if (!user.email) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
 
+        // AUDIT-008-015: Warning log for email fallback usage - track for migration
         logger.warn(
-          { userId: user.id, email: user.email },
-          'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (legacy only)',
+          {
+            userId: user.id,
+            email: user.email,
+            deprecationNotice: 'Email-based Stripe lookup is deprecated and will be removed',
+          },
+          'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (DEPRECATED)',
         );
 
         // List customers by email - could return multiple if email was reused

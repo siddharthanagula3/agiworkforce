@@ -71,6 +71,34 @@ impl TaskStatus {
             TaskStatus::Todo
         }
     }
+
+    /// INC-003 fix: Enhanced Asana status mapping that can use section name if available
+    /// Asana tasks can be in different sections that indicate status (e.g., "In Progress", "Blocked")
+    pub fn from_asana_status_with_section(completed: bool, section_name: Option<&str>) -> Self {
+        if completed {
+            return TaskStatus::Completed;
+        }
+
+        // If section name is provided, try to infer status from it
+        if let Some(section) = section_name {
+            let section_lower = section.to_lowercase();
+            return match section_lower.as_str() {
+                s if s.contains("progress") || s.contains("doing") || s.contains("wip") => {
+                    TaskStatus::InProgress
+                }
+                s if s.contains("blocked") || s.contains("waiting") || s.contains("on hold") => {
+                    TaskStatus::Blocked
+                }
+                s if s.contains("done") || s.contains("complete") || s.contains("finished") => {
+                    TaskStatus::Completed
+                }
+                s if s.contains("cancel") || s.contains("archive") => TaskStatus::Cancelled,
+                _ => TaskStatus::Todo,
+            };
+        }
+
+        TaskStatus::Todo
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +113,13 @@ pub struct Task {
 
     pub due_date: Option<DateTime<Utc>>,
 
+    /// FIX-005: Assignee ID (Asana gid, Trello member id, etc.)
+    /// Use this for API operations (update, assign)
     pub assignee: Option<String>,
+
+    /// FIX-005: Assignee display name for UI rendering
+    /// Asana uses names, others may use usernames
+    pub assignee_name: Option<String>,
 
     pub priority: Option<u8>,
 
@@ -111,6 +145,7 @@ impl Task {
             status: TaskStatus::Todo,
             due_date: None,
             assignee: None,
+            assignee_name: None,
             priority: None,
             tags: Vec::new(),
             url: None,
@@ -136,8 +171,16 @@ impl Task {
         self
     }
 
-    pub fn with_assignee(mut self, assignee: String) -> Self {
-        self.assignee = Some(assignee);
+    /// FIX-005: Set assignee with both ID and optional display name
+    pub fn with_assignee(mut self, assignee_id: String, assignee_name: Option<String>) -> Self {
+        self.assignee = Some(assignee_id);
+        self.assignee_name = assignee_name;
+        self
+    }
+
+    /// Set only the assignee ID (for backward compatibility)
+    pub fn with_assignee_id(mut self, assignee_id: String) -> Self {
+        self.assignee = Some(assignee_id);
         self
     }
 

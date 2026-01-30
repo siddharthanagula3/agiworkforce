@@ -420,7 +420,10 @@ export const useSettingsStore = create<SettingsState>()(
                 ...defaultSettings.llmConfig.taskRouting,
                 ...(settings.llmConfig?.taskRouting ?? defaultSettings.llmConfig.taskRouting),
               },
-              favoriteModels: [],
+              // SET-005 fix: Preserve persisted favoriteModels instead of resetting to []
+              favoriteModels: Array.isArray(settings.llmConfig?.favoriteModels)
+                ? settings.llmConfig.favoriteModels
+                : [],
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -518,7 +521,9 @@ export const useSettingsStore = create<SettingsState>()(
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SettingsState> | undefined;
 
-          const persistedDefaultModels = persisted?.llmConfig?.defaultModels as any;
+          const persistedDefaultModels = persisted?.llmConfig?.defaultModels as
+            | { managed_cloud?: string; ollama?: string }
+            | undefined;
 
           const mergedLLMConfig: LLMConfig = {
             ...currentState.llmConfig,
@@ -534,7 +539,10 @@ export const useSettingsStore = create<SettingsState>()(
               ...currentState.llmConfig.taskRouting,
               ...(persisted?.llmConfig?.taskRouting ?? {}),
             },
-            favoriteModels: [], // Always empty for subscription model
+            // SET-005 fix: Preserve user's favoriteModels instead of resetting
+            favoriteModels: Array.isArray(persisted?.llmConfig?.favoriteModels)
+              ? persisted.llmConfig.favoriteModels
+              : currentState.llmConfig.favoriteModels,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -557,7 +565,15 @@ export const useSettingsStore = create<SettingsState>()(
           };
         },
         migrate: (persistedState: unknown, version: number) => {
-          const state = persistedState as any;
+          const state = persistedState as Partial<SettingsState> & {
+            llmConfig?: Partial<LLMConfig> & {
+              defaultProvider?: string;
+              defaultModels?: Record<string, string>;
+              favoriteModels?: string[];
+              taskRouting?: Record<string, { provider: Provider; model: string }>;
+            };
+            chatPreferences?: Partial<ChatPreferences>;
+          };
 
           // Migration from v1 to v2: Simplified subscription-only model
           if (version < 2) {

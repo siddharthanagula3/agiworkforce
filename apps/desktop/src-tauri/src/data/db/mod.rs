@@ -6,8 +6,8 @@ pub mod models;
 pub mod repository;
 
 pub use models::{
-    AutomationHistory, Conversation, Message, MessageRole, OverlayEvent, OverlayEventType, Setting,
-    TaskType,
+    AutomationHistory, Conversation, Message, MessageRole, OverlayEvent, OverlayEventType,
+    PaginatedOverlayEvents, Setting, TaskType,
 };
 
 pub use repository::{
@@ -147,12 +147,23 @@ impl Database {
         self.with_connection(|conn| repository::get_overlay_event(conn, id))
     }
 
+    /// AUDIT-004-001 fix: List overlay events with required pagination.
+    ///
+    /// # Arguments
+    /// * `start_time` - Optional start time filter (inclusive)
+    /// * `end_time` - Optional end time filter (inclusive)
+    /// * `limit` - Required limit, clamped to MAX_OVERLAY_EVENTS_LIMIT (1000)
+    /// * `offset` - Optional offset for pagination (defaults to 0)
     pub fn list_overlay_events(
         &self,
         start_time: Option<chrono::DateTime<chrono::Utc>>,
         end_time: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<Vec<OverlayEvent>> {
-        self.with_connection(|conn| repository::list_overlay_events(conn, start_time, end_time))
+        limit: i64,
+        offset: Option<i64>,
+    ) -> Result<PaginatedOverlayEvents> {
+        self.with_connection(|conn| {
+            repository::list_overlay_events(conn, start_time, end_time, limit, offset)
+        })
     }
 
     pub fn delete_overlay_events_before(

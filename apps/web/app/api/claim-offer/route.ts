@@ -8,8 +8,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { requireCsrfToken } from '@/lib/csrf';
 
 async function handleClaimOffer(request: NextRequest) {
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
+
   // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'claim-offer');
   if (rateLimitResponse) {
@@ -41,9 +48,10 @@ async function handleClaimOffer(request: NextRequest) {
   const { code: trimmedCode } = validationResult.data;
 
   try {
+    // AUDIT-P3-008-009: Select only required columns instead of SELECT *
     const { data: invite, error: inviteError } = await supabase
       .from('beta_invites')
-      .select('*')
+      .select('id, plan_tier, trial_days, discount_percent')
       .eq('code', trimmedCode)
       .eq('is_active', true)
       .single();

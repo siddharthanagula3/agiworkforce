@@ -49,7 +49,7 @@ mod code_executor;
 mod database_executor;
 mod email_executor;
 mod file_executor;
-mod git_executor;
+pub mod git_executor;
 mod llm_executor;
 mod mcp_executor;
 mod ocr_executor;
@@ -70,7 +70,12 @@ pub use code_executor::CodeExecutor;
 pub use database_executor::DatabaseExecutor;
 pub use email_executor::EmailExecutor;
 pub use file_executor::FileExecutor;
-pub use git_executor::GitExecutor;
+pub use git_executor::{
+    BranchDiffSummary, CommitSummary, ConflictHunk, ConflictParser, ConflictResolver,
+    ConflictSuggestion, FileConflict, FileDiffStat, GeneratedPrContent, GitExecutor,
+    HunkResolution, PrCreationConfig, PrCreationError, PrCreationResult, PrCreationWorkflow,
+    ResolutionResult, ResolutionStrategy,
+};
 pub use llm_executor::LlmExecutor;
 pub use mcp_executor::{McpExecutor, McpExecutorExt, McpExecutorStats, McpToolResult};
 pub use ocr_executor::OcrExecutor;

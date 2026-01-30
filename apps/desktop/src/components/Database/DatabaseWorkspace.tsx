@@ -1,8 +1,13 @@
-import { Database, History, Link, Link2Off, Play, Plus, Table } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { Check, Database, History, Link, Link2Off, Play, Plus, Table } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { useDatabaseStore, type ConnectionConfig } from '../../stores/databaseStore';
+import {
+  useDatabaseStore,
+  type ConnectionConfig,
+  type DatabaseConnection,
+} from '../../stores/databaseStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
@@ -46,7 +51,10 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
   const [host, setHost] = useState('localhost');
   const [port, setPort] = useState('5432');
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  // WRK-002 FIX: Password is only temporarily held during form input, then immediately
+  // stored in secure storage and cleared. Never persisted in React state long-term.
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordSaved, setPasswordSaved] = useState(false);
   const [database, setDatabase] = useState('');
 
   const [mongoCollection, setMongoCollection] = useState('');
@@ -71,15 +79,25 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
     }
 
     const connectionId = `conn_${Date.now()}`;
+    // WRK-002 FIX: Capture password value before clearing
+    const currentPassword = passwordInput;
 
     try {
       if (connectionType === 'SQL') {
+        // WRK-002 FIX: Store password securely in encrypted storage FIRST
+        if (currentPassword) {
+          await invoke('db_store_password', {
+            connectionId,
+            password: currentPassword,
+          });
+        }
+
         const config: ConnectionConfig = {
           database_type: dbType,
           host,
           port: parseInt(port),
           username,
-          password,
+          password: currentPassword, // Use captured password, will be cleared after
           database,
         };
 
@@ -113,6 +131,14 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       setShowConnectionForm(false);
       resetConnectionForm();
     } catch (error) {
+      // WRK-002 FIX: Clean up stored password if connection failed
+      if (currentPassword && connectionType === 'SQL') {
+        try {
+          await invoke('db_delete_stored_password', { connectionId });
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
       toast.error(`Connection failed: ${error}`);
     }
   };
@@ -122,7 +148,9 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
     setHost('localhost');
     setPort('5432');
     setUsername('');
-    setPassword('');
+    // WRK-002 FIX: Clear password input immediately after use
+    setPasswordInput('');
+    setPasswordSaved(false);
     setDatabase('');
   };
 
@@ -131,6 +159,12 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
 
     try {
       await closeConnection(connectionId);
+      // WRK-002 FIX: Clean up stored password when connection is closed
+      try {
+        await invoke('db_delete_stored_password', { connectionId });
+      } catch {
+        // Ignore cleanup errors - password may not exist for non-SQL connections
+      }
       toast.success('Connection closed');
     } catch (error) {
       toast.error(`Failed to close connection: ${error}`);
@@ -294,12 +328,27 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
               />
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-              />
+              {/* WRK-002 FIX: Password input with secure storage indicator */}
+              <div className="relative">
+                <Input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPasswordSaved(false);
+                  }}
+                  placeholder={passwordSaved ? 'Password saved securely' : 'Password'}
+                  className={passwordSaved ? 'pr-8' : ''}
+                />
+                {passwordSaved && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <Check className="h-4 w-4 text-green-500" />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Password is encrypted and stored securely on your device
+              </p>
             </>
           )}
 
@@ -558,15 +607,50 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
   );
 }
 
-interface DatabaseConnection {
-  id: string;
-  type: string;
-  name?: string;
-}
-
 interface TableSchemaResult {
   rows: unknown[][];
   columns?: string[];
+}
+
+interface QueryResult {
+  rows?: unknown[][];
+  columns?: string[];
+}
+
+// WRK-006 fix: Add pagination limit to prevent crashes with large databases
+const DEFAULT_TABLE_LIMIT = 500;
+const MAX_TABLE_LIMIT = 1000;
+
+// WRK-001 fix: Support all SQL database types, not just MySQL
+// WRK-006 fix: Added LIMIT clause to prevent OOM with 10,000+ tables
+function getListTablesQuery(dbType?: string, limit: number = DEFAULT_TABLE_LIMIT): string {
+  const safeLimit = Math.min(limit, MAX_TABLE_LIMIT);
+
+  switch (dbType) {
+    case 'Postgres':
+      return `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename LIMIT ${safeLimit}`;
+    case 'Sqlite':
+      return `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT ${safeLimit}`;
+    case 'MySql':
+    default:
+      // MySQL SHOW TABLES doesn't support LIMIT, so we'll handle it in code
+      return 'SHOW TABLES';
+  }
+}
+
+function getDescribeTableQuery(tableName: string, dbType?: string): string {
+  // Sanitize table name to prevent SQL injection
+  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
+
+  switch (dbType) {
+    case 'Postgres':
+      return `SELECT column_name as "Column", data_type as "Type", is_nullable as "Null", column_default as "Default" FROM information_schema.columns WHERE table_name = '${safeName}' ORDER BY ordinal_position`;
+    case 'Sqlite':
+      return `PRAGMA table_info(${safeName})`;
+    case 'MySql':
+    default:
+      return `DESCRIBE ${safeName}`;
+  }
 }
 
 function SchemaExplorer({
@@ -582,16 +666,35 @@ function SchemaExplorer({
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingSchema, setLoadingSchema] = useState(false);
 
+  // WRK-001 fix: Use generic query execution with DB-specific SQL
+  // WRK-006 fix: Add pagination to prevent crashes with large databases
   const loadTables = useCallback(async () => {
     if (!activeConnection) return;
 
     setLoadingTables(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<string[]>('db_mysql_list_tables', {
+      const dbType = activeConnection.config?.database_type;
+      const sql = getListTablesQuery(dbType, DEFAULT_TABLE_LIMIT);
+
+      const result = await invoke<QueryResult>('db_execute_query', {
         connectionId: activeConnection.id,
+        sql,
       });
-      setTables(result);
+
+      // Extract table names from first column of results
+      let tableNames =
+        result.rows?.map((row) => String(row[0])).filter((name) => name && name.length > 0) || [];
+
+      // WRK-006 fix: MySQL SHOW TABLES doesn't support LIMIT, so truncate in code
+      if (dbType === 'MySql' && tableNames.length > DEFAULT_TABLE_LIMIT) {
+        tableNames = tableNames.slice(0, DEFAULT_TABLE_LIMIT);
+        toast.info(`Showing first ${DEFAULT_TABLE_LIMIT} tables. Database has more tables.`);
+      } else if (tableNames.length >= DEFAULT_TABLE_LIMIT) {
+        toast.info(`Showing first ${DEFAULT_TABLE_LIMIT} tables. Database may have more tables.`);
+      }
+
+      setTables(tableNames);
     } catch (error) {
       toast.error(`Failed to load tables: ${error}`);
     } finally {
@@ -605,14 +708,18 @@ function SchemaExplorer({
     }
   }, [activeConnection, loadTables]);
 
+  // WRK-001 fix: Use generic query execution with DB-specific SQL
   const handleTableClick = async (tableName: string) => {
     setSelectedTable(tableName);
     setLoadingSchema(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<TableSchemaResult>('db_mysql_describe_table', {
+      const dbType = activeConnection?.config?.database_type;
+      const sql = getDescribeTableQuery(tableName, dbType);
+
+      const result = await invoke<TableSchemaResult>('db_execute_query', {
         connectionId: activeConnection!.id,
-        tableName,
+        sql,
       });
       setTableSchema(result);
     } catch (error) {

@@ -148,15 +148,44 @@ impl SandboxManager {
 
     /// Destroy a session
     pub fn destroy_session(&self, id: &str) -> Result<bool> {
+        let config = self
+            .config
+            .read()
+            .map_err(|e| Error::Generic(e.to_string()))?;
+
         let mut sessions = self
             .sessions
             .write()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
         if let Some(session) = sessions.remove(id) {
-            // Clean up sandbox directory
+            // AUDIT-003-002 fix: Validate working_dir is within sandbox base_path before deletion
+            // This prevents directory traversal attacks where working_dir could be manipulated
             if session.working_dir.exists() {
-                let _ = std::fs::remove_dir_all(&session.working_dir);
+                let base_path = config.base_path.clone().unwrap_or_else(std::env::temp_dir);
+                let sandbox_base = base_path.join("sandbox");
+
+                // Canonicalize both paths to resolve symlinks and normalize
+                let canonical_working = session.working_dir.canonicalize().ok();
+                let canonical_base = sandbox_base.canonicalize().ok();
+
+                let is_safe = match (canonical_working, canonical_base) {
+                    (Some(working), Some(base)) => working.starts_with(&base),
+                    // If canonicalization fails (e.g., path doesn't exist), use string prefix check
+                    _ => session
+                        .working_dir
+                        .to_string_lossy()
+                        .starts_with(&sandbox_base.to_string_lossy().as_ref()),
+                };
+
+                if is_safe {
+                    let _ = std::fs::remove_dir_all(&session.working_dir);
+                } else {
+                    tracing::warn!(
+                        "AUDIT-003-002: Refused to delete working_dir outside sandbox: {:?}",
+                        session.working_dir
+                    );
+                }
             }
             Ok(true)
         } else {

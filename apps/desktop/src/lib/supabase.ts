@@ -90,3 +90,33 @@ export type EmailPreferences = Tables['email_preferences']['Row'];
 export type PricingPlan = Tables['pricing_plans']['Row'];
 export type UsageEvent = Tables['usage_events']['Row'];
 export type FeatureFlag = Tables['feature_flags']['Row'];
+
+/**
+ * AUDIT-P3-TYPE: Minimal profile fields needed for fallback construction.
+ * Used when database is unavailable but we have auth user metadata.
+ */
+export interface FallbackProfileData {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  stripe_customer_id: string | null;
+  credits: unknown;
+}
+
+/**
+ * AUDIT-P3-TYPE: Type guard to validate profile-like data has required fields.
+ */
+export function isValidProfileData(data: unknown): data is FallbackProfileData {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj['id'] === 'string' &&
+    typeof obj['email'] === 'string' &&
+    typeof obj['display_name'] === 'string' &&
+    typeof obj['created_at'] === 'string' &&
+    typeof obj['updated_at'] === 'string'
+  );
+}

@@ -563,10 +563,13 @@ fn extract_similarity_score(text: &str) -> f32 {
         }
     }
 
+    // AUDIT-P3-001: Use safe pattern matching instead of unwrap()
     if let Ok(re) = Regex::new(r"0\.\d+") {
         if let Some(caps) = re.captures(text) {
-            if let Ok(score) = caps.get(0).unwrap().as_str().parse::<f32>() {
-                return score * 100.0;
+            if let Some(match_str) = caps.get(0) {
+                if let Ok(score) = match_str.as_str().parse::<f32>() {
+                    return score * 100.0;
+                }
             }
         }
     }

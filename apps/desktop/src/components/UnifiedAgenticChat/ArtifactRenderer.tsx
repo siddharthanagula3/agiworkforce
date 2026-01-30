@@ -73,6 +73,21 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   const openFile = useCodeStore((state) => state.openFile);
   const setActiveFile = useCodeStore((state) => state.setActiveFile);
 
+  // AUDIT-005-003 fix: Ref to track mount state and timeout for copy state reset
+  const isMountedRef = useRef(true);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // AUDIT-005-003 fix: Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const { prompt, dialog: promptDialog } = usePrompt();
 
   const buildAbsolutePath = (base: string, target: string) => {
@@ -118,7 +133,16 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   const handleCopy = async () => {
     await navigator.clipboard.writeText(artifact.content);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // AUDIT-005-003 fix: Clear previous timeout and add mount check
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        setCopied(false);
+      }
+      copyTimeoutRef.current = null;
+    }, 2000);
   };
 
   const handleDownload = () => {
@@ -272,12 +296,21 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
       if (!savePath) return;
 
-      // Convert blob to base64 and write to file
+      // AUDIT-005-007 fix: Track FileReader and add mount check before state updates
       const reader = new FileReader();
       reader.onloadend = async () => {
+        // Check if component is still mounted before proceeding
+        if (!isMountedRef.current) return;
         const base64 = (reader.result as string).split(',')[1];
         await invoke('file_write_binary', { file_path: savePath, content: base64 });
-        toast.success('Exported as SVG');
+        if (isMountedRef.current) {
+          toast.success('Exported as SVG');
+        }
+      };
+      reader.onerror = () => {
+        if (isMountedRef.current) {
+          toast.error('Failed to read SVG data');
+        }
       };
       reader.readAsDataURL(blob);
     } catch (error) {
@@ -330,9 +363,15 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
 
-      // Create canvas and draw SVG
+      // AUDIT-005-008 fix: Create canvas and draw SVG with mount check
       const img = new Image();
       img.onload = async () => {
+        // Check if component is still mounted before proceeding
+        if (!isMountedRef.current) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+
         const canvas = document.createElement('canvas');
         canvas.width = width * 2; // 2x for retina
         canvas.height = height * 2;
@@ -345,6 +384,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           ctx.drawImage(img, 0, 0, width, height);
 
           canvas.toBlob(async (blob) => {
+            // AUDIT-005-008 fix: Check mount state before state updates
+            if (!isMountedRef.current) return;
             if (blob) {
               const pngUrl = URL.createObjectURL(blob);
               const a = document.createElement('a');
@@ -359,6 +400,12 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           }, 'image/png');
         }
         URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (isMountedRef.current) {
+          toast.error('Failed to load image for PNG export');
+        }
       };
       img.src = url;
     } catch (error) {
@@ -912,6 +959,22 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   // Generate a unique ID for message channel security
   const channelId = useRef(crypto.randomUUID());
 
+  // AUDIT-005-004 fix: Ref to track reload timeout for cleanup
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
+  // AUDIT-005-004 fix: Cleanup on unmount
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+        reloadTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // Build the sandboxed HTML document with security headers and console capture
   const buildSandboxedHtml = useCallback((content: string): string => {
     // Extract or detect if content is a full HTML document or just a snippet
@@ -1139,8 +1202,17 @@ ${content}
     setConsoleOutput([]);
     setError(null);
     setIsRunning(false);
+    // AUDIT-005-004 fix: Clear previous timeout and store new one for cleanup
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+    }
     // Small delay to ensure iframe is destroyed before recreating
-    setTimeout(() => setIsRunning(true), 50);
+    reloadTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        setIsRunning(true);
+      }
+      reloadTimeoutRef.current = null;
+    }, 50);
   }, []);
 
   const handleStop = useCallback(() => {

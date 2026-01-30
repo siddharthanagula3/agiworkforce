@@ -9,22 +9,31 @@ export interface UploadConfig {
 export async function uploadFile(file: File, config?: UploadConfig): Promise<FileAttachment> {
   const { onProgress } = config || {};
 
+  // AUDIT-007-014 fix: Declare interval outside try block for guaranteed cleanup
+  let interval: ReturnType<typeof setInterval> | undefined;
+
   try {
     const dataUrl = await readFileAsDataURL(file);
 
     if (onProgress) {
       let progress = 0;
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         progress += 20;
         if (progress > 100) {
           progress = 100;
-          clearInterval(interval);
+          if (interval !== undefined) {
+            clearInterval(interval);
+            interval = undefined;
+          }
         }
         onProgress(progress);
       }, 100);
 
       await new Promise((resolve) => setTimeout(resolve, 500));
-      clearInterval(interval);
+      if (interval !== undefined) {
+        clearInterval(interval);
+        interval = undefined;
+      }
       onProgress(100);
     }
 
@@ -39,6 +48,11 @@ export async function uploadFile(file: File, config?: UploadConfig): Promise<Fil
     return attachment;
   } catch (error) {
     throw new Error(`Failed to upload ${file.name}: ${error}`);
+  } finally {
+    // AUDIT-007-014 fix: Ensure interval is always cleared, even on error
+    if (interval !== undefined) {
+      clearInterval(interval);
+    }
   }
 }
 
@@ -77,21 +91,30 @@ export const deleteFile = async (fileId: string): Promise<void> => {
 };
 
 export async function downloadFile(url: string, filename: string): Promise<void> {
+  // AUDIT-007-015 fix: Track blobUrl for guaranteed cleanup in finally block
+  let blobUrl: string | undefined;
+
   try {
     const response = await fetch(url);
     const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
+    blobUrl = URL.createObjectURL(blob);
 
     const a = document.createElement('a');
     a.href = blobUrl;
     a.download = filename;
     document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    URL.revokeObjectURL(blobUrl);
+    try {
+      a.click();
+    } finally {
+      document.body.removeChild(a);
+    }
   } catch (error) {
     throw new Error(`Failed to download file: ${error}`);
+  } finally {
+    // AUDIT-007-015 fix: Ensure blob URL is always revoked, even if click fails
+    if (blobUrl !== undefined) {
+      URL.revokeObjectURL(blobUrl);
+    }
   }
 }
 

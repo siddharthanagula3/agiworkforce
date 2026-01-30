@@ -11,6 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 const DeviceApproveRequestSchema = z.object({
   code: z
@@ -23,6 +24,12 @@ const DeviceApproveRequestSchema = z.object({
 });
 
 async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> {
+  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
+
   // Reuse the device-link limiter; this endpoint is also security-sensitive.
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;

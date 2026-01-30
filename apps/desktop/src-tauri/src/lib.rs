@@ -14,6 +14,7 @@ use crate::sys::commands::{
     gmail_oauth::GmailOAuthState,
     intent::IntentState,
     load_persisted_calendar_accounts,
+    master_password::MasterPasswordState,
     mcp_extensions::McpExtensionsState,
     research::ResearchState,
     security::AuthManagerState,
@@ -153,6 +154,17 @@ pub fn run() {
             let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
             app.manage(AuthManagerState(auth_manager));
             tracing::info!("AuthManager initialized");
+
+            // Master Password state for SECSYS-001 security enhancement
+            match MasterPasswordState::new(db_conn_arc.clone()) {
+                Ok(master_password_state) => {
+                    app.manage(master_password_state);
+                    tracing::info!("MasterPasswordState initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize MasterPasswordState: {}. Master password features will be unavailable.", e);
+                }
+            }
 
 
             use crate::sys::commands::analytics::TelemetryState;
@@ -676,6 +688,7 @@ pub fn run() {
             crate::sys::commands::chat_detect_intent,
             crate::sys::commands::chat_is_stop_command,
             crate::sys::commands::chat_handle_stop,
+            crate::sys::commands::chat_compact_context,
             crate::sys::commands::chat::clear_local_database,
 
 
@@ -876,6 +889,22 @@ pub fn run() {
             crate::sys::commands::git_reset,
             crate::sys::commands::git_list_remotes,
             crate::sys::commands::git_add_remote,
+            // Git Conflict Resolution
+            crate::sys::commands::git_list_conflicts,
+            crate::sys::commands::git_get_conflict_details,
+            crate::sys::commands::git_resolve_conflict,
+            crate::sys::commands::git_mark_resolved,
+            crate::sys::commands::git_get_conflict_suggestion_prompt,
+            crate::sys::commands::git_has_conflicts,
+            crate::sys::commands::git_abort_merge,
+            crate::sys::commands::git_complete_merge,
+            // Git PR Creation
+            crate::sys::commands::git_get_branch_diff_summary,
+            crate::sys::commands::git_generate_pr_description,
+            crate::sys::commands::git_create_pr,
+            crate::sys::commands::git_check_pr_readiness,
+            crate::sys::commands::git_current_branch,
+            crate::sys::commands::git_default_branch,
 
 
             crate::sys::commands::design_generate_css,
@@ -1162,6 +1191,10 @@ pub fn run() {
             crate::sys::commands::db_redis_hset,
             crate::sys::commands::db_redis_hgetall,
             crate::sys::commands::db_redis_disconnect,
+            crate::sys::commands::db_store_password,
+            crate::sys::commands::db_has_stored_password,
+            crate::sys::commands::db_get_stored_password,
+            crate::sys::commands::db_delete_stored_password,
 
 
             crate::sys::commands::document_read,
@@ -1285,6 +1318,9 @@ pub fn run() {
             crate::sys::commands::computer_use_get_session,
             crate::sys::commands::computer_use_list_sessions,
             crate::sys::commands::computer_use_execute_tool,
+            crate::sys::commands::computer_use_zoom_region,
+            crate::sys::commands::computer_use_zoom_at_point,
+            crate::sys::commands::computer_use_suggest_zoom_level,
 
 
             crate::sys::commands::code_generate_edit,
@@ -1353,6 +1389,21 @@ pub fn run() {
             crate::sys::commands::voice::voice_ptt_state,
             crate::sys::commands::voice::voice_ptt_key_down,
             crate::sys::commands::voice::voice_ptt_key_up,
+            // Local Whisper STT
+            crate::sys::commands::voice::voice_download_whisper_model,
+            crate::sys::commands::voice::voice_list_whisper_models,
+            crate::sys::commands::voice::voice_set_whisper_model,
+            crate::sys::commands::voice::voice_delete_whisper_model,
+            crate::sys::commands::voice::voice_transcribe_local,
+            // Local Piper TTS
+            crate::sys::commands::voice::voice_download_piper_voice,
+            crate::sys::commands::voice::voice_list_piper_voices,
+            crate::sys::commands::voice::voice_set_piper_voice,
+            crate::sys::commands::voice::voice_delete_piper_voice,
+            crate::sys::commands::voice::voice_tts_speak_local,
+            crate::sys::commands::voice::voice_download_piper_binary,
+            crate::sys::commands::voice::voice_check_piper_binary,
+            crate::sys::commands::voice::voice_list_local_models,
 
             // Canvas (Visual Canvas / A2UI)
             crate::sys::commands::canvas::canvas_create,
@@ -1675,6 +1726,19 @@ pub fn run() {
             crate::sys::commands::agent::agent_list_tasks,
             crate::sys::commands::agent::agent_stop,
             crate::sys::commands::security::auth_login,
+
+            // Master Password (SECSYS-001 security enhancement)
+            crate::sys::commands::master_password::master_password_is_configured,
+            crate::sys::commands::master_password::master_password_is_unlocked,
+            crate::sys::commands::master_password::master_password_get_status,
+            crate::sys::commands::master_password::master_password_setup,
+            crate::sys::commands::master_password::master_password_verify,
+            crate::sys::commands::master_password::master_password_unlock,
+            crate::sys::commands::master_password::master_password_lock,
+            crate::sys::commands::master_password::master_password_change,
+            crate::sys::commands::master_password::master_password_needs_migration,
+            crate::sys::commands::master_password::master_password_start_migration,
+            crate::sys::commands::master_password::master_password_complete_migration,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,

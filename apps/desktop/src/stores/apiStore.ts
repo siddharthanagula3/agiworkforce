@@ -97,8 +97,8 @@ interface ApiState {
   extractVariables: (templateStr: string) => Promise<string[]>;
   validateTemplate: (templateStr: string) => Promise<boolean>;
 
-  parseResponse: (body: string, contentType?: string) => Promise<any>;
-  extractJsonPath: (body: string, path: string) => Promise<any>;
+  parseResponse: (body: string, contentType?: string) => Promise<unknown>;
+  extractJsonPath: (body: string, path: string) => Promise<unknown>;
 
   clearResponse: () => void;
   clearError: () => void;
@@ -314,9 +314,14 @@ export const useApiStore = create<ApiState>((set, get) => {
         createdAt: Date.now(),
       };
 
-      set((state) => ({
-        savedRequests: [...state.savedRequests, savedRequest],
-      }));
+      set((state) => {
+        const newSavedRequests = [...state.savedRequests, savedRequest];
+        // AUDIT-006-001 fix: Cap savedRequests at 100 entries, prune oldest when exceeded
+        if (newSavedRequests.length > 100) {
+          return { savedRequests: newSavedRequests.slice(-100) };
+        }
+        return { savedRequests: newSavedRequests };
+      });
     },
 
     loadRequest: (id: string) => {
@@ -432,7 +437,13 @@ export const useApiStore = create<ApiState>((set, get) => {
 
     renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
       try {
-        const rendered = await invoke<any>('api_render_template', {
+        interface RenderedTemplate {
+          method: string;
+          url: string;
+          headers?: Record<string, string>;
+          body?: string;
+        }
+        const rendered = await invoke<RenderedTemplate>('api_render_template', {
           template,
           variables,
         });
@@ -482,7 +493,7 @@ export const useApiStore = create<ApiState>((set, get) => {
 
     parseResponse: async (body: string, contentType?: string) => {
       try {
-        const parsed = await invoke<any>('api_parse_response', {
+        const parsed = await invoke<unknown>('api_parse_response', {
           body,
           contentType,
         });
@@ -498,7 +509,7 @@ export const useApiStore = create<ApiState>((set, get) => {
 
     extractJsonPath: async (body: string, path: string) => {
       try {
-        const result = await invoke<any>('api_extract_json_path', {
+        const result = await invoke<unknown>('api_extract_json_path', {
           body,
           path,
         });

@@ -66,9 +66,16 @@ export function useApiPromptCompletion(
   });
 
   // Refs for managing async operations
+  // AUDIT-007-009: AbortController is kept for API consistency but Tauri invoke
+  // calls cannot actually be aborted. We use isMountedRef and request ID tracking
+  // to handle stale responses instead.
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputRef = useRef<string>('');
+  // AUDIT-007-009 fix: Track mount state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  // AUDIT-007-009 fix: Track current request ID to ignore stale responses
+  const currentRequestIdRef = useRef(0);
 
   // Clear suggestion
   const clear = useCallback(() => {
@@ -90,14 +97,19 @@ export function useApiPromptCompletion(
   // Fetch completion from API
   const fetchCompletion = useCallback(
     async (inputText: string) => {
-      // Cancel any in-flight request
+      // Cancel any in-flight request (signals intent, though Tauri invoke won't actually abort)
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
 
-      // Create new abort controller
+      // Create new abort controller for consistency with standard patterns
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
+
+      // AUDIT-007-009 fix: Increment request ID to track this specific request
+      // This allows us to ignore responses from stale requests
+      currentRequestIdRef.current += 1;
+      const thisRequestId = currentRequestIdRef.current;
 
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
@@ -107,6 +119,8 @@ export function useApiPromptCompletion(
           return;
         }
 
+        // AUDIT-007-009: Note that Tauri invoke cannot be aborted once started.
+        // We rely on checking isMountedRef and requestId after completion instead.
         const response = await invoke<PromptCompletionResponse>('get_prompt_completion', {
           request: {
             input: inputText,
@@ -114,7 +128,18 @@ export function useApiPromptCompletion(
           },
         });
 
-        // Check if aborted after request completes
+        // AUDIT-007-009 fix: Check if component is still mounted
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        // AUDIT-007-009 fix: Check if this is still the current request
+        // A newer request may have started while we were waiting
+        if (thisRequestId !== currentRequestIdRef.current) {
+          return;
+        }
+
+        // Check if aborted after request completes (for consistency)
         if (abortController.signal.aborted) {
           return;
         }
@@ -142,6 +167,16 @@ export function useApiPromptCompletion(
 
         onSuggestionChange?.(suggestion);
       } catch (error) {
+        // AUDIT-007-009 fix: Check if component is still mounted before updating error state
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        // AUDIT-007-009 fix: Ignore errors from stale requests
+        if (thisRequestId !== currentRequestIdRef.current) {
+          return;
+        }
+
         // Ignore abort errors
         if (abortController.signal.aborted) {
           return;
@@ -220,7 +255,12 @@ export function useApiPromptCompletion(
 
   // Cleanup on unmount
   useEffect(() => {
+    // AUDIT-007-009 fix: Set mounted state to true when effect runs
+    isMountedRef.current = true;
+
     return () => {
+      // AUDIT-007-009 fix: Mark as unmounted to prevent state updates
+      isMountedRef.current = false;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }

@@ -23,6 +23,16 @@ import type {
   TrelloMoveCardRequest,
 } from '../types/productivity';
 
+// AUDIT-006-010/011: Array caps to prevent unbounded memory growth
+const PRODUCTIVITY_LIMITS = {
+  tasks: 500,
+  notionPages: 200,
+  trelloBoards: 100,
+  trelloCards: 500,
+  asanaProjects: 100,
+  asanaTasks: 500,
+} as const;
+
 interface ProductivityState {
   connectedProviders: Set<ProductivityProvider>;
   selectedProvider: ProductivityProvider | null;
@@ -49,7 +59,7 @@ interface ProductivityState {
   selectTask: (taskId: string | null) => void;
 
   notionListPages: () => Promise<void>;
-  notionQueryDatabase: (request: NotionDatabaseQueryRequest) => Promise<any[]>;
+  notionQueryDatabase: (request: NotionDatabaseQueryRequest) => Promise<unknown[]>;
   notionCreateRow: (request: NotionCreateRowRequest) => Promise<string>;
 
   trelloListBoards: () => Promise<void>;
@@ -65,6 +75,7 @@ interface ProductivityState {
   asanaMarkComplete: (request: AsanaMarkCompleteRequest) => Promise<void>;
 
   clearError: () => void;
+  resetOnLogout: () => void;
 }
 
 export const useProductivityStore = create<ProductivityState>((set, get) => ({
@@ -177,7 +188,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         provider: selectedProvider,
       });
 
-      set({ tasks, loading: false });
+      // AUDIT-006-010: Cap tasks array to prevent unbounded memory growth
+      const cappedTasks = tasks.slice(0, PRODUCTIVITY_LIMITS.tasks);
+      set({ tasks: cappedTasks, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list tasks', error);
       set({ error: (error as Error).message, loading: false });
@@ -223,7 +236,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
       const pages = await invoke<NotionPage[]>('productivity_notion_list_pages');
 
-      set({ notionPages: pages, loading: false });
+      // AUDIT-006-010: Cap notionPages array to prevent unbounded memory growth
+      const cappedPages = pages.slice(0, PRODUCTIVITY_LIMITS.notionPages);
+      set({ notionPages: cappedPages, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list Notion pages', error);
       set({ error: (error as Error).message, loading: false });
@@ -234,7 +249,7 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
-      const results = await invoke<any[]>('productivity_notion_query_database', {
+      const results = await invoke<unknown[]>('productivity_notion_query_database', {
         request,
       });
 
@@ -274,7 +289,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
       const boards = await invoke<TrelloBoard[]>('productivity_trello_list_boards');
 
-      set({ trelloBoards: boards, loading: false });
+      // AUDIT-006-010: Cap trelloBoards array to prevent unbounded memory growth
+      const cappedBoards = boards.slice(0, PRODUCTIVITY_LIMITS.trelloBoards);
+      set({ trelloBoards: cappedBoards, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list Trello boards', error);
       set({ error: (error as Error).message, loading: false });
@@ -289,7 +306,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         board_id: boardId,
       });
 
-      set({ trelloCards: cards, loading: false });
+      // AUDIT-006-010: Cap trelloCards array to prevent unbounded memory growth
+      const cappedCards = cards.slice(0, PRODUCTIVITY_LIMITS.trelloCards);
+      set({ trelloCards: cappedCards, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list Trello cards', error);
       set({ error: (error as Error).message, loading: false });
@@ -369,7 +388,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         workspace_id: workspaceId,
       });
 
-      set({ asanaProjects: projects, asanaWorkspaceId: workspaceId, loading: false });
+      // AUDIT-006-010: Cap asanaProjects array to prevent unbounded memory growth
+      const cappedProjects = projects.slice(0, PRODUCTIVITY_LIMITS.asanaProjects);
+      set({ asanaProjects: cappedProjects, asanaWorkspaceId: workspaceId, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list Asana projects', error);
       set({ error: (error as Error).message, loading: false });
@@ -384,7 +405,9 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         project_id: projectId,
       });
 
-      set({ asanaTasks: tasks, loading: false });
+      // AUDIT-006-010: Cap asanaTasks array to prevent unbounded memory growth
+      const cappedTasks = tasks.slice(0, PRODUCTIVITY_LIMITS.asanaTasks);
+      set({ asanaTasks: cappedTasks, loading: false });
     } catch (error) {
       console.error('[productivity] failed to list Asana tasks', error);
       set({ error: (error as Error).message, loading: false });
@@ -450,4 +473,23 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  // AUDIT-006-011: Reset all arrays on logout to prevent memory leaks
+  resetOnLogout: () => {
+    set({
+      connectedProviders: new Set(),
+      selectedProvider: null,
+      tasks: [],
+      selectedTaskId: null,
+      notionPages: [],
+      trelloBoards: [],
+      trelloCards: [],
+      asanaProjects: [],
+      asanaTasks: [],
+      asanaWorkspaceId: null,
+      loading: false,
+      error: null,
+    });
+    console.log('[ProductivityStore] Reset on logout');
+  },
 }));

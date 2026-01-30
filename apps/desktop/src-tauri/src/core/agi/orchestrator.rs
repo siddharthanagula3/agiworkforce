@@ -208,11 +208,12 @@ impl AgentOrchestrator {
             current_goal: Some(goal.description.clone()),
             current_step: None,
             progress: 0,
+            // AUDIT-P3-004: Use unwrap_or_default() for timestamp to avoid panic
             started_at: Some(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64,
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0),
             ),
             completed_at: None,
             error: None,
@@ -238,7 +239,10 @@ impl AgentOrchestrator {
 
         agents.insert(agent_id.clone(), agent);
 
-        let agent = agents.get_mut(&agent_id).unwrap();
+        // AUDIT-P3-005: Use ok_or_else instead of unwrap() for map access
+        let agent = agents
+            .get_mut(&agent_id)
+            .ok_or_else(|| anyhow::anyhow!("Agent not found after insertion"))?;
         let goal_id = agent.core.submit_goal(goal).await?;
 
         tracing::info!(
@@ -316,11 +320,12 @@ impl AgentOrchestrator {
 
             agent.status.status = AgentState::Failed;
             agent.status.error = Some("Cancelled by user".to_string());
+            // AUDIT-P3-011: Use unwrap_or(0) for timestamp to avoid panic
             agent.status.completed_at = Some(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64,
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0),
             );
 
             if let Some(ref app) = self.app_handle {

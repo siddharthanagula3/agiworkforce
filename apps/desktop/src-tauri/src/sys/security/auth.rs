@@ -13,8 +13,13 @@ use super::secret_manager::SecretManager;
 const ACCESS_TOKEN_DURATION: i64 = 60;
 const REFRESH_TOKEN_DURATION: i64 = 30 * 24 * 60;
 const MAX_FAILED_ATTEMPTS: u32 = 5;
-const LOCKOUT_DURATION: i64 = 15;
+// SECSYS-006 fix: Increased lockout duration from 15 to 30 minutes for better brute force protection
+const LOCKOUT_DURATION: i64 = 30;
 const INACTIVITY_TIMEOUT: i64 = 15;
+
+// SECSYS-003 fix: Rate limiting constants for token validation
+const TOKEN_VALIDATION_MAX_ATTEMPTS: u32 = 100; // Max attempts per minute
+const TOKEN_VALIDATION_WINDOW_SECS: i64 = 60; // 1 minute window
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -160,10 +165,47 @@ impl AuthToken {
     }
 }
 
+/// SECSYS-003 fix: Rate limiter for token validation to prevent brute-force attacks
+/// Tracks validation attempts within a sliding window
+#[derive(Debug, Clone)]
+struct ValidationAttempt {
+    count: u32,
+    window_start: DateTime<Utc>,
+}
+
+impl ValidationAttempt {
+    fn new() -> Self {
+        Self {
+            count: 1,
+            window_start: Utc::now(),
+        }
+    }
+
+    fn is_window_expired(&self) -> bool {
+        Utc::now() > self.window_start + Duration::seconds(TOKEN_VALIDATION_WINDOW_SECS)
+    }
+
+    fn increment(&mut self) {
+        if self.is_window_expired() {
+            // Reset window
+            self.count = 1;
+            self.window_start = Utc::now();
+        } else {
+            self.count += 1;
+        }
+    }
+
+    fn is_rate_limited(&self) -> bool {
+        !self.is_window_expired() && self.count > TOKEN_VALIDATION_MAX_ATTEMPTS
+    }
+}
+
 pub struct AuthManager {
     users: Arc<parking_lot::RwLock<HashMap<String, User>>>,
     sessions: Arc<parking_lot::RwLock<HashMap<String, Session>>>,
     secret_manager: Arc<SecretManager>,
+    /// SECSYS-003 fix: Rate limiter for token validation, keyed by partial token hash
+    validation_attempts: Arc<parking_lot::RwLock<HashMap<String, ValidationAttempt>>>,
 }
 
 impl AuthManager {
@@ -172,6 +214,7 @@ impl AuthManager {
             users: Arc::new(parking_lot::RwLock::new(HashMap::new())),
             sessions: Arc::new(parking_lot::RwLock::new(HashMap::new())),
             secret_manager,
+            validation_attempts: Arc::new(parking_lot::RwLock::new(HashMap::new())),
         }
     }
 
@@ -269,6 +312,29 @@ impl AuthManager {
     }
 
     pub fn validate_token(&self, access_token: &str) -> Result<User, String> {
+        // SECSYS-003 fix: Rate limiting to prevent brute-force token attacks
+        // Use first 8 chars of token as key to group similar attempts
+        let rate_key = if access_token.len() >= 8 {
+            access_token[..8].to_string()
+        } else {
+            access_token.to_string()
+        };
+
+        {
+            let mut attempts = self.validation_attempts.write();
+            if let Some(attempt) = attempts.get_mut(&rate_key) {
+                if attempt.is_rate_limited() {
+                    return Err(
+                        "Too many validation attempts. Please wait before trying again."
+                            .to_string(),
+                    );
+                }
+                attempt.increment();
+            } else {
+                attempts.insert(rate_key.clone(), ValidationAttempt::new());
+            }
+        }
+
         let mut sessions = self.sessions.write();
         let session = sessions
             .values_mut()
@@ -291,6 +357,12 @@ impl AuthManager {
         let user = users.get(&user_id).ok_or("User not found")?.clone();
 
         Ok(user)
+    }
+
+    /// SECSYS-003 fix: Clean up expired rate limit entries to prevent memory growth
+    pub fn cleanup_rate_limits(&self) {
+        let mut attempts = self.validation_attempts.write();
+        attempts.retain(|_, attempt| !attempt.is_window_expired());
     }
 
     pub fn get_user(&self, user_id: &str) -> Option<User> {
@@ -326,6 +398,9 @@ impl AuthManager {
     pub fn cleanup_expired_sessions(&self) {
         let mut sessions = self.sessions.write();
         sessions.retain(|_, session| !session.is_expired());
+        drop(sessions);
+        // SECSYS-003 fix: Also cleanup expired rate limit entries
+        self.cleanup_rate_limits();
     }
 }
 

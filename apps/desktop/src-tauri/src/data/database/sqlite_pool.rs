@@ -5,8 +5,9 @@
 //! - Reuses connections across commands
 //! - Properly handles concurrent access with WAL mode
 //! - Includes health checks and connection validation
+//! - DAT-003 fix: Uses condition variable instead of sleep polling
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use rusqlite::{Connection, OpenFlags};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -170,6 +171,9 @@ struct SqlitePoolInner {
     idle_connections: Mutex<VecDeque<PooledConnection>>,
     stats: Mutex<PoolStats>,
     active_count: Mutex<usize>,
+    /// DAT-003 fix: Condition variable to signal when connections are available
+    /// This avoids CPU spinning with sleep-based polling
+    connection_available: Condvar,
 }
 
 impl SqlitePoolInner {
@@ -190,6 +194,9 @@ impl SqlitePoolInner {
         }
 
         stats.active_connections = *active;
+
+        // DAT-003 fix: Notify one waiting thread that a connection is available
+        self.connection_available.notify_one();
     }
 }
 
@@ -220,6 +227,7 @@ impl SqlitePool {
             idle_connections: Mutex::new(VecDeque::with_capacity(config.max_connections)),
             stats: Mutex::new(PoolStats::default()),
             active_count: Mutex::new(0),
+            connection_available: Condvar::new(),
         });
 
         let pool = Self { inner };
@@ -325,8 +333,26 @@ impl SqlitePool {
                 )));
             }
 
-            // Wait a bit before retrying
-            std::thread::sleep(Duration::from_millis(10));
+            // DAT-003 fix: Use condition variable instead of sleep polling
+            // Wait for a connection to be returned (with remaining timeout)
+            let remaining_timeout = timeout.saturating_sub(start.elapsed());
+            if remaining_timeout.is_zero() {
+                continue; // Will hit the timeout check above
+            }
+
+            // Wait on the condition variable with timeout
+            // This is more efficient than sleep polling as it wakes immediately
+            // when a connection becomes available
+            let mut idle = self.inner.idle_connections.lock();
+            let result = self
+                .inner
+                .connection_available
+                .wait_for(&mut idle, remaining_timeout);
+
+            // If we timed out, the next iteration will handle the timeout error
+            // If we were notified, we'll try to acquire a connection in the next iteration
+            drop(idle);
+            let _ = result; // Ignore the WaitTimeoutResult, loop will re-check
         }
     }
 

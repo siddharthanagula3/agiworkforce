@@ -1004,4 +1004,256 @@ mod tests {
         let result = GitExecutor::validate_path(temp_dir.path(), &context, "test_operation");
         assert!(result.is_ok());
     }
+
+    // ============================================================================
+    // PR Creation Workflow Tests
+    // ============================================================================
+
+    use crate::core::agi::executors::{BranchDiffSummary, PrCreationConfig, PrCreationWorkflow};
+
+    /// Create a test repo with commits on a feature branch.
+    fn create_repo_with_branches() -> (TempDir, std::path::PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("pr_test_repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        // Initialize repo
+        let repo = git2::Repository::init(&repo_path).unwrap();
+
+        // Create initial commit on main
+        fs::write(repo_path.join("README.md"), "# Test Repo").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("README.md")).unwrap();
+        index.write().unwrap();
+
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = git2::Signature::now("Test User", "test@example.com").unwrap();
+
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
+
+        // Create feature branch
+        let head = repo.head().unwrap();
+        let head_commit = head.peel_to_commit().unwrap();
+        repo.branch("feature/test-pr", &head_commit, false).unwrap();
+
+        // Checkout feature branch
+        let feature_ref = "refs/heads/feature/test-pr";
+        repo.set_head(feature_ref).unwrap();
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+            .unwrap();
+
+        // Make commits on feature branch
+        fs::write(repo_path.join("new_file.txt"), "New feature file").unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .add_path(std::path::Path::new("new_file.txt"))
+            .unwrap();
+        index.write().unwrap();
+
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "feat: add new feature file",
+            &tree,
+            &[&parent],
+        )
+        .unwrap();
+
+        // Add another commit
+        fs::write(repo_path.join("another_file.txt"), "Another change").unwrap();
+        let mut index = repo.index().unwrap();
+        index
+            .add_path(std::path::Path::new("another_file.txt"))
+            .unwrap();
+        index.write().unwrap();
+
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "fix: add another file",
+            &tree,
+            &[&parent],
+        )
+        .unwrap();
+
+        (temp_dir, repo_path)
+    }
+
+    #[test]
+    fn test_get_branch_diff_summary_success() {
+        let (_temp_dir, repo_path) = create_repo_with_branches();
+
+        let result =
+            PrCreationWorkflow::get_branch_diff_summary(&repo_path, "main", "feature/test-pr");
+
+        assert!(result.is_ok());
+        let summary = result.unwrap();
+
+        assert_eq!(summary.base_branch, "main");
+        assert_eq!(summary.head_branch, "feature/test-pr");
+        assert_eq!(summary.commits_ahead, 2); // Two commits on feature branch
+        assert!(!summary.commits.is_empty());
+        assert!(!summary.files_changed.is_empty());
+        assert!(summary.total_additions > 0);
+    }
+
+    #[test]
+    fn test_get_branch_diff_summary_commit_details() {
+        let (_temp_dir, repo_path) = create_repo_with_branches();
+
+        let summary =
+            PrCreationWorkflow::get_branch_diff_summary(&repo_path, "main", "feature/test-pr")
+                .unwrap();
+
+        // Check commit summaries
+        let commit_messages: Vec<&str> =
+            summary.commits.iter().map(|c| c.message.as_str()).collect();
+
+        assert!(commit_messages.iter().any(|m| m.contains("feat:")));
+        assert!(commit_messages.iter().any(|m| m.contains("fix:")));
+
+        // Check each commit has required fields
+        for commit in &summary.commits {
+            assert!(!commit.hash_short.is_empty());
+            assert!(!commit.hash_full.is_empty());
+            assert_eq!(commit.hash_short.len(), 7);
+            assert!(commit.timestamp > 0);
+        }
+    }
+
+    #[test]
+    fn test_get_branch_diff_summary_file_stats() {
+        let (_temp_dir, repo_path) = create_repo_with_branches();
+
+        let summary =
+            PrCreationWorkflow::get_branch_diff_summary(&repo_path, "main", "feature/test-pr")
+                .unwrap();
+
+        // Should have two new files
+        assert!(summary.files_changed.len() >= 2);
+
+        // Check file status
+        let added_files: Vec<_> = summary
+            .files_changed
+            .iter()
+            .filter(|f| f.status == "added")
+            .collect();
+        assert!(added_files.len() >= 2);
+    }
+
+    #[test]
+    fn test_get_branch_diff_summary_base_branch_not_found() {
+        let (_temp_dir, repo_path) = create_repo_with_branches();
+
+        let result = PrCreationWorkflow::get_branch_diff_summary(
+            &repo_path,
+            "nonexistent-branch",
+            "feature/test-pr",
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found") || err.contains("Base branch"));
+    }
+
+    #[test]
+    fn test_get_branch_diff_summary_head_branch_not_found() {
+        let (_temp_dir, repo_path) = create_repo_with_branches();
+
+        let result =
+            PrCreationWorkflow::get_branch_diff_summary(&repo_path, "main", "nonexistent-feature");
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found") || err.contains("Head branch"));
+    }
+
+    #[test]
+    fn test_pr_creation_config_default() {
+        let config = PrCreationConfig::default();
+
+        assert_eq!(config.base_branch, "main");
+        assert!(config.head_branch.is_empty());
+        assert!(config.auto_generate_title);
+        assert!(config.auto_generate_description);
+        assert!(config.include_diff_summary);
+        assert!(!config.draft);
+        assert!(config.labels.is_empty());
+        assert!(config.reviewers.is_empty());
+    }
+
+    #[test]
+    fn test_pr_creation_config_serialization() {
+        let config = PrCreationConfig {
+            base_branch: "develop".to_string(),
+            head_branch: "feature/test".to_string(),
+            auto_generate_title: false,
+            auto_generate_description: true,
+            include_diff_summary: true,
+            custom_title: Some("My PR title".to_string()),
+            custom_description: None,
+            draft: true,
+            labels: vec!["bug".to_string(), "enhancement".to_string()],
+            reviewers: vec!["user1".to_string()],
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: PrCreationConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.base_branch, "develop");
+        assert_eq!(deserialized.head_branch, "feature/test");
+        assert!(!deserialized.auto_generate_title);
+        assert!(deserialized.draft);
+        assert_eq!(deserialized.labels.len(), 2);
+    }
+
+    #[test]
+    fn test_branch_diff_summary_serialization() {
+        use crate::core::agi::executors::{CommitSummary, FileDiffStat};
+
+        let summary = BranchDiffSummary {
+            base_branch: "main".to_string(),
+            head_branch: "feature/test".to_string(),
+            commits_ahead: 2,
+            commits: vec![CommitSummary {
+                hash_short: "abc1234".to_string(),
+                hash_full: "abc12345678901234567890".to_string(),
+                message: "test commit".to_string(),
+                message_full: "test commit\n\nFull description".to_string(),
+                author: "Test User".to_string(),
+                email: "test@example.com".to_string(),
+                timestamp: 1234567890,
+            }],
+            files_changed: vec![FileDiffStat {
+                path: "test.txt".to_string(),
+                additions: 10,
+                deletions: 5,
+                status: "modified".to_string(),
+                old_path: None,
+            }],
+            total_additions: 10,
+            total_deletions: 5,
+            diff_content: "+new line\n-old line".to_string(),
+        };
+
+        let json = serde_json::to_string(&summary).unwrap();
+        let deserialized: BranchDiffSummary = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.commits_ahead, 2);
+        assert_eq!(deserialized.commits.len(), 1);
+        assert_eq!(deserialized.files_changed.len(), 1);
+        assert_eq!(deserialized.total_additions, 10);
+    }
 }

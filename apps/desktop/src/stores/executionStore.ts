@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { ResearchTask } from '../types/chat';
 import type { ReflectionInsight, FailurePattern, Correction, SubGoal } from '../api/reflection';
+import type { ActionType } from './browserStore';
 
 export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
@@ -227,6 +228,10 @@ export const useExecutionStore = create<ExecutionState>()(
     addStep: (step) => {
       set((state) => {
         state.steps.push(step);
+        // AUDIT-006-006 fix: Cap steps at 200 entries
+        if (state.steps.length > 200) {
+          state.steps = state.steps.slice(-200);
+        }
       });
     },
 
@@ -308,6 +313,11 @@ export const useExecutionStore = create<ExecutionState>()(
     addFileChange: (change) => {
       set((state) => {
         state.fileChanges.push(change);
+
+        // AUDIT-006-005: Cap fileChanges at 500 entries, keeping newest (FIFO eviction)
+        if (state.fileChanges.length > 500) {
+          state.fileChanges = state.fileChanges.slice(-500);
+        }
       });
     },
 
@@ -466,6 +476,26 @@ export const useExecutionStore = create<ExecutionState>()(
 );
 
 let listenersInitialized = false;
+// AUDIT-006-028 fix: Store unlisten functions for cleanup
+type UnlistenFn = () => void;
+const unlistenFunctions: UnlistenFn[] = [];
+
+/**
+ * AUDIT-006-028 fix: Cleanup function to remove all event listeners
+ * Call this during logout to prevent memory leaks
+ */
+export function cleanupExecutionListeners(): void {
+  for (const unlisten of unlistenFunctions) {
+    try {
+      unlisten();
+    } catch (error) {
+      console.error('[ExecutionStore] Error cleaning up listener:', error);
+    }
+  }
+  unlistenFunctions.length = 0;
+  listenersInitialized = false;
+  console.debug('[ExecutionStore] Event listeners cleaned up');
+}
 
 export async function initializeExecutionListeners() {
   if (listenersInitialized) {
@@ -480,35 +510,41 @@ export async function initializeExecutionListeners() {
   }
 
   try {
-    await listen<{ goal_id: string; description: string }>('agi:goal:submitted', ({ payload }) => {
-      useExecutionStore.getState().setActiveGoal({
-        id: payload.goal_id,
-        description: payload.description,
-        status: 'planning',
-        startTime: Date.now(),
-        totalSteps: 0,
-        completedSteps: 0,
-        progressPercent: 0,
-      });
-      useExecutionStore.getState().setPanelVisible(true);
-    });
-
-    await listen<{ goal_id: string; total_steps: number; estimated_duration_ms: number }>(
-      'agi:goal:plan_created',
+    const unlisten1 = await listen<{ goal_id: string; description: string }>(
+      'agi:goal:submitted',
       ({ payload }) => {
-        const state = useExecutionStore.getState();
-        const goal = state.activeGoal;
-        if (goal && goal.id === payload.goal_id) {
-          state.setActiveGoal({
-            ...goal,
-            status: 'executing',
-            totalSteps: payload.total_steps,
-          });
-        }
+        useExecutionStore.getState().setActiveGoal({
+          id: payload.goal_id,
+          description: payload.description,
+          status: 'planning',
+          startTime: Date.now(),
+          totalSteps: 0,
+          completedSteps: 0,
+          progressPercent: 0,
+        });
+        useExecutionStore.getState().setPanelVisible(true);
       },
     );
+    unlistenFunctions.push(unlisten1);
 
-    await listen<{
+    const unlisten2 = await listen<{
+      goal_id: string;
+      total_steps: number;
+      estimated_duration_ms: number;
+    }>('agi:goal:plan_created', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      const goal = state.activeGoal;
+      if (goal && goal.id === payload.goal_id) {
+        state.setActiveGoal({
+          ...goal,
+          status: 'executing',
+          totalSteps: payload.total_steps,
+        });
+      }
+    });
+    unlistenFunctions.push(unlisten2);
+
+    const unlisten3 = await listen<{
       goal_id: string;
       step_id: string;
       step_index: number;
@@ -525,8 +561,9 @@ export async function initializeExecutionListeners() {
         startTime: Date.now(),
       });
     });
+    unlistenFunctions.push(unlisten3);
 
-    await listen<{
+    const unlisten4 = await listen<{
       goal_id: string;
       step_id: string;
       step_index: number;
@@ -543,8 +580,9 @@ export async function initializeExecutionListeners() {
         error: payload.error,
       });
     });
+    unlistenFunctions.push(unlisten4);
 
-    await listen<{
+    const unlisten5 = await listen<{
       goal_id: string;
       completed_steps: number;
       total_steps: number;
@@ -561,57 +599,69 @@ export async function initializeExecutionListeners() {
         });
       }
     });
+    unlistenFunctions.push(unlisten5);
 
-    await listen<{ goal_id: string; total_steps: number; completed_steps: number }>(
-      'agi:goal:achieved',
+    const unlisten6 = await listen<{
+      goal_id: string;
+      total_steps: number;
+      completed_steps: number;
+    }>('agi:goal:achieved', ({ payload }) => {
+      const state = useExecutionStore.getState();
+      const goal = state.activeGoal;
+      if (goal && goal.id === payload.goal_id) {
+        state.setActiveGoal({
+          ...goal,
+          status: 'completed',
+          endTime: Date.now(),
+          completedSteps: payload.completed_steps,
+          progressPercent: 100,
+        });
+
+        // Cleanup execution contexts after a delay to allow UI to show completion
+        setTimeout(() => {
+          useExecutionStore.getState().cleanupGoalContexts();
+        }, 5000); // 5 second delay before cleanup
+      }
+    });
+    unlistenFunctions.push(unlisten6);
+
+    const unlisten7 = await listen<{ goal_id: string; error: string }>(
+      'agi:goal:error',
       ({ payload }) => {
         const state = useExecutionStore.getState();
         const goal = state.activeGoal;
         if (goal && goal.id === payload.goal_id) {
           state.setActiveGoal({
             ...goal,
-            status: 'completed',
+            status: 'failed',
             endTime: Date.now(),
-            completedSteps: payload.completed_steps,
-            progressPercent: 100,
           });
 
-          // Cleanup execution contexts after a delay to allow UI to show completion
+          // Cleanup execution contexts after a delay to allow UI to show error
           setTimeout(() => {
             useExecutionStore.getState().cleanupGoalContexts();
           }, 5000); // 5 second delay before cleanup
         }
       },
     );
+    unlistenFunctions.push(unlisten7);
 
-    await listen<{ goal_id: string; error: string }>('agi:goal:error', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      const goal = state.activeGoal;
-      if (goal && goal.id === payload.goal_id) {
-        state.setActiveGoal({
-          ...goal,
-          status: 'failed',
-          endTime: Date.now(),
-        });
+    const unlisten8 = await listen<{ step_id: string; chunk: string }>(
+      'agi:llm_chunk',
+      ({ payload }) => {
+        const state = useExecutionStore.getState();
+        state.appendLLMReasoning(payload.step_id, payload.chunk);
+        state.setStreaming(true);
+      },
+    );
+    unlistenFunctions.push(unlisten8);
 
-        // Cleanup execution contexts after a delay to allow UI to show error
-        setTimeout(() => {
-          useExecutionStore.getState().cleanupGoalContexts();
-        }, 5000); // 5 second delay before cleanup
-      }
-    });
-
-    await listen<{ step_id: string; chunk: string }>('agi:llm_chunk', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      state.appendLLMReasoning(payload.step_id, payload.chunk);
-      state.setStreaming(true);
-    });
-
-    await listen<{ step_id: string }>('agi:llm_complete', () => {
+    const unlisten9 = await listen<{ step_id: string }>('agi:llm_complete', () => {
       useExecutionStore.getState().setStreaming(false);
     });
+    unlistenFunctions.push(unlisten9);
 
-    await listen<{ command: string; output: string; exit_code?: number }>(
+    const unlisten10 = await listen<{ command: string; output: string; exit_code?: number }>(
       'agi:terminal_output',
       ({ payload }) => {
         useExecutionStore.getState().addTerminalLog({
@@ -624,8 +674,9 @@ export async function initializeExecutionListeners() {
         });
       },
     );
+    unlistenFunctions.push(unlisten10);
 
-    await listen<{
+    const unlisten11 = await listen<{
       type: 'navigate' | 'click' | 'type' | 'extract' | 'screenshot';
       url?: string;
       selector?: string;
@@ -633,11 +684,14 @@ export async function initializeExecutionListeners() {
       screenshot_base64?: string;
       success: boolean;
       error?: string;
-    }>('agi:browser_action', ({ payload }) => {
+    }>('agi:browser_action', async ({ payload }) => {
       const state = useExecutionStore.getState();
+      const actionId = `browser_${Date.now()}`;
+      const timestamp = Date.now();
+
       state.addBrowserAction({
-        id: `browser_${Date.now()}`,
-        timestamp: Date.now(),
+        id: actionId,
+        timestamp,
         type: payload.type,
         url: payload.url,
         selector: payload.selector,
@@ -650,9 +704,47 @@ export async function initializeExecutionListeners() {
       if (payload.url) {
         state.updateCurrentBrowserState(payload.url, payload.screenshot_base64 || null);
       }
-    });
 
-    await listen<{
+      // WRK-003: Sync with browserStore to keep inline panels in sync with workspace
+      try {
+        const { useBrowserStore } = await import('./browserStore');
+        const browserStore = useBrowserStore.getState();
+
+        // Add action to browserStore in its expected format
+        browserStore.addAction({
+          id: actionId,
+          type: payload.type as ActionType,
+          timestamp,
+          success: payload.success,
+          details: {
+            url: payload.url,
+            selector: payload.selector,
+            text: payload.value,
+            error: payload.error,
+          },
+        });
+
+        // Add screenshot if present
+        if (payload.screenshot_base64 && browserStore.sessions.length > 0) {
+          const activeSession = browserStore.sessions.find((s) => s.active);
+          const activeTab = activeSession?.tabs.find((t) => t.active);
+          if (activeTab) {
+            browserStore.addScreenshot({
+              id: `screenshot_${timestamp}`,
+              timestamp,
+              data: payload.screenshot_base64,
+              tabId: activeTab.id,
+            });
+          }
+        }
+      } catch (syncError) {
+        // Don't block execution if browserStore sync fails
+        console.debug('[ExecutionStore] browserStore sync skipped:', syncError);
+      }
+    });
+    unlistenFunctions.push(unlisten11);
+
+    const unlisten12 = await listen<{
       path: string;
       operation: 'create' | 'modify' | 'delete';
       old_content?: string;
@@ -670,11 +762,12 @@ export async function initializeExecutionListeners() {
         accepted: null,
       });
     });
+    unlistenFunctions.push(unlisten12);
 
     // ===== Reflection Events =====
 
     // Main reflection completed event with full insight
-    await listen<{
+    const unlisten13 = await listen<{
       goal_id: string;
       iteration: number;
       insight: ReflectionInsight;
@@ -689,9 +782,10 @@ export async function initializeExecutionListeners() {
         state.setActiveTab('reflection');
       }
     });
+    unlistenFunctions.push(unlisten13);
 
     // Failure patterns event
-    await listen<{
+    const unlisten14 = await listen<{
       goal_id: string;
       iteration: number;
       patterns: FailurePattern[];
@@ -701,35 +795,39 @@ export async function initializeExecutionListeners() {
         state.addFailurePattern(pattern);
       });
     });
+    unlistenFunctions.push(unlisten14);
 
     // Corrections event
-    await listen<{
+    const unlisten15 = await listen<{
       goal_id: string;
       iteration: number;
       corrections: Correction[];
     }>('agi:reflection:corrections', ({ payload }) => {
       useExecutionStore.getState().setCorrections(payload.corrections);
     });
+    unlistenFunctions.push(unlisten15);
 
     // Recommendations event
-    await listen<{
+    const unlisten16 = await listen<{
       goal_id: string;
       iteration: number;
       recommendations: string[];
     }>('agi:reflection:recommendations', ({ payload }) => {
       useExecutionStore.getState().setRecommendations(payload.recommendations);
     });
+    unlistenFunctions.push(unlisten16);
 
     // Sub-goals event
-    await listen<{
+    const unlisten17 = await listen<{
       goal_id: string;
       sub_goals: SubGoal[];
     }>('agi:reflection:sub_goals', ({ payload }) => {
       useExecutionStore.getState().setSubGoals(payload.sub_goals);
     });
+    unlistenFunctions.push(unlisten17);
 
     // Plan revised event (after corrections applied)
-    await listen<{
+    const unlisten18 = await listen<{
       goal_id: string;
       iteration: number;
       corrections_applied: number;
@@ -739,9 +837,10 @@ export async function initializeExecutionListeners() {
         `[ExecutionStore] Plan revised: ${payload.corrections_applied} corrections applied, ${payload.new_steps_count} new steps`,
       );
     });
+    unlistenFunctions.push(unlisten18);
 
     // Goal iteration start - set reflecting state
-    await listen<{
+    const unlisten19 = await listen<{
       goal_id: string;
       iteration: number;
     }>('agi:goal:iteration_start', ({ payload }) => {
@@ -749,9 +848,10 @@ export async function initializeExecutionListeners() {
       state.setIteration(payload.iteration);
       // Will be set to reflecting once actual reflection begins
     });
+    unlistenFunctions.push(unlisten19);
 
     // Goal unachievable event
-    await listen<{
+    const unlisten20 = await listen<{
       goal_id: string;
       iterations: number;
       consecutive_failures: number;
@@ -762,6 +862,7 @@ export async function initializeExecutionListeners() {
       // Switch to reflection tab to show the final analysis
       state.setActiveTab('reflection');
     });
+    unlistenFunctions.push(unlisten20);
   } catch (error) {
     console.error('[ExecutionStore] Failed to initialize event listeners:', error);
     listenersInitialized = false;

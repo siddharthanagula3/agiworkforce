@@ -313,6 +313,10 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 state.fileOperations.push({ ...op, timestamp: new Date() });
+                // AUDIT-006-017 fix: Cap fileOperations at 200 entries
+                if (state.fileOperations.length > 200) {
+                  state.fileOperations = state.fileOperations.slice(-200);
+                }
               },
               undefined,
               'tool/addFileOperation',
@@ -323,6 +327,10 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 state.terminalCommands.push({ ...cmd, timestamp: new Date() });
+                // AUDIT-006-017 fix: Cap terminalCommands at 200 entries
+                if (state.terminalCommands.length > 200) {
+                  state.terminalCommands = state.terminalCommands.slice(-200);
+                }
               },
               undefined,
               'tool/addTerminalCommand',
@@ -350,6 +358,10 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 state.toolExecutions.push({ ...exec, timestamp: new Date() });
+                // AUDIT-006-017 fix: Cap toolExecutions at 200 entries
+                if (state.toolExecutions.length > 200) {
+                  state.toolExecutions = state.toolExecutions.slice(-200);
+                }
               },
               undefined,
               'tool/addToolExecution',
@@ -360,6 +372,10 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 state.screenshots.push({ ...screenshot, timestamp: new Date() });
+                // AUDIT-006-017 fix: Cap screenshots at 200 entries
+                if (state.screenshots.length > 200) {
+                  state.screenshots = state.screenshots.slice(-200);
+                }
               },
               undefined,
               'tool/addScreenshot',
@@ -510,6 +526,10 @@ export const useToolStore = create<ToolState>()(
                   state.pendingApprovals[index] = normalized;
                 } else {
                   state.pendingApprovals.push(normalized);
+                  // AUDIT-006-018 fix: Cap pendingApprovals at 50 entries
+                  if (state.pendingApprovals.length > 50) {
+                    state.pendingApprovals = state.pendingApprovals.slice(-50);
+                  }
                 }
               },
               undefined,

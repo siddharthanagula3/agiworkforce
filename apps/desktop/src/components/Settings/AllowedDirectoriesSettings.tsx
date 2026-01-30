@@ -37,11 +37,11 @@ export function AllowedDirectoriesSettings() {
       addAllowedDirectory(path);
       setManualPath('');
     } catch (e) {
+      // SET-003 fix: Don't add path if verification fails - require explicit user action
       console.error('Failed to validate path:', e);
-
-      setError('Could not verify path existence. Added anyway.');
-      addAllowedDirectory(path);
-      setManualPath('');
+      setError(
+        'Could not verify path. Please check the path exists and try again, or use Browse to select.',
+      );
     }
   };
 
@@ -61,9 +61,10 @@ export function AllowedDirectoriesSettings() {
         }
         addAllowedDirectory(selected);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to open directory picker:', e);
-      setError(`Failed to open directory picker: ${e.message || e}`);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setError(`Failed to open directory picker: ${errorMessage}`);
     }
   };
 
