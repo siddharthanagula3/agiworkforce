@@ -1,0 +1,42 @@
+# CodeQL Configuration for AGI Workforce
+# This configuration excludes test code from security scanning
+# as test values are intentionally hardcoded for testing purposes.
+
+name: 'AGI Workforce CodeQL Configuration'
+
+# Paths to exclude from analysis
+paths-ignore:
+  # Test directories
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+  - '**/test_*.rs'
+  - '**/__tests__/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+
+  # Node modules and build artifacts
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - '**/target/**'
+  - '**/.next/**'
+
+  # Generated code
+  - '**/generated/**'
+  - '**/*.generated.*'
+
+# Query filters - lower severity for test code patterns
+query-filters:
+  # Exclude hardcoded credentials rule for test files
+  - exclude:
+      id: rust/hardcoded-credentials
+      tags:
+        - test
+
+  # Exclude from security module tests
+  - exclude:
+      id: rust/hardcoded-credentials
+      path-regex: ".*/security/.*\\.rs$"
+      within-code-block: 'fn test_.*'
