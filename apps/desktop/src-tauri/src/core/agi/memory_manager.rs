@@ -1218,7 +1218,7 @@ impl MemoryManager {
         config: &CompactionConfig,
     ) -> String {
         let custom_prompt = config.summary_prompt.as_deref().unwrap_or(
-            "You are analyzing conversation logs to extract important memories.
+            "You are AGI Workforce's memory extraction system. Analyze conversation logs to extract important memories that will help serve the user better in future sessions.
 Extract key facts, user preferences, and decisions that should be remembered long-term.
 Format your response as JSON with this structure:
 {
