@@ -549,7 +549,7 @@ impl ConflictResolver {
     /// Generate an LLM prompt for suggesting a conflict resolution.
     pub fn generate_llm_prompt(hunk: &ConflictHunk, file_path: &str) -> String {
         let mut prompt = format!(
-            "You are helping resolve a git merge conflict in the file '{}'.\n\n",
+            "You are AGI Workforce's git assistant helping resolve a merge conflict in the file '{}'.\n\n",
             file_path
         );
 

@@ -447,7 +447,7 @@ impl TaskDecomposer {
 
     fn build_decomposition_prompt(&self, goal: &Goal) -> String {
         format!(
-            r#"You are a task decomposition expert. Analyze the following goal and break it down into parallelizable subtasks.
+            r#"You are AGI Workforce's task decomposition system. Analyze the user's goal and break it down into parallelizable subtasks that can be executed to complete their request.
 
 GOAL: {}
 PRIORITY: {:?}

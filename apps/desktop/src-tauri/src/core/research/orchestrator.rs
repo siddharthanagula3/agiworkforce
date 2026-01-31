@@ -620,7 +620,7 @@ Generate 3-5 diverse search strategies covering different angles of the query."#
             .join("\n---\n");
 
         let prompt = format!(
-            r#"You are synthesizing research findings into a comprehensive report.
+            r#"You are AGI Workforce's research synthesizer. Compile the research findings into a clear, comprehensive report for the user.
 
 Original Query: "{}"
 Refined Query: "{}"
