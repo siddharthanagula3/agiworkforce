@@ -135,7 +135,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         const isSimple = useSimpleModeStore.getState().mode === 'simple';
         onError?.(
           isSimple
-            ? "This AI can't see images. Please choose a different AI from the dropdown above, or remove the image."
+            ? "This model can't see images. Please choose a different model from the dropdown above, or remove the image."
             : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
         );
         // Filter out images, but allow other files if any
@@ -216,7 +216,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         const isSimple = useSimpleModeStore.getState().mode === 'simple';
         onError?.(
           isSimple
-            ? "This AI can't see images. Please choose a different AI from the dropdown above."
+            ? "This model can't see images. Please choose a different model from the dropdown above."
             : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
         );
         return;
