@@ -435,9 +435,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <div className="space-y-0.5">
                             <Label htmlFor="alwaysAgentMode">Always Use Agent Mode</Label>
                             <p className="text-xs text-muted-foreground">
-                              When enabled, all messages will use the AI agent with access to tools
-                              (file operations, web search, terminal, etc.). Otherwise, tools are
-                              only used when the AI detects an action request.
+                              When enabled, all messages will use AGI Workforce's automation
+                              capabilities (file operations, web search, terminal, etc.). Otherwise,
+                              tools are only used when an action is detected.
                             </p>
                           </div>
                           <Switch

@@ -1,7 +1,7 @@
 /**
  * Memory Store
  *
- * Manages persistent memory for the AI assistant, including preferences,
+ * Manages persistent memory for AGI Workforce, including preferences,
  * facts, decisions, and context. Uses SQLite via Tauri commands for storage.
  *
  * Zustand v5 patterns:
