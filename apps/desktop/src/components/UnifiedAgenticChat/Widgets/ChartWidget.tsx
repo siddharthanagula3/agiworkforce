@@ -9,7 +9,8 @@
 
 import React, { memo, useMemo, useCallback } from 'react';
 import { BarChart2 } from 'lucide-react';
-import { ChartWidgetData, WidgetRendererProps, widgetRegistry } from './index';
+import { WidgetRegistry } from './WidgetRegistry';
+import type { ChartWidgetData, WidgetRendererProps } from './index';
 
 // ============================================================================
 // Constants
@@ -501,4 +502,9 @@ ChartWidgetComponent.displayName = 'ChartWidget';
 export const ChartWidget = memo(ChartWidgetComponent);
 
 // Register the widget
-widgetRegistry.register<ChartWidgetData>('chart', ChartWidget, 'Chart', BarChart2);
+WidgetRegistry.register({
+  type: 'chart',
+  displayName: 'Chart',
+  component: ChartWidget as React.ComponentType<any>,
+  icon: BarChart2,
+});

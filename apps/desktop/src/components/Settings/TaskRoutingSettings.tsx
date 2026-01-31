@@ -240,7 +240,7 @@ export function TaskRoutingSettings() {
         <h4 className="text-sm font-medium mb-2">Model Selection Tips</h4>
         <ul className="text-xs text-muted-foreground space-y-1">
           <li>
-            <strong>Auto (Best Value)</strong> - Fastest and cheapest option, good for simple tasks
+            <strong>Auto (Economy)</strong> - Fastest and most cost-effective, good for simple tasks
           </li>
           <li>
             <strong>Auto Balanced</strong> - Balance of speed, cost, and quality for most tasks

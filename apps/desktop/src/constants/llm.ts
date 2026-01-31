@@ -85,7 +85,7 @@ export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 // Model presets for QuickModelSelector - organized by provider
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
   managed_cloud: [
-    { value: 'auto-economy', label: 'Auto (Best Value)' },
+    { value: 'auto-economy', label: 'Auto (Economy)' },
     { value: 'auto-balanced', label: 'Auto Balanced' },
     { value: 'auto-premium', label: 'Auto (Best Model)' },
   ],
@@ -487,7 +487,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
 
   'auto-economy': {
     id: 'auto-economy',
-    name: 'Auto (Best Value)',
+    name: 'Auto (Economy)',
     provider: 'managed_cloud',
     modelType: 'chat',
     contextWindow: 2_000_000, // Grok 4 Fast has 2M context

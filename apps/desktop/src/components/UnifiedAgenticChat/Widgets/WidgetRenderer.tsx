@@ -10,7 +10,8 @@
 import React, { memo, Suspense, useCallback } from 'react';
 import { AlertTriangle, HelpCircle, Loader2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { widgetRegistry, WidgetType, WidgetActionEvent } from './index';
+import { WidgetRegistry } from './WidgetRegistry';
+import type { WidgetType, WidgetActionEvent } from './index';
 
 // ============================================================================
 // Types
@@ -136,7 +137,7 @@ const WidgetRendererComponent: React.FC<WidgetRendererComponentProps> = ({
   messageId,
 }) => {
   // Get the registered widget
-  const registeredWidget = widgetRegistry.get(widget.type);
+  const registeredWidget = WidgetRegistry.get(widget.type);
 
   // Handle widget action
   const handleAction = useCallback(
