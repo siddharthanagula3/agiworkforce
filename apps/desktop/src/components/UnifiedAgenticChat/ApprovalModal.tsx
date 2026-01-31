@@ -202,8 +202,8 @@ export const ApprovalModal = () => {
           </DialogTitle>
           <DialogDescription>
             {isSimpleMode
-              ? 'The assistant wants to perform an action that needs your approval first.'
-              : 'The agent needs your permission to perform this operation.'}
+              ? 'AGI Workforce wants to perform an action that needs your approval first.'
+              : 'AGI Workforce needs your permission to perform this operation.'}
           </DialogDescription>
         </DialogHeader>
 

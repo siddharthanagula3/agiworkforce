@@ -29,13 +29,13 @@ const STEPS = [
   {
     id: 'welcome',
     title: 'Welcome to AGI Workforce!',
-    subtitle: 'Your AI-powered assistant that helps you get things done.',
+    subtitle: 'Your autonomous AI that helps you get things done.',
     icon: Sparkles,
     color: 'from-purple-500 to-indigo-500',
   },
   {
     id: 'capabilities',
-    title: 'What can I help you with?',
+    title: 'What can AGI Workforce do?',
     subtitle: 'Just ask naturally - like talking to a helpful colleague.',
     icon: MessageSquare,
     color: 'from-blue-500 to-cyan-500',
