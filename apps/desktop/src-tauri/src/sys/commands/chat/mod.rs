@@ -1,6 +1,6 @@
 use super::llm::LLMState;
 
-use crate::core::llm::{ContentPart, ImageDetail, ImageFormat, ImageInput};
+use crate::core::llm::{ContentPart, ImageDetail, ImageFormat, ImageInput, ToolChoice};
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
 use base64::Engine;
@@ -10,8 +10,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
+pub mod tools;
 pub mod types;
 pub use types::*;
 
@@ -864,6 +865,7 @@ pub async fn chat_send_message(
         '_,
         crate::sys::billing::BillingStateWrapper,
     >,
+    mcp_state: State<'_, crate::sys::commands::mcp::McpState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -1266,14 +1268,35 @@ When configured by the user, you can integrate with:
         );
     }
 
+    // Build tool definitions if tools are enabled
+    // This enables Claude Desktop/Code-like tool use in regular chat
+    let (chat_tools, tool_choice) = if request.enable_tools.unwrap_or(true) {
+        // Default to enabling tools for Claude Desktop-like experience
+        // Include MCP tools if available
+        let tool_defs = tools::build_chat_tools(None, Some(&mcp_state));
+        if !tool_defs.is_empty() {
+            info!(
+                "[Chat] Enabling {} tools for chat (Claude Desktop-like mode, includes MCP tools)",
+                tool_defs.len()
+            );
+            (Some(tool_defs), Some(ToolChoice::Auto))
+        } else {
+            debug!("[Chat] No tools available, proceeding without tool support");
+            (None, None)
+        }
+    } else {
+        debug!("[Chat] Tools explicitly disabled by request");
+        (None, None)
+    };
+
     let llm_request = LLMRequest {
         messages: llm_messages,
         model: model.clone(),
         temperature: Some(0.7),
         max_tokens: Some(4096),
         stream: request.stream.unwrap_or(false),
-        tools: None,
-        tool_choice: None,
+        tools: chat_tools.clone(),
+        tool_choice: tool_choice.clone(),
         thinking_mode: request.thinking_mode,
     };
 
@@ -1658,15 +1681,175 @@ When configured by the user, you can integrate with:
         };
 
         match result {
-            Ok(outcome) => {
+            Ok(mut outcome) => {
+                // Tool call handling loop - execute tools and send results back to LLM
+                // This enables Claude Desktop/Code-like autonomous tool execution
+                let max_tool_iterations = 10; // Safety limit to prevent infinite loops
+                let mut tool_iteration = 0;
+                let mut current_messages = llm_request.messages.clone();
+                let mut final_content = outcome.response.content.clone();
+                let mut total_tool_tokens: u32 = 0;
+
+                while let Some(ref tool_calls) = outcome.response.tool_calls {
+                    if tool_calls.is_empty() {
+                        break;
+                    }
+
+                    tool_iteration += 1;
+                    if tool_iteration > max_tool_iterations {
+                        warn!(
+                            "[Chat] Tool iteration limit reached ({}), stopping tool execution",
+                            max_tool_iterations
+                        );
+                        break;
+                    }
+
+                    info!(
+                        "[Chat] LLM requested {} tool call(s) (iteration {})",
+                        tool_calls.len(),
+                        tool_iteration
+                    );
+
+                    // Emit tool calls event for UI feedback
+                    let _ = app_handle.emit(
+                        "chat:tool-calls",
+                        serde_json::json!({
+                            "conversation_id": conversation.id,
+                            "tool_calls": tool_calls,
+                            "iteration": tool_iteration
+                        }),
+                    );
+
+                    // Add assistant message with tool calls to conversation
+                    current_messages.push(crate::core::llm::ChatMessage {
+                        role: "assistant".to_string(),
+                        content: outcome.response.content.clone(),
+                        tool_calls: Some(tool_calls.clone()),
+                        tool_call_id: None,
+                        multimodal_content: None,
+                    });
+
+                    // Execute each tool and collect results
+                    let mut tool_results = Vec::new();
+                    for tool_call in tool_calls {
+                        info!(
+                            "[Chat] Executing tool: {} (id: {})",
+                            tool_call.name, tool_call.id
+                        );
+
+                        // Emit individual tool execution event
+                        let _ = app_handle.emit(
+                            "chat:tool-executing",
+                            serde_json::json!({
+                                "conversation_id": conversation.id,
+                                "tool_call_id": tool_call.id,
+                                "tool_name": tool_call.name,
+                                "arguments": tool_call.arguments
+                            }),
+                        );
+
+                        // Execute the tool using our chat tools executor
+                        let result = tools::execute_chat_tool(
+                            &tool_call.name,
+                            &tool_call.arguments,
+                            Some(&app_handle),
+                        )
+                        .await;
+
+                        let (success, result_content) = match result {
+                            Ok(content) => {
+                                info!("[Chat] Tool {} succeeded", tool_call.name);
+                                (true, content)
+                            }
+                            Err(e) => {
+                                error!("[Chat] Tool {} failed: {}", tool_call.name, e);
+                                (false, format!("Error: {}", e))
+                            }
+                        };
+
+                        // Emit tool result event
+                        let _ = app_handle.emit(
+                            "chat:tool-result",
+                            serde_json::json!({
+                                "conversation_id": conversation.id,
+                                "tool_call_id": tool_call.id,
+                                "tool_name": tool_call.name,
+                                "success": success,
+                                "result": result_content.chars().take(500).collect::<String>()
+                            }),
+                        );
+
+                        tool_results.push(tools::ChatToolResult::new(
+                            tool_call.id.clone(),
+                            tool_call.name.clone(),
+                            success,
+                            result_content,
+                        ));
+                    }
+
+                    // Add tool results as messages
+                    for result in &tool_results {
+                        current_messages.push(crate::core::llm::ChatMessage {
+                            role: "tool".to_string(),
+                            content: result.to_message_content(),
+                            tool_calls: None,
+                            tool_call_id: Some(result.tool_call_id.clone()),
+                            multimodal_content: None,
+                        });
+                    }
+
+                    // Send updated conversation back to LLM
+                    let followup_request = crate::core::llm::LLMRequest {
+                        messages: current_messages.clone(),
+                        model: model.clone(),
+                        temperature: Some(0.7),
+                        max_tokens: Some(4096),
+                        stream: false,
+                        tools: chat_tools.clone(),
+                        tool_choice: tool_choice.clone(),
+                        thinking_mode: request.thinking_mode,
+                    };
+
+                    let followup_result = {
+                        let router = _llm_state.router.read().await;
+                        router.invoke_candidate(&candidate, &followup_request).await
+                    };
+
+                    match followup_result {
+                        Ok(new_outcome) => {
+                            total_tool_tokens += new_outcome.response.tokens.unwrap_or(0);
+                            final_content = new_outcome.response.content.clone();
+                            outcome = new_outcome;
+                        }
+                        Err(e) => {
+                            error!("[Chat] Follow-up LLM call failed: {}", e);
+                            // Use the last successful content
+                            break;
+                        }
+                    }
+                }
+
+                if tool_iteration > 0 {
+                    info!(
+                        "[Chat] Tool execution complete after {} iteration(s), {} additional tokens used",
+                        tool_iteration,
+                        total_tool_tokens
+                    );
+                }
+
                 let assistant_message = {
                     let conn = _db.connection()?;
+                    let total_tokens = outcome
+                        .response
+                        .tokens
+                        .map(|t| t as i32)
+                        .map(|t| t + total_tool_tokens as i32);
                     let msg = Message {
                         id: 0,
                         conversation_id: conversation.id,
                         role: MessageRole::Assistant,
-                        content: outcome.response.content.clone(),
-                        tokens: outcome.response.tokens.map(|t| t as i32),
+                        content: final_content.clone(),
+                        tokens: total_tokens,
                         cost: outcome.response.cost,
                         provider: Some(outcome.provider.as_string().to_string()),
                         model: Some(outcome.model.clone()),
@@ -1696,7 +1879,7 @@ When configured by the user, you can integrate with:
                     user_message,
                     assistant_message,
                     stats,
-                    last_message: Some(outcome.response.content),
+                    last_message: Some(final_content),
                     credits: outcome.response.credits,
                 });
             }
