@@ -617,7 +617,7 @@ export function getIntentClassificationPrompt(
     ? `\nUser has attached: ${options.attachmentTypes.join(', ')}\n`
     : '';
 
-  return `You are an intent classifier for an AI assistant. Analyze the user's message and classify their intent.
+  return `You are AGI Workforce's intent classifier. Analyze the user's message and classify their intent.
 
 ${contextInfo}${attachmentInfo}
 User Message: "${message.slice(0, 1000)}"
