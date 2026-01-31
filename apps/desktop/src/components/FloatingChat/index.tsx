@@ -140,7 +140,7 @@ export const FloatingChat = () => {
             <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mb-3">
               <span className="text-2xl">✨</span>
             </div>
-            <p className="text-sm text-zinc-400">Ask me anything! I'm your AI assistant.</p>
+            <p className="text-sm text-zinc-400">Ask me anything! I'm AGI Workforce.</p>
             <p className="text-xs text-zinc-500 mt-1">
               Press{' '}
               <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Cmd+Shift+F</kbd> to
