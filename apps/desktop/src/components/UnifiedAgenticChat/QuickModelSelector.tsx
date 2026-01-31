@@ -213,22 +213,22 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   // Auto mode configurations with icons and descriptions
   const autoModeConfig = {
     [AUTO_ECONOMY_ID]: {
-      name: 'Auto (Best Value)',
-      description: 'Cheapest model that works',
+      name: 'Auto (Economy)',
+      description: 'Fastest, most cost-effective',
       icon: DollarSign,
-      models: 'Gemini Flash, GPT-4o Mini, DeepSeek',
+      models: 'Gemini Flash, GPT-5 Nano, DeepSeek',
     },
     [AUTO_BALANCED_ID]: {
-      name: 'Auto Balanced',
+      name: 'Auto (Balanced)',
       description: 'Quality/cost sweet spot',
       icon: Zap,
-      models: 'Claude Sonnet, Gemini Pro, GPT-4o',
+      models: 'Claude Sonnet, Gemini Pro, GPT-5.2',
     },
     [AUTO_PREMIUM_ID]: {
-      name: 'Auto (Best Model)',
+      name: 'Auto (Premium)',
       description: 'Maximum performance',
       icon: Crown,
-      models: 'Claude Opus, GPT-5.2',
+      models: 'Claude Opus, GPT-5 Pro',
     },
   };
 
@@ -312,10 +312,10 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         )}
       </div>
 
-      {/* Smart Routing Section */}
+      {/* Auto Selection Section */}
       <div className="mb-2 space-y-1">
         <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Smart Routing (Jan 2026)
+          Auto Selection
         </div>
         {availableAutoModes.map((modeId) => {
           const config = autoModeConfig[modeId as keyof typeof autoModeConfig];
