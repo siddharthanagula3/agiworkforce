@@ -47,7 +47,7 @@ impl ActionPlanner {
         let base64_image = self.image_to_base64(&screenshot.pixels)?;
 
         let prompt = format!(
-            "You are verifying progress on a computer automation task.\n\n
+            "You are AGI Workforce's progress verification system, checking if the user's task is being completed successfully.\n\n
              Task: {}\n\n
              Actions taken so far: {} actions\n\n
              Look at the current screenshot and determine:\n
@@ -87,7 +87,7 @@ impl ActionPlanner {
         };
 
         format!(
-            "You are a computer use agent that controls the computer through vision and actions.\n\n
+            "You are AGI Workforce's vision-based automation agent that controls the computer through screenshots and actions to complete the user's task.\n\n
              TASK: {}\n\n
              {}\n\n
              Look at the screenshot and plan the NEXT 1-3 actions needed to make progress on this task.\n

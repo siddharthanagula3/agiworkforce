@@ -32,14 +32,31 @@ pub async fn get_code_completion(
         ..Default::default()
     };
 
+    // System prompt for AGI Workforce code completion
+    let system_prompt = format!(
+        r#"You are AGI Workforce's code completion engine. You help users write {} code efficiently.
+
+Provide accurate, idiomatic code completions. Return ONLY the code - no explanations or markdown formatting."#,
+        request.language
+    );
+
     let llm_request = LLMRequest {
-        messages: vec![crate::core::llm::ChatMessage {
-            role: "user".to_string(),
-            content: request.prompt,
-            tool_calls: None,
-            tool_call_id: None,
-            multimodal_content: None,
-        }],
+        messages: vec![
+            crate::core::llm::ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            },
+            crate::core::llm::ChatMessage {
+                role: "user".to_string(),
+                content: request.prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            },
+        ],
         model: "".to_string(),
         max_tokens: request.max_tokens.or(Some(150)),
         temperature: request.temperature.or(Some(0.3)),
@@ -96,9 +113,16 @@ pub async fn get_inline_completion(
     language: String,
     router_state: State<'_, Arc<tokio::sync::Mutex<LLMRouter>>>,
 ) -> Result<String, String> {
-    let prompt = format!(
-        "Complete the code:\n```{}\n{}[CURSOR]{}\n```\nReturn ONLY the completion text:",
-        language,
+    // System prompt for AGI Workforce inline completion
+    let system_prompt = format!(
+        r#"You are AGI Workforce's inline code completion engine for {} code.
+Provide the most likely code that should appear at the cursor position.
+Return ONLY the completion text - no explanations, no markdown, no code fences."#,
+        language
+    );
+
+    let user_prompt = format!(
+        "Complete the code at [CURSOR]:\n{}[CURSOR]{}",
         context_before
             .chars()
             .rev()
@@ -116,13 +140,22 @@ pub async fn get_inline_completion(
     };
 
     let llm_request = LLMRequest {
-        messages: vec![crate::core::llm::ChatMessage {
-            role: "user".to_string(),
-            content: prompt,
-            tool_calls: None,
-            tool_call_id: None,
-            multimodal_content: None,
-        }],
+        messages: vec![
+            crate::core::llm::ChatMessage {
+                role: "system".to_string(),
+                content: system_prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            },
+            crate::core::llm::ChatMessage {
+                role: "user".to_string(),
+                content: user_prompt,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            },
+        ],
         model: "".to_string(),
         max_tokens: Some(50),
         temperature: Some(0.2),
@@ -183,8 +216,10 @@ pub async fn get_prompt_completion(
     }
 
     // Build the prompt for ghost text completion
-    let system_prompt = r#"You are a helpful AI assistant providing prompt completions.
+    let system_prompt = r#"You are AGI Workforce's prompt suggestion engine.
 Your task is to complete the user's prompt with a natural, helpful continuation.
+
+AGI Workforce is a desktop AI assistant that can automate tasks (browser, files, terminal, email, etc.).
 
 Rules:
 - Provide ONLY the completion text (10-20 words maximum)
