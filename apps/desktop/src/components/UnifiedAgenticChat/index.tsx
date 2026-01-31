@@ -938,7 +938,7 @@ export const UnifiedAgenticChat: React.FC<{
       // In auto mode, use stronger warning language since AGI operates autonomously
       const modeContext =
         conversationMode === 'auto'
-          ? ' The AI will execute this autonomously without step-by-step approval.'
+          ? ' AGI Workforce will execute this autonomously without step-by-step approval.'
           : '';
 
       const riskMessage =

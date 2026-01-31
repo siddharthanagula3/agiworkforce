@@ -28,7 +28,7 @@ export const FRIENDLY_MESSAGES = {
   success: ['Done!', 'All set!', 'Got it!', 'Here you go!'],
   empty: {
     title: 'Start a conversation',
-    subtitle: "Ask me anything - I'm here to help!",
+    subtitle: 'Ask me anything - AGI Workforce is ready to help!',
   },
   noResults: {
     title: "I couldn't find anything",
