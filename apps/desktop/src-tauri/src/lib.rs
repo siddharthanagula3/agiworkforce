@@ -219,7 +219,7 @@ pub fn run() {
             app.manage(FileWatcherState::new());
 
 
-            app.manage(ApiState::new());
+            app.manage(ApiState::new().map_err(|e| anyhow::anyhow!("Failed to initialize API state: {}", e))?);
 
 
             app.manage(tokio::sync::Mutex::new(DatabaseState::new()));
@@ -296,6 +296,10 @@ pub fn run() {
                 Arc::new(session_manager),
             );
             app.manage(terminal_ai);
+
+            // LLMRouter for prompt completion feature (ghost text suggestions)
+            let completion_router = Arc::new(tokio::sync::Mutex::new(crate::core::llm::LLMRouter::new()));
+            app.manage(completion_router);
 
 
             app.manage(ProductivityState::new());
