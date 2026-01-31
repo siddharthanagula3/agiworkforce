@@ -11,6 +11,22 @@ import React from 'react';
 import { FileText } from 'lucide-react';
 
 // ============================================================================
+// Import WidgetRegistry first to avoid circular dependency issues
+// ============================================================================
+
+import {
+  WidgetRegistry,
+  useWidgetRegistry,
+  createWidgetData,
+  type WidgetType,
+  type BaseWidgetConfig,
+  type BaseWidgetProps,
+  type WidgetDefinition,
+  type RegisteredWidget,
+  type WidgetData,
+} from './WidgetRegistry';
+
+// ============================================================================
 // Re-export from WidgetRegistry
 // ============================================================================
 
@@ -24,7 +40,7 @@ export {
   type WidgetDefinition,
   type RegisteredWidget,
   type WidgetData,
-} from './WidgetRegistry';
+};
 
 // ============================================================================
 // Action Event Types
@@ -159,12 +175,8 @@ export interface ChartWidgetData {
 // Legacy Widget Registry (for compatibility with DataTableWidget/ChartWidget)
 // ============================================================================
 
-import {
-  WidgetRegistry as Registry,
-  type WidgetDefinition,
-  type BaseWidgetConfig,
-  type BaseWidgetProps,
-} from './WidgetRegistry';
+// Use the already-imported WidgetRegistry (aliased as Registry for clarity)
+const Registry = WidgetRegistry;
 
 // Alias for components that use the old `widgetRegistry` name
 export const widgetRegistry = {
