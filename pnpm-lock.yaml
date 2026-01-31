@@ -31,7 +31,7 @@ importers:
         specifier: ^8.54.0
         version: 8.54.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       baseline-browser-mapping:
-        specifier: ^2.9.19
+        specifier: ^2.9.11
         version: 2.9.19
       eslint:
         specifier: ^9.39.2
