@@ -255,9 +255,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
 
     return selectedModel?.startsWith('auto')
-      ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Smart Routing)')
+      ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Economy)')
       : selectedModel === 'auto'
-        ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Best Value)')
+        ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Economy)')
         : selectedModel
           ? (getModelMetadata(selectedModel)?.name ??
             availableModels.find((m) => m.id === selectedModel)?.name ??

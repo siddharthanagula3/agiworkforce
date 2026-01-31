@@ -18,12 +18,8 @@ import {
   Table,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import {
-  DataTableWidgetData,
-  WidgetRendererProps,
-  WidgetActionEvent,
-  widgetRegistry,
-} from './index';
+import { WidgetRegistry } from './WidgetRegistry';
+import type { DataTableWidgetData, WidgetRendererProps, WidgetActionEvent } from './index';
 
 // ============================================================================
 // Types
@@ -311,4 +307,9 @@ DataTableWidgetComponent.displayName = 'DataTableWidget';
 export const DataTableWidget = memo(DataTableWidgetComponent);
 
 // Register the widget
-widgetRegistry.register<DataTableWidgetData>('data-table', DataTableWidget, 'Data Table', Table);
+WidgetRegistry.register({
+  type: 'data-table',
+  displayName: 'Data Table',
+  component: DataTableWidget as React.ComponentType<any>,
+  icon: Table,
+});
