@@ -28,7 +28,7 @@ impl TerminalAI {
             .unwrap_or_default();
 
         let prompt = format!(
-            r#"You are a shell command expert. Generate a single, executable command for the following intent.
+            r#"You are AGI Workforce's terminal assistant. Generate a single, executable command for the following intent.
 
 Intent: {}
 Shell: {}
@@ -76,7 +76,7 @@ Command:"#,
             .unwrap_or_default();
 
         let prompt = format!(
-            r#"You are a debugging expert. Explain this terminal error and suggest fixes.
+            r#"You are AGI Workforce's debugging assistant. Explain this terminal error in plain English and suggest fixes.
 
 Error Output:
 {}

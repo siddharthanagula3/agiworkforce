@@ -431,7 +431,7 @@ impl ComputerUseAgent {
         };
 
         format!(
-            r#"You are a computer automation agent controlling the user's computer to complete a task.
+            r#"You are AGI Workforce's automation engine, controlling the user's computer to complete their task autonomously.
 
 TASK: {}
 

@@ -752,7 +752,7 @@ impl ReflectionEngine {
         context: &ExecutionContext,
     ) -> Result<Vec<String>> {
         let prompt = format!(
-            r#"You are an AI reflection engine. Analyze the execution results and provide 3-5 actionable recommendations.
+            r#"You are AGI Workforce's reflection engine. Analyze the execution results and provide 3-5 actionable recommendations to help complete the user's task.
 
 Goal: {}
 
@@ -842,7 +842,7 @@ Example: ["Recommendation 1", "Recommendation 2", "Recommendation 3"]"#,
             .collect();
 
         format!(
-            r#"You are an AI plan critic. Evaluate this plan before execution and identify potential issues.
+            r#"You are AGI Workforce's plan critic. Evaluate this plan before execution and identify potential issues that could prevent the user's task from completing successfully.
 
 Goal: {}
 
