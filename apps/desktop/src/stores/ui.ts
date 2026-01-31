@@ -851,17 +851,33 @@ export const useUIStore = create<UIState>()(
             const currentMode = get().mode;
             const newMode = currentMode === 'simple' ? 'advanced' : 'simple';
 
-            // When switching to simple mode, always use auto-economy for simplicity
+            // When switching to simple mode, select the best auto mode for the user's tier
             // "Simple Mode: Just type and chat - we handle the rest!"
             if (newMode === 'simple') {
               // Dynamically import to avoid circular dependency
-              import('./modelStore').then(({ useModelStore }) => {
-                const modelStore = useModelStore.getState();
-                // Force auto-economy in Simple Mode for consistent, budget-friendly experience
-                if (modelStore.selectedModel !== 'auto-economy') {
-                  void modelStore.selectModel('auto-economy', 'managed_cloud');
-                }
-              });
+              Promise.all([import('./modelStore'), import('./accountStore')]).then(
+                ([{ useModelStore }, { useAccountStore }]) => {
+                  const modelStore = useModelStore.getState();
+                  const accountStore = useAccountStore.getState();
+                  const tier = accountStore.account.plan ?? 'hobby';
+
+                  // Map tier to the best available auto mode
+                  // Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
+                  let targetAutoMode: string;
+                  if (tier === 'max' || tier === 'enterprise') {
+                    targetAutoMode = 'auto-premium';
+                  } else if (tier === 'pro') {
+                    targetAutoMode = 'auto-balanced';
+                  } else {
+                    targetAutoMode = 'auto-economy';
+                  }
+
+                  // Only change if not already on the target auto mode
+                  if (modelStore.selectedModel !== targetAutoMode) {
+                    void modelStore.selectModel(targetAutoMode, 'managed_cloud');
+                  }
+                },
+              );
             }
 
             set(
