@@ -103,7 +103,7 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-purple-500" />
-          AI Assistant
+          Terminal Assistant
         </CardTitle>
         <CardDescription>
           Get command suggestions, error explanations, and smart git commits
