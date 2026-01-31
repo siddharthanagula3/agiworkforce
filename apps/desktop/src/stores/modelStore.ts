@@ -727,8 +727,26 @@ export const initializeModelStoreFromSettings = async () => {
 };
 
 /**
+ * Get the best auto mode for a given tier.
+ * Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
+ */
+export const getBestAutoModeForTier = (tier: string): string => {
+  const normalizedTier = tier.toLowerCase();
+  if (normalizedTier === 'max' || normalizedTier === 'enterprise') {
+    return 'auto-premium';
+  } else if (normalizedTier === 'pro') {
+    return 'auto-balanced';
+  }
+  return 'auto-economy';
+};
+
+/**
  * Enforce tier-appropriate model selection.
  * Called when user's plan tier changes to ensure they're using an allowed auto mode.
+ *
+ * Behavior:
+ * - In Simple Mode: Automatically selects the BEST auto mode for the tier
+ * - In Advanced Mode: Only downgrades if using an auto mode above their tier
  *
  * Tier restrictions:
  * - hobby/free/none: Only 'auto-economy' allowed
@@ -738,11 +756,6 @@ export const initializeModelStoreFromSettings = async () => {
 export const enforceModelTierRestriction = (planTier: string | null): void => {
   const modelStore = useModelStore.getState();
   const { selectedModel, selectModel } = modelStore;
-
-  // Only enforce for auto modes
-  if (!selectedModel?.startsWith('auto')) {
-    return;
-  }
 
   const tier = planTier?.toLowerCase() || 'free';
 
@@ -758,13 +771,29 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
 
   const allowed = allowedModes[tier] || ['auto-economy'];
 
-  // If current model is not in allowed list, switch to auto-economy
-  if (!allowed.includes(selectedModel)) {
-    console.log(
-      `[ModelStore] Enforcing tier restriction: ${tier} tier cannot use ${selectedModel}, switching to auto-economy`,
-    );
-    void selectModel('auto-economy', 'managed_cloud');
-  }
+  // Check if user is in Simple Mode (dynamic import to avoid circular deps)
+  import('./ui').then(({ useUIStore }) => {
+    const isSimpleMode = useUIStore.getState().mode === 'simple';
+
+    if (isSimpleMode) {
+      // In Simple Mode: Always use the BEST auto mode for the tier
+      const bestAutoMode = getBestAutoModeForTier(tier);
+      if (selectedModel !== bestAutoMode) {
+        console.log(
+          `[ModelStore] Simple Mode: Setting ${tier} tier to best auto mode: ${bestAutoMode}`,
+        );
+        void selectModel(bestAutoMode, 'managed_cloud');
+      }
+    } else {
+      // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
+      if (selectedModel?.startsWith('auto') && !allowed.includes(selectedModel)) {
+        console.log(
+          `[ModelStore] Enforcing tier restriction: ${tier} tier cannot use ${selectedModel}, switching to auto-economy`,
+        );
+        void selectModel('auto-economy', 'managed_cloud');
+      }
+    }
+  });
 };
 
 // Subscribe to auth store plan changes to enforce tier restrictions
