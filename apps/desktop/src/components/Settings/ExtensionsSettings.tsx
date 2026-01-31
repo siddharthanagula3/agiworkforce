@@ -514,7 +514,7 @@ export function ExtensionsSettings() {
       {/* Help Text */}
       <div className="text-xs text-muted-foreground space-y-1">
         <p>Extensions are packaged as .agiext files containing MCP server implementations.</p>
-        <p>Enabled extensions run automatically and provide tools that the AI can use.</p>
+        <p>Enabled extensions run automatically and provide tools that AGI Workforce can use.</p>
       </div>
     </div>
   );

@@ -361,7 +361,7 @@ impl QuickWinOptimizer {
             || prompt_lower.starts_with("hi")
             || prompt_lower.starts_with("hey")
         {
-            return Some("Hello! How can I help you today?".to_string());
+            return Some("Hello! I'm AGI Workforce. How can I help you today?".to_string());
         }
 
         // Thanks
@@ -371,7 +371,7 @@ impl QuickWinOptimizer {
 
         // What can you do
         if prompt_lower.contains("what can you do") || prompt_lower.contains("help me") {
-            return Some("I can help you with files, web search, email, calendar, documents, code, automation, and much more. Just tell me what you need!".to_string());
+            return Some("I'm AGI Workforce! I can help you with files, web search, email, calendar, documents, code, automation, and much more. Just tell me what you need!".to_string());
         }
 
         None

@@ -680,7 +680,7 @@ export function MCPBundleBrowser() {
               Tool Registry
             </h1>
             <p className="text-muted-foreground mt-1">
-              One-click installation of tools to extend your AI capabilities
+              One-click installation of tools to extend AGI Workforce's capabilities
             </p>
           </div>
           <div className="flex items-center gap-2">

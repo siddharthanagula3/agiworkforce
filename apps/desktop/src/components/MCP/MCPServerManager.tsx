@@ -390,7 +390,7 @@ export function MCPServerManager() {
           <div>
             <h1 className="text-2xl font-bold">Tool Manager</h1>
             <p className="text-gray-600 mt-1">
-              Manage integrations and connect external tools to extend your AI
+              Manage integrations and connect external tools to extend AGI Workforce
             </p>
           </div>
 
