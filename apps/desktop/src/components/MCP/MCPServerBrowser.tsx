@@ -255,7 +255,9 @@ export function MCPServerBrowser() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">Tool Registry</h1>
-        <p className="text-gray-600">Discover and install tools to extend your AI capabilities</p>
+        <p className="text-gray-600">
+          Discover and install tools to extend AGI Workforce's capabilities
+        </p>
       </div>
 
       <div className="mb-6">

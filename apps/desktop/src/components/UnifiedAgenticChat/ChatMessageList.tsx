@@ -136,7 +136,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             Welcome to AGI Workforce
           </h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Start a conversation by typing a message below. I can help you automate tasks, manage
+            Start a conversation by typing a message below. AGI Workforce can automate tasks, manage
             files, run terminal commands, and much more.
           </p>
           <div className="space-y-2 text-sm text-left">
