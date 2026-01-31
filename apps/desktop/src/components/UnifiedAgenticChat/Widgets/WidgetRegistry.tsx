@@ -168,7 +168,7 @@ class WidgetRegistryImpl {
     this.widgets.set(definition.type, registered);
     this.notifyListeners();
 
-    if (process.env['NODE_ENV'] === 'development') {
+    if (import.meta.env.DEV) {
       console.log(`[WidgetRegistry] Registered widget: ${definition.type}`);
     }
   }
