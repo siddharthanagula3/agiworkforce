@@ -399,7 +399,7 @@ Return as JSON:
 
 fn build_css_generation_prompt(request: &DesignRequest) -> Result<String, String> {
     let mut prompt = String::from(
-        "You are an expert CSS developer. Generate CSS code based on this description.\n\n",
+        "You are AGI Workforce's design assistant. Generate CSS code based on this description.\n\n",
     );
 
     prompt.push_str(&format!("Description: {}\n\n", request.description));

@@ -70,7 +70,7 @@ pub async fn code_generate_edit(
         std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     let prompt = format!(
-        r#"You are an expert code editor. Edit the following code according to the instruction.
+        r#"You are AGI Workforce's code editor. Edit the following code according to the instruction.
 
 FILE: {:?}
 
@@ -209,7 +209,7 @@ pub async fn composer_start_session(
     }
 
     let llm_prompt = format!(
-        r#"You are an expert software engineer. Analyze the following code and implement the requested changes across multiple files.
+        r#"You are AGI Workforce's code editing assistant. Analyze the following code and implement the requested changes across multiple files.
 
 CONTEXT FILES:
 {}

@@ -136,7 +136,12 @@ impl AGIPlanner {
         };
 
         let prompt = format!(
-            r#"You are an AGI (Artificial General Intelligence) planning system. Create a detailed execution plan to achieve the following goal.
+            r#"You are AGI Workforce's planning system - an autonomous AI that helps non-technical users automate tasks on their computer.
+
+Your job is to create a detailed, step-by-step execution plan that AGI Workforce will follow to complete the user's request. Remember:
+- Users are often non-technical, so plans should be robust and handle edge cases
+- All actions should be reversible when possible (for undo functionality)
+- Break complex tasks into clear, atomic steps
 
 Goal: {}
 Priority: {:?}
@@ -702,7 +707,7 @@ Your response:"#,
             .collect();
 
         let prompt = format!(
-            r#"You are an AGI planning system. Create a plan to achieve the goal using THIS STRATEGY: {}
+            r#"You are AGI Workforce's planning system. Create a plan to achieve the user's goal using THIS STRATEGY: {}
 
 Goal: {}
 Priority: {:?}

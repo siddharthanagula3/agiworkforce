@@ -18,7 +18,9 @@ impl TaskPlanner {
         tracing::info!("[Planner] Planning task: {}", description);
 
         let prompt = format!(
-            r#"You are an expert Autonomous AI Automation Engineer. Your goal is to break down high-level user tasks into a precise, robust sequence of executable steps for a Windows desktop environment.
+            r#"You are AGI Workforce's task planner - an autonomous AI that helps non-technical users automate tasks on their computer.
+
+Break down the user's request into precise, executable steps. Remember that users may not understand technical details, so focus on making the automation reliable and reversible.
 
 Task: {}
 

@@ -47,7 +47,7 @@ use super::memory_persistence::{
 // =============================================================================
 
 /// Default prompt template for extracting memories from conversations
-pub const DEFAULT_EXTRACTION_PROMPT: &str = r#"You are analyzing a conversation to extract important information that should be remembered long-term.
+pub const DEFAULT_EXTRACTION_PROMPT: &str = r#"You are AGI Workforce's memory extraction system. Analyze conversations to extract important information that should be remembered long-term to help the user better in future sessions.
 
 Review the following conversation and extract key memories in these categories:
 - **Preferences**: User preferences, likes, dislikes, settings
