@@ -10,7 +10,8 @@
 import React, { memo, useState, useCallback } from 'react';
 import { Check, X, AlertTriangle, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { WidgetRendererProps, WidgetActionEvent, widgetRegistry } from './index';
+import { WidgetRegistry } from './WidgetRegistry';
+import type { WidgetRendererProps, WidgetActionEvent } from './index';
 
 // ============================================================================
 // Types
@@ -220,12 +221,12 @@ ConfirmationWidgetComponent.displayName = 'ConfirmationWidget';
 export const ConfirmationWidget = memo(ConfirmationWidgetComponent);
 
 // Register the widget
-widgetRegistry.register<ConfirmationWidgetData>(
-  'confirmation',
-  ConfirmationWidget,
-  'Confirmation',
-  HelpCircle,
-);
+WidgetRegistry.register({
+  type: 'confirmation',
+  displayName: 'Confirmation',
+  component: ConfirmationWidget as React.ComponentType<any>,
+  icon: HelpCircle,
+});
 
 /**
  * Create a confirmation widget data object
