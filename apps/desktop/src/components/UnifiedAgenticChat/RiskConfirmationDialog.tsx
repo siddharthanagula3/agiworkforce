@@ -85,9 +85,13 @@ export const useRiskConfirmation = () => {
     resolve: null,
   });
 
+  // Use ref to avoid dependency issues with resolve function
+  const resolveRef = React.useRef<((confirmed: boolean) => void) | null>(null);
+
   const confirm = React.useCallback(
     (riskLevel: 'medium' | 'high', message: string): Promise<boolean> => {
       return new Promise((resolve) => {
+        resolveRef.current = resolve;
         setState({
           isOpen: true,
           riskLevel,
@@ -100,14 +104,16 @@ export const useRiskConfirmation = () => {
   );
 
   const handleConfirm = React.useCallback(() => {
-    state.resolve?.(true);
+    resolveRef.current?.(true);
+    resolveRef.current = null;
     setState((prev) => ({ ...prev, isOpen: false, resolve: null }));
-  }, [state.resolve]);
+  }, []);
 
   const handleCancel = React.useCallback(() => {
-    state.resolve?.(false);
+    resolveRef.current?.(false);
+    resolveRef.current = null;
     setState((prev) => ({ ...prev, isOpen: false, resolve: null }));
-  }, [state.resolve]);
+  }, []);
 
   return {
     state,
