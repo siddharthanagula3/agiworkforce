@@ -2,6 +2,14 @@ use crate::core::agi::tools::{Tool, ToolRegistry, ToolResult};
 use crate::core::llm::{ToolCall, ToolDefinition};
 use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
+use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::commands::undo::UndoState;
+#[allow(unused_imports)]
+use crate::sys::security::ToolSafetyTier;
+use crate::ui::events::tool_stream::{
+    emit_tool_completed, emit_tool_error, emit_tool_output_chunk, emit_tool_progress,
+    emit_tool_started, OutputChunkType,
+};
 use crate::ui::events::{
     create_file_delete_event, create_file_read_event, create_file_write_event, emit_file_operation,
     emit_terminal_command, TerminalCommand,
@@ -19,6 +27,10 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration as TokioDuration};
 use uuid::Uuid;
+
+/// Default timeout for tool confirmation dialogs (in seconds)
+#[allow(dead_code)]
+const TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 
 const DANGEROUS_TOOLS: &[&str] = &[
     "file_write",
@@ -189,6 +201,58 @@ impl ToolExecutor {
             &metadata_snapshot,
             None,
         );
+
+        // Emit tool stream started event for real-time progress tracking
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_started(
+                app_handle,
+                &action_id,
+                &tool_call.name,
+                Some(metadata_snapshot.clone()),
+            );
+        }
+
+        // Safety tier check: determine if user confirmation is required
+        if let Some(app_handle) = &self.app_handle {
+            if let Err(e) = self
+                .check_safety_tier_and_confirm(
+                    app_handle,
+                    &tool_call.name,
+                    &metadata_snapshot,
+                    &action_id,
+                    start_time,
+                )
+                .await
+            {
+                // User denied or timeout - return approval required result
+                self.emit_tool_action(
+                    &action_id,
+                    &tool_call.name,
+                    "blocked",
+                    &metadata_snapshot,
+                    Some(e.to_string()),
+                );
+                self.emit_tool_metrics(
+                    &action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+
+                // Emit tool error for stream tracking
+                emit_tool_error(app_handle, &action_id, &e.to_string(), 0, true);
+
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "confirmation_denied": true }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("requires_confirmation".to_string(), json!(true)),
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                    ]),
+                });
+            }
+        }
 
         // Manual mode requires approval for dangerous/MCP tools
         // Auto mode (default) executes autonomously
@@ -391,6 +455,9 @@ impl ToolExecutor {
         &self,
         args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
+        // Generate a unique tool ID for streaming events
+        let tool_id = format!("terminal-{}", Uuid::new_v4());
+
         let command = args
             .get("command")
             .and_then(|v| v.as_str())
@@ -409,6 +476,16 @@ impl ToolExecutor {
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(60_000);
+
+        // Emit progress: starting command
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_progress(
+                app_handle,
+                &tool_id,
+                0.1,
+                Some(&format!("Running: {}", &command[..command.len().min(50)])),
+            );
+        }
 
         if let Some(dir) = &cwd {
             if let Err(e) = self.validate_path(dir).await {
@@ -451,6 +528,11 @@ impl ToolExecutor {
         }
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         cmd.kill_on_drop(true);
+
+        // Emit progress: process spawned
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_progress(app_handle, &tool_id, 0.3, Some("Process started"));
+        }
 
         let mut child = cmd
             .spawn()
@@ -544,6 +626,11 @@ impl ToolExecutor {
         let exit_code = output.status.code();
         let success = output.status.success();
 
+        // Emit progress: command completed, processing output
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_progress(app_handle, &tool_id, 0.8, Some("Processing output..."));
+        }
+
         if let Some(app_handle) = &self.app_handle {
             let terminal_event = TerminalCommand {
                 id: Uuid::new_v4().to_string(),
@@ -565,6 +652,29 @@ impl ToolExecutor {
                 agent_id: None,
             };
             emit_terminal_command(app_handle, terminal_event);
+
+            // Emit output chunks for real-time display in UI
+            if !stdout.is_empty() {
+                emit_tool_output_chunk(
+                    app_handle,
+                    &tool_id,
+                    &stdout,
+                    OutputChunkType::Stdout,
+                    false,
+                );
+            }
+            if !stderr.is_empty() {
+                emit_tool_output_chunk(
+                    app_handle,
+                    &tool_id,
+                    &stderr,
+                    OutputChunkType::Stderr,
+                    false,
+                );
+            }
+
+            // Final progress update
+            emit_tool_progress(app_handle, &tool_id, 1.0, Some("Complete"));
         }
 
         let mut metadata = HashMap::new();
@@ -587,6 +697,33 @@ impl ToolExecutor {
                 Some(trimmed.to_string())
             }
         };
+
+        // Record terminal command execution for undo tracking (non-reversible but tracked)
+        if success {
+            if let Some(app_handle) = &self.app_handle {
+                if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                    let task_id = Uuid::new_v4().to_string();
+                    let working_dir = cwd.clone().unwrap_or_else(|| ".".to_string());
+                    let _ = undo_state
+                        .change_tracker
+                        .record_tool_executed(
+                            "terminal_execute".to_string(),
+                            json!({ "command": command, "cwd": working_dir, "shell": shell }),
+                            json!({
+                                "stdout": &stdout,
+                                "stderr": &stderr,
+                                "exitCode": exit_code,
+                                "durationMs": duration_ms,
+                            }),
+                            task_id,
+                            None, // Terminal commands are not automatically reversible
+                            None,
+                            None,
+                        )
+                        .await;
+                }
+            }
+        }
 
         Ok(ToolResult {
             success,
@@ -742,15 +879,40 @@ impl ToolExecutor {
                 }
 
                 match write_result {
-                    Ok(_) => Ok(ToolResult {
-                        success: true,
-                        data: json!({ "success": true, "path": &path }),
-                        error: None,
-                        metadata: HashMap::from([
-                            ("path".to_string(), json!(&path)),
-                            ("content_length".to_string(), json!(content.len())),
-                        ]),
-                    }),
+                    Ok(_) => {
+                        // Record tool execution for undo
+                        if let Some(app_handle) = &self.app_handle {
+                            if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                                let task_id = session_id
+                                    .clone()
+                                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+                                let path_buf = std::path::PathBuf::from(&path);
+                                let _ = undo_state
+                                    .change_tracker
+                                    .record_tool_executed_with_path(
+                                        "file_write".to_string(),
+                                        json!({ "path": &path, "content": &content }),
+                                        json!({ "success": true, "path": &path }),
+                                        task_id,
+                                        path_buf,
+                                        old_content.clone(), // Store original content for undo
+                                        None, // No reverse tool needed, we restore from before_content
+                                        None,
+                                    )
+                                    .await;
+                            }
+                        }
+
+                        Ok(ToolResult {
+                            success: true,
+                            data: json!({ "success": true, "path": &path }),
+                            error: None,
+                            metadata: HashMap::from([
+                                ("path".to_string(), json!(&path)),
+                                ("content_length".to_string(), json!(content.len())),
+                            ]),
+                        })
+                    }
                     Err(e) => Ok(ToolResult {
                         success: false,
                         data: json!(null),
@@ -779,6 +941,9 @@ impl ToolExecutor {
                     });
                 }
 
+                // Read file content before deletion for undo capability
+                let file_content_before = fs::read_to_string(&path).await.ok();
+
                 let size_bytes = fs::metadata(&path)
                     .await
                     .ok()
@@ -791,18 +956,43 @@ impl ToolExecutor {
                         size_bytes,
                         delete_result.is_ok(),
                         delete_result.as_ref().err().map(|e| e.to_string()),
-                        session_id,
+                        session_id.clone(),
                     );
                     emit_file_operation(app_handle, file_op);
                 }
 
                 match delete_result {
-                    Ok(_) => Ok(ToolResult {
-                        success: true,
-                        data: json!({ "success": true, "path": &path }),
-                        error: None,
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    }),
+                    Ok(_) => {
+                        // Record tool execution for undo
+                        if let Some(app_handle) = &self.app_handle {
+                            if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                                let task_id = session_id
+                                    .clone()
+                                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+                                let path_buf = std::path::PathBuf::from(&path);
+                                let _ = undo_state
+                                    .change_tracker
+                                    .record_tool_executed_with_path(
+                                        "file_delete".to_string(),
+                                        json!({ "path": &path }),
+                                        json!({ "success": true, "path": &path }),
+                                        task_id,
+                                        path_buf,
+                                        file_content_before, // Store content for restoration
+                                        None,
+                                        None,
+                                    )
+                                    .await;
+                            }
+                        }
+
+                        Ok(ToolResult {
+                            success: true,
+                            data: json!({ "success": true, "path": &path }),
+                            error: None,
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
                     Err(e) => Ok(ToolResult {
                         success: false,
                         data: json!(null),
@@ -1117,11 +1307,24 @@ impl ToolExecutor {
             "search_web" => {
                 use crate::features::search::{SearchType, WebSearchConfig, WebSearchService};
 
+                // Generate a unique tool ID for streaming events
+                let tool_id = format!("search-{}", Uuid::new_v4());
+
                 let query = args
                     .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing query parameter"))?
                     .to_string();
+
+                // Emit progress: starting search
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_progress(
+                        app_handle,
+                        &tool_id,
+                        0.1,
+                        Some(&format!("Searching: {}", &query[..query.len().min(40)])),
+                    );
+                }
 
                 let num_results = args
                     .get("num_results")
@@ -1145,9 +1348,24 @@ impl ToolExecutor {
                     ..Default::default()
                 };
 
+                // Emit progress: search in progress
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_progress(app_handle, &tool_id, 0.5, Some("Fetching results..."));
+                }
+
                 match WebSearchService::new() {
                     Ok(service) => match service.search(&query, Some(config)).await {
                         Ok(response) => {
+                            // Emit progress: processing results
+                            if let Some(app_handle) = &self.app_handle {
+                                emit_tool_progress(
+                                    app_handle,
+                                    &tool_id,
+                                    1.0,
+                                    Some(&format!("Found {} results", response.count)),
+                                );
+                            }
+
                             // Format results for the frontend
                             let results: Vec<serde_json::Value> = response
                                 .results
@@ -1207,10 +1425,21 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing url parameter"))?;
 
+                // Generate a unique tool ID for streaming events
+                let tool_id = format!("browser-{}", Uuid::new_v4());
+
                 if let Some(ref app) = self.app_handle {
                     use crate::automation::browser::NavigationOptions;
                     use crate::sys::commands::BrowserStateWrapper;
                     use tauri::Manager;
+
+                    // Emit progress: starting navigation
+                    emit_tool_progress(
+                        app,
+                        &tool_id,
+                        0.1,
+                        Some(&format!("Navigating to {}", &url[..url.len().min(50)])),
+                    );
 
                     let browser_state = app.state::<BrowserStateWrapper>();
                     let tab_manager = match browser_state.get_tab_manager() {
@@ -1225,9 +1454,12 @@ impl ToolExecutor {
                         }
                     };
 
+                    emit_tool_progress(app, &tool_id, 0.3, Some("Browser ready"));
+
                     match tab_manager.list_tabs().await {
                         Ok(tabs) => {
                             let tab_id = if tabs.is_empty() {
+                                emit_tool_progress(app, &tool_id, 0.4, Some("Opening new tab"));
                                 match tab_manager.open_tab(url).await {
                                     Ok(tid) => tid,
                                     Err(e) => {
@@ -1243,16 +1475,21 @@ impl ToolExecutor {
                                 tabs[0].id.clone()
                             };
 
+                            emit_tool_progress(app, &tool_id, 0.6, Some("Loading page..."));
+
                             match tab_manager
                                 .navigate(&tab_id, url, NavigationOptions::default())
                                 .await
                             {
-                                Ok(_) => Ok(ToolResult {
-                                    success: true,
-                                    data: json!({ "success": true, "url": url, "tab_id": tab_id }),
-                                    error: None,
-                                    metadata: HashMap::new(),
-                                }),
+                                Ok(_) => {
+                                    emit_tool_progress(app, &tool_id, 1.0, Some("Page loaded"));
+                                    Ok(ToolResult {
+                                        success: true,
+                                        data: json!({ "success": true, "url": url, "tab_id": tab_id }),
+                                        error: None,
+                                        metadata: HashMap::new(),
+                                    })
+                                }
                                 Err(e) => Ok(ToolResult {
                                     success: false,
                                     data: json!(null),
@@ -3057,6 +3294,548 @@ impl ToolExecutor {
                     })
                 }
             }
+            "file_list" => {
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    });
+                }
+
+                match fs::read_dir(&path).await {
+                    Ok(mut entries) => {
+                        let mut items = Vec::new();
+                        while let Ok(Some(entry)) = entries.next_entry().await {
+                            let file_type = entry.file_type().await.ok();
+                            let type_str = match file_type {
+                                Some(ft) if ft.is_dir() => "directory",
+                                Some(ft) if ft.is_symlink() => "symlink",
+                                _ => "file",
+                            };
+                            let metadata = entry.metadata().await.ok();
+                            let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+
+                            items.push(json!({
+                                "name": entry.file_name().to_string_lossy(),
+                                "type": type_str,
+                                "path": entry.path().to_string_lossy(),
+                                "size": size
+                            }));
+                        }
+
+                        // Sort by name for consistent output
+                        items.sort_by(|a, b| {
+                            let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                            let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                            name_a.cmp(name_b)
+                        });
+
+                        let count = items.len();
+                        Ok(ToolResult {
+                            success: true,
+                            data: json!({ "entries": items, "count": count, "path": &path }),
+                            error: None,
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Failed to list directory: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    }),
+                }
+            }
+            "memory_remember" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::core::agi::memory_manager::MemoryCategory;
+                    use tauri::Manager;
+
+                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+                    // Support both "key"/"value" format and "category"/"topic"/"content" format
+                    let (category, topic, content) =
+                        if let (Some(key), Some(value)) = (
+                            args.get("key").and_then(|v| v.as_str()),
+                            args.get("value").and_then(|v| v.as_str()),
+                        ) {
+                            // Simple key/value format - use Fact category
+                            (MemoryCategory::Fact, key.to_string(), value.to_string())
+                        } else {
+                            // Full format with category/topic/content
+                            let category_str = args
+                                .get("category")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("fact");
+                            let category = match category_str.to_lowercase().as_str() {
+                                "preference" | "preferences" => MemoryCategory::Preference,
+                                "decision" | "decisions" => MemoryCategory::Decision,
+                                "context" => MemoryCategory::Context,
+                                _ => MemoryCategory::Fact,
+                            };
+                            let topic = args
+                                .get("topic")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                                .to_string();
+                            let content = args
+                                .get("content")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| anyhow!("Missing content or value parameter"))?
+                                .to_string();
+                            (category, topic, content)
+                        };
+
+                    let importance = args
+                        .get("importance")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as i32)
+                        .unwrap_or(5);
+                    let source = args.get("source").and_then(|v| v.as_str());
+
+                    match memory_state
+                        .manager
+                        .remember(category, &topic, &content, Some(importance), source)
+                    {
+                        Ok(memory_id) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "memory_id": memory_id,
+                                "topic": topic,
+                                "content": content,
+                                "message": format!("Remembered: {} = {}", topic, content)
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to store memory: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for memory operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "memory_recall" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::core::agi::memory_manager::MemoryCategory;
+                    use tauri::Manager;
+
+                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+                    // Support both "key" format and "category"/"topic" format
+                    let (category, topic) = if let Some(key) = args.get("key").and_then(|v| v.as_str())
+                    {
+                        (MemoryCategory::Fact, key.to_string())
+                    } else {
+                        let category_str = args
+                            .get("category")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("fact");
+                        let category = match category_str.to_lowercase().as_str() {
+                            "preference" | "preferences" => MemoryCategory::Preference,
+                            "decision" | "decisions" => MemoryCategory::Decision,
+                            "context" => MemoryCategory::Context,
+                            _ => MemoryCategory::Fact,
+                        };
+                        let topic = args
+                            .get("topic")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                            .to_string();
+                        (category, topic)
+                    };
+
+                    match memory_state.manager.recall(category, &topic) {
+                        Ok(Some(entry)) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "found": true,
+                                "memory_id": entry.id,
+                                "topic": entry.topic,
+                                "content": entry.content,
+                                "importance": entry.importance,
+                                "category": format!("{:?}", entry.category).to_lowercase(),
+                                "created_at": entry.created_at,
+                                "updated_at": entry.updated_at
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Ok(None) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "found": false,
+                                "topic": topic,
+                                "message": format!("No memory found for '{}'", topic)
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to recall memory: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for memory operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "memory_search" => {
+                if let Some(ref app) = self.app_handle {
+                    use tauri::Manager;
+
+                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+                    let query = args
+                        .get("query")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing query parameter"))?
+                        .to_string();
+                    let limit = args
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                        .unwrap_or(20);
+
+                    match memory_state.manager.search(&query, limit) {
+                        Ok(entries) => {
+                            let results: Vec<serde_json::Value> = entries
+                                .iter()
+                                .map(|e| {
+                                    json!({
+                                        "memory_id": e.id,
+                                        "topic": e.topic,
+                                        "content": e.content,
+                                        "importance": e.importance,
+                                        "category": format!("{:?}", e.category).to_lowercase(),
+                                    })
+                                })
+                                .collect();
+                            let count = results.len();
+                            Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "results": results,
+                                    "count": count,
+                                    "query": query
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            })
+                        }
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to search memories: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for memory operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "memory_forget" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::core::agi::memory_manager::MemoryCategory;
+                    use tauri::Manager;
+
+                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+                    // Support either memory_id or category+topic
+                    if let Some(memory_id) = args.get("memory_id").and_then(|v| v.as_i64()) {
+                        match memory_state.manager.forget(memory_id) {
+                            Ok(true) => Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "deleted": true,
+                                    "memory_id": memory_id,
+                                    "message": "Memory deleted successfully"
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                            Ok(false) => Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "deleted": false,
+                                    "memory_id": memory_id,
+                                    "message": "No memory found with that ID"
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                            Err(e) => Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Failed to delete memory: {}", e)),
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                        }
+                    } else {
+                        // Delete by category + topic
+                        let category_str = args
+                            .get("category")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("fact");
+                        let category = match category_str.to_lowercase().as_str() {
+                            "preference" | "preferences" => MemoryCategory::Preference,
+                            "decision" | "decisions" => MemoryCategory::Decision,
+                            "context" => MemoryCategory::Context,
+                            _ => MemoryCategory::Fact,
+                        };
+                        let topic = args
+                            .get("topic")
+                            .or_else(|| args.get("key"))
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| anyhow!("Missing topic, key, or memory_id parameter"))?;
+
+                        match memory_state.manager.forget_topic(category, topic) {
+                            Ok(true) => Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "deleted": true,
+                                    "topic": topic,
+                                    "message": format!("Memory '{}' deleted successfully", topic)
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                            Ok(false) => Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "deleted": false,
+                                    "topic": topic,
+                                    "message": format!("No memory found for '{}'", topic)
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                            Err(e) => Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Failed to delete memory: {}", e)),
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            }),
+                        }
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for memory operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "browser_click" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?
+                    .to_string();
+
+                if let Some(ref app) = self.app_handle {
+                    // Emit browser click event for the frontend to handle
+                    let _ = app.emit(
+                        "browser:click",
+                        json!({ "selector": selector.clone() }),
+                    );
+
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "success": true,
+                            "selector": selector,
+                            "message": format!("Click action initiated on element: {}", selector)
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                    })
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for browser automation".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "browser_extract" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                if let Some(ref app) = self.app_handle {
+                    // Emit browser extract event for the frontend to handle
+                    let _ = app.emit(
+                        "browser:extract",
+                        json!({ "selector": selector.clone() }),
+                    );
+
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "success": true,
+                            "selector": selector,
+                            "message": "Content extraction initiated. Results will be provided by the browser."
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                    })
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for browser automation".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "api_download" => {
+                let url = args
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing url parameter"))?
+                    .to_string();
+                let save_path = args
+                    .get("save_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing save_path parameter"))?
+                    .to_string();
+
+                // Validate destination path
+                if let Err(e) = self.validate_path(&save_path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(&save_path))]),
+                    });
+                }
+
+                // Perform the download
+                let client = reqwest::Client::new();
+                match client.get(&url).send().await {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!(
+                                    "Download failed with status: {}",
+                                    response.status()
+                                )),
+                                metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                            });
+                        }
+
+                        match response.bytes().await {
+                            Ok(bytes) => {
+                                // Ensure parent directory exists
+                                if let Some(parent) = Path::new(&save_path).parent() {
+                                    let _ = fs::create_dir_all(parent).await;
+                                }
+
+                                match fs::write(&save_path, &bytes).await {
+                                    Ok(_) => {
+                                        let size = bytes.len();
+
+                                        // Record for undo if available
+                                        if let Some(app_handle) = &self.app_handle {
+                                            if let Some(undo_state) =
+                                                app_handle.try_state::<UndoState>()
+                                            {
+                                                let task_id = Uuid::new_v4().to_string();
+                                                let path_buf =
+                                                    std::path::PathBuf::from(&save_path);
+                                                let _ = undo_state
+                                                    .change_tracker
+                                                    .record_tool_executed_with_path(
+                                                        "api_download".to_string(),
+                                                        json!({ "url": &url, "save_path": &save_path }),
+                                                        json!({ "success": true, "bytes": size }),
+                                                        task_id,
+                                                        path_buf,
+                                                        None, // New file, no previous content
+                                                        None,
+                                                        None,
+                                                    )
+                                                    .await;
+                                            }
+                                        }
+
+                                        Ok(ToolResult {
+                                            success: true,
+                                            data: json!({
+                                                "success": true,
+                                                "url": url,
+                                                "save_path": save_path,
+                                                "bytes_downloaded": size
+                                            }),
+                                            error: None,
+                                            metadata: HashMap::from([
+                                                ("url".to_string(), json!(&url)),
+                                                ("save_path".to_string(), json!(&save_path)),
+                                            ]),
+                                        })
+                                    }
+                                    Err(e) => Ok(ToolResult {
+                                        success: false,
+                                        data: json!(null),
+                                        error: Some(format!("Failed to save file: {}", e)),
+                                        metadata: HashMap::from([
+                                            ("url".to_string(), json!(&url)),
+                                            ("save_path".to_string(), json!(&save_path)),
+                                        ]),
+                                    }),
+                                }
+                            }
+                            Err(e) => Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Failed to read response: {}", e)),
+                                metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                            }),
+                        }
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Download request failed: {}", e)),
+                        metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                    }),
+                }
+            }
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
     }
@@ -3138,6 +3917,8 @@ impl ToolExecutor {
         start_time: Instant,
         result: Result<ToolResult>,
     ) -> Result<ToolResult> {
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
         match result {
             Ok(tool_result) => {
                 let status = if tool_result.success {
@@ -3152,12 +3933,28 @@ impl ToolExecutor {
                     &metadata,
                     tool_result.error.clone(),
                 );
-                self.emit_tool_metrics(
-                    action_id,
-                    tool_name,
-                    start_time.elapsed().as_millis() as u64,
-                    tool_result.success,
-                );
+                self.emit_tool_metrics(action_id, tool_name, duration_ms, tool_result.success);
+
+                // Emit tool stream completed/error event for real-time progress tracking
+                if let Some(app_handle) = &self.app_handle {
+                    if tool_result.success {
+                        emit_tool_completed(
+                            app_handle,
+                            action_id,
+                            tool_result.data.clone(),
+                            duration_ms,
+                        );
+                    } else {
+                        emit_tool_error(
+                            app_handle,
+                            action_id,
+                            tool_result.error.as_deref().unwrap_or("Unknown error"),
+                            duration_ms,
+                            true, // Most tool errors are retryable
+                        );
+                    }
+                }
+
                 Ok(tool_result)
             }
             Err(err) => {
@@ -3169,12 +3966,19 @@ impl ToolExecutor {
                     &metadata,
                     Some(message.clone()),
                 );
-                self.emit_tool_metrics(
-                    action_id,
-                    tool_name,
-                    start_time.elapsed().as_millis() as u64,
-                    false,
-                );
+                self.emit_tool_metrics(action_id, tool_name, duration_ms, false);
+
+                // Emit tool stream error event
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_error(
+                        app_handle,
+                        action_id,
+                        &message,
+                        duration_ms,
+                        true, // Most errors are retryable
+                    );
+                }
+
                 Err(err)
             }
         }
@@ -3191,6 +3995,154 @@ impl ToolExecutor {
                     .as_ref()
                     .unwrap_or(&"Unknown error".to_string())
             )
+        }
+    }
+
+    /// Check the safety tier for a tool and request user confirmation if required.
+    /// Returns Ok(()) if the tool can proceed, Err with a message if denied or timed out.
+    async fn check_safety_tier_and_confirm(
+        &self,
+        app_handle: &tauri::AppHandle,
+        tool_name: &str,
+        parameters: &Value,
+        action_id: &str,
+        _start_time: Instant,
+    ) -> Result<()> {
+        // Get the ToolConfirmationState from app handle
+        let confirmation_state = match app_handle.try_state::<ToolConfirmationState>() {
+            Some(state) => state,
+            None => {
+                tracing::warn!(
+                    "[ToolExecutor] ToolConfirmationState not available, skipping safety check"
+                );
+                return Ok(());
+            }
+        };
+
+        // Get the tool guard to determine safety tier
+        let tool_guard = confirmation_state.tool_guard();
+        let safety_tier = tool_guard.get_safety_tier(tool_name);
+
+        // Log the safety tier check
+        tracing::debug!(
+            "[ToolExecutor] Safety tier for '{}': {:?}",
+            tool_name,
+            safety_tier
+        );
+
+        // Safe and RequiresNotification tiers don't need user confirmation
+        if !safety_tier.requires_user_action() {
+            // For RequiresNotification tier, emit a notification event
+            if matches!(safety_tier, ToolSafetyTier::RequiresNotification) {
+                let _ = app_handle.emit(
+                    "tool:notification",
+                    json!({
+                        "tool_name": tool_name,
+                        "action_id": action_id,
+                        "message": format!("Executing: {}", tool_name),
+                        "parameters_preview": self.summarize_parameters(parameters),
+                    }),
+                );
+            }
+            return Ok(());
+        }
+
+        // Create the confirmation request
+        let tool_description = self
+            .registry
+            .get_tool(tool_name)
+            .map(|t| t.description.clone())
+            .unwrap_or_else(|| format!("Execute {}", tool_name));
+
+        let confirmation_request =
+            tool_guard.create_confirmation_request(tool_name, parameters, Some(&tool_description));
+
+        tracing::info!(
+            "[ToolExecutor] Requesting user confirmation for '{}' (tier: {:?})",
+            tool_name,
+            safety_tier
+        );
+
+        // Emit status update to show we're waiting for confirmation
+        let _ = app_handle.emit(
+            "agent:status:update",
+            json!({
+                "id": "main_agent",
+                "name": "AGI Workforce Agent",
+                "status": "awaiting_confirmation",
+                "currentStep": format!("Waiting for your approval to: {}", tool_name),
+                "progress": 50
+            }),
+        );
+
+        // Request confirmation from user
+        match request_tool_confirmation(
+            app_handle,
+            &confirmation_state,
+            confirmation_request,
+            TOOL_CONFIRMATION_TIMEOUT_SECS,
+        )
+        .await
+        {
+            Ok(approved) => {
+                if approved {
+                    tracing::info!(
+                        "[ToolExecutor] User approved tool '{}', proceeding with execution",
+                        tool_name
+                    );
+                    Ok(())
+                } else {
+                    tracing::info!(
+                        "[ToolExecutor] User denied tool '{}', aborting execution",
+                        tool_name
+                    );
+                    Err(anyhow!(
+                        "You declined to run '{}'. Let me know if you'd like me to try a different approach.",
+                        tool_name
+                    ))
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[ToolExecutor] Confirmation failed for '{}': {}",
+                    tool_name,
+                    e
+                );
+                Err(anyhow!(
+                    "Couldn't get your confirmation for '{}': {}. Please try again.",
+                    tool_name,
+                    e
+                ))
+            }
+        }
+    }
+
+    /// Create a brief summary of tool parameters for display
+    fn summarize_parameters(&self, parameters: &Value) -> String {
+        if let Some(obj) = parameters.as_object() {
+            obj.iter()
+                .take(3) // Limit to first 3 parameters
+                .map(|(k, v)| {
+                    let value_preview = match v {
+                        Value::String(s) => {
+                            if s.len() > 30 {
+                                format!("\"{}...\"", &s[..27])
+                            } else {
+                                format!("\"{}\"", s)
+                            }
+                        }
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Array(arr) => format!("[{} items]", arr.len()),
+                        Value::Object(obj) => format!("{{...{} keys}}", obj.len()),
+                        Value::Null => "null".to_string(),
+                    };
+                    format!("{}: {}", k, value_preview)
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else {
+            "No parameters".to_string()
         }
     }
 }
