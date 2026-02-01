@@ -58,6 +58,8 @@ pub struct ToolExecutor {
     registry: Arc<ToolRegistry>,
     app_handle: Option<tauri::AppHandle>,
     conversation_mode: Option<String>,
+    /// Optional project folder path to use as default working directory
+    project_folder: Option<String>,
 }
 
 impl ToolExecutor {
@@ -66,19 +68,56 @@ impl ToolExecutor {
             registry,
             app_handle: None,
             conversation_mode: None,
+            project_folder: None,
         }
     }
 
     pub fn with_app_handle(registry: Arc<ToolRegistry>, app_handle: tauri::AppHandle) -> Self {
+        // Try to get project folder from state
+        let project_folder = {
+            use tauri::Manager;
+            if let Some(state) =
+                app_handle.try_state::<crate::sys::commands::project_context::ProjectContextState>()
+            {
+                // Use block_on to get the folder synchronously during construction
+                tauri::async_runtime::block_on(async { state.get_folder().await })
+            } else {
+                None
+            }
+        };
+
         Self {
             registry,
             app_handle: Some(app_handle),
             conversation_mode: None,
+            project_folder,
         }
     }
 
     pub fn set_conversation_mode(&mut self, mode: Option<String>) {
         self.conversation_mode = mode;
+    }
+
+    /// Set the project folder for this executor
+    pub fn set_project_folder(&mut self, folder: Option<String>) {
+        self.project_folder = folder;
+    }
+
+    /// Get the current project folder
+    pub fn get_project_folder(&self) -> Option<&String> {
+        self.project_folder.as_ref()
+    }
+
+    /// Refresh the project folder from state (useful if folder changed mid-session)
+    pub async fn refresh_project_folder(&mut self) {
+        if let Some(app_handle) = &self.app_handle {
+            use tauri::Manager;
+            if let Some(state) =
+                app_handle.try_state::<crate::sys::commands::project_context::ProjectContextState>()
+            {
+                self.project_folder = state.get_folder().await;
+            }
+        }
     }
 
     pub fn get_tool_definitions(&self, tool_ids: Option<Vec<String>>) -> Vec<ToolDefinition> {
@@ -135,6 +174,27 @@ impl ToolExecutor {
             crate::core::agi::tools::ParameterType::FilePath => "string",
             crate::core::agi::tools::ParameterType::URL => "string",
         }
+    }
+
+    /// Resolve a path against the project folder if the path is relative.
+    /// If the path is absolute or no project folder is set, returns the path as-is.
+    fn resolve_path(&self, path_str: &str) -> String {
+        let path = Path::new(path_str);
+
+        // If the path is already absolute, return it as-is
+        if path.is_absolute() {
+            return path_str.to_string();
+        }
+
+        // If we have a project folder, resolve the relative path against it
+        if let Some(ref project_folder) = self.project_folder {
+            let project_path = Path::new(project_folder);
+            let resolved = project_path.join(path);
+            return resolved.to_string_lossy().to_string();
+        }
+
+        // No project folder set, return as-is
+        path_str.to_string()
     }
 
     async fn validate_path(&self, path_str: &str) -> Result<()> {
@@ -463,10 +523,12 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing command parameter"))?
             .to_string();
+        // Use provided cwd, or fall back to project folder if set
         let cwd = args
             .get("cwd")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(|s| s.to_string())
+            .or_else(|| self.project_folder.clone());
         let shell = args
             .get("shell")
             .and_then(|v| v.as_str())
@@ -774,11 +836,13 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         match tool.id.as_str() {
             "file_read" => {
-                let path = args
+                let raw_path = args
                     .get("path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?
                     .to_string();
+                // Resolve relative paths against project folder
+                let path = self.resolve_path(&raw_path);
                 let session_id = args
                     .get("session_id")
                     .and_then(|v| v.as_str())
@@ -835,11 +899,13 @@ impl ToolExecutor {
                 }
             }
             "file_write" => {
-                let path = args
+                let raw_path = args
                     .get("path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?
                     .to_string();
+                // Resolve relative paths against project folder
+                let path = self.resolve_path(&raw_path);
                 let content = args
                     .get("content")
                     .and_then(|v| v.as_str())
@@ -922,11 +988,13 @@ impl ToolExecutor {
                 }
             }
             "file_delete" => {
-                let path = args
+                let raw_path = args
                     .get("path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?
                     .to_string();
+                // Resolve relative paths against project folder
+                let path = self.resolve_path(&raw_path);
                 let session_id = args
                     .get("session_id")
                     .and_then(|v| v.as_str())
@@ -1632,36 +1700,235 @@ impl ToolExecutor {
                     .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing query parameter"))?;
-                let connection_id = args.get("connection_id").and_then(|v| v.as_str());
+
+                // Validate it's a SELECT query only (read-only)
+                let query_upper = query.trim().to_uppercase();
+                if !query_upper.starts_with("SELECT") && !query_upper.starts_with("WITH") {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("db_query only supports SELECT statements. Use db_execute for modifications.".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
+
+                // Block dangerous operations even in SELECT (like subqueries with mutations)
+                let blocked_keywords = [
+                    "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE", "GRANT",
+                    "REVOKE",
+                ];
+                for keyword in &blocked_keywords {
+                    if query_upper.contains(keyword) {
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!(
+                                "SQL operation '{}' is not allowed in db_query.",
+                                keyword
+                            )),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
 
                 if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::DatabaseState;
+                    use crate::sys::commands::chat::AppDatabase;
                     use tauri::Manager;
 
-                    let database_state = app.state::<tokio::sync::Mutex<DatabaseState>>();
-                    let _db_guard = database_state.lock().await;
+                    let db = app.state::<AppDatabase>();
+                    let conn = match db.conn.lock() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Database lock error: {}", e)),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
 
-                    match connection_id {
-                        Some(conn_id) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "message": "Database query executed (simulated)",
-                                "query": query,
-                                "connection_id": conn_id
-                            }),
-                            error: None,
-                            metadata: HashMap::from([(
-                                "connection_id".to_string(),
-                                json!(conn_id),
-                            )]),
+                    // Execute query and collect results - using a closure to manage lifetimes
+                    let query_result: Result<(Vec<String>, Vec<serde_json::Value>), String> =
+                        (|| {
+                            let mut stmt = conn
+                                .prepare(query)
+                                .map_err(|e| format!("Query preparation error: {}", e))?;
+                            let column_names: Vec<String> =
+                                stmt.column_names().iter().map(|s| s.to_string()).collect();
+
+                            let mut rows_iter = stmt
+                                .query([])
+                                .map_err(|e| format!("Query execution error: {}", e))?;
+                            let mut rows: Vec<serde_json::Value> = Vec::new();
+
+                            while let Some(row) = rows_iter
+                                .next()
+                                .map_err(|e| format!("Row fetch error: {}", e))?
+                            {
+                                let mut obj = serde_json::Map::new();
+                                for (idx, col_name) in column_names.iter().enumerate() {
+                                    let value: rusqlite::types::Value = row
+                                        .get(idx)
+                                        .map_err(|e| format!("Column read error: {}", e))?;
+                                    obj.insert(
+                                        col_name.clone(),
+                                        match value {
+                                            rusqlite::types::Value::Null => json!(null),
+                                            rusqlite::types::Value::Integer(n) => json!(n),
+                                            rusqlite::types::Value::Real(f) => json!(f),
+                                            rusqlite::types::Value::Text(s) => json!(s),
+                                            rusqlite::types::Value::Blob(b) => {
+                                                json!(format!("<blob {} bytes>", b.len()))
+                                            }
+                                        },
+                                    );
+                                }
+                                rows.push(serde_json::Value::Object(obj));
+                            }
+
+                            Ok((column_names, rows))
+                        })();
+
+                    match query_result {
+                        Ok((column_names, rows)) => {
+                            let row_count = rows.len();
+                            Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "columns": column_names,
+                                    "rows": rows,
+                                    "row_count": row_count
+                                }),
+                                error: None,
+                                metadata: HashMap::from([("query".to_string(), json!(query))]),
+                            })
+                        }
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(e),
+                            metadata: HashMap::from([("query".to_string(), json!(query))]),
                         }),
-                        None => Ok(ToolResult {
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("Database not available".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "db_execute" => {
+                let query = args
+                    .get("query")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing query parameter"))?;
+
+                // Validate it's a modification query (INSERT, UPDATE, DELETE)
+                let query_upper = query.trim().to_uppercase();
+                let is_modification = query_upper.starts_with("INSERT")
+                    || query_upper.starts_with("UPDATE")
+                    || query_upper.starts_with("DELETE");
+
+                if !is_modification {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
+
+                // Block dangerous DDL operations
+                let blocked_keywords = ["DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"];
+                for keyword in &blocked_keywords {
+                    if query_upper.contains(keyword) {
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword)),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::chat::AppDatabase;
+                    use tauri::Manager;
+
+                    let db = app.state::<AppDatabase>();
+                    let conn = match db.conn.lock() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Database lock error: {}", e)),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
+
+                    match conn.execute(query, []) {
+                        Ok(rows_affected) => Ok(ToolResult {
                             success: true,
                             data: json!({
-                                "message": "Database query executed (simulated)",
+                                "rows_affected": rows_affected,
                                 "query": query
                             }),
                             error: None,
+                            metadata: HashMap::from([("query".to_string(), json!(query))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Query execution error: {}", e)),
+                            metadata: HashMap::from([("query".to_string(), json!(query))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("Database not available".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "db_transaction_begin" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::chat::AppDatabase;
+                    use tauri::Manager;
+
+                    let db = app.state::<AppDatabase>();
+                    let conn = match db.conn.lock() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Database lock error: {}", e)),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
+
+                    match conn.execute("BEGIN TRANSACTION", []) {
+                        Ok(_) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "message": "Transaction started",
+                                "status": "active"
+                            }),
+                            error: None,
+                            metadata: HashMap::new(),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to begin transaction: {}", e)),
                             metadata: HashMap::new(),
                         }),
                     }
@@ -1669,7 +1936,95 @@ impl ToolExecutor {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("App handle not available for database operations".to_string()),
+                        error: Some("Database not available".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "db_transaction_commit" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::chat::AppDatabase;
+                    use tauri::Manager;
+
+                    let db = app.state::<AppDatabase>();
+                    let conn = match db.conn.lock() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Database lock error: {}", e)),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
+
+                    match conn.execute("COMMIT", []) {
+                        Ok(_) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "message": "Transaction committed",
+                                "status": "committed"
+                            }),
+                            error: None,
+                            metadata: HashMap::new(),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to commit transaction: {}", e)),
+                            metadata: HashMap::new(),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("Database not available".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "db_transaction_rollback" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::chat::AppDatabase;
+                    use tauri::Manager;
+
+                    let db = app.state::<AppDatabase>();
+                    let conn = match db.conn.lock() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Database lock error: {}", e)),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
+
+                    match conn.execute("ROLLBACK", []) {
+                        Ok(_) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "message": "Transaction rolled back",
+                                "status": "rolled_back"
+                            }),
+                            error: None,
+                            metadata: HashMap::new(),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to rollback transaction: {}", e)),
+                            metadata: HashMap::new(),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
                 }
@@ -3362,37 +3717,36 @@ impl ToolExecutor {
                     let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
                     // Support both "key"/"value" format and "category"/"topic"/"content" format
-                    let (category, topic, content) =
-                        if let (Some(key), Some(value)) = (
-                            args.get("key").and_then(|v| v.as_str()),
-                            args.get("value").and_then(|v| v.as_str()),
-                        ) {
-                            // Simple key/value format - use Fact category
-                            (MemoryCategory::Fact, key.to_string(), value.to_string())
-                        } else {
-                            // Full format with category/topic/content
-                            let category_str = args
-                                .get("category")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("fact");
-                            let category = match category_str.to_lowercase().as_str() {
-                                "preference" | "preferences" => MemoryCategory::Preference,
-                                "decision" | "decisions" => MemoryCategory::Decision,
-                                "context" => MemoryCategory::Context,
-                                _ => MemoryCategory::Fact,
-                            };
-                            let topic = args
-                                .get("topic")
-                                .and_then(|v| v.as_str())
-                                .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
-                                .to_string();
-                            let content = args
-                                .get("content")
-                                .and_then(|v| v.as_str())
-                                .ok_or_else(|| anyhow!("Missing content or value parameter"))?
-                                .to_string();
-                            (category, topic, content)
+                    let (category, topic, content) = if let (Some(key), Some(value)) = (
+                        args.get("key").and_then(|v| v.as_str()),
+                        args.get("value").and_then(|v| v.as_str()),
+                    ) {
+                        // Simple key/value format - use Fact category
+                        (MemoryCategory::Fact, key.to_string(), value.to_string())
+                    } else {
+                        // Full format with category/topic/content
+                        let category_str = args
+                            .get("category")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("fact");
+                        let category = match category_str.to_lowercase().as_str() {
+                            "preference" | "preferences" => MemoryCategory::Preference,
+                            "decision" | "decisions" => MemoryCategory::Decision,
+                            "context" => MemoryCategory::Context,
+                            _ => MemoryCategory::Fact,
                         };
+                        let topic = args
+                            .get("topic")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                            .to_string();
+                        let content = args
+                            .get("content")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| anyhow!("Missing content or value parameter"))?
+                            .to_string();
+                        (category, topic, content)
+                    };
 
                     let importance = args
                         .get("importance")
@@ -3401,10 +3755,13 @@ impl ToolExecutor {
                         .unwrap_or(5);
                     let source = args.get("source").and_then(|v| v.as_str());
 
-                    match memory_state
-                        .manager
-                        .remember(category, &topic, &content, Some(importance), source)
-                    {
+                    match memory_state.manager.remember(
+                        category,
+                        &topic,
+                        &content,
+                        Some(importance),
+                        source,
+                    ) {
                         Ok(memory_id) => Ok(ToolResult {
                             success: true,
                             data: json!({
@@ -3440,27 +3797,27 @@ impl ToolExecutor {
                     let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
                     // Support both "key" format and "category"/"topic" format
-                    let (category, topic) = if let Some(key) = args.get("key").and_then(|v| v.as_str())
-                    {
-                        (MemoryCategory::Fact, key.to_string())
-                    } else {
-                        let category_str = args
-                            .get("category")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("fact");
-                        let category = match category_str.to_lowercase().as_str() {
-                            "preference" | "preferences" => MemoryCategory::Preference,
-                            "decision" | "decisions" => MemoryCategory::Decision,
-                            "context" => MemoryCategory::Context,
-                            _ => MemoryCategory::Fact,
+                    let (category, topic) =
+                        if let Some(key) = args.get("key").and_then(|v| v.as_str()) {
+                            (MemoryCategory::Fact, key.to_string())
+                        } else {
+                            let category_str = args
+                                .get("category")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("fact");
+                            let category = match category_str.to_lowercase().as_str() {
+                                "preference" | "preferences" => MemoryCategory::Preference,
+                                "decision" | "decisions" => MemoryCategory::Decision,
+                                "context" => MemoryCategory::Context,
+                                _ => MemoryCategory::Fact,
+                            };
+                            let topic = args
+                                .get("topic")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                                .to_string();
+                            (category, topic)
                         };
-                        let topic = args
-                            .get("topic")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
-                            .to_string();
-                        (category, topic)
-                    };
 
                     match memory_state.manager.recall(category, &topic) {
                         Ok(Some(entry)) => Ok(ToolResult {
@@ -3665,10 +4022,7 @@ impl ToolExecutor {
 
                 if let Some(ref app) = self.app_handle {
                     // Emit browser click event for the frontend to handle
-                    let _ = app.emit(
-                        "browser:click",
-                        json!({ "selector": selector.clone() }),
-                    );
+                    let _ = app.emit("browser:click", json!({ "selector": selector.clone() }));
 
                     Ok(ToolResult {
                         success: true,
@@ -3697,10 +4051,7 @@ impl ToolExecutor {
 
                 if let Some(ref app) = self.app_handle {
                     // Emit browser extract event for the frontend to handle
-                    let _ = app.emit(
-                        "browser:extract",
-                        json!({ "selector": selector.clone() }),
-                    );
+                    let _ = app.emit("browser:extract", json!({ "selector": selector.clone() }));
 
                     Ok(ToolResult {
                         success: true,
@@ -3776,8 +4127,7 @@ impl ToolExecutor {
                                                 app_handle.try_state::<UndoState>()
                                             {
                                                 let task_id = Uuid::new_v4().to_string();
-                                                let path_buf =
-                                                    std::path::PathBuf::from(&save_path);
+                                                let path_buf = std::path::PathBuf::from(&save_path);
                                                 let _ = undo_state
                                                     .change_tracker
                                                     .record_tool_executed_with_path(
@@ -3835,6 +4185,229 @@ impl ToolExecutor {
                         metadata: HashMap::from([("url".to_string(), json!(&url))]),
                     }),
                 }
+            }
+            "api_upload" => {
+                let url = args
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
+                let file_path = args
+                    .get("file_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing file_path parameter"))?;
+
+                // Validate the file path
+                if let Err(e) = self.validate_path(file_path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("file_path".to_string(), json!(file_path))]),
+                    });
+                }
+
+                // Read file
+                let file_content = fs::read(file_path)
+                    .await
+                    .map_err(|e| anyhow!("Failed to read file: {}", e))?;
+
+                let file_name = Path::new(file_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("upload");
+
+                // Create multipart form
+                let part =
+                    reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
+                let form = reqwest::multipart::Form::new().part("file", part);
+
+                let client = reqwest::Client::new();
+                let response = client
+                    .post(url)
+                    .multipart(form)
+                    .send()
+                    .await
+                    .map_err(|e| anyhow!("Upload failed: {}", e))?;
+
+                let status = response.status().as_u16();
+                let body = response.text().await.unwrap_or_default();
+
+                Ok(ToolResult {
+                    success: status >= 200 && status < 300,
+                    data: json!({
+                        "status": status,
+                        "response": body,
+                        "file": file_path
+                    }),
+                    error: if status >= 400 {
+                        Some(format!("HTTP {}", status))
+                    } else {
+                        None
+                    },
+                    metadata: HashMap::from([
+                        ("url".to_string(), json!(url)),
+                        ("file_path".to_string(), json!(file_path)),
+                    ]),
+                })
+            }
+            "git_init" => {
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?;
+
+                // Validate the path
+                if let Err(e) = self.validate_path(path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    });
+                }
+
+                let output = tokio::process::Command::new("git")
+                    .args(["init"])
+                    .current_dir(path)
+                    .output()
+                    .await
+                    .map_err(|e| anyhow!("Failed to run git init: {}", e))?;
+
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+                Ok(ToolResult {
+                    success: output.status.success(),
+                    data: json!({
+                        "message": stdout.trim(),
+                        "path": path
+                    }),
+                    error: if !output.status.success() {
+                        Some(stderr)
+                    } else {
+                        None
+                    },
+                    metadata: HashMap::from([("path".to_string(), json!(path))]),
+                })
+            }
+            "github_create_repo" => {
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing name parameter"))?;
+                let description = args
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let private = args
+                    .get("private")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // Use gh CLI which handles auth
+                let mut cmd_args = vec!["repo", "create", name, "--confirm"];
+                if private {
+                    cmd_args.push("--private");
+                } else {
+                    cmd_args.push("--public");
+                }
+                if !description.is_empty() {
+                    cmd_args.push("--description");
+                    cmd_args.push(description);
+                }
+
+                let output = tokio::process::Command::new("gh")
+                    .args(&cmd_args)
+                    .output()
+                    .await
+                    .map_err(|e| anyhow!("Failed to create repo: {}", e))?;
+
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+                Ok(ToolResult {
+                    success: output.status.success(),
+                    data: json!({
+                        "name": name,
+                        "url": stdout.trim(),
+                        "private": private
+                    }),
+                    error: if !output.status.success() {
+                        Some(stderr)
+                    } else {
+                        None
+                    },
+                    metadata: HashMap::from([
+                        ("name".to_string(), json!(name)),
+                        ("private".to_string(), json!(private)),
+                    ]),
+                })
+            }
+            "physical_scrape" => {
+                let url = args
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
+                let selector = args.get("selector").and_then(|v| v.as_str());
+
+                // Use a real browser user agent to avoid bot detection
+                let client = reqwest::Client::builder()
+                    .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .build()
+                    .map_err(|e| anyhow!("Failed to create client: {}", e))?;
+
+                let response = client
+                    .get(url)
+                    .header(
+                        "Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    )
+                    .header("Accept-Language", "en-US,en;q=0.5")
+                    .send()
+                    .await
+                    .map_err(|e| anyhow!("Scrape request failed: {}", e))?;
+
+                let status = response.status().as_u16();
+                let html = response.text().await.unwrap_or_default();
+
+                // If selector provided, note it for the response
+                // Full CSS selector parsing would require the scraper crate
+                let extracted = if let Some(sel) = selector {
+                    format!(
+                        "Selector '{}' requested. Full HTML returned for client-side extraction.",
+                        sel
+                    )
+                } else {
+                    "Full HTML content returned.".to_string()
+                };
+
+                // Truncate HTML if too large to prevent memory issues
+                let content = if html.len() > 50000 {
+                    html[..50000].to_string()
+                } else {
+                    html.clone()
+                };
+
+                Ok(ToolResult {
+                    success: status >= 200 && status < 300,
+                    data: json!({
+                        "url": url,
+                        "status": status,
+                        "content": content,
+                        "extracted": extracted,
+                        "content_length": html.len(),
+                        "truncated": html.len() > 50000
+                    }),
+                    error: if status >= 400 {
+                        Some(format!("HTTP {}", status))
+                    } else {
+                        None
+                    },
+                    metadata: HashMap::from([
+                        ("url".to_string(), json!(url)),
+                        ("selector".to_string(), json!(selector)),
+                    ]),
+                })
             }
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
