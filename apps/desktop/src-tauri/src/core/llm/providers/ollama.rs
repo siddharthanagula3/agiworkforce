@@ -310,6 +310,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let result = provider.send_message(&request).await;

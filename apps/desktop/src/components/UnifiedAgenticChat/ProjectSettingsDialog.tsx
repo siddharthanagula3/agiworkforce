@@ -33,10 +33,12 @@ import {
   Trash2,
   Plus,
   Upload,
+  Brain,
 } from 'lucide-react';
 import { useProjectStore, type Project, type ProjectFile } from '../../stores/projectStore';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
+import { MemoryManager } from '../Memory/MemoryManager';
 
 // Project color options - defined as const tuple for type safety
 const PROJECT_COLORS = [
@@ -89,6 +91,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [conversationIds, setConversationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
+  const [autoSaveMemories, setAutoSaveMemories] = useState(true);
 
   // Store actions
   const createProject = useProjectStore((state) => state.createProject);
@@ -215,6 +218,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             <TabsTrigger value="files" className="data-[state=active]:bg-zinc-700">
               <File className="w-4 h-4 mr-2" />
               Files
+            </TabsTrigger>
+            <TabsTrigger value="memory" className="data-[state=active]:bg-zinc-700">
+              <Brain className="w-4 h-4 mr-2" />
+              Memory
             </TabsTrigger>
             <TabsTrigger value="conversations" className="data-[state=active]:bg-zinc-700">
               <MessageSquare className="w-4 h-4 mr-2" />
@@ -364,6 +371,56 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   </div>
                 )}
               </ScrollArea>
+            </TabsContent>
+
+            {/* Memory Tab */}
+            <TabsContent value="memory" className="space-y-4">
+              <div className="space-y-4">
+                {/* Auto-save Toggle */}
+                <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-blue-400" />
+                    <div className="flex flex-col">
+                      <Label className="text-zinc-300 font-medium">Auto-save Memories</Label>
+                      <p className="text-xs text-zinc-500">
+                        Automatically save architectural decisions and important context
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAutoSaveMemories(!autoSaveMemories)}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      autoSaveMemories ? 'bg-blue-600' : 'bg-zinc-700',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                        autoSaveMemories ? 'translate-x-6' : 'translate-x-1',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Memory Manager */}
+                <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                  <MemoryManager
+                    showCreateButton={true}
+                    showImportExport={false}
+                    maxHeight="350px"
+                  />
+                </div>
+
+                {/* Info Box */}
+                <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                  <p className="text-xs text-blue-300">
+                    Memories help AGI Workforce remember important details about your project across
+                    sessions. Architectural decisions, coding preferences, and project context are
+                    all stored as memories for continuous improvement.
+                  </p>
+                </div>
+              </div>
             </TabsContent>
 
             {/* Conversations Tab */}

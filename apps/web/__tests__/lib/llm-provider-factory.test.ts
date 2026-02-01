@@ -4,7 +4,7 @@
  * Tests for the LLM provider routing and factory functionality
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock logger before importing factory
 vi.mock('@/lib/logger', () => ({

@@ -15,6 +15,7 @@ mod tests {
             finish_reason: None,
             tool_calls: None,
             credits: None,
+            ..Default::default()
         };
 
         assert!(!response.content.is_empty());
@@ -36,6 +37,7 @@ mod tests {
             finish_reason: None,
             tool_calls: None,
             credits: None,
+            ..Default::default()
         };
 
         assert!(response.cached);
@@ -63,6 +65,7 @@ mod tests {
             finish_reason: None,
             tool_calls: None,
             credits: None,
+            ..Default::default()
         };
 
         let serialized = serde_json::to_string(&response).unwrap();
@@ -115,6 +118,7 @@ mod tests {
             finish_reason: None,
             tool_calls: None,
             credits: None,
+            ..Default::default()
         };
 
         assert!(response.cost.is_none());

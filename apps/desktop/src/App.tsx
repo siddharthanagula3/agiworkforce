@@ -7,6 +7,10 @@ import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
+import {
+  TimeoutWarningDialog,
+  type TimeoutWarningData,
+} from './components/Execution/TimeoutWarningDialog';
 
 import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorHandling';
@@ -56,6 +60,8 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
+  const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const { theme, setTheme } = useThemeContext();
 
   const toggleTheme = useCallback(() => {
@@ -227,6 +233,46 @@ const DesktopShell = () => {
     };
   }, []);
 
+  // Listen for timeout warning events from Tauri backend
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    const setupTimeoutListener = async () => {
+      try {
+        const unlisten = await listen<TimeoutWarningData>('agi:timeout_warning', (event) => {
+          if (!isMounted) return;
+
+          const warningData = event.payload;
+          console.log('[App] Received timeout warning:', warningData);
+
+          setTimeoutWarning(warningData);
+          setIsTimeoutWarningOpen(true);
+        });
+
+        if (isMounted) {
+          unlistenFn = unlisten;
+        } else {
+          unlisten();
+        }
+      } catch (error) {
+        console.error('[App] Failed to setup timeout warning listener:', error);
+      }
+    };
+
+    void setupTimeoutListener();
+
+    return () => {
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+        unlistenFn = null;
+      }
+    };
+  }, []);
+
   const startNewChat = useCallback(async () => {
     clearHistory();
   }, [clearHistory]);
@@ -286,6 +332,11 @@ const DesktopShell = () => {
   }, [startNewChat]);
 
   const openSettings = useCallback(() => setSettingsPanelOpen(true), []);
+
+  const handleDismissTimeoutWarning = useCallback(() => {
+    setIsTimeoutWarningOpen(false);
+    setTimeoutWarning(null);
+  }, []);
 
   const commandOptions = useMemo(() => {
     const buildOption = (definition: {
@@ -423,6 +474,11 @@ const DesktopShell = () => {
         </Suspense>
         <UpdateChecker onUpdateNow={openSettings} />
         <ErrorToastContainer position="top-right" />
+        <TimeoutWarningDialog
+          warning={timeoutWarning}
+          onDismiss={handleDismissTimeoutWarning}
+          isOpen={isTimeoutWarningOpen}
+        />
       </div>
     </Suspense>
   );

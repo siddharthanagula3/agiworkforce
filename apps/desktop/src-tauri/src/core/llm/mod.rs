@@ -3,6 +3,7 @@ pub mod cost_calculator;
 pub mod fallback_chain;
 pub mod function_executor;
 pub mod llm_router;
+pub mod memory_integration;
 pub mod providers;
 pub mod sse_parser;
 pub mod thinking;
@@ -23,12 +24,151 @@ pub struct LLMRequest {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub stream: bool,
+
+    // Sampling parameters
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<u32>,
+
+    // System prompt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+
+    // Tools
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<ToolDefinition>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
+
+    // Extended thinking (Anthropic Claude 4.x)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_mode: Option<bool>,
+
+    // Thinking/reasoning configuration (cross-provider)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingParameter>,
+
+    // Google Gemini 3 thinking level (0-4 scale)
+    /// Thinking level for Gemini 3 models (0=none, 1=low, 2=medium, 3=high, 4=extreme)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<u8>,
+
+    // Response format (structured outputs)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<ResponseFormat>,
+
+    // Prompt caching (Anthropic, OpenAI)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+
+    // Audio output configuration (OpenAI TTS)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_output: Option<AudioOutput>,
+
+    // Background mode (OpenAI GPT-5+)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background: Option<bool>,
+
+    // Conversation continuity (OpenAI Responses API)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_response_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
+
+    // Request metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+
+    // Multimodal generation (Google)
+    /// Image generation configuration (Google Imagen 4)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_generation: Option<crate::core::llm::providers::ImageGenConfig>,
+    /// Video generation configuration (Google Veo 3)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_generation: Option<crate::core::llm::providers::VideoGenConfig>,
+    /// Text-to-speech configuration (Google TTS)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tts_config: Option<crate::core::llm::providers::TTSConfig>,
+
+    // RAG capabilities (Google)
+    /// File search configuration for RAG (Google)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_search: Option<crate::core::llm::providers::FileSearchConfig>,
+    /// URL context for grounding responses (Google)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url_context: Option<Vec<String>>,
+
+    // Grounding (Google)
+    /// Enable Google Search grounding for factual responses
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub google_search: Option<bool>,
+    /// Google Maps grounding configuration for location-aware responses
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub google_maps: Option<crate::core::llm::providers::MapsGroundingConfig>,
+
+    // Computer Use (Google Preview)
+    /// Computer use configuration for agentic desktop control (Google Preview)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub computer_use: Option<crate::core::llm::providers::ComputerUseConfig>,
+
+    // Live API (Google)
+    /// Live session configuration for real-time multimodal streaming (Google)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live_session: Option<crate::core::llm::providers::LiveSessionConfig>,
+
+    // Code Execution (Google)
+    /// Enable code execution (Python sandbox) for computational tasks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_execution: Option<bool>,
+}
+
+impl Default for LLMRequest {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            model: String::new(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            top_p: None,
+            top_k: None,
+            system: None,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            thinking: None,
+            thinking_level: None,
+            response_format: None,
+            cache_control: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+            metadata: None,
+            image_generation: None,
+            video_generation: None,
+            tts_config: None,
+            file_search: None,
+            url_context: None,
+            google_search: None,
+            google_maps: None,
+            computer_use: None,
+            live_session: None,
+            code_execution: None,
+        }
+    }
+}
+
+impl LLMRequest {
+    /// Create a new LLMRequest with minimal required fields
+    pub fn new(messages: Vec<ChatMessage>, model: String) -> Self {
+        Self {
+            messages,
+            model,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +190,114 @@ pub enum ContentPart {
     Text { text: String },
     Image { image: ImageInput },
     Video { video: VideoInput },
+    Audio { audio: AudioInput },
+    Document { document: DocumentInput },
+    ToolUse { tool_use: ToolUseInput },
+    ToolResult { tool_result: ToolResultInput },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioInput {
+    pub data: Vec<u8>,
+    pub format: AudioFormat,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
+}
+
+/// Audio format for input and output
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioFormat {
+    Mp3,
+    Wav,
+    Ogg,
+    Flac,
+    Aac,
+    Opus,
+    M4a,
+    Webm,
+}
+
+/// Voice options for text-to-speech audio output
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioVoice {
+    Alloy,
+    Echo,
+    Fable,
+    Onyx,
+    Nova,
+    Shimmer,
+    Ash,
+    Ballad,
+    Coral,
+    Sage,
+    Verse,
+}
+
+impl Default for AudioVoice {
+    fn default() -> Self {
+        Self::Alloy
+    }
+}
+
+/// Configuration for audio output (text-to-speech)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioOutput {
+    /// Voice to use for speech synthesis
+    pub voice: AudioVoice,
+    /// Audio format for the output
+    pub format: AudioFormat,
+    /// Speech speed multiplier (0.25 to 4.0, default 1.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speed: Option<f32>,
+    /// Sample rate in Hz (e.g., 24000, 44100, 48000)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample_rate: Option<u32>,
+}
+
+impl Default for AudioOutput {
+    fn default() -> Self {
+        Self {
+            voice: AudioVoice::default(),
+            format: AudioFormat::Mp3,
+            speed: None,
+            sample_rate: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentInput {
+    pub data: Vec<u8>,
+    pub format: DocumentFormat,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DocumentFormat {
+    Pdf,
+    Docx,
+    Txt,
+    Html,
+    Md,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUseInput {
+    pub id: String,
+    pub name: String,
+    pub input: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResultInput {
+    pub tool_use_id: String,
+    pub content: String,
+    #[serde(default)]
+    pub is_error: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +336,18 @@ pub enum VideoData {
     Uri(String),
 }
 
+/// Audio data representation supporting multiple formats
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AudioData {
+    /// Raw audio bytes
+    Bytes(Vec<u8>),
+    /// Base64 encoded audio
+    Base64(String),
+    /// URI reference to audio file
+    Uri(String),
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum VideoFormat {
@@ -110,6 +370,45 @@ fn default_image_detail() -> ImageDetail {
     ImageDetail::Auto
 }
 
+/// Configuration for extended thinking/reasoning modes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ThinkingParameter {
+    /// Simple enabled/disabled flag
+    Enabled(bool),
+    /// Thinking level (string: "low", "medium", "high", "extreme")
+    Level {
+        level: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_thinking_tokens: Option<u32>,
+    },
+    /// Token budget for thinking (Anthropic style)
+    Budget {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        thinking_type: Option<String>,
+        budget_tokens: u32,
+    },
+}
+
+/// Response format for structured outputs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseFormat {
+    /// Format type: "json_object", "json_schema", "text"
+    #[serde(rename = "type")]
+    pub format_type: String,
+    /// JSON schema for structured output (when format_type is "json_schema")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub json_schema: Option<serde_json::Value>,
+}
+
+/// Cache control configuration for prompt caching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheControl {
+    /// Cache type: "ephemeral" for session-based caching
+    #[serde(rename = "type")]
+    pub cache_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMResponse {
     pub content: String,
@@ -130,6 +429,24 @@ pub struct LLMResponse {
     pub finish_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credits: Option<CreditsInfo>,
+    /// Code execution results from Google Gemini (Python sandbox)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_execution_results: Option<Vec<serde_json::Value>>,
+    /// Cached prompt tokens (OpenAI prompt caching)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read_input_tokens: Option<u32>,
+    /// Tokens used for reasoning/thinking (OpenAI reasoning models)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u32>,
+    /// Thinking tokens (Anthropic extended thinking)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_tokens: Option<u32>,
+    /// Reasoning content from thinking models
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
+    /// Response ID for conversation continuity (OpenAI Responses API)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,9 +466,25 @@ pub struct ToolDefinition {
     pub parameters: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl ToolDefinition {
+    /// Get the tool name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the tool description
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    /// Get the tool parameters schema
+    pub fn parameters(&self) -> &serde_json::Value {
+        &self.parameters
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-#[derive(Default)]
 pub enum ToolChoice {
     #[default]
     Auto,
@@ -240,8 +573,8 @@ impl Provider {
             Provider::DeepSeek => "deepseek-v3",
             Provider::Qwen => "qwen3-max",
             Provider::Moonshot => "kimi-k2-thinking",
-            Provider::Zhipu => "glm-4.7", // GLM-4.7 is the flagship coding model
-            Provider::ManagedCloud => "deepseek-v3", // Default to budget king via cloud
+            Provider::Zhipu => "glm-4.7",
+            Provider::ManagedCloud => "deepseek-v3",
         }
     }
 
@@ -285,7 +618,6 @@ impl Provider {
 
             (Provider::Perplexity, _) => "sonar-deep-research",
 
-            // ZhipuAI - GLM-4.7 for coding (73.8% SWE-bench), GLM-4.6V for vision
             (Provider::Zhipu, TaskType::FastCompletion) => "glm-4.6v-flash",
             (Provider::Zhipu, TaskType::CodeGeneration) => "glm-4.7",
             (Provider::Zhipu, TaskType::ComplexReasoning) => "glm-4.7",
@@ -296,7 +628,7 @@ impl Provider {
             (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-coder",
             (Provider::ManagedCloud, TaskType::ComplexReasoning) => "deepseek-reasoner",
             (Provider::ManagedCloud, TaskType::Chat) => "deepseek-v3",
-            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash", // Best budget vision
+            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash",
             (Provider::ManagedCloud, TaskType::LongContext) => "deepseek-v3",
         }
     }
@@ -335,6 +667,7 @@ pub trait LLMProvider: Send + Sync {
                     total_tokens: response.tokens,
                 }),
                 credits: None,
+                tool_calls: None,
             },
         )])))
     }
@@ -348,6 +681,21 @@ pub trait LLMProvider: Send + Sync {
     }
 
     fn supports_function_calling(&self) -> bool {
+        false
+    }
+
+    /// Whether the provider supports audio input (e.g., speech-to-text)
+    fn supports_audio_input(&self) -> bool {
+        false
+    }
+
+    /// Whether the provider supports audio output (e.g., text-to-speech)
+    fn supports_audio_output(&self) -> bool {
+        false
+    }
+
+    /// Whether the provider supports streaming audio in real-time
+    fn supports_streaming_audio(&self) -> bool {
         false
     }
 }

@@ -491,6 +491,100 @@ impl ChangeTracker {
         let state = self.state.read().await;
         state.snapshots.get(task_id).cloned()
     }
+
+    /// Record a tool execution for undo tracking.
+    ///
+    /// This is a generic method to track tool executions that may or may not be reversible.
+    /// For file operations, use the specific record_file_* methods instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `tool_name` - Name of the tool that was executed
+    /// * `input` - Input parameters passed to the tool
+    /// * `output` - Output from the tool execution
+    /// * `task_id` - ID of the task that performed this operation
+    /// * `reversible` - Whether this operation can be undone
+    /// * `undo_description` - Optional description of how to undo
+    /// * `path` - Optional file path if this affects a file
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_tool_executed(
+        &self,
+        tool_name: String,
+        input: serde_json::Value,
+        output: serde_json::Value,
+        task_id: String,
+        reversible: Option<bool>,
+        undo_description: Option<String>,
+        path: Option<PathBuf>,
+    ) -> String {
+        let mut change = Change::new(
+            ChangeType::CommandExecuted {
+                command: tool_name.clone(),
+                working_dir: path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| ".".to_string()),
+            },
+            path,
+            task_id,
+            Some(serde_json::to_string(&input).unwrap_or_default()),
+            Some(serde_json::to_string(&output).unwrap_or_default()),
+        );
+
+        change.can_revert = reversible.unwrap_or(false);
+        if let Some(desc) = undo_description {
+            change
+                .metadata
+                .insert("undo_description".to_string(), serde_json::json!(desc));
+        }
+        change
+            .metadata
+            .insert("tool_name".to_string(), serde_json::json!(tool_name));
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+        id
+    }
+
+    /// Record a tool execution that affects a specific file path.
+    ///
+    /// This variant is used when a tool modifies a file and we want to track
+    /// the before/after state for potential undo.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_tool_executed_with_path(
+        &self,
+        tool_name: String,
+        path: PathBuf,
+        before_content: Option<String>,
+        after_content: Option<String>,
+        task_id: String,
+        reversible: bool,
+        undo_description: Option<String>,
+    ) -> String {
+        let mut change = Change::new(
+            ChangeType::FileModified,
+            Some(path.clone()),
+            task_id,
+            before_content,
+            after_content,
+        );
+
+        change.can_revert = reversible;
+        if let Some(desc) = undo_description {
+            change
+                .metadata
+                .insert("undo_description".to_string(), serde_json::json!(desc));
+        }
+        change
+            .metadata
+            .insert("tool_name".to_string(), serde_json::json!(tool_name));
+
+        let id = change.id.clone();
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+        id
+    }
 }
 
 impl Default for ChangeTracker {

@@ -78,6 +78,37 @@ export {
   type WatcherStatus,
 } from './screenWatcher';
 
+// Timeout Management - Extended task execution
+export {
+  getTimeoutConfig,
+  setTimeoutConfig,
+  getRecommendedTimeout,
+  formatDuration,
+  minutesToSeconds,
+  secondsToMinutes,
+  type TimeoutConfig,
+  type TimeoutWarning,
+  type TimeoutResponse,
+} from './timeout';
+
+// Background Tasks - Persistent task management
+export {
+  listBackgroundTasks,
+  getBackgroundTask,
+  getTaskProgress,
+  createBackgroundTask,
+  pauseBackgroundTask,
+  resumeBackgroundTask,
+  cancelBackgroundTask,
+  extendTaskTimeout,
+  getTaskHistory,
+  deleteBackgroundTask,
+  getResumableTasks,
+  resumeAllTasks,
+  type PersistentTask,
+  type TaskProgress,
+} from './backgroundTasks';
+
 // Re-export other API modules for convenience
 export * from './automation';
 export * from './codeEditing';

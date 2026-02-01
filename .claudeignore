@@ -1,0 +1,134 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+Cargo.lock
+*.lock
+
+# Build outputs
+dist/
+build/
+.next/
+.nuxt/
+.output/
+target/
+out/
+
+# Cache directories
+.vite/
+.cache/
+.turbo/
+.vercel/
+.parcel-cache/
+
+# Coverage and test artifacts
+coverage/
+.nyc_output/
+*.lcov
+
+# Git
+.git/
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Binary and compiled files
+*.wasm
+*.node
+*.dylib
+*.so
+*.dll
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.msi
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Source maps
+*.map
+
+# Minified files
+*.min.js
+*.min.css
+
+# Generated types (large)
+**/generated/
+**/*.generated.ts
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Large media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.svg
+*.webp
+*.bmp
+*.tiff
+*.avif
+
+# Fonts
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.eot
+
+# PDFs and docs
+*.pdf
+
+# E2E test artifacts
+apps/desktop/e2e/test-results/
+apps/desktop/e2e/playwright-report/
+playwright-report/
+test-results/
+
+# Rust target
+apps/desktop/src-tauri/target/
+
+# Tauri bundles
+apps/desktop/src-tauri/bundle/

@@ -63,6 +63,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -157,6 +158,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let serialized = serde_json::to_string(&request).unwrap();
@@ -215,6 +217,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 4);
@@ -238,6 +241,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.stream);
@@ -254,6 +258,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.temperature.unwrap() <= 2.0);
@@ -270,6 +275,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.max_tokens.unwrap() > 0);

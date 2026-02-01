@@ -355,6 +355,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let router = self.router.read().await;

@@ -81,6 +81,7 @@ mod unit_tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -223,6 +224,7 @@ mod unit_tests {
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tools.is_some());
@@ -373,6 +375,7 @@ mod function_calling_tests {
             }]),
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tools.is_some());

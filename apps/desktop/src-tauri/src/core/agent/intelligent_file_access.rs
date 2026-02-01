@@ -251,6 +251,7 @@ Provide a detailed analysis in a structured format."#
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let preferences = crate::core::llm::RouterPreferences {

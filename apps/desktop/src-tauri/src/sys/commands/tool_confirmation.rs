@@ -1,0 +1,451 @@
+//! Tool Confirmation Commands
+//!
+//! This module provides Tauri commands for the tool confirmation dialog system.
+//! It handles user responses to tool confirmation requests and manages pending confirmations.
+
+#[allow(unused_imports)]
+use crate::sys::security::{
+    RiskLevel, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
+    ToolSafetyTier,
+};
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tauri::{Emitter, State};
+use tokio::sync::oneshot;
+use tracing::{debug, info, warn};
+
+/// State for managing pending tool confirmation requests
+pub struct ToolConfirmationState {
+    /// Map of request_id to oneshot sender for confirmation response
+    pending_confirmations: Arc<Mutex<HashMap<String, oneshot::Sender<ToolConfirmationResponse>>>>,
+    /// Remembered choices for specific tools (tool_name -> approved)
+    remembered_choices: Arc<Mutex<HashMap<String, bool>>>,
+    /// Tool execution guard for policy lookups
+    tool_guard: Arc<ToolExecutionGuard>,
+}
+
+impl ToolConfirmationState {
+    pub fn new() -> Self {
+        Self {
+            pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
+            remembered_choices: Arc::new(Mutex::new(HashMap::new())),
+            tool_guard: Arc::new(ToolExecutionGuard::new()),
+        }
+    }
+
+    /// Check if user has a remembered choice for this tool
+    pub fn get_remembered_choice(&self, tool_name: &str) -> Option<bool> {
+        self.remembered_choices.lock().get(tool_name).copied()
+    }
+
+    /// Store a remembered choice for a tool
+    pub fn remember_choice(&self, tool_name: &str, approved: bool) {
+        self.remembered_choices
+            .lock()
+            .insert(tool_name.to_string(), approved);
+    }
+
+    /// Clear all remembered choices
+    pub fn clear_remembered_choices(&self) {
+        self.remembered_choices.lock().clear();
+    }
+
+    /// Get the tool guard for policy lookups
+    pub fn tool_guard(&self) -> &ToolExecutionGuard {
+        &self.tool_guard
+    }
+
+    /// Register a pending confirmation and return a receiver for the response
+    pub fn register_pending(
+        &self,
+        request_id: String,
+    ) -> oneshot::Receiver<ToolConfirmationResponse> {
+        let (tx, rx) = oneshot::channel();
+        self.pending_confirmations.lock().insert(request_id, tx);
+        rx
+    }
+
+    /// Resolve a pending confirmation with the user's response
+    pub fn resolve_pending(&self, response: ToolConfirmationResponse) -> Result<(), String> {
+        let mut pending = self.pending_confirmations.lock();
+        if let Some(tx) = pending.remove(&response.request_id) {
+            tx.send(response)
+                .map_err(|_| "Failed to send confirmation response".to_string())
+        } else {
+            Err(format!(
+                "No pending confirmation found for request_id: {}",
+                response.request_id
+            ))
+        }
+    }
+
+    /// Cancel a pending confirmation (e.g., on timeout)
+    pub fn cancel_pending(&self, request_id: &str) {
+        self.pending_confirmations.lock().remove(request_id);
+    }
+
+    /// Get count of pending confirmations
+    pub fn pending_count(&self) -> usize {
+        self.pending_confirmations.lock().len()
+    }
+}
+
+impl Default for ToolConfirmationState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Summary of a tool confirmation request for the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolConfirmationSummary {
+    pub request_id: String,
+    pub tool_name: String,
+    pub tool_display_name: String,
+    pub description: String,
+    pub parameters_summary: String,
+    pub risk_level: String,
+    pub safety_tier: String,
+    pub reason: String,
+    pub reversible: bool,
+    pub undo_description: Option<String>,
+}
+
+impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
+    fn from(req: &ToolConfirmationRequest) -> Self {
+        // Create a human-readable parameters summary
+        let parameters_summary = if let Some(obj) = req.parameters.as_object() {
+            obj.iter()
+                .map(|(k, v)| {
+                    let value_str = match v {
+                        Value::String(s) => {
+                            // Truncate long strings
+                            if s.len() > 50 {
+                                format!("\"{}...\"", &s[..47])
+                            } else {
+                                format!("\"{}\"", s)
+                            }
+                        }
+                        _ => v.to_string(),
+                    };
+                    format!("{}: {}", k, value_str)
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else {
+            req.parameters.to_string()
+        };
+
+        // Create a user-friendly display name
+        let tool_display_name = req
+            .tool_name
+            .replace('_', " ")
+            .split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().chain(chars).collect(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        Self {
+            request_id: req.request_id.clone(),
+            tool_name: req.tool_name.clone(),
+            tool_display_name,
+            description: req.tool_description.clone(),
+            parameters_summary,
+            risk_level: format!("{:?}", req.risk_level),
+            safety_tier: format!("{:?}", req.safety_tier),
+            reason: req.reason.clone(),
+            reversible: req.reversible,
+            undo_description: req.undo_description.clone(),
+        }
+    }
+}
+
+// ============================================================================
+// Tauri Commands
+// ============================================================================
+
+/// Respond to a tool confirmation request.
+/// Called by the frontend when user approves or denies a tool execution.
+#[tauri::command]
+pub async fn respond_tool_confirmation(
+    request_id: String,
+    approved: bool,
+    remember_choice: bool,
+    reason: Option<String>,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    info!(
+        "[ToolConfirmation] User {} tool execution for request {}{}",
+        if approved { "approved" } else { "denied" },
+        request_id,
+        if remember_choice {
+            " (remembering choice)"
+        } else {
+            ""
+        }
+    );
+
+    let response = ToolConfirmationResponse {
+        request_id: request_id.clone(),
+        approved,
+        remember_choice,
+        reason,
+    };
+
+    state.resolve_pending(response)
+}
+
+/// Get the safety tier for a specific tool.
+/// Useful for the frontend to determine how to handle tool calls.
+#[tauri::command]
+pub fn get_tool_safety_tier(
+    tool_name: String,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<ToolSafetyTierInfo, String> {
+    let guard = state.tool_guard();
+    let safety_tier = guard.get_safety_tier(&tool_name);
+    let risk_level = guard.get_risk_level(&tool_name);
+
+    Ok(ToolSafetyTierInfo {
+        tool_name,
+        safety_tier: format!("{:?}", safety_tier),
+        safety_tier_description: safety_tier.description().to_string(),
+        requires_user_action: safety_tier.requires_user_action(),
+        risk_level: risk_level.map(|r| format!("{:?}", r)),
+    })
+}
+
+/// Get remembered choices for tools.
+#[tauri::command]
+pub fn get_remembered_tool_choices(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<HashMap<String, bool>, String> {
+    Ok(state.remembered_choices.lock().clone())
+}
+
+/// Clear all remembered tool choices.
+#[tauri::command]
+pub fn clear_remembered_tool_choices(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.clear_remembered_choices();
+    info!("[ToolConfirmation] Cleared all remembered tool choices");
+    Ok(())
+}
+
+/// Clear a specific remembered tool choice.
+#[tauri::command]
+pub fn clear_remembered_tool_choice(
+    tool_name: String,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.remembered_choices.lock().remove(&tool_name);
+    info!(
+        "[ToolConfirmation] Cleared remembered choice for tool: {}",
+        tool_name
+    );
+    Ok(())
+}
+
+/// Get the count of pending confirmations.
+#[tauri::command]
+pub fn get_pending_confirmation_count(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<usize, String> {
+    Ok(state.pending_count())
+}
+
+/// Cancel a pending confirmation (e.g., user closed the dialog without responding).
+#[tauri::command]
+pub fn cancel_tool_confirmation(
+    request_id: String,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.cancel_pending(&request_id);
+    info!(
+        "[ToolConfirmation] Cancelled pending confirmation: {}",
+        request_id
+    );
+    Ok(())
+}
+
+// ============================================================================
+// Response Types
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolSafetyTierInfo {
+    pub tool_name: String,
+    pub safety_tier: String,
+    pub safety_tier_description: String,
+    pub requires_user_action: bool,
+    pub risk_level: Option<String>,
+}
+
+// ============================================================================
+// Helper Functions for Tool Executor Integration
+// ============================================================================
+
+/// Request confirmation from user for a tool execution.
+/// Emits a `tool:confirmation_required` event and waits for response.
+pub async fn request_tool_confirmation(
+    app_handle: &tauri::AppHandle,
+    state: &ToolConfirmationState,
+    request: ToolConfirmationRequest,
+    timeout_secs: u64,
+) -> Result<bool, String> {
+    let request_id = request.request_id.clone();
+    let tool_name = request.tool_name.clone();
+
+    // Check for remembered choice
+    if let Some(remembered) = state.get_remembered_choice(&tool_name) {
+        debug!(
+            "[ToolConfirmation] Using remembered choice for '{}': {}",
+            tool_name, remembered
+        );
+        return Ok(remembered);
+    }
+
+    // Register the pending confirmation
+    let rx = state.register_pending(request_id.clone());
+
+    // Create summary for frontend
+    let summary = ToolConfirmationSummary::from(&request);
+
+    // Emit the confirmation request event
+    if let Err(e) = app_handle.emit("tool:confirmation_required", &summary) {
+        state.cancel_pending(&request_id);
+        return Err(format!("Failed to emit confirmation event: {}", e));
+    }
+
+    info!(
+        "[ToolConfirmation] Waiting for user confirmation for '{}' (request_id: {})",
+        tool_name, request_id
+    );
+
+    // Wait for response with timeout
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+        Ok(Ok(response)) => {
+            // If user wants to remember the choice, store it
+            if response.remember_choice {
+                state.remember_choice(&tool_name, response.approved);
+            }
+
+            if response.approved {
+                info!("[ToolConfirmation] Tool '{}' approved by user", tool_name);
+            } else {
+                warn!(
+                    "[ToolConfirmation] Tool '{}' denied by user: {:?}",
+                    tool_name, response.reason
+                );
+            }
+
+            Ok(response.approved)
+        }
+        Ok(Err(_)) => {
+            warn!(
+                "[ToolConfirmation] Confirmation channel closed for '{}'",
+                tool_name
+            );
+            state.cancel_pending(&request_id);
+            Err("Confirmation channel closed unexpectedly".to_string())
+        }
+        Err(_) => {
+            warn!(
+                "[ToolConfirmation] Confirmation timeout for '{}' after {}s",
+                tool_name, timeout_secs
+            );
+            state.cancel_pending(&request_id);
+            // Emit timeout event so frontend can update UI
+            let _ = app_handle.emit(
+                "tool:confirmation_timeout",
+                serde_json::json!({
+                    "request_id": request_id,
+                    "tool_name": tool_name,
+                }),
+            );
+            Err(format!(
+                "User did not respond within {} seconds",
+                timeout_secs
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tool_confirmation_state() {
+        let state = ToolConfirmationState::new();
+
+        // Test remembered choices
+        assert!(state.get_remembered_choice("file_write").is_none());
+        state.remember_choice("file_write", true);
+        assert_eq!(state.get_remembered_choice("file_write"), Some(true));
+
+        // Test clearing
+        state.clear_remembered_choices();
+        assert!(state.get_remembered_choice("file_write").is_none());
+    }
+
+    #[test]
+    fn test_safety_tier_lookup() {
+        let state = ToolConfirmationState::new();
+        let guard = state.tool_guard();
+
+        // Test known tools
+        assert_eq!(guard.get_safety_tier("file_read"), ToolSafetyTier::Safe);
+        assert_eq!(
+            guard.get_safety_tier("file_write"),
+            ToolSafetyTier::RequiresNotification
+        );
+        assert_eq!(
+            guard.get_safety_tier("browser_navigate"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+        assert_eq!(
+            guard.get_safety_tier("code_execute"),
+            ToolSafetyTier::RequiresExplicitApproval
+        );
+
+        // Test unknown tool (should default to confirmation)
+        assert_eq!(
+            guard.get_safety_tier("unknown_tool"),
+            ToolSafetyTier::RequiresConfirmation
+        );
+    }
+
+    #[test]
+    fn test_confirmation_summary_creation() {
+        let request = ToolConfirmationRequest {
+            request_id: "test-123".to_string(),
+            tool_name: "file_write".to_string(),
+            tool_description: "Write content to a file".to_string(),
+            parameters: serde_json::json!({
+                "path": "/home/user/test.txt",
+                "content": "Hello, World!"
+            }),
+            risk_level: crate::sys::security::tool_guard::RiskLevel::Medium,
+            safety_tier: ToolSafetyTier::RequiresNotification,
+            reason: "This action will modify a file.".to_string(),
+            reversible: true,
+            undo_description: Some("Original content can be restored.".to_string()),
+        };
+
+        let summary = ToolConfirmationSummary::from(&request);
+        assert_eq!(summary.tool_display_name, "File Write");
+        assert!(summary.parameters_summary.contains("path"));
+        assert!(summary.parameters_summary.contains("content"));
+    }
+}

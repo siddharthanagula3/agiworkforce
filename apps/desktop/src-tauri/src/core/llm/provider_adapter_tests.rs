@@ -1,0 +1,627 @@
+//! Unit tests for provider adapters
+
+#[cfg(test)]
+mod tests {
+    use super::super::*;
+    use crate::core::llm::provider_adapter::{ProviderAdapter, ProviderAdapterFactory};
+    use serde_json::json;
+
+    #[test]
+    fn test_openai_adapter_chat_completions_basic() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello, world!".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-4.1".to_string(),
+            temperature: Some(0.7),
+            max_tokens: Some(100),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["model"], "gpt-4.1");
+        assert_eq!(adapted["temperature"], 0.7);
+        assert_eq!(adapted["max_tokens"], 100);
+    }
+
+    #[test]
+    fn test_openai_adapter_responses_api_gpt5() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Explain quantum computing".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5.2".to_string(),
+            temperature: Some(0.3),
+            max_tokens: Some(2000),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: Some("You are a helpful assistant.".to_string()),
+            thinking: Some(ThinkingParameter::Enabled(true)),
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["model"], "gpt-5.2");
+        assert_eq!(adapted["input"], "Explain quantum computing");
+        assert_eq!(adapted["instructions"], "You are a helpful assistant.");
+        assert_eq!(adapted["reasoning"]["effort"], "medium");
+    }
+
+    #[test]
+    fn test_openai_adapter_reasoning_model_with_budget() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Solve this complex problem".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "o3".to_string(),
+            temperature: Some(1.0),
+            max_tokens: Some(4000),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Budget {
+                thinking_type: "extended".to_string(),
+                budget_tokens: 8000,
+            }),
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["model"], "o3");
+        assert_eq!(adapted["reasoning"]["effort"], "high"); // 8000 tokens = high effort
+    }
+
+    #[test]
+    fn test_openai_adapter_structured_outputs() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let json_schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "number"}
+            },
+            "required": ["name", "age"]
+        });
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Generate user data".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5".to_string(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: Some(ResponseFormat {
+                format_type: "json_schema".to_string(),
+                json_schema: Some(json_schema.clone()),
+            }),
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["text"]["format"], "json_schema");
+        assert_eq!(adapted["text"]["json_schema"], json_schema);
+    }
+
+    #[test]
+    fn test_openai_adapter_with_tools() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let tools = vec![ToolDefinition::Flat {
+            name: "get_weather".to_string(),
+            description: "Get the current weather".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"}
+                },
+                "required": ["location"]
+            }),
+        }];
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "What's the weather?".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-4.1".to_string(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            tools: Some(tools),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(result.is_ok());
+
+        let adapted = result.unwrap();
+        let tools_arr = adapted["tools"].as_array().unwrap();
+        assert_eq!(tools_arr.len(), 1);
+        assert_eq!(tools_arr[0]["type"], "function");
+        assert_eq!(tools_arr[0]["function"]["name"], "get_weather");
+        assert_eq!(adapted["tool_choice"], "auto");
+    }
+
+    #[test]
+    fn test_openai_adapter_response_chat_completions() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "gpt-4.1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello! How can I help you today?"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 9,
+                "total_tokens": 19,
+                "prompt_tokens_details": {
+                    "cached_tokens": 5
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "Hello! How can I help you today?");
+        assert_eq!(response.prompt_tokens, Some(10));
+        assert_eq!(response.completion_tokens, Some(9));
+        assert_eq!(response.tokens, Some(19));
+        assert_eq!(response.cache_read_input_tokens, Some(5));
+        assert_eq!(response.model, "gpt-4.1");
+        assert_eq!(response.finish_reason, Some("stop".to_string()));
+    }
+
+    #[test]
+    fn test_openai_adapter_response_with_reasoning_tokens() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "chatcmpl-456",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "o4-mini",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "After careful consideration, the answer is 42."
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 50,
+                "completion_tokens": 200,
+                "total_tokens": 250,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 150
+                }
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.reasoning_tokens, Some(150));
+        assert_eq!(response.completion_tokens, Some(200));
+        assert_eq!(response.model, "o4-mini");
+    }
+
+    #[test]
+    fn test_openai_adapter_response_with_tool_calls() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "chatcmpl-789",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "gpt-4.1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_abc123",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": "{\"location\": \"San Francisco\"}"
+                        }
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 30,
+                "total_tokens": 50
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_abc123");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].arguments, "{\"location\": \"San Francisco\"}");
+    }
+
+    #[test]
+    fn test_openai_adapter_supports_features() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        assert_eq!(adapter.provider_name(), "OpenAI");
+        assert!(adapter.supports_prompt_caching()); // OpenAI now supports prompt caching
+        assert!(adapter.supports_extended_thinking()); // GPT-5 and reasoning models
+        assert!(adapter.supports_batch_processing());
+        assert!(adapter.supports_structured_outputs());
+    }
+
+    #[test]
+    fn test_anthropic_adapter_basic() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+
+        assert_eq!(adapter.provider_name(), "Anthropic");
+        assert!(adapter.supports_prompt_caching());
+        assert!(adapter.supports_extended_thinking());
+    }
+
+    #[test]
+    fn test_provider_factory_creates_correct_adapters() {
+        let openai = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+        assert_eq!(openai.provider_name(), "OpenAI");
+
+        let anthropic = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        assert_eq!(anthropic.provider_name(), "Anthropic");
+
+        let google = ProviderAdapterFactory::create_adapter(Provider::Google);
+        assert_eq!(google.provider_name(), "Google");
+
+        // Providers using OpenAI-compatible format
+        let perplexity = ProviderAdapterFactory::create_adapter(Provider::Perplexity);
+        assert_eq!(perplexity.provider_name(), "OpenAI");
+
+        let xai = ProviderAdapterFactory::create_adapter(Provider::XAI);
+        assert_eq!(xai.provider_name(), "OpenAI");
+
+        let qwen = ProviderAdapterFactory::create_adapter(Provider::Qwen);
+        assert_eq!(qwen.provider_name(), "OpenAI");
+    }
+
+    #[test]
+    fn test_openai_vision_chat_completions() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        // Create a small 1x1 PNG image (smallest valid PNG)
+        let png_data = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1 dimensions
+            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, // IHDR data
+            0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, // IDAT chunk
+            0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD,
+            0x8D, 0xB4, // IDAT data + CRC
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82, // IEND
+        ];
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "What's in this image?".to_string(),
+                    },
+                    ContentPart::Image {
+                        image: ImageInput {
+                            data: png_data,
+                            format: ImageFormat::Png,
+                            detail: ImageDetail::High,
+                        },
+                    },
+                ]),
+            }],
+            model: "gpt-4.1-vision".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(
+            result.is_ok(),
+            "Vision request should be successfully adapted"
+        );
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["model"], "gpt-4.1-vision");
+
+        // Verify the message structure includes both text and image
+        let messages = adapted["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 1);
+
+        let content = messages[0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "Should have text and image parts");
+
+        // Check text part
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "What's in this image?");
+
+        // Check image part
+        assert_eq!(content[1]["type"], "image_url");
+        assert!(content[1]["image_url"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert_eq!(content[1]["image_url"]["detail"], "high");
+    }
+
+    #[test]
+    fn test_openai_vision_responses_api() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        // Create a small test image
+        let png_data = vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D,
+            0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(vec![
+                    ContentPart::Text {
+                        text: "Analyze this image".to_string(),
+                    },
+                    ContentPart::Image {
+                        image: ImageInput {
+                            data: png_data,
+                            format: ImageFormat::Png,
+                            detail: ImageDetail::Low,
+                        },
+                    },
+                ]),
+            }],
+            model: "gpt-5.2".to_string(), // GPT-5 uses Responses API
+            temperature: None,
+            max_tokens: Some(200),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: Some("You are a helpful vision assistant".to_string()),
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            code_execution: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let result = adapter.adapt_request(&request);
+        assert!(
+            result.is_ok(),
+            "Vision request for Responses API should succeed"
+        );
+
+        let adapted = result.unwrap();
+        assert_eq!(adapted["model"], "gpt-5.2");
+        assert_eq!(
+            adapted["instructions"],
+            "You are a helpful vision assistant"
+        );
+
+        // Verify the input structure for Responses API
+        let input = adapted["input"].as_array().unwrap();
+        assert_eq!(input.len(), 2, "Should have text and image input parts");
+
+        // Check text input
+        assert_eq!(input[0]["type"], "input_text");
+        assert_eq!(input[0]["text"], "Analyze this image");
+
+        // Check image input
+        assert_eq!(input[1]["type"], "input_image");
+        assert!(input[1]["source"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert_eq!(input[1]["source"]["detail"], "low");
+    }
+
+    #[test]
+    fn test_image_token_calculation() {
+        use crate::core::llm::ImageDetail;
+
+        // Test low detail (fixed 85 tokens)
+        let low_detail_tokens =
+            super::super::OpenAIAdapter::calculate_image_tokens(1920, 1080, ImageDetail::Low);
+        assert_eq!(
+            low_detail_tokens, 85,
+            "Low detail should always be 85 tokens"
+        );
+
+        // Test high detail with small image (1x1, should be 1 tile)
+        let small_high_tokens =
+            super::super::OpenAIAdapter::calculate_image_tokens(100, 100, ImageDetail::High);
+        // 1 tile (100x100 fits in 512x512) = 170 + 85 = 255
+        assert_eq!(
+            small_high_tokens, 255,
+            "Small image should be 1 tile = 255 tokens"
+        );
+
+        // Test high detail with medium image (512x512, exactly 1 tile)
+        let medium_high_tokens =
+            super::super::OpenAIAdapter::calculate_image_tokens(512, 512, ImageDetail::High);
+        assert_eq!(
+            medium_high_tokens, 255,
+            "512x512 should be 1 tile = 255 tokens"
+        );
+
+        // Test high detail with large image (1024x1024, should be 4 tiles: 2x2)
+        let large_high_tokens =
+            super::super::OpenAIAdapter::calculate_image_tokens(1024, 1024, ImageDetail::High);
+        // 4 tiles (2x2) = 4*170 + 85 = 765
+        assert_eq!(
+            large_high_tokens, 765,
+            "1024x1024 should be 4 tiles = 765 tokens"
+        );
+
+        // Test high detail with very large image that needs scaling
+        let xlarge_high_tokens =
+            super::super::OpenAIAdapter::calculate_image_tokens(4096, 4096, ImageDetail::High);
+        // 4096x4096 scaled to 2048x2048, then 4x4 tiles = 16*170 + 85 = 2805
+        assert_eq!(
+            xlarge_high_tokens, 2805,
+            "4096x4096 scaled to 2048x2048 should be 16 tiles = 2805 tokens"
+        );
+    }
+}

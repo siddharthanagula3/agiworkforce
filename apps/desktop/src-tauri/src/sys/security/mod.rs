@@ -65,7 +65,10 @@ pub use rate_limit::{RateLimitConfig, RateLimiter};
 pub use rbac::{Permission, RBACManager};
 pub use secret_manager::{SecretError, SecretManager};
 pub use storage::{decrypt_file, encrypt_file, EncryptedData, SecureStorage};
-pub use tool_guard::{SecurityError, ToolExecutionGuard, ToolPolicy};
+pub use tool_guard::{
+    SecurityError, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
+    ToolPolicy, ToolSafetyTier,
+};
 pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
 pub use validator::{CommandValidator, SafetyLevel};
 
