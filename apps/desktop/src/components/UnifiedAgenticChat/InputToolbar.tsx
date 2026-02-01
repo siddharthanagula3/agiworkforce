@@ -1,7 +1,7 @@
 /**
  * InputToolbar Component
  *
- * Left side toolbar containing attachment and voice input buttons.
+ * Left side toolbar containing folder selector, attachment, and voice input buttons.
  */
 
 import React from 'react';
@@ -9,6 +9,7 @@ import { Paperclip } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getModelMetadata } from '../../constants/llm';
 import { VoiceInputButton } from './VoiceInputButton';
+import { FolderSelector } from './FolderSelector';
 
 export interface InputToolbarProps {
   /** Whether input is disabled */
@@ -62,6 +63,9 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
 
   return (
     <div className="flex items-center gap-1">
+      {/* Folder Selector - scopes session to a project directory */}
+      <FolderSelector disabled={disabled} compact={false} isSimpleMode={isSimpleMode} />
+
       {enableAttachments && (
         <button
           type="button"
