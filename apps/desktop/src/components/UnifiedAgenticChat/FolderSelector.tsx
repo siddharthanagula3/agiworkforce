@@ -59,8 +59,8 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     return formatFolderPath(currentFolder);
   }, [currentFolder]);
 
-  // Get just the folder name for compact display
-  const folderName = useMemo(() => {
+  // Get just the folder name for compact display (used in tooltip)
+  const _folderName = useMemo(() => {
     if (!currentFolder) return null;
     const parts = currentFolder.split(/[/\\]/);
     return parts[parts.length - 1] || parts[parts.length - 2] || currentFolder;
@@ -126,12 +126,14 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   // Render the trigger button content
   const renderTriggerContent = () => {
     if (currentFolder) {
+      // In compact mode, show just the icon
+      if (compact) {
+        return <FolderOpen size={18} className="text-primary" aria-hidden="true" />;
+      }
       return (
         <>
           <FolderOpen size={16} className="text-primary shrink-0" aria-hidden="true" />
-          <span className="truncate max-w-[150px] text-sm font-medium">
-            {compact ? folderName : displayName}
-          </span>
+          <span className="truncate max-w-[100px] text-sm font-medium">{displayName}</span>
           <ChevronDown
             size={14}
             className={cn(
@@ -191,11 +193,11 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        {compact && !currentFolder ? (
+        {compact ? (
           <Tooltip>
             <TooltipTrigger asChild>{triggerButton}</TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>Select a project folder to scope your session</p>
+              <p>{currentFolder ? displayName : 'Select a project folder to scope your session'}</p>
             </TooltipContent>
           </Tooltip>
         ) : (

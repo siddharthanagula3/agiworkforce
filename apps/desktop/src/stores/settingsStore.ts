@@ -56,10 +56,24 @@ export interface ChatPreferences {
   alwaysUseAgentMode: boolean;
 }
 
+export interface ExecutionPreferences {
+  /** Maximum task timeout in minutes (1-4320, default 1440=24hrs) */
+  maxTimeoutMinutes: number;
+  /** Enable automatic checkpointing of task progress */
+  enableCheckpointing: boolean;
+  /** Interval between checkpoints in steps (default 5) */
+  checkpointInterval: number;
+  /** Enable task resumption after app restart */
+  autoResumeOnRestart: boolean;
+  /** Show timeout warnings at 1hr, 30min, 5min remaining */
+  enableTimeoutWarnings: boolean;
+}
+
 interface SettingsState {
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
   chatPreferences: ChatPreferences;
+  executionPreferences: ExecutionPreferences;
   allowedDirectories: string[];
   loading: boolean;
   error: string | null;
@@ -80,6 +94,12 @@ interface SettingsState {
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
 
+  setMaxTimeoutMinutes: (minutes: number) => void;
+  setEnableCheckpointing: (enabled: boolean) => void;
+  setCheckpointInterval: (interval: number) => void;
+  setAutoResumeOnRestart: (enabled: boolean) => void;
+  setEnableTimeoutWarnings: (enabled: boolean) => void;
+
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
   setAllowedDirectories: (paths: string[]) => void;
@@ -94,7 +114,11 @@ interface SettingsState {
 
 const defaultSettings: Pick<
   SettingsState,
-  'llmConfig' | 'windowPreferences' | 'chatPreferences' | 'allowedDirectories'
+  | 'llmConfig'
+  | 'windowPreferences'
+  | 'chatPreferences'
+  | 'executionPreferences'
+  | 'allowedDirectories'
 > = {
   llmConfig: {
     defaultProvider: 'managed_cloud',
@@ -124,6 +148,13 @@ const defaultSettings: Pick<
     promptCompletionEnabled: true, // AI-powered ghost text enabled by default
     alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
   },
+  executionPreferences: {
+    maxTimeoutMinutes: 1440, // 24 hours default
+    enableCheckpointing: true,
+    checkpointInterval: 5, // Steps between checkpoints
+    autoResumeOnRestart: true,
+    enableTimeoutWarnings: true,
+  },
   allowedDirectories: [],
 };
 
@@ -152,7 +183,8 @@ const storageFallback: Storage = {
 // Version for storage migration
 // v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
 // v3: Added alwaysUseAgentMode setting
-const SETTINGS_STORE_VERSION = 3;
+// v4: Added executionPreferences for extended timeout support
+const SETTINGS_STORE_VERSION = 4;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -165,6 +197,61 @@ export const useSettingsStore = create<SettingsState>()(
 
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'settings/setHasHydrated');
+        },
+
+        setMaxTimeoutMinutes: (minutes: number) => {
+          const clamped = Math.max(1, Math.min(4320, minutes)); // 1 min to 72 hours
+          set(
+            (state) => ({
+              executionPreferences: { ...state.executionPreferences, maxTimeoutMinutes: clamped },
+            }),
+            undefined,
+            'settings/setMaxTimeoutMinutes',
+          );
+        },
+
+        setEnableCheckpointing: (enabled: boolean) => {
+          set(
+            (state) => ({
+              executionPreferences: { ...state.executionPreferences, enableCheckpointing: enabled },
+            }),
+            undefined,
+            'settings/setEnableCheckpointing',
+          );
+        },
+
+        setCheckpointInterval: (interval: number) => {
+          const clamped = Math.max(1, Math.min(100, interval));
+          set(
+            (state) => ({
+              executionPreferences: { ...state.executionPreferences, checkpointInterval: clamped },
+            }),
+            undefined,
+            'settings/setCheckpointInterval',
+          );
+        },
+
+        setAutoResumeOnRestart: (enabled: boolean) => {
+          set(
+            (state) => ({
+              executionPreferences: { ...state.executionPreferences, autoResumeOnRestart: enabled },
+            }),
+            undefined,
+            'settings/setAutoResumeOnRestart',
+          );
+        },
+
+        setEnableTimeoutWarnings: (enabled: boolean) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                enableTimeoutWarnings: enabled,
+              },
+            }),
+            undefined,
+            'settings/setEnableTimeoutWarnings',
+          );
         },
 
         setDefaultProvider: async (provider: Provider) => {
@@ -375,6 +462,7 @@ export const useSettingsStore = create<SettingsState>()(
               llmConfig: LLMConfig;
               windowPreferences: WindowPreferences;
               chatPreferences?: ChatPreferences;
+              executionPreferences?: ExecutionPreferences;
               allowedDirectories: string[];
             };
 
@@ -383,6 +471,7 @@ export const useSettingsStore = create<SettingsState>()(
                 llmConfig: LLMConfig;
                 windowPreferences: WindowPreferences;
                 chatPreferences?: ChatPreferences;
+                executionPreferences?: ExecutionPreferences;
                 allowedDirectories: string[];
               }>('settings_load_from_disk');
             } catch (diskError) {
@@ -394,6 +483,7 @@ export const useSettingsStore = create<SettingsState>()(
                 llmConfig: LLMConfig;
                 windowPreferences: WindowPreferences;
                 chatPreferences?: ChatPreferences;
+                executionPreferences?: ExecutionPreferences;
                 allowedDirectories: string[];
               }>('settings_load');
             }
@@ -436,6 +526,11 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.chatPreferences ?? defaultSettings.chatPreferences),
             };
 
+            const mergedExecutionPreferences: ExecutionPreferences = {
+              ...defaultSettings.executionPreferences,
+              ...(settings.executionPreferences ?? defaultSettings.executionPreferences),
+            };
+
             // Configure local Ollama provider
             try {
               await invoke('llm_configure_provider', {
@@ -457,6 +552,7 @@ export const useSettingsStore = create<SettingsState>()(
                 llmConfig: mergedLLMConfig,
                 windowPreferences: mergedWindowPreferences,
                 chatPreferences: mergedChatPreferences,
+                executionPreferences: mergedExecutionPreferences,
                 allowedDirectories: settings.allowedDirectories ?? [],
                 loading: false,
               },
@@ -489,12 +585,19 @@ export const useSettingsStore = create<SettingsState>()(
         saveSettings: async () => {
           set({ loading: true, error: null }, undefined, 'settings/saveSettings/start');
           try {
-            const { llmConfig, windowPreferences, chatPreferences, allowedDirectories } = get();
+            const {
+              llmConfig,
+              windowPreferences,
+              chatPreferences,
+              executionPreferences,
+              allowedDirectories,
+            } = get();
             await invoke('settings_save', {
               settings: {
                 llmConfig,
                 windowPreferences,
                 chatPreferences,
+                executionPreferences,
                 allowedDirectories,
               },
             });
@@ -516,6 +619,7 @@ export const useSettingsStore = create<SettingsState>()(
           llmConfig: state.llmConfig,
           windowPreferences: state.windowPreferences,
           chatPreferences: state.chatPreferences,
+          executionPreferences: state.executionPreferences,
           allowedDirectories: state.allowedDirectories,
         }),
         merge: (persistedState, currentState) => {
@@ -555,12 +659,18 @@ export const useSettingsStore = create<SettingsState>()(
             ...(persisted?.chatPreferences ?? {}),
           };
 
+          const mergedExecutionPreferences: ExecutionPreferences = {
+            ...currentState.executionPreferences,
+            ...(persisted?.executionPreferences ?? {}),
+          };
+
           return {
             ...currentState,
             ...persisted,
             llmConfig: mergedLLMConfig,
             windowPreferences: mergedWindowPreferences,
             chatPreferences: mergedChatPreferences,
+            executionPreferences: mergedExecutionPreferences,
             allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
           };
         },
@@ -573,6 +683,7 @@ export const useSettingsStore = create<SettingsState>()(
               taskRouting?: Record<string, { provider: Provider; model: string }>;
             };
             chatPreferences?: Partial<ChatPreferences>;
+            executionPreferences?: Partial<ExecutionPreferences>;
           };
 
           // Migration from v1 to v2: Simplified subscription-only model
@@ -600,6 +711,19 @@ export const useSettingsStore = create<SettingsState>()(
               state.chatPreferences = { promptCompletionEnabled: true, alwaysUseAgentMode: false };
             } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
               state.chatPreferences.alwaysUseAgentMode = false;
+            }
+          }
+
+          // Migration from v3 to v4: Add executionPreferences for extended timeout support
+          if (version < 4) {
+            if (!state.executionPreferences) {
+              state.executionPreferences = {
+                maxTimeoutMinutes: 1440, // 24 hours
+                enableCheckpointing: true,
+                checkpointInterval: 5,
+                autoResumeOnRestart: true,
+                enableTimeoutWarnings: true,
+              };
             }
           }
 
@@ -658,6 +782,18 @@ export const selectPromptCompletionEnabled = (state: SettingsState) =>
   state.chatPreferences.promptCompletionEnabled;
 export const selectAlwaysUseAgentMode = (state: SettingsState) =>
   state.chatPreferences.alwaysUseAgentMode;
+
+export const selectExecutionPreferences = (state: SettingsState) => state.executionPreferences;
+export const selectMaxTimeoutMinutes = (state: SettingsState) =>
+  state.executionPreferences.maxTimeoutMinutes;
+export const selectEnableCheckpointing = (state: SettingsState) =>
+  state.executionPreferences.enableCheckpointing;
+export const selectCheckpointInterval = (state: SettingsState) =>
+  state.executionPreferences.checkpointInterval;
+export const selectAutoResumeOnRestart = (state: SettingsState) =>
+  state.executionPreferences.autoResumeOnRestart;
+export const selectEnableTimeoutWarnings = (state: SettingsState) =>
+  state.executionPreferences.enableTimeoutWarnings;
 
 export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
 export const selectSettingsLoading = (state: SettingsState) => state.loading;

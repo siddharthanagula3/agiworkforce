@@ -17,6 +17,39 @@ export interface DocumentMetadata {
   word_count?: number;
 }
 
+export interface WordContent {
+  paragraphs: string[];
+  tables?: Array<string[][]>;
+}
+
+export interface WordDocumentConfig {
+  file_path: string;
+  metadata: DocumentMetadata;
+}
+
+export interface ExcelSheet {
+  name: string;
+  rows: Array<Record<string, any>>;
+}
+
+export interface ExcelDocumentConfig {
+  file_path: string;
+  sheets: ExcelSheet[];
+  metadata: DocumentMetadata;
+}
+
+export interface PdfContent {
+  pages: Array<{
+    page_number: number;
+    text: string;
+  }>;
+}
+
+export interface PdfDocumentConfig {
+  file_path: string;
+  metadata: DocumentMetadata;
+}
+
 export interface DocumentContent {
   text: string;
   metadata: DocumentMetadata;

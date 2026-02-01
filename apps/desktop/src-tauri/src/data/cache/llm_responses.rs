@@ -100,6 +100,7 @@ impl LLMResponseCache {
                 tool_calls: None,
                 finish_reason: None,
                 credits: None,
+                ..Default::default()
             };
 
             Ok(Some(response))

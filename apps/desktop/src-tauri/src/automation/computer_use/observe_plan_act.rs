@@ -535,6 +535,7 @@ Only include actions you're confident will make progress."#,
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {
