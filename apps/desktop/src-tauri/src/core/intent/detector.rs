@@ -273,6 +273,7 @@ Only respond with the JSON object, no other text."#,
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let router_guard = router.read().await;

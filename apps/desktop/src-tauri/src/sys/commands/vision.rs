@@ -141,6 +141,7 @@ pub async fn vision_send_message(
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let provider = request.provider.as_deref().and_then(|p| match p {

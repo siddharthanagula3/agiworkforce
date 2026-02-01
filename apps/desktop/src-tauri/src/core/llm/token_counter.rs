@@ -156,6 +156,21 @@ impl TokenCounter {
                             // Default video estimate without duration
                             total_tokens += Self::estimate_video_tokens(None);
                         }
+                        ContentPart::Audio { .. } => {
+                            // Audio tokens estimated at ~25 tokens per second of audio
+                            // Default to 10 seconds estimate
+                            total_tokens += 250;
+                        }
+                        ContentPart::Document { .. } => {
+                            // Documents vary greatly, estimate at ~1000 tokens per page
+                            // Default to 5 pages
+                            total_tokens += 5000;
+                        }
+                        ContentPart::ToolUse { .. } | ContentPart::ToolResult { .. } => {
+                            // Tool use and result blocks are typically structured JSON
+                            // Estimate conservatively
+                            total_tokens += 200;
+                        }
                     }
                 }
             } else {

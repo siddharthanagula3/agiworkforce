@@ -55,6 +55,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -92,6 +93,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -136,6 +138,7 @@ mod tests {
             tools: Some(tools.clone()),
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tools.is_some());
@@ -162,6 +165,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.max_tokens.is_none());
@@ -184,6 +188,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.stream);
@@ -236,6 +241,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 3);
@@ -255,6 +261,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let high_temp = LLMRequest {
@@ -266,6 +273,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(low_temp.temperature, Some(0.0));
@@ -291,6 +299,7 @@ mod tests {
                 tools: None,
                 tool_choice: None,
                 thinking_mode: None,
+                ..Default::default()
             };
 
             assert_eq!(request.model, model);
@@ -314,6 +323,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages[0].content, "");
@@ -351,6 +361,7 @@ mod tests {
             tools: Some(tools),
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tools.is_some());
@@ -374,6 +385,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let serialized = serde_json::to_string(&request).unwrap();
@@ -436,6 +448,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.messages[0].multimodal_content.is_some());

@@ -156,6 +156,22 @@ export const rateLimitConfigs = {
     window: '1 m', // 20 streaming requests per minute (more intensive)
     failClosed: true, // Security-sensitive: streaming is resource-intensive
   },
+  // Media generation endpoints - expensive operations
+  'image-generation': {
+    limit: 10,
+    window: '1 m', // 10 image generation requests per minute (expensive operation)
+    failClosed: true, // Security-sensitive: AI image generation is costly
+  },
+  'video-generation': {
+    limit: 5,
+    window: '1 m', // 5 video generation requests per minute (very expensive)
+    failClosed: true, // Security-sensitive: AI video generation is very costly
+  },
+  'video-status': {
+    limit: 30,
+    window: '1 m', // 30 status poll requests per minute (allow frequent polling)
+    failClosed: false, // Not sensitive: just querying status
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute

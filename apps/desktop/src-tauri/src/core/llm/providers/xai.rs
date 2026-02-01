@@ -304,6 +304,7 @@ impl LLMProvider for XAIProvider {
             tool_calls,
             finish_reason: choice.finish_reason.clone(),
             credits: None,
+            ..Default::default()
         })
     }
 

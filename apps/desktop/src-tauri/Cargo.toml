@@ -252,7 +252,9 @@ appstore = []
 vad = ["dep:webrtc-vad"]
 # Local Whisper STT (offline speech-to-text)
 # Requires whisper.cpp to be built - see whisper-rs docs
-local-whisper = ["dep:whisper-rs"]  
+local-whisper = ["dep:whisper-rs"]
+# PDF extraction support
+pdf-extract = []
 
 
 [build-dependencies]

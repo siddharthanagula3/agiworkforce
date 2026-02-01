@@ -11,6 +11,7 @@ mod tests {
             model: Some("gpt-4".to_string()),
             usage: None,
             credits: None,
+            tool_calls: None,
         };
 
         assert_eq!(chunk.content, "Hello");
@@ -31,6 +32,7 @@ mod tests {
                 total_tokens: Some(30),
             }),
             credits: None,
+            tool_calls: None,
         };
 
         assert!(chunk.done);
@@ -60,6 +62,7 @@ mod tests {
             model: None,
             usage: None,
             credits: None,
+            tool_calls: None,
         };
 
         let serialized = serde_json::to_string(&chunk).unwrap();
@@ -92,6 +95,7 @@ mod tests {
                 model: None,
                 usage: None,
                 credits: None,
+                tool_calls: None,
             };
             assert!(chunk.finish_reason.is_some());
         }
@@ -107,6 +111,7 @@ mod tests {
                 model: None,
                 usage: None,
                 credits: None,
+                tool_calls: None,
             },
             StreamChunk {
                 content: " world".to_string(),
@@ -115,6 +120,7 @@ mod tests {
                 model: None,
                 usage: None,
                 credits: None,
+                tool_calls: None,
             },
             StreamChunk {
                 content: "!".to_string(),
@@ -123,6 +129,7 @@ mod tests {
                 model: None,
                 usage: None,
                 credits: None,
+                tool_calls: None,
             },
         ];
 

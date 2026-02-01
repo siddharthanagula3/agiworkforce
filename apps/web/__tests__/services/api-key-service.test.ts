@@ -39,7 +39,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 // Import after mocks
-import { ApiKeyService, detectHashFormat, type HashFormat } from '@/lib/services/api-key-service';
+import { ApiKeyService, detectHashFormat } from '@/lib/services/api-key-service';
 
 describe('API Key Service', () => {
   const mockUserId = 'user-123';

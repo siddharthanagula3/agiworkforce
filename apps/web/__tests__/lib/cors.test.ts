@@ -17,8 +17,8 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Store original env
-const originalEnv = { ...process.env };
+// Store original env (for potential future use in cleanup)
+const _originalEnv = { ...process.env };
 
 describe('CORS', () => {
   beforeEach(() => {

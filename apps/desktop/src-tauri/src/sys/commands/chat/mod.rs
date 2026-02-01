@@ -12,6 +12,7 @@ use tauri::{Emitter, State};
 
 use tracing::{debug, error, info, warn};
 
+pub mod memory_handler;
 pub mod tools;
 pub mod types;
 pub use types::*;
@@ -397,6 +398,224 @@ fn calculate_conversation_score(content: &str) -> f32 {
 fn detect_agentic_intent(content: &str) -> bool {
     let result = detect_user_intent(content);
     result.intent == UserIntent::ActionRequest && result.should_auto_execute
+}
+
+/// Extract text content from document attachments (non-image files).
+/// This enables full document support similar to ChatGPT, Claude, and Gemini.
+/// Supported formats: .txt, .md, .json, .js, .ts, .py, .rs, .html, .css, .xml, .yaml, .toml, .csv, .log
+/// PDF support requires the pdf-extract crate (text extraction only).
+fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String, String)> {
+    let mut extracted: Vec<(String, String)> = Vec::new();
+
+    // Text file extensions that can be read directly
+    let text_extensions = [
+        ".txt", ".md", ".markdown", ".json", ".jsonl", ".js", ".jsx", ".ts", ".tsx",
+        ".py", ".pyw", ".rs", ".go", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
+        ".cs", ".rb", ".php", ".html", ".htm", ".css", ".scss", ".sass", ".less",
+        ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".env",
+        ".csv", ".tsv", ".log", ".sh", ".bash", ".zsh", ".fish", ".ps1",
+        ".sql", ".graphql", ".gql", ".vue", ".svelte", ".astro",
+        ".dockerfile", ".gitignore", ".gitattributes", ".editorconfig",
+        ".eslintrc", ".prettierrc", ".babelrc", ".npmrc", ".nvmrc",
+    ];
+
+    for attachment in attachments {
+        // Skip images - they're handled separately as multimodal content
+        if attachment.attachment_type == "image" {
+            continue;
+        }
+
+        let content = match &attachment.content {
+            Some(c) if !c.is_empty() => c,
+            _ => {
+                debug!(
+                    "[Chat] Skipping attachment '{}' - no content provided",
+                    attachment.name
+                );
+                continue;
+            }
+        };
+
+        // Check if it's a text-based file
+        let name_lower = attachment.name.to_lowercase();
+        let is_text_file = text_extensions.iter().any(|ext| name_lower.ends_with(ext))
+            || attachment.mime_type.as_deref().map_or(false, |mime| {
+                mime.starts_with("text/")
+                    || mime == "application/json"
+                    || mime == "application/xml"
+                    || mime == "application/javascript"
+                    || mime == "application/typescript"
+            });
+
+        if is_text_file {
+            // Decode base64 content to text
+            let base64_data = if content.starts_with("data:") {
+                content.split(',').nth(1).unwrap_or(content)
+            } else {
+                content
+            };
+
+            match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+                Ok(bytes) => {
+                    match String::from_utf8(bytes) {
+                        Ok(text) => {
+                            // Truncate very large files to prevent context overflow
+                            let max_chars = 100_000; // ~100KB of text
+                            let truncated = if text.len() > max_chars {
+                                format!(
+                                    "{}\n\n... [File truncated - showing first {} characters of {}]",
+                                    &text[..max_chars],
+                                    max_chars,
+                                    text.len()
+                                )
+                            } else {
+                                text
+                            };
+                            info!(
+                                "[Chat] Extracted text from '{}' ({} chars)",
+                                attachment.name,
+                                truncated.len()
+                            );
+                            extracted.push((attachment.name.clone(), truncated));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "[Chat] File '{}' is not valid UTF-8 text: {}",
+                                attachment.name, e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "[Chat] Failed to decode base64 content for '{}': {}",
+                        attachment.name, e
+                    );
+                }
+            }
+        } else if name_lower.ends_with(".pdf") {
+            // PDF extraction - attempt basic text extraction
+            let base64_data = if content.starts_with("data:") {
+                content.split(',').nth(1).unwrap_or(content)
+            } else {
+                content
+            };
+
+            match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+                Ok(bytes) => {
+                    // Try to extract text from PDF using pdf-extract or similar
+                    // For now, we'll use a basic approach or note that PDF support is limited
+                    match extract_pdf_text(&bytes) {
+                        Ok(text) if !text.trim().is_empty() => {
+                            let max_chars = 100_000;
+                            let truncated = if text.len() > max_chars {
+                                format!(
+                                    "{}\n\n... [PDF truncated - showing first {} characters]",
+                                    &text[..max_chars],
+                                    max_chars
+                                )
+                            } else {
+                                text
+                            };
+                            info!(
+                                "[Chat] Extracted text from PDF '{}' ({} chars)",
+                                attachment.name,
+                                truncated.len()
+                            );
+                            extracted.push((attachment.name.clone(), truncated));
+                        }
+                        Ok(_) => {
+                            warn!(
+                                "[Chat] PDF '{}' appears to be empty or image-based (no extractable text)",
+                                attachment.name
+                            );
+                            extracted.push((
+                                attachment.name.clone(),
+                                "[PDF attached but no text could be extracted - may be image-based or scanned]".to_string(),
+                            ));
+                        }
+                        Err(e) => {
+                            warn!("[Chat] Failed to extract text from PDF '{}': {}", attachment.name, e);
+                            extracted.push((
+                                attachment.name.clone(),
+                                format!("[PDF attached but text extraction failed: {}]", e),
+                            ));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "[Chat] Failed to decode PDF '{}': {}",
+                        attachment.name, e
+                    );
+                }
+            }
+        } else {
+            // Unsupported file type - note it for the user
+            debug!(
+                "[Chat] Unsupported file type for text extraction: '{}' (type: {})",
+                attachment.name, attachment.attachment_type
+            );
+            extracted.push((
+                attachment.name.clone(),
+                format!(
+                    "[File '{}' attached but content extraction not supported for this file type]",
+                    attachment.name
+                ),
+            ));
+        }
+    }
+
+    extracted
+}
+
+/// Extract text from PDF bytes using pdf-extract crate
+fn extract_pdf_text(pdf_bytes: &[u8]) -> Result<String, String> {
+    // Use pdf-extract crate if available, otherwise return an error
+    // Note: This requires adding pdf-extract to Cargo.toml
+    #[cfg(feature = "pdf-extract")]
+    {
+        use pdf_extract::extract_text_from_mem;
+        extract_text_from_mem(pdf_bytes).map_err(|e| e.to_string())
+    }
+
+    #[cfg(not(feature = "pdf-extract"))]
+    {
+        // Fallback: try basic PDF text extraction without external crate
+        // Look for text streams in PDF
+        let content = String::from_utf8_lossy(pdf_bytes);
+
+        // Very basic extraction - look for text between BT and ET markers
+        let mut extracted = String::new();
+        let mut in_text = false;
+
+        for line in content.lines() {
+            if line.contains("BT") {
+                in_text = true;
+            } else if line.contains("ET") {
+                in_text = false;
+            } else if in_text {
+                // Try to extract text from Tj or TJ operators
+                if let Some(start) = line.find('(') {
+                    if let Some(end) = line.rfind(')') {
+                        if start < end {
+                            let text = &line[start + 1..end];
+                            if !text.is_empty() {
+                                extracted.push_str(text);
+                                extracted.push(' ');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if extracted.trim().is_empty() {
+            Err("PDF text extraction not available - consider using a vision model to analyze the PDF as images".to_string())
+        } else {
+            Ok(extracted)
+        }
+    }
 }
 
 /// Convert ChatAttachments to ContentPart for multimodal messages.
@@ -1202,62 +1421,137 @@ If a user asks "What files are in my Desktop folder?", you MUST call `file_list`
     });
     debug!("[Chat] Added default AGI Workforce system prompt");
 
+    // Add OS/platform context so the LLM knows the user's operating system
+    let os_name = std::env::consts::OS;
+    let os_arch = std::env::consts::ARCH;
+    let os_family = std::env::consts::FAMILY;
+
+    let os_context = match os_name {
+        "macos" => format!(
+            "## User's System Environment\n\n\
+            - **Operating System:** macOS ({})\n\
+            - **Architecture:** {}\n\n\
+            When running terminal commands, use macOS-compatible commands:\n\
+            - Use `ls`, `rm`, `mv`, `cp`, `mkdir` for file operations\n\
+            - Use `/` for path separators (e.g., ~/Desktop/file.txt)\n\
+            - Use `open` to launch applications or URLs\n\
+            - Common shells: zsh (default), bash\n\
+            - Home directory: ~/ or $HOME",
+            os_family, os_arch
+        ),
+        "windows" => format!(
+            "## User's System Environment\n\n\
+            - **Operating System:** Windows ({})\n\
+            - **Architecture:** {}\n\n\
+            When running terminal commands, use Windows-compatible commands:\n\
+            - Use `dir` (or `ls` in PowerShell), `del`/`Remove-Item`, `move`, `copy`, `mkdir` for file operations\n\
+            - Use `\\` for path separators (e.g., C:\\Users\\username\\Desktop\\file.txt)\n\
+            - Use `start` to launch applications or URLs\n\
+            - Prefer PowerShell over cmd.exe for better compatibility\n\
+            - Home directory: %USERPROFILE% or $env:USERPROFILE",
+            os_family, os_arch
+        ),
+        "linux" => format!(
+            "## User's System Environment\n\n\
+            - **Operating System:** Linux ({})\n\
+            - **Architecture:** {}\n\n\
+            When running terminal commands, use Linux-compatible commands:\n\
+            - Use `ls`, `rm`, `mv`, `cp`, `mkdir` for file operations\n\
+            - Use `/` for path separators (e.g., ~/Desktop/file.txt)\n\
+            - Use `xdg-open` to launch applications or URLs\n\
+            - Common shells: bash (default), zsh, fish\n\
+            - Home directory: ~/ or $HOME",
+            os_family, os_arch
+        ),
+        _ => format!(
+            "## User's System Environment\n\n\
+            - **Operating System:** {} ({})\n\
+            - **Architecture:** {}\n\n\
+            Adapt terminal commands to this platform as appropriate.",
+            os_name, os_family, os_arch
+        ),
+    };
+
+    llm_messages.push(ChatMessage {
+        role: "system".to_string(),
+        content: os_context,
+        tool_calls: None,
+        tool_call_id: None,
+        multimodal_content: None,
+    });
+    debug!("[Chat] Added OS context: {} ({})", os_name, os_arch);
+
     // Add project folder context if one is set
-    let project_ctx = project_context_state.get_context().await;
-    if project_ctx.is_valid {
-        if let Some(ref folder) = project_ctx.folder {
-            let project_name = project_ctx.name.as_deref().unwrap_or("Unknown Project");
-
-            // Build project context message
-            let mut project_context_content = format!(
-                "## Active Project Folder\n\n\
-                The user is currently working in a project folder:\n\
-                - **Project Name:** {}\n\
-                - **Path:** {}\n\n\
-                **Important Guidelines for this session:**\n\
-                - When performing file operations, default to working within this project folder unless the user specifies otherwise\n\
-                - Use relative paths from the project root when possible\n\
-                - For terminal commands, use this folder as the working directory (cwd)\n\
-                - When creating new files, place them in appropriate locations within the project structure\n",
-                project_name, folder
-            );
-
-            // Try to get a summary of the project structure
-            if let Ok(files) =
-                crate::sys::commands::project_context::project_context_list_files_internal_sync(
-                    folder, 1, false,
-                )
-            {
-                if !files.is_empty() {
-                    project_context_content.push_str("\n**Project Structure (top level):**\n```\n");
-                    for file in files.iter().take(25) {
-                        let prefix = if file.is_directory {
-                            "[DIR] "
-                        } else {
-                            "      "
-                        };
-                        project_context_content.push_str(&format!("{}{}\n", prefix, file.name));
-                    }
-                    if files.len() > 25 {
-                        project_context_content
-                            .push_str(&format!("... and {} more items\n", files.len() - 25));
-                    }
-                    project_context_content.push_str("```\n");
-                }
-            }
-
-            llm_messages.push(ChatMessage {
-                role: "system".to_string(),
-                content: project_context_content,
-                tool_calls: None,
-                tool_call_id: None,
-                multimodal_content: None,
-            });
-            debug!(
-                "[Chat] Added project folder context: {} ({})",
-                project_name, folder
-            );
+    // Priority: request.project_folder > state context
+    let effective_folder = if let Some(ref folder) = request.project_folder {
+        // Update the project context state so tools can use it
+        project_context_state.set_folder(folder.clone()).await;
+        Some(folder.clone())
+    } else {
+        let ctx = project_context_state.get_context().await;
+        if ctx.is_valid {
+            ctx.folder.clone()
+        } else {
+            None
         }
+    };
+
+    if let Some(ref folder) = effective_folder {
+        // Extract project name from folder path
+        let project_name = std::path::Path::new(folder)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Project");
+
+        // Build project context message
+        let mut project_context_content = format!(
+            "## Active Project Folder\n\n\
+            The user is currently working in a project folder:\n\
+            - **Project Name:** {}\n\
+            - **Path:** {}\n\n\
+            **Important Guidelines for this session:**\n\
+            - When performing file operations, default to working within this project folder unless the user specifies otherwise\n\
+            - Use relative paths from the project root when possible\n\
+            - For terminal commands, use this folder as the working directory (cwd)\n\
+            - When creating new files, place them in appropriate locations within the project structure\n",
+            project_name, folder
+        );
+
+        // Try to get a summary of the project structure
+        if let Ok(files) =
+            crate::sys::commands::project_context::project_context_list_files_internal_sync(
+                folder, 1, false,
+            )
+        {
+            if !files.is_empty() {
+                project_context_content.push_str("\n**Project Structure (top level):**\n```\n");
+                for file in files.iter().take(25) {
+                    let prefix = if file.is_directory {
+                        "[DIR] "
+                    } else {
+                        "      "
+                    };
+                    project_context_content.push_str(&format!("{}{}\n", prefix, file.name));
+                }
+                if files.len() > 25 {
+                    project_context_content
+                        .push_str(&format!("... and {} more items\n", files.len() - 25));
+                }
+                project_context_content.push_str("```\n");
+            }
+        }
+
+        llm_messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: project_context_content,
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        });
+        debug!(
+            "[Chat] Added project folder context: {} ({})",
+            project_name, folder
+        );
     }
 
     // Append custom instructions if provided (they supplement the default prompt)
@@ -1309,6 +1603,38 @@ If a user asks "What files are in my Desktop folder?", you MUST call `file_list`
         } else {
             None
         };
+
+    // Extract text from document attachments (non-image files)
+    // This enables full document support like ChatGPT, Claude, and Gemini
+    if let Some(ref attachments) = request.attachments {
+        let extracted_text = extract_text_from_attachments(attachments);
+        if !extracted_text.is_empty() {
+            let mut document_context = String::from("## Attached Documents\n\nThe user has attached the following files. Their contents are provided below:\n\n");
+
+            for (filename, content) in &extracted_text {
+                document_context.push_str(&format!(
+                    "### File: {}\n```\n{}\n```\n\n",
+                    filename, content
+                ));
+            }
+
+            document_context.push_str("Use the content above to help answer the user's question. You can reference specific parts of the files in your response.\n");
+
+            llm_messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: document_context,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            });
+
+            info!(
+                "[Chat] Added {} document(s) to context ({} total chars)",
+                extracted_text.len(),
+                extracted_text.iter().map(|(_, c)| c.len()).sum::<usize>()
+            );
+        }
+    }
 
     // Add conversation history (all messages except the last user message)
     // We'll add the current user message separately with multimodal content
@@ -1378,6 +1704,7 @@ If a user asks "What files are in my Desktop folder?", you MUST call `file_list`
         tools: chat_tools.clone(),
         tool_choice: tool_choice.clone(),
         thinking_mode: request.thinking_mode,
+        ..Default::default()
     };
 
     let stream_mode = request.stream.unwrap_or(false);
@@ -1672,6 +1999,7 @@ If a user asks "What files are in my Desktop folder?", you MUST call `file_list`
                             tools: llm_request_clone.tools.clone(),
                             tool_choice: llm_request_clone.tool_choice.clone(),
                             thinking_mode: llm_request_clone.thinking_mode,
+                            ..Default::default()
                         };
 
                         // Get candidates for follow-up request
@@ -2107,6 +2435,7 @@ If a user asks "What files are in my Desktop folder?", you MUST call `file_list`
                         tools: chat_tools.clone(),
                         tool_choice: tool_choice.clone(),
                         thinking_mode: request.thinking_mode,
+                        ..Default::default()
                     };
 
                     let followup_result = {

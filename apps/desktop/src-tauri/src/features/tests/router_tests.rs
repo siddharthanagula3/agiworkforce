@@ -18,6 +18,7 @@ mod sse_parser_tests {
             finish_reason: None,
             model: None,
             credits: None,
+            tool_calls: None,
         };
 
         assert_eq!(chunk.content, "Hello");
@@ -38,6 +39,7 @@ mod sse_parser_tests {
             finish_reason: Some("stop".to_string()),
             model: None,
             credits: None,
+            tool_calls: None,
         };
 
         assert!(chunk.done);

@@ -12,6 +12,9 @@ pub struct StreamChunk {
     pub model: Option<String>,
     pub usage: Option<TokenUsage>,
     pub credits: Option<crate::core::llm::CreditsInfo>,
+    /// Tool calls received in this chunk (for streaming tool use)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<StreamingToolCall>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -19,6 +22,20 @@ pub struct TokenUsage {
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
     pub total_tokens: Option<u32>,
+}
+
+/// Represents a streaming tool call that arrives in multiple chunks.
+/// Tool calls are accumulated by index as chunks arrive.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StreamingToolCall {
+    /// Index of this tool call in the array (used for accumulation)
+    pub index: usize,
+    /// Unique identifier for this tool call
+    pub id: String,
+    /// Name of the tool being called
+    pub name: String,
+    /// JSON arguments for the tool (accumulated across chunks)
+    pub arguments: String,
 }
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024;
@@ -282,6 +299,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model,
         usage,
         credits,
+        tool_calls: None,
     })
 }
 
@@ -374,6 +392,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         model,
         usage,
         credits: None,
+        tool_calls: None,
     })
 }
 
@@ -454,6 +473,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model,
         usage,
         credits: None,
+        tool_calls: None,
     })
 }
 
@@ -516,6 +536,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model,
         usage,
         credits: None,
+        tool_calls: None,
     })
 }
 

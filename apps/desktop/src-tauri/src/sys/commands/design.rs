@@ -86,6 +86,7 @@ pub async fn design_generate_css(
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -201,6 +202,7 @@ Ensure colors have proper contrast ratios (WCAG AA minimum):
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -270,6 +272,7 @@ Return as JSON array:
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -376,6 +379,7 @@ Return as JSON:
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;

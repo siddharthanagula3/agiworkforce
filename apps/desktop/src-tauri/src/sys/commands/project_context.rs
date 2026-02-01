@@ -55,6 +55,28 @@ impl ProjectContextState {
             None
         }
     }
+
+    /// Set the project folder directly (for internal use)
+    /// Validates the path and updates the context
+    pub async fn set_folder(&self, path: String) {
+        let path_buf = PathBuf::from(&path);
+        let is_valid = path_buf.exists() && path_buf.is_dir();
+        let name = path_buf
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string());
+
+        let mut ctx = self.context.write().await;
+        ctx.folder = Some(path);
+        ctx.name = name;
+        ctx.is_valid = is_valid;
+
+        if is_valid {
+            debug!("[ProjectContext] Internal set_folder: {:?}", ctx.folder);
+        } else {
+            warn!("[ProjectContext] set_folder path invalid: {:?}", ctx.folder);
+        }
+    }
 }
 
 impl Default for ProjectContextState {

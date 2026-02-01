@@ -79,16 +79,35 @@ impl DeepSeekProvider {
             .collect()
     }
 
-    fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
-        let (input_cost, output_cost) = match model {
-            "deepseek-reasoner" => (0.55, 2.19),
-            "deepseek-chat" | "deepseek-v3" => (0.14, 0.28),
-            _ => (0.14, 0.28),
+    fn calculate_cost(
+        model: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_hit_tokens: Option<u32>,
+        reasoning_tokens: Option<u32>,
+    ) -> f64 {
+        // DeepSeek pricing per 1M tokens (USD)
+        let (input_price, output_price) = match model {
+            m if m.contains("deepseek-reasoner") => (0.55, 2.19), // Reasoner pricing
+            m if m.contains("deepseek-chat") || m.contains("deepseek-v3") => (0.14, 0.28),
+            m if m.contains("deepseek-coder") => (0.14, 0.28),
+            _ => (0.14, 0.28), // Default to v3 pricing
         };
 
-        let input = (input_tokens as f64 / 1_000_000.0) * input_cost;
-        let output = (output_tokens as f64 / 1_000_000.0) * output_cost;
-        input + output
+        // Cache hits are 10x cheaper ($0.014 vs $0.14 for v3)
+        let cache_price = input_price / 10.0;
+        let cache_tokens = cache_hit_tokens.unwrap_or(0);
+
+        // Calculate costs
+        let cache_cost = cache_tokens as f64 * cache_price / 1_000_000.0;
+        let non_cached_input = input_tokens.saturating_sub(cache_tokens);
+        let input_cost = non_cached_input as f64 * input_price / 1_000_000.0;
+        let output_cost = output_tokens as f64 * output_price / 1_000_000.0;
+
+        // Reasoning tokens are priced at output rate for reasoner model
+        let reasoning_cost = reasoning_tokens.unwrap_or(0) as f64 * 2.19 / 1_000_000.0;
+
+        cache_cost + input_cost + output_cost + reasoning_cost
     }
 }
 
@@ -143,6 +162,8 @@ struct DeepSeekRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<DeepSeekTool>>,
@@ -182,6 +203,12 @@ struct DeepSeekUsage {
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
+    /// Cache hit tokens - for cache pricing (10x cheaper than regular input)
+    #[serde(default)]
+    prompt_cache_hit_tokens: Option<u32>,
+    /// Reasoning tokens - for deepseek-reasoner model
+    #[serde(default)]
+    reasoning_tokens: Option<u32>,
 }
 
 #[async_trait]
@@ -191,6 +218,10 @@ impl LLMProvider for DeepSeekProvider {
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         let api_key = self.get_api_key()?;
+
+        // Check if using deepseek-reasoner model and thinking is enabled
+        let is_reasoner = request.model.contains("reasoner");
+        let use_reasoning = is_reasoner || request.thinking_mode == Some(true);
 
         let messages: Vec<DeepSeekMessage> = request
             .messages
@@ -238,11 +269,27 @@ impl LLMProvider for DeepSeekProvider {
             })
             .collect();
 
+        // DeepSeek Reasoner automatically reasons and doesn't need temperature adjustment
+        // For reasoning mode, we may want higher max_tokens to accommodate reasoning
+        let max_tokens = if use_reasoning {
+            request.max_tokens.or(Some(8192)) // Higher default for reasoning
+        } else {
+            request.max_tokens
+        };
+
+        // Reasoner model uses default temperature internally, so we skip it for reasoner
+        let temperature = if is_reasoner {
+            None
+        } else {
+            request.temperature
+        };
+
         let deepseek_request = DeepSeekRequest {
             model: request.model.clone(),
             messages,
-            temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            temperature,
+            top_p: request.top_p,
+            max_tokens,
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request
                 .tool_choice
@@ -284,11 +331,20 @@ impl LLMProvider for DeepSeekProvider {
             .as_ref()
             .map(|calls| Self::convert_tool_calls(calls));
 
+        // Extract cache and reasoning tokens for accurate cost calculation
+        let cache_hit_tokens = deepseek_response.usage.prompt_cache_hit_tokens;
+        let reasoning_tokens = deepseek_response.usage.reasoning_tokens;
+
         let cost = Self::calculate_cost(
             &deepseek_response.model,
             deepseek_response.usage.prompt_tokens,
             deepseek_response.usage.completion_tokens,
+            cache_hit_tokens,
+            reasoning_tokens,
         );
+
+        // Check if we had cache hits
+        let cached = cache_hit_tokens.unwrap_or(0) > 0;
 
         Ok(LLMResponse {
             content,
@@ -297,10 +353,13 @@ impl LLMProvider for DeepSeekProvider {
             completion_tokens: Some(deepseek_response.usage.completion_tokens),
             cost: Some(cost),
             model: deepseek_response.model,
-            cached: false,
+            cached,
             tool_calls,
             finish_reason: choice.finish_reason.clone(),
             credits: None,
+            cache_read_input_tokens: cache_hit_tokens,
+            reasoning_tokens,
+            ..Default::default()
         })
     }
 
@@ -329,6 +388,10 @@ impl LLMProvider for DeepSeekProvider {
         Box<dyn Error + Send + Sync>,
     > {
         let api_key = self.get_api_key()?;
+
+        // Check if using deepseek-reasoner model and thinking is enabled
+        let is_reasoner = request.model.contains("reasoner");
+        let use_reasoning = is_reasoner || request.thinking_mode == Some(true);
 
         let messages: Vec<DeepSeekMessage> = request
             .messages
@@ -376,11 +439,27 @@ impl LLMProvider for DeepSeekProvider {
             })
             .collect();
 
+        // DeepSeek Reasoner automatically reasons and doesn't need temperature adjustment
+        // For reasoning mode, we may want higher max_tokens to accommodate reasoning
+        let max_tokens = if use_reasoning {
+            request.max_tokens.or(Some(8192)) // Higher default for reasoning
+        } else {
+            request.max_tokens
+        };
+
+        // Reasoner model uses default temperature internally, so we skip it for reasoner
+        let temperature = if is_reasoner {
+            None
+        } else {
+            request.temperature
+        };
+
         let deepseek_request = DeepSeekRequest {
             model: request.model.clone(),
             messages,
-            temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            temperature,
+            top_p: request.top_p,
+            max_tokens,
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request
                 .tool_choice
@@ -390,8 +469,9 @@ impl LLMProvider for DeepSeekProvider {
         };
 
         tracing::debug!(
-            "Starting DeepSeek streaming request for model: {}",
-            request.model
+            "Starting DeepSeek streaming request for model: {} (reasoning: {})",
+            request.model,
+            use_reasoning
         );
 
         let response = self

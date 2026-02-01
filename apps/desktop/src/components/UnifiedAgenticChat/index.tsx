@@ -31,6 +31,7 @@ import type { ResearchTask } from '../../types/chat';
 import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
+import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { CanvasWorkspace } from '../Canvas';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { AppLayout } from './AppLayout';
@@ -1281,6 +1282,10 @@ export const UnifiedAgenticChat: React.FC<{
           console.log('[UnifiedAgenticChat] Updated credits from response:', response.credits);
           useBillingStore.getState().updateCredits(response.credits);
         }
+
+        // Trigger a credit refresh after message is sent to update UI with fresh balance
+        // This helps users see their remaining credits in near real-time
+        void refreshCreditsAfterMessage();
       }
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
@@ -1414,7 +1419,7 @@ export const UnifiedAgenticChat: React.FC<{
             </>
           ) : activeView === 'projects' ? (
             <ProjectsView />
-          ) : activeView === 'canvas' ? (
+          ) : activeView === 'artifacts' ? (
             <div className="flex-1 p-4">
               <CanvasWorkspace className="h-full" />
             </div>
