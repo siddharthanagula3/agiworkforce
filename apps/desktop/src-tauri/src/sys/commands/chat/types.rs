@@ -148,6 +148,11 @@ pub struct ChatSendMessageRequest {
     /// These are merged from global, conversation, and project instructions
     #[serde(default, alias = "customInstructions")]
     pub custom_instructions: Option<String>,
+
+    /// Project folder path for scoping file operations
+    /// When set, file and terminal tools will use this as the default working directory
+    #[serde(default, alias = "projectFolder")]
+    pub project_folder: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -108,6 +108,7 @@ Respond ONLY with the modified code. Do not include explanations or markdown for
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -247,6 +248,7 @@ Format your response as JSON:
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;

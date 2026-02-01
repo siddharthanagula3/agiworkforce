@@ -37,6 +37,7 @@ module.exports = {
     'target',
     'examples/**',
     'apps/_future_mobile/**',
+    'apps/extension/**',
   ],
   rules: {
     'react/react-in-jsx-scope': 'off',
@@ -82,9 +83,24 @@ module.exports = {
       },
     },
     {
-      files: ['apps/extension/src/**/*.js'],
+      files: ['apps/extension/**/*.{js,ts,tsx}'],
+      env: {
+        browser: true,
+        webextensions: true,
+      },
       globals: {
         chrome: 'readonly',
+      },
+      rules: {
+        '@typescript-eslint/no-unused-vars': [
+          'warn',
+          {
+            argsIgnorePattern: '^_',
+            varsIgnorePattern: '^_',
+          },
+        ],
+        '@typescript-eslint/no-unused-expressions': 'off',
+        'no-undef': 'off',
       },
     },
     {

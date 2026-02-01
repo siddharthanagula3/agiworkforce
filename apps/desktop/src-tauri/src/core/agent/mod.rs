@@ -2,6 +2,7 @@ pub mod ai_orchestrator;
 pub mod approval;
 pub mod autonomous;
 pub mod background_agent;
+pub mod background_tasks;
 pub mod change_tracker;
 pub mod code_generator;
 pub mod context_compactor;
@@ -14,6 +15,7 @@ pub mod planner;
 pub mod prompt_engineer;
 pub mod rag_system;
 pub mod runtime;
+pub mod timeout_manager;
 pub mod undo_manager;
 pub mod vision;
 
@@ -27,6 +29,7 @@ pub use background_agent::{
     BackgroundAgentManagerState, BackgroundAgentStatus, ConversationMessage,
     DEFAULT_AGENT_TIMEOUT_SECS, MAX_BACKGROUND_AGENTS,
 };
+pub use background_tasks::{PersistentTask, TaskCheckpoint, TaskStorage};
 pub use change_tracker::ChangeTracker;
 pub use continuous_executor::{
     ContinuousExecutor, ContinuousExecutorConfig, ContinuousTask, ContinuousTaskStatus,
@@ -37,6 +40,7 @@ pub use executor::TaskExecutor;
 pub use form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 pub use planner::TaskPlanner;
 pub use runtime::AgentRuntime;
+pub use timeout_manager::{TimeoutConfig, TimeoutTracker, TimeoutWarning, TimeoutResponse};
 pub use undo_manager::UndoManager;
 pub use vision::VisionAutomation;
 

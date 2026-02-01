@@ -631,12 +631,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       {/* Drag overlay */}
       <DragOverlay isVisible={isDragging} />
 
-      {/* Hidden file input */}
+      {/* Hidden file input - accepts images, audio, documents, and code files */}
       <input
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,audio/*"
+        accept="image/*,audio/*,text/*,application/pdf,application/json,.md,.txt,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.c,.cpp,.h,.html,.css,.xml,.yaml,.yml,.toml,.csv,.sql,.sh,.ps1"
         className="hidden"
         onChange={handleFileSelect}
       />
@@ -731,8 +731,54 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           )}
 
-          {/* Main input row */}
-          <div className="flex items-end gap-2 p-3">
+          {/* Textarea area - full width at top */}
+          <div className="relative px-3 pt-3">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={
+                isQueueMode
+                  ? isSimpleMode
+                    ? "I'm working on your request. Type here and I'll respond when ready..."
+                    : 'Type to queue a message while AI is working...'
+                  : placeholder
+              }
+              disabled={isInputDisabled}
+              rows={1}
+              className={cn(
+                'w-full resize-none bg-transparent py-2 px-1',
+                'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
+                'focus:outline-hidden',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'text-[15px] leading-6',
+              )}
+              style={{ maxHeight: `${24 * MAX_ROWS}px` }}
+            />
+
+            {/* Slash command menu */}
+            <SlashCommandMenu
+              show={showSlashAutocomplete}
+              suggestions={autocompleteResult.suggestions}
+              selectedIndex={slashAutocompleteIndex}
+              onSelect={handleSlashCommandSelect}
+              onHover={setSlashAutocompleteIndex}
+            />
+
+            {/* Inline suggestion */}
+            {!showSlashAutocomplete && (
+              <InlineSuggestion
+                content={content}
+                suggestion={inlineSuggestion}
+                isLoading={promptCompletion.isLoading}
+              />
+            )}
+          </div>
+
+          {/* Toolbar row - below textarea */}
+          <div className="flex items-center justify-between px-3 pb-2 pt-1">
             {/* Left toolbar */}
             <InputToolbar
               disabled={isInputDisabled}
@@ -751,37 +797,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onPreferLocalWhisperChange={setPreferLocalWhisper}
             />
 
-            {/* Textarea with suggestions */}
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder={
-                  isQueueMode
-                    ? isSimpleMode
-                      ? "I'm working on your request. Type here and I'll respond when ready..."
-                      : 'Type to queue a message while AI is working...'
-                    : placeholder
-                }
-                disabled={isInputDisabled}
-                rows={1}
-                className={cn(
-                  'w-full resize-none bg-transparent py-2 px-2 pr-12',
-                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
-                  'focus:outline-hidden',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'text-[15px] leading-6',
-                )}
-                style={{ maxHeight: `${24 * MAX_ROWS}px` }}
-              />
-
-              {/* Character count */}
+            {/* Right side controls */}
+            <div className="flex items-center gap-2">
               <div
                 className={cn(
-                  'absolute bottom-2 right-2 text-xs font-medium pointer-events-none',
+                  'text-xs font-medium',
                   content.length > maxLength * 0.9
                     ? 'text-orange-500 dark:text-orange-400'
                     : 'text-gray-400 dark:text-gray-500',
@@ -790,27 +810,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {content.length} / {maxLength}
               </div>
 
-              {/* Slash command menu */}
-              <SlashCommandMenu
-                show={showSlashAutocomplete}
-                suggestions={autocompleteResult.suggestions}
-                selectedIndex={slashAutocompleteIndex}
-                onSelect={handleSlashCommandSelect}
-                onHover={setSlashAutocompleteIndex}
-              />
-
-              {/* Inline suggestion */}
-              {!showSlashAutocomplete && (
-                <InlineSuggestion
-                  content={content}
-                  suggestion={inlineSuggestion}
-                  isLoading={promptCompletion.isLoading}
-                />
-              )}
-            </div>
-
-            {/* Right side controls */}
-            <div className="flex items-center gap-2">
               <ModelSelectorButton
                 modelDisplayName={modelDisplayName}
                 thinkingModeEnabled={thinkingModeEnabled}

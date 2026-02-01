@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NextRequest, NextResponse } from 'next/server';
 
 // Store original env
 const originalEnv = { ...process.env };
@@ -346,7 +345,7 @@ describe('Session Management', () => {
 
     it('should handle clock skew between client and server', async () => {
       // Server time is slightly ahead
-      const serverTimeOffset = 120; // 2 minutes ahead
+      const _serverTimeOffset = 120; // 2 minutes ahead
       const sessionExpiresAt = Math.floor(Date.now() / 1000) + 60; // Expires in 1 min client time
 
       mockGetSession.mockResolvedValue({
@@ -570,7 +569,7 @@ describe('Session Management', () => {
       const client = createServerClient('', '', { cookies: {} as never });
 
       // Sign out should still succeed even with expired token
-      const { error } = await client.auth.signOut();
+      const { error: _error } = await client.auth.signOut();
       // The client might return an error but the session should still be cleared locally
       expect(mockSignOut).toHaveBeenCalled();
     });

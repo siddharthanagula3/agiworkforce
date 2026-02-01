@@ -453,6 +453,7 @@ If not found:
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {

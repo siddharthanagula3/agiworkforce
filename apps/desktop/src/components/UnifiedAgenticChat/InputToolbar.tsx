@@ -64,7 +64,7 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   return (
     <div className="flex items-center gap-1">
       {/* Folder Selector - scopes session to a project directory */}
-      <FolderSelector disabled={disabled} compact={false} isSimpleMode={isSimpleMode} />
+      <FolderSelector disabled={disabled} compact={true} isSimpleMode={isSimpleMode} />
 
       {enableAttachments && (
         <button

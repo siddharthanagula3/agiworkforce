@@ -211,6 +211,7 @@ impl LlmExecutor {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         // Execute the request

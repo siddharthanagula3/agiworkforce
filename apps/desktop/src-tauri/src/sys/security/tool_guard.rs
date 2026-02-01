@@ -1,4 +1,5 @@
 use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -6,6 +7,77 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, warn};
+
+/// Safety tier for tool execution - determines what level of user interaction is required
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolSafetyTier {
+    /// Tool is safe to execute without any user interaction
+    Safe,
+    /// Tool should notify user but doesn't require explicit approval
+    RequiresNotification,
+    /// Tool requires user confirmation before execution
+    RequiresConfirmation,
+    /// Tool requires explicit approval with detailed review
+    RequiresExplicitApproval,
+}
+
+impl ToolSafetyTier {
+    /// Returns true if this tier requires some form of user action before execution
+    pub fn requires_user_action(&self) -> bool {
+        matches!(
+            self,
+            ToolSafetyTier::RequiresConfirmation | ToolSafetyTier::RequiresExplicitApproval
+        )
+    }
+
+    /// Returns a human-readable description of this safety tier
+    pub fn description(&self) -> &'static str {
+        match self {
+            ToolSafetyTier::Safe => "Safe to execute automatically",
+            ToolSafetyTier::RequiresNotification => "Will notify you when executing",
+            ToolSafetyTier::RequiresConfirmation => "Requires your confirmation",
+            ToolSafetyTier::RequiresExplicitApproval => {
+                "Requires explicit approval with detailed review"
+            }
+        }
+    }
+}
+
+/// Request for tool confirmation from the user
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolConfirmationRequest {
+    /// Unique identifier for this confirmation request
+    pub request_id: String,
+    /// Name of the tool being executed
+    pub tool_name: String,
+    /// Human-readable description of what the tool does
+    pub tool_description: String,
+    /// Parameters being passed to the tool
+    pub parameters: Value,
+    /// Risk level of the operation
+    pub risk_level: RiskLevel,
+    /// Safety tier that triggered this confirmation
+    pub safety_tier: ToolSafetyTier,
+    /// Reason why confirmation is required
+    pub reason: String,
+    /// Whether this action can be undone
+    pub reversible: bool,
+    /// Description of how to undo the action (if reversible)
+    pub undo_description: Option<String>,
+}
+
+/// Response from user for a tool confirmation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolConfirmationResponse {
+    /// ID of the confirmation request being responded to
+    pub request_id: String,
+    /// Whether the user approved the execution
+    pub approved: bool,
+    /// Whether to remember this choice for future executions of this tool
+    pub remember_choice: bool,
+    /// Optional reason provided by user (especially if denied)
+    pub reason: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub struct ToolPolicy {
@@ -15,7 +87,7 @@ pub struct ToolPolicy {
     pub risk_level: RiskLevel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -644,6 +716,93 @@ impl ToolExecutionGuard {
             .get(tool_name)
             .map(|p| p.requires_approval)
             .unwrap_or(true)
+    }
+
+    /// Get the safety tier for a given tool based on its risk level and approval requirements
+    pub fn get_safety_tier(&self, tool_name: &str) -> ToolSafetyTier {
+        match self.allowed_tools.get(tool_name) {
+            Some(policy) => match policy.risk_level {
+                RiskLevel::Low => ToolSafetyTier::Safe,
+                RiskLevel::Medium => {
+                    if policy.requires_approval {
+                        ToolSafetyTier::RequiresConfirmation
+                    } else {
+                        ToolSafetyTier::RequiresNotification
+                    }
+                }
+                RiskLevel::High => ToolSafetyTier::RequiresConfirmation,
+                RiskLevel::Critical => ToolSafetyTier::RequiresExplicitApproval,
+            },
+            // Unknown tools default to requiring confirmation for safety
+            None => ToolSafetyTier::RequiresConfirmation,
+        }
+    }
+
+    /// Create a confirmation request for a tool that requires user approval.
+    ///
+    /// # Arguments
+    ///
+    /// * `tool_name` - Name of the tool to be executed
+    /// * `parameters` - Parameters being passed to the tool
+    /// * `description` - Optional human-readable description of what the tool does
+    ///
+    /// # Returns
+    ///
+    /// A `ToolConfirmationRequest` that can be sent to the frontend for user approval.
+    pub fn create_confirmation_request(
+        &self,
+        tool_name: &str,
+        parameters: &Value,
+        description: Option<&str>,
+    ) -> ToolConfirmationRequest {
+        let safety_tier = self.get_safety_tier(tool_name);
+        let risk_level = self.get_risk_level(tool_name).unwrap_or(RiskLevel::Medium);
+
+        let reason = match safety_tier {
+            ToolSafetyTier::Safe => "This tool is safe and doesn't require confirmation.".to_string(),
+            ToolSafetyTier::RequiresNotification => "This tool will notify you when executing.".to_string(),
+            ToolSafetyTier::RequiresConfirmation => format!(
+                "The '{}' tool requires your confirmation before executing.",
+                tool_name
+            ),
+            ToolSafetyTier::RequiresExplicitApproval => format!(
+                "The '{}' tool is a high-risk operation that requires explicit approval with detailed review.",
+                tool_name
+            ),
+        };
+
+        // Determine reversibility based on tool type
+        let (reversible, undo_description) = match tool_name {
+            "file_write" | "file_create" => (true, Some("Restore the previous file contents".to_string())),
+            "file_delete" => (true, Some("Restore the deleted file from backup".to_string())),
+            "code_execute" => (false, None),
+            "db_query" => {
+                // Check if it's a read-only query
+                let query_lower = parameters
+                    .get("query")
+                    .and_then(|q| q.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if query_lower.starts_with("select") {
+                    (false, None) // SELECT queries are not reversible but also don't modify data
+                } else {
+                    (false, Some("Database changes may need manual rollback".to_string()))
+                }
+            }
+            _ => (false, None),
+        };
+
+        ToolConfirmationRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            tool_name: tool_name.to_string(),
+            tool_description: description.unwrap_or("No description available").to_string(),
+            parameters: parameters.clone(),
+            risk_level,
+            safety_tier,
+            reason,
+            reversible,
+            undo_description,
+        }
     }
 }
 
