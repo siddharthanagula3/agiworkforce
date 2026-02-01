@@ -3,6 +3,7 @@
  *
  * Manages project organization for the AGI Workforce desktop app.
  * Projects group conversations, files, and custom instructions together.
+ * Also manages the current working folder for scoped sessions (like Claude Code).
  *
  * Updated to Zustand v5 best practices:
  * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
@@ -54,6 +55,10 @@ interface ProjectState {
   isLoading: boolean;
   error: string | null;
 
+  // Folder scope (like Claude Code's project folder)
+  currentFolder: string | null;
+  recentFolders: string[];
+
   // Actions - CRUD
   loadProjects: () => Promise<void>;
   createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>;
@@ -84,6 +89,13 @@ interface ProjectState {
   getArchivedProjects: () => Project[];
   getActiveProjects: () => Project[];
 
+  // Folder scope actions
+  setCurrentFolder: (path: string | null) => void;
+  addRecentFolder: (path: string) => void;
+  removeRecentFolder: (path: string) => void;
+  clearRecentFolders: () => void;
+  getCurrentFolderDisplayName: () => string | null;
+
   // Utilities
   clearError: () => void;
 }
@@ -105,6 +117,40 @@ const storageFallback: Storage = {
 // Version for storage migration
 const PROJECT_STORE_VERSION = 1;
 
+// Maximum number of recent folders to keep
+const MAX_RECENT_FOLDERS = 10;
+
+/**
+ * Formats a folder path for display (e.g., ~/Projects/my-app)
+ */
+function formatFolderPath(path: string): string {
+  // Replace home directory with ~
+  const homeDir =
+    typeof window !== 'undefined' && 'process' in window
+      ? ((window as unknown as { process?: { env?: { HOME?: string } } }).process?.env?.HOME ?? '')
+      : '';
+
+  if (homeDir && path.startsWith(homeDir)) {
+    return '~' + path.slice(homeDir.length);
+  }
+
+  // If on Windows, try to shorten common paths
+  if (path.includes('\\Users\\')) {
+    const match = path.match(/[A-Z]:\\Users\\[^\\]+\\(.+)/i);
+    if (match) {
+      return '~\\' + match[1];
+    }
+  }
+
+  // For Unix-like paths, try /home/user or /Users/user
+  const unixMatch = path.match(/^\/(?:home|Users)\/[^/]+\/(.+)/);
+  if (unixMatch) {
+    return '~/' + unixMatch[1];
+  }
+
+  return path;
+}
+
 export const useProjectStore = create<ProjectState>()(
   devtools(
     persist(
@@ -115,6 +161,10 @@ export const useProjectStore = create<ProjectState>()(
         projectSettings: {},
         isLoading: false,
         error: null,
+
+        // Folder scope state
+        currentFolder: null,
+        recentFolders: [],
 
         // Load projects from backend
         loadProjects: async () => {
@@ -348,6 +398,54 @@ export const useProjectStore = create<ProjectState>()(
           return get().projects.filter((p) => !p.isArchived);
         },
 
+        // Set current folder scope
+        setCurrentFolder: (path) => {
+          set({ currentFolder: path }, undefined, 'project/setCurrentFolder');
+
+          // If setting a folder (not clearing), add to recent folders
+          if (path) {
+            const recent = get().recentFolders.filter((f) => f !== path);
+            set(
+              { recentFolders: [path, ...recent].slice(0, MAX_RECENT_FOLDERS) },
+              undefined,
+              'project/updateRecentFolders',
+            );
+          }
+        },
+
+        // Add a folder to recent folders list
+        addRecentFolder: (path) => {
+          const recent = get().recentFolders.filter((f) => f !== path);
+          set(
+            { recentFolders: [path, ...recent].slice(0, MAX_RECENT_FOLDERS) },
+            undefined,
+            'project/addRecentFolder',
+          );
+        },
+
+        // Remove a folder from recent folders
+        removeRecentFolder: (path) => {
+          set(
+            (state) => ({
+              recentFolders: state.recentFolders.filter((f) => f !== path),
+            }),
+            undefined,
+            'project/removeRecentFolder',
+          );
+        },
+
+        // Clear all recent folders
+        clearRecentFolders: () => {
+          set({ recentFolders: [] }, undefined, 'project/clearRecentFolders');
+        },
+
+        // Get display-friendly name for current folder
+        getCurrentFolderDisplayName: () => {
+          const { currentFolder } = get();
+          if (!currentFolder) return null;
+          return formatFolderPath(currentFolder);
+        },
+
         // Clear error
         clearError: () => {
           set({ error: null });
@@ -363,6 +461,8 @@ export const useProjectStore = create<ProjectState>()(
           projects: state.projects,
           activeProjectId: state.activeProjectId,
           projectSettings: state.projectSettings,
+          currentFolder: state.currentFolder,
+          recentFolders: state.recentFolders,
         }),
         migrate: (persistedState: unknown, version: number) => {
           // Migration logic for future schema changes
@@ -391,3 +491,11 @@ export const selectArchivedProjects = (state: ProjectState) =>
 
 export const selectProjectById = (id: string) => (state: ProjectState) =>
   state.projects.find((p) => p.id === id) || null;
+
+// Folder scope selectors
+export const selectCurrentFolder = (state: ProjectState) => state.currentFolder;
+export const selectRecentFolders = (state: ProjectState) => state.recentFolders;
+export const selectHasCurrentFolder = (state: ProjectState) => state.currentFolder !== null;
+
+// Export the formatFolderPath utility for use in components
+export { formatFolderPath };
