@@ -1,6 +1,6 @@
 # AGI Workforce
 
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/siddhartha/agiworkforce)
+[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/siddhartha/agiworkforce)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
@@ -8,15 +8,32 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
 
-> **Your Personal AI Workforce** - An enterprise-grade AI automation platform that brings autonomous agents, intelligent chat, deep research, code generation, and powerful automation to your desktop. Built single-handedly by **Siddhartha Nagula** over 6 months of dedicated development.
+> **Your Personal AI Workforce** - A desktop app where non-technical users simply tell an AI what they want done in everyday language, and it autonomously completes the task. Everything is reversible with one click. Built single-handedly by **Siddhartha Nagula** over 6 months of dedicated development.
 
 ---
 
 ## What is AGI Workforce?
 
-**AGI Workforce** is a comprehensive AI-powered desktop application that acts as your personal team of AI assistants. Whether you need to have intelligent conversations, get expert advice, conduct deep research, write code, or automate complex workflows - AGI Workforce does it all from a single, beautifully designed interface.
+AGI Workforce is like having a super-smart assistant that lives on your computer. You talk to it in plain English, and it does things for you automatically.
 
-Think of it as having access to the world's most capable AI models (OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, and local models via Ollama) combined with powerful automation tools that can control your browser, execute terminal commands, manage files, and orchestrate complex multi-step tasks - all without leaving the application.
+**Example conversations:**
+
+- "Find all the invoices in my email from last month and put them in a folder"
+- "Schedule a meeting with John next Tuesday at 2pm"
+- "Write a summary of this document"
+- "Create a spreadsheet with my sales data"
+- "Search the web for the best coffee shops near me"
+
+AGI Workforce figures out the steps needed and does them without asking you for permission at every step. If it makes a mistake, you can say "undo that" and it reverses everything.
+
+### What Makes It Different?
+
+| Traditional Software                      | AGI Workforce                 |
+| ----------------------------------------- | ----------------------------- |
+| Click buttons, fill forms, navigate menus | Just describe what you want   |
+| You do each step manually                 | AI does steps automatically   |
+| Mistakes require manual fixing            | One-click undo for everything |
+| Need to learn each app                    | Just talk naturally           |
 
 ### Why AGI Workforce?
 
@@ -29,117 +46,162 @@ Think of it as having access to the world's most capable AI models (OpenAI, Anth
 
 ---
 
+## How It Works (The Big Picture)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        YOUR DEVICES                              │
+│                                                                  │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐    │
+│  │   Desktop    │     │     Web      │     │    Mobile    │    │
+│  │     App      │◄───►│    App       │◄───►│    (Future)  │    │
+│  │ [Full AI]    │     │ [Chat Only]  │     │ [Sync Only]  │    │
+│  └──────────────┘     └──────────────┘     └──────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLOUD SERVICES                               │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐    │
+│  │   AI Models  │     │   Database   │     │   Payments   │    │
+│  │ (Claude,GPT) │     │  (Supabase)  │     │   (Stripe)   │    │
+│  └──────────────┘     └──────────────┘     └──────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key insight:** The desktop app does all the "smart" work. The web app is mainly for billing and accessing chat from browsers.
+
+### The AI Reasoning Loop
+
+When you ask AGI Workforce to do something:
+
+```
+    1. UNDERSTAND          2. PLAN              3. EXECUTE
+    ┌─────────┐           ┌─────────┐          ┌─────────┐
+    │ "What   │    ──►    │ Break   │    ──►   │ Do each │
+    │ does    │           │ into    │          │ step    │
+    │ user    │           │ steps"  │          │         │
+    │ want?"  │           │         │          │         │
+    └─────────┘           └─────────┘          └─────────┘
+         ▲                                          │
+         │         4. REFLECT                       │
+         │         ┌─────────┐                      │
+         └──────── │ "Did it │ ◄────────────────────┘
+                   │ work?"  │
+                   └─────────┘
+```
+
+---
+
 ## Core Capabilities
 
 ### 1. Intelligent Chat & Conversations
 
-AGI Workforce provides a powerful chat interface that goes beyond simple Q&A:
-
-- **Multi-Provider Support**: Seamlessly switch between OpenAI (GPT-4o, GPT-4), Anthropic (Claude 4 Opus, Claude Sonnet), Google (Gemini 2.5), DeepSeek, xAI (Grok), and local models via Ollama
+- **Multi-Provider Support**: Seamlessly switch between OpenAI (GPT-4o, GPT-5), Anthropic (Claude 4 Opus, Claude Sonnet), Google (Gemini 2.5), DeepSeek, xAI (Grok), and local models via Ollama
 - **Streaming Responses**: Real-time token streaming for immediate feedback
 - **Vision & Multimodal**: Upload images for analysis, screenshots for debugging, documents for processing
 - **Conversation Memory**: Intelligent context management that remembers your conversation history
 - **Cost Tracking**: Real-time cost calculation showing exactly what each conversation costs
-- **Multiple Chat Sessions**: Organize conversations by project or topic
 
-### 2. Expert Advice & Assistance
+### 2. Autonomous Task Execution
 
-Get thoughtful, expert-level guidance on any topic:
+When you set AGI Workforce to "autonomous mode," it works independently:
 
-- **Domain Expertise**: From software engineering to business strategy, get advice tailored to your needs
-- **Code Review**: Paste code and get detailed feedback on quality, security, and best practices
-- **Problem Solving**: Describe complex problems and receive structured solutions
-- **Decision Support**: Get pros/cons analysis and recommendations for tough decisions
-- **Learning Assistant**: Explanations calibrated to your expertise level
+1. You describe what you want
+2. AI breaks it into steps
+3. AI executes each step automatically
+4. AI shows you the result
+5. You can undo anything if needed
 
-### 3. Powerful Search & Discovery
+### 3. File & Document Management
 
-Find information quickly and comprehensively:
+AGI Workforce can work with files on your computer:
 
-- **Web Search Integration**: AI-enhanced web search that understands context
-- **Local File Search**: Intelligent search across your documents and codebase
-- **Semantic Search**: Find relevant content even when keywords don't match exactly
-- **Cross-Reference**: Combine information from multiple sources automatically
+- **Read files** - Look at documents, spreadsheets, PDFs
+- **Create files** - Make new documents, images, code files
+- **Edit files** - Change existing files
+- **Move/rename files** - Organize your folders
+- **Delete files** - Remove unwanted items (with undo!)
+- **Create Word/Excel/PDF** - Generate professional documents
 
-### 4. Deep Research & Analysis
+### 4. Web Browsing & Automation
 
-Conduct thorough research that would take humans hours:
-
-- **Multi-Source Research**: Automatically gather and synthesize information from multiple sources
-- **Structured Reports**: Generate well-organized research reports with citations
-- **Fact Verification**: Cross-check claims across multiple sources
-- **Trend Analysis**: Identify patterns and trends in complex data
-- **Competitive Intelligence**: Research competitors, markets, and technologies
-
-### 5. Code Generation & Development
-
-Your AI pair programmer that actually writes production code:
-
-- **Code Generation**: Generate complete functions, classes, or entire modules from descriptions
-- **Multi-Language Support**: Python, TypeScript, JavaScript, Rust, Go, Java, C++, and more
-- **Code Explanation**: Understand complex codebases with detailed explanations
-- **Refactoring**: Transform messy code into clean, maintainable solutions
-- **Bug Detection**: Identify potential bugs and security vulnerabilities
-- **Test Generation**: Automatically generate unit tests and integration tests
-- **Documentation**: Generate comprehensive documentation from code
-
-### 6. Workflow Automation
-
-Automate repetitive tasks with intelligent workflows:
-
-- **Visual Workflow Builder**: Drag-and-drop interface to create complex automation flows
-- **Conditional Logic**: Build workflows with if/then branching based on conditions
-- **Parallel Execution**: Run multiple tasks simultaneously for maximum efficiency
-- **Error Handling**: Built-in retry logic and fallback mechanisms
-- **Scheduling**: Set up recurring automated tasks
-- **Notifications**: Get alerts when workflows complete or encounter issues
-
-### 7. Browser Automation
-
-AI that can browse the web for you:
-
-- **Semantic Navigation**: Describe what you want to do in plain English ("fill out the contact form", "download the PDF")
+- **Semantic Navigation**: Describe what you want ("fill out the contact form")
 - **Web Scraping**: Extract structured data from websites
 - **Form Filling**: Automatically complete web forms
 - **Screenshot Analysis**: Capture and analyze web page content
-- **Multi-Tab Management**: Work across multiple browser tabs
-- **Cookie & Session Handling**: Maintain authenticated sessions
 
-### 8. Terminal & Shell Integration
+### 5. Email & Calendar Integration
 
-Execute commands with AI understanding:
+- Read and summarize emails
+- Draft and send replies
+- Search your inbox
+- Create calendar events
+- Schedule meetings
 
-- **Command Generation**: Describe what you want to do, get the right command
-- **Output Analysis**: AI interprets command outputs and suggests next steps
+### 6. Terminal & Shell Integration
+
+- **Command Generation**: Describe what you want, get the right command
+- **Output Analysis**: AI interprets outputs and suggests next steps
 - **Script Generation**: Create shell scripts for complex operations
 - **Safe Execution**: Preview commands before running them
-- **History & Context**: AI remembers previous commands in context
 
-### 9. File & Document Management
+### 7. Deep Research Mode
 
-Intelligent file operations:
+For complex research tasks:
 
-- **File Organization**: Automatically organize files based on content
-- **Document Processing**: Extract text from PDFs, images, and documents
-- **Content Transformation**: Convert between formats, summarize documents
-- **Batch Operations**: Process multiple files with a single command
-- **Version Tracking**: Keep track of document changes over time
+1. Searches multiple sources (web, your files, emails)
+2. Reads and analyzes the content
+3. Creates a summary with sources cited
+4. Presents findings in an easy-to-read format
 
-### 10. MCP (Model Context Protocol) Integration
+### 8. Code Generation & Development
 
-Extend AI capabilities with external tools:
+- **Code Generation**: Generate complete functions, classes, or modules
+- **Multi-Language Support**: Python, TypeScript, JavaScript, Rust, Go, Java, C++, and more
+- **Code Explanation**: Understand complex codebases
+- **Bug Detection**: Identify potential bugs and security vulnerabilities
+- **Test Generation**: Automatically generate tests
 
-- **40+ MCP Servers**: Pre-configured servers for databases, APIs, file systems, and more
-- **Custom Servers**: Build and connect your own MCP servers
-- **Tool Discovery**: Automatic discovery of available tools and capabilities
-- **Secure Credentials**: Store API keys and tokens in your OS keyring
-- **Session Management**: Persistent connections with automatic reconnection
+### 9. MCP (Model Context Protocol) Integration
+
+Extend AI capabilities with 40+ external tools:
+
+- Pre-configured servers for databases, APIs, file systems
+- Tool Discovery: Automatic discovery of available capabilities
+- Secure Credentials: Store API keys in your OS keyring
+
+---
+
+## Safety & Control
+
+### The Undo System
+
+**Everything AGI Workforce does can be reversed.**
+
+- Creates a file → You can delete it
+- Deletes a file → You can restore it
+- Sends an email → Draft only unless you approve
+- Changes a document → Revert to the previous version
+
+Just say "undo" or click the undo button.
+
+### Resource Limits
+
+Built-in safeguards prevent runaway operations:
+
+- **Time limit:** Tasks stop after 5 minutes
+- **Step limit:** Maximum 1,000 steps per task
+- **Memory limit:** Won't use more than 2GB RAM
+- **Retry limit:** Gives up after 3 consecutive failures
+
+### Folder Permissions
+
+You control exactly which folders AGI Workforce can access. It cannot see anything outside those folders.
 
 ---
 
 ## Technology Stack
-
-AGI Workforce is built with cutting-edge technologies for maximum performance and reliability:
 
 ### Desktop Application (Tauri + Rust)
 
@@ -163,7 +225,6 @@ AGI Workforce is built with cutting-edge technologies for maximum performance an
 | **Terminal**         | xterm.js v6 - Full terminal emulation      |
 | **Code Editor**      | Monaco Editor - VS Code's editor           |
 | **Workflows**        | @xyflow/react v12 - Visual node editor     |
-| **Diagrams**         | Mermaid v11 - Diagram generation           |
 
 ### Web Platform (Next.js 16)
 
@@ -173,65 +234,17 @@ AGI Workforce is built with cutting-edge technologies for maximum performance an
 | **Database**       | Supabase PostgreSQL with RLS    |
 | **Authentication** | Supabase Auth with JWT          |
 | **Payments**       | Stripe with webhook idempotency |
-| **Rate Limiting**  | Upstash Redis                   |
-| **Server State**   | React Query v5                  |
 
-### AI & ML Infrastructure
+### Supported AI Models
 
-| Component          | Technology                                       |
-| ------------------ | ------------------------------------------------ |
-| **LLM Providers**  | OpenAI, Anthropic, Google, DeepSeek, xAI, Ollama |
-| **Token Counting** | cl100k_base, o200k_base tokenizers               |
-| **Streaming**      | Server-Sent Events (SSE) parsing                 |
-| **Vision**         | Multimodal image analysis                        |
-| **OCR**            | Tesseract integration                            |
-
----
-
-## Supported AI Models
-
-AGI Workforce supports all major AI providers:
-
-### Cloud Providers
-
-| Provider      | Models                                               | Features                       |
-| ------------- | ---------------------------------------------------- | ------------------------------ |
-| **OpenAI**    | GPT-4o, GPT-4o-mini, GPT-4-turbo, o1, o1-mini        | Chat, Vision, Function calling |
-| **Anthropic** | Claude 4 Opus, Claude 3.5/4 Sonnet, Claude 3.5 Haiku | Chat, Vision, Long context     |
-| **Google**    | Gemini 2.5 Pro/Flash, Gemini 2.0                     | Chat, Vision, Grounding        |
-| **DeepSeek**  | DeepSeek V3, DeepSeek Coder                          | Chat, Code generation          |
-| **xAI**       | Grok 2, Grok 2 Vision                                | Chat, Vision, Real-time        |
-
-### Local Models (via Ollama)
-
-Run AI models locally for complete privacy:
-
-- Llama 3.3 (70B, 8B)
-- Mistral (7B, Nemo)
-- CodeLlama
-- Phi-3
-- Qwen 2.5
-- And many more...
-
----
-
-## Key Features at a Glance
-
-| Feature                  | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| **Autonomous AGI**       | Self-directed agents that plan and execute complex goals |
-| **Multi-Provider Chat**  | Switch between AI providers seamlessly                   |
-| **Vision & Multimodal**  | Analyze images, screenshots, and documents               |
-| **Browser Automation**   | AI-controlled web navigation with CDP                    |
-| **Terminal Integration** | Execute and analyze shell commands                       |
-| **Visual Workflows**     | Drag-and-drop automation builder                         |
-| **MCP Integration**      | 40+ tools via Model Context Protocol                     |
-| **Code Generation**      | Write, review, and refactor code                         |
-| **Deep Research**        | Multi-source research and analysis                       |
-| **Real-Time Sync**       | WebSocket sync between devices                           |
-| **Offline Support**      | Full functionality without internet                      |
-| **Enterprise Security**  | Encryption, audit logging, RBAC                          |
-| **Cost Tracking**        | Real-time usage and cost monitoring                      |
+| Provider      | Models                                                      | Features                       |
+| ------------- | ----------------------------------------------------------- | ------------------------------ |
+| **OpenAI**    | GPT-4o, GPT-4o-mini, GPT-5, o1, o1-mini                     | Chat, Vision, Function calling |
+| **Anthropic** | Claude Opus 4.5, Claude 4/3.5 Sonnet, Claude 3.5 Haiku      | Chat, Vision, Long context     |
+| **Google**    | Gemini 2.5 Pro/Flash, Gemini 2.0                            | Chat, Vision, Grounding        |
+| **DeepSeek**  | DeepSeek V3, DeepSeek Coder                                 | Chat, Code generation          |
+| **xAI**       | Grok 2, Grok 2 Vision                                       | Chat, Vision, Real-time        |
+| **Local**     | Llama 3.3, Mistral, CodeLlama, Phi-3, Qwen 2.5 (via Ollama) | Full privacy                   |
 
 ---
 
@@ -278,7 +291,7 @@ The desktop app will launch with hot-reload enabled.
 
 1. **Add your API keys**: Go to Settings > API Keys and add your provider keys
 2. **Start chatting**: Open a new chat and start conversing with AI
-3. **Try automation**: Create a simple workflow to automate a task
+3. **Try automation**: Ask it to do something ("list files on my Desktop")
 4. **Explore MCP**: Enable MCP servers to extend capabilities
 
 ---
@@ -345,71 +358,39 @@ pnpm build:desktop            # Build desktop (DMG/EXE/AppImage)
 pnpm build                    # Build all packages
 ```
 
-### Code Quality Standards
-
-- **Zero Errors**: All code must pass TypeScript strict mode
-- **Zero Warnings**: ESLint with max 15 warnings in CI
-- **Formatted**: Prettier with single quotes, semicolons
-- **Tested**: Vitest unit tests + Playwright E2E tests
-- **Documented**: JSDoc comments on public APIs
-
 ---
 
 ## Documentation
 
-### User Guides
-
-- **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
-- **[User Guide](docs/USER_GUIDE.md)** - Complete user manual
-- **[Features Guide](docs/FEATURES.md)** - All features explained
-- **[FAQ](docs/FAQ.md)** - Common questions answered
-- **[Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md)** - Productivity shortcuts
-
-### Developer Documentation
-
+- **[PLAIN_ENGLISH_OVERVIEW.md](docs/PLAIN_ENGLISH_OVERVIEW.md)** - Complete user guide in plain language
+- **[HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** - Technical architecture explained simply
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture deep-dive
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 - **[CLAUDE.md](CLAUDE.md)** - AI assistant development guide
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history
-
----
-
-## Security & Privacy
-
-AGI Workforce is built with security as a core principle:
-
-- **Local-First**: Your data stays on your machine in encrypted SQLite
-- **OS Keyring**: API keys stored in native OS keychain (macOS Keychain, Windows Credential Manager)
-- **AES-GCM Encryption**: Sensitive data encrypted at rest
-- **No Telemetry**: No data collection or tracking
-- **Audit Logging**: Full activity logging for compliance
-- **Row Level Security**: Supabase RLS for web platform
 
 ---
 
 ## Version History
 
-### v1.0.6 (Current)
+### v1.0.9 (Current)
+
+- Implemented 17 missing tool handlers (file*list, memory*_, browser\__, api_download)
+- Complete tool feedback loop verification
+- Chat-first autonomous architecture with undo system
+- Latest 2026 model support (GPT-5.2, Gemini 3, Claude Opus 4.5)
+- Major dependency updates (React 19.2.3, Vite 7.3.1, Tauri 2.9.6)
+
+### v1.0.6
 
 - Simplified chat-first architecture with undo system
 - "Always use agent mode" setting for enhanced automation
 - Intelligent model router with task classification
-- Latest 2026 model support (GPT-5.2, Gemini 3, Claude Opus 4.5)
-- Major dependency updates (React 19.2.3, Vite 7.3.1, Tauri 2.9.6)
 
 ### v1.0.5
 
 - Global deployment with signaling server on Fly.io
 - Auto-updater support for desktop
 - Enhanced MCP tool integration
-- Performance optimizations
-
-### v1.0.4
-
-- Multi-provider LLM routing
-- Browser automation with CDP
-- Visual workflow builder
-- Enhanced terminal integration
 
 See [CHANGELOG.md](docs/CHANGELOG.md) for full history.
 
@@ -418,8 +399,6 @@ See [CHANGELOG.md](docs/CHANGELOG.md) for full history.
 ## About the Developer
 
 **AGI Workforce** was developed single-handedly by **Siddhartha Nagula** over **6 months** of dedicated work. This project represents a comprehensive vision for AI-powered productivity - combining the best AI models with powerful automation capabilities in a native desktop experience.
-
-The entire application - from the Rust backend to the React frontend, from the AI integrations to the browser automation, from the database schema to the payment processing - was designed and implemented by a single developer with a passion for building tools that make people more productive.
 
 ---
 
