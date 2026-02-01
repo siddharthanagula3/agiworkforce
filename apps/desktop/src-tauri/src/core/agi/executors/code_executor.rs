@@ -806,6 +806,7 @@ impl CodeExecutor {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let router = context.router.read().await;

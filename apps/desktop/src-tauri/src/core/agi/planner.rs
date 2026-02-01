@@ -154,6 +154,8 @@ Relevant Knowledge:
 {}
 {}
 Current Context:
+- Operating System: {} ({})
+- Architecture: {}
 - CPU Usage: {}%
 - Memory Usage: {}MB
 - Previous Steps: {}
@@ -200,6 +202,9 @@ Return ONLY the JSON array."#,
             tools_summary.join("\n"),
             knowledge_summary.join("\n"),
             best_practices_section,
+            std::env::consts::OS,
+            std::env::consts::FAMILY,
+            std::env::consts::ARCH,
             context.available_resources.cpu_usage_percent,
             context.available_resources.memory_usage_mb,
             context.tool_results.len()
@@ -228,6 +233,7 @@ Return ONLY the JSON array."#,
             tools: None,
             tool_choice: None,
             thinking_mode: Some(true),
+            ..Default::default()
         };
 
         let router = self.router.read().await;
@@ -597,6 +603,7 @@ Your response:"#,
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let router = self.router.read().await;
@@ -720,6 +727,8 @@ Relevant Knowledge:
 {}
 
 Current Context:
+- Operating System: {} ({})
+- Architecture: {}
 - CPU Usage: {}%
 - Memory Usage: {}MB
 - Previous Steps: {}
@@ -741,6 +750,9 @@ Return ONLY a JSON array of steps with this structure:
             goal.success_criteria.join(", "),
             tools_summary.join("\n"),
             knowledge_summary.join("\n"),
+            std::env::consts::OS,
+            std::env::consts::FAMILY,
+            std::env::consts::ARCH,
             context.available_resources.cpu_usage_percent,
             context.available_resources.memory_usage_mb,
             context.tool_results.len()
@@ -769,6 +781,7 @@ Return ONLY a JSON array of steps with this structure:
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let router = self.router.read().await;

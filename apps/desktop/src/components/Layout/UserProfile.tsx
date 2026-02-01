@@ -1,11 +1,20 @@
 import * as Popover from '@radix-ui/react-popover';
-import { CreditCard, MessageSquare, Settings, Coins, LogOut, Loader2 } from 'lucide-react';
-import React from 'react';
+import {
+  CreditCard,
+  MessageSquare,
+  Settings,
+  Coins,
+  LogOut,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
+import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useAuthStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';
 import { getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
+import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 
 interface UserProfileProps {
   onSettingsClick?: () => void;
@@ -24,6 +33,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const isTierLoading = useAccountStore(selectIsTierLoading);
 
   const { displayName, email, avatar, planDisplayName, plan, credits } = account;
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshCredits = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshCreditsAfterMessage();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Show "Loading..." when subscription tier is being fetched
   // This prevents showing "FREE" to paid users during network delays
@@ -113,6 +132,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             {/* Credit Balance Display */}
             {(plan === 'hobby' || plan === 'pro' || plan === 'max') && credits && (
               <div className="mt-3 space-y-2">
+                {/* Refresh Credits Button */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleRefreshCredits()}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
+                    title="Refresh credits"
+                  >
+                    <RefreshCw className={cn('h-3 w-3', isRefreshing && 'animate-spin')} />
+                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
+                </div>
                 {/* Daily Credits */}
                 {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3">

@@ -15,6 +15,7 @@ import {
   Terminal,
   Video,
   X,
+  Activity,
 } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -24,6 +25,7 @@ import { BrowserVisualization } from '../Browser/BrowserVisualization';
 import { MonacoEditor } from '../Editor/MonacoEditor';
 import { TerminalPanel } from '../Execution/TerminalPanel';
 import { MediaGallery } from '../Media/MediaGallery';
+import { BackgroundTasksPanel } from '../BackgroundTasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
 
 export type DynamicPanelType =
@@ -38,6 +40,7 @@ export type DynamicPanelType =
   | 'diff'
   | 'canvas'
   | 'artifact'
+  | 'tasks'
   | null;
 
 interface DynamicSidecarProps {
@@ -61,6 +64,7 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   diff: <FileText className="h-4 w-4 text-zinc-300" />,
   canvas: <Braces className="h-4 w-4 text-pink-400" />,
   artifact: <Code2 className="h-4 w-4 text-amber-400" />,
+  tasks: <Activity className="h-4 w-4 text-cyan-400" />,
 };
 
 // AUDIT-005-018 fix: Separate component to handle video autoPlay with error handling
@@ -209,6 +213,9 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             }
           />
         );
+
+      case 'tasks':
+        return <BackgroundTasksPanel className="flex-1" maxHeight="100%" />;
 
       case 'artifact':
         if (!payload?.['artifact']) {

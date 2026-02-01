@@ -142,7 +142,6 @@ describe('Single Conversation API', () => {
           order: vi.fn().mockResolvedValue({ data: mockMessages, error: null }),
         };
 
-        const callCount = 0;
         mockSupabaseData.from.mockImplementation((table: string) => {
           if (table === 'web_conversations') {
             return convQueryChain;

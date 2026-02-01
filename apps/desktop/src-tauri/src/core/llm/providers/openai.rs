@@ -104,6 +104,22 @@ struct OpenAIRequest {
     tools: Option<Vec<OpenAITool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<OpenAIToolChoiceValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<OpenAIResponseFormat>,
+}
+
+/// OpenAI response format for structured outputs
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum OpenAIResponseFormat {
+    Text,
+    JsonObject,
+    #[serde(rename = "json_schema")]
+    JsonSchema {
+        json_schema: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -125,6 +141,15 @@ struct OpenAIUsage {
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
+    #[serde(default)]
+    completion_tokens_details: Option<CompletionTokensDetails>,
+}
+
+/// Details about completion token usage including reasoning tokens
+#[derive(Debug, Clone, Deserialize)]
+struct CompletionTokensDetails {
+    #[serde(default)]
+    reasoning_tokens: Option<u32>,
 }
 
 pub struct OpenAIProvider {
@@ -206,7 +231,13 @@ impl OpenAIProvider {
                             },
                         });
                     }
-                    ContentPart::Video { .. } => {}
+                    // Video, Audio, Document, ToolUse, ToolResult not directly supported by OpenAI
+                    // multimodal content parts - skip them for now
+                    ContentPart::Video { .. }
+                    | ContentPart::Audio { .. }
+                    | ContentPart::Document { .. }
+                    | ContentPart::ToolUse { .. }
+                    | ContentPart::ToolResult { .. } => {}
                 }
             }
 
@@ -287,6 +318,40 @@ impl OpenAIProvider {
             })
             .collect()
     }
+
+    /// Convert LLMRequest response_format to OpenAI format
+    fn convert_response_format(
+        response_format: Option<&crate::core::llm::ResponseFormat>,
+    ) -> Option<OpenAIResponseFormat> {
+        response_format.map(|rf| match rf.format_type.as_str() {
+            "text" => OpenAIResponseFormat::Text,
+            "json_object" => OpenAIResponseFormat::JsonObject,
+            "json_schema" => {
+                // Wrap the schema in the expected OpenAI format
+                let json_schema = if let Some(schema) = &rf.json_schema {
+                    serde_json::json!({
+                        "name": "response",
+                        "strict": true,
+                        "schema": schema
+                    })
+                } else {
+                    serde_json::json!({
+                        "name": "response",
+                        "strict": true,
+                        "schema": {}
+                    })
+                };
+                OpenAIResponseFormat::JsonSchema { json_schema }
+            }
+            _ => OpenAIResponseFormat::Text,
+        })
+    }
+
+    /// Check if a model is a reasoning model (o1/o3 series)
+    #[allow(dead_code)]
+    fn is_reasoning_model(model: &str) -> bool {
+        model.starts_with("o1") || model.starts_with("o3")
+    }
 }
 
 #[async_trait::async_trait]
@@ -357,6 +422,8 @@ impl LLMProvider for OpenAIProvider {
                 .tool_choice
                 .as_ref()
                 .and_then(Self::convert_tool_choice),
+            top_p: request.top_p,
+            response_format: Self::convert_response_format(request.response_format.as_ref()),
         };
 
         let response = self
@@ -418,6 +485,13 @@ impl LLMProvider for OpenAIProvider {
             openai_response.usage.completion_tokens,
         );
 
+        // Extract reasoning tokens from completion_tokens_details (o1/o3 models)
+        let reasoning_tokens = openai_response
+            .usage
+            .completion_tokens_details
+            .as_ref()
+            .and_then(|d| d.reasoning_tokens);
+
         Ok(LLMResponse {
             content,
             tokens: Some(openai_response.usage.total_tokens),
@@ -427,6 +501,7 @@ impl LLMProvider for OpenAIProvider {
             model: openai_response.model,
             tool_calls,
             finish_reason: choice.finish_reason.clone(),
+            reasoning_tokens,
             ..LLMResponse::default()
         })
     }
@@ -486,6 +561,8 @@ impl LLMProvider for OpenAIProvider {
                 .tool_choice
                 .as_ref()
                 .and_then(Self::convert_tool_choice),
+            top_p: request.top_p,
+            response_format: Self::convert_response_format(request.response_format.as_ref()),
         };
 
         tracing::debug!(

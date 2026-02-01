@@ -463,6 +463,68 @@ pub async fn memory_import_json_string(
     state.manager.import_from_json(&json, strategy)
 }
 
+// =============================================================================
+// Memory Dashboard Commands
+// =============================================================================
+
+/// Get memory dashboard statistics
+#[command]
+pub async fn memory_get_dashboard_stats(
+    state: State<'_, MemoryState>,
+) -> Result<serde_json::Value> {
+    let stats = state.manager.get_memory_stats()?;
+    let compaction_stats = state.manager.get_compaction_stats()?;
+
+    Ok(serde_json::json!({
+        "memory_stats": stats,
+        "compaction_stats": compaction_stats,
+    }))
+}
+
+/// Get project-specific memories for injection into LLM context
+#[command]
+pub async fn memory_get_project_memories(
+    project_name: Option<String>,
+    limit: Option<usize>,
+    state: State<'_, MemoryState>,
+) -> Result<Vec<MemoryEntry>> {
+    let limit = limit.unwrap_or(10);
+
+    if let Some(name) = project_name {
+        // Search for project-specific memories
+        state.manager.search(&name, limit)
+    } else {
+        // Return high-importance memories for context
+        state.manager.get_important_memories(6)
+    }
+}
+
+/// Get memory usage trends (placeholder for future analytics)
+#[command]
+pub async fn memory_get_usage_trends(
+    state: State<'_, MemoryState>,
+) -> Result<serde_json::Value> {
+    let stats = state.manager.get_memory_stats()?;
+
+    // Return basic trend data
+    Ok(serde_json::json!({
+        "total_memories": stats.total_count,
+        "average_importance": stats.avg_importance,
+        "high_importance": stats.high_importance_count,
+        "low_importance": stats.low_importance_count,
+        "trend": "stable"
+    }))
+}
+
+/// Suggest important memories for user review
+#[command]
+pub async fn memory_suggest_important(
+    state: State<'_, MemoryState>,
+) -> Result<Vec<MemoryEntry>> {
+    // Get critical memories (importance >= 9)
+    state.manager.get_important_memories(9)
+}
+
 /// Parse a category string to MemoryCategory enum
 fn parse_category(category: &str) -> Result<MemoryCategory> {
     match category.to_lowercase().as_str() {

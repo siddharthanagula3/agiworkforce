@@ -56,6 +56,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -93,6 +94,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -133,6 +135,7 @@ mod tests {
             tools: Some(tools.clone()),
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tools.is_some());
@@ -152,6 +155,7 @@ mod tests {
             tools: None,
             tool_choice: Some(ToolChoice::Auto),
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.tool_choice.is_some());
@@ -169,6 +173,7 @@ mod tests {
             tools: None,
             tool_choice: Some(ToolChoice::Required),
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(matches!(request.tool_choice, Some(ToolChoice::Required)));
@@ -185,6 +190,7 @@ mod tests {
             tools: None,
             tool_choice: Some(ToolChoice::Specific("get_weather".to_string())),
             thinking_mode: None,
+            ..Default::default()
         };
 
         if let Some(ToolChoice::Specific(name)) = &request.tool_choice {
@@ -211,6 +217,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert!(request.stream);
@@ -281,6 +288,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages.len(), 3);
@@ -300,6 +308,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let high_temp = LLMRequest {
@@ -311,6 +320,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(low_temp.temperature, Some(0.0));
@@ -328,6 +338,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.max_tokens, Some(4096));
@@ -350,6 +361,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         assert_eq!(request.messages[0].content, "");
@@ -369,6 +381,7 @@ mod tests {
                 tools: None,
                 tool_choice: None,
                 thinking_mode: None,
+                ..Default::default()
             };
 
             assert_eq!(request.model, model);
@@ -392,6 +405,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let serialized = serde_json::to_string(&request).unwrap();

@@ -1,5 +1,7 @@
 use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::core::llm::{ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall};
+use crate::core::llm::{
+    ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ThinkingParameter, ToolCall,
+};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -55,11 +57,15 @@ struct AnthropicRequest {
     model: String,
     messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
+    system: Option<Vec<AnthropicSystemContent>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,13 +74,32 @@ struct AnthropicRequest {
     thinking: Option<AnthropicThinking>,
 }
 
+/// Anthropic system content block with optional cache_control
+#[derive(Debug, Clone, Serialize)]
+struct AnthropicSystemContent {
+    #[serde(rename = "type")]
+    content_type: String,
+    text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_control: Option<AnthropicCacheControl>,
+}
+
+/// Cache control for Anthropic prompt caching
+#[derive(Debug, Clone, Serialize)]
+struct AnthropicCacheControl {
+    #[serde(rename = "type")]
+    cache_type: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct AnthropicResponse {
-    _id: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    id: Option<String>,
     content: Vec<AnthropicContent>,
     usage: AnthropicUsage,
     model: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     stop_reason: Option<String>,
 }
 
@@ -89,12 +114,26 @@ enum AnthropicContent {
         name: String,
         input: Value,
     },
+    /// Thinking content block from extended thinking mode
+    Thinking {
+        thinking: String,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct AnthropicUsage {
     input_tokens: u32,
     output_tokens: u32,
+    /// Tokens used for cache creation (prompt caching)
+    #[serde(default)]
+    #[allow(dead_code)]
+    cache_creation_input_tokens: Option<u32>,
+    /// Tokens read from cache (prompt caching)
+    #[serde(default)]
+    cache_read_input_tokens: Option<u32>,
+    /// Thinking tokens used in extended thinking mode
+    #[serde(default)]
+    thinking_tokens: Option<u32>,
 }
 
 pub struct AnthropicProvider {
@@ -160,7 +199,14 @@ impl AnthropicProvider {
                             },
                         });
                     }
-                    ContentPart::Video { .. } => {}
+                    // Video, audio, documents, tool use/result not yet supported by Anthropic multimodal
+                    ContentPart::Video { .. }
+                    | ContentPart::Audio { .. }
+                    | ContentPart::Document { .. }
+                    | ContentPart::ToolUse { .. }
+                    | ContentPart::ToolResult { .. } => {
+                        // Skip unsupported content types for now
+                    }
                 }
             }
 
@@ -214,18 +260,30 @@ impl LLMProvider for AnthropicProvider {
                 .collect()
         });
 
-        let system_message = request
+        // Build system message with optional cache_control
+        let system_messages: Vec<String> = request
             .messages
             .iter()
             .filter(|m| m.role == "system")
             .map(|m| m.content.clone())
-            .collect::<Vec<String>>()
-            .join("\n\n");
+            .collect();
 
-        let system_param = if system_message.is_empty() {
+        let system_param = if system_messages.is_empty() {
             None
         } else {
-            Some(system_message)
+            let combined_system = system_messages.join("\n\n");
+            // Apply cache_control if specified
+            let cache_control = request
+                .cache_control
+                .as_ref()
+                .map(|cc| AnthropicCacheControl {
+                    cache_type: cc.cache_type.clone(),
+                });
+            Some(vec![AnthropicSystemContent {
+                content_type: "text".to_string(),
+                text: combined_system,
+                cache_control,
+            }])
         };
 
         let messages: Vec<AnthropicMessage> = request
@@ -238,34 +296,88 @@ impl LLMProvider for AnthropicProvider {
             })
             .collect();
 
-        let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
-            // Extended thinking mode: Claude 4.5 supports up to 128K output tokens
-            (
-                Some(AnthropicThinking {
-                    thinking_type: "enabled".to_string(),
-                    budget_tokens: 32000, // Increased for deeper reasoning
-                }),
-                None,
-                request.max_tokens.or(Some(128000)), // Max output for Claude 4.5
-            )
-        } else {
-            // Standard mode: 16K default for quality responses
-            (
-                None,
-                request.temperature,
-                request.max_tokens.or(Some(16384)),
-            )
-        };
+        // Process thinking configuration with full ThinkingParameter support
+        let (thinking_config, adjusted_temp, adjusted_max) =
+            if let Some(thinking) = &request.thinking {
+                match thinking {
+                    ThinkingParameter::Budget {
+                        budget_tokens,
+                        thinking_type,
+                    } => (
+                        Some(AnthropicThinking {
+                            thinking_type: thinking_type
+                                .clone()
+                                .unwrap_or_else(|| "enabled".to_string()),
+                            budget_tokens: *budget_tokens,
+                        }),
+                        None, // Temperature must be None when thinking is enabled
+                        request.max_tokens.or(Some(128000)),
+                    ),
+                    ThinkingParameter::Enabled(true) => (
+                        Some(AnthropicThinking {
+                            thinking_type: "enabled".to_string(),
+                            budget_tokens: 32000, // Default budget
+                        }),
+                        None,
+                        request.max_tokens.or(Some(128000)),
+                    ),
+                    ThinkingParameter::Enabled(false) => (
+                        None,
+                        request.temperature,
+                        request.max_tokens.or(Some(16384)),
+                    ),
+                    ThinkingParameter::Level {
+                        level,
+                        max_thinking_tokens,
+                    } => {
+                        // Map level string to budget tokens
+                        let budget = max_thinking_tokens.unwrap_or_else(|| match level.as_str() {
+                            "low" => 8000,
+                            "medium" => 16000,
+                            "high" => 32000,
+                            "extreme" => 64000,
+                            _ => 16000,
+                        });
+                        (
+                            Some(AnthropicThinking {
+                                thinking_type: "enabled".to_string(),
+                                budget_tokens: budget,
+                            }),
+                            None,
+                            request.max_tokens.or(Some(128000)),
+                        )
+                    }
+                }
+            } else if request.thinking_mode == Some(true) {
+                // Fallback to legacy thinking_mode bool
+                (
+                    Some(AnthropicThinking {
+                        thinking_type: "enabled".to_string(),
+                        budget_tokens: 32000,
+                    }),
+                    None,
+                    request.max_tokens.or(Some(128000)),
+                )
+            } else {
+                // Standard mode: 16K default for quality responses
+                (
+                    None,
+                    request.temperature,
+                    request.max_tokens.or(Some(16384)),
+                )
+            };
 
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages,
             system: system_param,
-            max_tokens,
-            temperature,
+            max_tokens: adjusted_max,
+            temperature: adjusted_temp,
+            top_p: request.top_p,
+            top_k: request.top_k,
             stream: if request.stream { Some(false) } else { None },
             tools: anthropic_tools,
-            thinking,
+            thinking: thinking_config,
         };
 
         let response = self
@@ -300,6 +412,7 @@ impl LLMProvider for AnthropicProvider {
 
         let mut text_content = String::new();
         let mut tool_calls = Vec::new();
+        let mut reasoning_content = String::new();
 
         for content_block in &anthropic_response.content {
             match content_block {
@@ -312,6 +425,12 @@ impl LLMProvider for AnthropicProvider {
                         name: name.clone(),
                         arguments: serde_json::to_string(input).unwrap_or_default(),
                     });
+                }
+                AnthropicContent::Thinking { thinking } => {
+                    if !reasoning_content.is_empty() {
+                        reasoning_content.push_str("\n\n");
+                    }
+                    reasoning_content.push_str(thinking);
                 }
             }
         }
@@ -336,6 +455,12 @@ impl LLMProvider for AnthropicProvider {
                     _ => reason.clone(),
                 });
 
+        // Extract thinking tokens from usage
+        let thinking_tokens = anthropic_response.usage.thinking_tokens;
+
+        // Extract cache read tokens for reporting
+        let cache_read_input_tokens = anthropic_response.usage.cache_read_input_tokens;
+
         Ok(LLMResponse {
             content: text_content,
             tokens: Some(total_tokens),
@@ -349,6 +474,13 @@ impl LLMProvider for AnthropicProvider {
                 Some(tool_calls)
             },
             finish_reason,
+            thinking_tokens,
+            cache_read_input_tokens,
+            reasoning_content: if reasoning_content.is_empty() {
+                None
+            } else {
+                Some(reasoning_content)
+            },
             ..LLMResponse::default()
         })
     }
@@ -387,18 +519,30 @@ impl LLMProvider for AnthropicProvider {
                 .collect()
         });
 
-        let system_message = request
+        // Build system message with optional cache_control
+        let system_messages: Vec<String> = request
             .messages
             .iter()
             .filter(|m| m.role == "system")
             .map(|m| m.content.clone())
-            .collect::<Vec<String>>()
-            .join("\n\n");
+            .collect();
 
-        let system_param = if system_message.is_empty() {
+        let system_param = if system_messages.is_empty() {
             None
         } else {
-            Some(system_message)
+            let combined_system = system_messages.join("\n\n");
+            // Apply cache_control if specified
+            let cache_control = request
+                .cache_control
+                .as_ref()
+                .map(|cc| AnthropicCacheControl {
+                    cache_type: cc.cache_type.clone(),
+                });
+            Some(vec![AnthropicSystemContent {
+                content_type: "text".to_string(),
+                text: combined_system,
+                cache_control,
+            }])
         };
 
         let messages: Vec<AnthropicMessage> = request
@@ -411,34 +555,88 @@ impl LLMProvider for AnthropicProvider {
             })
             .collect();
 
-        let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
-            // Extended thinking mode: Claude 4.5 supports up to 128K output tokens
-            (
-                Some(AnthropicThinking {
-                    thinking_type: "enabled".to_string(),
-                    budget_tokens: 32000, // Increased for deeper reasoning
-                }),
-                None,
-                request.max_tokens.or(Some(128000)), // Max output for Claude 4.5
-            )
-        } else {
-            // Standard mode: 16K default for quality responses
-            (
-                None,
-                request.temperature,
-                request.max_tokens.or(Some(16384)),
-            )
-        };
+        // Process thinking configuration with full ThinkingParameter support
+        let (thinking_config, adjusted_temp, adjusted_max) =
+            if let Some(thinking) = &request.thinking {
+                match thinking {
+                    ThinkingParameter::Budget {
+                        budget_tokens,
+                        thinking_type,
+                    } => (
+                        Some(AnthropicThinking {
+                            thinking_type: thinking_type
+                                .clone()
+                                .unwrap_or_else(|| "enabled".to_string()),
+                            budget_tokens: *budget_tokens,
+                        }),
+                        None, // Temperature must be None when thinking is enabled
+                        request.max_tokens.or(Some(128000)),
+                    ),
+                    ThinkingParameter::Enabled(true) => (
+                        Some(AnthropicThinking {
+                            thinking_type: "enabled".to_string(),
+                            budget_tokens: 32000, // Default budget
+                        }),
+                        None,
+                        request.max_tokens.or(Some(128000)),
+                    ),
+                    ThinkingParameter::Enabled(false) => (
+                        None,
+                        request.temperature,
+                        request.max_tokens.or(Some(16384)),
+                    ),
+                    ThinkingParameter::Level {
+                        level,
+                        max_thinking_tokens,
+                    } => {
+                        // Map level string to budget tokens
+                        let budget = max_thinking_tokens.unwrap_or_else(|| match level.as_str() {
+                            "low" => 8000,
+                            "medium" => 16000,
+                            "high" => 32000,
+                            "extreme" => 64000,
+                            _ => 16000,
+                        });
+                        (
+                            Some(AnthropicThinking {
+                                thinking_type: "enabled".to_string(),
+                                budget_tokens: budget,
+                            }),
+                            None,
+                            request.max_tokens.or(Some(128000)),
+                        )
+                    }
+                }
+            } else if request.thinking_mode == Some(true) {
+                // Fallback to legacy thinking_mode bool
+                (
+                    Some(AnthropicThinking {
+                        thinking_type: "enabled".to_string(),
+                        budget_tokens: 32000,
+                    }),
+                    None,
+                    request.max_tokens.or(Some(128000)),
+                )
+            } else {
+                // Standard mode: 16K default for quality responses
+                (
+                    None,
+                    request.temperature,
+                    request.max_tokens.or(Some(16384)),
+                )
+            };
 
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages,
             system: system_param,
-            max_tokens,
-            temperature,
+            max_tokens: adjusted_max,
+            temperature: adjusted_temp,
+            top_p: request.top_p,
+            top_k: request.top_k,
             stream: Some(true),
             tools: anthropic_tools,
-            thinking,
+            thinking: thinking_config,
         };
 
         tracing::debug!(

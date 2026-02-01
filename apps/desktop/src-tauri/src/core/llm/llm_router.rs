@@ -1799,6 +1799,7 @@ impl LLMRouter {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let candidates = self.candidates(&request, &prefs);
