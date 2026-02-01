@@ -25,19 +25,23 @@ import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/
 import { useBillingStore } from '../../stores/auth';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useExecutionStore } from '../../stores/executionStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import type { ResearchTask } from '../../types/chat';
 import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
+import { CanvasWorkspace } from '../Canvas';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
+import { ActiveToolStreams } from './Cards/ActiveToolStreams';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
+import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import {
   executeTerminalCommand,
   executeBrowserCommand,
@@ -46,6 +50,59 @@ import {
   executeUndoCommand,
 } from '../../handlers/slashCommandHandlers';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+/**
+ * Wrapper component that shows active tool streams above the chat input
+ * Shows running streams and recently completed/errored streams for visibility
+ */
+const ActiveToolStreamsDisplay: React.FC = () => {
+  const activeToolStreams = useUnifiedChatStore((state) => state.activeToolStreams);
+  const [tick, setTick] = React.useState(0);
+
+  // Refresh visibility check every second to handle completed stream expiration
+  React.useEffect(() => {
+    const hasCompletedStreams = Array.from(activeToolStreams.values()).some(
+      (s) => s.status === 'completed' || s.status === 'error',
+    );
+
+    if (!hasCompletedStreams) return;
+
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeToolStreams]);
+
+  // Get running streams and recently completed/errored streams (within 3 seconds)
+  // tick is included to trigger recalculation when interval fires
+  const visibleStreams = React.useMemo(() => {
+    // Use tick to force recalculation
+    void tick;
+    const now = Date.now();
+    const streams = Array.from(activeToolStreams.values());
+    return streams.filter((s) => {
+      if (s.status === 'running') return true;
+      // Show completed/errored streams for 3 seconds after completion
+      if ((s.status === 'completed' || s.status === 'error') && s.completedAt) {
+        const completedTime = new Date(s.completedAt).getTime();
+        return now - completedTime < 3000;
+      }
+      return false;
+    });
+  }, [activeToolStreams, tick]);
+
+  // Don't render if no visible streams
+  if (visibleStreams.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="border-t border-gray-800 bg-gray-900/50 px-4 py-2">
+      <ActiveToolStreams showCompleted={true} maxStreams={3} />
+    </div>
+  );
+};
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
@@ -109,7 +166,8 @@ export const UnifiedAgenticChat: React.FC<{
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // Ref to store unlisten functions for synchronous cleanup
-  const unlistenFnsRef = useRef<Array<() => void>>([]);
+  // Note: Unlisten can return void or Promise<void> depending on the event type
+  const unlistenFnsRef = useRef<Array<() => void | Promise<void>>>([]);
   const isMountedRef = useRef(true);
 
   // CHT-005 fix: Track active stream sessions to prevent race conditions
@@ -545,6 +603,72 @@ export const UnifiedAgenticChat: React.FC<{
         }),
       );
 
+      // Tool execution event listeners - display tool calls in the UI
+      registerListener(
+        listen<{
+          conversation_id: number;
+          tool_calls: Array<{
+            index: number;
+            id: string;
+            name: string;
+            arguments: string;
+          }>;
+          streaming: boolean;
+        }>('chat:tool-calls', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Tool calls detected:', payload.tool_calls.length);
+          // Add to action trail to show which tools are being called
+          for (const tc of payload.tool_calls) {
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'running',
+              message: `Calling ${tc.name}...`,
+              metadata: { tool_call_id: tc.id, arguments: tc.arguments },
+            });
+          }
+        }),
+      );
+
+      registerListener(
+        listen<{
+          conversation_id: number;
+          tool_call_id: string;
+          tool_name: string;
+          arguments: string;
+        }>('chat:tool-executing', ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Tool executing:', payload.tool_name);
+          // Update action trail with executing status
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: 'running',
+            message: `Executing ${payload.tool_name}...`,
+            metadata: { tool_call_id: payload.tool_call_id },
+          });
+        }),
+      );
+
+      registerListener(
+        listen<{
+          conversation_id: number;
+          tool_call_id: string;
+          tool_name: string;
+          success: boolean;
+          result: string;
+        }>('chat:tool-result', ({ payload }) => {
+          console.log(
+            '[UnifiedAgenticChat] Tool result:',
+            payload.tool_name,
+            payload.success ? 'succeeded' : 'failed',
+          );
+          // Update action trail with result
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: payload.success ? 'completed' : 'error',
+            message: payload.success
+              ? `${payload.tool_name} completed`
+              : `${payload.tool_name} failed`,
+            metadata: { tool_call_id: payload.tool_call_id, result_preview: payload.result },
+            fadeAfter: 3000,
+          });
+        }),
+      );
+
       // Deep Research event listeners
       registerListener(
         listen<{
@@ -683,15 +807,31 @@ export const UnifiedAgenticChat: React.FC<{
     return () => {
       // Mark as unmounted first to prevent new registrations
       isMountedRef.current = false;
-      // Synchronously clean up all registered listeners
-      unlistenFnsRef.current.forEach((unlisten) => {
+      // Clean up all registered listeners - handle both sync and async unlisten functions
+      // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections
+      const listeners = [...unlistenFnsRef.current];
+      unlistenFnsRef.current = [];
+
+      listeners.forEach((unlisten) => {
         try {
-          unlisten();
+          const result = unlisten();
+          // Handle async unlisten functions that return promises
+          if (result && typeof result === 'object' && 'catch' in result) {
+            (result as Promise<void>).catch((error) => {
+              // Suppress "listeners[eventId].handleId" errors - these occur when
+              // the event system is cleaning up during component unmount
+              if (!String(error).includes('listeners[eventId]')) {
+                console.warn('[UnifiedAgenticChat] Async listener cleanup warning:', error);
+              }
+            });
+          }
         } catch (error) {
-          console.error('[UnifiedAgenticChat] Error during listener cleanup:', error);
+          // Suppress the specific Tauri internal error during cleanup
+          if (!String(error).includes('listeners[eventId]')) {
+            console.error('[UnifiedAgenticChat] Error during listener cleanup:', error);
+          }
         }
       });
-      unlistenFnsRef.current = [];
     };
     // AUDIT-005-014 fix: Remove stable store actions from dependency array
     // updateMessage and setStreamingMessage are stable zustand actions that don't change
@@ -1079,6 +1219,9 @@ export const UnifiedAgenticChat: React.FC<{
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
 
+        // Get current project folder for scoped file operations
+        const currentProjectFolder = useProjectStore.getState().currentFolder;
+
         interface ChatSendMessageResponse {
           conversation?: { id: number };
           message?: { id: number; content: string };
@@ -1116,6 +1259,8 @@ export const UnifiedAgenticChat: React.FC<{
             researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
             // Force agent mode if user has enabled "always use agent mode" setting
             enableAgentMode: alwaysUseAgentMode ? true : undefined,
+            // Project folder for scoped file operations (like Claude Code)
+            projectFolder: currentProjectFolder || undefined,
           },
         });
 
@@ -1163,7 +1308,7 @@ export const UnifiedAgenticChat: React.FC<{
         } else if (errorMessage.includes('[ERR_RATE_LIMIT]')) {
           userMessage = `⏳ **Rate Limit Exceeded**\n\nYou are sending requests too quickly. Please wait a moment before trying again.`;
         } else if (errorMessage.includes('[ERR_NETWORK_TIMEOUT]')) {
-          userMessage = `📡 **Network Timeout**\n\nThe request to the AI models timed out. Please check your connection and try again.`;
+          userMessage = `📡 **Network Timeout**\n\nThe request timed out. Please check your connection and try again.`;
         } else if (errorMessage.includes('[ERR_PROVIDER_ERROR]')) {
           const detail =
             errorMessage.split('[ERR_PROVIDER_ERROR]')[1]?.trim() || 'Unknown provider error.';
@@ -1248,6 +1393,14 @@ export const UnifiedAgenticChat: React.FC<{
         <AppLayout onOpenSettings={onOpenSettings}>
           {activeView === 'chat' ? (
             <>
+              {/* Header bar with background task indicator */}
+              <div className="flex items-center justify-end px-4 py-2 border-b border-gray-800/50">
+                <BackgroundTaskIndicator
+                  popoverSide="bottom"
+                  popoverAlign="end"
+                  panelMaxHeight="350px"
+                />
+              </div>
               <BudgetAlertsPanel />
               <ChatStream
                 onOpenSidecar={openSidecar}
@@ -1255,10 +1408,16 @@ export const UnifiedAgenticChat: React.FC<{
                   useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
                 }}
               />
+              {/* Real-time tool execution progress display */}
+              <ActiveToolStreamsDisplay />
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
           ) : activeView === 'projects' ? (
             <ProjectsView />
+          ) : activeView === 'canvas' ? (
+            <div className="flex-1 p-4">
+              <CanvasWorkspace className="h-full" />
+            </div>
           ) : null}
         </AppLayout>
 

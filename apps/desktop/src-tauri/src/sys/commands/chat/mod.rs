@@ -866,6 +866,7 @@ pub async fn chat_send_message(
         crate::sys::billing::BillingStateWrapper,
     >,
     mcp_state: State<'_, crate::sys::commands::mcp::McpState>,
+    project_context_state: State<'_, crate::sys::commands::project_context::ProjectContextState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -1121,54 +1122,75 @@ pub async fn chat_send_message(
 
 ## Your Capabilities
 
-You have access to the following tools and integrations:
-
-**Browser Automation:**
-- Navigate to websites and interact with web pages
-- Click buttons, fill forms, scroll, and take screenshots
-- Login to websites (with user's credentials)
-- Extract information from web pages
+You have access to the following tools and abilities:
 
 **File Operations:**
-- Read, write, create, and edit files on the local system
-- Navigate the file system and manage files/folders
-- Search for files by name or content
+- Read, write, create, and delete files
+- List directory contents and navigate the file system
+- Download files from URLs to the user's computer
+
+**Document Creation:**
+- Create Word documents (.docx) with formatted text, headings, and paragraphs
+- Create Excel spreadsheets (.xlsx) with headers and data rows
+- Create PDF documents with text content
+
+**Media Generation (Pro/Max plans only):**
+- Generate images from text descriptions (AI-powered: DALL-E, Stable Diffusion, Google Imagen)
+- Generate videos from text prompts (AI-powered: Runway, Google Veo)
+- Note: If a user on Hobby plan asks for media generation, politely explain they need to upgrade to Pro
+
+**Web & Search:**
+- Search the web for current information
+- Navigate to websites and interact with pages
+- Click buttons, fill forms, and extract content from web pages
+- Take screenshots of websites or the screen
 
 **Terminal/Shell:**
-- Execute shell commands and scripts
-- Run development tools (npm, git, cargo, etc.)
-- Manage processes and system operations
+- Execute shell commands and scripts on the user's LOCAL computer using the `terminal_execute` tool
+- Run development tools (npm, git, python, etc.)
+- IMPORTANT: Always use the `terminal_execute` tool for ALL shell commands. Do NOT use any built-in code execution - commands must run on the user's actual computer, not a remote sandbox.
 
-**MCP Integrations (Model Context Protocol):**
-When configured by the user, you can integrate with:
+**Memory:**
+- Remember important information across conversations
+- Recall previously stored information when relevant
+
+**MCP Integrations:**
+When configured, you can also:
 - Gmail - Read, send, and manage emails
-- GitHub - Manage repositories, issues, and pull requests
-- Slack - Send messages and interact with workspaces
+- GitHub - Manage repositories, issues, and PRs
+- Slack - Send messages to channels
 - Google Drive - Access and manage files
-- And more user-configured integrations
-
-**Image & Content Generation:**
-- Generate images using AI models
-- Create and edit visual content
-
-**Web Search:**
-- Search the web for current information
-- Look up documentation and resources
+- And other user-configured integrations
 
 ## How You Work
 
-1. When the user asks you to do something, you autonomously complete the task
+1. When asked to do something, you autonomously complete the task using your tools
 2. You break down complex goals into steps and execute them
 3. All actions are reversible - users can undo if something goes wrong
 4. You report progress and results in plain, friendly language
+
+## CRITICAL TOOL USAGE RULES
+
+**YOU MUST USE TOOLS - NEVER HALLUCINATE OR FABRICATE OUTPUT**
+
+1. **File Operations**: You MUST call the `file_read`, `file_write`, `file_list`, or `file_delete` tools. NEVER pretend to read files or list directories. NEVER make up file contents or directory listings.
+
+2. **Terminal/Shell Commands**: You MUST call the `terminal_execute` tool. NEVER write bash code blocks and pretend to execute them. NEVER fabricate command output.
+
+3. **Web Search**: You MUST call the `search_web` tool. NEVER pretend to search or make up search results.
+
+4. **Browser Operations**: You MUST call browser tools (`browser_navigate`, `browser_click`, `browser_extract`). NEVER simulate browser interactions.
+
+If a user asks "What files are in my Desktop folder?", you MUST call `file_list` with path="~/Desktop" or use `terminal_execute` with command="ls ~/Desktop". DO NOT make up a list of files.
 
 ## Guidelines
 
 - Be proactive and complete tasks fully without asking for approval at each step
 - If something fails, explain what happened in plain English (no technical jargon)
-- For tasks involving sensitive actions, briefly explain what you're about to do
+- When generating files (images, documents, videos), save them and tell the user where
 - When asked about your capabilities, describe them in user-friendly terms
-- Remember: users are often non-technical - keep explanations simple and clear"#;
+- Remember: users are often non-technical - keep explanations simple and clear
+- ALWAYS use the actual tools provided to you - never simulate, pretend, or fabricate results"#;
 
     // Add the default system prompt
     llm_messages.push(ChatMessage {
@@ -1179,6 +1201,64 @@ When configured by the user, you can integrate with:
         multimodal_content: None,
     });
     debug!("[Chat] Added default AGI Workforce system prompt");
+
+    // Add project folder context if one is set
+    let project_ctx = project_context_state.get_context().await;
+    if project_ctx.is_valid {
+        if let Some(ref folder) = project_ctx.folder {
+            let project_name = project_ctx.name.as_deref().unwrap_or("Unknown Project");
+
+            // Build project context message
+            let mut project_context_content = format!(
+                "## Active Project Folder\n\n\
+                The user is currently working in a project folder:\n\
+                - **Project Name:** {}\n\
+                - **Path:** {}\n\n\
+                **Important Guidelines for this session:**\n\
+                - When performing file operations, default to working within this project folder unless the user specifies otherwise\n\
+                - Use relative paths from the project root when possible\n\
+                - For terminal commands, use this folder as the working directory (cwd)\n\
+                - When creating new files, place them in appropriate locations within the project structure\n",
+                project_name, folder
+            );
+
+            // Try to get a summary of the project structure
+            if let Ok(files) =
+                crate::sys::commands::project_context::project_context_list_files_internal_sync(
+                    folder, 1, false,
+                )
+            {
+                if !files.is_empty() {
+                    project_context_content.push_str("\n**Project Structure (top level):**\n```\n");
+                    for file in files.iter().take(25) {
+                        let prefix = if file.is_directory {
+                            "[DIR] "
+                        } else {
+                            "      "
+                        };
+                        project_context_content.push_str(&format!("{}{}\n", prefix, file.name));
+                    }
+                    if files.len() > 25 {
+                        project_context_content
+                            .push_str(&format!("... and {} more items\n", files.len() - 25));
+                    }
+                    project_context_content.push_str("```\n");
+                }
+            }
+
+            llm_messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: project_context_content,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            });
+            debug!(
+                "[Chat] Added project folder context: {} ({})",
+                project_name, folder
+            );
+        }
+    }
 
     // Append custom instructions if provided (they supplement the default prompt)
     if let Some(ref custom_instructions) = request.custom_instructions {
@@ -1348,6 +1428,15 @@ When configured by the user, you can integrate with:
                     let mut was_stopped = false;
                     let mut final_usage = None;
                     let mut final_credits = None;
+                    let mut final_finish_reason: Option<String> = None;
+
+                    // Accumulate tool calls from streaming chunks
+                    // Tool calls arrive in multiple chunks and must be merged by index
+                    use std::collections::HashMap;
+                    let mut accumulated_tool_calls: HashMap<
+                        usize,
+                        crate::core::llm::sse_parser::StreamingToolCall,
+                    > = HashMap::new();
 
                     let mut pending_notified = false;
                     while let Some(chunk_result) = stream.next().await {
@@ -1379,6 +1468,37 @@ When configured by the user, you can integrate with:
                             Ok(chunk) => {
                                 full_content.push_str(&chunk.content);
                                 token_count += 1;
+
+                                // Track finish reason (important for detecting tool_calls)
+                                if let Some(ref finish) = chunk.finish_reason {
+                                    final_finish_reason = Some(finish.clone());
+                                }
+
+                                // Accumulate tool calls from this chunk
+                                if let Some(ref tool_calls) = chunk.tool_calls {
+                                    for tc in tool_calls {
+                                        let entry = accumulated_tool_calls
+                                            .entry(tc.index)
+                                            .or_insert_with(|| {
+                                                crate::core::llm::sse_parser::StreamingToolCall {
+                                                    index: tc.index,
+                                                    id: String::new(),
+                                                    name: String::new(),
+                                                    arguments: String::new(),
+                                                }
+                                            });
+
+                                        // Merge: ID and name only appear in first chunk
+                                        if !tc.id.is_empty() {
+                                            entry.id = tc.id.clone();
+                                        }
+                                        if !tc.name.is_empty() {
+                                            entry.name = tc.name.clone();
+                                        }
+                                        // Arguments are streamed across multiple chunks
+                                        entry.arguments.push_str(&tc.arguments);
+                                    }
+                                }
 
                                 if let Some(usage) = chunk.usage {
                                     final_usage = Some(usage);
@@ -1421,6 +1541,185 @@ When configured by the user, you can integrate with:
                                 );
                                 return;
                             }
+                        }
+                    }
+
+                    // Check if we have tool calls to execute
+                    // finish_reason == "tool_calls" indicates the LLM wants to use tools
+                    let has_tool_calls = final_finish_reason.as_deref() == Some("tool_calls")
+                        && !accumulated_tool_calls.is_empty();
+
+                    if has_tool_calls && !was_stopped {
+                        info!(
+                            "[Chat] Streaming completed with {} tool call(s) - executing tools",
+                            accumulated_tool_calls.len()
+                        );
+
+                        // Convert accumulated tool calls to sorted Vec
+                        let mut tool_calls_vec: Vec<_> =
+                            accumulated_tool_calls.into_iter().collect();
+                        tool_calls_vec.sort_by_key(|(idx, _)| *idx);
+                        let tool_calls: Vec<_> =
+                            tool_calls_vec.into_iter().map(|(_, tc)| tc).collect();
+
+                        // Emit tool calls event
+                        let _ = app_handle_clone.emit(
+                            "chat:tool-calls",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "tool_calls": tool_calls,
+                                "streaming": true
+                            }),
+                        );
+
+                        // Execute each tool and collect results
+                        let mut tool_results = Vec::new();
+                        for tc in &tool_calls {
+                            info!(
+                                "[Chat] Executing streamed tool: {} (id: {})",
+                                tc.name, tc.id
+                            );
+
+                            // Emit tool executing event
+                            let _ = app_handle_clone.emit(
+                                "chat:tool-executing",
+                                serde_json::json!({
+                                    "conversation_id": conversation_id_clone,
+                                    "tool_call_id": tc.id,
+                                    "tool_name": tc.name,
+                                    "arguments": tc.arguments
+                                }),
+                            );
+
+                            // Execute the tool
+                            let result = tools::execute_chat_tool(
+                                &tc.name,
+                                &tc.arguments,
+                                Some(&app_handle_clone),
+                            )
+                            .await;
+
+                            let (success, result_content) = match result {
+                                Ok(content) => {
+                                    info!("[Chat] Streamed tool {} succeeded", tc.name);
+                                    (true, content)
+                                }
+                                Err(e) => {
+                                    error!("[Chat] Streamed tool {} failed: {}", tc.name, e);
+                                    (false, format!("Error: {}", e))
+                                }
+                            };
+
+                            // Emit tool result event
+                            let _ = app_handle_clone.emit(
+                                "chat:tool-result",
+                                serde_json::json!({
+                                    "conversation_id": conversation_id_clone,
+                                    "tool_call_id": tc.id,
+                                    "tool_name": tc.name,
+                                    "success": success,
+                                    "result": result_content.chars().take(500).collect::<String>()
+                                }),
+                            );
+
+                            tool_results.push(tools::ChatToolResult::new(
+                                tc.id.clone(),
+                                tc.name.clone(),
+                                success,
+                                result_content,
+                            ));
+                        }
+
+                        // Build follow-up messages with tool results
+                        let mut followup_messages = llm_request_clone.messages.clone();
+
+                        // Add assistant message with tool calls
+                        followup_messages.push(crate::core::llm::ChatMessage {
+                            role: "assistant".to_string(),
+                            content: full_content.clone(),
+                            tool_calls: Some(
+                                tool_calls
+                                    .iter()
+                                    .map(|tc| crate::core::llm::ToolCall {
+                                        id: tc.id.clone(),
+                                        name: tc.name.clone(),
+                                        arguments: tc.arguments.clone(),
+                                    })
+                                    .collect(),
+                            ),
+                            tool_call_id: None,
+                            multimodal_content: None,
+                        });
+
+                        // Add tool results as tool role messages
+                        for result in &tool_results {
+                            followup_messages.push(crate::core::llm::ChatMessage {
+                                role: "tool".to_string(),
+                                content: result.to_message_content(),
+                                tool_calls: None,
+                                tool_call_id: Some(result.tool_call_id.clone()),
+                                multimodal_content: None,
+                            });
+                        }
+
+                        // Send follow-up request to LLM (non-streaming for simplicity)
+                        let followup_request = crate::core::llm::LLMRequest {
+                            messages: followup_messages,
+                            model: model_clone.clone(),
+                            temperature: Some(0.7),
+                            max_tokens: Some(4096),
+                            stream: false,
+                            tools: llm_request_clone.tools.clone(),
+                            tool_choice: llm_request_clone.tool_choice.clone(),
+                            thinking_mode: llm_request_clone.thinking_mode,
+                        };
+
+                        // Get candidates for follow-up request
+                        let candidates = router.candidates(&followup_request, &preferences_clone);
+
+                        let mut followup_success = false;
+                        for candidate in candidates {
+                            match router.invoke_candidate(&candidate, &followup_request).await {
+                                Ok(outcome) => {
+                                    // Append tool results and final response to content
+                                    full_content.push_str("\n\n");
+                                    full_content.push_str(&outcome.response.content);
+                                    token_count += outcome.response.tokens.unwrap_or(0);
+
+                                    // Stream the final content to frontend
+                                    let _ = app_handle_clone.emit(
+                                        "chat:stream-chunk",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "delta": outcome.response.content,
+                                            "content": full_content.clone(),
+                                            "has_pending_messages": has_pending_messages()
+                                        }),
+                                    );
+
+                                    if let Some(credits) = outcome.response.credits {
+                                        // Update final credits from follow-up (already CreditsInfo type)
+                                        final_credits = Some(credits);
+                                    }
+                                    followup_success = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "[Chat] Follow-up candidate {} failed: {}",
+                                        candidate.model, e
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+
+                        if !followup_success {
+                            error!("[Chat] All follow-up candidates failed");
+                            full_content.push_str(
+                                "\n\n*Tool execution completed but unable to generate final response.*",
+                            );
                         }
                     }
 
