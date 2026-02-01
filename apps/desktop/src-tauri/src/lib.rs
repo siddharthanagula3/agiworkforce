@@ -19,6 +19,7 @@ use crate::sys::commands::{
     research::ResearchState,
     security::AuthManagerState,
     skills::SkillsState,
+    tool_confirmation::ToolConfirmationState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
@@ -383,6 +384,10 @@ pub fn run() {
             app.manage(DiagnosticsState::new());
             tracing::info!("Diagnostics state initialized");
 
+            // Tool Confirmation state for safety tier confirmation dialogs
+            app.manage(ToolConfirmationState::new());
+            tracing::info!("Tool confirmation state initialized");
+
             // Artifact state for live previews and versioned artifacts
             app.manage(crate::sys::commands::artifacts::ArtifactState::new());
             tracing::info!("Artifact state initialized");
@@ -415,6 +420,10 @@ pub fn run() {
             // Intent detection state for intelligent routing
             app.manage(IntentState::new());
             tracing::info!("Intent detection state initialized");
+
+            // Project context state for active folder selection
+            app.manage(crate::sys::commands::project_context::ProjectContextState::new());
+            tracing::info!("Project context state initialized");
 
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
@@ -524,6 +533,8 @@ pub fn run() {
 
             app.manage(crate::sys::commands::PromptEnhancementState::new());
 
+            // Initialize notification center state
+            app.manage(crate::sys::commands::NotificationCenterState::new());
 
             let task_db_conn = Arc::new(Mutex::new(
                 Connection::open(&db_path).context("Failed to open database for task manager")?,
@@ -746,9 +757,11 @@ pub fn run() {
             crate::sys::commands::calendar_list_accounts,
             crate::sys::commands::calendar_list_calendars,
             crate::sys::commands::calendar_list_events,
+            crate::sys::commands::calendar_get_event,
             crate::sys::commands::calendar_create_event,
             crate::sys::commands::calendar_update_event,
             crate::sys::commands::calendar_delete_event,
+            crate::sys::commands::calendar_sync,
             crate::sys::commands::calendar_get_system_timezone,
 
 
@@ -1025,6 +1038,7 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
+            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1424,7 +1438,7 @@ pub fn run() {
             crate::sys::commands::canvas::canvas_a2ui_execute,
             crate::sys::commands::canvas::canvas_add_text,
 
-            // Notifications
+            // Notifications (OS-level desktop notifications)
             crate::sys::commands::notification_check_permission,
             crate::sys::commands::notification_request_permission,
             crate::sys::commands::notification_show,
@@ -1437,6 +1451,17 @@ pub fn run() {
             crate::sys::commands::notification_get,
             crate::sys::commands::notification_update,
             crate::sys::commands::notification_register_actions,
+
+            // Notification Center (in-app notification system)
+            crate::sys::commands::notification_center::notification_list,
+            crate::sys::commands::notification_center::notification_mark_read,
+            crate::sys::commands::notification_center::notification_mark_all_read,
+            crate::sys::commands::notification_center::notification_delete,
+            crate::sys::commands::notification_center::notification_delete_all_read,
+            crate::sys::commands::notification_center::notification_get_settings,
+            crate::sys::commands::notification_center::notification_set_settings,
+            crate::sys::commands::notification_center::notification_create,
+            crate::sys::commands::notification_center::notification_unread_count,
 
             // Scheduler (proactive task scheduling with cron expressions)
             crate::sys::commands::scheduler_add_job,
@@ -1455,6 +1480,10 @@ pub fn run() {
             crate::sys::commands::research_get_modes,
             crate::sys::commands::research_quick,
             crate::sys::commands::research_check_availability,
+            // Web Search (direct search without research orchestration)
+            crate::sys::commands::search_web,
+            crate::sys::commands::search_clear_cache,
+            crate::sys::commands::search_cache_stats,
 
             // Intent Detection (intelligent routing and tool selection)
             crate::sys::commands::intent::intent_detect,
@@ -1550,6 +1579,13 @@ pub fn run() {
             crate::sys::commands::project_get_settings,
             crate::sys::commands::project_update_settings,
 
+            // Project Context (active folder selection)
+            crate::sys::commands::project_context_set_folder,
+            crate::sys::commands::project_context_get_folder,
+            crate::sys::commands::project_context_validate_path,
+            crate::sys::commands::project_context_list_files,
+            crate::sys::commands::project_context_get_summary,
+
             crate::sys::commands::create_workflow,
             crate::sys::commands::update_workflow,
             crate::sys::commands::delete_workflow,
@@ -1599,6 +1635,7 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
+            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1731,6 +1768,15 @@ pub fn run() {
             crate::sys::commands::agent::agent_stop,
             crate::sys::commands::security::auth_login,
 
+            // Tool Confirmation (safety tier confirmation dialogs)
+            crate::sys::commands::tool_confirmation::respond_tool_confirmation,
+            crate::sys::commands::tool_confirmation::get_tool_safety_tier,
+            crate::sys::commands::tool_confirmation::get_remembered_tool_choices,
+            crate::sys::commands::tool_confirmation::clear_remembered_tool_choices,
+            crate::sys::commands::tool_confirmation::clear_remembered_tool_choice,
+            crate::sys::commands::tool_confirmation::get_pending_confirmation_count,
+            crate::sys::commands::tool_confirmation::cancel_tool_confirmation,
+
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,
             crate::sys::commands::master_password::master_password_is_unlocked,
@@ -1816,6 +1862,13 @@ pub fn run() {
             crate::sys::commands::undo_last,
             crate::sys::commands::undo_task,
             crate::sys::commands::undo_can_undo,
+
+            // Tool Execution Undo (chat tool execution reversal)
+            crate::sys::commands::undo::get_undo_history,
+            crate::sys::commands::undo::undo_last_action,
+            crate::sys::commands::undo::undo_action_by_id,
+            crate::sys::commands::undo::record_tool_execution,
+            crate::sys::commands::undo::record_tool_execution_with_path,
 
             // Form Undo (browser form submission reversal)
             crate::sys::commands::undo::form_undo_record,
