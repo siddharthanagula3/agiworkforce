@@ -20,44 +20,46 @@ import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
  * API IDs are the exact strings required by each provider's API.
  */
 const MODEL_ID_TO_API_ID: Record<string, string> = {
-  // Google Gemini models
-  'gemini-3-ultra': 'gemini-2.0-pro-exp', // Gemini 3 Ultra maps to 2.0 Pro
-  'gemini-3-pro': 'gemini-2.0-pro-exp', // Gemini 3 Pro maps to 2.0 Pro
-  'gemini-3-flash': 'gemini-2.0-flash-exp', // Gemini 3 Flash maps to 2.0 Flash
-  // Anthropic Claude models
-  'claude-opus-4.5': 'claude-sonnet-4-20250514', // Claude Opus 4.5 (placeholder - update when released)
-  'claude-sonnet-4.5': 'claude-sonnet-4-20250514', // Claude Sonnet 4.5
-  'claude-haiku-4.5': 'claude-haiku-4-20250514', // Claude Haiku 4.5
-  // OpenAI models
-  'gpt-5.2': 'gpt-4o', // GPT-5.2 maps to GPT-4o (placeholder)
-  'gpt-5-pro': 'gpt-4o', // GPT-5 Pro maps to GPT-4o (placeholder)
-  'gpt-5-nano': 'gpt-4o-mini', // GPT-5 Nano maps to GPT-4o Mini
-  o3: 'o1', // o3 maps to o1 (placeholder)
-  // xAI Grok models
-  'grok-4.1': 'grok-2-latest', // Grok 4.1 maps to Grok 2
-  'grok-4.1-fast-reasoning': 'grok-2-latest', // Grok Fast
-  'grok-4.1-mini': 'grok-2-latest', // Grok Mini
+  // Google Gemini 3 models (per docs/llm-provider-reference.md)
+  'gemini-3-ultra': 'gemini-3-pro-preview', // Gemini 3 Ultra
+  'gemini-3-pro': 'gemini-3-pro-preview', // Gemini 3 Pro
+  'gemini-3-flash': 'gemini-3-flash-preview', // Gemini 3 Flash
+  // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
+  'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
+  'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
+  'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
+  // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
+  'gpt-5.2': 'gpt-5.2-2025-12-11', // GPT-5.2 flagship
+  'gpt-5-pro': 'gpt-5.2-pro-2025-12-11', // GPT-5.2 Pro
+  'gpt-5-nano': 'gpt-5-nano-2025-08-07', // GPT-5 Nano
+  o3: 'o3-2025-04-16', // o3 reasoning model
+  // xAI Grok 4.1 models (per docs/llm-provider-reference.md)
+  'grok-4.1': 'grok-4-1-fast-reasoning', // Grok 4.1
+  'grok-4.1-fast-reasoning': 'grok-4-1-fast-reasoning', // Grok Fast Reasoning
+  'grok-4.1-fast': 'grok-4-1-fast-non-reasoning', // Grok Fast Non-Reasoning
+  'grok-4.1-mini': 'grok-4-1-fast-non-reasoning', // Grok Mini
   // DeepSeek models
   'deepseek-v3.2': 'deepseek-chat', // DeepSeek V3.2 maps to deepseek-chat
   'deepseek-r1': 'deepseek-reasoner', // DeepSeek R1 reasoning model
-  // Qwen models
-  'qwen3-max': 'qwen-max', // Qwen3 Max
-  'qwen3-coder-plus': 'qwen-coder-plus', // Qwen3 Coder Plus
-  'qwen3-coder-flash': 'qwen-coder-turbo', // Qwen3 Coder Flash
-  'qwen-turbo': 'qwen-turbo', // Already correct
-  'qwen-flash': 'qwen-turbo', // Qwen Flash maps to turbo
-  // Moonshot/Kimi models
-  'kimi-k2.5-thinking': 'moonshot-v1-128k', // Kimi K2.5 Thinking
-  'kimi-k2.5-turbo': 'moonshot-v1-32k', // Kimi K2.5 Turbo
+  // Qwen models (via MuleRouter) - per docs/llm-provider-reference.md
+  'qwen3-max': 'qwen3-max', // Qwen3 Max
+  'qwen3-coder-plus': 'qwen-plus', // Qwen3 Coder Plus
+  'qwen3-coder-flash': 'qwen-flash', // Qwen3 Coder Flash
+  'qwen-turbo': 'qwen-flash', // Qwen Turbo maps to Flash
+  'qwen-flash': 'qwen-flash', // Qwen Flash
+  // Moonshot/Kimi models - per docs/llm-provider-reference.md
+  'kimi-k2.5': 'kimi-k2.5', // Kimi K2.5 latest
+  'kimi-k2.5-thinking': 'kimi-k2-thinking', // Kimi K2.5 Thinking
+  'kimi-k2.5-turbo': 'kimi-k2-turbo-preview', // Kimi K2.5 Turbo
   // Perplexity models
-  sonar: 'sonar', // Already correct
-  'sonar-pro': 'sonar-pro', // Already correct
-  'sonar-reasoning': 'sonar-reasoning', // Already correct
-  'sonar-deep-research': 'sonar-deep-research', // Already correct
-  // ZhipuAI GLM models
-  'glm-4.7': 'glm-4-plus', // GLM-4.7 maps to glm-4-plus
-  'glm-4.6v': 'glm-4v-plus', // GLM-4.6V vision model
-  'glm-4.6v-flash': 'glm-4v-flash', // GLM-4.6V Flash
+  sonar: 'sonar',
+  'sonar-pro': 'sonar-pro',
+  'sonar-reasoning': 'sonar-reasoning',
+  'sonar-deep-research': 'sonar-deep-research',
+  // ZhipuAI GLM models - per docs/llm-provider-reference.md
+  'glm-4.7': 'glm-4.7', // GLM-4.7 flagship
+  'glm-4.6v': 'glm-4.6v', // GLM-4.6V vision model
+  'glm-4.6v-flash': 'glm-4.6v-flash', // GLM-4.6V Flash
 };
 
 // Diagnostic: Log which API keys are configured on first access
