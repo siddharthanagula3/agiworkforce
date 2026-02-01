@@ -793,6 +793,7 @@ impl PrCreationWorkflow {
             tools: None,
             tool_choice: None,
             thinking_mode: None,
+            ..Default::default()
         };
 
         let preferences = RouterPreferences::default();

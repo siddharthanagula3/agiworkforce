@@ -29,7 +29,6 @@ import { errorTracking } from '../../services/errorTracking';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
-import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
@@ -51,11 +50,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
-  const setTemperature = useSettingsStore((state) => state.setTemperature);
-  const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
   const setTheme = useSettingsStore((state) => state.setTheme);
-  const setStartupPosition = useSettingsStore((state) => state.setStartupPosition);
-  const setDockOnStartup = useSettingsStore((state) => state.setDockOnStartup);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
@@ -145,44 +140,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // SET-004: Wrapped handlers that track unsaved changes
-  const handleTemperatureChange = useCallback(
-    (value: number) => {
-      setTemperature(value);
-      setHasUnsavedChanges(true);
-    },
-    [setTemperature],
-  );
-
-  const handleMaxTokensChange = useCallback(
-    (value: number) => {
-      setMaxTokens(value);
-      setHasUnsavedChanges(true);
-    },
-    [setMaxTokens],
-  );
-
   const handleThemeChange = useCallback(
     (value: 'light' | 'dark' | 'system') => {
       setTheme(value);
       setHasUnsavedChanges(true);
     },
     [setTheme],
-  );
-
-  const handleStartupPositionChange = useCallback(
-    (value: 'center' | 'remember') => {
-      setStartupPosition(value);
-      setHasUnsavedChanges(true);
-    },
-    [setStartupPosition],
-  );
-
-  const handleDockOnStartupChange = useCallback(
-    (value: 'left' | 'right' | 'none') => {
-      setDockOnStartup(value === 'none' ? null : value);
-      setHasUnsavedChanges(true);
-    },
-    [setDockOnStartup],
   );
 
   const handleAgentModeChange = useCallback(
@@ -383,50 +346,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       </div>
                     </div>
 
-                    {/* Generation Settings */}
-                    <div className="rounded-lg border border-border bg-card p-6">
-                      <h4 className="font-semibold mb-4">Generation Settings</h4>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="temperature">
-                            Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
-                          </Label>
-                          <input
-                            id="temperature"
-                            type="range"
-                            min="0"
-                            max="2"
-                            step="0.1"
-                            value={resolvedLLMConfig.temperature}
-                            onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
-                            className="w-full accent-primary"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Lower values are more focused and deterministic. Higher values are more
-                            creative.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="maxTokens">Max Tokens</Label>
-                          {/* SET-002 fix: Align with backend validation (1-200000) */}
-                          <Input
-                            id="maxTokens"
-                            type="number"
-                            min="1"
-                            max="200000"
-                            step="256"
-                            value={resolvedLLMConfig.maxTokens}
-                            onChange={(e) => handleMaxTokensChange(parseInt(e.target.value))}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Maximum number of tokens to generate (1-200,000). Most models use
-                            1,000-8,000.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Agent Mode Settings */}
                     <div className="rounded-lg border border-border bg-card p-6">
                       <h4 className="font-semibold mb-4">Agent Mode</h4>
@@ -498,43 +417,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectItem value="light">Light</SelectItem>
                           <SelectItem value="dark">Dark</SelectItem>
                           <SelectItem value="system">System</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="startupPosition">Startup Position</Label>
-                      <Select
-                        value={resolvedWindowPreferences.startupPosition}
-                        onValueChange={(value) =>
-                          handleStartupPositionChange(value as 'center' | 'remember')
-                        }
-                      >
-                        <SelectTrigger id="startupPosition">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="center">Center Screen</SelectItem>
-                          <SelectItem value="remember">Remember Last Position</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="dockOnStartup">Dock on Startup</Label>
-                      <Select
-                        value={resolvedWindowPreferences.dockOnStartup || 'none'}
-                        onValueChange={(value) =>
-                          handleDockOnStartupChange(value as 'left' | 'right' | 'none')
-                        }
-                      >
-                        <SelectTrigger id="dockOnStartup">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Don&apos;t Dock</SelectItem>
-                          <SelectItem value="left">Dock Left</SelectItem>
-                          <SelectItem value="right">Dock Right</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

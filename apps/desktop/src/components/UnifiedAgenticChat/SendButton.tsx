@@ -46,7 +46,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
         className={cn(
           'p-2 rounded-lg transition-all duration-200',
           'bg-red-500 hover:bg-red-600 text-white',
-          'shadow-lg shadow-red-500/25 animate-pulse',
+          'shadow-lg shadow-red-500/25',
         )}
         title="Stop generation"
         aria-label="Stop the current response"

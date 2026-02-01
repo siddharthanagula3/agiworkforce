@@ -957,13 +957,12 @@ impl ToolExecutor {
                                     .change_tracker
                                     .record_tool_executed_with_path(
                                         "file_write".to_string(),
-                                        json!({ "path": &path, "content": &content }),
-                                        json!({ "success": true, "path": &path }),
-                                        task_id,
                                         path_buf,
                                         old_content.clone(), // Store original content for undo
-                                        None, // No reverse tool needed, we restore from before_content
-                                        None,
+                                        Some(content.clone()), // New content
+                                        task_id,
+                                        true, // File writes are reversible
+                                        Some("Restore previous file contents".to_string()),
                                     )
                                     .await;
                             }
@@ -1042,13 +1041,12 @@ impl ToolExecutor {
                                     .change_tracker
                                     .record_tool_executed_with_path(
                                         "file_delete".to_string(),
-                                        json!({ "path": &path }),
-                                        json!({ "success": true, "path": &path }),
-                                        task_id,
                                         path_buf,
                                         file_content_before, // Store content for restoration
-                                        None,
-                                        None,
+                                        None, // File was deleted, no after content
+                                        task_id,
+                                        true, // File deletes are reversible
+                                        Some("Restore deleted file".to_string()),
                                     )
                                     .await;
                             }
@@ -4132,13 +4130,12 @@ impl ToolExecutor {
                                                     .change_tracker
                                                     .record_tool_executed_with_path(
                                                         "api_download".to_string(),
-                                                        json!({ "url": &url, "save_path": &save_path }),
-                                                        json!({ "success": true, "bytes": size }),
-                                                        task_id,
                                                         path_buf,
                                                         None, // New file, no previous content
-                                                        None,
-                                                        None,
+                                                        None, // Downloaded file content not tracked
+                                                        task_id,
+                                                        true, // Downloads are reversible (delete the file)
+                                                        Some("Delete downloaded file".to_string()),
                                                     )
                                                     .await;
                                             }

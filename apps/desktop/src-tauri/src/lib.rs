@@ -16,6 +16,7 @@ use crate::sys::commands::{
     load_persisted_calendar_accounts,
     master_password::MasterPasswordState,
     mcp_extensions::McpExtensionsState,
+    project_memory::ProjectMemoryState,
     research::ResearchState,
     security::AuthManagerState,
     skills::SkillsState,
@@ -316,6 +317,17 @@ pub fn run() {
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize memory manager: {}. Memory features may be degraded.", e);
+                }
+            }
+
+            // Project-scoped memory state for project-specific long-term memories
+            match ProjectMemoryState::new(&db_path.to_string_lossy()) {
+                Ok(project_memory_state) => {
+                    app.manage(project_memory_state);
+                    tracing::info!("Project memory manager initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize project memory manager: {}. Project memory features may be degraded.", e);
                 }
             }
 
@@ -712,6 +724,17 @@ pub fn run() {
             crate::sys::commands::checkpoint_list,
             crate::sys::commands::checkpoint_delete,
 
+            // AGI Checkpoint Management
+            crate::sys::commands::agi_checkpoint_save,
+            crate::sys::commands::agi_checkpoint_get_latest,
+            crate::sys::commands::agi_checkpoint_get,
+            crate::sys::commands::agi_checkpoint_list,
+            crate::sys::commands::agi_checkpoint_delete,
+            crate::sys::commands::agi_checkpoint_restore_history,
+            crate::sys::commands::agi_checkpoint_record_restore,
+            crate::sys::commands::agi_checkpoint_cleanup,
+            crate::sys::commands::agi_checkpoint_init,
+
 
             crate::sys::commands::cloud_connect,
             crate::sys::commands::cloud_complete_oauth,
@@ -757,11 +780,9 @@ pub fn run() {
             crate::sys::commands::calendar_list_accounts,
             crate::sys::commands::calendar_list_calendars,
             crate::sys::commands::calendar_list_events,
-            crate::sys::commands::calendar_get_event,
             crate::sys::commands::calendar_create_event,
             crate::sys::commands::calendar_update_event,
             crate::sys::commands::calendar_delete_event,
-            crate::sys::commands::calendar_sync,
             crate::sys::commands::calendar_get_system_timezone,
 
 
@@ -1038,7 +1059,6 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
-            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1261,6 +1281,39 @@ pub fn run() {
             crate::sys::commands::memory_export_json,
             crate::sys::commands::memory_export_markdown,
             crate::sys::commands::memory_import_json,
+            // Memory dashboard commands
+            crate::sys::commands::memory_get_dashboard_stats,
+            crate::sys::commands::memory_get_project_memories,
+            crate::sys::commands::memory_get_usage_trends,
+            crate::sys::commands::memory_suggest_important,
+
+            // Project Memory Commands (project-scoped long-term memory)
+            crate::sys::commands::project_memory::save_project_context,
+            crate::sys::commands::project_memory::get_project_context,
+            crate::sys::commands::project_memory::save_coding_style,
+            crate::sys::commands::project_memory::get_coding_styles,
+            crate::sys::commands::project_memory::save_architectural_decision,
+            crate::sys::commands::project_memory::get_architectural_decisions,
+            crate::sys::commands::project_memory::get_project_memories,
+            crate::sys::commands::project_memory::search_project_memories,
+            crate::sys::commands::project_memory::update_memory_importance,
+            crate::sys::commands::project_memory::delete_project_memory,
+            crate::sys::commands::project_memory::clear_project_memories,
+            crate::sys::commands::project_memory::get_project_memory_stats,
+            crate::sys::commands::project_memory::auto_save_decision,
+
+            // Chat-Memory Integration Commands
+            crate::sys::commands::chat_memory_integration::chat_load_project_memories,
+            crate::sys::commands::chat_memory_integration::chat_detect_and_save_decision,
+            crate::sys::commands::chat_memory_integration::chat_save_decision,
+            crate::sys::commands::chat_memory_integration::chat_configure_memory_injection,
+            crate::sys::commands::chat_memory_integration::chat_get_memory_dashboard,
+            crate::sys::commands::chat_memory_integration::chat_suggest_memories_for_review,
+            crate::sys::commands::chat_memory_integration::chat_prefetch_session_memories,
+            crate::sys::commands::chat_memory_integration::chat_log_milestone,
+            crate::sys::commands::chat_memory_integration::chat_log_action,
+            crate::sys::commands::chat_memory_integration::chat_recall_memory,
+            crate::sys::commands::chat_memory_integration::chat_search_memories,
 
             crate::sys::commands::mcp_initialize,
             crate::sys::commands::mcp_list_servers,
@@ -1480,10 +1533,6 @@ pub fn run() {
             crate::sys::commands::research_get_modes,
             crate::sys::commands::research_quick,
             crate::sys::commands::research_check_availability,
-            // Web Search (direct search without research orchestration)
-            crate::sys::commands::search_web,
-            crate::sys::commands::search_clear_cache,
-            crate::sys::commands::search_cache_stats,
 
             // Intent Detection (intelligent routing and tool selection)
             crate::sys::commands::intent::intent_detect,
@@ -1635,7 +1684,6 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
-            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1862,13 +1910,6 @@ pub fn run() {
             crate::sys::commands::undo_last,
             crate::sys::commands::undo_task,
             crate::sys::commands::undo_can_undo,
-
-            // Tool Execution Undo (chat tool execution reversal)
-            crate::sys::commands::undo::get_undo_history,
-            crate::sys::commands::undo::undo_last_action,
-            crate::sys::commands::undo::undo_action_by_id,
-            crate::sys::commands::undo::record_tool_execution,
-            crate::sys::commands::undo::record_tool_execution_with_path,
 
             // Form Undo (browser form submission reversal)
             crate::sys::commands::undo::form_undo_record,

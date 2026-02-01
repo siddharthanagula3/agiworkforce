@@ -64,6 +64,7 @@ Provide accurate, idiomatic code completions. Return ONLY the code - no explanat
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -163,6 +164,7 @@ Return ONLY the completion text - no explanations, no markdown, no code fences."
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;
@@ -271,6 +273,7 @@ Rules:
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     let router = router_state.lock().await;

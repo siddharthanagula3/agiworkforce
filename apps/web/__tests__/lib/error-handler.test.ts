@@ -19,7 +19,7 @@ vi.mock('@/lib/logger', () => ({
 
 // Import after mocks
 import { handleError, withErrorHandler } from '@/lib/error-handler';
-import { createError, AppError } from '@/lib/errors';
+import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 describe('Error Handler', () => {

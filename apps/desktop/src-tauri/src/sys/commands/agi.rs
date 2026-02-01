@@ -821,6 +821,7 @@ pub async fn start_agent_task(
         tools: None,
         tool_choice: None,
         thinking_mode: None,
+        ..Default::default()
     };
 
     // 4. Call API

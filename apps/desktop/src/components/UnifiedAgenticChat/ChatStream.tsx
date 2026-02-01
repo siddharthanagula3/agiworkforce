@@ -416,19 +416,18 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       </AnimatePresence>
 
       {/* Current Action Indicator - shows at top when agent is working */}
-      <div className="sticky top-0 z-10 flex justify-center py-2">
-        <CurrentActionBadge />
-      </div>
+      {/* Only render when there's actually an action to show to prevent layout jumps */}
+      <CurrentActionBadge />
 
       {/* Active Tool Streams - shows real-time progress for running tools (hidden in simple mode) */}
       {!isSimpleMode && (
         <ActiveToolStreams showCompleted={false} maxStreams={3} className="px-4 mb-2" />
       )}
 
-      {/* AGI Iteration Progress Panel - shows reasoning loop progress (hidden in simple mode) */}
-      {!isSimpleMode && (isLoading || agentStatus?.status === 'running') && (
+      {/* AGI Iteration Progress Panel - shows reasoning loop progress (only when AGI task is running) */}
+      {!isSimpleMode && agentStatus?.status === 'running' && agentStatus?.currentGoal && (
         <div className="px-4 mb-2">
-          <IterationProgressPanel goalDescription={agentStatus?.currentGoal || 'Processing...'} />
+          <IterationProgressPanel goalDescription={agentStatus.currentGoal} />
         </div>
       )}
 
@@ -443,10 +442,10 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             <motion.div
               key="thinking"
               className="flex items-start gap-3 px-4 py-3"
-              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
-              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
-              transition={prefersReducedMotion ? { duration: 0.15 } : undefined}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               {/* Warm avatar - Claude style */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
@@ -479,10 +478,10 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             <motion.div
               key="live-execution"
               className="flex items-start gap-3 px-4 py-3"
-              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
-              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
-              transition={prefersReducedMotion ? { duration: 0.15 } : undefined}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               {/* Warm working avatar */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">

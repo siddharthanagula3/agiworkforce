@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 51;
+const CURRENT_VERSION: i32 = 53;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -158,6 +158,7 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         // Memory (persistent AGI memory)
         "user_memory",
         "daily_logs",
+        "project_memories",
         // FTS tables (virtual)
         "messages_fts",
         "conversations_fts",
@@ -169,6 +170,10 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         // Master Password (SECSYS-001)
         "master_password",
         "master_password_migration",
+        // AGI Task Checkpointing
+        "agi_tasks",
+        "agi_task_checkpoints",
+        "agi_checkpoint_restore_history",
     ])
 });
 
@@ -501,6 +506,14 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 51 {
         run_migration_in_transaction(conn, 51, apply_migration_v51)?;
+    }
+
+    if current_version < 52 {
+        run_migration_in_transaction(conn, 52, apply_migration_v52)?;
+    }
+
+    if current_version < 53 {
+        run_migration_in_transaction(conn, 53, apply_migration_v53)?;
     }
 
     Ok(())
@@ -4394,6 +4407,210 @@ fn apply_migration_v51(conn: &Connection) -> Result<()> {
 
     tracing::info!(
         "Applied migration v51: Created master_password tables for SECSYS-001 security enhancement"
+    );
+
+    Ok(())
+}
+
+
+/// Migration v52: Create project_memories table for project-scoped long-term memory
+/// This table stores:
+/// - ProjectContext: folder path, tech stack, conventions
+/// - CodingStyle: naming conventions, patterns, formatting rules
+/// - ArchitecturalDecision: design decisions, rationale, timestamps
+///
+/// Each memory entry is associated with a specific project folder and can be
+/// searched by content using keyword search, with support for semantic search
+/// via TF-IDF indexing.
+fn apply_migration_v52(conn: &Connection) -> Result<()> {
+    // Create project_memories table for storing project-scoped memories
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS project_memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_folder TEXT NOT NULL,
+            memory_type TEXT NOT NULL CHECK(memory_type IN ('context', 'coding_style', 'architectural_decision')),
+            content TEXT NOT NULL,
+            importance INTEGER NOT NULL DEFAULT 5 CHECK(importance >= 1 AND importance <= 10),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_accessed TEXT,
+            UNIQUE(project_folder, memory_type)
+        )",
+        [],
+    )?;
+
+    // Create indexes for efficient querying
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_memories_folder ON project_memories(project_folder)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_memories_type ON project_memories(memory_type)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_memories_importance ON project_memories(importance DESC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_memories_updated ON project_memories(updated_at DESC)",
+        [],
+    )?;
+
+    // Create FTS table for full-text search (with fallback if FTS5 unavailable)
+    let fts_sql = "CREATE VIRTUAL TABLE IF NOT EXISTS project_memories_fts USING fts5(
+        content,
+        project_folder UNINDEXED,
+        memory_type UNINDEXED,
+        content='project_memories',
+        content_rowid='id'
+    )";
+
+    if let Err(e) = conn.execute(fts_sql, []) {
+        let err_msg = e.to_string().to_lowercase();
+        if !err_msg.contains("no such module: fts5")
+            && !err_msg.contains("fts5 is not compiled")
+            && !err_msg.contains("unknown tokenizer")
+        {
+            return Err(e);
+        }
+        // FTS5 not available, continue without FTS support
+        tracing::warn!(
+            "FTS5 full-text search not available for project_memories. Falling back to LIKE queries."
+        );
+    }
+
+    // Create triggers to keep FTS index in sync
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_memories_fts'", []).is_ok() {
+        conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS project_memories_ai AFTER INSERT ON project_memories BEGIN
+              INSERT INTO project_memories_fts(rowid, content, project_folder, memory_type)
+              VALUES (new.id, new.content, new.project_folder, new.memory_type);
+            END",
+            [],
+        ).ok();
+
+        conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS project_memories_ad AFTER DELETE ON project_memories BEGIN
+              DELETE FROM project_memories_fts WHERE rowid = old.id;
+            END",
+            [],
+        ).ok();
+
+        conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS project_memories_au AFTER UPDATE ON project_memories BEGIN
+              DELETE FROM project_memories_fts WHERE rowid = old.id;
+              INSERT INTO project_memories_fts(rowid, content, project_folder, memory_type)
+              VALUES (new.id, new.content, new.project_folder, new.memory_type);
+            END",
+            [],
+        ).ok();
+    }
+
+    tracing::info!(
+        "Applied migration v52: Created project_memories table for project-scoped long-term memory"
+    );
+
+    Ok(())
+}
+
+/// Migration v53: Create AGI task checkpoint tables for session persistence
+fn apply_migration_v53(conn: &Connection) -> Result<()> {
+    // Create agi_tasks table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agi_tasks (
+            id TEXT PRIMARY KEY,
+            goal_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            completed_at_ms INTEGER,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Create agi_task_checkpoints table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agi_task_checkpoints (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            goal_json TEXT NOT NULL,
+            current_step INTEGER NOT NULL,
+            completed_steps_json TEXT NOT NULL,
+            current_state_json TEXT NOT NULL,
+            tool_results_json TEXT NOT NULL,
+            context_memory_json TEXT NOT NULL,
+            available_resources_json TEXT NOT NULL,
+            checkpoint_reason TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            total_steps INTEGER NOT NULL,
+            progress_percent REAL NOT NULL,
+            elapsed_time_ms INTEGER NOT NULL,
+            estimated_remaining_ms INTEGER,
+            tool_calls_executed INTEGER NOT NULL DEFAULT 0,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            last_error_message TEXT,
+            is_latest BOOLEAN NOT NULL DEFAULT 1,
+            parent_checkpoint_id TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(task_id) REFERENCES agi_tasks(id),
+            FOREIGN KEY(parent_checkpoint_id) REFERENCES agi_task_checkpoints(id)
+        )",
+        [],
+    )?;
+
+    // Create indices for efficient queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agi_checkpoints_task_id
+         ON agi_task_checkpoints(task_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agi_checkpoints_latest
+         ON agi_task_checkpoints(task_id, is_latest)
+         WHERE is_latest = 1",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agi_checkpoints_created
+         ON agi_task_checkpoints(created_at_ms DESC)",
+        [],
+    )?;
+
+    // Create agi_checkpoint_restore_history table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agi_checkpoint_restore_history (
+            id TEXT PRIMARY KEY,
+            checkpoint_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            restored_at_ms INTEGER NOT NULL,
+            resumed_steps INTEGER NOT NULL DEFAULT 0,
+            success BOOLEAN NOT NULL,
+            error_message TEXT,
+            restored_at TEXT NOT NULL,
+            FOREIGN KEY(checkpoint_id) REFERENCES agi_task_checkpoints(id),
+            FOREIGN KEY(task_id) REFERENCES agi_tasks(id)
+        )",
+        [],
+    )?;
+
+    // Create indices for restore history
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agi_restore_history_checkpoint
+         ON agi_checkpoint_restore_history(checkpoint_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agi_restore_history_task
+         ON agi_checkpoint_restore_history(task_id)",
+        [],
+    )?;
+
+    tracing::info!(
+        "Applied migration v53: Created AGI task checkpoint tables for session persistence"
     );
 
     Ok(())
