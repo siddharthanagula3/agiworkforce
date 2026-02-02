@@ -189,14 +189,22 @@ export class GoogleProvider extends BaseLLMProvider {
     // Transform Google's streaming format to OpenAI-compatible SSE format
     // Google returns: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
     // We need: data: {"choices":[{"delta":{"content":"..."}}]}\n\n
+    let buffer = '';
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
-        const lines = text.split('\n').filter((line) => line.trim());
+        buffer += text;
+
+        // Process complete JSON objects (Google returns newline-delimited JSON)
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
         for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
           try {
-            const data = JSON.parse(line);
+            const data = JSON.parse(trimmedLine);
 
             // Extract text from Google's format
             const candidate = data.candidates?.[0];
