@@ -25,9 +25,10 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'gemini-3-pro': 'gemini-3-pro-preview', // Gemini 3 Pro
   'gemini-3-flash': 'gemini-3-flash-preview', // Gemini 3 Flash
   // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
-  'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
-  'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
-  'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
+  // Use simpler IDs without dates for better compatibility
+  'claude-opus-4.5': 'claude-opus-4-5', // Claude Opus 4.5
+  'claude-sonnet-4.5': 'claude-sonnet-4-5', // Claude Sonnet 4.5
+  'claude-haiku-4.5': 'claude-haiku-4-5', // Claude Haiku 4.5
   // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
   'gpt-5.2': 'gpt-5.2', // GPT-5.2 flagship
   'gpt-5-pro': 'gpt-5-pro', // GPT-5 Pro

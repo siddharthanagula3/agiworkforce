@@ -181,8 +181,51 @@ export class AnthropicProvider extends BaseLLMProvider {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+      let errorText: string;
+      let errorData: unknown;
+      try {
+        errorText = await response.text();
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorText = response.statusText;
+        errorData = { status: response.status };
+      }
+
+      logger.error(
+        {
+          status: response.status,
+          error: errorText,
+          errorData,
+          model: request.model,
+        },
+        'Anthropic streaming API error',
+      );
+
+      // Handle specific error types based on status code (same as non-streaming)
+      if (response.status === 401) {
+        throw new Error('Anthropic API authentication failed. Please check your API key.');
+      } else if (response.status === 403) {
+        throw new Error(
+          'Anthropic API permission denied. Your API key may not have access to this model.',
+        );
+      } else if (response.status === 404) {
+        throw new Error(
+          `Model "${request.model}" not found. This model may not be available yet or the model ID is incorrect.`,
+        );
+      } else if (response.status === 413) {
+        throw new Error('Anthropic API request too large. Maximum request size is 32 MB.');
+      } else if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        throw new Error(
+          `Anthropic API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+        );
+      } else if (response.status === 500) {
+        throw new Error('Anthropic API internal server error. Please try again later.');
+      } else if (response.status === 529) {
+        throw new Error('Anthropic API is temporarily overloaded. Please try again later.');
+      } else {
+        throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+      }
     }
 
     if (!response.body) {
