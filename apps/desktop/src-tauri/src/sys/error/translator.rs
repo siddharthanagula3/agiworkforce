@@ -1003,7 +1003,7 @@ fn sanitize_tool_name(tool: &str) -> Cow<'_, str> {
 
 /// Convert snake_case tool names to human-readable format
 fn humanize_tool_name(name: &str) -> String {
-    name.replace('_', " ").replace('-', " ")
+    name.replace(['_', '-'], " ")
 }
 
 /// Remove technical jargon from error messages

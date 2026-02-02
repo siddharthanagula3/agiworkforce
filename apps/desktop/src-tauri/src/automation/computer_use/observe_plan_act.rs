@@ -849,11 +849,11 @@ Only include actions you're confident will make progress."#,
                 let mut keyboard = KeyboardSimulator::new()?;
                 let mods: Vec<enigo::Key> = modifiers
                     .iter()
-                    .filter_map(|m| match m {
-                        HotkeyModifier::Ctrl => Some(enigo::Key::Control),
-                        HotkeyModifier::Alt => Some(enigo::Key::Alt),
-                        HotkeyModifier::Shift => Some(enigo::Key::Shift),
-                        HotkeyModifier::Meta => Some(enigo::Key::Meta),
+                    .map(|m| match m {
+                        HotkeyModifier::Ctrl => enigo::Key::Control,
+                        HotkeyModifier::Alt => enigo::Key::Alt,
+                        HotkeyModifier::Shift => enigo::Key::Shift,
+                        HotkeyModifier::Meta => enigo::Key::Meta,
                     })
                     .collect();
 

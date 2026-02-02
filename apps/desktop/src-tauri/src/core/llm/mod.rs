@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMRequest {
     pub messages: Vec<ChatMessage>,
     pub model: String,
@@ -121,43 +121,6 @@ pub struct LLMRequest {
     /// Enable code execution (Python sandbox) for computational tasks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_execution: Option<bool>,
-}
-
-impl Default for LLMRequest {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            model: String::new(),
-            temperature: None,
-            max_tokens: None,
-            stream: false,
-            top_p: None,
-            top_k: None,
-            system: None,
-            tools: None,
-            tool_choice: None,
-            thinking_mode: None,
-            thinking: None,
-            thinking_level: None,
-            response_format: None,
-            cache_control: None,
-            audio_output: None,
-            background: None,
-            previous_response_id: None,
-            conversation_id: None,
-            metadata: None,
-            image_generation: None,
-            video_generation: None,
-            tts_config: None,
-            file_search: None,
-            url_context: None,
-            google_search: None,
-            google_maps: None,
-            computer_use: None,
-            live_session: None,
-            code_execution: None,
-        }
-    }
 }
 
 impl LLMRequest {
