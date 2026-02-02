@@ -4412,7 +4412,6 @@ fn apply_migration_v51(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-
 /// Migration v52: Create project_memories table for project-scoped long-term memory
 /// This table stores:
 /// - ProjectContext: folder path, tech stack, conventions
@@ -4481,7 +4480,13 @@ fn apply_migration_v52(conn: &Connection) -> Result<()> {
     }
 
     // Create triggers to keep FTS index in sync
-    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_memories_fts'", []).is_ok() {
+    if conn
+        .execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_memories_fts'",
+            [],
+        )
+        .is_ok()
+    {
         conn.execute(
             "CREATE TRIGGER IF NOT EXISTS project_memories_ai AFTER INSERT ON project_memories BEGIN
               INSERT INTO project_memories_fts(rowid, content, project_folder, memory_type)

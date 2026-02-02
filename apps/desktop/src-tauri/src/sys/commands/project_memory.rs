@@ -269,7 +269,13 @@ pub async fn auto_save_decision(
 
     // Auto-saved decisions are marked with high importance and "accepted" status
     manager
-        .save_architectural_decision(&project_folder, &decision, &rationale, Some("accepted"), Some(8))
+        .save_architectural_decision(
+            &project_folder,
+            &decision,
+            &rationale,
+            Some("accepted"),
+            Some(8),
+        )
         .map_err(|e| format!("Failed to auto-save decision: {}", e))
 }
 
@@ -321,7 +327,13 @@ pub async fn record_agi_decision(
 ) -> Result<i64, String> {
     let manager = state.manager.read().await;
     manager
-        .save_architectural_decision(project_folder, decision, rationale, Some("accepted"), Some(8))
+        .save_architectural_decision(
+            project_folder,
+            decision,
+            rationale,
+            Some("accepted"),
+            Some(8),
+        )
         .map_err(|e| format!("Failed to record AGI decision: {}", e))
 }
 
@@ -335,8 +347,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
 
-        let state = ProjectMemoryState::new(db_path.to_str().unwrap())
-            .expect("Failed to create state");
+        let state =
+            ProjectMemoryState::new(db_path.to_str().unwrap()).expect("Failed to create state");
 
         let request = SaveProjectContextRequest {
             project_folder: "/test/project".to_string(),
@@ -367,8 +379,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
 
-        let state = ProjectMemoryState::new(db_path.to_str().unwrap())
-            .expect("Failed to create state");
+        let state =
+            ProjectMemoryState::new(db_path.to_str().unwrap()).expect("Failed to create state");
 
         let request = SaveArchitecturalDecisionRequest {
             project_folder: "/test/project".to_string(),

@@ -6,15 +6,14 @@
 /// - Resuming from a specific checkpoint
 /// - Deleting old checkpoints
 /// - Tracking checkpoint restore history
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tracing::info;
 
 use crate::core::agi::{
-    Checkpoint, CheckpointConfig, CheckpointListResponse, CheckpointReason,
-    CheckpointStore, CreateCheckpointRequest, Goal,
+    Checkpoint, CheckpointConfig, CheckpointListResponse, CheckpointReason, CheckpointStore,
+    CreateCheckpointRequest, Goal,
 };
 
 /// Response type for checkpoint operations
@@ -117,11 +116,7 @@ pub async fn agi_checkpoint_save(
         match serde_json::from_str::<serde_json::Value>(&json_str)
             .map_err(|e| format!("Failed to parse state JSON: {}", e))?
         {
-            serde_json::Value::Object(map) => {
-                map.into_iter()
-                    .map(|(k, v)| (k, v))
-                    .collect()
-            }
+            serde_json::Value::Object(map) => map.into_iter().map(|(k, v)| (k, v)).collect(),
             _ => std::collections::HashMap::new(),
         }
     } else {
@@ -189,7 +184,9 @@ pub async fn agi_checkpoint_list(
     request: ListCheckpointsRequest,
     state: State<'_, AGICheckpointState>,
 ) -> Result<CheckpointResponse<CheckpointListResponse>, String> {
-    let limit = request.limit.unwrap_or(state.config.max_checkpoints_per_task);
+    let limit = request
+        .limit
+        .unwrap_or(state.config.max_checkpoints_per_task);
 
     match state.store.list_checkpoints(&request.task_id, limit).await {
         Ok(checkpoints) => Ok(CheckpointResponse::ok(CheckpointListResponse {

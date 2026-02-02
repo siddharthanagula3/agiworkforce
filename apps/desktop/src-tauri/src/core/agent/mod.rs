@@ -40,7 +40,7 @@ pub use executor::TaskExecutor;
 pub use form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 pub use planner::TaskPlanner;
 pub use runtime::AgentRuntime;
-pub use timeout_manager::{TimeoutConfig, TimeoutTracker, TimeoutWarning, TimeoutResponse};
+pub use timeout_manager::{TimeoutConfig, TimeoutResponse, TimeoutTracker, TimeoutWarning};
 pub use undo_manager::UndoManager;
 pub use vision::VisionAutomation;
 
