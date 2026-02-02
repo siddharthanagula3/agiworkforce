@@ -116,7 +116,7 @@ pub async fn agi_checkpoint_save(
         match serde_json::from_str::<serde_json::Value>(&json_str)
             .map_err(|e| format!("Failed to parse state JSON: {}", e))?
         {
-            serde_json::Value::Object(map) => map.into_iter().map(|(k, v)| (k, v)).collect(),
+            serde_json::Value::Object(map) => map.into_iter().collect(),
             _ => std::collections::HashMap::new(),
         }
     } else {

@@ -46,10 +46,12 @@ impl Default for ComputerUseConfig {
 /// Media resolution levels for Gemini 3 (v1alpha API)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum MediaResolution {
     /// Low resolution - 280 tokens per image
     MediaResolutionLow,
     /// Medium resolution - 560 tokens per image (default)
+    #[default]
     MediaResolutionMedium,
     /// High resolution - 1120 tokens per image
     MediaResolutionHigh,
@@ -76,12 +78,6 @@ impl MediaResolution {
             MediaResolution::MediaResolutionHigh => "MEDIA_RESOLUTION_HIGH",
             MediaResolution::MediaResolutionUltraHigh => "MEDIA_RESOLUTION_ULTRA_HIGH",
         }
-    }
-}
-
-impl Default for MediaResolution {
-    fn default() -> Self {
-        MediaResolution::MediaResolutionMedium
     }
 }
 
@@ -188,14 +184,14 @@ pub struct CacheUsageMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GoogleContent {
-    role: String,
-    parts: Vec<GooglePart>,
+pub struct GoogleContent {
+    pub role: String,
+    pub parts: Vec<GooglePart>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-enum GooglePart {
+pub enum GooglePart {
     Text {
         text: String,
     },
@@ -224,27 +220,27 @@ enum GooglePart {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GoogleInlineData {
-    mime_type: String,
-    data: String,
+pub struct GoogleInlineData {
+    pub mime_type: String,
+    pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GoogleFileData {
-    mime_type: String,
-    file_uri: String,
+pub struct GoogleFileData {
+    pub mime_type: String,
+    pub file_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GoogleFunctionCall {
-    name: String,
-    args: Value,
+pub struct GoogleFunctionCall {
+    pub name: String,
+    pub args: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GoogleFunctionResponse {
-    name: String,
-    response: Value,
+pub struct GoogleFunctionResponse {
+    pub name: String,
+    pub response: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]

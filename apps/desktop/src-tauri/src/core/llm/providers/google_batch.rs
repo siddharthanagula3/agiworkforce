@@ -586,7 +586,7 @@ impl GoogleBatchProvider {
         output_path: &Path,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         // Parse file URI to get file ID
-        let file_id = file_uri.split('/').last().ok_or("Invalid file URI")?;
+        let file_id = file_uri.split('/').next_back().ok_or("Invalid file URI")?;
 
         let url = format!("{}/files/{}?alt=media", self.base_url, file_id);
 
@@ -616,7 +616,7 @@ impl GoogleBatchProvider {
         &self,
         file_uri: &str,
     ) -> Result<Vec<BatchResult>, Box<dyn Error + Send + Sync>> {
-        let file_id = file_uri.split('/').last().ok_or("Invalid file URI")?;
+        let file_id = file_uri.split('/').next_back().ok_or("Invalid file URI")?;
 
         let url = format!("{}/files/{}?alt=media", self.base_url, file_id);
 
