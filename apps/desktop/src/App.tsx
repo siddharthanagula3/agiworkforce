@@ -86,6 +86,12 @@ const DesktopShell = () => {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
 
+      // Suppress known Tauri internal errors that occur during event cleanup
+      if (message.includes('listeners[eventId]')) {
+        console.debug('[Tauri] Suppressed internal event cleanup error');
+        return; // Don't show error dialog for this known issue
+      }
+
       addError({
         type: 'UNHANDLED_PROMISE_REJECTION',
         severity: 'error',
