@@ -498,10 +498,11 @@ impl ComputerUseSafetyLayer {
         }
 
         // Alt+F4 special handling
-        if modifiers.contains(&HotkeyModifier::Alt) && key.eq_ignore_ascii_case("f4") {
-            if self.config.require_confirmation_for_destructive {
-                return SafetyDecision::needs_confirmation("Alt+F4 will close the current window");
-            }
+        if modifiers.contains(&HotkeyModifier::Alt)
+            && key.eq_ignore_ascii_case("f4")
+            && self.config.require_confirmation_for_destructive
+        {
+            return SafetyDecision::needs_confirmation("Alt+F4 will close the current window");
         }
 
         SafetyDecision::allow()
@@ -519,13 +520,13 @@ impl ComputerUseSafetyLayer {
         let name_lower = name.to_lowercase();
         let sensitive_apps = ["terminal", "cmd", "powershell", "bash", "sh", "regedit"];
 
-        if sensitive_apps.iter().any(|app| name_lower.contains(app)) {
-            if self.config.require_confirmation_for_destructive {
-                return SafetyDecision::needs_confirmation(format!(
-                    "Launching '{}' - this is a privileged application",
-                    name
-                ));
-            }
+        if sensitive_apps.iter().any(|app| name_lower.contains(app))
+            && self.config.require_confirmation_for_destructive
+        {
+            return SafetyDecision::needs_confirmation(format!(
+                "Launching '{}' - this is a privileged application",
+                name
+            ));
         }
 
         SafetyDecision::allow()

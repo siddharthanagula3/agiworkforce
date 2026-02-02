@@ -36,6 +36,7 @@ use std::sync::{Arc, Mutex};
 // AUDIT-003-015 fix: Secure zeroization function that prevents compiler optimization
 // from eliding the memory clearing operation. Uses volatile write semantics and
 // memory barrier to ensure the zeroing actually happens.
+#[allow(unsafe_code)]
 fn secure_zeroize(data: &mut [u8]) {
     // Use volatile write to prevent compiler optimization
     for byte in data.iter_mut() {

@@ -253,7 +253,7 @@ impl CheckpointStore {
                             last_error_message, is_latest, parent_checkpoint_id
                      FROM agi_task_checkpoints WHERE id = ?1",
                     params![checkpoint_id],
-                    |row| Self::row_to_checkpoint(row),
+                    Self::row_to_checkpoint,
                 )
                 .optional()?;
 
@@ -282,7 +282,7 @@ impl CheckpointStore {
                      WHERE task_id = ?1 AND is_latest = 1
                      LIMIT 1",
                     params![task_id],
-                    |row| Self::row_to_checkpoint(row),
+                    Self::row_to_checkpoint,
                 )
                 .optional()?;
 

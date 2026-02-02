@@ -59,10 +59,7 @@ pub struct TimeoutConfig {
 
 impl TimeoutConfig {
     pub fn new(max_seconds: u64) -> Self {
-        let clamped = std::cmp::max(
-            consts::MIN_TIMEOUT_SECS,
-            std::cmp::min(max_seconds, consts::MAX_TIMEOUT_SECS),
-        );
+        let clamped = max_seconds.clamp(consts::MIN_TIMEOUT_SECS, consts::MAX_TIMEOUT_SECS);
 
         Self {
             max_duration: Duration::from_secs(clamped),

@@ -175,7 +175,7 @@ impl SandboxManager {
                     _ => session
                         .working_dir
                         .to_string_lossy()
-                        .starts_with(&sandbox_base.to_string_lossy().as_ref()),
+                        .starts_with(sandbox_base.to_string_lossy().as_ref()),
                 };
 
                 if is_safe {

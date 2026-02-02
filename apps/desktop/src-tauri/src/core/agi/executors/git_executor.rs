@@ -390,13 +390,11 @@ impl ConflictParser {
         while idx < lines.len() {
             let line = lines[idx];
 
-            if line.starts_with(Self::MARKER_THEIRS_END) {
+            if let Some(stripped) = line.strip_prefix(Self::MARKER_THEIRS_END) {
                 // Extract label from the closing marker
-                if line.len() > Self::MARKER_THEIRS_END.len() {
-                    let label = line[Self::MARKER_THEIRS_END.len()..].trim();
-                    if !label.is_empty() {
-                        theirs_label = Some(label.to_string());
-                    }
+                let label = stripped.trim();
+                if !label.is_empty() {
+                    theirs_label = Some(label.to_string());
                 }
 
                 let hunk = ConflictHunk {

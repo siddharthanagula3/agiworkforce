@@ -33,8 +33,10 @@ use super::types::ElementBounds;
 /// Supported zoom levels for region inspection.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ZoomLevel {
     /// 2x magnification - good for slightly small elements.
+    #[default]
     X2,
     /// 4x magnification - good for small text and icons.
     X4,
@@ -64,12 +66,6 @@ impl ZoomLevel {
             f if (f - 8.0).abs() < 0.01 => ZoomLevel::X8,
             _ => ZoomLevel::Custom(clamped),
         }
-    }
-}
-
-impl Default for ZoomLevel {
-    fn default() -> Self {
-        ZoomLevel::X2
     }
 }
 

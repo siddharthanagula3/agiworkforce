@@ -331,7 +331,7 @@ impl CheckpointedExecution {
                 completed_steps,
                 reason,
                 total_steps,
-                &*metrics_guard,
+                &metrics_guard,
                 None,
             )
             .await?;
