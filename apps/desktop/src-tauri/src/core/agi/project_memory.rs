@@ -181,7 +181,8 @@ impl ProjectMemoryManager {
                     updated_at: String::new(),
                     last_accessed: None,
                 })
-                .unwrap()
+                .unwrap(),
+                importance
             ],
         )
         .map_err(|e| Error::Database(format!("Failed to save project context: {}", e)))?;
