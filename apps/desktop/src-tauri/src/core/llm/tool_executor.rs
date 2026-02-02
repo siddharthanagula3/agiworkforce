@@ -4230,7 +4230,7 @@ impl ToolExecutor {
                 let body = response.text().await.unwrap_or_default();
 
                 Ok(ToolResult {
-                    success: status >= 200 && status < 300,
+                    success: (200..300).contains(&status),
                     data: json!({
                         "status": status,
                         "response": body,
@@ -4386,7 +4386,7 @@ impl ToolExecutor {
                 };
 
                 Ok(ToolResult {
-                    success: status >= 200 && status < 300,
+                    success: (200..300).contains(&status),
                     data: json!({
                         "url": url,
                         "status": status,

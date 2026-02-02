@@ -1106,8 +1106,8 @@ impl MemoryStore {
 
         if let (Ok(mut cache), Ok(mut order)) = (cache_result, order_result) {
             // If already cached, just update the value (don't add to order again)
-            if cache.contains_key(&id) {
-                cache.insert(id, embedding);
+            if let std::collections::hash_map::Entry::Occupied(mut e) = cache.entry(id) {
+                e.insert(embedding);
                 return;
             }
 

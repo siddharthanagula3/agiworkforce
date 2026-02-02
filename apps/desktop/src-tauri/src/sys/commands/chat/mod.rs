@@ -491,7 +491,7 @@ fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String,
         // Check if it's a text-based file
         let name_lower = attachment.name.to_lowercase();
         let is_text_file = text_extensions.iter().any(|ext| name_lower.ends_with(ext))
-            || attachment.mime_type.as_deref().map_or(false, |mime| {
+            || attachment.mime_type.as_deref().is_some_and(|mime| {
                 mime.starts_with("text/")
                     || mime == "application/json"
                     || mime == "application/xml"

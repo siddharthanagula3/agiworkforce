@@ -19,7 +19,6 @@ use crate::sys::error::{Error, Result};
 /// - File size limits are enforced at the DocumentManager level (DOC-010)
 /// - ZIP bomb protection via the `zip` crate's built-in limits
 /// - No network access during parsing (no external resource fetching)
-
 const CORE_PROPS_NS: &str =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 

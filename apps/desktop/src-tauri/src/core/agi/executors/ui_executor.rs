@@ -158,14 +158,14 @@ impl UiExecutor {
 
             // EXE-006 fix: Validate coordinate bounds (typical screen max is 32767)
             const MAX_COORDINATE: i64 = 32767;
-            if x < 0 || x > MAX_COORDINATE {
+            if !(0..=MAX_COORDINATE).contains(&x) {
                 return Err(anyhow!(
                     "X coordinate {} out of bounds (must be 0-{})",
                     x,
                     MAX_COORDINATE
                 ));
             }
-            if y < 0 || y > MAX_COORDINATE {
+            if !(0..=MAX_COORDINATE).contains(&y) {
                 return Err(anyhow!(
                     "Y coordinate {} out of bounds (must be 0-{})",
                     y,

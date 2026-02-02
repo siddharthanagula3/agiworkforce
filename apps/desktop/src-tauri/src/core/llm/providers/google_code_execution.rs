@@ -15,17 +15,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Code execution configuration for Gemini models
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CodeExecutionConfig {
     /// Enable code execution in the request
     #[serde(default)]
     pub enabled: bool,
-}
-
-impl Default for CodeExecutionConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }
 
 impl CodeExecutionConfig {
@@ -41,7 +35,7 @@ impl CodeExecutionConfig {
 }
 
 /// Result of code execution containing output and generated content
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CodeExecutionResult {
     /// Standard output from code execution
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,18 +59,6 @@ pub struct CodeExecutionResult {
     pub status: Option<String>,
 }
 
-impl Default for CodeExecutionResult {
-    fn default() -> Self {
-        Self {
-            stdout: None,
-            stderr: None,
-            output_images: None,
-            exit_code: None,
-            status: None,
-        }
-    }
-}
-
 impl CodeExecutionResult {
     /// Check if the code execution was successful
     pub fn is_success(&self) -> bool {
@@ -90,7 +72,7 @@ impl CodeExecutionResult {
             || self
                 .output_images
                 .as_ref()
-                .map_or(false, |imgs| !imgs.is_empty())
+                .is_some_and(|imgs| !imgs.is_empty())
     }
 
     /// Get formatted output combining stdout and stderr
@@ -207,13 +189,11 @@ pub fn parse_code_execution_results(parts: &[serde_json::Value]) -> Vec<CodeExec
     let mut results = Vec::new();
 
     for part in parts {
-        if let Ok(code_part) = serde_json::from_value::<GoogleCodePart>(part.clone()) {
-            if let GoogleCodePart::CodeExecutionResult {
-                code_execution_result,
-            } = code_part
-            {
-                results.push(code_execution_result.into());
-            }
+        if let Ok(GoogleCodePart::CodeExecutionResult {
+            code_execution_result,
+        }) = serde_json::from_value::<GoogleCodePart>(part.clone())
+        {
+            results.push(code_execution_result.into());
         }
     }
 
@@ -225,10 +205,10 @@ pub fn extract_executable_code(parts: &[serde_json::Value]) -> Vec<ExecutableCod
     let mut code_blocks = Vec::new();
 
     for part in parts {
-        if let Ok(code_part) = serde_json::from_value::<GoogleCodePart>(part.clone()) {
-            if let GoogleCodePart::ExecutableCode { executable_code } = code_part {
-                code_blocks.push(executable_code);
-            }
+        if let Ok(GoogleCodePart::ExecutableCode { executable_code }) =
+            serde_json::from_value::<GoogleCodePart>(part.clone())
+        {
+            code_blocks.push(executable_code);
         }
     }
 

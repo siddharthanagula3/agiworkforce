@@ -255,7 +255,7 @@ If no matching element is found, respond with:
         // Parse find result
         let json_str = self.extract_json(&response)?;
         let parsed: serde_json::Value =
-            serde_json::from_str(&json_str).context("Failed to parse find response")?;
+            serde_json::from_str(json_str).context("Failed to parse find response")?;
 
         if parsed
             .get("found")
@@ -301,7 +301,7 @@ If not found:
             .await?;
 
         let json_str = self.extract_json(&response)?;
-        let parsed: serde_json::Value = serde_json::from_str(&json_str)?;
+        let parsed: serde_json::Value = serde_json::from_str(json_str)?;
 
         if parsed
             .get("found")
