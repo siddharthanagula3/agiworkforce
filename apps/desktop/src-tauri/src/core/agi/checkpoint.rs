@@ -33,12 +33,11 @@
 /// - Durability: Checkpoints persisted to SQLite with fsync
 /// - Consistency: Restored state is validated before resumption
 /// - Isolation: Concurrent checkpoints don't interfere
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::core::agi::{ExecutionContext, Goal, ToolExecutionResult, ResourceState};
+use crate::core::agi::{ExecutionContext, Goal, ResourceState, ToolExecutionResult};
 
 /// Unique identifier for a checkpoint
 pub type CheckpointId = String;
@@ -336,7 +335,10 @@ mod tests {
     fn test_checkpoint_reason_display() {
         assert_eq!(CheckpointReason::Interval.to_string(), "interval");
         assert_eq!(CheckpointReason::UserPaused.to_string(), "user_paused");
-        assert_eq!(CheckpointReason::TimeoutApproaching.to_string(), "timeout_approaching");
+        assert_eq!(
+            CheckpointReason::TimeoutApproaching.to_string(),
+            "timeout_approaching"
+        );
     }
 
     #[test]

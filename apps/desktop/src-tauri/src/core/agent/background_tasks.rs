@@ -119,7 +119,9 @@ pub struct TaskStorage {
 impl TaskStorage {
     pub fn new(db: Arc<Mutex<Connection>>) -> Result<Self> {
         {
-            let conn = db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+            let conn = db
+                .lock()
+                .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
             // Create tables if they don't exist
             conn.execute_batch(
@@ -164,7 +166,10 @@ impl TaskStorage {
 
     /// Store a task
     pub fn save_task(&self, task: &PersistentTask) -> Result<()> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "INSERT OR REPLACE INTO persistent_tasks
@@ -194,7 +199,10 @@ impl TaskStorage {
 
     /// Retrieve a task by ID
     pub fn load_task(&self, task_id: &str) -> Result<Option<PersistentTask>> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, description, status, current_step, total_steps, timeout_secs, elapsed_secs,
@@ -202,40 +210,45 @@ impl TaskStorage {
              FROM persistent_tasks WHERE id = ?"
         )?;
 
-        let task = stmt.query_row(params![task_id], |row| {
-            Ok(PersistentTask {
-                id: row.get(0)?,
-                description: row.get(1)?,
-                status: row.get(2)?,
-                current_step: row.get(3)?,
-                total_steps: row.get(4)?,
-                timeout_secs: row.get(5)?,
-                elapsed_secs: row.get(6)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(7)?)
-                    .ok()
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(Utc::now),
-                started_at: row
-                    .get::<_, Option<String>>(8)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                completed_at: row
-                    .get::<_, Option<String>>(9)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                context_json: row.get(10)?,
-                progress_json: row.get(11)?,
-                priority: row.get(12)?,
-                notes: row.get(13)?,
+        let task = stmt
+            .query_row(params![task_id], |row| {
+                Ok(PersistentTask {
+                    id: row.get(0)?,
+                    description: row.get(1)?,
+                    status: row.get(2)?,
+                    current_step: row.get(3)?,
+                    total_steps: row.get(4)?,
+                    timeout_secs: row.get(5)?,
+                    elapsed_secs: row.get(6)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(7)?)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(Utc::now),
+                    started_at: row
+                        .get::<_, Option<String>>(8)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    completed_at: row
+                        .get::<_, Option<String>>(9)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    context_json: row.get(10)?,
+                    progress_json: row.get(11)?,
+                    priority: row.get(12)?,
+                    notes: row.get(13)?,
+                })
             })
-        }).optional()?;
+            .optional()?;
 
         Ok(task)
     }
 
     /// List all tasks with a given status
     pub fn list_tasks_by_status(&self, status: &str) -> Result<Vec<PersistentTask>> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, description, status, current_step, total_steps, timeout_secs, elapsed_secs,
@@ -280,7 +293,10 @@ impl TaskStorage {
 
     /// List all incomplete tasks (for auto-resume)
     pub fn list_resumable_tasks(&self) -> Result<Vec<PersistentTask>> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, description, status, current_step, total_steps, timeout_secs, elapsed_secs,
@@ -326,20 +342,32 @@ impl TaskStorage {
 
     /// Delete a task
     pub fn delete_task(&self, task_id: &str) -> Result<()> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         // Delete checkpoints first (foreign key constraint)
-        conn.execute("DELETE FROM task_checkpoints WHERE task_id = ?", params![task_id])?;
+        conn.execute(
+            "DELETE FROM task_checkpoints WHERE task_id = ?",
+            params![task_id],
+        )?;
 
         // Delete task
-        conn.execute("DELETE FROM persistent_tasks WHERE id = ?", params![task_id])?;
+        conn.execute(
+            "DELETE FROM persistent_tasks WHERE id = ?",
+            params![task_id],
+        )?;
 
         Ok(())
     }
 
     /// Save a checkpoint
     pub fn save_checkpoint(&self, checkpoint: &TaskCheckpoint) -> Result<()> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "INSERT INTO task_checkpoints
@@ -361,7 +389,10 @@ impl TaskStorage {
 
     /// Get the latest checkpoint for a task
     pub fn get_latest_checkpoint(&self, task_id: &str) -> Result<Option<TaskCheckpoint>> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, task_id, step_number, context_json, tool_results_json, created_at, metadata_json
@@ -391,7 +422,10 @@ impl TaskStorage {
 
     /// Clean up old completed tasks (older than days)
     pub fn cleanup_old_tasks(&self, days: i32) -> Result<usize> {
-        let conn = self.db.lock().map_err(|e| anyhow!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock database: {}", e))?;
 
         let cutoff = Utc::now() - chrono::Duration::days(days as i64);
 
@@ -412,11 +446,7 @@ mod tests {
 
     #[test]
     fn test_persistent_task_new() {
-        let task = PersistentTask::new(
-            "test-1".to_string(),
-            "Test task".to_string(),
-            3600,
-        );
+        let task = PersistentTask::new("test-1".to_string(), "Test task".to_string(), 3600);
         assert_eq!(task.id, "test-1");
         assert_eq!(task.status, "queued");
         assert_eq!(task.timeout_secs, 3600);
@@ -424,12 +454,8 @@ mod tests {
 
     #[test]
     fn test_task_checkpoint_new() {
-        let checkpoint = TaskCheckpoint::new(
-            "task-1".to_string(),
-            1,
-            "{}".to_string(),
-            "{}".to_string(),
-        );
+        let checkpoint =
+            TaskCheckpoint::new("task-1".to_string(), 1, "{}".to_string(), "{}".to_string());
         assert_eq!(checkpoint.task_id, "task-1");
         assert_eq!(checkpoint.step_number, 1);
     }

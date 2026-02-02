@@ -1043,7 +1043,7 @@ impl ToolExecutor {
                                         "file_delete".to_string(),
                                         path_buf,
                                         file_content_before, // Store content for restoration
-                                        None, // File was deleted, no after content
+                                        None,                // File was deleted, no after content
                                         task_id,
                                         true, // File deletes are reversible
                                         Some("Restore deleted file".to_string()),

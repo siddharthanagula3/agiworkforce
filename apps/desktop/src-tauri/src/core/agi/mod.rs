@@ -15,7 +15,6 @@ pub mod memory;
 pub mod memory_manager;
 pub mod memory_persistence;
 pub mod orchestrator;
-pub mod project_memory;
 #[allow(dead_code)]
 pub mod orchestrator_examples;
 pub mod outcome_tracker;
@@ -23,6 +22,7 @@ pub mod planner;
 pub mod planner_memory_integration;
 pub mod process_ontology;
 pub mod process_reasoning;
+pub mod project_memory;
 pub mod reflection;
 pub mod resources;
 pub mod sandbox;
@@ -67,13 +67,13 @@ pub use orchestrator::{
     ResourceLock, UiGuard,
 };
 pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
+pub use planner::AGIPlanner;
+pub use process_ontology::{ProcessOntology, ProcessTemplate};
+pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
 pub use project_memory::{
     ArchitecturalDecision, CodingStyle, ProjectContext, ProjectMemory, ProjectMemoryManager,
     ProjectMemoryType,
 };
-pub use planner::AGIPlanner;
-pub use process_ontology::{ProcessOntology, ProcessTemplate};
-pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
 pub use reflection::{
     Correction, CorrectionType, ExecutionAssessment, FailedStep, FailureCategory, FailurePattern,
     PlanCritique, PlanRisk, ReflectionEngine, ReflectionInsight, SubGoal,

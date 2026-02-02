@@ -6,7 +6,6 @@
 /// - Handles task state restoration from checkpoints
 /// - Tracks execution metrics and progress
 /// - Provides recovery and resume semantics
-
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -168,7 +167,9 @@ impl CheckpointManager {
             | CheckpointReason::TaskComplete => true,
 
             // Create on interval
-            CheckpointReason::Interval => steps_since_last_checkpoint >= self.config.checkpoint_interval_steps,
+            CheckpointReason::Interval => {
+                steps_since_last_checkpoint >= self.config.checkpoint_interval_steps
+            }
 
             // Create if approaching timeout
             CheckpointReason::TimeoutApproaching => {
@@ -357,7 +358,11 @@ impl CheckpointedExecution {
 
     /// Gets remaining time until timeout
     pub async fn remaining_time(&self) -> Option<Duration> {
-        self.metrics.lock().await.remaining_ms().map(Duration::from_millis)
+        self.metrics
+            .lock()
+            .await
+            .remaining_ms()
+            .map(Duration::from_millis)
     }
 }
 

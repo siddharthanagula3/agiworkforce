@@ -2,8 +2,8 @@
 
 use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::core::llm::{
-    AudioFormat, ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse,
-    ThinkingParameter, ToolCall,
+    AudioFormat, ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ThinkingParameter,
+    ToolCall,
 };
 use futures_util::Stream;
 use reqwest::Client;

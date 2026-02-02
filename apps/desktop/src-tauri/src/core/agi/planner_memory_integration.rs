@@ -81,7 +81,8 @@ impl PlannerMemoryIntegration {
             }
 
             // Weight confidence by similarity score
-            context.memory_confidence = (context.memory_confidence + search_result.combined_score) / 2.0;
+            context.memory_confidence =
+                (context.memory_confidence + search_result.combined_score) / 2.0;
         }
 
         // Cap confidence at 1.0
@@ -89,9 +90,7 @@ impl PlannerMemoryIntegration {
 
         info!(
             "[PlannerMemory] Found {} relevant memories for goal: {} (confidence: {:.2})",
-            memory_count,
-            goal,
-            context.memory_confidence
+            memory_count, goal, context.memory_confidence
         );
 
         Ok(context)
@@ -138,10 +137,15 @@ impl PlannerMemoryIntegration {
 
     /// Check if a solution exists in memory and return it
     pub fn find_previous_solution(&self, problem: &str) -> Result<Option<String>> {
-        let solutions = self.memory_manager.search(&format!("solution: {}", problem), 1)?;
+        let solutions = self
+            .memory_manager
+            .search(&format!("solution: {}", problem), 1)?;
 
         if let Some(solution) = solutions.first() {
-            debug!("[PlannerMemory] Found previous solution: {}", solution.topic);
+            debug!(
+                "[PlannerMemory] Found previous solution: {}",
+                solution.topic
+            );
             Ok(Some(solution.content.clone()))
         } else {
             Ok(None)

@@ -773,8 +773,13 @@ impl ToolExecutionGuard {
 
         // Determine reversibility based on tool type
         let (reversible, undo_description) = match tool_name {
-            "file_write" | "file_create" => (true, Some("Restore the previous file contents".to_string())),
-            "file_delete" => (true, Some("Restore the deleted file from backup".to_string())),
+            "file_write" | "file_create" => {
+                (true, Some("Restore the previous file contents".to_string()))
+            }
+            "file_delete" => (
+                true,
+                Some("Restore the deleted file from backup".to_string()),
+            ),
             "code_execute" => (false, None),
             "db_query" => {
                 // Check if it's a read-only query
@@ -786,7 +791,10 @@ impl ToolExecutionGuard {
                 if query_lower.starts_with("select") {
                     (false, None) // SELECT queries are not reversible but also don't modify data
                 } else {
-                    (false, Some("Database changes may need manual rollback".to_string()))
+                    (
+                        false,
+                        Some("Database changes may need manual rollback".to_string()),
+                    )
                 }
             }
             _ => (false, None),
@@ -795,7 +803,9 @@ impl ToolExecutionGuard {
         ToolConfirmationRequest {
             request_id: uuid::Uuid::new_v4().to_string(),
             tool_name: tool_name.to_string(),
-            tool_description: description.unwrap_or("No description available").to_string(),
+            tool_description: description
+                .unwrap_or("No description available")
+                .to_string(),
             parameters: parameters.clone(),
             risk_level,
             safety_tier,
