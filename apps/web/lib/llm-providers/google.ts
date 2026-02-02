@@ -186,6 +186,87 @@ export class GoogleProvider extends BaseLLMProvider {
       throw new Error('No response body for streaming request');
     }
 
-    return response.body;
+    // Transform Google's streaming format to OpenAI-compatible SSE format
+    // Google returns: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
+    // We need: data: {"choices":[{"delta":{"content":"..."}}]}\n\n
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        const text = new TextDecoder().decode(chunk);
+        const lines = text.split('\n').filter((line) => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            // Extract text from Google's format
+            const candidate = data.candidates?.[0];
+            if (!candidate) continue;
+
+            // Check for safety blocks
+            if (candidate.finishReason === 'SAFETY') {
+              logger.warn(
+                { model: request.model, safetyRatings: candidate.safetyRatings },
+                'Google streaming response blocked by safety filters',
+              );
+              // Send error as SSE event
+              const errorEvent = `data: ${JSON.stringify({
+                error: 'Response was blocked by safety filters',
+                finishReason: 'SAFETY',
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(errorEvent));
+              continue;
+            }
+
+            const textContent = candidate.content?.parts?.[0]?.text;
+            if (textContent) {
+              // Convert to OpenAI SSE format
+              const sseEvent = `data: ${JSON.stringify({
+                choices: [
+                  {
+                    delta: {
+                      content: textContent,
+                    },
+                    index: 0,
+                  },
+                ],
+                model: request.model,
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseEvent));
+            }
+
+            // Send usage data if present
+            if (data.usageMetadata) {
+              const usageEvent = `data: ${JSON.stringify({
+                usageMetadata: data.usageMetadata,
+                usage: {
+                  prompt_tokens: data.usageMetadata.promptTokenCount || 0,
+                  completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
+                  total_tokens: data.usageMetadata.totalTokenCount || 0,
+                },
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(usageEvent));
+            }
+
+            // Send done signal if finished
+            if (candidate.finishReason && candidate.finishReason !== 'SAFETY') {
+              const doneEvent = `data: ${JSON.stringify({
+                choices: [
+                  {
+                    finish_reason: candidate.finishReason.toLowerCase(),
+                    index: 0,
+                  },
+                ],
+              })}\n\ndata: [DONE]\n\n`;
+              controller.enqueue(new TextEncoder().encode(doneEvent));
+            }
+          } catch (error) {
+            // Skip malformed chunks
+            logger.debug({ error, line }, 'Failed to parse Google streaming chunk');
+          }
+        }
+      },
+    });
+
+    return response.body.pipeThrough(transformStream);
   }
 }
