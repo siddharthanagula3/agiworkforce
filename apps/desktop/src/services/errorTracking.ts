@@ -293,6 +293,15 @@ export const errorTracking = new ErrorTrackingService();
 
 export function setupGlobalErrorHandler() {
   window.addEventListener('unhandledrejection', (event) => {
+    const errorMessage = String(event.reason);
+
+    // Suppress known Tauri internal errors that occur during cleanup
+    if (errorMessage.includes('listeners[eventId]')) {
+      console.debug('[Tauri] Suppressed internal event cleanup error');
+      event.preventDefault(); // Prevent the error dialog from showing
+      return;
+    }
+
     console.error('Unhandled promise rejection:', event.reason);
     errorTracking.captureError(
       event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
