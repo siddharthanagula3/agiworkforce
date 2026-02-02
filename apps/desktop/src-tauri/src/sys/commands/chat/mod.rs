@@ -409,14 +409,66 @@ fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String,
 
     // Text file extensions that can be read directly
     let text_extensions = [
-        ".txt", ".md", ".markdown", ".json", ".jsonl", ".js", ".jsx", ".ts", ".tsx",
-        ".py", ".pyw", ".rs", ".go", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
-        ".cs", ".rb", ".php", ".html", ".htm", ".css", ".scss", ".sass", ".less",
-        ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".env",
-        ".csv", ".tsv", ".log", ".sh", ".bash", ".zsh", ".fish", ".ps1",
-        ".sql", ".graphql", ".gql", ".vue", ".svelte", ".astro",
-        ".dockerfile", ".gitignore", ".gitattributes", ".editorconfig",
-        ".eslintrc", ".prettierrc", ".babelrc", ".npmrc", ".nvmrc",
+        ".txt",
+        ".md",
+        ".markdown",
+        ".json",
+        ".jsonl",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".py",
+        ".pyw",
+        ".rs",
+        ".go",
+        ".java",
+        ".kt",
+        ".swift",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".cs",
+        ".rb",
+        ".php",
+        ".html",
+        ".htm",
+        ".css",
+        ".scss",
+        ".sass",
+        ".less",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".env",
+        ".csv",
+        ".tsv",
+        ".log",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".fish",
+        ".ps1",
+        ".sql",
+        ".graphql",
+        ".gql",
+        ".vue",
+        ".svelte",
+        ".astro",
+        ".dockerfile",
+        ".gitignore",
+        ".gitattributes",
+        ".editorconfig",
+        ".eslintrc",
+        ".prettierrc",
+        ".babelrc",
+        ".npmrc",
+        ".nvmrc",
     ];
 
     for attachment in attachments {
@@ -535,7 +587,10 @@ fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String,
                             ));
                         }
                         Err(e) => {
-                            warn!("[Chat] Failed to extract text from PDF '{}': {}", attachment.name, e);
+                            warn!(
+                                "[Chat] Failed to extract text from PDF '{}': {}",
+                                attachment.name, e
+                            );
                             extracted.push((
                                 attachment.name.clone(),
                                 format!("[PDF attached but text extraction failed: {}]", e),
@@ -544,10 +599,7 @@ fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String,
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        "[Chat] Failed to decode PDF '{}': {}",
-                        attachment.name, e
-                    );
+                    warn!("[Chat] Failed to decode PDF '{}': {}", attachment.name, e);
                 }
             }
         } else {

@@ -189,10 +189,7 @@ impl ProjectMemoryManager {
         let id: i64 = conn
             .query_row(
                 "SELECT id FROM project_memories WHERE project_folder = ?1 AND memory_type = ?2",
-                params![
-                    project_folder,
-                    ProjectMemoryType::Context.as_str()
-                ],
+                params![project_folder, ProjectMemoryType::Context.as_str()],
                 |row| row.get(0),
             )
             .map_err(|e| Error::Database(format!("Failed to get memory id: {}", e)))?;
@@ -214,8 +211,8 @@ impl ProjectMemoryManager {
             params![project_folder, ProjectMemoryType::Context.as_str()],
             |row| {
                 let content: String = row.get(2)?;
-                let mut ctx: ProjectContext = serde_json::from_str(&content)
-                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let mut ctx: ProjectContext =
+                    serde_json::from_str(&content).map_err(|_| rusqlite::Error::InvalidQuery)?;
                 ctx.id = row.get(0)?;
                 ctx.importance = row.get(3)?;
                 ctx.created_at = row.get::<_, String>(4)?;
@@ -228,7 +225,10 @@ impl ProjectMemoryManager {
         match result {
             Ok(entry) => Ok(Some(entry)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(Error::Database(format!("Failed to get project context: {}", e))),
+            Err(e) => Err(Error::Database(format!(
+                "Failed to get project context: {}",
+                e
+            ))),
         }
     }
 
@@ -523,7 +523,10 @@ impl ProjectMemoryManager {
             .map_err(|e| Error::Generic(e.to_string()))?;
 
         let rows = conn
-            .execute("DELETE FROM project_memories WHERE id = ?1", params![memory_id])
+            .execute(
+                "DELETE FROM project_memories WHERE id = ?1",
+                params![memory_id],
+            )
             .map_err(|e| Error::Database(format!("Failed to delete memory: {}", e)))?;
 
         Ok(rows > 0)
@@ -604,8 +607,8 @@ impl ProjectMemoryManager {
 
 fn map_project_memory_row(row: &Row<'_>) -> rusqlite::Result<ProjectMemory> {
     let memory_type_str: String = row.get(2)?;
-    let memory_type = ProjectMemoryType::from_str(&memory_type_str)
-        .unwrap_or(ProjectMemoryType::Context);
+    let memory_type =
+        ProjectMemoryType::from_str(&memory_type_str).unwrap_or(ProjectMemoryType::Context);
 
     Ok(ProjectMemory {
         id: row.get(0)?,
@@ -746,14 +749,7 @@ mod tests {
         let (_temp_dir, manager) = setup_test_db();
 
         let id = manager
-            .save_project_context(
-                "/path/to/project",
-                vec![],
-                None,
-                None,
-                vec![],
-                Some(5),
-            )
+            .save_project_context("/path/to/project", vec![], None, None, vec![], Some(5))
             .unwrap();
 
         manager.update_memory_importance(id, 9).unwrap();
@@ -767,17 +763,12 @@ mod tests {
         let (_temp_dir, manager) = setup_test_db();
 
         manager
-            .save_project_context(
-                "/path/to/project",
-                vec![],
-                None,
-                None,
-                vec![],
-                Some(8),
-            )
+            .save_project_context("/path/to/project", vec![], None, None, vec![], Some(8))
             .unwrap();
 
-        let stats = manager.get_project_memory_stats("/path/to/project").unwrap();
+        let stats = manager
+            .get_project_memory_stats("/path/to/project")
+            .unwrap();
         assert_eq!(stats["total_memories"], 1);
     }
 }
