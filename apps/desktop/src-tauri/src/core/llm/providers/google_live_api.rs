@@ -1042,9 +1042,18 @@ impl GoogleLiveApiProvider {
                 let _ = event_tx.send(LiveApiEvent::GenerationComplete);
             }
 
-            ServerMessage::ResumptionToken { token, expires_at_secs } => {
-                info!("Resumption token received (expires in {} secs from epoch)", expires_at_secs);
-                let _ = event_tx.send(LiveApiEvent::ResumptionToken { token, expires_at_secs });
+            ServerMessage::ResumptionToken {
+                token,
+                expires_at_secs,
+            } => {
+                info!(
+                    "Resumption token received (expires in {} secs from epoch)",
+                    expires_at_secs
+                );
+                let _ = event_tx.send(LiveApiEvent::ResumptionToken {
+                    token,
+                    expires_at_secs,
+                });
             }
 
             ServerMessage::SessionResumed => {

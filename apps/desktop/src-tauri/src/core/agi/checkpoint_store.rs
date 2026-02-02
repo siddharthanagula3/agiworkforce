@@ -5,14 +5,13 @@
 /// - Retrieving checkpoints by ID or task
 /// - Listing and filtering checkpoints
 /// - Cleanup and archival operations
-
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 use tracing::{debug, info};
 
 use super::checkpoint::*;
-use crate::core::agi::{Goal, ResourceState, ToolExecutionResult, CheckpointContextEntry};
+use crate::core::agi::{CheckpointContextEntry, Goal, ResourceState, ToolExecutionResult};
 
 /// Database connection wrapper for checkpoint operations
 pub struct CheckpointStore {
@@ -293,7 +292,11 @@ impl CheckpointStore {
     }
 
     /// Lists all checkpoints for a task
-    pub async fn list_checkpoints(&self, task_id: &str, limit: usize) -> Result<Vec<CheckpointSummary>> {
+    pub async fn list_checkpoints(
+        &self,
+        task_id: &str,
+        limit: usize,
+    ) -> Result<Vec<CheckpointSummary>> {
         let task_id = task_id.to_string();
         let db_path = self.db_path.clone();
 
@@ -379,7 +382,10 @@ impl CheckpointStore {
             }
 
             if deleted_count > 0 {
-                debug!("Cleaned up {} old checkpoints for task {}", deleted_count, task_id);
+                debug!(
+                    "Cleaned up {} old checkpoints for task {}",
+                    deleted_count, task_id
+                );
             }
 
             Ok::<_, rusqlite::Error>(deleted_count)
@@ -446,11 +452,11 @@ impl CheckpointStore {
         let tool_results: Vec<ToolExecutionResult> =
             serde_json::from_str(&row.get::<_, String>(6)?)
                 .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
-        let context_memory: Vec<CheckpointContextEntry> = serde_json::from_str(&row.get::<_, String>(7)?)
-            .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
-        let available_resources: ResourceState =
-            serde_json::from_str(&row.get::<_, String>(8)?)
+        let context_memory: Vec<CheckpointContextEntry> =
+            serde_json::from_str(&row.get::<_, String>(7)?)
                 .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let available_resources: ResourceState = serde_json::from_str(&row.get::<_, String>(8)?)
+            .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
         let reason_str: String = row.get(9)?;
         let reason = parse_checkpoint_reason(&reason_str);
         let created_at_ms: i64 = row.get(10)?;

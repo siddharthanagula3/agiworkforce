@@ -501,9 +501,7 @@ pub async fn memory_get_project_memories(
 
 /// Get memory usage trends (placeholder for future analytics)
 #[command]
-pub async fn memory_get_usage_trends(
-    state: State<'_, MemoryState>,
-) -> Result<serde_json::Value> {
+pub async fn memory_get_usage_trends(state: State<'_, MemoryState>) -> Result<serde_json::Value> {
     let stats = state.manager.get_memory_stats()?;
 
     // Return basic trend data
@@ -518,9 +516,7 @@ pub async fn memory_get_usage_trends(
 
 /// Suggest important memories for user review
 #[command]
-pub async fn memory_suggest_important(
-    state: State<'_, MemoryState>,
-) -> Result<Vec<MemoryEntry>> {
+pub async fn memory_suggest_important(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
     // Get critical memories (importance >= 9)
     state.manager.get_important_memories(9)
 }

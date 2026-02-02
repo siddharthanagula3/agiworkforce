@@ -4,7 +4,9 @@
 //! It integrates memories into LLM context and detects/saves architectural decisions.
 
 use crate::core::agi::memory_manager::{MemoryCategory, MemoryManager};
-use crate::core::llm::memory_integration::{MemoryInjectionConfig, MemoryInjectionResult, MemoryInjector};
+use crate::core::llm::memory_integration::{
+    MemoryInjectionConfig, MemoryInjectionResult, MemoryInjector,
+};
 use crate::sys::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
