@@ -29,9 +29,9 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
   'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
   // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
-  'gpt-5.2': 'gpt-5.2-2025-12-11', // GPT-5.2 flagship
-  'gpt-5-pro': 'gpt-5.2-pro-2025-12-11', // GPT-5.2 Pro
-  'gpt-5-nano': 'gpt-5-nano-2025-08-07', // GPT-5 Nano
+  'gpt-5.2': 'gpt-5.2', // GPT-5.2 flagship
+  'gpt-5-pro': 'gpt-5-pro', // GPT-5 Pro
+  'gpt-5-nano': 'gpt-5-nano', // GPT-5 Nano
   o3: 'o3-2025-04-16', // o3 reasoning model
   // xAI Grok 4.1 models (per docs/llm-provider-reference.md)
   'grok-4.1': 'grok-4-1-fast-reasoning', // Grok 4.1
