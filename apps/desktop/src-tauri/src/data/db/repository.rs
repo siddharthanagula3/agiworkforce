@@ -502,7 +502,7 @@ pub fn list_overlay_events(
     offset: Option<i64>,
 ) -> Result<PaginatedOverlayEvents> {
     // AUDIT-004-001: Enforce maximum limit to prevent unbounded queries
-    let effective_limit = limit.min(MAX_OVERLAY_EVENTS_LIMIT).max(1);
+    let effective_limit = limit.clamp(1, MAX_OVERLAY_EVENTS_LIMIT);
     let effective_offset = offset.unwrap_or(0).max(0);
 
     // First, get the total count for pagination UI

@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(feature = "local-whisper")]
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -14,10 +14,12 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 /// Whisper model size options with tradeoffs between speed and accuracy
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum WhisperModelSize {
     /// ~75MB, fastest, suitable for real-time on most hardware
     Tiny,
     /// ~150MB, good balance of speed and accuracy
+    #[default]
     Base,
     /// ~500MB, better accuracy for challenging audio
     Small,
@@ -62,12 +64,6 @@ impl WhisperModelSize {
             WhisperModelSize::Small => "Small (~500MB) - Better accuracy",
             WhisperModelSize::Medium => "Medium (~1.5GB) - Best accuracy, slower",
         }
-    }
-}
-
-impl Default for WhisperModelSize {
-    fn default() -> Self {
-        WhisperModelSize::Base
     }
 }
 
@@ -125,7 +121,7 @@ pub struct TranscriptionSegment {
 }
 
 /// Configuration for transcription
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TranscriptionConfig {
     /// Language hint (ISO 639-1 code like "en", "es", "fr")
     /// If None, Whisper will auto-detect
@@ -138,18 +134,6 @@ pub struct TranscriptionConfig {
     pub word_timestamps: bool,
     /// Maximum segment length in characters
     pub max_segment_length: Option<u32>,
-}
-
-impl Default for TranscriptionConfig {
-    fn default() -> Self {
-        Self {
-            language: None, // Auto-detect
-            translate_to_english: false,
-            num_threads: 0, // Auto
-            word_timestamps: false,
-            max_segment_length: None,
-        }
-    }
 }
 
 /// Local Whisper-based speech-to-text engine
@@ -480,7 +464,7 @@ impl WhisperLocal {
     }
 
     /// List available local models
-    pub async fn list_available_models(models_dir: &PathBuf) -> Result<Vec<WhisperModelSize>> {
+    pub async fn list_available_models(models_dir: &Path) -> Result<Vec<WhisperModelSize>> {
         let mut available = Vec::new();
 
         for size in [
@@ -499,7 +483,7 @@ impl WhisperLocal {
     }
 
     /// Delete a downloaded model
-    pub async fn delete_model(models_dir: &PathBuf, size: WhisperModelSize) -> Result<()> {
+    pub async fn delete_model(models_dir: &Path, size: WhisperModelSize) -> Result<()> {
         let path = models_dir.join(size.model_filename());
         if path.exists() {
             tokio::fs::remove_file(&path)
@@ -549,7 +533,7 @@ pub struct WhisperModelInfo {
 }
 
 impl WhisperModelInfo {
-    pub fn new(size: WhisperModelSize, models_dir: &PathBuf) -> Self {
+    pub fn new(size: WhisperModelSize, models_dir: &Path) -> Self {
         let path = models_dir.join(size.model_filename());
         let is_downloaded = path.exists();
 

@@ -84,8 +84,10 @@ pub enum Modality {
 /// Voice configuration for audio sessions
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Voice {
     /// Puck - friendly and conversational
+    #[default]
     Puck,
     /// Charon - deep and authoritative
     Charon,
@@ -97,17 +99,13 @@ pub enum Voice {
     Aoede,
 }
 
-impl Default for Voice {
-    fn default() -> Self {
-        Voice::Puck
-    }
-}
-
 /// Voice Activity Detection (VAD) mode
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum VadMode {
     /// Automatic voice activity detection
+    #[default]
     VadAutomatic,
     /// Manual voice activity control
     VadManual,
@@ -115,16 +113,11 @@ pub enum VadMode {
     VadOff,
 }
 
-impl Default for VadMode {
-    fn default() -> Self {
-        VadMode::VadAutomatic
-    }
-}
-
 /// Language codes for speech configuration (24 languages supported)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum LanguageCode {
     #[serde(rename = "en")]
+    #[default]
     English,
     #[serde(rename = "es")]
     Spanish,
@@ -172,12 +165,6 @@ pub enum LanguageCode {
     Norwegian,
     #[serde(rename = "uk")]
     Ukrainian,
-}
-
-impl Default for LanguageCode {
-    fn default() -> Self {
-        LanguageCode::English
-    }
 }
 
 /// Speech configuration for audio sessions
@@ -230,35 +217,27 @@ impl Default for SpeechConfig {
 /// Function calling scheduling mode
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum FunctionCallingScheduling {
     /// Interrupt current generation to call function
     Interrupt,
     /// Call function when model is idle
+    #[default]
     WhenIdle,
     /// Call function silently without affecting generation
     Silent,
 }
 
-impl Default for FunctionCallingScheduling {
-    fn default() -> Self {
-        FunctionCallingScheduling::WhenIdle
-    }
-}
-
 /// Function calling behavior
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default)]
 pub enum FunctionCallingBehavior {
     /// Non-blocking asynchronous function calls
+    #[default]
     NonBlocking,
     /// Blocking synchronous function calls
     Blocking,
-}
-
-impl Default for FunctionCallingBehavior {
-    fn default() -> Self {
-        FunctionCallingBehavior::NonBlocking
-    }
 }
 
 /// Tool configuration for Live API
@@ -424,7 +403,7 @@ pub enum ClientMessage {
     /// Setup message to configure session
     Setup {
         #[serde(flatten)]
-        config: LiveSessionConfig,
+        config: Box<LiveSessionConfig>,
     },
 
     /// Send text content
@@ -876,7 +855,9 @@ impl GoogleLiveApiProvider {
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         debug!("Sending setup message");
 
-        let message = ClientMessage::Setup { config };
+        let message = ClientMessage::Setup {
+            config: Box::new(config),
+        };
         self.send_message(message).await
     }
 

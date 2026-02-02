@@ -47,6 +47,7 @@ pub enum VoiceProvider {
 }
 
 /// Barge-in detection state
+#[derive(Default)]
 pub struct BargeInState {
     /// Barge-in detector instance
     #[cfg(feature = "vad")]
@@ -57,18 +58,6 @@ pub struct BargeInState {
     pub config: BargeInConfig,
     /// Whether barge-in is enabled
     pub enabled: bool,
-}
-
-impl Default for BargeInState {
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "vad")]
-            detector: None,
-            handle: None,
-            config: BargeInConfig::default(),
-            enabled: false,
-        }
-    }
 }
 
 /// State for local Whisper STT

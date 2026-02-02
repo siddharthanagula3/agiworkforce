@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -14,19 +14,15 @@ use tokio::process::Command;
 /// Quality level for Piper voices
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum PiperQuality {
     /// Lowest quality, smallest size, fastest
     Low,
     /// Medium quality, balanced
+    #[default]
     Medium,
     /// Highest quality, largest size
     High,
-}
-
-impl Default for PiperQuality {
-    fn default() -> Self {
-        PiperQuality::Medium
-    }
 }
 
 impl std::fmt::Display for PiperQuality {
@@ -455,7 +451,7 @@ impl PiperLocal {
 
                         voices.push(VoiceInfo {
                             id: voice_id.clone(),
-                            name: voice_id.replace('-', " ").replace('_', " "),
+                            name: voice_id.replace(['-', '_'], " "),
                             language,
                             quality,
                             is_downloaded: true,
@@ -740,7 +736,7 @@ impl PiperLocal {
     }
 
     /// Delete a downloaded voice
-    pub async fn delete_voice(models_dir: &PathBuf, voice_id: &str) -> Result<()> {
+    pub async fn delete_voice(models_dir: &Path, voice_id: &str) -> Result<()> {
         let model_path = models_dir.join(format!("{}.onnx", voice_id));
         let config_path = models_dir.join(format!("{}.onnx.json", voice_id));
 
