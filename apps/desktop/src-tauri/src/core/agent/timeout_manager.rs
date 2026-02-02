@@ -11,8 +11,8 @@
 //! - Persistent timeout configuration
 //! - Task resumption capability after timeout warning
 
-use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 
 /// Configuration constants for timeout management
 pub mod consts {
@@ -121,7 +121,9 @@ impl TimeoutTracker {
 
     /// Calculate elapsed time excluding paused periods
     pub fn elapsed(&self) -> Duration {
-        self.start_time.elapsed().saturating_sub(self.paused_duration)
+        self.start_time
+            .elapsed()
+            .saturating_sub(self.paused_duration)
     }
 
     /// Calculate time remaining before timeout
@@ -165,17 +167,23 @@ impl TimeoutTracker {
 
         if remaining <= consts::WARNING_THRESHOLD_5MIN && !self.warned_5min {
             self.warned_5min = true;
-            return Some(TimeoutWarning::FiveMinutes { remaining_secs: remaining });
+            return Some(TimeoutWarning::FiveMinutes {
+                remaining_secs: remaining,
+            });
         }
 
         if remaining <= consts::WARNING_THRESHOLD_30MIN && !self.warned_30min {
             self.warned_30min = true;
-            return Some(TimeoutWarning::ThirtyMinutes { remaining_secs: remaining });
+            return Some(TimeoutWarning::ThirtyMinutes {
+                remaining_secs: remaining,
+            });
         }
 
         if remaining <= consts::WARNING_THRESHOLD_1HR && !self.warned_1hr {
             self.warned_1hr = true;
-            return Some(TimeoutWarning::OneHour { remaining_secs: remaining });
+            return Some(TimeoutWarning::OneHour {
+                remaining_secs: remaining,
+            });
         }
 
         None
@@ -227,10 +235,16 @@ impl TimeoutWarning {
                 format!("Task will timeout in 1 hour ({} seconds)", remaining_secs)
             }
             Self::ThirtyMinutes { remaining_secs } => {
-                format!("Task will timeout in 30 minutes ({} seconds)", remaining_secs)
+                format!(
+                    "Task will timeout in 30 minutes ({} seconds)",
+                    remaining_secs
+                )
             }
             Self::FiveMinutes { remaining_secs } => {
-                format!("Task will timeout in 5 minutes ({} seconds)", remaining_secs)
+                format!(
+                    "Task will timeout in 5 minutes ({} seconds)",
+                    remaining_secs
+                )
             }
         }
     }

@@ -164,7 +164,11 @@ impl MemoryInjector {
                 .to_lowercase()
                 .replace(" ", "_")
         } else {
-            message.chars().take(20).collect::<String>().replace(" ", "_")
+            message
+                .chars()
+                .take(20)
+                .collect::<String>()
+                .replace(" ", "_")
         };
 
         // Boost importance for architectural decisions

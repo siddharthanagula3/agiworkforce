@@ -42,10 +42,12 @@ pub async fn chat_save_decision(
     memory_state: State<'_, MemoryState>,
 ) -> Result<SaveDecisionResponse> {
     let handler = ChatMemoryHandler::new(Some(memory_state.manager.clone()))?;
-    handler.save_decision(crate::sys::commands::chat::memory_handler::SaveDecisionRequest {
-        message,
-        auto_detected: false,
-    })
+    handler.save_decision(
+        crate::sys::commands::chat::memory_handler::SaveDecisionRequest {
+            message,
+            auto_detected: false,
+        },
+    )
 }
 
 /// Configure memory injection behavior
@@ -185,7 +187,9 @@ pub async fn chat_search_memories(
 /// Parse category string
 fn parse_category(category: &str) -> Result<crate::core::agi::memory_manager::MemoryCategory> {
     match category.to_lowercase().as_str() {
-        "preference" | "preferences" => Ok(crate::core::agi::memory_manager::MemoryCategory::Preference),
+        "preference" | "preferences" => {
+            Ok(crate::core::agi::memory_manager::MemoryCategory::Preference)
+        }
         "fact" | "facts" => Ok(crate::core::agi::memory_manager::MemoryCategory::Fact),
         "decision" | "decisions" => Ok(crate::core::agi::memory_manager::MemoryCategory::Decision),
         "context" => Ok(crate::core::agi::memory_manager::MemoryCategory::Context),
