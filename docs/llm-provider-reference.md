@@ -107,11 +107,11 @@ https://api.openai.com/v1
 
 ### Available Models
 
-| Model Name  | API Model ID             | Context Window | Description                                                            |
-| ----------- | ------------------------ | -------------- | ---------------------------------------------------------------------- |
-| GPT-5.2     | `gpt-5.2-2025-12-11`     | -              | Flagship model for coding and agentic tasks                            |
-| GPT-5.2 Pro | `gpt-5.2-pro-2025-12-11` | -              | Smartest model for difficult questions (Responses API only)            |
-| GPT-5 nano  | `gpt-5-nano-2025-08-07`  | 400K           | Fastest, cheapest version - great for summarization and classification |
+| Model Name | API Model ID | Context Window | Description                                                            |
+| ---------- | ------------ | -------------- | ---------------------------------------------------------------------- |
+| GPT-5.2    | `gpt-5.2`    | -              | Flagship model for coding and agentic tasks                            |
+| GPT-5 Pro  | `gpt-5-pro`  | -              | Smartest model for difficult questions (Responses API only)            |
+| GPT-5 nano | `gpt-5-nano` | 400K           | Fastest, cheapest version - great for summarization and classification |
 
 ### GPT-5 nano Details
 
@@ -956,9 +956,9 @@ This is the mapping used in `apps/web/lib/llm-providers/factory.ts`:
 ```typescript
 const MODEL_ID_TO_API_ID: Record<string, string> = {
   // OpenAI models
-  'gpt-5.2': 'gpt-5.2-2025-12-11',
-  'gpt-5-pro': 'gpt-5.2-pro-2025-12-11',
-  'gpt-5-nano': 'gpt-5-nano-2025-08-07',
+  'gpt-5.2': 'gpt-5.2',
+  'gpt-5-pro': 'gpt-5-pro',
+  'gpt-5-nano': 'gpt-5-nano',
 
   // Anthropic Claude models
   'claude-opus-4.5': 'claude-opus-4-5-20251101',
