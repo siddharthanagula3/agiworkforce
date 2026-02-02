@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 ///     dynamic_retrieval_threshold: Some(0.5),
 /// };
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SearchGroundingConfig {
     /// Enable Google Search grounding
     #[serde(default)]
@@ -37,15 +37,6 @@ pub struct SearchGroundingConfig {
     /// Higher values = only search when highly confident it's needed
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dynamic_retrieval_threshold: Option<f32>,
-}
-
-impl Default for SearchGroundingConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            dynamic_retrieval_threshold: None,
-        }
-    }
 }
 
 /// Google Maps grounding configuration
@@ -144,11 +135,11 @@ impl GroundingConfig {
 
     /// Check if any grounding is enabled
     pub fn is_enabled(&self) -> bool {
-        self.search.as_ref().map_or(false, |s| s.enabled)
+        self.search.as_ref().is_some_and(|s| s.enabled)
             || self
                 .maps
                 .as_ref()
-                .map_or(false, |m| m.place_id.is_some() || m.location.is_some())
+                .is_some_and(|m| m.place_id.is_some() || m.location.is_some())
     }
 }
 
@@ -243,11 +234,9 @@ pub struct GroundingMetadata {
 impl GroundingMetadata {
     /// Check if any grounding data is present
     pub fn has_grounding(&self) -> bool {
-        self.search_results
-            .as_ref()
-            .map_or(false, |r| !r.is_empty())
-            || self.map_results.as_ref().map_or(false, |r| !r.is_empty())
-            || self.url_citations.as_ref().map_or(false, |c| !c.is_empty())
+        self.search_results.as_ref().is_some_and(|r| !r.is_empty())
+            || self.map_results.as_ref().is_some_and(|r| !r.is_empty())
+            || self.url_citations.as_ref().is_some_and(|c| !c.is_empty())
     }
 
     /// Get total number of sources
