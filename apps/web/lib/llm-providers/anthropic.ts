@@ -12,7 +12,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
-      'anthropic-version': '2024-10-22', // Updated for Claude 4.5 features
+      'anthropic-version': '2023-06-01', // Required API version (supports all Claude models)
     };
   }
 
