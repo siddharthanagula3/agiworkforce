@@ -250,11 +250,10 @@ pub async fn master_password_complete_migration(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn create_test_state() -> MasterPasswordState {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        // Use in-memory database for tests to avoid temp file cleanup issues
+        let conn = Connection::open_in_memory().unwrap();
         MasterPasswordState::new(Arc::new(Mutex::new(conn))).unwrap()
     }
 

@@ -373,7 +373,8 @@ mod tests {
     #[test]
     fn test_execution_metrics_elapsed() {
         let metrics = ExecutionMetrics::new(None);
-        assert!(metrics.elapsed_ms() >= 0);
+        // elapsed_ms() returns u64 which is always >= 0, just verify it returns a value
+        let _ = metrics.elapsed_ms();
     }
 
     #[test]
