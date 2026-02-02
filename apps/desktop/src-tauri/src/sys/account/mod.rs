@@ -424,7 +424,7 @@ pub async fn fetch_credit_balance(
     let token = get_access_token()?;
     let api_base = get_api_base_url();
 
-    let url = format!("{}/api/credits/balance", api_base);
+    let url = format!("{}/api/llm/v1/credits/balance", api_base);
 
     let api_request = ApiRequest {
         method: HttpMethod::Get,
@@ -490,7 +490,7 @@ pub async fn report_llm_usage(
     let token = get_access_token()?;
     let api_base = get_api_base_url();
 
-    let url = format!("{}/api/credits/deduct", api_base);
+    let url = format!("{}/api/llm/v1/credits/deduct", api_base);
 
     let request_body = serde_json::json!({
         "amount_cents": amount_cents,
