@@ -140,14 +140,14 @@ function findCheaperFallbackModel(
   // Define fallback models ordered by cost (cheapest first)
   // These are the most cost-effective models available as of January 2026
   const fallbackModels = [
-    { model: 'deepseek-chat', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek V3.2, best value
+    { model: 'deepseek-v3.2', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek V3.2, best value
     { model: 'qwen-flash', provider: 'qwen' }, // $0.05/$0.15 per 1M - Ultra cheap Qwen
     { model: 'gpt-5-nano', provider: 'openai' }, // $0.05/$0.4 per 1M - OpenAI's cheapest
     { model: 'qwen-turbo', provider: 'qwen' }, // $0.1/$0.3 per 1M - Fast Qwen
-    { model: 'gemini-2.5-flash-lite', provider: 'google' }, // $0.15/$1.0 per 1M - Google's lite
-    { model: 'grok-4-1-fast', provider: 'xai' }, // $0.2/$0.5 per 1M - Grok 4.1 Fast
-    { model: 'gemini-2.5-flash', provider: 'google' }, // $0.3/$2.5 per 1M - Google's efficient
-    { model: 'claude-haiku-4-5', provider: 'anthropic' }, // $1.0/$5.0 per 1M - Claude 4.5 Haiku
+    { model: 'gemini-3-flash', provider: 'google' }, // $0.50/$3.0 per 1M - Gemini 3 Flash
+    { model: 'grok-4.1-fast-reasoning', provider: 'xai' }, // $0.1/$0.4 per 1M - Grok 4.1 Fast Reasoning
+    { model: 'claude-haiku-4.5', provider: 'anthropic' }, // $1.0/$5.0 per 1M - Claude 4.5 Haiku
+    { model: 'glm-4.7', provider: 'zhipu' }, // $0.14/$0.42 per 1M - GLM-4.7
   ];
 
   // Try each fallback model and find the cheapest one that's cheaper than current
