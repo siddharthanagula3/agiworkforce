@@ -7,7 +7,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { accountApi } from '../api/accountApi';
-import { useAccountStore } from '../stores/accountStore';
+import { useAccountStore } from '../stores/auth';
 import { toast } from 'sonner';
 
 // Refresh interval in milliseconds (30 seconds)
@@ -42,7 +42,7 @@ export function useCreditRefresh(options: UseCreditRefreshOptions = {}): CreditR
   const errorRef = useRef<string | null>(null);
   const lastWarningRef = useRef<'low' | 'critical' | null>(null);
 
-  const updateCredits = useAccountStore((state) => state.updateAccount);
+  const updateCredits = useAccountStore((state) => state.setAccount);
   const plan = useAccountStore((state) => state.account.plan);
 
   const refreshCredits = useCallback(async () => {
@@ -168,7 +168,7 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
     const creditBalance = await accountApi.fetchCreditBalance();
 
     if (creditBalance.has_credits) {
-      useAccountStore.getState().updateAccount({
+      useAccountStore.getState().setAccount({
         credits: {
           account_id: creditBalance.account_id || undefined,
           period_start: creditBalance.period_start || undefined,
