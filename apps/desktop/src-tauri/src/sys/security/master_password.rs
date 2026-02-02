@@ -641,11 +641,10 @@ pub fn derive_key_base64(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     fn create_test_manager() -> MasterPasswordManager {
-        let temp_file = NamedTempFile::new().unwrap();
-        let conn = Connection::open(temp_file.path()).unwrap();
+        // Use in-memory database for tests to avoid temp file cleanup issues
+        let conn = Connection::open_in_memory().unwrap();
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
         manager

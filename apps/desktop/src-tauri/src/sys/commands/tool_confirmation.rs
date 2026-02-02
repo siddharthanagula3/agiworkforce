@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(guard.get_safety_tier("file_read"), ToolSafetyTier::Safe);
         assert_eq!(
             guard.get_safety_tier("file_write"),
-            ToolSafetyTier::RequiresNotification
+            ToolSafetyTier::RequiresConfirmation
         );
         assert_eq!(
             guard.get_safety_tier("browser_navigate"),

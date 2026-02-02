@@ -1162,8 +1162,14 @@ fn simplify_param_error(msg: &str) -> String {
 
 /// Try to extract a field name from an error message
 fn extract_field_name(msg: &str) -> Option<String> {
-    // Look for patterns like "field 'name'" or "'name' is required"
-    let patterns = [r"'([a-zA-Z_]+)'", r"`([a-zA-Z_]+)`", r"field (\w+)"];
+    // Look for patterns like "field `name`" or "`name` is required"
+    // Only match when field name is explicitly marked with backticks or quotes
+    let patterns = [
+        r"missing field `([a-zA-Z_]+)`",
+        r"field `([a-zA-Z_]+)`",
+        r"`([a-zA-Z_]+)` is required",
+        r"'([a-zA-Z_]+)' is required",
+    ];
 
     for pattern in &patterns {
         if let Ok(re) = regex::Regex::new(pattern) {
