@@ -206,9 +206,26 @@ export class GoogleProvider extends BaseLLMProvider {
           try {
             const data = JSON.parse(trimmedLine);
 
+            // Debug: Log the raw response to understand what Google is returning
+            logger.debug(
+              {
+                model: request.model,
+                data: JSON.stringify(data).substring(0, 500),
+                hasCandidates: !!data.candidates,
+                candidatesLength: data.candidates?.length,
+              },
+              'Google streaming chunk received',
+            );
+
             // Extract text from Google's format
             const candidate = data.candidates?.[0];
-            if (!candidate) continue;
+            if (!candidate) {
+              logger.warn(
+                { model: request.model, data },
+                'Google streaming response has no candidates',
+              );
+              continue;
+            }
 
             // Check for safety blocks
             if (candidate.finishReason === 'SAFETY') {
@@ -226,6 +243,21 @@ export class GoogleProvider extends BaseLLMProvider {
             }
 
             const textContent = candidate.content?.parts?.[0]?.text;
+
+            // Debug: Log what we extracted
+            if (!textContent) {
+              logger.warn(
+                {
+                  model: request.model,
+                  hasContent: !!candidate.content,
+                  hasParts: !!candidate.content?.parts,
+                  partsLength: candidate.content?.parts?.length,
+                  firstPart: candidate.content?.parts?.[0],
+                },
+                'Google streaming chunk has no text content',
+              );
+            }
+
             if (textContent) {
               // Convert to OpenAI SSE format
               const sseEvent = `data: ${JSON.stringify({
