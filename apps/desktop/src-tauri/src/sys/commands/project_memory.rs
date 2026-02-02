@@ -340,12 +340,35 @@ pub async fn record_agi_decision(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
     use tempfile::TempDir;
+
+    fn init_test_db(db_path: &std::path::Path) {
+        let conn = Connection::open(db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS project_memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_folder TEXT NOT NULL,
+                memory_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                importance INTEGER NOT NULL DEFAULT 5,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_accessed TEXT,
+                UNIQUE(project_folder, memory_type)
+            )",
+            [],
+        )
+        .unwrap();
+    }
 
     #[tokio::test]
     async fn test_save_and_get_project_context() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
+
+        // Initialize database tables
+        init_test_db(&db_path);
 
         let state =
             ProjectMemoryState::new(db_path.to_str().unwrap()).expect("Failed to create state");
@@ -378,6 +401,9 @@ mod tests {
     async fn test_save_architectural_decision() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
+
+        // Initialize database tables
+        init_test_db(&db_path);
 
         let state =
             ProjectMemoryState::new(db_path.to_str().unwrap()).expect("Failed to create state");
