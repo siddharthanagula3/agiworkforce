@@ -477,14 +477,14 @@ impl URLContentFetcher {
         // Simple extraction: remove scripts, styles, and navigation
         let mut content = html.to_string();
 
-        // Remove script tags
-        content = regex::Regex::new(r"<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>")
+        // Remove script tags (case-insensitive)
+        content = regex::Regex::new(r"(?is)<script[^>]*>.*?</script>")
             .unwrap()
             .replace_all(&content, "")
             .to_string();
 
-        // Remove style tags
-        content = regex::Regex::new(r"<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>")
+        // Remove style tags (case-insensitive)
+        content = regex::Regex::new(r"(?is)<style[^>]*>.*?</style>")
             .unwrap()
             .replace_all(&content, "")
             .to_string();
