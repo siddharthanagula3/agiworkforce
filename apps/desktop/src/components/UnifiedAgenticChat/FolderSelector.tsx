@@ -59,13 +59,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     return formatFolderPath(currentFolder);
   }, [currentFolder]);
 
-  // Get just the folder name for compact display (used in tooltip)
-  const _folderName = useMemo(() => {
-    if (!currentFolder) return null;
-    const parts = currentFolder.split(/[/\\]/);
-    return parts[parts.length - 1] || parts[parts.length - 2] || currentFolder;
-  }, [currentFolder]);
-
   // Handle folder selection via native dialog
   const handleSelectFolder = useCallback(async () => {
     if (isSelecting) return;
