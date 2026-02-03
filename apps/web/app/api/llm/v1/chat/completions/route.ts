@@ -740,7 +740,21 @@ async function handleChatCompletions(request: NextRequest) {
         refundKey,
       );
 
-      logger.error({ error, provider, model: chatRequest.model }, 'Streaming request failed');
+      // Enhanced error logging for debugging model-specific issues
+      logger.error(
+        {
+          error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          provider,
+          model: chatRequest.model,
+          originalModel: requestedModel,
+          userId: user.id,
+          requestId,
+          hasProvider: !!LLMProviderFactory.getProviderInstance(provider),
+        },
+        'Streaming request failed',
+      );
 
       // Determine appropriate status code based on error type
       const errorMessage = error instanceof Error ? error.message : 'Streaming request failed';
@@ -788,7 +802,20 @@ async function handleChatCompletions(request: NextRequest) {
       refundKey,
     );
 
-    logger.error({ error, provider, model: chatRequest.model }, 'LLM request failed');
+    // Enhanced error logging for debugging model-specific issues
+    logger.error(
+      {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        provider,
+        model: chatRequest.model,
+        originalModel: requestedModel,
+        userId: user.id,
+        requestId,
+      },
+      'LLM request failed',
+    );
 
     // Determine appropriate status code based on error type
     const errorMessage = error instanceof Error ? error.message : 'Request failed';
