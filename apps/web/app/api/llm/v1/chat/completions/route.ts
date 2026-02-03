@@ -606,19 +606,23 @@ async function handleChatCompletions(request: NextRequest) {
                 }
 
                 // Track usage metrics for credit reconciliation
+                // Use Math.max to accumulate tokens properly (handles race conditions)
                 if (event.type === 'message_delta' && event.usage) {
-                  outputTokens = event.usage.output_tokens || outputTokens;
+                  outputTokens = Math.max(outputTokens, event.usage.output_tokens || 0);
                 }
                 if (event.type === 'message_start' && event.message?.usage) {
-                  inputTokens = event.message.usage.input_tokens || inputTokens;
+                  inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
                 }
                 if (event.usage) {
-                  inputTokens = event.usage.prompt_tokens || inputTokens;
-                  outputTokens = event.usage.completion_tokens || outputTokens;
+                  inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
+                  outputTokens = Math.max(outputTokens, event.usage.completion_tokens || 0);
                 }
                 if (event.usageMetadata) {
-                  inputTokens = event.usageMetadata.promptTokenCount || inputTokens;
-                  outputTokens = event.usageMetadata.candidatesTokenCount || outputTokens;
+                  inputTokens = Math.max(inputTokens, event.usageMetadata.promptTokenCount || 0);
+                  outputTokens = Math.max(
+                    outputTokens,
+                    event.usageMetadata.candidatesTokenCount || 0,
+                  );
                 }
 
                 // Re-serialize with the corrected model name
@@ -638,9 +642,10 @@ async function handleChatCompletions(request: NextRequest) {
             }
           }
 
-          // Enqueue the processed lines
+          // Enqueue the processed lines with proper SSE formatting
           if (processedLines.length > 0) {
-            controller.enqueue(encoder.encode(processedLines.join('\n') + '\n'));
+            // SSE format requires \n\n between events, not just \n
+            controller.enqueue(encoder.encode(processedLines.join('\n\n') + '\n\n'));
           }
         },
         async flush(controller) {
@@ -649,43 +654,64 @@ async function handleChatCompletions(request: NextRequest) {
             controller.enqueue(encoder.encode(buffer));
           }
 
-          // Credit reconciliation at end of stream
-          const totalTokens = inputTokens + outputTokens;
+          // Credit reconciliation at end of stream with error handling
+          // CRITICAL: Errors here cannot return error responses (stream already started)
+          // Log errors but don't crash the stream
+          try {
+            const totalTokens = inputTokens + outputTokens;
 
-          if (totalTokens > 0) {
-            const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
-              promptTokens: inputTokens,
-              completionTokens: outputTokens,
-              totalTokens,
-            });
+            if (totalTokens > 0) {
+              const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
+                promptTokens: inputTokens,
+                completionTokens: outputTokens,
+                totalTokens,
+              });
 
-            const costDifference = actualCostCents - estimatedCostCents;
+              const costDifference = actualCostCents - estimatedCostCents;
 
-            if (costDifference !== 0) {
-              // Use idempotency key for reconciliation to prevent duplicate adjustments
-              const reconciliationKey = CreditService.generateIdempotencyKey(
-                userId,
-                'reconciliation',
-                requestId,
-              );
-              await CreditService.deductCredits(
-                userId,
-                costDifference,
-                `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
-                {
-                  provider: providerUsed,
-                  model: modelUsed,
-                  type: 'streaming_reconciliation',
-                  estimatedCostCents,
-                  actualCostCents,
-                  promptTokens: inputTokens,
-                  completionTokens: outputTokens,
-                  totalTokens,
+              if (costDifference !== 0) {
+                // Use idempotency key for reconciliation to prevent duplicate adjustments
+                const reconciliationKey = CreditService.generateIdempotencyKey(
+                  userId,
+                  'reconciliation',
                   requestId,
-                },
-                reconciliationKey,
-              );
+                );
+                await CreditService.deductCredits(
+                  userId,
+                  costDifference,
+                  `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
+                  {
+                    provider: providerUsed,
+                    model: modelUsed,
+                    type: 'streaming_reconciliation',
+                    estimatedCostCents,
+                    actualCostCents,
+                    promptTokens: inputTokens,
+                    completionTokens: outputTokens,
+                    totalTokens,
+                    requestId,
+                  },
+                  reconciliationKey,
+                );
+              }
             }
+          } catch (reconciliationError) {
+            // Stream already sent to client - can't return error response
+            // Log for monitoring and manual reconciliation
+            logger.error(
+              {
+                error: reconciliationError,
+                userId,
+                requestId,
+                providerUsed,
+                modelUsed,
+                inputTokens,
+                outputTokens,
+                estimatedCostCents,
+              },
+              'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
+            );
+            // Stream continues - user already received response
           }
         },
       });
@@ -714,14 +740,33 @@ async function handleChatCompletions(request: NextRequest) {
 
       logger.error({ error, provider, model: chatRequest.model }, 'Streaming request failed');
 
+      // Determine appropriate status code based on error type
+      const errorMessage = error instanceof Error ? error.message : 'Streaming request failed';
+      let statusCode = 500;
+      let errorType = 'server_error';
+
+      if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
+        statusCode = 401;
+        errorType = 'authentication_error';
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+        statusCode = 429;
+        errorType = 'rate_limit_error';
+      } else if (errorMessage.includes('insufficient credits') || errorMessage.includes('402')) {
+        statusCode = 402;
+        errorType = 'insufficient_credits';
+      } else if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+        statusCode = 404;
+        errorType = 'not_found';
+      }
+
       return NextResponse.json(
         {
           error: {
-            message: error instanceof Error ? error.message : 'Streaming request failed',
-            type: 'server_error',
+            message: errorMessage,
+            type: errorType,
           },
         },
-        { status: 500 },
+        { status: statusCode },
       );
     }
   }
@@ -743,14 +788,33 @@ async function handleChatCompletions(request: NextRequest) {
 
     logger.error({ error, provider, model: chatRequest.model }, 'LLM request failed');
 
+    // Determine appropriate status code based on error type
+    const errorMessage = error instanceof Error ? error.message : 'Request failed';
+    let statusCode = 500;
+    let errorType = 'server_error';
+
+    if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
+      statusCode = 401;
+      errorType = 'authentication_error';
+    } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+      statusCode = 429;
+      errorType = 'rate_limit_error';
+    } else if (errorMessage.includes('insufficient credits') || errorMessage.includes('402')) {
+      statusCode = 402;
+      errorType = 'insufficient_credits';
+    } else if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+      statusCode = 404;
+      errorType = 'not_found';
+    }
+
     return NextResponse.json(
       {
         error: {
-          message: error instanceof Error ? error.message : 'Request failed',
-          type: 'server_error',
+          message: errorMessage,
+          type: errorType,
         },
       },
-      { status: 500 },
+      { status: statusCode },
     );
   }
 
@@ -763,42 +827,72 @@ async function handleChatCompletions(request: NextRequest) {
 
   const costDifference = actualCostCents - estimatedCostCents;
 
-  if (costDifference !== 0) {
-    // Use idempotency key for reconciliation to prevent duplicate adjustments
-    const reconciliationKey = CreditService.generateIdempotencyKey(
-      user.id,
-      'reconciliation',
-      requestId,
-    );
-    await CreditService.deductCredits(
-      user.id,
-      costDifference,
-      costDifference > 0
-        ? `Additional charge: ${provider}/${llmResponse.model}`
-        : `Credit adjustment: ${provider}/${llmResponse.model}`,
+  // Wrap post-provider operations in try-catch to prevent 500 errors after successful generation
+  try {
+    if (costDifference !== 0) {
+      // Use idempotency key for reconciliation to prevent duplicate adjustments
+      const reconciliationKey = CreditService.generateIdempotencyKey(
+        user.id,
+        'reconciliation',
+        requestId,
+      );
+      await CreditService.deductCredits(
+        user.id,
+        costDifference,
+        costDifference > 0
+          ? `Additional charge: ${provider}/${llmResponse.model}`
+          : `Credit adjustment: ${provider}/${llmResponse.model}`,
+        {
+          provider,
+          model: llmResponse.model,
+          type: 'reconciliation',
+          estimatedCostCents,
+          actualCostCents,
+          promptTokens: llmResponse.promptTokens,
+          completionTokens: llmResponse.completionTokens,
+          totalTokens: llmResponse.totalTokens,
+          requestId,
+        },
+        reconciliationKey,
+      );
+    }
+  } catch (reconciliationError) {
+    // Provider succeeded - don't fail the request due to credit reconciliation issues
+    // Log for monitoring and manual adjustment
+    logger.error(
       {
+        error: reconciliationError,
+        userId: user.id,
+        requestId,
         provider,
         model: llmResponse.model,
-        type: 'reconciliation',
         estimatedCostCents,
         actualCostCents,
-        promptTokens: llmResponse.promptTokens,
-        completionTokens: llmResponse.completionTokens,
-        totalTokens: llmResponse.totalTokens,
-        requestId,
+        costDifference,
       },
-      reconciliationKey,
+      'Credit reconciliation failed after successful LLM response - may require manual adjustment',
     );
+    // Continue to return the successful LLM response
   }
 
-  // Cache analytics
-  const cacheMetrics = calculateCacheSavings(
-    llmResponse,
-    LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model),
-  );
+  // Cache analytics - wrap in try-catch to prevent logging failures from failing the request
+  // Default cache metrics in case calculation fails
+  let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0 };
+  try {
+    cacheMetrics = calculateCacheSavings(
+      llmResponse,
+      LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model),
+    );
 
-  if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {
-    logCacheAnalytics(user.id, llmResponse.model, provider, llmResponse, cacheMetrics);
+    if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {
+      logCacheAnalytics(user.id, llmResponse.model, provider, llmResponse, cacheMetrics);
+    }
+  } catch (analyticsError) {
+    // Non-critical - just log and continue
+    logger.warn(
+      { error: analyticsError, userId: user.id, requestId },
+      'Cache analytics logging failed',
+    );
   }
 
   // Return OpenAI-compatible response

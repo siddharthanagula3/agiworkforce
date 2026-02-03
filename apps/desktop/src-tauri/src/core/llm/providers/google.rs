@@ -215,6 +215,9 @@ struct GoogleCandidate {
     /// Grounding metadata from Google Search or Maps grounding
     #[serde(rename = "groundingMetadata")]
     grounding_metadata: Option<GoogleApiGroundingMetadata>,
+    /// Finish reason - can be "STOP", "SAFETY", "RECITATION", "MAX_TOKENS", etc.
+    #[serde(rename = "finishReason")]
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -548,6 +551,19 @@ impl LLMProvider for GoogleProvider {
         let mut code_execution_results: Vec<serde_json::Value> = Vec::new();
 
         if let Some(candidate) = google_response.candidates.first() {
+            // Check for safety filter blocking
+            if let Some(ref finish_reason) = candidate.finish_reason {
+                if finish_reason == "SAFETY" {
+                    let error_msg = "Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.";
+                    tracing::warn!("Google safety filter triggered: {}", error_msg);
+                    return Err(error_msg.into());
+                } else if finish_reason == "RECITATION" {
+                    let error_msg = "Response was blocked due to recitation concerns. Try rephrasing your request.";
+                    tracing::warn!("Google recitation filter triggered: {}", error_msg);
+                    return Err(error_msg.into());
+                }
+            }
+
             // Parse grounding metadata if present
             if let Some(api_metadata) = &candidate.grounding_metadata {
                 let metadata = parse_grounding_metadata(api_metadata);
@@ -642,7 +658,16 @@ impl LLMProvider for GoogleProvider {
             }
         }
 
-        let finish_reason = if !tool_calls.is_empty() {
+        // Use the actual finish reason from Google, or default based on response content
+        let finish_reason = if let Some(candidate) = google_response.candidates.first() {
+            candidate.finish_reason.clone().or_else(|| {
+                if !tool_calls.is_empty() {
+                    Some("tool_calls".to_string())
+                } else {
+                    Some("stop".to_string())
+                }
+            })
+        } else if !tool_calls.is_empty() {
             Some("tool_calls".to_string())
         } else {
             Some("stop".to_string())
