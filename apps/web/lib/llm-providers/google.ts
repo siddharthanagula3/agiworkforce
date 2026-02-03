@@ -20,6 +20,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // Convert messages format for Google Gemini
     const contents = request.messages
       .filter((msg) => msg.role !== 'system')
+      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
       .map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }],
@@ -151,6 +152,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // Convert messages format for Google Gemini
     const contents = request.messages
       .filter((msg) => msg.role !== 'system')
+      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
       .map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }],
