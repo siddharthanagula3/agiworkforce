@@ -437,6 +437,12 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         }
                     }
                     if let Some(finish) = candidate.get("finishReason").and_then(|f| f.as_str()) {
+                        // Check for safety filter blocks before accepting the finish reason
+                        if finish == "SAFETY" {
+                            return Err("Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.".into());
+                        } else if finish == "RECITATION" {
+                            return Err("Response was blocked due to recitation concerns. Try rephrasing your request.".into());
+                        }
                         finish_reason = Some(finish.to_string());
                         done = true;
                     }
