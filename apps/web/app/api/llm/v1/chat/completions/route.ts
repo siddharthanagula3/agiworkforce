@@ -877,7 +877,7 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Cache analytics - wrap in try-catch to prevent logging failures from failing the request
   // Default cache metrics in case calculation fails
-  let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0 };
+  let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0, cacheWriteCostCents: 0 };
   try {
     cacheMetrics = calculateCacheSavings(
       llmResponse,
