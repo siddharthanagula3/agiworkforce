@@ -257,7 +257,7 @@ export class GoogleProvider extends BaseLLMProvider {
         buffer += text;
         chunkCount++;
 
-        // Process complete JSON objects (Google returns newline-delimited JSON)
+        // Process SSE events (Google returns: data: {...}\n\n with alt=sse parameter)
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
@@ -265,8 +265,15 @@ export class GoogleProvider extends BaseLLMProvider {
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
 
+          // Skip non-data lines (comments, empty lines)
+          if (!trimmedLine.startsWith('data:')) continue;
+
+          // Remove 'data: ' prefix and parse JSON
+          const jsonStr = trimmedLine.substring(5).trim();
+          if (jsonStr === '[DONE]') continue;
+
           try {
-            const data = JSON.parse(trimmedLine);
+            const data = JSON.parse(jsonStr);
 
             // Extract text from Google's format
             const candidate = data.candidates?.[0];
