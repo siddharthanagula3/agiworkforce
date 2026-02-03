@@ -636,15 +636,17 @@ async function handleChatCompletions(request: NextRequest) {
                 // If parse fails, pass through unchanged
                 processedLines.push(line);
               }
-            } else {
-              // Non-data lines (empty lines, etc.) pass through unchanged
+            } else if (line.trim()) {
+              // Non-data lines pass through only if non-empty (fixes SSE corruption)
               processedLines.push(line);
             }
+            // Empty lines are silently dropped to prevent SSE format corruption
           }
 
           // Enqueue the processed lines with proper SSE formatting
           if (processedLines.length > 0) {
-            // SSE format requires \n\n between events, not just \n
+            // SSE format requires \n\n between events
+            // Filter ensures no duplicate separators
             controller.enqueue(encoder.encode(processedLines.join('\n\n') + '\n\n'));
           }
         },
