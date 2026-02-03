@@ -89,24 +89,25 @@ pub struct SafetySettings {
 
 impl Default for SafetySettings {
     fn default() -> Self {
-        // Gemini 2.5 and 3 default to OFF for all categories
+        // Gemini 2.5 and 3 default to BLOCK_NONE for all categories
+        // This disables safety filters for terminal/code execution requests
         Self {
             settings: vec![
                 SafetySetting {
                     category: HarmCategory::HarmCategoryHarassment,
-                    threshold: HarmBlockThreshold::Off,
+                    threshold: HarmBlockThreshold::BlockNone,
                 },
                 SafetySetting {
                     category: HarmCategory::HarmCategoryHateSpeech,
-                    threshold: HarmBlockThreshold::Off,
+                    threshold: HarmBlockThreshold::BlockNone,
                 },
                 SafetySetting {
                     category: HarmCategory::HarmCategorySexuallyExplicit,
-                    threshold: HarmBlockThreshold::Off,
+                    threshold: HarmBlockThreshold::BlockNone,
                 },
                 SafetySetting {
                     category: HarmCategory::HarmCategoryDangerous,
-                    threshold: HarmBlockThreshold::Off,
+                    threshold: HarmBlockThreshold::BlockNone,
                 },
             ],
         }

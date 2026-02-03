@@ -431,8 +431,18 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                     if let Some(content_block) = candidate.get("content") {
                         if let Some(parts) = content_block.get("parts").and_then(|p| p.as_array()) {
                             for part in parts {
+                                // Check for text content
                                 if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
                                     content.push_str(text);
+                                }
+                                // Check for function calls (tool execution)
+                                if let Some(function_call) = part.get("functionCall") {
+                                    let name = function_call
+                                        .get("name")
+                                        .and_then(|n| n.as_str())
+                                        .unwrap_or("tool");
+                                    // Return a status message so the bubble isn't blank
+                                    content.push_str(&format!("🛠️ Executing {}...", name));
                                 }
                             }
                         }
