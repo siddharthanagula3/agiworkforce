@@ -54,6 +54,8 @@ export interface ChatPreferences {
   promptCompletionEnabled: boolean;
   /** Always use agent mode with tools for all messages (not just action requests) */
   alwaysUseAgentMode: boolean;
+  /** Show simple one-line status messages instead of detailed command/code blocks */
+  compactMode: boolean;
 }
 
 export interface ExecutionPreferences {
@@ -147,6 +149,7 @@ const defaultSettings: Pick<
   chatPreferences: {
     promptCompletionEnabled: true, // AI-powered ghost text enabled by default
     alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
+    compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
@@ -184,7 +187,8 @@ const storageFallback: Storage = {
 // v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
 // v3: Added alwaysUseAgentMode setting
 // v4: Added executionPreferences for extended timeout support
-const SETTINGS_STORE_VERSION = 4;
+// v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
+const SETTINGS_STORE_VERSION = 5;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -417,6 +421,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setAlwaysUseAgentMode',
+          );
+        },
+
+        setCompactMode: (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, compactMode: enabled },
+            }),
+            undefined,
+            'settings/setCompactMode',
           );
         },
 
@@ -708,7 +722,11 @@ export const useSettingsStore = create<SettingsState>()(
           // Migration from v2 to v3: Add alwaysUseAgentMode setting
           if (version < 3) {
             if (!state.chatPreferences) {
-              state.chatPreferences = { promptCompletionEnabled: true, alwaysUseAgentMode: false };
+              state.chatPreferences = {
+                promptCompletionEnabled: true,
+                alwaysUseAgentMode: false,
+                compactMode: true,
+              };
             } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
               state.chatPreferences.alwaysUseAgentMode = false;
             }
@@ -724,6 +742,13 @@ export const useSettingsStore = create<SettingsState>()(
                 autoResumeOnRestart: true,
                 enableTimeoutWarnings: true,
               };
+            }
+          }
+
+          // Migration from v4 to v5: Add compactMode to chatPreferences
+          if (version < 5) {
+            if (state.chatPreferences && state.chatPreferences.compactMode === undefined) {
+              state.chatPreferences.compactMode = true; // Enable compact mode by default
             }
           }
 

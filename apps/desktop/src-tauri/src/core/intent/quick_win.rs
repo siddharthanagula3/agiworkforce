@@ -356,22 +356,25 @@ impl QuickWinOptimizer {
     fn try_generate_direct_answer(&self, intent: &DetectedIntent) -> Option<String> {
         let prompt_lower = intent.prompt.to_lowercase();
 
-        // Greetings
-        if prompt_lower.starts_with("hello")
-            || prompt_lower.starts_with("hi")
-            || prompt_lower.starts_with("hey")
-        {
-            return Some("Hello! I'm AGI Workforce. How can I help you today?".to_string());
+        // Greetings - keep it minimal
+        if prompt_lower.starts_with("hello") {
+            return Some("Hello!".to_string());
+        }
+        if prompt_lower.starts_with("hi") {
+            return Some("Hi!".to_string());
+        }
+        if prompt_lower.starts_with("hey") {
+            return Some("Hey!".to_string());
         }
 
         // Thanks
         if prompt_lower.contains("thank") {
-            return Some("You're welcome! Let me know if you need anything else.".to_string());
+            return Some("You're welcome!".to_string());
         }
 
-        // What can you do
-        if prompt_lower.contains("what can you do") || prompt_lower.contains("help me") {
-            return Some("I'm AGI Workforce! I can help you with files, web search, email, calendar, documents, code, automation, and much more. Just tell me what you need!".to_string());
+        // What can you do - only list capabilities when explicitly asked
+        if prompt_lower.contains("what can you do") {
+            return Some("I can help you with files, web search, email, calendar, documents, code, automation, and more. What would you like me to do?".to_string());
         }
 
         None

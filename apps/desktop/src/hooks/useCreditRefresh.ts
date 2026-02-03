@@ -62,31 +62,37 @@ export function useCreditRefresh(options: UseCreditRefreshOptions = {}): CreditR
     try {
       const creditBalance = await accountApi.fetchCreditBalance();
 
-      if (creditBalance.has_credits) {
+      // Check if user has credits (both monthly and daily remaining)
+      const hasCredits =
+        creditBalance.credits.monthly_remaining_cents > 0 &&
+        creditBalance.credits.daily_remaining_cents > 0;
+
+      if (hasCredits) {
         // Update the account store with new credit info
         updateCredits({
           credits: {
-            account_id: creditBalance.account_id || undefined,
-            period_start: creditBalance.period_start || undefined,
-            period_end: creditBalance.period_end || undefined,
-            allocated_cents: creditBalance.credits_allocated_cents,
-            used_cents: creditBalance.credits_used_cents,
-            remaining_cents: creditBalance.credits_remaining_cents,
-            daily_limit_cents: creditBalance.daily_limit_cents,
-            daily_used_cents: creditBalance.daily_used_cents,
-            daily_remaining_cents: creditBalance.daily_remaining_cents,
+            allocated_cents: creditBalance.credits.monthly_allocated_cents,
+            used_cents: creditBalance.credits.monthly_used_cents,
+            remaining_cents: creditBalance.credits.monthly_remaining_cents,
+            daily_limit_cents: creditBalance.credits.daily_limit_cents,
+            daily_used_cents: creditBalance.credits.daily_used_cents,
+            daily_remaining_cents: creditBalance.credits.daily_remaining_cents,
           },
         });
 
         // Check for low credit warnings
-        if (showWarnings && creditBalance.credits_allocated_cents > 0) {
+        if (showWarnings && creditBalance.credits.monthly_allocated_cents > 0) {
           const remainingPercent =
-            (creditBalance.credits_remaining_cents / creditBalance.credits_allocated_cents) * 100;
+            (creditBalance.credits.monthly_remaining_cents /
+              creditBalance.credits.monthly_allocated_cents) *
+            100;
 
           // Check daily limits too
           const dailyRemainingPercent =
-            creditBalance.daily_limit_cents > 0
-              ? (creditBalance.daily_remaining_cents / creditBalance.daily_limit_cents) * 100
+            creditBalance.credits.daily_limit_cents > 0
+              ? (creditBalance.credits.daily_remaining_cents /
+                  creditBalance.credits.daily_limit_cents) *
+                100
               : 100;
 
           // Use the lower of the two
@@ -167,30 +173,36 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
   try {
     const creditBalance = await accountApi.fetchCreditBalance();
 
-    if (creditBalance.has_credits) {
+    // Check if user has credits (both monthly and daily remaining)
+    const hasCredits =
+      creditBalance.credits.monthly_remaining_cents > 0 &&
+      creditBalance.credits.daily_remaining_cents > 0;
+
+    if (hasCredits) {
       useAccountStore.getState().setAccount({
         credits: {
-          account_id: creditBalance.account_id || undefined,
-          period_start: creditBalance.period_start || undefined,
-          period_end: creditBalance.period_end || undefined,
-          allocated_cents: creditBalance.credits_allocated_cents,
-          used_cents: creditBalance.credits_used_cents,
-          remaining_cents: creditBalance.credits_remaining_cents,
-          daily_limit_cents: creditBalance.daily_limit_cents,
-          daily_used_cents: creditBalance.daily_used_cents,
-          daily_remaining_cents: creditBalance.daily_remaining_cents,
+          allocated_cents: creditBalance.credits.monthly_allocated_cents,
+          used_cents: creditBalance.credits.monthly_used_cents,
+          remaining_cents: creditBalance.credits.monthly_remaining_cents,
+          daily_limit_cents: creditBalance.credits.daily_limit_cents,
+          daily_used_cents: creditBalance.credits.daily_used_cents,
+          daily_remaining_cents: creditBalance.credits.daily_remaining_cents,
         },
       });
 
       // Check for low credit warnings
-      if (creditBalance.credits_allocated_cents > 0) {
+      if (creditBalance.credits.monthly_allocated_cents > 0) {
         const remainingPercent =
-          (creditBalance.credits_remaining_cents / creditBalance.credits_allocated_cents) * 100;
+          (creditBalance.credits.monthly_remaining_cents /
+            creditBalance.credits.monthly_allocated_cents) *
+          100;
 
         // Check daily limits too
         const dailyRemainingPercent =
-          creditBalance.daily_limit_cents > 0
-            ? (creditBalance.daily_remaining_cents / creditBalance.daily_limit_cents) * 100
+          creditBalance.credits.daily_limit_cents > 0
+            ? (creditBalance.credits.daily_remaining_cents /
+                creditBalance.credits.daily_limit_cents) *
+              100
             : 100;
 
         // Use the lower of the two

@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
 import { InlinePanel as InlinePanelType } from '../../../stores/unifiedChatStore';
 import { InlinePanel } from './InlinePanel';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 export interface TerminalInlinePanelProps {
   panel: InlinePanelType;
@@ -22,9 +23,15 @@ export interface TerminalInlinePanelProps {
 const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
     const [copied, setCopied] = useState(false);
+    const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
     const terminalContent = panel.content.terminal;
 
     if (!terminalContent) {
+      return null;
+    }
+
+    // In compact mode, hide terminal output completely
+    if (compactMode) {
       return null;
     }
 

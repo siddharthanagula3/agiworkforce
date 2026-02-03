@@ -85,16 +85,30 @@ export const accountApi = {
     if (!isTauri) {
       // In web mode, return empty credits
       return {
-        has_credits: false,
-        account_id: null,
-        credits_allocated_cents: 0,
-        credits_used_cents: 0,
-        credits_remaining_cents: 0,
-        daily_limit_cents: 0,
-        daily_used_cents: 0,
-        daily_remaining_cents: 0,
-        period_start: null,
-        period_end: null,
+        object: 'credit_balance',
+        subscription: {
+          plan_tier: 'free',
+          status: 'active',
+          current_period_end: undefined,
+        },
+        credits: {
+          monthly_allocated_cents: 0,
+          monthly_remaining_cents: 0,
+          monthly_used_cents: 0,
+          monthly_reset_at: new Date().toISOString(),
+          seconds_until_monthly_reset: 0,
+          daily_limit_cents: 0,
+          daily_used_cents: 0,
+          daily_remaining_cents: 0,
+          daily_reset_at: new Date().toISOString(),
+          seconds_until_daily_reset: 0,
+        },
+        formatted: {
+          monthly_remaining: '$0.00',
+          monthly_allocated: '$0.00',
+          daily_remaining: '$0.00',
+          daily_limit: '$0.00',
+        },
       };
     }
     const invoke = await getInvoke();

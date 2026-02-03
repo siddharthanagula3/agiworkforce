@@ -123,8 +123,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       // Minification settings
       minify: isDebug ? false : 'esbuild',
 
-      // Source maps for debugging
-      sourcemap: isDebug ? 'inline' : false,
+      // Source maps for debugging - always enabled to catch production issues
+      sourcemap: true,
 
       // Output directory
       outDir: 'dist',
@@ -166,7 +166,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             // Terminal emulation - loaded when terminal features are used
             'terminal-vendor': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-webgl'],
 
-            // Markdown rendering
+            // Markdown rendering and syntax highlighting
             'markdown-vendor': [
               'react-markdown',
               'remark-gfm',
@@ -174,6 +174,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               'katex',
               'rehype-katex',
               'remark-math',
+              'highlight.js',
+              'react-syntax-highlighter',
             ],
 
             // Charting library - only loaded on analytics/dashboard views
@@ -196,9 +198,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
 
             // PDF handling - loaded on-demand for document features
             'pdf-vendor': ['pdfjs-dist'],
-
-            // Syntax highlighting
-            'highlight-vendor': ['highlight.js', 'react-syntax-highlighter'],
           },
 
           // Asset file naming for better caching
@@ -247,6 +246,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'framer-motion',
         'clsx',
         'date-fns',
+        'highlight.js',
+        'react-syntax-highlighter',
       ],
       // Exclude CLI tools from optimization
       exclude: ['@tauri-apps/cli'],
@@ -278,10 +279,12 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     // Esbuild Configuration
     // ===================
     esbuild: {
-      // Drop console.log in production builds
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
+      // Keep console logs in production for debugging
+      drop: mode === 'production' ? ['debugger'] : [],
       // Preserve legal comments
       legalComments: 'none',
+      // Keep function/class names to avoid initialization issues
+      keepNames: true,
     },
 
     // ===================

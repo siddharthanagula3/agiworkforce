@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { TerminalCommand } from '../../../stores/unifiedChatStore';
 import { TerminalOutputViewer } from '../Visualizations/TerminalOutputViewer';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 export interface TerminalCommandCardProps {
   command: TerminalCommand;
@@ -29,6 +30,8 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
   className = '',
 }) => {
   const [showFullOutput, setShowFullOutput] = useState(false);
+  const [showExpanded, setShowExpanded] = useState(false);
+  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
 
   const isSuccess = command.exitCode === 0 || command.exitCode === undefined;
   const hasOutput =
@@ -54,12 +57,48 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
     }
   };
 
+  // Compact mode: Show simple one-line status
+  if (compactMode && !showExpanded) {
+    return (
+      <button
+        onClick={() => setShowExpanded(true)}
+        className={`w-full text-left px-3 py-2 rounded-lg ${
+          isSuccess
+            ? 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
+            : 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+        } transition-colors ${className}`}
+      >
+        <div className="flex items-center gap-2 text-sm">
+          <Terminal size={14} className={isSuccess ? 'text-green-600' : 'text-red-600'} />
+          <span className="text-gray-700 dark:text-gray-300 truncate">
+            Executing terminal command...
+          </span>
+          {isSuccess ? (
+            <Check size={14} className="text-green-600 shrink-0" />
+          ) : (
+            <X size={14} className="text-red-600 shrink-0" />
+          )}
+        </div>
+      </button>
+    );
+  }
+
   return (
     <div
       className={`terminal-command-card rounded-lg border ${
         isSuccess ? 'border-gray-200 dark:border-gray-700' : 'border-red-200 dark:border-red-900'
       } bg-white dark:bg-gray-800 overflow-hidden ${className}`}
     >
+      {compactMode && (
+        <div className="px-4 pt-3 pb-2">
+          <button
+            onClick={() => setShowExpanded(false)}
+            className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          >
+            ← Hide details
+          </button>
+        </div>
+      )}
       {}
       <div className="flex items-start justify-between p-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
