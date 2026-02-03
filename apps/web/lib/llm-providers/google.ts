@@ -242,19 +242,24 @@ export class GoogleProvider extends BaseLLMProvider {
               continue;
             }
 
-            const textContent = candidate.content?.parts?.[0]?.text;
+            // Extract text from ALL parts, not just the first one (fixes multi-part text loss)
+            const allTextParts =
+              candidate.content?.parts
+                ?.filter((part: any) => part.text)
+                .map((part: any) => part.text) || [];
+            const textContent = allTextParts.join('');
 
             // Debug: Log what we extracted
-            if (!textContent) {
+            if (!textContent && candidate.content?.parts?.length) {
               logger.warn(
                 {
                   model: request.model,
                   hasContent: !!candidate.content,
                   hasParts: !!candidate.content?.parts,
                   partsLength: candidate.content?.parts?.length,
-                  firstPart: candidate.content?.parts?.[0],
+                  parts: candidate.content?.parts,
                 },
-                'Google streaming chunk has no text content',
+                'Google streaming chunk has parts but no text content',
               );
             }
 
