@@ -109,8 +109,9 @@ impl SseStreamParser {
                         tracing::error!("Critical stream error: {}", e);
                         self.pending_chunks.insert(0, Err(e));
                     } else {
-                        // Non-critical parsing errors (e.g., partial data, comments, empty data fields) are logged but not propagated
-                        tracing::debug!("Non-critical stream parse issue (ignored): {}", e);
+                        // Non-critical parsing errors (e.g., partial data, comments, empty data fields)
+                        // Use WARN level for better debugging visibility (upgraded from DEBUG)
+                        tracing::warn!("Non-critical stream parse issue (ignored): {}", e);
                     }
                 }
             }

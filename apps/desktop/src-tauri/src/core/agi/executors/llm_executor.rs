@@ -303,9 +303,11 @@ impl LlmExecutor {
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(chunk) => {
-                            // content is a String, not Option<String>
+                            // Always accumulate content, even if empty (fixes Gemini empty message bug)
+                            full_content.push_str(&chunk.content);
+
+                            // Only increment counter and emit for non-empty chunks
                             if !chunk.content.is_empty() {
-                                full_content.push_str(&chunk.content);
                                 chunk_count += 1;
 
                                 // Emit progress periodically (every 10 chunks)
@@ -332,8 +334,12 @@ impl LlmExecutor {
                                 }
                             }
 
-                            // Check for completion (done is bool, not Option<bool>)
+                            // Check for completion AFTER processing content (done is bool, not Option<bool>)
                             if chunk.done {
+                                tracing::debug!(
+                                    "[LlmExecutor] Stream completed with done=true. Final content length: {}",
+                                    full_content.len()
+                                );
                                 break;
                             }
                         }
