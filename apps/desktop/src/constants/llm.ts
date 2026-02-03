@@ -649,7 +649,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5-nano': {
     id: 'gpt-5-nano',
-    apiModelId: 'gpt-5-nano-2025-09-15',
+    apiModelId: 'gpt-5-nano',
     name: 'GPT-5 Nano',
     provider: 'openai',
     modelType: 'chat',
@@ -763,7 +763,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'claude-haiku-4.5': {
     id: 'claude-haiku-4.5',
-    apiModelId: 'claude-haiku-4-5-20251015',
+    apiModelId: 'claude-haiku-4-5-20251001',
     name: 'Claude 4.5 Haiku',
     provider: 'anthropic',
     modelType: 'chat',
@@ -805,7 +805,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // ============================================
   'gemini-3-ultra': {
     id: 'gemini-3-ultra',
-    apiModelId: 'gemini-3.0-ultra',
+    apiModelId: 'gemini-3-ultra',
     name: 'Gemini 3 Ultra',
     provider: 'google',
     modelType: 'reasoning',
@@ -841,7 +841,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gemini-3-pro': {
     id: 'gemini-3-pro',
-    apiModelId: 'gemini-3.0-pro',
+    apiModelId: 'gemini-3-pro',
     name: 'Gemini 3 Pro',
     provider: 'google',
     modelType: 'reasoning',
@@ -877,7 +877,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gemini-3-flash': {
     id: 'gemini-3-flash',
-    apiModelId: 'gemini-3.0-flash',
+    apiModelId: 'gemini-3-flash',
     name: 'Gemini 3 Flash',
     provider: 'google',
     modelType: 'chat',
