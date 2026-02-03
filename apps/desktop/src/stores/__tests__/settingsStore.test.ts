@@ -54,7 +54,11 @@ describe('settingsStore', () => {
     useSettingsStore.setState({
       llmConfig: createDefaultLLMConfig(),
       windowPreferences: createDefaultWindowPreferences(),
-      chatPreferences: { promptCompletionEnabled: true, alwaysUseAgentMode: false },
+      chatPreferences: {
+        promptCompletionEnabled: true,
+        alwaysUseAgentMode: false,
+        compactMode: true,
+      },
       allowedDirectories: [],
       loading: false,
       error: null,

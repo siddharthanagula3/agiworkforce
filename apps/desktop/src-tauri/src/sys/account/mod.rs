@@ -400,20 +400,52 @@ pub fn get_refresh_token() -> Result<String, String> {
         .ok_or_else(|| "No refresh token stored. Please sign in.".to_string())
 }
 
-/// Credit balance response from the API
+/// Subscription information from credits API
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreditBalanceResponse {
-    pub has_credits: bool,
-    pub account_id: Option<String>,
-    pub credits_allocated_cents: i32,
-    pub credits_used_cents: i32,
-    pub credits_remaining_cents: i32,
+pub struct SubscriptionInfo {
+    pub plan_tier: String,
+    pub status: String,
+    pub current_period_end: Option<String>,
+}
+
+/// Credits information from credits API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreditsInfo {
+    pub monthly_allocated_cents: i32,
+    pub monthly_remaining_cents: i32,
+    pub monthly_used_cents: i32,
+    pub monthly_reset_at: String,
+    pub seconds_until_monthly_reset: i32,
     pub daily_limit_cents: i32,
     pub daily_used_cents: i32,
     pub daily_remaining_cents: i32,
-    pub period_start: Option<String>,
-    pub period_end: Option<String>,
-    pub last_daily_reset_at: Option<String>,
+    pub daily_reset_at: String,
+    pub seconds_until_daily_reset: i32,
+}
+
+/// Formatted credits for display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormattedCredits {
+    pub monthly_remaining: String,
+    pub monthly_allocated: String,
+    pub daily_remaining: String,
+    pub daily_limit: String,
+}
+
+/// Credit balance response from the API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreditBalanceResponse {
+    pub object: String,
+    pub subscription: SubscriptionInfo,
+    pub credits: CreditsInfo,
+    pub formatted: FormattedCredits,
+}
+
+impl CreditBalanceResponse {
+    /// Helper method to check if user has credits available
+    pub fn has_credits(&self) -> bool {
+        self.credits.monthly_remaining_cents > 0 && self.credits.daily_remaining_cents > 0
+    }
 }
 
 /// Fetch current credit balance from the API
