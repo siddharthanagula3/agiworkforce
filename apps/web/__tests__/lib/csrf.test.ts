@@ -58,7 +58,8 @@ describe('CSRF', () => {
       delete process.env.CSRF_SECRET;
       vi.resetModules();
 
-      const { generateCsrfToken } = await import('@/lib/csrf');
+      const { generateCsrfToken, resetCsrfCache } = await import('@/lib/csrf');
+      resetCsrfCache(); // Clear cached secret
 
       expect(() => generateCsrfToken('session-123')).toThrow(
         'CSRF_SECRET environment variable is required',
