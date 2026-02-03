@@ -230,6 +230,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // Google returns: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
     // We need: data: {"choices":[{"delta":{"content":"..."}}]}\n\n
     let buffer = '';
+    let hasTextContent = false; // Track if we've sent any text content
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -319,6 +320,7 @@ export class GoogleProvider extends BaseLLMProvider {
             }
 
             if (textContent) {
+              hasTextContent = true; // Mark that we've sent content
               // Convert to OpenAI SSE format
               const sseEvent = `data: ${JSON.stringify({
                 choices: [
@@ -377,6 +379,28 @@ export class GoogleProvider extends BaseLLMProvider {
             // Skip malformed chunks
             logger.debug({ error, line }, 'Failed to parse Google streaming chunk');
           }
+        }
+      },
+      flush(controller) {
+        // If we never sent any text content, send an error message
+        if (!hasTextContent) {
+          logger.error(
+            { model: request.model },
+            '[GEMINI DEBUG] Stream ended with NO text content - sending error',
+          );
+          const errorEvent = `data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  content:
+                    '[Error: Gemini returned an empty response. This may be due to content filtering or an API issue. Please try again.]',
+                },
+                index: 0,
+              },
+            ],
+            model: request.model,
+          })}\n\ndata: [DONE]\n\n`;
+          controller.enqueue(new TextEncoder().encode(errorEvent));
         }
       },
     });
