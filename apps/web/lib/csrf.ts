@@ -15,6 +15,14 @@ function getCsrfSecret(): string {
   return cachedSecret;
 }
 
+/**
+ * Reset the cached CSRF secret (for testing only)
+ * @internal
+ */
+export function resetCsrfCache(): void {
+  cachedSecret = null;
+}
+
 const CSRF_HEADER = 'x-csrf-token';
 // Cookie name reserved for future CSRF implementation: 'csrf-token'
 
