@@ -231,22 +231,31 @@ export class GoogleProvider extends BaseLLMProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
+      logger.error(
+        { model: request.model, status: response.status, error: errorText },
+        'Gemini streaming request failed',
+      );
       throw new Error(`Google API error: ${response.status} ${errorText}`);
     }
 
     if (!response.body) {
+      logger.error({ model: request.model }, 'Gemini response has no body');
       throw new Error('No response body for streaming request');
     }
+
+    logger.info({ model: request.model, url }, 'Gemini streaming request initiated');
 
     // Transform Google's streaming format to OpenAI-compatible SSE format
     // Google returns: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
     // We need: data: {"choices":[{"delta":{"content":"..."}}]}\n\n
     let buffer = '';
     let hasTextContent = false; // Track if we've sent any text content
+    let chunkCount = 0;
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
         buffer += text;
+        chunkCount++;
 
         // Process complete JSON objects (Google returns newline-delimited JSON)
         const lines = buffer.split('\n');
@@ -259,25 +268,9 @@ export class GoogleProvider extends BaseLLMProvider {
           try {
             const data = JSON.parse(trimmedLine);
 
-            // Debug: Log the raw response to understand what Google is returning
-            logger.info(
-              {
-                model: request.model,
-                data: JSON.stringify(data).substring(0, 500),
-                fullData: JSON.stringify(data),
-                hasCandidates: !!data.candidates,
-                candidatesLength: data.candidates?.length,
-              },
-              '[GEMINI DEBUG] Google streaming chunk received',
-            );
-
             // Extract text from Google's format
             const candidate = data.candidates?.[0];
             if (!candidate) {
-              logger.info(
-                { model: request.model, data: JSON.stringify(data) },
-                '[GEMINI DEBUG] Google streaming response has no candidates - SKIPPING',
-              );
               continue;
             }
 
@@ -303,34 +296,6 @@ export class GoogleProvider extends BaseLLMProvider {
                 .map((part: any) => part.text) || [];
             const textContent = allTextParts.join('');
 
-            // Debug: Log what we extracted
-            logger.info(
-              {
-                model: request.model,
-                hasContent: !!candidate.content,
-                hasParts: !!candidate.content?.parts,
-                partsLength: candidate.content?.parts?.length,
-                parts: JSON.stringify(candidate.content?.parts),
-                allTextPartsLength: allTextParts.length,
-                textContentLength: textContent.length,
-                textContentPreview: textContent.substring(0, 100),
-              },
-              '[GEMINI DEBUG] Extracted text from candidate',
-            );
-
-            if (!textContent && candidate.content?.parts?.length) {
-              logger.info(
-                {
-                  model: request.model,
-                  hasContent: !!candidate.content,
-                  hasParts: !!candidate.content?.parts,
-                  partsLength: candidate.content?.parts?.length,
-                  parts: JSON.stringify(candidate.content?.parts),
-                },
-                '[GEMINI DEBUG] Google streaming chunk has parts but no text content - SKIPPING',
-              );
-            }
-
             if (textContent) {
               hasTextContent = true; // Mark that we've sent content
               // Convert to OpenAI SSE format
@@ -346,20 +311,6 @@ export class GoogleProvider extends BaseLLMProvider {
                 model: request.model,
               })}\n\n`;
               controller.enqueue(new TextEncoder().encode(sseEvent));
-              logger.info(
-                {
-                  model: request.model,
-                  textLength: textContent.length,
-                  textPreview: textContent.substring(0, 100),
-                  sseEventLength: sseEvent.length,
-                },
-                '[GEMINI DEBUG] SSE event sent to client',
-              );
-            } else {
-              logger.info(
-                { model: request.model },
-                '[GEMINI DEBUG] No text content - NOT sending SSE event',
-              );
             }
 
             // Send usage data if present
@@ -396,16 +347,16 @@ export class GoogleProvider extends BaseLLMProvider {
       flush(controller) {
         // If we never sent any text content, send an error message
         if (!hasTextContent) {
-          logger.error(
-            { model: request.model },
-            '[GEMINI DEBUG] Stream ended with NO text content - sending error',
+          logger.warn(
+            { model: request.model, chunksReceived: chunkCount },
+            'Gemini stream ended with no text content',
           );
           const errorEvent = `data: ${JSON.stringify({
             choices: [
               {
                 delta: {
                   content:
-                    '[Error: Gemini returned an empty response. This may be due to content filtering or an API issue. Please try again.]',
+                    '[Error: The model returned an empty response. This may be due to content filtering. Please try rephrasing your message.]',
                 },
                 index: 0,
               },
