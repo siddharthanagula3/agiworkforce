@@ -28,6 +28,11 @@ export class GoogleProvider extends BaseLLMProvider {
 
     const systemInstruction = request.messages.find((msg) => msg.role === 'system');
 
+    // CRITICAL: Gemini 3 models require temperature of 1.0
+    // Lower values cause looping or degraded performance
+    const isGemini3 = request.model.includes('gemini-3');
+    const temperature = isGemini3 && request.temperature === undefined ? 1.0 : request.temperature;
+
     const body: Record<string, unknown> = {
       contents,
       ...(systemInstruction && {
@@ -36,7 +41,7 @@ export class GoogleProvider extends BaseLLMProvider {
         },
       }),
       generationConfig: {
-        ...(request.temperature !== undefined && { temperature: request.temperature }),
+        ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
       },
       // Disable safety filters to prevent blank responses for code/terminal prompts
@@ -178,7 +183,8 @@ export class GoogleProvider extends BaseLLMProvider {
   }
 
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
-    const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?key=${this.apiKey}`;
+    // IMPORTANT: alt=sse is required for streaming to work properly
+    const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
     // Convert messages format for Google Gemini
     const contents = request.messages
@@ -191,6 +197,11 @@ export class GoogleProvider extends BaseLLMProvider {
 
     const systemInstruction = request.messages.find((msg) => msg.role === 'system');
 
+    // CRITICAL: Gemini 3 models require temperature of 1.0
+    // Lower values cause looping or degraded performance
+    const isGemini3 = request.model.includes('gemini-3');
+    const temperature = isGemini3 && request.temperature === undefined ? 1.0 : request.temperature;
+
     const body: Record<string, unknown> = {
       contents,
       ...(systemInstruction && {
@@ -199,7 +210,7 @@ export class GoogleProvider extends BaseLLMProvider {
         },
       }),
       generationConfig: {
-        ...(request.temperature !== undefined && { temperature: request.temperature }),
+        ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
       },
       // Disable safety filters to prevent blank responses for code/terminal prompts
