@@ -13,7 +13,7 @@
  * - Health checks: Moderate limits (100/min) for monitoring
  */
 
-import rateLimit, { type Options } from 'express-rate-limit';
+import rateLimit, { type Options, ipKeyGenerator } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
 
 /**
@@ -88,8 +88,8 @@ function keyGenerator(req: Request): string {
   }
 
   // Fall back to IP address for unauthenticated requests
-  // Trust proxy should be configured in production for accurate IP
-  return `ip:${req.ip || 'unknown'}`;
+  // Use ipKeyGenerator for proper IPv6 handling
+  return `ip:${ipKeyGenerator(req)}`;
 }
 
 /**
