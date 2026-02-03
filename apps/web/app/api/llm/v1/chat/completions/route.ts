@@ -77,8 +77,8 @@ const ChatCompletionRequestSchema = z.object({
 
 // Model tier requirements
 const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
-  'claude-opus-4-5': ['max', 'enterprise'],
-  'claude-opus-4-5-20251101': ['max', 'enterprise'],
+  'claude-opus-4.5': ['max', 'enterprise'],
+  'claude-opus-4.5-20251101': ['max', 'enterprise'],
   o3: ['max', 'enterprise'],
   'o3-mini': ['max', 'enterprise'],
   'gpt-5': ['max', 'enterprise'],
@@ -136,7 +136,7 @@ function findCheaperFallbackModel(
     { model: 'qwen-flash', provider: 'qwen' },
     { model: 'gpt-5-nano', provider: 'openai' },
     { model: 'gemini-2.5-flash-lite', provider: 'google' },
-    { model: 'claude-haiku-4-5', provider: 'anthropic' },
+    { model: 'claude-haiku-4.5', provider: 'anthropic' },
   ];
 
   for (const fallback of fallbackModels) {
