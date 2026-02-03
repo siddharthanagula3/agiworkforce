@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
 import { cn } from '../../../lib/utils';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 export interface TerminalOutputData {
   command?: string;
@@ -16,9 +17,15 @@ export interface TerminalOutputData {
 
 export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status }) => {
   const [expanded, setExpanded] = useState(false);
+  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
 
   const data = result?.data as TerminalOutputData | undefined;
   if (!data) return null;
+
+  // In compact mode, hide terminal output completely
+  if (compactMode) {
+    return null;
+  }
 
   const { command = '', stdout = '', stderr = '', exitCode = 0, success = true, error } = data;
 

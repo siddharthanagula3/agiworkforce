@@ -9,6 +9,8 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 import { useExecutionStore } from '../../../stores/executionStore';
+import { useSettingsStore } from '../../../stores/settingsStore';
+import { getToolDisplayInfo } from '../../../lib/toolDisplayNames';
 import { EditableMessage } from '../EditableMessage';
 import { DeepResearchPanel } from '../DeepResearchPanel';
 import { ImageLightbox } from '../ImageLightbox';
@@ -281,6 +283,24 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   // Render tool call
   if (isToolCall) {
+    const compactMode = useSettingsStore.getState().chatPreferences.compactMode;
+
+    // In compact mode, show simple status message instead of detailed card
+    if (compactMode) {
+      const toolDisplayInfo = getToolDisplayInfo(toolName);
+      const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
+      const statusText = isExecuting ? toolDisplayInfo.activeForm : toolDisplayInfo.completedForm;
+
+      return (
+        <div className="px-4 py-2">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="animate-pulse">•</div>
+            <span>{statusText}</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"

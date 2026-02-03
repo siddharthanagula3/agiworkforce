@@ -28,3 +28,13 @@ vi.mock('next/headers', () => ({
 
 // Mock server-only module
 vi.mock('server-only', () => ({}));
+
+// Mock CSRF validation in API routes - skip CSRF token validation in tests
+// (Individual CSRF tests will test the real implementation)
+vi.mock('@/lib/csrf', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/csrf')>('@/lib/csrf');
+  return {
+    ...actual,
+    requireCsrfToken: vi.fn().mockResolvedValue(null),
+  };
+});

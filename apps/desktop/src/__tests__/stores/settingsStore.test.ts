@@ -43,6 +43,7 @@ describe('settingsStore', () => {
       chatPreferences: {
         promptCompletionEnabled: true,
         alwaysUseAgentMode: false,
+        compactMode: true,
       },
       allowedDirectories: [],
       loading: false,
