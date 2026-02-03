@@ -151,6 +151,9 @@ debug/
 *.p12
 *.pfx
 
+# --- MCP Configuration (contains sensitive credentials) ---
+.mcp.json
+
 # --- Application cache ---
 .cache/
 cache/
