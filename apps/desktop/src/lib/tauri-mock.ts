@@ -101,6 +101,16 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'extension_disable':
       throw new Error('Extension management requires the desktop application');
 
+    // Background task commands
+    case 'background_task_list':
+      return [] as T;
+
+    case 'background_task_status':
+      return null as T;
+
+    case 'background_task_cancel':
+      return undefined as T;
+
     default:
       console.warn(`[Tauri] Command not available in web mode: ${command}`);
       return [] as T;
