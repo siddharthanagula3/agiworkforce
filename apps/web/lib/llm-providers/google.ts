@@ -39,6 +39,13 @@ export class GoogleProvider extends BaseLLMProvider {
         ...(request.temperature !== undefined && { temperature: request.temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
       },
+      // Disable safety filters to prevent blank responses for code/terminal prompts
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      ],
     };
 
     try {
@@ -195,6 +202,13 @@ export class GoogleProvider extends BaseLLMProvider {
         ...(request.temperature !== undefined && { temperature: request.temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
       },
+      // Disable safety filters to prevent blank responses for code/terminal prompts
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      ],
     };
 
     const response = await fetch(url, {
