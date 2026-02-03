@@ -20,10 +20,10 @@ import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
  * API IDs are the exact strings required by each provider's API.
  */
 const MODEL_ID_TO_API_ID: Record<string, string> = {
-  // Google Gemini 3 models (per docs/llm-provider-reference.md)
-  'gemini-3-ultra': 'gemini-3-pro-preview', // Gemini 3 Ultra
-  'gemini-3-pro': 'gemini-3-pro-preview', // Gemini 3 Pro
-  'gemini-3-flash': 'gemini-3-flash-preview', // Gemini 3 Flash
+  // Google Gemini 2.5 models (actual Google API IDs - marketed as Gemini 3)
+  'gemini-3-ultra': 'gemini-2.5-pro', // Gemini 2.5 Pro (marketed as Ultra)
+  'gemini-3-pro': 'gemini-2.5-pro', // Gemini 2.5 Pro
+  'gemini-3-flash': 'gemini-2.5-flash', // Gemini 2.5 Flash
   // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
   // Anthropic requires date suffixes in model IDs
   'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
