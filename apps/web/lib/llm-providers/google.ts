@@ -123,9 +123,33 @@ export class GoogleProvider extends BaseLLMProvider {
           'Google response was blocked due to recitation concerns',
         );
         throw new Error('Response was blocked due to recitation concerns');
+      } else if (finishReason === 'OTHER') {
+        logger.warn(
+          { model: request.model, finishReason, candidate },
+          'Google response blocked with OTHER reason',
+        );
+        throw new Error('Response was blocked by content filter');
       }
 
-      const content = candidate.content?.parts?.[0]?.text || '';
+      // Extract text from ALL parts, not just the first one
+      const allTextParts =
+        candidate.content?.parts?.filter((part: any) => part.text).map((part: any) => part.text) ||
+        [];
+      const content = allTextParts.join('');
+
+      // Warn if response is empty despite successful completion
+      if (!content && finishReason !== 'SAFETY' && finishReason !== 'RECITATION') {
+        logger.warn(
+          {
+            model: request.model,
+            finishReason,
+            hasParts: !!candidate.content?.parts,
+            partsLength: candidate.content?.parts?.length,
+            parts: candidate.content?.parts,
+          },
+          'Google returned empty content despite successful completion',
+        );
+      }
 
       // Google returns token counts in usageMetadata
       const promptTokens = data.usageMetadata?.promptTokenCount || 0;
