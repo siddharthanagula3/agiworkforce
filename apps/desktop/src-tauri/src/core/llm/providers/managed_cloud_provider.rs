@@ -18,7 +18,7 @@ fn managed_cloud_base_url() -> String {
 }
 
 fn managed_cloud_llm_url() -> String {
-    format!("{}/api/llm/completion", managed_cloud_base_url())
+    format!("{}/api/llm/v1/chat/completions", managed_cloud_base_url())
 }
 
 fn auth_failed_message() -> &'static str {
