@@ -247,22 +247,23 @@ export class GoogleProvider extends BaseLLMProvider {
             const data = JSON.parse(trimmedLine);
 
             // Debug: Log the raw response to understand what Google is returning
-            logger.debug(
+            logger.info(
               {
                 model: request.model,
                 data: JSON.stringify(data).substring(0, 500),
+                fullData: JSON.stringify(data),
                 hasCandidates: !!data.candidates,
                 candidatesLength: data.candidates?.length,
               },
-              'Google streaming chunk received',
+              '[GEMINI DEBUG] Google streaming chunk received',
             );
 
             // Extract text from Google's format
             const candidate = data.candidates?.[0];
             if (!candidate) {
-              logger.warn(
-                { model: request.model, data },
-                'Google streaming response has no candidates',
+              logger.info(
+                { model: request.model, data: JSON.stringify(data) },
+                '[GEMINI DEBUG] Google streaming response has no candidates - SKIPPING',
               );
               continue;
             }
@@ -290,16 +291,30 @@ export class GoogleProvider extends BaseLLMProvider {
             const textContent = allTextParts.join('');
 
             // Debug: Log what we extracted
+            logger.info(
+              {
+                model: request.model,
+                hasContent: !!candidate.content,
+                hasParts: !!candidate.content?.parts,
+                partsLength: candidate.content?.parts?.length,
+                parts: JSON.stringify(candidate.content?.parts),
+                allTextPartsLength: allTextParts.length,
+                textContentLength: textContent.length,
+                textContentPreview: textContent.substring(0, 100),
+              },
+              '[GEMINI DEBUG] Extracted text from candidate',
+            );
+
             if (!textContent && candidate.content?.parts?.length) {
-              logger.warn(
+              logger.info(
                 {
                   model: request.model,
                   hasContent: !!candidate.content,
                   hasParts: !!candidate.content?.parts,
                   partsLength: candidate.content?.parts?.length,
-                  parts: candidate.content?.parts,
+                  parts: JSON.stringify(candidate.content?.parts),
                 },
-                'Google streaming chunk has parts but no text content',
+                '[GEMINI DEBUG] Google streaming chunk has parts but no text content - SKIPPING',
               );
             }
 
@@ -317,6 +332,20 @@ export class GoogleProvider extends BaseLLMProvider {
                 model: request.model,
               })}\n\n`;
               controller.enqueue(new TextEncoder().encode(sseEvent));
+              logger.info(
+                {
+                  model: request.model,
+                  textLength: textContent.length,
+                  textPreview: textContent.substring(0, 100),
+                  sseEventLength: sseEvent.length,
+                },
+                '[GEMINI DEBUG] SSE event sent to client',
+              );
+            } else {
+              logger.info(
+                { model: request.model },
+                '[GEMINI DEBUG] No text content - NOT sending SSE event',
+              );
             }
 
             // Send usage data if present
