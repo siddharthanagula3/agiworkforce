@@ -1052,21 +1052,36 @@ export const useChatStore = create<ChatState>()(
             set(
               (state) => {
                 const { currentStreamingMessageId, activeConversationId } = state;
-                if (currentStreamingMessageId) {
-                  const messageInMessages = state.messages.find(
+                if (!currentStreamingMessageId) {
+                  console.warn(
+                    '[chatStore] appendToStreamingMessage called but no streaming message ID set',
+                  );
+                  return;
+                }
+
+                const messageInMessages = state.messages.find(
+                  (m) => m.id === currentStreamingMessageId,
+                );
+                if (messageInMessages) {
+                  messageInMessages.content += content;
+                } else {
+                  console.error(
+                    '[chatStore] Streaming message not found in messages array:',
+                    currentStreamingMessageId,
+                  );
+                }
+
+                if (activeConversationId && state.messagesByConversation[activeConversationId]) {
+                  const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
                     (m) => m.id === currentStreamingMessageId,
                   );
-                  if (messageInMessages) {
-                    messageInMessages.content += content;
-                  }
-
-                  if (activeConversationId && state.messagesByConversation[activeConversationId]) {
-                    const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
-                      (m) => m.id === currentStreamingMessageId,
-                    );
-                    if (messageInConvo) {
-                      messageInConvo.content += content;
-                    }
+                  if (messageInConvo) {
+                    messageInConvo.content += content;
+                  } else {
+                    console.error('[chatStore] Streaming message not found in conversation:', {
+                      currentStreamingMessageId,
+                      activeConversationId,
+                    });
                   }
                 }
               },
