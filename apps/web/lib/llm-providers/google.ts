@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 
 export class GoogleProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
+    // Force redeployment - 2026-02-03
     return 'https://generativelanguage.googleapis.com/v1beta';
   }
 
