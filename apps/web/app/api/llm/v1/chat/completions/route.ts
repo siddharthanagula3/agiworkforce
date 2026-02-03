@@ -751,7 +751,6 @@ async function handleChatCompletions(request: NextRequest) {
           originalModel: requestedModel,
           userId: user.id,
           requestId,
-          hasProvider: !!LLMProviderFactory.getProviderInstance(provider),
         },
         'Streaming request failed',
       );
