@@ -22,6 +22,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     // Convert messages format for Anthropic
     const messages = request.messages
       .filter((msg) => msg.role !== 'system')
+      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
       .map((msg, index, array) => {
         const contentObj: Record<string, unknown> = {
           role: msg.role === 'tool' ? 'user' : msg.role,
@@ -154,6 +155,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const messages = request.messages
       .filter((msg) => msg.role !== 'system')
+      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
       .map((msg) => ({
         role: msg.role === 'tool' ? 'user' : msg.role,
         content: msg.content,
