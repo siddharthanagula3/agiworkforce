@@ -49,17 +49,20 @@ export const ChatContainer = memo(function ChatContainer({ className = '' }: Cha
   // Handle send message
   const handleSendMessage = useCallback(
     async (content: string, attachments?: Attachment[]) => {
+      let conversationId = activeConversationId;
+
       // Create conversation if none exists
-      if (!activeConversationId) {
+      if (!conversationId) {
         const conversation = await createConversation(content.slice(0, 50));
         if (!conversation) {
           toast.error('Failed to create conversation');
           return;
         }
+        conversationId = conversation.id;
       }
 
-      // Send the message
-      await sendMessage(content, { attachments });
+      // Send the message with the conversation ID
+      await sendMessage(content, { attachments, conversationId });
     },
     [activeConversationId, createConversation, sendMessage],
   );
