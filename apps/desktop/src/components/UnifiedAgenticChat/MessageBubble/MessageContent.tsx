@@ -15,6 +15,7 @@ import { EnhancedMessage } from '../../../stores/unifiedChatStore';
 import { parseCitations } from '../CitationBadge';
 import { SourcesFooter } from '../SourcesFooter';
 import { CodeBlock } from '../Visualizations/CodeBlock';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 export interface MessageContentProps {
   message: EnhancedMessage;
@@ -27,6 +28,8 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   isUser,
   isStreaming = false,
 }) => {
+  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+
   return (
     <div
       className={`prose prose-sm dark:prose-invert max-w-none transition-opacity ${
@@ -44,6 +47,11 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               const match = /language-(\w+)/.exec(className || '');
               const language = match ? match[1] : 'text';
               const code = String(children).replace(/\n$/, '');
+
+              // In compact mode, hide ALL code blocks from assistant messages (not user messages)
+              if (compactMode && !inline && !isUser) {
+                return null; // Hide all code blocks in compact mode for assistant
+              }
 
               return !inline ? (
                 <CodeBlock
