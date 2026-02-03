@@ -46,6 +46,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     const query = debouncedSearchQuery.toLowerCase();
 
     return recentMessages.filter((msg) => {
+      // Allow streaming messages even if content is empty (fixes hidden streaming messages)
+      if (msg.metadata?.streaming) return true;
+
+      // Filter non-streaming messages by content
       if (!msg.content || typeof msg.content !== 'string') return false;
       return msg.content.toLowerCase().includes(query);
     });

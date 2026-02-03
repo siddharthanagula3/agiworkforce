@@ -1174,10 +1174,10 @@ export const UnifiedAgenticChat: React.FC<{
       useExecutionStore.getState().addResearchTask(initialResearchTask);
     }
 
-    // Create assistant message with deep-research metadata if applicable
+    // Create assistant message with loading placeholder (fixes empty message display)
     const assistantMessageId = addMessage({
       role: 'assistant',
-      content: isDeepResearchMode ? '' : '',
+      content: '', // Will be populated by streaming chunks
       metadata: {
         streaming: true,
         ...(isDeepResearchMode && {
