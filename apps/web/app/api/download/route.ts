@@ -98,7 +98,33 @@ async function handleDownload(request: NextRequest) {
   }
 
   if (asset && asset.browser_download_url) {
-    return NextResponse.redirect(asset.browser_download_url, { status: 307 });
+    // Set clean filenames for downloads
+    const cleanFilenames: Record<string, string> = {
+      mac: 'agiworkforce.dmg',
+      windows: 'agiworkforce-setup.exe',
+      linux: 'agiworkforce.AppImage',
+    };
+
+    const downloadUrl = asset.browser_download_url;
+    const filename = cleanFilenames[platform] || asset.name;
+
+    // Fetch the file from GitHub and stream it back with custom filename
+    const fileResponse = await fetch(downloadUrl);
+
+    if (!fileResponse.ok) {
+      throw createError.external('Failed to fetch installer from GitHub');
+    }
+
+    // Stream the file with custom Content-Disposition header
+    return new NextResponse(fileResponse.body, {
+      status: 200,
+      headers: {
+        'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
+        'Content-Length': fileResponse.headers.get('Content-Length') || '',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+      },
+    });
   }
 
   // No matching asset found in release? Fallback.
