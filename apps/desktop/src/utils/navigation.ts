@@ -1,7 +1,7 @@
 import { open } from '@tauri-apps/plugin-shell';
 import { isTauri } from '../lib/tauri-mock';
 
-const PRICING_URL = 'https://agiworkforce.com/pricing';
+const PRICING_URL = 'https://www.agiworkforce.com/dashboard/billing';
 
 export async function openExternalUrl(url: string) {
   if (isTauri) {
