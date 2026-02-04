@@ -36,8 +36,15 @@ interface LLMConfig {
   temperature: number;
   maxTokens: number;
   defaultModels: {
-    managed_cloud: string;
+    openai: string;
+    anthropic: string;
+    google: string;
     ollama: string;
+    xai: string;
+    deepseek: string;
+    qwen: string;
+    moonshot: string;
+    managed_cloud: string;
   };
   taskRouting: TaskRouting;
   favoriteModels: string[];
@@ -127,8 +134,15 @@ const defaultSettings: Pick<
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      managed_cloud: 'auto',
+      openai: '',
+      anthropic: '',
+      google: '',
       ollama: '',
+      xai: '',
+      deepseek: '',
+      qwen: '',
+      moonshot: '',
+      managed_cloud: 'auto',
     },
     favoriteModels: [],
     taskRouting: {
@@ -188,7 +202,7 @@ const storageFallback: Storage = {
 // v3: Added alwaysUseAgentMode setting
 // v4: Added executionPreferences for extended timeout support
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
-const SETTINGS_STORE_VERSION = 5;
+const SETTINGS_STORE_VERSION = 6;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -706,8 +720,15 @@ export const useSettingsStore = create<SettingsState>()(
             if (state?.llmConfig) {
               state.llmConfig.defaultProvider = 'managed_cloud';
               state.llmConfig.defaultModels = {
-                managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
+                openai: '',
+                anthropic: '',
+                google: '',
                 ollama: state.llmConfig?.defaultModels?.ollama ?? '',
+                xai: '',
+                deepseek: '',
+                qwen: '',
+                moonshot: '',
+                managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
               };
               state.llmConfig.favoriteModels = [];
               // Update taskRouting to use managed_cloud with 'auto'
@@ -749,6 +770,23 @@ export const useSettingsStore = create<SettingsState>()(
           if (version < 5) {
             if (state.chatPreferences && state.chatPreferences.compactMode === undefined) {
               state.chatPreferences.compactMode = true; // Enable compact mode by default
+            }
+          }
+
+          // Migration from v5 to v6: Add all provider fields to defaultModels (backend requirement)
+          if (version < 6) {
+            if (state?.llmConfig?.defaultModels) {
+              state.llmConfig.defaultModels = {
+                openai: '',
+                anthropic: '',
+                google: '',
+                ollama: state.llmConfig.defaultModels.ollama ?? '',
+                xai: '',
+                deepseek: '',
+                qwen: '',
+                moonshot: '',
+                managed_cloud: state.llmConfig.defaultModels.managed_cloud ?? 'auto',
+              };
             }
           }
 
