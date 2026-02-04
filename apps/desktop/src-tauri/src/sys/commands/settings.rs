@@ -19,15 +19,7 @@ pub struct LLMConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DefaultModels {
-    pub openai: String,
-    pub anthropic: String,
-    pub google: String,
     pub ollama: String,
-    pub xai: String,
-    pub deepseek: String,
-    pub qwen: String,
-    pub moonshot: String,
-    #[serde(default)]
     pub managed_cloud: String,
 }
 
@@ -82,14 +74,7 @@ impl SettingsState {
                     temperature: 0.7,
                     max_tokens: 4096,
                     default_models: DefaultModels {
-                        openai: "gpt-5.1".to_string(),
-                        anthropic: "claude-sonnet-4-5".to_string(),
-                        google: "gemini-3-pro".to_string(),
-                        ollama: "llama4-maverick".to_string(),
-                        xai: "grok-4.1".to_string(),
-                        deepseek: "".to_string(),
-                        qwen: "qwen3-max".to_string(),
-                        moonshot: "kimi-k2-thinking".to_string(),
+                        ollama: "".to_string(),
                         managed_cloud: "auto".to_string(),
                     },
                     favorite_models: Vec::new(),
