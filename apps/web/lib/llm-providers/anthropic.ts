@@ -96,23 +96,30 @@ export class AnthropicProvider extends BaseLLMProvider {
         );
 
         // Handle specific error types based on status code
+        // Use keywords that route.ts error matching expects
         if (response.status === 401) {
-          throw new Error('Anthropic API authentication failed. Please check your API key.');
+          throw new Error('Anthropic authentication error (401): Please check your API key.');
+        } else if (response.status === 402) {
+          throw new Error('Anthropic insufficient credits (402): Please upgrade your plan.');
         } else if (response.status === 403) {
           throw new Error(
-            'Anthropic API permission denied. Your API key may not have access to this resource.',
+            'Anthropic API permission denied (403): Your API key may not have access to this resource.',
           );
+        } else if (response.status === 404) {
+          throw new Error(`Anthropic not found (404): ${errorText}`);
         } else if (response.status === 413) {
-          throw new Error('Anthropic API request too large. Maximum request size is 32 MB.');
+          throw new Error('Anthropic API request too large (413): Maximum request size is 32 MB.');
         } else if (response.status === 429) {
           const retryAfter = response.headers.get('retry-after');
           throw new Error(
-            `Anthropic API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+            `Anthropic rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
           );
-        } else if (response.status === 500) {
-          throw new Error('Anthropic API internal server error. Please try again later.');
+        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+          throw new Error(
+            `Anthropic API service error (${response.status}): Please try again later.`,
+          );
         } else if (response.status === 529) {
-          throw new Error('Anthropic API is temporarily overloaded. Please try again later.');
+          throw new Error('Anthropic API overloaded (529): Please try again later.');
         } else {
           throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
         }
@@ -203,28 +210,31 @@ export class AnthropicProvider extends BaseLLMProvider {
         'Anthropic streaming API error',
       );
 
-      // Handle specific error types based on status code (same as non-streaming)
+      // Handle specific error types based on status code
+      // Use keywords that route.ts error matching expects
       if (response.status === 401) {
-        throw new Error('Anthropic API authentication failed. Please check your API key.');
+        throw new Error('Anthropic authentication error (401): Please check your API key.');
+      } else if (response.status === 402) {
+        throw new Error('Anthropic insufficient credits (402): Please upgrade your plan.');
       } else if (response.status === 403) {
         throw new Error(
-          'Anthropic API permission denied. Your API key may not have access to this model.',
+          'Anthropic API permission denied (403): Your API key may not have access to this model.',
         );
       } else if (response.status === 404) {
-        throw new Error(
-          `Model "${request.model}" not found. This model may not be available yet or the model ID is incorrect.`,
-        );
+        throw new Error(`Anthropic not found (404): Model "${request.model}" not available.`);
       } else if (response.status === 413) {
-        throw new Error('Anthropic API request too large. Maximum request size is 32 MB.');
+        throw new Error('Anthropic API request too large (413): Maximum request size is 32 MB.');
       } else if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after');
         throw new Error(
-          `Anthropic API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+          `Anthropic rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
         );
-      } else if (response.status === 500) {
-        throw new Error('Anthropic API internal server error. Please try again later.');
+      } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+        throw new Error(
+          `Anthropic API service error (${response.status}): Please try again later.`,
+        );
       } else if (response.status === 529) {
-        throw new Error('Anthropic API is temporarily overloaded. Please try again later.');
+        throw new Error('Anthropic API overloaded (529): Please try again later.');
       } else {
         throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
       }
