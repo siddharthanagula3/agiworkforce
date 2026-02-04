@@ -645,9 +645,9 @@ async function handleChatCompletions(request: NextRequest) {
 
           // Enqueue the processed lines with proper SSE formatting
           if (processedLines.length > 0) {
-            // SSE format requires \n\n between events
-            // Filter ensures no duplicate separators
-            controller.enqueue(encoder.encode(processedLines.join('\n\n') + '\n\n'));
+            // SSE format: event: and data: lines separated by \n, events separated by \n\n
+            // Join lines with single \n (keeps event: and data: together), add \n\n at end
+            controller.enqueue(encoder.encode(processedLines.join('\n') + '\n\n'));
           }
         },
         async flush(controller) {
