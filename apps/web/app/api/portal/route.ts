@@ -8,6 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
@@ -100,6 +101,12 @@ function getValidatedOrigin(request: Request): string {
 }
 
 async function handlePortal(request: NextRequest) {
+  // CSRF protection for state-changing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
+
   // Rate limiting: 10 requests per minute per user/IP
   const rateLimitResponse = await withRateLimit(request, 'portal');
   if (rateLimitResponse) {

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
 import { getSupabaseClient } from '../../services/supabase';
 import { getPlanLevel, isActiveSubscriptionStatus } from '@/lib/constants';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -17,9 +18,10 @@ function PricingContent() {
   const handleUpgrade = async (plan: string) => {
     setLoadingPlan(plan);
     try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ plan, billingInterval }),
       });
 
@@ -102,9 +104,10 @@ function PricingContent() {
   const handleManage = async () => {
     setLoadingPlan('manage');
     try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
       const data = await res.json();
       if (!res.ok) {
