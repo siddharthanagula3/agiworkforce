@@ -692,20 +692,20 @@ mod tests {
     #[test]
     fn test_change_password() {
         let manager = create_test_manager();
-        manager.setup("OldPassword123!").unwrap();
+        manager.setup("OldPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
 
         manager
-            .change("OldPassword123!", "NewPassword456!")
+            .change("OldPassword123!", "NewPassword456!") // codeql[rust/hard-coded-cryptographic-value]
             .unwrap();
 
-        assert!(!manager.verify("OldPassword123!").unwrap());
-        assert!(manager.verify("NewPassword456!").unwrap());
+        assert!(!manager.verify("OldPassword123!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
+        assert!(manager.verify("NewPassword456!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
     }
 
     #[test]
     fn test_derive_key_requires_unlock() {
         let manager = create_test_manager();
-        manager.setup("TestPassword123!").unwrap();
+        manager.setup("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
         manager.lock();
 
         let result = manager.derive_key(KeyPurpose::MasterEncryption);
@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn test_derive_key_different_purposes() {
         let manager = create_test_manager();
-        manager.setup("TestPassword123!").unwrap();
+        manager.setup("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
 
         let key1 = manager.derive_key(KeyPurpose::JwtSecret).unwrap();
         let key2 = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
@@ -729,7 +729,7 @@ mod tests {
     #[test]
     fn test_key_consistency() {
         let manager = create_test_manager();
-        manager.setup("TestPassword123!").unwrap();
+        manager.setup("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
 
         let key1 = manager.derive_key(KeyPurpose::MasterEncryption).unwrap();
         let key2 = manager.derive_key(KeyPurpose::MasterEncryption).unwrap();
@@ -741,9 +741,9 @@ mod tests {
     #[test]
     fn test_already_configured_error() {
         let manager = create_test_manager();
-        manager.setup("TestPassword123!").unwrap();
+        manager.setup("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
 
-        let result = manager.setup("AnotherPassword!");
+        let result = manager.setup("AnotherPassword!"); // codeql[rust/hard-coded-cryptographic-value]
         assert!(matches!(
             result,
             Err(MasterPasswordError::AlreadyConfigured)
