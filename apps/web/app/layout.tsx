@@ -91,7 +91,7 @@ export default function RootLayout({
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'Customer Support',
-      email: 'support@agiworkforce.com',
+      email: 'contact@agiagentautomation.com',
     },
   };
 
