@@ -5,23 +5,20 @@ import { Skeleton } from '../ui/Skeleton';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/Tooltip';
+import { formatCredits, dollarsToCredits } from '../../utils/credits';
 
 interface CostSidebarWidgetProps {
   collapsed?: boolean;
   onOpenDashboard?: () => void;
 }
 
-const currency = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-});
-
-function formatCurrency(value: number | null | undefined): string {
+function formatCostAsCredits(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) {
-    return '$0.00';
+    return '0 credits';
   }
-  return currency.format(value);
+  // Convert dollars to credits (1 dollar = 100 credits)
+  const credits = dollarsToCredits(value);
+  return formatCredits(credits);
 }
 
 export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWidgetProps) {
@@ -74,7 +71,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               Today
             </span>
             <span className="font-medium text-foreground">
-              {formatCurrency(overview?.today_total)}
+              {formatCostAsCredits(overview?.today_total)}
             </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
@@ -83,7 +80,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               Month
             </span>
             <span className="font-medium text-foreground">
-              {formatCurrency(overview?.month_total)}
+              {formatCostAsCredits(overview?.month_total)}
             </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
@@ -93,7 +90,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
             </span>
             <span className="font-medium text-foreground">
               {overview?.remaining_budget != null
-                ? formatCurrency(overview.remaining_budget)
+                ? formatCostAsCredits(overview.remaining_budget)
                 : 'No budget'}
             </span>
           </div>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui';
 import { CreditCard, Loader2 } from 'lucide-react';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 export function ManageBillingButton() {
   const [loading, setLoading] = useState(false);
@@ -10,9 +11,10 @@ export function ManageBillingButton() {
   const handleManage = async () => {
     setLoading(true);
     try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
       const data = await res.json();
       if (!res.ok) {
