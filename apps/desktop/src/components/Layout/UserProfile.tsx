@@ -202,7 +202,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 )}
 
                 {/* Monthly Credits */}
-                {credits.allocated_cents && credits.allocated_cents > 0 && (
+                {((credits.allocated_cents && credits.allocated_cents > 0) ||
+                  ((credits as any).credits_allocated_cents &&
+                    (credits as any).credits_allocated_cents > 0)) && (
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Coins className="h-3.5 w-3.5 text-amber-400" />
