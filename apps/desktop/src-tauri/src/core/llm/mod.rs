@@ -79,48 +79,12 @@ pub struct LLMRequest {
     // Request metadata
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
-
-    // Multimodal generation (Google)
-    /// Image generation configuration (Google Imagen 4)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_generation: Option<crate::core::llm::providers::ImageGenConfig>,
-    /// Video generation configuration (Google Veo 3)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub video_generation: Option<crate::core::llm::providers::VideoGenConfig>,
-    /// Text-to-speech configuration (Google TTS)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tts_config: Option<crate::core::llm::providers::TTSConfig>,
-
-    // RAG capabilities (Google)
-    /// File search configuration for RAG (Google)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_search: Option<crate::core::llm::providers::FileSearchConfig>,
-    /// URL context for grounding responses (Google)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url_context: Option<Vec<String>>,
-
-    // Grounding (Google)
-    /// Enable Google Search grounding for factual responses
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub google_search: Option<bool>,
-    /// Google Maps grounding configuration for location-aware responses
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub google_maps: Option<crate::core::llm::providers::MapsGroundingConfig>,
-
-    // Computer Use (Google Preview)
-    /// Computer use configuration for agentic desktop control (Google Preview)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub computer_use: Option<crate::core::llm::providers::ComputerUseConfig>,
-
-    // Live API (Google)
-    /// Live session configuration for real-time multimodal streaming (Google)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub live_session: Option<crate::core::llm::providers::LiveSessionConfig>,
-
-    // Code Execution (Google)
-    /// Enable code execution (Python sandbox) for computational tasks
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code_execution: Option<bool>,
+    // Google-specific features removed (provider cleanup)
+    // The following fields have been commented out as Google provider support was removed:
+    // - image_generation, video_generation, tts_config
+    // - file_search, url_context
+    // - google_search, google_maps
+    // - computer_use, live_session, code_execution
 }
 
 impl LLMRequest {
