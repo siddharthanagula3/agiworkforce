@@ -607,7 +607,7 @@ async function handleChatCompletions(request: NextRequest) {
                   // Anthropic sends: event: content_block_delta, data: {"type":"content_block_delta","delta":{"text":"text"}}
 
                   if (event.type === 'content_block_delta' && event.delta?.text) {
-                    // Transform to OpenAI format
+                    // Transform text delta to OpenAI format
                     transformedEvent = {
                       choices: [
                         {
@@ -615,6 +615,57 @@ async function handleChatCompletions(request: NextRequest) {
                             content: event.delta.text,
                           },
                           index: event.index || 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_delta' &&
+                    event.delta?.type === 'input_json_delta'
+                  ) {
+                    // Transform tool call delta to OpenAI format
+                    // Anthropic sends: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"..."}}
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            tool_calls: [
+                              {
+                                index: event.index || 0,
+                                function: {
+                                  arguments: event.delta.partial_json || '',
+                                },
+                              },
+                            ],
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'tool_use'
+                  ) {
+                    // Transform tool call start to OpenAI format
+                    // Anthropic sends: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_...","name":"tool_name"}}
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            tool_calls: [
+                              {
+                                index: event.index || 0,
+                                id: event.content_block.id,
+                                type: 'function',
+                                function: {
+                                  name: event.content_block.name,
+                                  arguments: '',
+                                },
+                              },
+                            ],
+                          },
+                          index: 0,
                         },
                       ],
                       model: responseModelName,
@@ -639,10 +690,13 @@ async function handleChatCompletions(request: NextRequest) {
                     // Skip message_start, not needed in OpenAI format
                     continue;
                   } else if (
-                    event.type === 'content_block_start' ||
-                    event.type === 'content_block_stop'
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'text'
                   ) {
-                    // Skip block start/stop events, not needed in OpenAI format
+                    // Skip text block start, not needed in OpenAI format
+                    continue;
+                  } else if (event.type === 'content_block_stop') {
+                    // Skip block stop events, not needed in OpenAI format
                     continue;
                   }
                 }
