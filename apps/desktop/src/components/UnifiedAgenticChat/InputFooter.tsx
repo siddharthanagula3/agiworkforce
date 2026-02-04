@@ -14,10 +14,8 @@ export interface InputFooterProps {
   hasInlineSuggestion: boolean;
   /** Whether to show credit usage */
   showCreditUsage: boolean;
-  /** Monthly credit usage percentage (0-100) */
+  /** Credit usage percentage (0-100) */
   creditPercentage: number;
-  /** Daily credit usage percentage (0-100) */
-  dailyCreditPercentage?: number;
   /** Whether balance is low */
   isLowBalance: boolean;
   /** Token usage current value */
@@ -31,7 +29,6 @@ export const InputFooter: React.FC<InputFooterProps> = ({
   hasInlineSuggestion,
   showCreditUsage,
   creditPercentage,
-  dailyCreditPercentage,
   isLowBalance,
   tokenCurrent,
   tokenMax,
@@ -57,63 +54,33 @@ export const InputFooter: React.FC<InputFooterProps> = ({
 
       {/* Usage meters - hidden in simple mode */}
       {!isSimpleMode && showCreditUsage ? (
-        <div className="flex items-center gap-4">
-          {/* Daily Usage */}
-          {dailyCreditPercentage != null && (
+        <div
+          className="flex items-center gap-2"
+          title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
+        >
+          <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
             <div
-              className="flex items-center gap-2"
-              title={`Daily Usage: ${dailyCreditPercentage.toFixed(1)}%`}
-            >
-              <span className="text-xs text-gray-500 dark:text-gray-400">Daily:</span>
-              <div className="w-20 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-300',
-                    dailyCreditPercentage > 90
-                      ? 'bg-red-500'
-                      : dailyCreditPercentage > 75
-                        ? 'bg-amber-500'
-                        : 'bg-blue-500',
-                  )}
-                  style={{ width: `${dailyCreditPercentage}%` }}
-                />
-              </div>
-              <span className="text-xs font-medium tabular-nums text-gray-600 dark:text-gray-300">
-                {dailyCreditPercentage.toFixed(1)}%
-              </span>
-            </div>
-          )}
-
-          {/* Monthly Usage */}
-          <div
-            className="flex items-center gap-2"
-            title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
-          >
-            <span className="text-xs text-gray-500 dark:text-gray-400">Monthly:</span>
-            <div className="w-20 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all duration-300',
-                  creditPercentage > 90
-                    ? 'bg-red-500'
-                    : creditPercentage > 75
-                      ? 'bg-amber-500'
-                      : 'bg-green-500',
-                )}
-                style={{ width: `${creditPercentage}%` }}
-              />
-            </div>
-            <span
               className={cn(
-                'text-xs font-medium tabular-nums',
-                isLowBalance
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-gray-600 dark:text-gray-300',
+                'h-full rounded-full transition-all duration-300',
+                creditPercentage > 90
+                  ? 'bg-red-500'
+                  : creditPercentage > 75
+                    ? 'bg-amber-500'
+                    : 'bg-green-500',
               )}
-            >
-              {creditPercentage.toFixed(1)}%
-            </span>
+              style={{ width: `${creditPercentage}%` }}
+            />
           </div>
+          <span
+            className={cn(
+              'text-xs font-medium tabular-nums',
+              isLowBalance
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-gray-600 dark:text-gray-300',
+            )}
+          >
+            {creditPercentage.toFixed(1)}%
+          </span>
         </div>
       ) : !isSimpleMode && hasTokenUsage ? (
         <div className="flex items-center gap-2" title="Context Window Usage">
