@@ -268,31 +268,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Credit usage calculations
   const getTokenCost = useBillingUsageStore((state) => state.getTokenCost);
   const subscription = useBillingStore((state) => state.subscription);
-  const dailyUsageCents = useBillingStore((state) => state.dailyUsage_cents);
   const monthlyCost = getTokenCost();
 
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
-  let dailyLimit = 0;
-  if (planName.includes('hobby')) {
-    monthlyLimit = PLAN_CREDIT_LIMITS.hobby.monthly;
-    dailyLimit = PLAN_CREDIT_LIMITS.hobby.daily;
-  } else if (planName.includes('pro')) {
-    monthlyLimit = PLAN_CREDIT_LIMITS.pro.monthly;
-    dailyLimit = PLAN_CREDIT_LIMITS.pro.daily;
-  } else if (planName.includes('max')) {
-    monthlyLimit = PLAN_CREDIT_LIMITS.max.monthly;
-    dailyLimit = PLAN_CREDIT_LIMITS.max.daily;
-  }
+  if (planName.includes('hobby')) monthlyLimit = PLAN_CREDIT_LIMITS.hobby.monthly;
+  else if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro.monthly;
+  else if (planName.includes('max')) monthlyLimit = PLAN_CREDIT_LIMITS.max.monthly;
 
   const showCreditUsage = monthlyLimit > 0;
   const creditPercentage = showCreditUsage ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
-
-  // Daily usage calculation - convert cents to dollars
-  const dailyCost = dailyUsageCents != null ? dailyUsageCents / 100 : 0;
-  const dailyCreditPercentage =
-    showCreditUsage && dailyLimit > 0 ? Math.min((dailyCost / dailyLimit) * 100, 100) : undefined;
-
   const isLowBalance = showCreditUsage && monthlyLimit - monthlyCost < monthlyLimit * 0.1;
 
   // AUDIT-005-015 fix: Use ref to track current content to avoid stale closure
@@ -864,7 +849,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             hasInlineSuggestion={!!inlineSuggestion}
             showCreditUsage={showCreditUsage}
             creditPercentage={creditPercentage}
-            dailyCreditPercentage={dailyCreditPercentage}
             isLowBalance={isLowBalance}
             tokenCurrent={tokenUsage?.current}
             tokenMax={tokenUsage?.max}
