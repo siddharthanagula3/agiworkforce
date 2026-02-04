@@ -55,12 +55,46 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
     }
 
+    // Transform tools from OpenAI format to Anthropic format if needed
+    let anthropicTools;
+    if (request.tools) {
+      anthropicTools = request.tools.map((tool: any) => {
+        // If tool is already in Anthropic format (has input_schema), use as-is
+        if (tool.input_schema) {
+          return tool;
+        }
+        // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
+        if (tool.type === 'function' && tool.function) {
+          return {
+            name: tool.function.name,
+            description: tool.function.description,
+            input_schema: tool.function.parameters || {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+          };
+        }
+        // Fallback: assume it's missing input_schema, use parameters if available
+        return {
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.parameters ||
+            tool.input_schema || {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+        };
+      });
+    }
+
     const body: Record<string, unknown> = {
       model: request.model,
       max_tokens: request.max_tokens || 16384, // Increased for Claude 4.5 quality outputs
       messages,
       ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(request.tools && { tools: request.tools }),
+      ...(anthropicTools && { tools: anthropicTools }),
     };
 
     if (systemContent) {
@@ -170,13 +204,47 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
 
+    // Transform tools from OpenAI format to Anthropic format if needed
+    let anthropicTools;
+    if (request.tools) {
+      anthropicTools = request.tools.map((tool: any) => {
+        // If tool is already in Anthropic format (has input_schema), use as-is
+        if (tool.input_schema) {
+          return tool;
+        }
+        // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
+        if (tool.type === 'function' && tool.function) {
+          return {
+            name: tool.function.name,
+            description: tool.function.description,
+            input_schema: tool.function.parameters || {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+          };
+        }
+        // Fallback: assume it's missing input_schema, use parameters if available
+        return {
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.parameters ||
+            tool.input_schema || {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+        };
+      });
+    }
+
     const body: Record<string, unknown> = {
       model: request.model,
       max_tokens: request.max_tokens || 16384, // Increased for Claude 4.5 quality outputs
       messages,
       stream: true,
       ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(request.tools && { tools: request.tools }),
+      ...(anthropicTools && { tools: anthropicTools }),
     };
 
     if (systemMessage) {
