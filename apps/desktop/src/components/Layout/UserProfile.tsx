@@ -163,8 +163,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          {formatCreditNumber(credits.daily_used_cents || 0)} /{' '}
-                          {formatCreditNumber(credits.daily_limit_cents)} credits
+                          {Math.min(
+                            getUsagePercentage(
+                              credits.daily_used_cents || 0,
+                              credits.daily_limit_cents,
+                            ),
+                            100,
+                          ).toFixed(0)}
+                          %
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
@@ -212,8 +218,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          {formatCreditNumber(credits.used_cents || 0)} /{' '}
-                          {formatCreditNumber(credits.allocated_cents)} credits
+                          {Math.min(
+                            getUsagePercentage(credits.used_cents || 0, credits.allocated_cents),
+                            100,
+                          ).toFixed(0)}
+                          %
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
