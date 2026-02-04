@@ -36,14 +36,7 @@ interface LLMConfig {
   temperature: number;
   maxTokens: number;
   defaultModels: {
-    openai: string;
-    anthropic: string;
-    google: string;
     ollama: string;
-    xai: string;
-    deepseek: string;
-    qwen: string;
-    moonshot: string;
     managed_cloud: string;
   };
   taskRouting: TaskRouting;
@@ -134,14 +127,7 @@ const defaultSettings: Pick<
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      openai: '',
-      anthropic: '',
-      google: '',
       ollama: '',
-      xai: '',
-      deepseek: '',
-      qwen: '',
-      moonshot: '',
       managed_cloud: 'auto',
     },
     favoriteModels: [],
@@ -720,14 +706,7 @@ export const useSettingsStore = create<SettingsState>()(
             if (state?.llmConfig) {
               state.llmConfig.defaultProvider = 'managed_cloud';
               state.llmConfig.defaultModels = {
-                openai: '',
-                anthropic: '',
-                google: '',
                 ollama: state.llmConfig?.defaultModels?.ollama ?? '',
-                xai: '',
-                deepseek: '',
-                qwen: '',
-                moonshot: '',
                 managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
               };
               state.llmConfig.favoriteModels = [];
@@ -773,18 +752,11 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v5 to v6: Add all provider fields to defaultModels (backend requirement)
+          // Migration from v5 to v6: Cleanup - remove unused provider fields
           if (version < 6) {
             if (state?.llmConfig?.defaultModels) {
               state.llmConfig.defaultModels = {
-                openai: '',
-                anthropic: '',
-                google: '',
                 ollama: state.llmConfig.defaultModels.ollama ?? '',
-                xai: '',
-                deepseek: '',
-                qwen: '',
-                moonshot: '',
                 managed_cloud: state.llmConfig.defaultModels.managed_cloud ?? 'auto',
               };
             }
