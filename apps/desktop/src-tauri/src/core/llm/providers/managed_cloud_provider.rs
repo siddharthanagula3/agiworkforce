@@ -61,6 +61,39 @@ impl ManagedCloudProvider {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         Ok(Self { client })
     }
+
+    /// Transform tools from desktop's flat format to OpenAI's nested format
+    /// Desktop format: { name, description, parameters }
+    /// OpenAI format: { type: "function", function: { name, description, parameters } }
+    fn transform_tools_to_openai_format(
+        tools: &[crate::core::llm::ToolDefinition],
+    ) -> Vec<Value> {
+        tools
+            .iter()
+            .map(|tool| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters
+                    }
+                })
+            })
+            .collect()
+    }
+
+    /// Transform LLMRequest to OpenAI-compatible format for the web API
+    fn transform_request(&self, request: &LLMRequest) -> Value {
+        let mut transformed = serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
+
+        // Transform tools if present
+        if let Some(tools) = &request.tools {
+            transformed["tools"] = serde_json::json!(Self::transform_tools_to_openai_format(tools));
+        }
+
+        transformed
+    }
 }
 
 #[async_trait]
@@ -75,11 +108,14 @@ impl LLMProvider for ManagedCloudProvider {
 
         let url = managed_cloud_llm_url();
 
+        // Transform request to OpenAI-compatible format
+        let transformed_request = self.transform_request(request);
+
         let res = self
             .client
             .post(url)
             .bearer_auth(&token)
-            .json(request)
+            .json(&transformed_request)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
@@ -189,11 +225,14 @@ impl LLMProvider for ManagedCloudProvider {
         let mut streaming_request = request.clone();
         streaming_request.stream = true;
 
+        // Transform request to OpenAI-compatible format
+        let transformed_request = self.transform_request(&streaming_request);
+
         let res = self
             .client
             .post(url)
             .bearer_auth(&token)
-            .json(&streaming_request)
+            .json(&transformed_request)
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
