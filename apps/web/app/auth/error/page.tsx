@@ -104,7 +104,10 @@ function AuthErrorContent() {
         <div className="pt-6 border-t border-zinc-800">
           <p className="text-sm text-zinc-500">
             Need help?{' '}
-            <a href="mailto:support@agiworkforce.com" className="text-blue-400 hover:underline">
+            <a
+              href="mailto:contact@agiagentautomation.com"
+              className="text-blue-400 hover:underline"
+            >
               Contact Support
             </a>
           </p>

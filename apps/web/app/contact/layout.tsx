@@ -49,7 +49,7 @@ const jsonLd = {
   mainEntity: {
     '@type': 'Organization',
     name: 'AGI Automation LLC',
-    email: 'support@agiworkforce.com',
+    email: 'contact@agiagentautomation.com',
     address: {
       '@type': 'PostalAddress',
       addressLocality: 'Austin',
@@ -59,7 +59,7 @@ const jsonLd = {
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'customer support',
-      email: 'support@agiworkforce.com',
+      email: 'contact@agiagentautomation.com',
       availableLanguage: 'English',
     },
     sameAs: [
