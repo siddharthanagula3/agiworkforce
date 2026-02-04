@@ -1,130 +1,111 @@
-# AGI Workforce - COMPLETE FIX PLAN
+# LLM Integration Fix Plan
 
-## Mission: 100% Functional Desktop Application
-
-**Status: ✅ COMPLETE**
-
----
-
-## COMPLETED FIXES
-
-### ✅ Priority 1: Core Functionality Gaps - ALL FIXED
-
-| Issue                                 | File                                      | Status                 |
-| ------------------------------------- | ----------------------------------------- | ---------------------- |
-| Folder selector missing               | `ChatInputArea.tsx`, `FolderSelector.tsx` | ✅ COMPLETE            |
-| db_query returns SIMULATED data       | `tool_executor.rs`                        | ✅ FIXED - Real SQLite |
-| Tools not connected to chat           | Multiple files                            | ✅ VERIFIED WORKING    |
-| Project context not passed to backend | `project_context.rs`                      | ✅ IMPLEMENTED         |
-
-### ✅ Priority 2: Missing Tool Implementations - ALL IMPLEMENTED
-
-| Tool                    | Status         | Notes                                |
-| ----------------------- | -------------- | ------------------------------------ |
-| db_query                | ✅ FIXED       | Real SQLite SELECT queries           |
-| db_execute              | ✅ IMPLEMENTED | INSERT/UPDATE/DELETE with validation |
-| db_transaction_begin    | ✅ IMPLEMENTED | Real transactions                    |
-| db_transaction_commit   | ✅ IMPLEMENTED | Real transactions                    |
-| db_transaction_rollback | ✅ IMPLEMENTED | Real transactions                    |
-| api_upload              | ✅ IMPLEMENTED | Multipart file upload                |
-| git_init                | ✅ IMPLEMENTED | Git repository init                  |
-| github_create_repo      | ✅ IMPLEMENTED | GitHub API via gh CLI                |
-| physical_scrape         | ✅ IMPLEMENTED | Web scraping with anti-bot UA        |
-
-### ✅ Priority 3: Integration - ALL VERIFIED
-
-| Issue                                 | Status                      |
-| ------------------------------------- | --------------------------- |
-| Tool results display in chat          | ✅ WORKING                  |
-| Action trail shows tool execution     | ✅ ENHANCED (3s visibility) |
-| Project folder scopes file operations | ✅ IMPLEMENTED              |
+**Created:** 2026-02-04
+**Status:** All models working EXCEPT Haiku (user handling)
+**Effort:** ~10 engineering days
 
 ---
 
-## IMPLEMENTATION SUMMARY
+## ✅ Current Status
 
-### Track A: Folder Selector Feature ✅
+**Working Models:**
 
-- Created `FolderSelector.tsx` component
-- Extended `projectStore.ts` with folder state
-- Integrated into `InputToolbar.tsx`
-- Added project context to chat messages
+- GPT-5 nano, GPT-5.2, GPT-5 Pro ✅
+- Claude Opus 4.5, Sonnet 4.5 ✅
+- Google Gemini 3 ✅
+- DeepSeek, Moonshot, Qwen ✅
 
-### Track B: Backend Folder Wiring ✅
+**Known Issues:**
 
-- Created `project_context.rs` module
-- Registered commands in `lib.rs`
-- Added project context to chat system prompt
-- Updated tool executor to use project folder
-- Relative paths resolve against project folder
-
-### Track C: Database Tools ✅
-
-- Fixed `db_query` with real SQLite execution
-- Implemented `db_execute` with safety validation
-- Implemented transaction tools (begin/commit/rollback)
-- Added SQL injection protection
-
-### Track D: Missing Tools ✅
-
-- Implemented `api_upload` (multipart form)
-- Implemented `git_init` (git command)
-- Implemented `github_create_repo` (gh CLI)
-- Implemented `physical_scrape` (browser UA)
-
-### Track E: Tool-Chat Integration ✅
-
-- Verified event flow working correctly
-- Enhanced tool stream display (3s after completion)
-- All events properly connected
+- Streaming tool calls BROKEN
+- Multi-turn tool conversations BROKEN
+- Extended thinking not extracted
+- Security: Error message leaks
 
 ---
 
-## BUILD STATUS
+## Phase 1: Critical Fixes (Days 1-2)
 
-| Check            | Status                  |
-| ---------------- | ----------------------- |
-| TypeScript       | ✅ 0 errors             |
-| ESLint           | ✅ 0 errors, 2 warnings |
-| Rust cargo check | ✅ Pass                 |
-| Desktop tests    | ✅ 746 passed           |
-| Web tests        | ✅ 661 passed           |
+### Day 1: Streaming Tool Calls (LLM-001)
 
----
+**Files:** `apps/desktop/src-tauri/src/core/llm/sse_parser.rs`
 
-## FILES CREATED
+- AM: OpenAI tool call parsing
+- PM: Anthropic tool call parsing
+- Tests: Partial JSON accumulation
 
-- `apps/desktop/src/components/UnifiedAgenticChat/FolderSelector.tsx`
-- `apps/desktop/src-tauri/src/sys/commands/project_context.rs`
-
-## FILES MODIFIED
-
-### Frontend
-
-- `apps/desktop/src/stores/projectStore.ts`
-- `apps/desktop/src/components/UnifiedAgenticChat/InputToolbar.tsx`
-- `apps/desktop/src/components/UnifiedAgenticChat/index.tsx`
-
-### Backend
-
-- `apps/desktop/src-tauri/src/core/llm/tool_executor.rs`
-- `apps/desktop/src-tauri/src/sys/commands/mod.rs`
-- `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs`
-- `apps/desktop/src-tauri/src/lib.rs`
+**Success:** Tools execute during streaming
 
 ---
 
-## Session Complete: 2026-01-31
+### Day 2: Multi-turn Conversations (LLM-002)
 
-All requested features implemented and verified:
+**Files:** `apps/web/lib/llm-providers/anthropic.ts`
 
-- ✅ Folder selector in chat input (like Claude Code/Windsurf)
-- ✅ Database tools connected to real SQLite
-- ✅ All missing tools implemented
-- ✅ Tool-chat integration verified
-- ✅ All tests passing
-- ✅ Build successful
+- AM: Transform to `tool_use` blocks
+- PM: Transform to `tool_result` blocks
+- Tests: Multi-turn workflow
+
+**Success:** Agentic conversations work
 
 ---
 
-_Plan completed: 2026-01-31_
+## Phase 2: Thinking & Security (Days 3-4)
+
+### Day 3: Reasoning Extraction (LLM-003)
+
+- AM: Update Rust parsers
+- PM: Web transform + UI
+- Tests: GPT-5.2, o3, Claude, DeepSeek
+
+---
+
+### Day 4: Security (LLM-004, LLM-006)
+
+- AM: Error sanitization
+- PM: Response schema validation
+- Tests: Security audit
+
+**Success:** No API keys in errors, type-safe parsing
+
+---
+
+## Phase 3: Extended Thinking (Days 5-6)
+
+### Day 5: Provider Support (LLM-005)
+
+- AM: OpenAI reasoning_effort
+- PM: Google thinkingConfig, DeepSeek/Moonshot
+
+---
+
+### Day 6: Input Validation (LLM-007, LLM-008)
+
+- AM: Sanitization + injection detection
+- PM: Type-safe tools
+
+**Success:** All providers support thinking
+
+---
+
+## Phase 4: Polish (Days 7-10)
+
+- Add metadata (LLM-009)
+- Optimize performance (LLM-010)
+- Integration testing
+- Security audit
+
+---
+
+## Rollout
+
+**Phase 1-2:** Deploy to staging → QA → production
+**Phase 3-4:** Feature flags → beta → gradual rollout
+
+---
+
+## Approval Required
+
+**DO NOT START** until user signals: "Start implementation"
+
+**Next:** User reviews docs → approves plan → we begin Phase 1

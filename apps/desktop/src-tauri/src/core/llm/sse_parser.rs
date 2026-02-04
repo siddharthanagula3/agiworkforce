@@ -325,9 +325,13 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
     if let Some(data) = data_str {
         let json: Value = serde_json::from_str(&data)?;
 
-        match event_type.as_deref() {
+        // Determine event type: prefer explicit event: line, fallback to type field in JSON
+        let effective_type = event_type
+            .as_deref()
+            .or_else(|| json.get("type").and_then(|t| t.as_str()));
+
+        match effective_type {
             Some("error") => {
-                // Handle Anthropic error events
                 let error_type = json
                     .get("error")
                     .and_then(|e| e.get("type"))
