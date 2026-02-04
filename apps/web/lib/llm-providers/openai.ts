@@ -81,7 +81,11 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.stream = request.stream;
     }
     if (request.tools) {
-      body.tools = request.tools;
+      // Ensure all tools have a 'type' field (required by OpenAI API)
+      body.tools = request.tools.map((tool: any) => ({
+        ...tool,
+        type: tool.type || 'function',
+      }));
     }
     if (request.tool_choice) {
       body.tool_choice = request.tool_choice;
@@ -200,7 +204,13 @@ export class OpenAIProvider extends BaseLLMProvider {
         body.max_tokens = request.max_tokens;
       }
     }
-    if (request.tools) body.tools = request.tools;
+    if (request.tools) {
+      // Ensure all tools have a 'type' field (required by OpenAI API)
+      body.tools = request.tools.map((tool: any) => ({
+        ...tool,
+        type: tool.type || 'function',
+      }));
+    }
     if (request.tool_choice) body.tool_choice = request.tool_choice;
 
     const response = await fetch(url, {
