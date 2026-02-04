@@ -65,9 +65,7 @@ impl ManagedCloudProvider {
     /// Transform tools from desktop's flat format to OpenAI's nested format
     /// Desktop format: { name, description, parameters }
     /// OpenAI format: { type: "function", function: { name, description, parameters } }
-    fn transform_tools_to_openai_format(
-        tools: &[crate::core::llm::ToolDefinition],
-    ) -> Vec<Value> {
+    fn transform_tools_to_openai_format(tools: &[crate::core::llm::ToolDefinition]) -> Vec<Value> {
         tools
             .iter()
             .map(|tool| {
@@ -85,7 +83,8 @@ impl ManagedCloudProvider {
 
     /// Transform LLMRequest to OpenAI-compatible format for the web API
     fn transform_request(&self, request: &LLMRequest) -> Value {
-        let mut transformed = serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
+        let mut transformed =
+            serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
 
         // Transform tools if present
         if let Some(tools) = &request.tools {
@@ -95,7 +94,9 @@ impl ManagedCloudProvider {
         // GPT-5 nano doesn't support custom temperature (only default value of 1.0)
         // Remove temperature parameter for gpt-5-nano to avoid API errors
         if request.model == "gpt-5-nano" {
-            transformed.as_object_mut().and_then(|obj| obj.remove("temperature"));
+            transformed
+                .as_object_mut()
+                .and_then(|obj| obj.remove("temperature"));
         }
 
         transformed

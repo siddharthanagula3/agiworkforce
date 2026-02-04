@@ -84,7 +84,7 @@ export default function TermsPage() {
             <h3>7. Contact Us</h3>
             <p>
               If you have any questions about these Terms, please contact us at
-              support@agiworkforce.com.
+              contact@agiagentautomation.com.
             </p>
           </div>
         </div>
