@@ -81,11 +81,32 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.stream = request.stream;
     }
     if (request.tools) {
-      // Ensure all tools have a 'type' field (required by OpenAI API)
-      body.tools = request.tools.map((tool: any) => ({
-        ...tool,
-        type: tool.type || 'function',
-      }));
+      // Transform tools to OpenAI format and ensure 'type' field
+      body.tools = request.tools.map((tool: any) => {
+        // If tool already has function field, it's in OpenAI format
+        if (tool.function) {
+          return {
+            type: 'function',
+            function: tool.function,
+          };
+        }
+        // If tool has input_schema, it's in Anthropic format - transform it
+        if (tool.input_schema) {
+          return {
+            type: 'function',
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.input_schema,
+            },
+          };
+        }
+        // Fallback: assume it's already in OpenAI format, just ensure type field
+        return {
+          ...tool,
+          type: tool.type || 'function',
+        };
+      });
     }
     if (request.tool_choice) {
       body.tool_choice = request.tool_choice;
@@ -205,11 +226,32 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
     if (request.tools) {
-      // Ensure all tools have a 'type' field (required by OpenAI API)
-      body.tools = request.tools.map((tool: any) => ({
-        ...tool,
-        type: tool.type || 'function',
-      }));
+      // Transform tools to OpenAI format and ensure 'type' field
+      body.tools = request.tools.map((tool: any) => {
+        // If tool already has function field, it's in OpenAI format
+        if (tool.function) {
+          return {
+            type: 'function',
+            function: tool.function,
+          };
+        }
+        // If tool has input_schema, it's in Anthropic format - transform it
+        if (tool.input_schema) {
+          return {
+            type: 'function',
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.input_schema,
+            },
+          };
+        }
+        // Fallback: assume it's already in OpenAI format, just ensure type field
+        return {
+          ...tool,
+          type: tool.type || 'function',
+        };
+      });
     }
     if (request.tool_choice) body.tool_choice = request.tool_choice;
 
