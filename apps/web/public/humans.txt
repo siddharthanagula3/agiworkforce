@@ -7,7 +7,7 @@ Name: AGI Automation LLC
 Site: https://agiworkforce.com
 Twitter: @agiworkforce
 GitHub: @agiworkforce
-Email: support@agiworkforce.com
+Email: contact@agiagentautomation.com
 
 Title: Platform Engineering
 Role: Desktop Application (Tauri/Rust)
@@ -46,10 +46,10 @@ Cache: Redis (Upstash)
 CDN: Vercel Edge Network
 
 /* CONTACT */
-Email: support@agiworkforce.com
+Email: contact@agiagentautomation.com
 Discord: https://discord.gg/agiworkforce (if available)
 GitHub Issues: https://github.com/agiworkforce/issues
-Security: security@agiworkforce.com
+Security: contact@agiagentautomation.com
 
 /* MISSION */
 Our mission is to make AI-powered automation accessible and affordable to everyone.
