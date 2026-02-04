@@ -67,17 +67,27 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     setIsOpen(false);
 
     try {
+      console.log('[FolderSelector] Opening folder picker dialog...');
       const selected = await open({
         directory: true,
         multiple: false,
         title: 'Select Project Folder',
       });
 
+      console.log('[FolderSelector] Dialog returned:', selected);
+
       if (selected && typeof selected === 'string') {
+        console.log('[FolderSelector] Setting folder to:', selected);
         setCurrentFolder(selected);
+      } else {
+        console.log('[FolderSelector] Dialog cancelled or no selection');
       }
     } catch (error) {
       console.error('[FolderSelector] Failed to open folder picker:', error);
+      // Show error to user
+      alert(
+        `Failed to open folder picker: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setIsSelecting(false);
     }
