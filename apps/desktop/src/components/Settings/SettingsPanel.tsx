@@ -4,7 +4,6 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Activity,
   Check,
-  Cloud,
   Database,
   Download,
   Github,
@@ -247,36 +246,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </p>
 
                   <div className="space-y-6">
-                    {/* Managed Cloud Card */}
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-md bg-primary/10 p-3">
-                          <Cloud className="h-6 w-6 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold mb-2">Managed Cloud</h4>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            All AI requests are handled through your subscription. We automatically
-                            route your requests to the best available model based on the task type.
-                          </p>
-                          <ul className="space-y-1 text-xs text-muted-foreground">
-                            <li className="flex items-center gap-2">
-                              <Check className="h-3 w-3 text-green-500" />
-                              <span>Automatic model selection for optimal results</span>
-                            </li>
-                            <li className="flex items-center gap-2">
-                              <Check className="h-3 w-3 text-green-500" />
-                              <span>Access to latest AI models included in your plan</span>
-                            </li>
-                            <li className="flex items-center gap-2">
-                              <Check className="h-3 w-3 text-green-500" />
-                              <span>No API keys needed - everything is managed for you</span>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Ollama Local Option */}
                     <div className="rounded-lg border border-border bg-card p-6">
                       <div className="flex items-start justify-between gap-4">
