@@ -116,15 +116,20 @@ export class OpenAIProvider extends BaseLLMProvider {
         );
 
         // Handle specific error types based on status code
+        // Use keywords that route.ts error matching expects
         if (response.status === 401) {
-          throw new Error('OpenAI API authentication failed. Please check your API key.');
+          throw new Error('OpenAI authentication error (401): Please check your API key.');
         } else if (response.status === 429) {
           const retryAfter = response.headers.get('retry-after');
           throw new Error(
-            `OpenAI API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+            `OpenAI rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
           );
+        } else if (response.status === 402) {
+          throw new Error('OpenAI insufficient credits (402): Please upgrade your plan.');
+        } else if (response.status === 404) {
+          throw new Error(`OpenAI not found (404): ${errorText}`);
         } else if (response.status === 500 || response.status === 502 || response.status === 503) {
-          throw new Error('OpenAI API service temporarily unavailable. Please try again later.');
+          throw new Error(`OpenAI API service error (${response.status}): Please try again later.`);
         } else {
           throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
         }
@@ -205,8 +210,24 @@ export class OpenAIProvider extends BaseLLMProvider {
     });
 
     if (!response.ok) {
+      const status = response.status;
       const errorText = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+
+      // Create error message with keywords that route.ts can match
+      let message = '';
+      if (status === 401) {
+        message = `OpenAI authentication error (401): ${errorText}`;
+      } else if (status === 429) {
+        message = `OpenAI rate limit exceeded (429): ${errorText}`;
+      } else if (status === 402) {
+        message = `OpenAI insufficient credits (402): ${errorText}`;
+      } else if (status === 404) {
+        message = `OpenAI not found (404): ${errorText}`;
+      } else {
+        message = `OpenAI API error: ${status} ${errorText}`;
+      }
+
+      throw new Error(message);
     }
 
     if (!response.body) {
