@@ -35,7 +35,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
-import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 interface SettingsPanelProps {
@@ -369,9 +368,45 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </div>
                 </div>
 
-                {/* Task Routing Settings */}
+                {/* Intelligent Routing Info */}
                 <div className="border-t border-border pt-6">
-                  <TaskRoutingSettings />
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
+                    <h3 className="text-lg font-semibold mb-3">Intelligent Model Routing</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      We automatically route your requests to the optimal model based on multiple
+                      factors:
+                    </p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-primary shrink-0" />
+                        <span>
+                          <strong>Performance Benchmarks</strong> - Models are selected based on
+                          proven performance metrics for each task type
+                        </span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-primary shrink-0" />
+                        <span>
+                          <strong>Industry Standards</strong> - Following best practices for model
+                          selection and task optimization
+                        </span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-primary shrink-0" />
+                        <span>
+                          <strong>Subscription Tier</strong> - Access to models is determined by
+                          your current plan
+                        </span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-primary shrink-0" />
+                        <span>
+                          <strong>Cost Efficiency</strong> - Balancing quality with cost to maximize
+                          your credit usage
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </TabsContent>
 
