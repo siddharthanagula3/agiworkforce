@@ -29,7 +29,7 @@ Disallow: /dashboard/
 Disallow: /auth/
 
 # Contact
-Contact: support@agiworkforce.com
+Contact: contact@agiagentautomation.com
 Crawl-Delay: 1
 
 # Last updated

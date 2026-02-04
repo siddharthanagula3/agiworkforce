@@ -51,7 +51,7 @@ function PaymentFailureContent() {
           <div className="pt-4 border-t border-zinc-900/50 w-full mt-2">
             <p className="text-xs text-zinc-600 mb-2">Need help?</p>
             <Link
-              href="mailto:support@agiworkforce.com"
+              href="mailto:contact@agiagentautomation.com"
               className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Contact Support
