@@ -968,7 +968,25 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 try {
                   const { accountApi } = await import('../api/accountApi');
                   const profile = await accountApi.fetchUserProfile(authState.session.access_token);
-                  credits = profile.credits || null;
+                  // Normalize credit field names (API returns credits_allocated_cents but we expect allocated_cents)
+                  const apiCredits = profile.credits as any;
+                  if (apiCredits) {
+                    credits = {
+                      account_id: apiCredits.account_id,
+                      period_start: apiCredits.period_start,
+                      period_end: apiCredits.period_end,
+                      allocated_cents:
+                        apiCredits.allocated_cents ?? apiCredits.credits_allocated_cents,
+                      used_cents: apiCredits.used_cents ?? apiCredits.credits_used_cents,
+                      remaining_cents:
+                        apiCredits.remaining_cents ?? apiCredits.credits_remaining_cents,
+                      percentage_used: apiCredits.percentage_used,
+                      daily_limit_cents: apiCredits.daily_limit_cents,
+                      daily_used_cents: apiCredits.daily_used_cents,
+                      daily_remaining_cents: apiCredits.daily_remaining_cents,
+                      daily_reset_at: apiCredits.daily_reset_at ?? apiCredits.last_daily_reset_at,
+                    };
+                  }
                 } catch {
                   // Continue without credits
                 }
