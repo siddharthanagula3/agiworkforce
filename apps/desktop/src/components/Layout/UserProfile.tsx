@@ -221,7 +221,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
                           {Math.min(
-                            getUsagePercentage(credits.used_cents || 0, credits.allocated_cents),
+                            getUsagePercentage(
+                              credits.used_cents || 0,
+                              credits.allocated_cents || 0,
+                            ),
                             100,
                           ).toFixed(0)}
                           %
@@ -231,7 +234,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <div
                           className="h-full bg-linear-to-r from-amber-500 to-amber-400 transition-all"
                           style={{
-                            width: `${Math.min(getUsagePercentage(credits.used_cents || 0, credits.allocated_cents), 100)}%`,
+                            width: `${Math.min(getUsagePercentage(credits.used_cents || 0, credits.allocated_cents || 0), 100)}%`,
                           }}
                         />
                       </div>
