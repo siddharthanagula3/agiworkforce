@@ -193,20 +193,9 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     </button>
   );
 
-  return (
+  const dropdownMenu = (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        {compact ? (
-          <Tooltip>
-            <TooltipTrigger asChild>{triggerButton}</TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>{currentFolder ? displayName : 'Select a project folder to scope your session'}</p>
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          triggerButton
-        )}
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel className="text-xs text-gray-500 dark:text-gray-400">
@@ -302,6 +291,22 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+
+  // Wrap in Tooltip only in compact mode
+  if (compact) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>{dropdownMenu}</div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>{currentFolder ? displayName : 'Select a project folder to scope your session'}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return dropdownMenu;
 };
 
 export default FolderSelector;
