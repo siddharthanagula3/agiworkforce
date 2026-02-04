@@ -600,9 +600,56 @@ async function handleChatCompletions(request: NextRequest) {
               try {
                 const event = JSON.parse(jsonStr);
 
+                // Transform Anthropic SSE format to OpenAI format for desktop compatibility
+                let transformedEvent = event;
+                if (providerUsed === 'anthropic') {
+                  // Desktop expects OpenAI SSE format: data: {"choices":[{"delta":{"content":"text"}}]}
+                  // Anthropic sends: event: content_block_delta, data: {"type":"content_block_delta","delta":{"text":"text"}}
+
+                  if (event.type === 'content_block_delta' && event.delta?.text) {
+                    // Transform to OpenAI format
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            content: event.delta.text,
+                          },
+                          index: event.index || 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (event.type === 'message_delta' && event.delta?.stop_reason) {
+                    // Transform message_delta to OpenAI finish event
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {},
+                          finish_reason: event.delta.stop_reason,
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (event.type === 'message_stop') {
+                    // Transform message_stop to OpenAI [DONE]
+                    processedLines.push('data: [DONE]');
+                    continue;
+                  } else if (event.type === 'message_start') {
+                    // Skip message_start, not needed in OpenAI format
+                    continue;
+                  } else if (
+                    event.type === 'content_block_start' ||
+                    event.type === 'content_block_stop'
+                  ) {
+                    // Skip block start/stop events, not needed in OpenAI format
+                    continue;
+                  }
+                }
+
                 // Replace the internal API model name with the user-requested model name
-                if (event.model) {
-                  event.model = responseModelName;
+                if (transformedEvent.model) {
+                  transformedEvent.model = responseModelName;
                 }
 
                 // Track usage metrics for credit reconciliation
@@ -626,7 +673,7 @@ async function handleChatCompletions(request: NextRequest) {
                 }
 
                 // Re-serialize with the corrected model name
-                processedLines.push(`data: ${JSON.stringify(event)}`);
+                processedLines.push(`data: ${JSON.stringify(transformedEvent)}`);
               } catch (parseError) {
                 // AUDIT-P3-008-014: Log JSON parsing errors at debug level for monitoring
                 logger.debug(
@@ -637,7 +684,7 @@ async function handleChatCompletions(request: NextRequest) {
                 processedLines.push(line);
               }
             } else if (line.trim()) {
-              // Non-data lines pass through only if non-empty (fixes SSE corruption)
+              // Non-data lines (e.g., event:) pass through only if non-empty
               processedLines.push(line);
             }
             // Empty lines are silently dropped to prevent SSE format corruption
