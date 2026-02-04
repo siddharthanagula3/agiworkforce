@@ -1,79 +1,129 @@
-# AGI Workforce - TODO
+# Implementation TODO List
 
-## Session 2: 2026-01-31 - COMPLETE ✅
-
----
-
-## ✅ COMPLETED (This Session)
-
-### Feature: Folder Selector in Chat Input
-
-- [x] Created FolderSelector.tsx component
-- [x] Extended projectStore.ts with folder state
-- [x] Integrated folder selector into InputToolbar.tsx
-- [x] Added project context to chat messages
-- [x] Created project_context.rs backend module
-- [x] Registered Tauri commands for project folder
-- [x] Added project context to LLM system prompt
-- [x] Updated tool executor to respect project folder
-- [x] Relative paths resolve against project folder
-
-### Fix: Database Tools
-
-- [x] Fixed db_query - now executes real SQLite SELECT queries
-- [x] Implemented db_execute with INSERT/UPDATE/DELETE support
-- [x] Implemented db_transaction_begin
-- [x] Implemented db_transaction_commit
-- [x] Implemented db_transaction_rollback
-- [x] Added SQL injection protection
-
-### Fix: Missing Tool Implementations
-
-- [x] Implemented api_upload (multipart file upload)
-- [x] Implemented git_init (git repository init)
-- [x] Implemented github_create_repo (GitHub API via gh CLI)
-- [x] Implemented physical_scrape (web scraping with anti-bot UA)
-
-### Fix: Tool-Chat Integration
-
-- [x] Verified tool event flow is working
-- [x] Enhanced ActiveToolStreamsDisplay for 3s visibility after completion
-- [x] Confirmed action trail shows tool execution
+**Generated:** 2026-02-04
+**Source:** Comprehensive parallel agent review
+**Note:** User will handle Claude Haiku empty messages separately. All other models working correctly.
 
 ---
 
-## 🟢 ALL PREVIOUS ITEMS COMPLETED
+## 🔴 PRIORITY 0 - CRITICAL BLOCKERS
 
-### Session 1 (2026-01-31)
+### LLM-001: Fix Streaming Tool Call Parsing
 
-- [x] Implemented 9 missing tool handlers (file*list, memory*_, browser\__, api_download)
-- [x] Updated README.md to v1.0.9
-- [x] Fixed RiskConfirmationDialog.tsx lint warning
-- [x] Pushed to GitHub main
+**Status:** 🔴 CRITICAL | **Effort:** 1 day
+**Files:** `apps/desktop/src-tauri/src/core/llm/sse_parser.rs:201-398`
 
----
+**Issue:** `StreamChunk.tool_calls` always `None` - never populated from streaming deltas
 
-## 🔵 FUTURE ENHANCEMENTS (Optional)
+**Tasks:**
 
-- [ ] Add folder history persistence across sessions
-- [ ] Auto-detect project root (.git, package.json, etc.)
-- [ ] Add nested project support (monorepos)
-- [ ] Add per-tool folder exceptions
-- [ ] ExtensionBridge native messaging (deferred - using Playwright)
-- [ ] E2E testing for folder scope feature
+- [ ] Parse `delta.tool_calls` in OpenAI streaming
+- [ ] Parse `content_block_start` + `input_json_delta` in Anthropic
+- [ ] Accumulate partial JSON across chunks
+- [ ] Add unit + integration tests
 
 ---
 
-## BUILD STATUS
+### LLM-002: Fix Anthropic Multi-turn Tool Conversations
 
-| Check            | Result                  |
-| ---------------- | ----------------------- |
-| TypeScript       | ✅ 0 errors             |
-| ESLint           | ✅ 0 errors, 2 warnings |
-| Rust cargo check | ✅ Pass                 |
-| Desktop tests    | ✅ 746 passed           |
-| Web tests        | ✅ 661 passed           |
+**Status:** 🔴 CRITICAL | **Effort:** 6 hours
+**Files:** `apps/web/lib/llm-providers/anthropic.ts:23-90`
+
+**Issue:** Missing `tool_use` and `tool_result` content blocks
+
+**Tasks:**
+
+- [ ] Transform assistant tool calls → `tool_use` blocks
+- [ ] Transform tool results → `tool_result` blocks
+- [ ] Handle mixed content
+- [ ] Add tests
 
 ---
 
-_Session completed: 2026-01-31_
+### LLM-003: Add Reasoning Content Extraction
+
+**Status:** 🔴 HIGH | **Effort:** 1 day
+**Files:** `apps/desktop/src-tauri/src/core/llm/` + `apps/web/app/api/llm/v1/chat/completions/route.ts`
+
+**Issue:** Reasoning tokens generated but never displayed
+
+**Tasks:**
+
+- [ ] Add `reasoning_content` field to StreamChunk
+- [ ] Extract from OpenAI, Anthropic, DeepSeek parsers
+- [ ] Forward through transform stream
+- [ ] Add UI display (collapsible)
+
+---
+
+### LLM-004: Sanitize Error Messages
+
+**Status:** 🔴 HIGH (Security) | **Effort:** 4 hours
+**Files:** `apps/web/app/api/llm/v1/chat/completions/route.ts:819-846`
+
+**Issue:** Raw errors expose API keys, stack traces
+
+**Tasks:**
+
+- [ ] Create sanitizer with allowlist
+- [ ] Add correlation IDs
+- [ ] Remove sensitive patterns
+- [ ] Security test
+
+---
+
+## ⚠️ PRIORITY 1 - HIGH PRIORITY
+
+### LLM-005: Enable Extended Thinking
+
+**Effort:** 1 day total
+
+- [ ] OpenAI `reasoning_effort` parameter (2h)
+- [ ] Google `thinkingConfig` levels 0-4 (2h)
+- [ ] DeepSeek/Moonshot conditional thinking (3h)
+
+### LLM-006: Add Response Schema Validation (Rust)
+
+**Effort:** 4 hours
+
+- [ ] Define Serde structs
+- [ ] Replace unsafe JSON navigation
+- [ ] Test malformed responses
+
+### LLM-007: Add Input Validation
+
+**Effort:** 4 hours
+
+- [ ] Sanitize control characters
+- [ ] Detect prompt injection
+- [ ] Validate multimodal content
+
+---
+
+## 🟡 PRIORITY 2 - MEDIUM
+
+### LLM-008: Type-Safe Tool Transformations
+
+**Effort:** 3 hours
+
+- [ ] Define interfaces, remove `any`
+- [ ] Add Zod validation
+
+### LLM-009: Add Response Metadata
+
+**Effort:** 4 hours
+
+- [ ] reasoning_tokens, thinking_tokens
+- [ ] grounding_metadata, cached_tokens
+
+### LLM-010: Performance Optimization
+
+**Effort:** 4 hours
+
+- [ ] Replace Vec with VecDeque
+- [ ] Pre-allocate strings
+- [ ] Benchmark
+
+---
+
+**Estimated Total:** ~10 engineering days
