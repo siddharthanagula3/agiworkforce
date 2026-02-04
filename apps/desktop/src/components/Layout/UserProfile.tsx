@@ -13,8 +13,9 @@ import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useAuthStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';
-import { getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
+import { getUsagePercentage } from '../../stores/usageStore';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
+import { formatCreditNumber } from '../../utils/credits';
 
 interface UserProfileProps {
   onSettingsClick?: () => void;
@@ -156,21 +157,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Remaining</span>
                         <span className="text-sm font-semibold text-zinc-100">
-                          {getRemainingPercentage(
-                            credits.daily_used_cents || 0,
-                            credits.daily_limit_cents,
-                          )}
-                          %
+                          {formatCreditNumber(credits.daily_remaining_cents)} credits
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          {getUsagePercentage(
-                            credits.daily_used_cents || 0,
-                            credits.daily_limit_cents,
-                          )}
-                          % used
+                          {formatCreditNumber(credits.daily_used_cents || 0)} /{' '}
+                          {formatCreditNumber(credits.daily_limit_cents)} credits
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
@@ -212,15 +206,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Remaining</span>
                         <span className="text-sm font-semibold text-zinc-100">
-                          {getRemainingPercentage(credits.used_cents || 0, credits.allocated_cents)}
-                          %
+                          {formatCreditNumber(credits.remaining_cents)} credits
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          {getUsagePercentage(credits.used_cents || 0, credits.allocated_cents)}%
-                          used
+                          {formatCreditNumber(credits.used_cents || 0)} /{' '}
+                          {formatCreditNumber(credits.allocated_cents)} credits
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
