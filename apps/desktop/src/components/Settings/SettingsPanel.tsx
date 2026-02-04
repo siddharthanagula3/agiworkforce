@@ -37,7 +37,6 @@ import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
 import { TaskRoutingSettings } from './TaskRoutingSettings';
 import { UpdateSettings } from './UpdateSettings';
-import MCPCredentialManager from '../MCP/MCPCredentialManager';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -390,7 +389,20 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <p className="text-sm text-muted-foreground mb-6">
                     Connect your accounts for enhanced MCP tool capabilities
                   </p>
-                  <MCPCredentialManager servers={[]} />
+                  <div className="rounded-lg border border-border bg-card p-12 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="rounded-full bg-primary/10 p-4">
+                        <Github className="h-8 w-8 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-semibold mb-2">Coming Soon</h4>
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          Integration management for GitHub, Google Drive, Slack, and other services
+                          will be available in an upcoming release.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
 
@@ -668,23 +680,19 @@ function DataPrivacyTab() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-6">
-          <h4 className="font-semibold mb-2">Privacy First</h4>
+          <h4 className="font-semibold mb-2">Privacy & Security</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <span>No data is sent to AGI Workforce servers</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <span>All processing happens locally or with your chosen AI providers</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <span>You control which AI providers to use and when</span>
+              <span>Chat history and settings are stored locally on your device</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
               <span>Integration credentials are encrypted and stored locally on your device</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <span>You can export your data at any time in standard JSON format</span>
             </li>
           </ul>
         </div>
