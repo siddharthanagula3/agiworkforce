@@ -195,6 +195,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         finishReason,
         cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
         cachedInputTokens: data.usage?.cache_read_input_tokens,
+        tool_calls: message?.tool_calls, // Include tool calls if present
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'OpenAI request failed');
