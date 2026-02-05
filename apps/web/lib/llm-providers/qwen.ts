@@ -33,9 +33,9 @@ export class QwenProvider extends BaseLLMProvider {
   private async sendOpenAICompatibleRequest(
     request: LLMProviderRequest,
   ): Promise<LLMProviderResponse> {
-    // MuleRouter and other OpenAI-compatible proxies use /chat/completions
-    // See: https://www.mulerouter.ai/docs/api-reference/quickstart
-    const url = `${this.baseUrl}/chat/completions`;
+    // MuleRouter uses OpenAI-compatible format at /vendors/openai/v1/chat/completions
+    // See: https://mulerouter.ai/docs/api-reference/endpoint/openai/chat
+    const url = `${this.baseUrl}/vendors/openai/v1/chat/completions`;
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -193,7 +193,8 @@ export class QwenProvider extends BaseLLMProvider {
   }
 
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
-    const url = `${this.baseUrl}/chat/completions`;
+    // MuleRouter uses OpenAI-compatible format at /vendors/openai/v1/chat/completions
+    const url = `${this.baseUrl}/vendors/openai/v1/chat/completions`;
 
     const body: Record<string, unknown> = {
       model: request.model,
