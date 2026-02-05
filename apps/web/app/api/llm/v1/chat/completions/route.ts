@@ -1043,6 +1043,7 @@ async function handleChatCompletions(request: NextRequest) {
           message: {
             role: 'assistant',
             content: llmResponse.content,
+            tool_calls: llmResponse.toolCalls, // ✅ Include tool calls if present
           },
           finish_reason: llmResponse.finishReason || 'stop',
         },
