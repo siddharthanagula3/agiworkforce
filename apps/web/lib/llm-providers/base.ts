@@ -9,6 +9,7 @@ export interface LLMProviderResponse {
   finishReason?: string;
   cacheCreationInputTokens?: number;
   cachedInputTokens?: number;
+  tool_calls?: unknown[]; // Tool calls if the model used function calling
 }
 
 export interface LLMProviderRequest {
