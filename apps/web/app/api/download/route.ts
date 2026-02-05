@@ -112,7 +112,7 @@ async function handleDownload(request: NextRequest) {
     const fileResponse = await fetch(downloadUrl);
 
     if (!fileResponse.ok) {
-      throw createError.external('Failed to fetch installer from GitHub');
+      throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
     }
 
     // Stream the file with custom Content-Disposition header
