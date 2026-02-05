@@ -448,16 +448,58 @@ pub async fn execute_chat_tool(
             let query = args["query"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Missing required parameter: query"))?;
-            let _num_results = args["num_results"].as_i64().unwrap_or(5);
+            let num_results = args["num_results"].as_i64().unwrap_or(5) as usize;
 
             info!("[ChatTool] Web search: {}", query);
 
-            // For now, return a placeholder - actual web search would require API integration
-            Ok(format!(
-                "Web search for '{}' is not yet implemented. \
-                Please ask the user to provide the information directly or suggest they search manually.",
-                query
-            ))
+            // Use the WebSearchService to perform actual web search
+            use crate::features::search::{WebSearchConfig, WebSearchService};
+
+            let service = WebSearchService::new()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize search service: {}", e))?;
+
+            let config = WebSearchConfig {
+                num_results: num_results.min(10), // Cap at 10 results
+                ..Default::default()
+            };
+
+            match service.search(query, Some(config)).await {
+                Ok(response) => {
+                    // Format results for the LLM
+                    let mut result_text = format!(
+                        "Found {} results for \"{}\" (searched using {}):\n\n",
+                        response.count, response.query, response.provider
+                    );
+
+                    for (idx, result) in response.results.iter().enumerate() {
+                        result_text.push_str(&format!(
+                            "{}. {}\n   URL: {}\n   {}\n\n",
+                            idx + 1,
+                            result.title,
+                            result.url,
+                            result.snippet
+                        ));
+                    }
+
+                    // Truncate if too long
+                    let max_len = 15000;
+                    if result_text.len() > max_len {
+                        result_text.truncate(max_len);
+                        result_text.push_str("\n\n[Results truncated]");
+                    }
+
+                    Ok(result_text)
+                }
+                Err(e) => {
+                    // Return a user-friendly error message
+                    Ok(format!(
+                        "I couldn't search the web right now. The search service returned an error: {}\n\n\
+                        This might be due to network issues or rate limiting. You can try again in a moment, \
+                        or I can help you with other tasks.",
+                        e
+                    ))
+                }
+            }
         }
 
         "browser_navigate" => {
