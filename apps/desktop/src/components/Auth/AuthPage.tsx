@@ -39,9 +39,14 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       const accessToken = params['access_token'];
       const refreshToken = params['refresh_token'];
       const errorDescription = params['error_description'];
+      const errorCode = params['error'];
+      const code = params['code'];
 
-      if (errorDescription) {
-        setErrorMessage(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
+      if (errorDescription || errorCode) {
+        const message = errorDescription
+          ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+          : errorCode;
+        setErrorMessage(message || 'OAuth sign-in failed.');
         setPageState('error');
         return;
       }
@@ -49,6 +54,24 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       if (accessToken && refreshToken) {
         // Manually set session if tokens are present
         supabaseAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      }
+
+      if (code && !accessToken) {
+        setPageState('verifying');
+        supabaseAuth.exchangeCodeForSession(code).then((response) => {
+          if (response.error) {
+            setErrorMessage(response.error.message);
+            setPageState('error');
+            return;
+          }
+
+          setPageState('verified');
+          window.history.replaceState(null, '', window.location.pathname);
+          setTimeout(() => {
+            onAuthSuccess?.();
+          }, 500);
+        });
+        return;
       }
 
       if (
