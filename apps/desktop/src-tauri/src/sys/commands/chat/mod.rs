@@ -1227,9 +1227,8 @@ pub async fn chat_send_message(
         .enable_agent_mode
         .unwrap_or_else(|| detect_agentic_intent(&request.content));
 
-    let is_deep_research =
-        matches!(request.focus_mode.as_deref(), Some("deep-research"))
-            || request.research_task_id.is_some();
+    let is_deep_research = matches!(request.focus_mode.as_deref(), Some("deep-research"))
+        || request.research_task_id.is_some();
 
     use crate::core::agent::prompt_engineer::PromptEngineer;
     use crate::core::llm::{
@@ -1988,8 +1987,7 @@ pub async fn chat_send_message(
                         let automation = match AutomationService::new() {
                             Ok(service) => Arc::new(service),
                             Err(e) => {
-                                let error_msg =
-                                    format!("Automation service unavailable: {}", e);
+                                let error_msg = format!("Automation service unavailable: {}", e);
                                 let _ = app_handle_clone.emit(
                                     "agent:finished",
                                     serde_json::json!({
@@ -2029,8 +2027,7 @@ pub async fn chat_send_message(
                         ) {
                             Ok(orchestrator) => orchestrator,
                             Err(e) => {
-                                let error_msg =
-                                    format!("Failed to initialize orchestrator: {}", e);
+                                let error_msg = format!("Failed to initialize orchestrator: {}", e);
                                 let _ = app_handle_clone.emit(
                                     "agent:finished",
                                     serde_json::json!({
@@ -2061,8 +2058,7 @@ pub async fn chat_send_message(
                             }
                         };
 
-                        let orchestrator_arc =
-                            Arc::new(tokio::sync::Mutex::new(orchestrator));
+                        let orchestrator_arc = Arc::new(tokio::sync::Mutex::new(orchestrator));
                         *crate::sys::commands::agi::ORCHESTRATOR.lock() =
                             Some(orchestrator_arc.clone());
                         orchestrator_arc

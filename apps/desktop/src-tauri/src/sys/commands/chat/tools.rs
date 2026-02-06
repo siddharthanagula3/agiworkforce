@@ -959,9 +959,8 @@ pub async fn execute_chat_tool(
     use crate::core::llm::ToolCall;
     use std::sync::Arc;
 
-    let handle = app_handle.ok_or_else(|| {
-        anyhow::anyhow!("Tool execution requires desktop app context")
-    })?;
+    let handle =
+        app_handle.ok_or_else(|| anyhow::anyhow!("Tool execution requires desktop app context"))?;
 
     let resolved_tool_name = match tool_name {
         "document_create_docx" => "document_create_word",

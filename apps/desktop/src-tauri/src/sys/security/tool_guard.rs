@@ -660,10 +660,7 @@ impl ToolExecutionGuard {
                 }
             }
             "document_create_pdf" | "document_create_word" | "document_create_excel" => {
-                if let Some(path) = parameters
-                    .get("output_path")
-                    .and_then(|p| p.as_str())
-                {
+                if let Some(path) = parameters.get("output_path").and_then(|p| p.as_str()) {
                     self.validate_file_path(path)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
