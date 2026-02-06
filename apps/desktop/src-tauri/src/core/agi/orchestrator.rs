@@ -615,7 +615,8 @@ impl AgentOrchestrator {
                                             summary_parts.push(result_str.to_string());
                                         }
                                     } else {
-                                        summary_parts.push(format!("Completed: {}", tool_result.tool_id));
+                                        summary_parts
+                                            .push(format!("Completed: {}", tool_result.tool_id));
                                     }
                                 }
                             }

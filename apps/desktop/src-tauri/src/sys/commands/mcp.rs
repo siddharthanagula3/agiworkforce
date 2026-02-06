@@ -94,85 +94,179 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
     // Define well-known MCP servers available for installation
     // This is a curated catalog, not mock data - it represents real packages
     let available_servers = vec![
-        ("filesystem", "Filesystem", "0.2.0",
-         "Secure read/write access to local filesystem",
-         "@modelcontextprotocol/server-filesystem",
-         vec!["read_file", "write_file", "list_directory", "create_directory", "move_file", "search_files"],
-         "automation", 4.9, 45000),
-
-        ("git", "Git", "0.1.0",
-         "Git repository operations and version control",
-         "@modelcontextprotocol/server-git",
-         vec!["git_status", "git_commit", "git_log", "git_diff", "git_branch"],
-         "development", 4.8, 32000),
-
-        ("github", "GitHub", "0.3.1",
-         "Interact with GitHub repositories, issues, and pull requests",
-         "@modelcontextprotocol/server-github",
-         vec!["create_issue", "list_issues", "create_pull_request", "list_prs", "get_file_contents", "push_files"],
-         "development", 4.9, 38000),
-
-        ("google-drive", "Google Drive", "0.1.5",
-         "Access and manage Google Drive files and folders",
-         "@modelcontextprotocol/server-gdrive",
-         vec!["list_files", "read_file", "upload_file", "create_folder", "search_files"],
-         "data", 4.7, 12000),
-
-        ("slack", "Slack", "0.1.2",
-         "Send messages and interact with Slack channels",
-         "@modelcontextprotocol/server-slack",
-         vec!["post_message", "list_channels", "get_channel_history", "create_channel"],
-         "productivity", 4.6, 15200),
-
-        ("terminal", "Terminal", "0.1.0",
-         "Execute shell commands safely in a sandboxed environment",
-         "@modelcontextprotocol/server-shell",
-         vec!["execute_command", "run_script"],
-         "automation", 4.5, 28000),
-
-        ("stripe", "Stripe", "0.1.0",
-         "Access Stripe payment data and manage subscriptions",
-         "@modelcontextprotocol/server-stripe",
-         vec!["list_customers", "get_payment", "list_subscriptions"],
-         "integration", 4.4, 8900),
-
-        ("postgres", "PostgreSQL", "0.1.1",
-         "Query PostgreSQL databases with read-only access",
-         "@modelcontextprotocol/server-postgres",
-         vec!["query", "list_tables", "describe_table", "get_schema"],
-         "data", 4.5, 9700),
-
-        ("memory", "Memory", "0.1.0",
-         "Persistent knowledge graph storage for long-term context",
-         "@modelcontextprotocol/server-memory",
-         vec!["store_entity", "retrieve_entities", "create_relation", "search_knowledge"],
-         "data", 4.3, 5400),
-
-        ("time", "Time", "0.1.0",
-         "Current time, timezones, and date calculations",
-         "@modelcontextprotocol/server-time",
-         vec!["current_time", "convert_timezone", "add_duration", "format_date"],
-         "productivity", 4.1, 3200),
+        (
+            "filesystem",
+            "Filesystem",
+            "0.2.0",
+            "Secure read/write access to local filesystem",
+            "@modelcontextprotocol/server-filesystem",
+            vec![
+                "read_file",
+                "write_file",
+                "list_directory",
+                "create_directory",
+                "move_file",
+                "search_files",
+            ],
+            "automation",
+            4.9,
+            45000,
+        ),
+        (
+            "git",
+            "Git",
+            "0.1.0",
+            "Git repository operations and version control",
+            "@modelcontextprotocol/server-git",
+            vec![
+                "git_status",
+                "git_commit",
+                "git_log",
+                "git_diff",
+                "git_branch",
+            ],
+            "development",
+            4.8,
+            32000,
+        ),
+        (
+            "github",
+            "GitHub",
+            "0.3.1",
+            "Interact with GitHub repositories, issues, and pull requests",
+            "@modelcontextprotocol/server-github",
+            vec![
+                "create_issue",
+                "list_issues",
+                "create_pull_request",
+                "list_prs",
+                "get_file_contents",
+                "push_files",
+            ],
+            "development",
+            4.9,
+            38000,
+        ),
+        (
+            "google-drive",
+            "Google Drive",
+            "0.1.5",
+            "Access and manage Google Drive files and folders",
+            "@modelcontextprotocol/server-gdrive",
+            vec![
+                "list_files",
+                "read_file",
+                "upload_file",
+                "create_folder",
+                "search_files",
+            ],
+            "data",
+            4.7,
+            12000,
+        ),
+        (
+            "slack",
+            "Slack",
+            "0.1.2",
+            "Send messages and interact with Slack channels",
+            "@modelcontextprotocol/server-slack",
+            vec![
+                "post_message",
+                "list_channels",
+                "get_channel_history",
+                "create_channel",
+            ],
+            "productivity",
+            4.6,
+            15200,
+        ),
+        (
+            "terminal",
+            "Terminal",
+            "0.1.0",
+            "Execute shell commands safely in a sandboxed environment",
+            "@modelcontextprotocol/server-shell",
+            vec!["execute_command", "run_script"],
+            "automation",
+            4.5,
+            28000,
+        ),
+        (
+            "stripe",
+            "Stripe",
+            "0.1.0",
+            "Access Stripe payment data and manage subscriptions",
+            "@modelcontextprotocol/server-stripe",
+            vec!["list_customers", "get_payment", "list_subscriptions"],
+            "integration",
+            4.4,
+            8900,
+        ),
+        (
+            "postgres",
+            "PostgreSQL",
+            "0.1.1",
+            "Query PostgreSQL databases with read-only access",
+            "@modelcontextprotocol/server-postgres",
+            vec!["query", "list_tables", "describe_table", "get_schema"],
+            "data",
+            4.5,
+            9700,
+        ),
+        (
+            "memory",
+            "Memory",
+            "0.1.0",
+            "Persistent knowledge graph storage for long-term context",
+            "@modelcontextprotocol/server-memory",
+            vec![
+                "store_entity",
+                "retrieve_entities",
+                "create_relation",
+                "search_knowledge",
+            ],
+            "data",
+            4.3,
+            5400,
+        ),
+        (
+            "time",
+            "Time",
+            "0.1.0",
+            "Current time, timezones, and date calculations",
+            "@modelcontextprotocol/server-time",
+            vec![
+                "current_time",
+                "convert_timezone",
+                "add_duration",
+                "format_date",
+            ],
+            "productivity",
+            4.1,
+            3200,
+        ),
     ];
 
     let mut registry: Vec<RegistryPackage> = available_servers
         .into_iter()
-        .map(|(id, name, version, description, npm_package, tools, category, rating, downloads)| {
-            RegistryPackage {
-                id: format!("mcp-{}", id),
-                name: name.to_string(),
-                version: version.to_string(),
-                description: description.to_string(),
-                author: "Model Context Protocol".to_string(),
-                category: category.to_string(),
-                npm_package: Some(npm_package.to_string()),
-                github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-                tools: tools.into_iter().map(String::from).collect(),
-                rating,
-                downloads,
-                installed: installed_servers.contains(id),
-            }
-        })
+        .map(
+            |(id, name, version, description, npm_package, tools, category, rating, downloads)| {
+                RegistryPackage {
+                    id: format!("mcp-{}", id),
+                    name: name.to_string(),
+                    version: version.to_string(),
+                    description: description.to_string(),
+                    author: "Model Context Protocol".to_string(),
+                    category: category.to_string(),
+                    npm_package: Some(npm_package.to_string()),
+                    github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+                    tools: tools.into_iter().map(String::from).collect(),
+                    rating,
+                    downloads,
+                    installed: installed_servers.contains(id),
+                }
+            },
+        )
         .collect();
 
     let known_ids: HashSet<String> = registry.iter().map(|pkg| pkg.id.clone()).collect();
@@ -915,8 +1009,9 @@ pub async fn mcp_install_server(
         }),
         risk_level: RiskLevel::High,
         safety_tier: ToolSafetyTier::RequiresExplicitApproval,
-        reason: "Installing an MCP server adds a new executable command to the local MCP configuration."
-            .to_string(),
+        reason:
+            "Installing an MCP server adds a new executable command to the local MCP configuration."
+                .to_string(),
         reversible: true,
         undo_description: Some("Remove the MCP server configuration".to_string()),
     };
@@ -932,7 +1027,9 @@ pub async fn mcp_install_server(
     // Add to configuration
     let updated_config = {
         let mut config = state.config.lock();
-        config.mcp_servers.insert(server_name.clone(), server_config);
+        config
+            .mcp_servers
+            .insert(server_name.clone(), server_config);
         config.clone()
     };
 
