@@ -346,6 +346,22 @@ pub fn run() {
             let mcp_state = McpState::new();
             app.manage(mcp_state);
 
+            // Initialize MCP system and auto-connect configured servers
+            let app_clone = app.handle().clone();
+            async_runtime::spawn(async move {
+                let mcp_state_ref: tauri::State<McpState> = app_clone.state();
+                match crate::sys::commands::mcp::mcp_initialize(mcp_state_ref, app_clone.clone())
+                    .await
+                {
+                    Ok(message) => {
+                        tracing::info!("MCP initialization: {}", message);
+                    }
+                    Err(e) => {
+                        tracing::error!("MCP initialization failed: {}. MCP tools will not be available.", e);
+                    }
+                }
+            });
+
             // MCP OAuth state for handling OAuth flows (GitHub, Google Drive, Slack)
             app.manage(McpOAuthState::new());
 
@@ -383,6 +399,27 @@ pub fn run() {
             // Research orchestration state for multi-source investigation
             app.manage(ResearchState::new());
             tracing::info!("Research state initialized");
+
+            // Initialize AGI Orchestrator on startup for agent mode routing
+            let app_for_orchestrator = app.handle().clone();
+            async_runtime::spawn(async move {
+                let automation_state_ref: tauri::State<
+                    std::sync::Arc<Option<crate::automation::AutomationService>>,
+                > = app_for_orchestrator.state();
+                let llm_state_ref: tauri::State<LLMState> = app_for_orchestrator.state();
+                match crate::sys::commands::orchestrator_init_default(
+                    automation_state_ref,
+                    llm_state_ref,
+                    app_for_orchestrator.clone()
+                ).await {
+                    Ok(_) => {
+                        tracing::info!("AGI Orchestrator initialized successfully");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to initialize AGI Orchestrator: {}. Agent mode may not work until manually initialized.", e);
+                    }
+                }
+            });
 
             // Messaging state for Discord, Telegram, Signal integrations
             app.manage(crate::sys::commands::messaging::MessagingState::default());
@@ -893,6 +930,7 @@ pub fn run() {
             crate::sys::commands::browser_get_dom_snapshot,
             crate::sys::commands::browser_get_console_logs,
             crate::sys::commands::browser_get_network_activity,
+            crate::features::search::web_search::web_search,
 
 
             crate::sys::commands::find_element_semantic,
@@ -1260,6 +1298,10 @@ pub fn run() {
             crate::sys::commands::memory_get_session_context,
             crate::sys::commands::memory_export_all,
             crate::sys::commands::memory_cleanup_logs,
+            // Frontend compatibility aliases
+            crate::sys::commands::memory_store,
+            crate::sys::commands::memory_delete,
+            crate::sys::commands::memory_list_all,
             // Memory decay commands
             crate::sys::commands::memory_run_decay,
             crate::sys::commands::memory_get_decay_config,
@@ -1318,6 +1360,7 @@ pub fn run() {
             crate::sys::commands::mcp_initialize,
             crate::sys::commands::mcp_list_servers,
             crate::sys::commands::mcp_get_registry,
+            crate::sys::commands::mcp_install_server,
             crate::sys::commands::mcp_connect_server,
             crate::sys::commands::mcp_disconnect_server,
             crate::sys::commands::mcp_list_tools,
@@ -1410,8 +1453,6 @@ pub fn run() {
             crate::sys::commands::voice_transcribe_blob,
             crate::sys::commands::voice_configure,
             crate::sys::commands::voice_get_settings,
-            crate::sys::commands::voice_start_recording,
-            crate::sys::commands::voice_stop_recording,
             crate::sys::commands::voice_check_local_whisper,
 
 

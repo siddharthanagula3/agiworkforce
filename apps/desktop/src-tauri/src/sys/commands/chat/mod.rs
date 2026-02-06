@@ -393,6 +393,25 @@ fn calculate_conversation_score(content: &str) -> f32 {
     score.min(1.0)
 }
 
+/// Detect if the user is asking about what is visible on their screen.
+fn should_attach_screen_context(content: &str) -> bool {
+    let content_lower = content.to_lowercase();
+    let patterns = [
+        "what is on my screen",
+        "what's on my screen",
+        "what is on the screen",
+        "what's on the screen",
+        "see my screen",
+        "look at my screen",
+        "what's visible",
+        "what is visible",
+        "screenshot",
+        "screen capture",
+    ];
+
+    patterns.iter().any(|p| content_lower.contains(p))
+}
+
 /// Legacy function for backward compatibility
 /// Returns true if the message has action intent
 fn detect_agentic_intent(content: &str) -> bool {
@@ -1138,6 +1157,8 @@ pub async fn chat_send_message(
     >,
     mcp_state: State<'_, crate::sys::commands::mcp::McpState>,
     project_context_state: State<'_, crate::sys::commands::project_context::ProjectContextState>,
+    memory_state: State<'_, crate::sys::commands::memory::MemoryState>,
+    _research_state: State<'_, crate::sys::commands::research::ResearchState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -1202,63 +1223,15 @@ pub async fn chat_send_message(
         }
     }
 
-    let use_agent = request
+    let agent_mode = request
         .enable_agent_mode
         .unwrap_or_else(|| detect_agentic_intent(&request.content));
 
-    if use_agent {
-        info!("[Chat] Routing to AGI Orchestrator");
+    let is_deep_research =
+        matches!(request.focus_mode.as_deref(), Some("deep-research"))
+            || request.research_task_id.is_some();
 
-        use crate::sys::commands::agi::ORCHESTRATOR;
-        let orchestrator_arc = {
-            let guard = ORCHESTRATOR.lock();
-            guard.as_ref().cloned()
-        }
-        .ok_or_else(|| "AGI Orchestrator not initialized".to_string())?;
-
-        let orchestrator = orchestrator_arc.lock().await;
-
-        let _ = app_handle.emit(
-            "agent:thinking",
-            serde_json::json!({
-                "status": "Thinking...",
-                "instruction": request.content
-            }),
-        );
-
-        match orchestrator
-            .process_instruction(&request.content, request.attachments.clone())
-            .await
-        {
-            Ok(result) => {
-                let _ = app_handle.emit(
-                    "agent:finished",
-                    serde_json::json!({
-                        "success": result.success,
-                        "summary": result.summary
-                    }),
-                );
-
-                return Ok(ChatSendMessageResponse {
-                    conversation: Conversation::default(),
-                    user_message: Message::default(),
-                    assistant_message: Message {
-                        content: result.summary,
-                        ..Message::default()
-                    },
-                    stats: ConversationStats {
-                        message_count: 0,
-                        total_tokens: 0,
-                        total_cost: 0.0,
-                    },
-                    last_message: None,
-                    credits: None,
-                });
-            }
-            Err(e) => return Err(format!("Orchestration failed: {e}")),
-        }
-    }
-
+    use crate::core::agent::prompt_engineer::PromptEngineer;
     use crate::core::llm::{
         cost_calculator::CostCalculator,
         llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
@@ -1388,80 +1361,48 @@ pub async fn chat_send_message(
     // Build conversation messages, prepending system prompt
     let mut llm_messages: Vec<ChatMessage> = Vec::new();
 
-    // Default system prompt - inspired by ChatGPT, Claude, Gemini, Copilot system prompt patterns
-    const DEFAULT_SYSTEM_PROMPT: &str = r#"You are AGI Workforce, a desktop AI assistant created by AGI AUTOMATION LLC. You help users automate tasks on their computer through natural conversation.
-
-AGI AUTOMATION LLC was founded by Siddhartha Nagula, who serves as Founder & CEO. The entire AGI Workforce platform was built solo by Siddhartha.
-
-## Personality & Tone
-
-- Be direct, warm, and concise. Avoid filler, flattery, and sycophancy.
-- Never open with "Certainly!", "Of course!", "Absolutely!", "Great question!", or similar.
-- Never end responses with opt-in questions like "Would you like me to...", "Shall I...", or "Do you want me to..." unless genuinely needed for ambiguous tasks.
-- Match your response length to the complexity of the request:
-  - Simple greetings ("hi", "hello", "hey") → respond naturally in 1-2 sentences. Do NOT list your capabilities unless asked.
-  - Quick questions → give a direct answer, no preamble.
-  - Complex tasks → break down your approach, then execute.
-- Use plain language. Most users are non-technical. Avoid jargon, technical codes, and stack traces.
-- When something fails, explain what happened and what you'll try next - in simple terms.
-- Be honest about limitations. If you can't do something, say so directly.
-
-## Response Formatting
-
-- Use Markdown for structured content: headings, bullet points, bold, code blocks.
-- Never start responses with "Here is...", "Based on...", "I've...", or "I found..." - just present the content directly.
-- Keep responses scannable. Use bullet points and short paragraphs over walls of text.
-- Only use emojis if the user uses them first or explicitly asks for them.
-
-## Capabilities
-
-You have tools for: file operations (read, write, create, delete, list), document creation (Word, Excel, PDF), media generation (images, videos - Pro/Max plans), web search and browsing, terminal/shell command execution, persistent memory, and integrations (Gmail, GitHub, Slack, Google Drive, and more when configured).
-
-Only describe these capabilities in detail when the user asks "what can you do?" or similar. Otherwise, just use the tools directly to complete the task.
-
-Media generation requires a Pro or Max plan. If a Hobby user requests it, let them know briefly.
-
-## Tool Usage Rules
-
-ALWAYS use your actual tools to perform actions. NEVER simulate, fabricate, or hallucinate tool output.
-
-- **Files**: Call file tools (file_read, file_write, file_list, file_delete). Never make up file contents or directory listings.
-- **Terminal**: Call terminal_execute for ALL shell commands. Commands run on the user's local computer, not a sandbox. Never fabricate command output.
-- **Web**: Call search_web for current information. Never invent search results.
-- **Browser**: Call browser tools (browser_navigate, browser_click, browser_extract). Never simulate browser interactions.
-- **Multiple tools**: When you need to perform several independent operations, call them in parallel for efficiency.
-
-If a user asks "What files are in my Desktop?", call file_list on ~/Desktop. Do not guess.
-
-## Anti-Hallucination Rules
-
-CRITICAL: Be strictly honest. Never make up information, even if it sounds plausible.
-
-- **Unknown information**: If you don't know something, say "I don't have this information" instead of guessing or making plausible-sounding claims.
-- **Web search results**: Only report what you actually found in search results. Do NOT embellish, assume, or fill in gaps with invented details.
-- **Dates and specifics**: Never make up specific dates, timelines, or numbers unless you have verified them from search results or files.
-- **Sources**: Never claim something is "mentioned on X/Twitter" or "on the website" unless you actually accessed and verified that source.
-- **Company/product info**: If asked about AGI Workforce's history beyond what's in this system prompt, admit you don't have that information rather than inventing a backstory.
-
-When web search returns no useful results, say "I couldn't find information about [topic]" instead of fabricating an answer.
-
-## Autonomy & Safety
-
-- Execute tasks proactively. Break complex goals into steps and complete them without asking for permission at each step.
-- All actions are reversible. If something goes wrong, the user can undo.
-- Report progress and results clearly. When you create or save files, tell the user the exact path.
-- If a task is genuinely ambiguous (multiple valid interpretations), ask one clarifying question - then proceed.
-- Never perform destructive operations (mass deletion, system changes) without confirming with the user first."#;
+    let default_system_prompt = PromptEngineer::default_system_prompt();
 
     // Add the default system prompt
     llm_messages.push(ChatMessage {
         role: "system".to_string(),
-        content: DEFAULT_SYSTEM_PROMPT.to_string(),
+        content: default_system_prompt,
         tool_calls: None,
         tool_call_id: None,
         multimodal_content: None,
     });
     debug!("[Chat] Added default AGI Workforce system prompt");
+
+    // Load relevant memories and inject into context
+    let memory_handler = memory_handler::ChatMemoryHandler::new(Some(memory_state.manager.clone()))
+        .map_err(|e| format!("Failed to initialize memory handler: {e}"))?;
+
+    match memory_handler.load_project_memories(request.project_folder.as_deref()) {
+        Ok(memory_response) => {
+            if memory_response.injection_result.has_relevant_memories {
+                // Inject memory context as a system message
+                llm_messages.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: memory_response.system_prompt_enhancement,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                });
+                info!(
+                    "[Chat] Injected {} memories into context (Decisions: {}, Preferences: {}, Facts: {})",
+                    memory_response.injection_result.memories_loaded,
+                    memory_response.injection_result.summary.decisions,
+                    memory_response.injection_result.summary.preferences,
+                    memory_response.injection_result.summary.facts
+                );
+            } else {
+                debug!("[Chat] No relevant memories found for this conversation");
+            }
+        }
+        Err(e) => {
+            warn!("[Chat] Failed to load memories (non-fatal): {}", e);
+        }
+    }
 
     // Add OS/platform context so the LLM knows the user's operating system
     let os_name = std::env::consts::OS;
@@ -1538,6 +1479,8 @@ When web search returns no useful results, say "I couldn't find information abou
         }
     };
 
+    let mut project_context_for_agent: Option<String> = None;
+
     if let Some(ref folder) = effective_folder {
         // Extract project name from folder path
         let project_name = std::path::Path::new(folder)
@@ -1583,6 +1526,8 @@ When web search returns no useful results, say "I couldn't find information abou
             }
         }
 
+        project_context_for_agent = Some(project_context_content.clone());
+
         llm_messages.push(ChatMessage {
             role: "system".to_string(),
             content: project_context_content,
@@ -1614,7 +1559,7 @@ When web search returns no useful results, say "I couldn't find information abou
     }
 
     // Process attachments for multimodal content if present
-    let multimodal_parts: Option<Vec<ContentPart>> =
+    let mut multimodal_parts: Option<Vec<ContentPart>> =
         if let Some(ref attachments) = request.attachments {
             if !attachments.is_empty() {
                 // Check if the model supports vision
@@ -1646,8 +1591,47 @@ When web search returns no useful results, say "I couldn't find information abou
             None
         };
 
+    if multimodal_parts.is_none() && should_attach_screen_context(&request.content) {
+        if model_likely_supports_vision(&model) {
+            use crate::automation::screen::capture_primary_screen;
+            use image::{DynamicImage, ImageFormat as ImageOutputFormat};
+            use std::io::Cursor;
+
+            match capture_primary_screen() {
+                Ok(capture) => {
+                    let mut png_bytes = Vec::new();
+                    let dynamic = DynamicImage::ImageRgba8(capture.pixels);
+                    if dynamic
+                        .write_to(&mut Cursor::new(&mut png_bytes), ImageOutputFormat::Png)
+                        .is_ok()
+                    {
+                        multimodal_parts = Some(vec![ContentPart::Image {
+                            image: ImageInput {
+                                data: png_bytes,
+                                format: ImageFormat::Png,
+                                detail: ImageDetail::Auto,
+                            },
+                        }]);
+                        info!("[Chat] Attached screen context for vision request");
+                    } else {
+                        warn!("[Chat] Failed to encode screen capture");
+                    }
+                }
+                Err(e) => {
+                    warn!("[Chat] Failed to capture screen context: {}", e);
+                }
+            }
+        } else {
+            warn!(
+                "[Chat] Screen context requested but model '{}' may not support vision",
+                model
+            );
+        }
+    }
+
     // Extract text from document attachments (non-image files)
     // This enables full document support like ChatGPT, Claude, and Gemini
+    let mut attachment_text_context: Option<String> = None;
     if let Some(ref attachments) = request.attachments {
         let extracted_text = extract_text_from_attachments(attachments);
         if !extracted_text.is_empty() {
@@ -1661,6 +1645,8 @@ When web search returns no useful results, say "I couldn't find information abou
             }
 
             document_context.push_str("Use the content above to help answer the user's question. You can reference specific parts of the files in your response.\n");
+
+            attachment_text_context = Some(document_context.clone());
 
             llm_messages.push(ChatMessage {
                 role: "system".to_string(),
@@ -1676,6 +1662,16 @@ When web search returns no useful results, say "I couldn't find information abou
                 extracted_text.iter().map(|(_, c)| c.len()).sum::<usize>()
             );
         }
+    }
+
+    let mut agent_instruction = request.content.clone();
+    if let Some(ref context) = project_context_for_agent {
+        agent_instruction.push_str("\n\n");
+        agent_instruction.push_str(context);
+    }
+    if let Some(ref docs) = attachment_text_context {
+        agent_instruction.push_str("\n\n");
+        agent_instruction.push_str(docs);
     }
 
     // Add conversation history (all messages except the last user message)
@@ -1770,6 +1766,479 @@ When web search returns no useful results, say "I couldn't find information abou
             }),
         );
 
+        if is_deep_research {
+            use crate::core::research::{ResearchMode, ResearchOrchestrator};
+
+            let research_task_id = request.research_task_id.clone().unwrap_or_else(|| {
+                format!(
+                    "research-{}-{}",
+                    Utc::now().timestamp_millis(),
+                    uuid::Uuid::new_v4()
+                        .to_string()
+                        .split('-')
+                        .next()
+                        .unwrap_or("x")
+                )
+            });
+
+            let query = request.content.clone();
+            let app_handle_clone = app_handle.clone();
+            let frontend_message_id_clone = frontend_message_id.clone();
+            let conversation_id_clone = conversation.id;
+            let db_arc_clone = db_arc.clone();
+            let user_id_clone = request.user_id.clone();
+            let model_clone = model.clone();
+            let provider_enum_clone = provider_enum;
+            let router_clone = _llm_state.router.clone();
+            let research_config = _research_state.config.read().await.clone();
+
+            tauri::async_runtime::spawn(async move {
+                let _ = app_handle_clone.emit(
+                    "chat:stream-chunk",
+                    serde_json::json!({
+                        "conversation_id": conversation_id_clone,
+                        "message_id": frontend_message_id_clone,
+                        "delta": "Starting deep research...\n",
+                        "content": "Starting deep research...\n",
+                        "has_pending_messages": has_pending_messages()
+                    }),
+                );
+
+                let orchestrator = match ResearchOrchestrator::new(router_clone, research_config) {
+                    Ok(orchestrator) => orchestrator
+                        .with_app_handle(app_handle_clone.clone())
+                        .with_task_id(Some(research_task_id.clone())),
+                    Err(e) => {
+                        let error_msg = format!("Failed to initialize research orchestrator: {e}");
+                        let _ = app_handle_clone.emit(
+                            "research:error",
+                            serde_json::json!({
+                                "task_id": research_task_id,
+                                "query": query,
+                                "error": error_msg,
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-error",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "error": "Failed to start deep research"
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "content": "Failed to start deep research.",
+                                "error": true,
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+                        return;
+                    }
+                };
+
+                let result = orchestrator.research(&query, ResearchMode::Deep).await;
+                match result {
+                    Ok(result) => {
+                        let content = result.report.clone();
+
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-chunk",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "delta": content.clone(),
+                                "content": content,
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+
+                        let assistant_message = {
+                            let conn = match db_arc_clone.connection() {
+                                Ok(conn) => conn,
+                                Err(e) => {
+                                    let _ = app_handle_clone.emit(
+                                        "chat:stream-error",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "error": format!("Database error: {e}")
+                                        }),
+                                    );
+                                    return;
+                                }
+                            };
+
+                            let msg = Message {
+                                id: 0,
+                                conversation_id: conversation_id_clone,
+                                user_id: user_id_clone.clone(),
+                                role: MessageRole::Assistant,
+                                content: result.report.clone(),
+                                tokens: None,
+                                cost: None,
+                                provider: provider_enum_clone.map(|p| p.as_string().to_string()),
+                                model: Some(model_clone.clone()),
+                                created_at: Utc::now(),
+                            };
+                            match repository::create_message(&conn, &msg) {
+                                Ok(id) => match repository::get_message(&conn, id) {
+                                    Ok(msg) => msg,
+                                    Err(_) => return,
+                                },
+                                Err(_) => return,
+                            }
+                        };
+
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "backend_message_id": assistant_message.id,
+                                "pending_messages_count": pending_messages_count(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+                    }
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        let _ = app_handle_clone.emit(
+                            "research:error",
+                            serde_json::json!({
+                                "task_id": research_task_id,
+                                "query": query,
+                                "error": error_msg.clone(),
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-error",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "error": error_msg
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "content": "Deep research failed.",
+                                "error": true,
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+                    }
+                }
+            });
+
+            return Ok(ChatSendMessageResponse {
+                conversation,
+                user_message,
+                assistant_message: Message::default(),
+                stats: ConversationStats {
+                    message_count: 0,
+                    total_tokens: 0,
+                    total_cost: 0.0,
+                },
+                last_message: None,
+                credits: None,
+            });
+        }
+
+        if agent_mode {
+            use crate::automation::AutomationService;
+            use crate::core::agi::{AGIConfig, AgentOrchestrator};
+
+            let app_handle_clone = app_handle.clone();
+            let frontend_message_id_clone = frontend_message_id.clone();
+            let conversation_id_clone = conversation.id;
+            let db_arc_clone = db_arc.clone();
+            let user_id_clone = request.user_id.clone();
+            let model_clone = model.clone();
+            let provider_enum_clone = provider_enum;
+            let router_clone = _llm_state.router.clone();
+            let preferences_clone = preferences.clone();
+            let attachments_clone = request.attachments.clone();
+            let agent_instruction_clone = agent_instruction.clone();
+            let llm_messages_clone = llm_request.messages.clone();
+
+            tauri::async_runtime::spawn(async move {
+                let start_time = std::time::Instant::now();
+                let _ = app_handle_clone.emit(
+                    "agent:thinking",
+                    serde_json::json!({
+                        "thinking": true,
+                        "message": "Executing agent plan..."
+                    }),
+                );
+
+                let orchestrator_arc = {
+                    let guard = crate::sys::commands::agi::ORCHESTRATOR.lock();
+                    guard.clone()
+                };
+
+                let orchestrator_arc = match orchestrator_arc {
+                    Some(orch) => orch,
+                    None => {
+                        let automation = match AutomationService::new() {
+                            Ok(service) => Arc::new(service),
+                            Err(e) => {
+                                let error_msg =
+                                    format!("Automation service unavailable: {}", e);
+                                let _ = app_handle_clone.emit(
+                                    "agent:finished",
+                                    serde_json::json!({
+                                        "success": false,
+                                        "error": error_msg,
+                                        "duration_ms": start_time.elapsed().as_millis() as u64
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": "Agent mode requires automation permissions"
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-end",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "content": "Agent mode is unavailable (missing automation permissions).",
+                                        "error": true,
+                                        "has_pending_messages": has_pending_messages()
+                                    }),
+                                );
+                                return;
+                            }
+                        };
+
+                        let orchestrator = match AgentOrchestrator::new(
+                            4,
+                            AGIConfig::default(),
+                            router_clone.clone(),
+                            automation,
+                            Some(app_handle_clone.clone()),
+                        ) {
+                            Ok(orchestrator) => orchestrator,
+                            Err(e) => {
+                                let error_msg =
+                                    format!("Failed to initialize orchestrator: {}", e);
+                                let _ = app_handle_clone.emit(
+                                    "agent:finished",
+                                    serde_json::json!({
+                                        "success": false,
+                                        "error": error_msg,
+                                        "duration_ms": start_time.elapsed().as_millis() as u64
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": "Failed to start agent mode"
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-end",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "content": "Failed to start agent mode.",
+                                        "error": true,
+                                        "has_pending_messages": has_pending_messages()
+                                    }),
+                                );
+                                return;
+                            }
+                        };
+
+                        let orchestrator_arc =
+                            Arc::new(tokio::sync::Mutex::new(orchestrator));
+                        *crate::sys::commands::agi::ORCHESTRATOR.lock() =
+                            Some(orchestrator_arc.clone());
+                        orchestrator_arc
+                    }
+                };
+
+                let result = {
+                    let orchestrator = orchestrator_arc.lock().await;
+                    orchestrator
+                        .process_instruction(&agent_instruction_clone, attachments_clone)
+                        .await
+                };
+
+                let _ = app_handle_clone.emit(
+                    "agent:thinking",
+                    serde_json::json!({
+                        "thinking": false,
+                    }),
+                );
+
+                match result {
+                    Ok(orchestrator_result) => {
+                        let success = orchestrator_result.success;
+                        let summary = orchestrator_result.summary;
+                        let mut final_content = summary.clone();
+                        let mut final_tokens: Option<u32> = None;
+                        let mut final_cost: Option<f64> = None;
+
+                        if success {
+                            let mut messages = llm_messages_clone.clone();
+                            messages.push(crate::core::llm::ChatMessage {
+                                role: "system".to_string(),
+                                content: format!(
+                                    "Agent execution summary:\n{}\n\nProvide a clear final response to the user using this summary.",
+                                    summary
+                                ),
+                                tool_calls: None,
+                                tool_call_id: None,
+                                multimodal_content: None,
+                            });
+
+                            let final_request = crate::core::llm::LLMRequest {
+                                messages,
+                                model: model_clone.clone(),
+                                temperature: Some(0.7),
+                                max_tokens: Some(4096),
+                                stream: false,
+                                tools: None,
+                                tool_choice: None,
+                                thinking_mode: None,
+                                ..Default::default()
+                            };
+
+                            let router = router_clone.read().await;
+                            let candidates = router.candidates(&final_request, &preferences_clone);
+                            if let Some(candidate) = candidates.first() {
+                                match router.invoke_candidate(candidate, &final_request).await {
+                                    Ok(outcome) => {
+                                        final_content = outcome.response.content.clone();
+                                        final_tokens = outcome.response.tokens;
+                                        final_cost = outcome.response.cost;
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "[Chat] Agent response synthesis failed: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-chunk",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "delta": final_content.clone(),
+                                "content": final_content.clone(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+
+                        let assistant_message = {
+                            let conn = match db_arc_clone.connection() {
+                                Ok(conn) => conn,
+                                Err(_) => return,
+                            };
+
+                            let msg = Message {
+                                id: 0,
+                                conversation_id: conversation_id_clone,
+                                user_id: user_id_clone.clone(),
+                                role: MessageRole::Assistant,
+                                content: final_content.clone(),
+                                tokens: final_tokens.map(|t| t as i32),
+                                cost: final_cost,
+                                provider: provider_enum_clone.map(|p| p.as_string().to_string()),
+                                model: Some(model_clone.clone()),
+                                created_at: Utc::now(),
+                            };
+                            match repository::create_message(&conn, &msg) {
+                                Ok(id) => match repository::get_message(&conn, id) {
+                                    Ok(msg) => msg,
+                                    Err(_) => return,
+                                },
+                                Err(_) => return,
+                            }
+                        };
+
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "backend_message_id": assistant_message.id,
+                                "pending_messages_count": pending_messages_count(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+
+                        let _ = app_handle_clone.emit(
+                            "agent:finished",
+                            serde_json::json!({
+                                "success": success,
+                                "result": final_content,
+                                "duration_ms": start_time.elapsed().as_millis() as u64
+                            }),
+                        );
+                    }
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        let _ = app_handle_clone.emit(
+                            "agent:finished",
+                            serde_json::json!({
+                                "success": false,
+                                "error": error_msg,
+                                "duration_ms": start_time.elapsed().as_millis() as u64
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-error",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "error": "Agent execution failed"
+                            }),
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "content": "Agent execution failed.",
+                                "error": true,
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+                    }
+                }
+            });
+
+            return Ok(ChatSendMessageResponse {
+                conversation,
+                user_message,
+                assistant_message: Message::default(),
+                stats: ConversationStats {
+                    message_count: 0,
+                    total_tokens: 0,
+                    total_cost: 0.0,
+                },
+                last_message: None,
+                credits: None,
+            });
+        }
+
         // Clone all needed variables for the spawned task
         let app_handle_clone = app_handle.clone();
         let frontend_message_id_clone = frontend_message_id.clone();
@@ -1781,6 +2250,8 @@ When web search returns no useful results, say "I couldn't find information abou
         let provider_enum_clone = provider_enum;
         let model_clone = model.clone();
         let user_id_clone = request.user_id.clone();
+        let project_folder_clone = request.project_folder.clone();
+        let conversation_mode_clone = request.conversation_mode.clone();
 
         // Spawn streaming task to avoid blocking the command response
         // Return immediately - events will handle the streaming updates
@@ -1965,6 +2436,8 @@ When web search returns no useful results, say "I couldn't find information abou
                                 &tc.name,
                                 &tc.arguments,
                                 Some(&app_handle_clone),
+                                project_folder_clone.clone(),
+                                conversation_mode_clone.clone(),
                             )
                             .await;
 
@@ -2220,6 +2693,179 @@ When web search returns no useful results, say "I couldn't find information abou
         });
     }
 
+    if is_deep_research {
+        use crate::core::research::{ResearchMode, ResearchOrchestrator};
+
+        let research_config = _research_state.config.read().await.clone();
+        let orchestrator = ResearchOrchestrator::new(_llm_state.router.clone(), research_config)
+            .map_err(|e| format!("Failed to initialize research: {}", e))?
+            .with_app_handle(app_handle.clone())
+            .with_task_id(request.research_task_id.clone());
+
+        let result = orchestrator
+            .research(&request.content, ResearchMode::Deep)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let assistant_message = {
+            let conn = _db.connection()?;
+            let msg = Message {
+                id: 0,
+                conversation_id: conversation.id,
+                role: MessageRole::Assistant,
+                content: result.report.clone(),
+                tokens: None,
+                cost: None,
+                provider: provider_enum.map(|p| p.as_string().to_string()),
+                model: Some(model.clone()),
+                created_at: Utc::now(),
+                user_id: conversation.user_id.clone(),
+            };
+            let id = repository::create_message(&conn, &msg)
+                .map_err(|e| format!("Failed to save assistant message: {e}"))?;
+            repository::get_message(&conn, id)
+                .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
+        };
+
+        let stats = {
+            let conn = _db.connection()?;
+            let messages = repository::list_messages(&conn, conversation.id)
+                .map_err(|e| format!("Failed to compute stats: {e}"))?;
+            ConversationStats {
+                message_count: messages.len(),
+                total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+                total_cost: messages.iter().filter_map(|m| m.cost).sum(),
+            }
+        };
+
+        return Ok(ChatSendMessageResponse {
+            conversation,
+            user_message,
+            assistant_message,
+            stats,
+            last_message: Some(result.report),
+            credits: None,
+        });
+    }
+
+    if agent_mode {
+        use crate::automation::AutomationService;
+        use crate::core::agi::{AGIConfig, AgentOrchestrator};
+
+        let orchestrator_arc = {
+            let guard = crate::sys::commands::agi::ORCHESTRATOR.lock();
+            guard.clone()
+        };
+
+        let orchestrator_arc = match orchestrator_arc {
+            Some(orch) => orch,
+            None => {
+                let automation = AutomationService::new()
+                    .map_err(|e| format!("Automation service unavailable: {}", e))?;
+                let orchestrator = AgentOrchestrator::new(
+                    4,
+                    AGIConfig::default(),
+                    _llm_state.router.clone(),
+                    Arc::new(automation),
+                    Some(app_handle.clone()),
+                )
+                .map_err(|e| format!("Failed to initialize orchestrator: {}", e))?;
+
+                let orchestrator_arc = Arc::new(tokio::sync::Mutex::new(orchestrator));
+                *crate::sys::commands::agi::ORCHESTRATOR.lock() = Some(orchestrator_arc.clone());
+                orchestrator_arc
+            }
+        };
+
+        let orchestrator_result = {
+            let orchestrator = orchestrator_arc.lock().await;
+            orchestrator
+                .process_instruction(&agent_instruction, request.attachments.clone())
+                .await
+                .map_err(|e| format!("Agent execution failed: {}", e))?
+        };
+
+        let mut final_content = orchestrator_result.summary.clone();
+        let mut final_tokens: Option<u32> = None;
+        let mut final_cost: Option<f64> = None;
+
+        if orchestrator_result.success {
+            let mut messages = llm_request.messages.clone();
+            messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: format!(
+                    "Agent execution summary:\n{}\n\nProvide a clear final response to the user using this summary.",
+                    orchestrator_result.summary
+                ),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            });
+
+            let final_request = LLMRequest {
+                messages,
+                model: model.clone(),
+                temperature: Some(0.7),
+                max_tokens: Some(4096),
+                stream: false,
+                tools: None,
+                tool_choice: None,
+                thinking_mode: None,
+                ..Default::default()
+            };
+
+            let router = _llm_state.router.read().await;
+            let candidates = router.candidates(&final_request, &preferences);
+            if let Some(candidate) = candidates.first() {
+                if let Ok(outcome) = router.invoke_candidate(candidate, &final_request).await {
+                    final_content = outcome.response.content.clone();
+                    final_tokens = outcome.response.tokens;
+                    final_cost = outcome.response.cost;
+                }
+            }
+        }
+
+        let assistant_message = {
+            let conn = _db.connection()?;
+            let msg = Message {
+                id: 0,
+                conversation_id: conversation.id,
+                role: MessageRole::Assistant,
+                content: final_content.clone(),
+                tokens: final_tokens.map(|t| t as i32),
+                cost: final_cost,
+                provider: provider_enum.map(|p| p.as_string().to_string()),
+                model: Some(model.clone()),
+                created_at: Utc::now(),
+                user_id: conversation.user_id.clone(),
+            };
+            let id = repository::create_message(&conn, &msg)
+                .map_err(|e| format!("Failed to save assistant message: {e}"))?;
+            repository::get_message(&conn, id)
+                .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
+        };
+
+        let stats = {
+            let conn = _db.connection()?;
+            let messages = repository::list_messages(&conn, conversation.id)
+                .map_err(|e| format!("Failed to compute stats: {e}"))?;
+            ConversationStats {
+                message_count: messages.len(),
+                total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+                total_cost: messages.iter().filter_map(|m| m.cost).sum(),
+            }
+        };
+
+        return Ok(ChatSendMessageResponse {
+            conversation,
+            user_message,
+            assistant_message,
+            stats,
+            last_message: Some(final_content),
+            credits: None,
+        });
+    }
+
     // Ensure ManagedCloud provider is initialized if user is authenticated
     // This handles cases where provider wasn't initialized on startup
     {
@@ -2422,6 +3068,8 @@ When web search returns no useful results, say "I couldn't find information abou
                             &tool_call.name,
                             &tool_call.arguments,
                             Some(&app_handle),
+                            request.project_folder.clone(),
+                            request.conversation_mode.clone(),
                         )
                         .await;
 
@@ -2543,6 +3191,11 @@ When web search returns no useful results, say "I couldn't find information abou
                         total_cost: messages.iter().filter_map(|m| m.cost).sum(),
                     }
                 };
+
+                // Auto-detect and save architectural decisions from the conversation
+                if let Err(e) = memory_handler.detect_and_save_decision(&final_content) {
+                    warn!("[Chat] Failed to auto-save decision (non-fatal): {}", e);
+                }
 
                 return Ok(ChatSendMessageResponse {
                     conversation,

@@ -21,9 +21,6 @@ struct EndpointStatus {
 
 /// Essential endpoints to check
 const ENDPOINTS: &[(&str, &str)] = &[
-    ("Anthropic API", "https://api.anthropic.com"),
-    ("OpenAI API", "https://api.openai.com"),
-    ("Google AI API", "https://generativelanguage.googleapis.com"),
     ("AGI Workforce API", "https://api.agiworkforce.com"),
     ("GitHub (for MCP)", "https://api.github.com"),
 ];

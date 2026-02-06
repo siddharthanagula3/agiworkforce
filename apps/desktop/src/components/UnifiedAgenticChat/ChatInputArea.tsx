@@ -12,6 +12,7 @@ import { invoke } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
 import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
+import type { CaptureResult } from '../../types/capture';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -407,12 +408,103 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   };
 
+  // Screen capture handler - converts captured image to attachment
+  const handleScreenCapture = useCallback(
+    async (result: CaptureResult) => {
+      try {
+        // Read the captured image file and convert to base64
+        const imageBytes = await invoke<number[]>('plugin:fs|read_file', {
+          path: result.path,
+        });
+
+        // Convert number array to Uint8Array and then to base64
+        const uint8Array = new Uint8Array(imageBytes);
+        const base64 = btoa(String.fromCharCode(...uint8Array));
+
+        // Determine mime type from file format
+        const mimeType = result.path.endsWith('.png')
+          ? 'image/png'
+          : result.path.endsWith('.jpg') || result.path.endsWith('.jpeg')
+            ? 'image/jpeg'
+            : 'image/png';
+
+        // Create attachment from screenshot
+        const attachment: Attachment = {
+          id: result.id,
+          type: 'image',
+          name: `screenshot-${new Date().toISOString().split('T')[0]}.png`,
+          mimeType,
+          content: `data:${mimeType};base64,${base64}`,
+          size: uint8Array.length,
+        };
+
+        // Add to attachments
+        setAttachments([...attachments, attachment]);
+        console.log('[ChatInputArea] Screenshot attached:', attachment.name);
+      } catch (error) {
+        console.error('[ChatInputArea] Failed to process screenshot:', error);
+        setSubmitError('Failed to attach screenshot. Please try again.');
+      }
+    },
+    [attachments, setAttachments],
+  );
+
+  // Detect "what's on my screen?" patterns and auto-capture
+  const detectAndCaptureScreen = useCallback(
+    async (messageContent: string): Promise<boolean> => {
+      // Pattern matching for screen-related queries
+      const screenPatterns = [
+        /what'?s on (my|the) screen/i,
+        /what (is|are) on (my|the) screen/i,
+        /show (me )?(my|the) screen/i,
+        /look at (my|the) screen/i,
+        /see (my|the) screen/i,
+        /describe (my|the) screen/i,
+        /analyze (my|the) screen/i,
+        /what (do|does) (you|u) see( on (my|the) screen)?/i,
+        /can you see (my|the) screen/i,
+      ];
+
+      const matchesPattern = screenPatterns.some((pattern) => pattern.test(messageContent));
+
+      if (matchesPattern) {
+        console.log('[ChatInputArea] Detected screen query, auto-capturing...');
+        try {
+          // Auto-capture full screen
+          await import('../../hooks/useScreenCapture'); // Keep import for side effects if needed, or remove if purely for unused function
+          const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+          const conversationDbId = activeConversationId
+            ? (useUnifiedChatStore.getState() as any).uuidToDbId?.(activeConversationId)
+            : undefined;
+
+          // Use the hook's capture function directly
+          const result = await invoke<CaptureResult>('capture_screen_full', {
+            conversation_id: conversationDbId,
+          });
+
+          await handleScreenCapture(result);
+          return true;
+        } catch (error) {
+          console.error('[ChatInputArea] Auto-capture failed:', error);
+          // Don't block message send on capture failure
+          return false;
+        }
+      }
+
+      return false;
+    },
+    [handleScreenCapture],
+  );
+
   // Submit handler
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!content.trim() || isInputDisabled || isSending) return;
 
     const messageContent = content.trim();
+
+    // Check for screen query patterns and auto-capture if detected
+    await detectAndCaptureScreen(messageContent);
 
     // Queue mode handling
     if (isQueueMode) {
@@ -795,6 +887,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onToggleRecording={toggleListening}
               onModeSelectorChange={setShowTranscriptionModeSelector}
               onPreferLocalWhisperChange={setPreferLocalWhisper}
+              onScreenCapture={handleScreenCapture}
+              conversationId={
+                useUnifiedChatStore.getState().activeConversationId
+                  ? (useUnifiedChatStore.getState() as any).uuidToDbId?.(
+                      useUnifiedChatStore.getState().activeConversationId!,
+                    )
+                  : undefined
+              }
             />
 
             {/* Right side controls */}

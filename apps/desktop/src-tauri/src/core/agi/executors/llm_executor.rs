@@ -64,15 +64,10 @@ impl LlmExecutor {
     /// Supports common provider names in lowercase.
     fn parse_provider(provider_str: &str) -> Option<Provider> {
         match provider_str.to_lowercase().as_str() {
-            "anthropic" | "claude" => Some(Provider::Anthropic),
-            "openai" | "gpt" => Some(Provider::OpenAI),
-            "google" | "gemini" => Some(Provider::Google),
-            "deepseek" => Some(Provider::DeepSeek),
-            "xai" | "grok" => Some(Provider::XAI),
-            "qwen" | "alibaba" => Some(Provider::Qwen),
-            "moonshot" | "kimi" => Some(Provider::Moonshot),
-            "zhipu" | "glm" => Some(Provider::Zhipu),
-            "perplexity" | "sonar" => Some(Provider::Perplexity),
+            // All cloud providers route via ManagedCloud (no local API keys)
+            "anthropic" | "claude" | "openai" | "gpt" | "google" | "gemini" | "deepseek"
+            | "xai" | "grok" | "qwen" | "alibaba" | "moonshot" | "kimi" | "zhipu" | "glm"
+            | "perplexity" | "sonar" => Some(Provider::ManagedCloud),
             "ollama" | "local" => Some(Provider::Ollama),
             "managed" | "cloud" | "managed-cloud" => Some(Provider::ManagedCloud),
             _ => None,
@@ -189,7 +184,7 @@ impl LlmExecutor {
             (Some(p), Some(m)) => (*p, m.clone()),
             (Some(p), None) => (*p, self.default_model_for_provider(*p)),
             (None, Some(m)) => (self.infer_provider_from_model(m), m.clone()),
-            (None, None) => (Provider::Anthropic, "claude-haiku-4-5".to_string()),
+            (None, None) => (Provider::ManagedCloud, "gpt-5-nano".to_string()),
         };
 
         // Build router preferences
@@ -384,17 +379,8 @@ impl LlmExecutor {
     /// Get the default model for a given provider.
     fn default_model_for_provider(&self, provider: Provider) -> String {
         match provider {
-            Provider::Anthropic => "claude-haiku-4-5".to_string(),
-            Provider::OpenAI => "gpt-5-nano".to_string(),
-            Provider::Google => "gemini-3-flash".to_string(),
-            Provider::DeepSeek => "deepseek-v3.2".to_string(),
-            Provider::XAI => "grok-4.1-fast-reasoning".to_string(),
-            Provider::Qwen => "qwen-max-2025-01-25".to_string(),
-            Provider::Moonshot => "kimi-k2-thinking".to_string(),
-            Provider::Zhipu => "glm-4.6v-flash".to_string(),
-            Provider::Perplexity => "sonar".to_string(),
             Provider::Ollama => "llama4-maverick".to_string(),
-            Provider::ManagedCloud => "gpt-5-nano".to_string(),
+            _ => "gpt-5-nano".to_string(),
         }
     }
 
@@ -402,34 +388,13 @@ impl LlmExecutor {
     fn infer_provider_from_model(&self, model: &str) -> Provider {
         let model_lower = model.to_lowercase();
 
-        if model_lower.starts_with("claude") {
-            Provider::Anthropic
-        } else if model_lower.starts_with("gpt-")
-            || model_lower.starts_with("o1")
-            || model_lower.starts_with("o3")
-        {
-            Provider::OpenAI
-        } else if model_lower.starts_with("gemini") {
-            Provider::Google
-        } else if model_lower.starts_with("deepseek") {
-            Provider::DeepSeek
-        } else if model_lower.starts_with("grok") {
-            Provider::XAI
-        } else if model_lower.starts_with("qwen") {
-            Provider::Qwen
-        } else if model_lower.starts_with("kimi") || model_lower.starts_with("moonshot") {
-            Provider::Moonshot
-        } else if model_lower.starts_with("glm") {
-            Provider::Zhipu
-        } else if model_lower.starts_with("sonar") {
-            Provider::Perplexity
-        } else if model_lower.starts_with("llama")
+        if model_lower.starts_with("llama")
             || model_lower.starts_with("mistral")
             || model_lower.starts_with("phi")
         {
             Provider::Ollama
         } else {
-            // Default to ManagedCloud for unknown models
+            // Route all non-local models through ManagedCloud
             Provider::ManagedCloud
         }
     }
@@ -535,31 +500,40 @@ mod tests {
     fn test_parse_provider() {
         assert_eq!(
             LlmExecutor::parse_provider("anthropic"),
-            Some(Provider::Anthropic)
+            Some(Provider::ManagedCloud)
         );
         assert_eq!(
             LlmExecutor::parse_provider("claude"),
-            Some(Provider::Anthropic)
+            Some(Provider::ManagedCloud)
         );
         assert_eq!(
             LlmExecutor::parse_provider("openai"),
-            Some(Provider::OpenAI)
+            Some(Provider::ManagedCloud)
         );
-        assert_eq!(LlmExecutor::parse_provider("gpt"), Some(Provider::OpenAI));
+        assert_eq!(
+            LlmExecutor::parse_provider("gpt"),
+            Some(Provider::ManagedCloud)
+        );
         assert_eq!(
             LlmExecutor::parse_provider("google"),
-            Some(Provider::Google)
+            Some(Provider::ManagedCloud)
         );
         assert_eq!(
             LlmExecutor::parse_provider("gemini"),
-            Some(Provider::Google)
+            Some(Provider::ManagedCloud)
         );
         assert_eq!(
             LlmExecutor::parse_provider("deepseek"),
-            Some(Provider::DeepSeek)
+            Some(Provider::ManagedCloud)
         );
-        assert_eq!(LlmExecutor::parse_provider("xai"), Some(Provider::XAI));
-        assert_eq!(LlmExecutor::parse_provider("grok"), Some(Provider::XAI));
+        assert_eq!(
+            LlmExecutor::parse_provider("xai"),
+            Some(Provider::ManagedCloud)
+        );
+        assert_eq!(
+            LlmExecutor::parse_provider("grok"),
+            Some(Provider::ManagedCloud)
+        );
         assert_eq!(LlmExecutor::parse_provider("unknown_provider"), None);
     }
 
@@ -574,35 +548,35 @@ mod tests {
         );
         assert_eq!(
             executor.infer_provider_from_model("gpt-5-nano"),
-            Provider::OpenAI
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("gemini-3-pro"),
-            Provider::Google
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("deepseek-v3.2"),
-            Provider::DeepSeek
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("grok-4.1"),
-            Provider::XAI
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("qwen-max"),
-            Provider::Qwen
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("kimi-k2"),
-            Provider::Moonshot
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("glm-4.7"),
-            Provider::Zhipu
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("sonar-pro"),
-            Provider::Perplexity
+            Provider::ManagedCloud
         );
         assert_eq!(
             executor.infer_provider_from_model("llama4-maverick"),
@@ -621,7 +595,7 @@ mod tests {
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "claude-haiku-4-5"
+            "gpt-5-nano"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
@@ -629,7 +603,7 @@ mod tests {
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gemini-3-flash"
+            "gpt-5-nano"
         );
     }
 

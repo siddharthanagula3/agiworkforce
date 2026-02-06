@@ -302,32 +302,10 @@ impl Default for AppSettings {
                 ..Default::default()
             },
         );
-        model_configs.insert(
-            "claude-sonnet-4-5".to_string(),
-            ModelConfig {
-                model_name: "claude-sonnet-4-5".to_string(),
-                ..Default::default()
-            },
-        );
-
-        let mut provider_configs = HashMap::new();
-        provider_configs.insert(
-            "openai".to_string(),
-            LLMProviderConfig {
-                provider: "openai".to_string(),
-                ..Default::default()
-            },
-        );
-        provider_configs.insert(
-            "anthropic".to_string(),
-            LLMProviderConfig {
-                provider: "anthropic".to_string(),
-                ..Default::default()
-            },
-        );
+        let provider_configs = HashMap::new();
 
         Self {
-            default_provider: "openai".to_string(),
+            default_provider: "managed_cloud".to_string(),
             default_model: "gpt-5-nano".to_string(),
             model_configs,
             provider_configs,
@@ -369,7 +347,7 @@ mod tests {
     #[test]
     fn test_default_app_settings() {
         let settings = AppSettings::default();
-        assert_eq!(settings.default_provider, "openai");
+        assert_eq!(settings.default_provider, "managed_cloud");
         assert_eq!(settings.ui_preferences.theme, "system");
         assert!(settings.security_settings.require_confirmation_for_actions);
     }

@@ -196,79 +196,111 @@ impl WebSearchAgent {
         query: &str,
         max_results: usize,
     ) -> Result<Vec<SearchResult>, ResearchError> {
-        // If not configured with external API, return mock results
-        // In production, this would call Perplexity, Tavily, or similar
-        if !self.configured {
-            tracing::warn!("WebSearchAgent not configured, returning empty results");
-            return Ok(Vec::new());
-        }
+        // If configured with external API, use it; otherwise fall back to built-in search executor.
+        if self.configured {
+            let endpoint = self
+                .api_endpoint
+                .as_ref()
+                .ok_or_else(|| ResearchError::ConfigError("No search endpoint configured".into()))?;
 
-        let endpoint = self
-            .api_endpoint
-            .as_ref()
-            .ok_or_else(|| ResearchError::ConfigError("No search endpoint configured".into()))?;
+            let api_key = self
+                .api_key
+                .as_ref()
+                .ok_or_else(|| ResearchError::ConfigError("No API key configured".into()))?;
 
-        let api_key = self
-            .api_key
-            .as_ref()
-            .ok_or_else(|| ResearchError::ConfigError("No API key configured".into()))?;
-
-        // Build the search request
-        let request_body = serde_json::json!({
-            "query": query,
-            "max_results": max_results,
-        });
-
-        let response = self
-            .http_client
-            .post(endpoint)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| ResearchError::AgentError {
-                agent: "web_search".into(),
-                message: e.to_string(),
-            })?;
-
-        if !response.status().is_success() {
-            return Err(ResearchError::AgentError {
-                agent: "web_search".into(),
-                message: format!("Search API returned status: {}", response.status()),
+            let request_body = serde_json::json!({
+                "query": query,
+                "max_results": max_results,
             });
-        }
 
-        // Parse the response
-        let json: serde_json::Value =
-            response
-                .json()
+            let response = self
+                .http_client
+                .post(endpoint)
+                .header("Authorization", format!("Bearer {}", api_key))
+                .json(&request_body)
+                .send()
                 .await
                 .map_err(|e| ResearchError::AgentError {
                     agent: "web_search".into(),
                     message: e.to_string(),
                 })?;
 
-        // Parse results based on API response format
-        let mut results = Vec::new();
-        if let Some(items) = json["results"].as_array() {
-            for (idx, item) in items.iter().enumerate() {
-                let result = SearchResult {
-                    id: format!("web_{}", idx),
-                    title: item["title"].as_str().unwrap_or("Untitled").to_string(),
-                    content: item["snippet"].as_str().unwrap_or("").to_string(),
-                    full_content: item["content"].as_str().map(|s| s.to_string()),
-                    url: item["url"].as_str().map(|s| s.to_string()),
-                    source_type: SourceType::WebPage,
-                    relevance: item["score"].as_f64().unwrap_or(0.5) as f32,
-                    timestamp: None,
-                    author: item["author"].as_str().map(|s| s.to_string()),
-                    metadata: HashMap::new(),
-                };
-                results.push(result);
+            if !response.status().is_success() {
+                return Err(ResearchError::AgentError {
+                    agent: "web_search".into(),
+                    message: format!("Search API returned status: {}", response.status()),
+                });
             }
+
+            let json: serde_json::Value =
+                response
+                    .json()
+                    .await
+                    .map_err(|e| ResearchError::AgentError {
+                        agent: "web_search".into(),
+                        message: e.to_string(),
+                    })?;
+
+            let mut results = Vec::new();
+            if let Some(items) = json["results"].as_array() {
+                for (idx, item) in items.iter().enumerate() {
+                    let result = SearchResult {
+                        id: format!("web_{}", idx),
+                        title: item["title"].as_str().unwrap_or("Untitled").to_string(),
+                        content: item["snippet"].as_str().unwrap_or("").to_string(),
+                        full_content: item["content"].as_str().map(|s| s.to_string()),
+                        url: item["url"].as_str().map(|s| s.to_string()),
+                        source_type: SourceType::WebPage,
+                        relevance: item["score"].as_f64().unwrap_or(0.5) as f32,
+                        timestamp: None,
+                        author: item["author"].as_str().map(|s| s.to_string()),
+                        metadata: HashMap::new(),
+                    };
+                    results.push(result);
+                }
+            }
+
+            return Ok(results);
         }
 
-        Ok(results)
+        // Built-in fallback using SearchExecutor (Perplexity if configured, else DuckDuckGo)
+        use crate::core::agi::executors::search_executor::{SearchExecutor, SearchType as ExecSearchType};
+        let executor = SearchExecutor::new();
+        let raw = executor
+            .run_search(query, ExecSearchType::General, max_results)
+            .await
+            .map_err(|e| ResearchError::AgentError {
+                agent: "web_search".into(),
+                message: e.to_string(),
+            })?;
+
+        let results = raw
+            .get("results")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut normalized = Vec::new();
+        for (idx, item) in results.iter().enumerate() {
+            let title = item["title"].as_str().unwrap_or("Untitled").to_string();
+            let content = item["snippet"].as_str().unwrap_or("").to_string();
+            let url = item["url"].as_str().map(|s| s.to_string());
+
+            normalized.push(SearchResult {
+                id: format!("web_{}", idx),
+                title,
+                content,
+                full_content: None,
+                url,
+                source_type: SourceType::WebPage,
+                relevance: item["score"].as_f64().unwrap_or(0.5) as f32,
+                timestamp: None,
+                author: None,
+                metadata: HashMap::new(),
+            });
+        }
+
+        Ok(normalized)
     }
 }
 

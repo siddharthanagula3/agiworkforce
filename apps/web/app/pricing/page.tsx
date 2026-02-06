@@ -306,7 +306,7 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Code Generation:</strong> Write code (no terminal)
+                      <strong>Code Execution:</strong> Terminal access included
                     </span>
                   </li>
                   <li className="flex gap-2">
@@ -318,7 +318,7 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Speech:</strong> Text-to-speech & transcription
+                      <strong>Web Search:</strong> Search the web for information
                     </span>
                   </li>
                 </ul>
@@ -430,7 +430,7 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Flagship Models:</strong> Claude Opus, GPT-5 Pro, Gemini Ultra
+                      <strong>Flagship Models:</strong> Claude Opus, GPT-5 Pro, Gemini Pro
                     </span>
                   </li>
                   <li className="flex gap-2">
@@ -541,7 +541,7 @@ function PricingContent() {
                       },
                       {
                         feature: 'Code Execution',
-                        hobby: 'Generate Only',
+                        hobby: 'Terminal',
                         pro: 'Terminal',
                         max: 'Terminal',
                       },
@@ -558,10 +558,10 @@ function PricingContent() {
                         max: 'Real-time',
                       },
                       {
-                        feature: 'Music Generation',
+                        feature: 'Audio & Music',
                         hobby: false,
-                        pro: 'Suno, Udio',
-                        max: 'Suno, Udio',
+                        pro: false,
+                        max: false,
                       },
                       {
                         feature: 'Priority Support',

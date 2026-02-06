@@ -9,10 +9,10 @@
 //! - `research:complete` - Research completed successfully
 //! - `research:error` - Research failed with error
 
-use crate::core::llm::LLMRouter;
 use crate::core::research::{
     ResearchConfig, ResearchError, ResearchMode, ResearchOrchestrator, ResearchResult,
 };
+use crate::sys::commands::llm::LLMState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -62,6 +62,9 @@ pub struct ResearchRequest {
     /// Optional configuration overrides
     #[serde(default)]
     pub config_overrides: Option<ResearchConfigOverrides>,
+    /// Optional task ID for frontend correlation
+    #[serde(default, alias = "taskId")]
+    pub task_id: Option<String>,
 }
 
 /// Input type for research mode to handle string conversion.
@@ -211,6 +214,7 @@ fn translate_research_error(error: &ResearchError) -> String {
 pub async fn research_start(
     app: AppHandle,
     state: State<'_, ResearchState>,
+    llm_state: State<'_, LLMState>,
     request: ResearchRequest,
 ) -> Result<ResearchResponse, String> {
     // Validate query
@@ -250,12 +254,14 @@ pub async fn research_start(
         base_config
     };
 
-    // Create LLM router for the orchestrator
-    let router = Arc::new(RwLock::new(LLMRouter::new()));
+    // Use shared LLM router so provider configuration is respected
+    let router = llm_state.router.clone();
 
     // Create orchestrator with app handle for events
     let orchestrator = match ResearchOrchestrator::new(router, config) {
-        Ok(o) => o.with_app_handle(app.clone()),
+        Ok(o) => o
+            .with_app_handle(app.clone())
+            .with_task_id(request.task_id.clone()),
         Err(e) => return Err(translate_research_error(&e)),
     };
 
@@ -273,6 +279,39 @@ pub async fn research_start(
                 result.metadata.sources_cited,
                 result.metadata.duration_secs
             );
+
+            if let Some(task_id) = request.task_id.clone() {
+                for finding in &result.key_findings {
+                    let _ = app.emit(
+                        "research:finding_added",
+                        serde_json::json!({
+                            "task_id": task_id,
+                            "finding": finding,
+                        }),
+                    );
+                }
+
+                for citation in &result.citations {
+                    let domain = citation
+                        .url
+                        .as_deref()
+                        .and_then(|url| url::Url::parse(url).ok())
+                        .and_then(|parsed| parsed.domain().map(|d| d.to_string()));
+
+                    let _ = app.emit(
+                        "research:source_added",
+                        serde_json::json!({
+                            "task_id": task_id,
+                            "source": {
+                                "title": citation.title.clone(),
+                                "url": citation.url.clone().unwrap_or_default(),
+                                "domain": domain
+                            }
+                        }),
+                    );
+                }
+            }
+
             Ok(result.into())
         }
         Err(e) => {
@@ -281,6 +320,7 @@ pub async fn research_start(
             let _ = app.emit(
                 "research:error",
                 serde_json::json!({
+                    "task_id": request.task_id,
                     "query": query,
                     "error": error_msg.clone(),
                 }),
@@ -368,15 +408,18 @@ pub fn research_get_modes() -> Vec<serde_json::Value> {
 pub async fn research_quick(
     app: AppHandle,
     state: State<'_, ResearchState>,
+    llm_state: State<'_, LLMState>,
     query: String,
 ) -> Result<ResearchResponse, String> {
     research_start(
         app,
         state,
+        llm_state,
         ResearchRequest {
             query,
             mode: ResearchModeInput::Quick,
             config_overrides: None,
+            task_id: None,
         },
     )
     .await

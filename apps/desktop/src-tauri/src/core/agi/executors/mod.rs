@@ -55,7 +55,7 @@ mod mcp_executor;
 mod ocr_executor;
 mod outcome_executor;
 mod productivity_executor;
-mod search_executor;
+pub mod search_executor;
 mod terminal_executor;
 mod ui_executor;
 

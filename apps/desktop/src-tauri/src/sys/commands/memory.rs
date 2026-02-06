@@ -147,6 +147,34 @@ pub async fn memory_export_all(state: State<'_, MemoryState>) -> Result<Vec<Memo
     state.manager.export_all()
 }
 
+/// List all memories (alias for memory_export_all for frontend compatibility)
+#[command]
+pub async fn memory_list_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
+    state.manager.export_all()
+}
+
+/// Store or update a memory (alias for memory_remember for frontend compatibility)
+#[command]
+pub async fn memory_store(
+    category: String,
+    topic: String,
+    content: String,
+    importance: Option<i32>,
+    source: Option<String>,
+    state: State<'_, MemoryState>,
+) -> Result<i64> {
+    let category = parse_category(&category)?;
+    state
+        .manager
+        .remember(category, &topic, &content, importance, source.as_deref())
+}
+
+/// Delete a memory by ID (alias for memory_forget for frontend compatibility)
+#[command]
+pub async fn memory_delete(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
+    state.manager.forget(memory_id)
+}
+
 /// Cleanup old daily logs (keep last N days)
 #[command]
 pub async fn memory_cleanup_logs(
