@@ -372,7 +372,10 @@ impl ToolRegistry {
             id: "browser_type".to_string(),
             name: "Type in Browser".to_string(),
             description: "Type text into a browser element using a CSS selector".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "selector".to_string(),
@@ -451,7 +454,10 @@ impl ToolRegistry {
             id: "browser_get_text".to_string(),
             name: "Get Browser Text".to_string(),
             description: "Get text content from a browser element".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "selector".to_string(),
@@ -480,7 +486,10 @@ impl ToolRegistry {
             id: "browser_get_attribute".to_string(),
             name: "Get Browser Attribute".to_string(),
             description: "Get an attribute from a browser element".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "selector".to_string(),
@@ -516,7 +525,10 @@ impl ToolRegistry {
             id: "browser_screenshot".to_string(),
             name: "Browser Screenshot".to_string(),
             description: "Capture a screenshot of the current page".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::ImageProcessing],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::ImageProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "full_page".to_string(),
@@ -632,7 +644,10 @@ impl ToolRegistry {
             id: "browser_query_all".to_string(),
             name: "Query All Browser Elements".to_string(),
             description: "Query multiple browser elements and return their metadata".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::DataAnalysis],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::DataAnalysis,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "selector".to_string(),
@@ -660,8 +675,12 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "browser_execute_async_js".to_string(),
             name: "Execute Async JavaScript".to_string(),
-            description: "Execute async JavaScript in the browser and return the result".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::SystemOperation],
+            description: "Execute async JavaScript in the browser and return the result"
+                .to_string(),
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::SystemOperation,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "script".to_string(),
@@ -725,7 +744,10 @@ impl ToolRegistry {
             id: "browser_get_element_state".to_string(),
             name: "Get Element State".to_string(),
             description: "Get visibility/interactivity state for a browser element".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::DataAnalysis],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::DataAnalysis,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "selector".to_string(),
@@ -924,7 +946,10 @@ impl ToolRegistry {
             id: "browser_go_back".to_string(),
             name: "Browser Back".to_string(),
             description: "Navigate back in browser history".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::NetworkOperation,
+            ],
             parameters: vec![ToolParameter {
                 name: "tab_id".to_string(),
                 parameter_type: ParameterType::String,
@@ -944,7 +969,10 @@ impl ToolRegistry {
             id: "browser_go_forward".to_string(),
             name: "Browser Forward".to_string(),
             description: "Navigate forward in browser history".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::NetworkOperation,
+            ],
             parameters: vec![ToolParameter {
                 name: "tab_id".to_string(),
                 parameter_type: ParameterType::String,
@@ -964,7 +992,10 @@ impl ToolRegistry {
             id: "browser_reload".to_string(),
             name: "Browser Reload".to_string(),
             description: "Reload the current browser page".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::NetworkOperation,
+            ],
             parameters: vec![ToolParameter {
                 name: "tab_id".to_string(),
                 parameter_type: ParameterType::String,
@@ -1013,7 +1044,10 @@ impl ToolRegistry {
             id: "browser_get_dom_snapshot".to_string(),
             name: "Get DOM Snapshot".to_string(),
             description: "Get the full HTML DOM snapshot of the current page".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![ToolParameter {
                 name: "tab_id".to_string(),
                 parameter_type: ParameterType::String,

@@ -88,14 +88,18 @@ impl DiagnosticCheck for AuthHealthCheck {
             }));
         }
 
-        DiagnosticResult::ok(self.id(), self.name(), "Cloud authentication active".to_string())
-            .with_duration(duration)
-            .with_metadata(serde_json::json!({
-                "providers": statuses,
-                "cloud_auth": cloud_auth_status,
-                "configured": configured_count,
-                "valid": valid_count,
-            }))
+        DiagnosticResult::ok(
+            self.id(),
+            self.name(),
+            "Cloud authentication active".to_string(),
+        )
+        .with_duration(duration)
+        .with_metadata(serde_json::json!({
+            "providers": statuses,
+            "cloud_auth": cloud_auth_status,
+            "configured": configured_count,
+            "valid": valid_count,
+        }))
     }
 }
 

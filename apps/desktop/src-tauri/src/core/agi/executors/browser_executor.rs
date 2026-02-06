@@ -210,9 +210,13 @@ async fn execute_navigate(
         ));
     };
 
-    let (cdp_client, tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), true, Some(url))
-            .await?;
+    let (cdp_client, tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        true,
+        Some(url),
+    )
+    .await?;
 
     cdp_client
         .navigate(url)
@@ -257,8 +261,13 @@ async fn execute_click(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .click_element(selector)
@@ -317,8 +326,13 @@ async fn execute_extract(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     // Perform extraction based on type
     let result = match extract_type {
@@ -409,8 +423,13 @@ async fn execute_type(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .type_into_element(selector, text, clear_first)
@@ -444,8 +463,13 @@ async fn execute_wait_for_selector(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .wait_for_selector(selector, timeout_ms)
@@ -474,8 +498,13 @@ async fn execute_get_text(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let text = cdp_client
         .get_text(selector)
@@ -509,8 +538,13 @@ async fn execute_get_attribute(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let value = cdp_client
         .get_attribute(selector, attribute)
@@ -548,8 +582,13 @@ async fn execute_screenshot(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let bytes = cdp_client
         .capture_screenshot(full_page)
@@ -581,8 +620,13 @@ async fn execute_hover(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .hover_element(selector)
@@ -611,8 +655,13 @@ async fn execute_focus(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .focus_element(selector)
@@ -641,8 +690,13 @@ async fn execute_scroll_into_view(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .scroll_into_view(selector)
@@ -671,8 +725,13 @@ async fn execute_query_all(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let elements = cdp_client
         .query_all(selector)
@@ -720,8 +779,13 @@ async fn execute_async_js(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let options = ExecuteOptions {
         timeout_ms,
@@ -756,8 +820,13 @@ async fn execute_get_element_state(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let state = AdvancedBrowserOps::get_element_state(cdp_client, selector)
         .await
@@ -793,8 +862,13 @@ async fn execute_wait_for_interactive(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     AdvancedBrowserOps::wait_for_interactive(cdp_client, selector, timeout_ms)
         .await
@@ -826,8 +900,13 @@ async fn execute_select_option(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .select_option(selector, value)
@@ -856,8 +935,13 @@ async fn execute_check(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .set_checked(selector, true)
@@ -886,8 +970,13 @@ async fn execute_uncheck(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .set_checked(selector, false)
@@ -911,8 +1000,13 @@ async fn execute_get_url(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let url = cdp_client
         .get_url()
@@ -936,8 +1030,13 @@ async fn execute_get_title(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let title = cdp_client
         .get_title()
@@ -961,8 +1060,13 @@ async fn execute_go_back(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .evaluate("history.back()")
@@ -985,8 +1089,13 @@ async fn execute_go_forward(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .evaluate("history.forward()")
@@ -1009,8 +1118,13 @@ async fn execute_reload(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     cdp_client
         .evaluate("location.reload()")
@@ -1038,8 +1152,13 @@ async fn execute_wait_for_navigation(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let script = format!(
         r#"
@@ -1090,8 +1209,13 @@ async fn execute_get_dom_snapshot(
         ));
     };
 
-    let (cdp_client, target_tab_id) =
-        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+    let (cdp_client, target_tab_id) = get_cdp_client(
+        app,
+        parameters.get("tab_id").and_then(|v| v.as_str()),
+        false,
+        None,
+    )
+    .await?;
 
     let html = cdp_client
         .evaluate("document.documentElement.outerHTML")
