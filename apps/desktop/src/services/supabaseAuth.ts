@@ -1034,14 +1034,63 @@ class SupabaseAuthService {
       provider,
       options: {
         redirectTo: redirectUrl,
+        skipBrowserRedirect: isTauri,
       },
     });
 
     if (response.error) {
       this.updateState({ isLoading: false, error: response.error.message });
+      return response;
     }
 
+    if (isTauri) {
+      const oauthUrl = response.data?.url;
+      if (!oauthUrl) {
+        const errorMessage = 'OAuth URL missing from provider response.';
+        this.updateState({ isLoading: false, error: errorMessage });
+        return {
+          data: response.data,
+          error: new AuthError(errorMessage, 500, 'OAuthError'),
+        };
+      }
+
+      try {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(oauthUrl);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.updateState({ isLoading: false, error: message });
+        return {
+          data: response.data,
+          error: new AuthError(message, 500, 'OAuthError'),
+        };
+      }
+    }
+
+    this.updateState({ isLoading: false });
     return response;
+  }
+
+  async exchangeCodeForSession(code: string): Promise<AuthResponse> {
+    const supabase = getSupabase();
+    this.updateState({ isLoading: true, error: null });
+
+    try {
+      const response = await supabase.auth.exchangeCodeForSession(code);
+      if (response.error) {
+        this.updateState({ isLoading: false, error: response.error.message });
+      } else {
+        this.updateState({ isLoading: false });
+      }
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.updateState({ isLoading: false, error: message });
+      return {
+        data: { user: null, session: null },
+        error: new AuthError(message, 500, 'OAuthError'),
+      };
+    }
   }
 
   async signOut(): Promise<void> {

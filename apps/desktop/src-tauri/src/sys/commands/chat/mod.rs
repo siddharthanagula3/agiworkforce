@@ -2384,6 +2384,7 @@ pub async fn chat_send_message(
                     // finish_reason == "tool_calls" indicates the LLM wants to use tools
                     let has_tool_calls = final_finish_reason.as_deref() == Some("tool_calls")
                         && !accumulated_tool_calls.is_empty();
+                    let mut tool_failure_summaries: Vec<String> = Vec::new();
 
                     if has_tool_calls && !was_stopped {
                         info!(
@@ -2447,6 +2448,12 @@ pub async fn chat_send_message(
                                     (false, format!("Error: {}", e))
                                 }
                             };
+
+                            if !success {
+                                let mut summary = result_content.replace('\n', " ");
+                                summary = summary.chars().take(200).collect();
+                                tool_failure_summaries.push(format!("{}: {}", tc.name, summary));
+                            }
 
                             // Emit tool result event
                             let _ = app_handle_clone.emit(
@@ -2564,6 +2571,30 @@ pub async fn chat_send_message(
 
                     if was_stopped && !full_content.is_empty() {
                         full_content.push_str("\n\n*[Generation stopped by user]*");
+                    }
+
+                    if full_content.trim().is_empty() {
+                        let fallback = if !tool_failure_summaries.is_empty() {
+                            format!(
+                                "I couldn't complete that because one or more tools failed: {}. \
+Please confirm the tool permissions or try a different approach.",
+                                tool_failure_summaries.join("; ")
+                            )
+                        } else {
+                            "I couldn't generate a response. Please try again.".to_string()
+                        };
+
+                        full_content = fallback.clone();
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-chunk",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "delta": fallback,
+                                "content": full_content.clone(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
                     }
 
                     // Save assistant message to database
