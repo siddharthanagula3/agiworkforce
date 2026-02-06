@@ -1,3 +1,4 @@
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tauri::{command, State};
 
@@ -6,7 +7,7 @@ use crate::features::document::{
     ExcelSheet, PdfContent, PdfDocumentConfig, PdfDocumentCreator, SearchResult, WordContent,
     WordDocumentConfig, WordDocumentCreator,
 };
-use crate::sys::error::Result;
+use crate::sys::error::{Error, Result};
 
 pub struct DocumentState {
     pub manager: Arc<DocumentManager>,
@@ -71,9 +72,10 @@ pub async fn document_create_word(
     config: WordDocumentConfig,
     contents: Vec<WordContent>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = WordDocumentCreator::new();
-    creator.create(&output_path, config, contents)?;
-    Ok(output_path)
+    creator.create(&resolved_path, config, contents)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -83,9 +85,10 @@ pub async fn document_create_word_simple(
     author: Option<String>,
     paragraphs: Vec<String>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = WordDocumentCreator::new();
-    creator.create_simple(&output_path, title, author, paragraphs)?;
-    Ok(output_path)
+    creator.create_simple(&resolved_path, title, author, paragraphs)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -94,9 +97,10 @@ pub async fn document_create_excel(
     config: ExcelDocumentConfig,
     sheets: Vec<ExcelSheet>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = ExcelDocumentCreator::new();
-    creator.create(&output_path, config, sheets)?;
-    Ok(output_path)
+    creator.create(&resolved_path, config, sheets)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -106,9 +110,10 @@ pub async fn document_create_excel_simple(
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = ExcelDocumentCreator::new();
-    creator.create_simple(&output_path, &sheet_name, headers, rows)?;
-    Ok(output_path)
+    creator.create_simple(&resolved_path, &sheet_name, headers, rows)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -118,9 +123,10 @@ pub async fn document_create_excel_numbers(
     headers: Vec<String>,
     rows: Vec<Vec<f64>>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = ExcelDocumentCreator::new();
-    creator.create_with_numbers(&output_path, &sheet_name, headers, rows)?;
-    Ok(output_path)
+    creator.create_with_numbers(&resolved_path, &sheet_name, headers, rows)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -129,9 +135,10 @@ pub async fn document_create_pdf(
     config: PdfDocumentConfig,
     contents: Vec<PdfContent>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = PdfDocumentCreator::new();
-    creator.create(&output_path, config, contents)?;
-    Ok(output_path)
+    creator.create(&resolved_path, config, contents)?;
+    Ok(resolved_path)
 }
 
 #[command]
@@ -141,7 +148,48 @@ pub async fn document_create_pdf_simple(
     author: Option<String>,
     paragraphs: Vec<String>,
 ) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
     let creator = PdfDocumentCreator::new();
-    creator.create_simple(&output_path, title, author, paragraphs)?;
-    Ok(output_path)
+    creator.create_simple(&resolved_path, title, author, paragraphs)?;
+    Ok(resolved_path)
+}
+
+fn resolve_output_path(output_path: &str) -> Result<String> {
+    let trimmed = output_path.trim();
+    if trimmed.is_empty() {
+        return Err(Error::InvalidPath("output_path cannot be empty".to_string()));
+    }
+
+    let mut resolved = if trimmed == "~" || trimmed.starts_with("~/") {
+        let home = dirs::home_dir()
+            .ok_or_else(|| Error::InvalidPath("Unable to resolve home directory".to_string()))?;
+        if trimmed == "~" {
+            home
+        } else {
+            home.join(trimmed.trim_start_matches("~/"))
+        }
+    } else {
+        PathBuf::from(trimmed)
+    };
+
+    if resolved.is_relative() {
+        let mut components = Path::new(&resolved).components();
+        if let Some(Component::Normal(first)) = components.next() {
+            if first.to_string_lossy().eq_ignore_ascii_case("desktop") {
+                let desktop = dirs::desktop_dir()
+                    .or_else(|| dirs::home_dir().map(|dir| dir.join("Desktop")))
+                    .ok_or_else(|| {
+                        Error::InvalidPath("Unable to resolve Desktop directory".to_string())
+                    })?;
+                let rest = components.as_path();
+                resolved = if rest.as_os_str().is_empty() {
+                    desktop
+                } else {
+                    desktop.join(rest)
+                };
+            }
+        }
+    }
+
+    Ok(resolved.to_string_lossy().to_string())
 }

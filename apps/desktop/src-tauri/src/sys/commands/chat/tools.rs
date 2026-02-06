@@ -21,6 +21,8 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
     "file_list",
     // Screenshot and UI
     "ui_screenshot",
+    "ui_click",
+    "ui_type",
     // Web search
     "search_web",
     // Terminal
@@ -29,6 +31,32 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
     "browser_navigate",
     "browser_click",
     "browser_extract",
+    "browser_type",
+    "browser_wait_for_selector",
+    "browser_get_text",
+    "browser_get_attribute",
+    "browser_screenshot",
+    "browser_hover",
+    "browser_focus",
+    "browser_scroll_into_view",
+    "browser_query_all",
+    "browser_execute_async_js",
+    "browser_get_element_state",
+    "browser_wait_for_interactive",
+    "browser_select_option",
+    "browser_check",
+    "browser_uncheck",
+    "browser_get_url",
+    "browser_get_title",
+    "browser_go_back",
+    "browser_go_forward",
+    "browser_reload",
+    "browser_wait_for_navigation",
+    "browser_get_dom_snapshot",
+    // Document generation
+    "document_create_pdf",
+    "document_create_word",
+    "document_create_excel",
 ];
 
 /// Build tool definitions for chat.
@@ -140,6 +168,21 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["path", "content"]
             }),
         },
+        // File Delete
+        ToolDefinition {
+            name: "file_delete".to_string(),
+            description: "Delete a file. Use this when the user asks to remove or delete a file.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute or relative path to the file to delete"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
         // File List (Directory listing)
         ToolDefinition {
             name: "file_list".to_string(),
@@ -165,6 +208,45 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "required": []
             }),
         },
+        // UI Click
+        ToolDefinition {
+            name: "ui_click".to_string(),
+            description: "Click on a UI element using coordinates, UIA, image matching, or text targeting.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "object",
+                        "description": "Target element (coordinates, UIA, image, or text)."
+                    },
+                    "button": {
+                        "type": "string",
+                        "description": "Mouse button (left, right, middle)",
+                        "default": "left"
+                    }
+                },
+                "required": ["target"]
+            }),
+        },
+        // UI Type
+        ToolDefinition {
+            name: "ui_type".to_string(),
+            description: "Type text into a UI element specified by a target selector or coordinates.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "object",
+                        "description": "Target element."
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type."
+                    }
+                },
+                "required": ["target", "text"]
+            }),
+        },
         // Web Search
         ToolDefinition {
             name: "search_web".to_string(),
@@ -179,6 +261,10 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     "num_results": {
                         "type": "integer",
                         "description": "Number of results to return (default: 5, max: 10)"
+                    },
+                    "search_type": {
+                        "type": "string",
+                        "description": "Search type: web, news, images (default: web)"
                     }
                 },
                 "required": ["query"]
@@ -216,6 +302,586 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["url"]
+            }),
+        },
+        // Browser Click
+        ToolDefinition {
+            name: "browser_click".to_string(),
+            description: "Click a browser element using a CSS selector.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element to click"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Extract
+        ToolDefinition {
+            name: "browser_extract".to_string(),
+            description: "Extract text, attributes, or element data from the current browser page using CSS selectors.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element (defaults to 'body')"
+                    },
+                    "extract_type": {
+                        "type": "string",
+                        "description": "Type of extraction: text, attribute, or all (default: text)"
+                    },
+                    "attribute": {
+                        "type": "string",
+                        "description": "Attribute name (required for attribute extraction)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Type
+        ToolDefinition {
+            name: "browser_type".to_string(),
+            description: "Type text into a browser element using a CSS selector.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the input element"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type"
+                    },
+                    "clear_first": {
+                        "type": "boolean",
+                        "description": "Clear existing content before typing (default: true)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector", "text"]
+            }),
+        },
+        // Browser Wait For Selector
+        ToolDefinition {
+            name: "browser_wait_for_selector".to_string(),
+            description: "Wait for a CSS selector to appear in the browser.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector to wait for"
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds (default: 30000)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Get Text
+        ToolDefinition {
+            name: "browser_get_text".to_string(),
+            description: "Get text content from a browser element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Get Attribute
+        ToolDefinition {
+            name: "browser_get_attribute".to_string(),
+            description: "Get an attribute from a browser element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "attribute": {
+                        "type": "string",
+                        "description": "Attribute name to retrieve"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector", "attribute"]
+            }),
+        },
+        // Browser Screenshot
+        ToolDefinition {
+            name: "browser_screenshot".to_string(),
+            description: "Capture a screenshot of the current page.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "full_page": {
+                        "type": "boolean",
+                        "description": "Capture full page (default: false)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Hover
+        ToolDefinition {
+            name: "browser_hover".to_string(),
+            description: "Hover over a browser element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Focus
+        ToolDefinition {
+            name: "browser_focus".to_string(),
+            description: "Focus a browser element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Scroll Into View
+        ToolDefinition {
+            name: "browser_scroll_into_view".to_string(),
+            description: "Scroll a browser element into view.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Query All
+        ToolDefinition {
+            name: "browser_query_all".to_string(),
+            description: "Query multiple elements and return their metadata.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for elements"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Execute Async JS
+        ToolDefinition {
+            name: "browser_execute_async_js".to_string(),
+            description: "Execute async JavaScript in the browser and return the result.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": "JavaScript to execute"
+                    },
+                    "args": {
+                        "type": "array",
+                        "description": "Arguments passed to the script"
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds (default: 30000)"
+                    },
+                    "retry_count": {
+                        "type": "integer",
+                        "description": "Retry attempts (default: 3)"
+                    },
+                    "retry_delay_ms": {
+                        "type": "integer",
+                        "description": "Delay between retries in milliseconds (default: 1000)"
+                    },
+                    "await_promise": {
+                        "type": "boolean",
+                        "description": "Await promise results (default: true)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["script"]
+            }),
+        },
+        // Browser Get Element State
+        ToolDefinition {
+            name: "browser_get_element_state".to_string(),
+            description: "Get visibility and interactivity state for an element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Wait For Interactive
+        ToolDefinition {
+            name: "browser_wait_for_interactive".to_string(),
+            description: "Wait until an element is interactive and ready.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element"
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds (default: 30000)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Select Option
+        ToolDefinition {
+            name: "browser_select_option".to_string(),
+            description: "Select an option value in a select element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the select element"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Option value to select"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector", "value"]
+            }),
+        },
+        // Browser Check
+        ToolDefinition {
+            name: "browser_check".to_string(),
+            description: "Check a checkbox element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the checkbox"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Uncheck
+        ToolDefinition {
+            name: "browser_uncheck".to_string(),
+            description: "Uncheck a checkbox element.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the checkbox"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": ["selector"]
+            }),
+        },
+        // Browser Get URL
+        ToolDefinition {
+            name: "browser_get_url".to_string(),
+            description: "Get the current page URL.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Get Title
+        ToolDefinition {
+            name: "browser_get_title".to_string(),
+            description: "Get the current page title.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Back
+        ToolDefinition {
+            name: "browser_go_back".to_string(),
+            description: "Navigate back in browser history.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Forward
+        ToolDefinition {
+            name: "browser_go_forward".to_string(),
+            description: "Navigate forward in browser history.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Reload
+        ToolDefinition {
+            name: "browser_reload".to_string(),
+            description: "Reload the current page.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Wait For Navigation
+        ToolDefinition {
+            name: "browser_wait_for_navigation".to_string(),
+            description: "Wait for page navigation to complete.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds (default: 30000)"
+                    },
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Browser Get DOM Snapshot
+        ToolDefinition {
+            name: "browser_get_dom_snapshot".to_string(),
+            description: "Get the full HTML DOM snapshot of the current page.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        // Document Creation - PDF
+        ToolDefinition {
+            name: "document_create_pdf".to_string(),
+            description: "Create a PDF document with formatted content. Use this when the user asks to create a PDF, generate a document, or export to PDF. Perfect for reports, letters, documents, and formatted text.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Where to save the PDF file. Can be absolute path, relative to Desktop (e.g., 'Desktop/report.pdf'), or use ~ for home directory. File extension .pdf will be added if missing."
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Document title (optional, used in metadata and as heading)"
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Document author (optional, used in metadata)"
+                    },
+                    "paragraphs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Array of paragraph text. Each string becomes a separate paragraph in the document."
+                    }
+                },
+                "required": ["output_path", "paragraphs"]
+            }),
+        },
+        // Document Creation - Word
+        ToolDefinition {
+            name: "document_create_word".to_string(),
+            description: "Create a Microsoft Word document (.docx) with formatted content. Use this when the user asks to create a Word document, DOCX file, or needs an editable document format. Ideal for documents that need further editing.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Where to save the Word file. Can be absolute path, relative to Desktop (e.g., 'Desktop/letter.docx'), or use ~ for home directory. File extension .docx will be added if missing."
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Document title (optional, used in metadata and as heading)"
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Document author (optional, used in metadata)"
+                    },
+                    "paragraphs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Array of paragraph text. Each string becomes a separate paragraph in the document."
+                    }
+                },
+                "required": ["output_path", "paragraphs"]
+            }),
+        },
+        // Document Creation - Excel
+        ToolDefinition {
+            name: "document_create_excel".to_string(),
+            description: "Create a Microsoft Excel spreadsheet (.xlsx) with tabular data. Use this when the user asks to create a spreadsheet, Excel file, CSV export to Excel, or organize data in rows and columns. Perfect for tables, data analysis, and structured information.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Where to save the Excel file. Can be absolute path, relative to Desktop (e.g., 'Desktop/data.xlsx'), or use ~ for home directory. File extension .xlsx will be added if missing."
+                    },
+                    "sheet_name": {
+                        "type": "string",
+                        "description": "Name of the worksheet tab (optional, defaults to 'Sheet1')"
+                    },
+                    "headers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Column headers (first row of the spreadsheet)"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Data rows. Each inner array represents one row of data, with values corresponding to the headers."
+                    }
+                },
+                "required": ["output_path", "headers", "rows"]
             }),
         },
     ]
@@ -285,325 +951,37 @@ pub async fn execute_chat_tool(
     tool_name: &str,
     arguments_json: &str,
     app_handle: Option<&tauri::AppHandle>,
+    project_folder: Option<String>,
+    conversation_mode: Option<String>,
 ) -> Result<String> {
-    use std::path::Path;
-    use tokio::fs;
-    use tokio::process::Command;
-    use tracing::{info, warn};
+    use crate::core::agi::tools::ToolRegistry;
+    use crate::core::llm::tool_executor::ToolExecutor;
+    use crate::core::llm::ToolCall;
+    use std::sync::Arc;
 
-    // Parse arguments
-    let args: serde_json::Value = serde_json::from_str(arguments_json)
-        .map_err(|e| anyhow::anyhow!("Invalid tool arguments JSON: {}", e))?;
+    let handle = app_handle.ok_or_else(|| {
+        anyhow::anyhow!("Tool execution requires desktop app context")
+    })?;
 
-    match tool_name {
-        "file_read" => {
-            let path = args["path"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: path"))?;
+    let resolved_tool_name = match tool_name {
+        "document_create_docx" => "document_create_word",
+        "document_create_xlsx" => "document_create_excel",
+        _ => tool_name,
+    };
 
-            info!("[ChatTool] Reading file: {}", path);
+    let registry = Arc::new(ToolRegistry::new()?);
+    registry.register_all_tools()?;
 
-            // Read file content
-            let content = fs::read_to_string(path)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to read file '{}': {}", path, e))?;
+    let mut executor = ToolExecutor::with_app_handle(registry, handle.clone());
+    executor.set_project_folder(project_folder);
+    executor.set_conversation_mode(conversation_mode);
 
-            // Truncate if too long (to avoid context overflow)
-            let max_len = 50000;
-            if content.len() > max_len {
-                Ok(format!(
-                    "{}\n\n[Truncated - file has {} characters, showing first {}]",
-                    &content[..max_len],
-                    content.len(),
-                    max_len
-                ))
-            } else {
-                Ok(content)
-            }
-        }
+    let tool_call = ToolCall {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: resolved_tool_name.to_string(),
+        arguments: arguments_json.to_string(),
+    };
 
-        "file_write" => {
-            let path = args["path"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: path"))?;
-            let content = args["content"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: content"))?;
-
-            info!("[ChatTool] Writing to file: {}", path);
-
-            // Ensure parent directory exists
-            if let Some(parent) = Path::new(path).parent() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create directory: {}", e))?;
-            }
-
-            // Write file
-            fs::write(path, content)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to write file '{}': {}", path, e))?;
-
-            Ok(format!(
-                "Successfully wrote {} bytes to {}",
-                content.len(),
-                path
-            ))
-        }
-
-        "file_list" => {
-            let path = args["path"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: path"))?;
-
-            info!("[ChatTool] Listing directory: {}", path);
-
-            let mut entries = fs::read_dir(path)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to read directory '{}': {}", path, e))?;
-
-            let mut items = Vec::new();
-            while let Some(entry) = entries
-                .next_entry()
-                .await
-                .map_err(|e| anyhow::anyhow!("Error reading entry: {}", e))?
-            {
-                let file_type = entry.file_type().await.ok();
-                let type_str = match file_type {
-                    Some(ft) if ft.is_dir() => "[DIR]",
-                    Some(ft) if ft.is_symlink() => "[LINK]",
-                    _ => "[FILE]",
-                };
-                items.push(format!(
-                    "{} {}",
-                    type_str,
-                    entry.file_name().to_string_lossy()
-                ));
-            }
-
-            items.sort();
-            Ok(items.join("\n"))
-        }
-
-        "terminal_execute" => {
-            let command = args["command"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: command"))?;
-            let cwd = args["cwd"].as_str();
-
-            info!("[ChatTool] Executing command: {}", command);
-
-            // Security: Basic command sanitization
-            if command.contains("rm -rf /") || command.contains("sudo rm") {
-                return Err(anyhow::anyhow!("Dangerous command blocked for safety"));
-            }
-
-            let shell = if cfg!(windows) { "cmd" } else { "sh" };
-            let shell_arg = if cfg!(windows) { "/C" } else { "-c" };
-
-            let mut cmd = Command::new(shell);
-            cmd.arg(shell_arg).arg(command);
-
-            if let Some(dir) = cwd {
-                cmd.current_dir(dir);
-            }
-
-            let output = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output())
-                .await
-                .map_err(|_| anyhow::anyhow!("Command timed out after 30 seconds"))?
-                .map_err(|e| anyhow::anyhow!("Failed to execute command: {}", e))?;
-
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-
-            let result = if output.status.success() {
-                if stdout.is_empty() {
-                    "Command completed successfully (no output)".to_string()
-                } else {
-                    stdout.to_string()
-                }
-            } else {
-                format!(
-                    "Command failed with exit code {:?}\nStdout: {}\nStderr: {}",
-                    output.status.code(),
-                    stdout,
-                    stderr
-                )
-            };
-
-            // Truncate if too long
-            let max_len = 10000;
-            if result.len() > max_len {
-                Ok(format!(
-                    "{}\n\n[Output truncated at {} chars]",
-                    &result[..max_len],
-                    max_len
-                ))
-            } else {
-                Ok(result)
-            }
-        }
-
-        "search_web" => {
-            let query = args["query"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: query"))?;
-            let num_results = args["num_results"].as_i64().unwrap_or(5) as usize;
-
-            info!("[ChatTool] Web search: {}", query);
-
-            // Use the WebSearchService to perform actual web search
-            use crate::features::search::{WebSearchConfig, WebSearchService};
-
-            let service = WebSearchService::new()
-                .map_err(|e| anyhow::anyhow!("Failed to initialize search service: {}", e))?;
-
-            let config = WebSearchConfig {
-                num_results: num_results.min(10), // Cap at 10 results
-                ..Default::default()
-            };
-
-            match service.search(query, Some(config)).await {
-                Ok(response) => {
-                    // Format results for the LLM
-                    let mut result_text = format!(
-                        "Found {} results for \"{}\" (searched using {}):\n\n",
-                        response.count, response.query, response.provider
-                    );
-
-                    for (idx, result) in response.results.iter().enumerate() {
-                        result_text.push_str(&format!(
-                            "{}. {}\n   URL: {}\n   {}\n\n",
-                            idx + 1,
-                            result.title,
-                            result.url,
-                            result.snippet
-                        ));
-                    }
-
-                    // Truncate if too long
-                    let max_len = 15000;
-                    if result_text.len() > max_len {
-                        result_text.truncate(max_len);
-                        result_text.push_str("\n\n[Results truncated]");
-                    }
-
-                    Ok(result_text)
-                }
-                Err(e) => {
-                    // Return a user-friendly error message
-                    Ok(format!(
-                        "I couldn't search the web right now. The search service returned an error: {}\n\n\
-                        This might be due to network issues or rate limiting. You can try again in a moment, \
-                        or I can help you with other tasks.",
-                        e
-                    ))
-                }
-            }
-        }
-
-        "browser_navigate" => {
-            let url = args["url"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing required parameter: url"))?;
-
-            info!("[ChatTool] Browser navigation requested: {}", url);
-
-            // Emit browser navigation event if app_handle available
-            if let Some(handle) = app_handle {
-                use tauri::Emitter;
-                let _ = handle.emit("browser:navigate", serde_json::json!({ "url": url }));
-                Ok(format!("Navigation to {} initiated", url))
-            } else {
-                Ok(format!(
-                    "Would navigate to: {} (browser not available)",
-                    url
-                ))
-            }
-        }
-
-        "ui_screenshot" => {
-            info!("[ChatTool] Screenshot requested");
-
-            // Emit screenshot event if app_handle available
-            if let Some(handle) = app_handle {
-                use tauri::Emitter;
-                let _ = handle.emit("ui:screenshot:request", serde_json::json!({}));
-                Ok(
-                    "Screenshot capture initiated. The result will be displayed in the UI."
-                        .to_string(),
-                )
-            } else {
-                Ok("Screenshot tool requires desktop app context".to_string())
-            }
-        }
-
-        _ => {
-            // Check if this is an MCP tool (format: mcp__server__tool)
-            if tool_name.starts_with("mcp__") {
-                info!("[ChatTool] MCP tool requested: {}", tool_name);
-
-                // MCP tool execution requires the app handle to access McpState
-                if let Some(handle) = app_handle {
-                    use tauri::Manager;
-
-                    // Get MCP state from app handle
-                    let mcp_state = handle.state::<crate::sys::commands::mcp::McpState>();
-
-                    // Parse the tool name to extract server and tool
-                    let parts: Vec<&str> = tool_name.split("__").collect();
-                    if parts.len() >= 3 {
-                        let server_name = parts[1];
-                        let mcp_tool_name = parts[2..].join("__");
-
-                        info!(
-                            "[ChatTool] Executing MCP tool '{}' on server '{}'",
-                            mcp_tool_name, server_name
-                        );
-
-                        // Execute the MCP tool
-                        match mcp_state
-                            .client
-                            .call_tool(server_name, &mcp_tool_name, args.clone())
-                            .await
-                        {
-                            Ok(result) => {
-                                // Convert MCP result to string
-                                let result_str = serde_json::to_string_pretty(&result)
-                                    .unwrap_or_else(|_| format!("{:?}", result));
-
-                                // Truncate if too long
-                                let max_len = 30000;
-                                if result_str.len() > max_len {
-                                    Ok(format!(
-                                        "{}\n\n[MCP result truncated at {} chars]",
-                                        &result_str[..max_len],
-                                        max_len
-                                    ))
-                                } else {
-                                    Ok(result_str)
-                                }
-                            }
-                            Err(e) => {
-                                Err(anyhow::anyhow!("MCP tool '{}' failed: {}", tool_name, e))
-                            }
-                        }
-                    } else {
-                        Err(anyhow::anyhow!(
-                            "Invalid MCP tool name format: {}. Expected mcp__server__tool",
-                            tool_name
-                        ))
-                    }
-                } else {
-                    Err(anyhow::anyhow!(
-                        "MCP tool '{}' requires app context which is not available",
-                        tool_name
-                    ))
-                }
-            } else {
-                warn!("[ChatTool] Unknown tool: {}", tool_name);
-                Err(anyhow::anyhow!("Unknown tool: {}", tool_name))
-            }
-        }
-    }
+    let result = executor.execute_tool_call(&tool_call).await?;
+    Ok(executor.format_tool_result(&tool_call, &result))
 }

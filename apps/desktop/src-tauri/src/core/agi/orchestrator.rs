@@ -594,21 +594,54 @@ impl AgentOrchestrator {
             success_criteria: vec![],
         };
 
-        let agent_id = self.spawn_agent(goal).await?;
+        let agent_id = self.spawn_agent(goal.clone()).await?;
 
         let max_attempts = 300;
         for _ in 0..max_attempts {
             if let Some(status) = self.get_agent_status(&agent_id).await {
                 if status.status == AgentState::Completed {
+                    // Get execution context to extract actual results
+                    let agents = self.agents.lock().await;
+                    if let Some(agent) = agents.get(&agent_id) {
+                        if let Some(goal_context) = agent.core.get_goal_status(&goal.id) {
+                            // Build a comprehensive summary from tool results and context
+                            let mut summary_parts = Vec::new();
+
+                            // Add successful tool results
+                            for tool_result in &goal_context.tool_results {
+                                if tool_result.success {
+                                    if let Some(result_str) = tool_result.result.as_str() {
+                                        if !result_str.is_empty() {
+                                            summary_parts.push(result_str.to_string());
+                                        }
+                                    } else {
+                                        summary_parts.push(format!("Completed: {}", tool_result.tool_id));
+                                    }
+                                }
+                            }
+
+                            let summary = if summary_parts.is_empty() {
+                                "Task completed successfully.".to_string()
+                            } else {
+                                summary_parts.join("\n\n")
+                            };
+
+                            return Ok(OrchestratorResult {
+                                success: true,
+                                summary,
+                            });
+                        }
+                    }
+
                     return Ok(OrchestratorResult {
                         success: true,
-                        summary: "Agent completed task successfully.".to_string(),
+                        summary: "Task completed successfully.".to_string(),
                     });
                 }
                 if status.status == AgentState::Failed {
                     return Ok(OrchestratorResult {
                         success: false,
-                        summary: format!("Agent failed: {}", status.error.unwrap_or_default()),
+                        summary: format!("Task failed: {}", status.error.unwrap_or_default()),
                     });
                 }
             }
@@ -617,7 +650,7 @@ impl AgentOrchestrator {
 
         Ok(OrchestratorResult {
             success: false,
-            summary: "Agent execution timed out.".to_string(),
+            summary: "Task execution timed out after 30 seconds.".to_string(),
         })
     }
 }

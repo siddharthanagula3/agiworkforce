@@ -10,10 +10,12 @@
 //! - `browser_extract` - Extract text, attributes, or all elements matching a selector
 
 use super::{ExecutorContext, ToolExecutor};
+use crate::automation::browser::{AdvancedBrowserOps, ExecuteOptions};
 use crate::automation::AutomationService;
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -43,7 +45,33 @@ impl BrowserExecutor {
 #[async_trait]
 impl ToolExecutor for BrowserExecutor {
     fn tool_names(&self) -> Vec<&'static str> {
-        vec!["browser_navigate", "browser_click", "browser_extract"]
+        vec![
+            "browser_navigate",
+            "browser_click",
+            "browser_extract",
+            "browser_type",
+            "browser_wait_for_selector",
+            "browser_get_text",
+            "browser_get_attribute",
+            "browser_screenshot",
+            "browser_hover",
+            "browser_focus",
+            "browser_scroll_into_view",
+            "browser_query_all",
+            "browser_execute_async_js",
+            "browser_get_element_state",
+            "browser_wait_for_interactive",
+            "browser_select_option",
+            "browser_check",
+            "browser_uncheck",
+            "browser_get_url",
+            "browser_get_title",
+            "browser_go_back",
+            "browser_go_forward",
+            "browser_reload",
+            "browser_wait_for_navigation",
+            "browser_get_dom_snapshot",
+        ]
     }
 
     fn description(&self) -> &'static str {
@@ -61,9 +89,96 @@ impl ToolExecutor for BrowserExecutor {
             "browser_navigate" => execute_navigate(parameters, context).await,
             "browser_click" => execute_click(parameters, context).await,
             "browser_extract" => execute_extract(parameters, context).await,
+            "browser_type" => execute_type(parameters, context).await,
+            "browser_wait_for_selector" => execute_wait_for_selector(parameters, context).await,
+            "browser_get_text" => execute_get_text(parameters, context).await,
+            "browser_get_attribute" => execute_get_attribute(parameters, context).await,
+            "browser_screenshot" => execute_screenshot(parameters, context).await,
+            "browser_hover" => execute_hover(parameters, context).await,
+            "browser_focus" => execute_focus(parameters, context).await,
+            "browser_scroll_into_view" => execute_scroll_into_view(parameters, context).await,
+            "browser_query_all" => execute_query_all(parameters, context).await,
+            "browser_execute_async_js" => execute_async_js(parameters, context).await,
+            "browser_get_element_state" => execute_get_element_state(parameters, context).await,
+            "browser_wait_for_interactive" => {
+                execute_wait_for_interactive(parameters, context).await
+            }
+            "browser_select_option" => execute_select_option(parameters, context).await,
+            "browser_check" => execute_check(parameters, context).await,
+            "browser_uncheck" => execute_uncheck(parameters, context).await,
+            "browser_get_url" => execute_get_url(parameters, context).await,
+            "browser_get_title" => execute_get_title(parameters, context).await,
+            "browser_go_back" => execute_go_back(parameters, context).await,
+            "browser_go_forward" => execute_go_forward(parameters, context).await,
+            "browser_reload" => execute_reload(parameters, context).await,
+            "browser_wait_for_navigation" => execute_wait_for_navigation(parameters, context).await,
+            "browser_get_dom_snapshot" => execute_get_dom_snapshot(parameters, context).await,
             _ => Err(anyhow!("Unknown browser tool: {}", tool_name)),
         }
     }
+}
+
+async fn resolve_tab_id(
+    app: &tauri::AppHandle,
+    requested_tab_id: Option<&str>,
+    allow_create: bool,
+    initial_url: Option<&str>,
+) -> Result<String> {
+    use crate::sys::commands::BrowserStateWrapper;
+    use tauri::Manager;
+
+    let browser_state = app.state::<BrowserStateWrapper>();
+    let tab_manager = browser_state
+        .get_tab_manager()
+        .map_err(|e| anyhow!("Browser is not ready: {}", e))?;
+    let tab_manager = tab_manager.lock().await;
+
+    if let Some(tab_id) = requested_tab_id {
+        return Ok(tab_id.to_string());
+    }
+
+    let tabs = tab_manager
+        .list_tabs()
+        .await
+        .map_err(|e| anyhow!("Could not access browser tabs: {}", e))?;
+
+    if let Some(tab) = tabs.first() {
+        return Ok(tab.id.clone());
+    }
+
+    if !allow_create {
+        return Err(anyhow!(
+            "No browser tabs available. Please navigate to a URL first using browser_navigate."
+        ));
+    }
+
+    let url = initial_url.unwrap_or("about:blank");
+    let tab_id = tab_manager
+        .open_tab(url)
+        .await
+        .map_err(|e| anyhow!("Could not open a new browser tab: {}", e))?;
+
+    Ok(tab_id)
+}
+
+async fn get_cdp_client(
+    app: &tauri::AppHandle,
+    requested_tab_id: Option<&str>,
+    allow_create: bool,
+    initial_url: Option<&str>,
+) -> Result<(Arc<crate::automation::browser::CdpClient>, String)> {
+    use crate::sys::commands::BrowserStateWrapper;
+    use tauri::Manager;
+
+    let tab_id = resolve_tab_id(app, requested_tab_id, allow_create, initial_url).await?;
+
+    let browser_state = app.state::<BrowserStateWrapper>();
+    let client = browser_state
+        .get_cdp_client_for_tab(&tab_id)
+        .await
+        .map_err(|e| anyhow!("Could not connect to browser tab: {}", e))?;
+
+    Ok((client, tab_id))
 }
 
 /// Execute browser_navigate operation.
@@ -95,35 +210,12 @@ async fn execute_navigate(
         ));
     };
 
-    use crate::sys::commands::BrowserStateWrapper;
-    use tauri::Manager;
+    let (cdp_client, tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), true, Some(url))
+            .await?;
 
-    let browser_state = app.state::<BrowserStateWrapper>();
-    let tab_manager = browser_state
-        .get_tab_manager()
-        .map_err(|e| anyhow!("Browser is not ready: {}", e))?
-        .lock()
-        .await;
-
-    // Get existing tabs or open a new one
-    let tabs = tab_manager
-        .list_tabs()
-        .await
-        .map_err(|e| anyhow!("Could not access browser tabs: {}", e))?;
-
-    let tab_id = if tabs.is_empty() {
-        tab_manager
-            .open_tab(url)
-            .await
-            .map_err(|e| anyhow!("Could not open a new browser tab: {}", e))?
-    } else {
-        tabs[0].id.clone()
-    };
-
-    // Navigate to the URL
-    use crate::automation::browser::NavigationOptions;
-    tab_manager
-        .navigate(&tab_id, url, NavigationOptions::default())
+    cdp_client
+        .navigate(url)
         .await
         .map_err(|e| anyhow!("Could not navigate to '{}': {}", url, e))?;
 
@@ -159,50 +251,17 @@ async fn execute_click(
         .get("selector")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-    let tab_id = parameters.get("tab_id").and_then(|v| v.as_str());
-
     let Some(ref app) = context.app_handle else {
         return Err(anyhow!(
             "Could not click the element. Browser automation is not available."
         ));
     };
 
-    use crate::automation::browser::{ClickOptions, DomOperations};
-    use crate::sys::commands::BrowserStateWrapper;
-    use tauri::Manager;
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
 
-    let browser_state = app.state::<BrowserStateWrapper>();
-    let tab_manager = browser_state
-        .get_tab_manager()
-        .map_err(|e| anyhow!("Browser is not ready: {}", e))?
-        .lock()
-        .await;
-
-    // Determine target tab
-    let target_tab_id = if let Some(tid) = tab_id {
-        tid.to_string()
-    } else {
-        let tabs = tab_manager
-            .list_tabs()
-            .await
-            .map_err(|e| anyhow!("Could not access browser tabs: {}", e))?;
-        if tabs.is_empty() {
-            return Err(anyhow!(
-                "No browser tabs available. Please navigate to a URL first using browser_navigate."
-            ));
-        }
-        tabs[0].id.clone()
-    };
-
-    // Get CDP client for the tab
-    let cdp_client = browser_state
-        .get_cdp_client_for_tab(&target_tab_id)
-        .await
-        .map_err(|e| anyhow!("Could not connect to browser tab: {}", e))?;
-
-    // Perform the click
-    let options = ClickOptions::default();
-    DomOperations::click_with_cdp(cdp_client, selector, options)
+    cdp_client
+        .click_element(selector)
         .await
         .map_err(|e| anyhow!("Could not click element '{}': {}", selector, e))?;
 
@@ -247,7 +306,6 @@ async fn execute_extract(
         .get("selector")
         .and_then(|v| v.as_str())
         .unwrap_or("body");
-    let tab_id = parameters.get("tab_id").and_then(|v| v.as_str());
     let extract_type = parameters
         .get("extract_type")
         .and_then(|v| v.as_str())
@@ -259,37 +317,14 @@ async fn execute_extract(
         ));
     };
 
-    use crate::automation::browser::DomOperations;
-    use crate::sys::commands::BrowserStateWrapper;
-    use tauri::Manager;
-
-    let browser_state = app.state::<BrowserStateWrapper>();
-    let tab_manager = browser_state
-        .get_tab_manager()
-        .map_err(|e| anyhow!("Browser is not ready: {}", e))?
-        .lock()
-        .await;
-
-    // Determine target tab
-    let target_tab_id = if let Some(tid) = tab_id {
-        tid.to_string()
-    } else {
-        let tabs = tab_manager
-            .list_tabs()
-            .await
-            .map_err(|e| anyhow!("Could not access browser tabs: {}", e))?;
-        if tabs.is_empty() {
-            return Err(anyhow!(
-                "No browser tabs available. Please navigate to a URL first using browser_navigate."
-            ));
-        }
-        tabs[0].id.clone()
-    };
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
 
     // Perform extraction based on type
     let result = match extract_type {
         "text" => {
-            let text = DomOperations::get_text(&target_tab_id, selector)
+            let text = cdp_client
+                .get_text(selector)
                 .await
                 .map_err(|e| anyhow!("Could not extract text from '{}': {}", selector, e))?;
             json!({ "type": "text", "content": text })
@@ -300,7 +335,8 @@ async fn execute_extract(
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow!("Missing attribute parameter for attribute extraction"))?;
 
-            let attr_value = DomOperations::get_attribute(&target_tab_id, selector, attribute_name)
+            let attr_value = cdp_client
+                .get_attribute(selector, attribute_name)
                 .await
                 .map_err(|e| {
                     anyhow!(
@@ -318,7 +354,8 @@ async fn execute_extract(
             })
         }
         "all" => {
-            let elements = DomOperations::query_all(&target_tab_id, selector)
+            let elements = cdp_client
+                .query_all(selector)
                 .await
                 .map_err(|e| anyhow!("Could not query elements '{}': {}", selector, e))?;
 
@@ -333,7 +370,8 @@ async fn execute_extract(
         }
         _ => {
             // Default to text extraction for unknown types
-            let text = DomOperations::get_text(&target_tab_id, selector)
+            let text = cdp_client
+                .get_text(selector)
                 .await
                 .map_err(|e| anyhow!("Could not extract text from '{}': {}", selector, e))?;
             json!({ "type": "text", "content": text })
@@ -345,6 +383,725 @@ async fn execute_extract(
         "selector": selector,
         "tab_id": target_tab_id,
         "data": result
+    }))
+}
+
+async fn execute_type(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+    let text = parameters
+        .get("text")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing text parameter"))?;
+    let clear_first = parameters
+        .get("clear_first")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not type into the element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .type_into_element(selector, text, clear_first)
+        .await
+        .map_err(|e| anyhow!("Could not type into '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "action": "typed",
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_wait_for_selector(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+    let timeout_ms = parameters
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30_000);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not wait for selector. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .wait_for_selector(selector, timeout_ms)
+        .await
+        .map_err(|e| anyhow!("Selector '{}' did not appear: {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_get_text(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get text. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let text = cdp_client
+        .get_text(selector)
+        .await
+        .map_err(|e| anyhow!("Could not get text from '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id,
+        "text": text
+    }))
+}
+
+async fn execute_get_attribute(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+    let attribute = parameters
+        .get("attribute")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing attribute parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get attribute. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let value = cdp_client
+        .get_attribute(selector, attribute)
+        .await
+        .map_err(|e| {
+            anyhow!(
+                "Could not get attribute '{}' from '{}': {}",
+                attribute,
+                selector,
+                e
+            )
+        })?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "attribute": attribute,
+        "tab_id": target_tab_id,
+        "value": value
+    }))
+}
+
+async fn execute_screenshot(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let full_page = parameters
+        .get("full_page")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not take screenshot. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let bytes = cdp_client
+        .capture_screenshot(full_page)
+        .await
+        .map_err(|e| anyhow!("Could not capture screenshot: {}", e))?;
+
+    let encoded = STANDARD.encode(bytes);
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id,
+        "format": "png",
+        "image_base64": encoded
+    }))
+}
+
+async fn execute_hover(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not hover element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .hover_element(selector)
+        .await
+        .map_err(|e| anyhow!("Could not hover element '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_focus(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not focus element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .focus_element(selector)
+        .await
+        .map_err(|e| anyhow!("Could not focus element '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_scroll_into_view(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not scroll element into view. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .scroll_into_view(selector)
+        .await
+        .map_err(|e| anyhow!("Could not scroll element '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_query_all(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not query elements. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let elements = cdp_client
+        .query_all(selector)
+        .await
+        .map_err(|e| anyhow!("Could not query elements '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id,
+        "elements": elements
+    }))
+}
+
+async fn execute_async_js(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let script = parameters
+        .get("script")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing script parameter"))?;
+    let args = parameters.get("args").and_then(|v| v.as_array()).cloned();
+
+    let timeout_ms = parameters
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30_000);
+    let retry_count = parameters
+        .get("retry_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3) as u32;
+    let retry_delay_ms = parameters
+        .get("retry_delay_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1000);
+    let await_promise = parameters
+        .get("await_promise")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not execute script. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let options = ExecuteOptions {
+        timeout_ms,
+        retry_count,
+        retry_delay_ms,
+        await_promise,
+    };
+
+    let result = AdvancedBrowserOps::execute_async_js(cdp_client, script, args, options)
+        .await
+        .map_err(|e| anyhow!("Script execution failed: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id,
+        "result": result
+    }))
+}
+
+async fn execute_get_element_state(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get element state. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let state = AdvancedBrowserOps::get_element_state(cdp_client, selector)
+        .await
+        .map_err(|e| anyhow!("Could not get element state for '{}': {}", selector, e))?;
+
+    let state_json =
+        serde_json::to_value(state).map_err(|e| anyhow!("Failed to serialize state: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id,
+        "state": state_json
+    }))
+}
+
+async fn execute_wait_for_interactive(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+    let timeout_ms = parameters
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30_000);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not wait for interactive element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    AdvancedBrowserOps::wait_for_interactive(cdp_client, selector, timeout_ms)
+        .await
+        .map_err(|e| anyhow!("Element '{}' not interactive: {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_select_option(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+    let value = parameters
+        .get("value")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing value parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not select option. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .select_option(selector, value)
+        .await
+        .map_err(|e| anyhow!("Could not select option for '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_check(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not check element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .set_checked(selector, true)
+        .await
+        .map_err(|e| anyhow!("Could not check '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_uncheck(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let selector = parameters
+        .get("selector")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not uncheck element. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .set_checked(selector, false)
+        .await
+        .map_err(|e| anyhow!("Could not uncheck '{}': {}", selector, e))?;
+
+    Ok(json!({
+        "success": true,
+        "selector": selector,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_get_url(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get URL. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let url = cdp_client
+        .get_url()
+        .await
+        .map_err(|e| anyhow!("Could not get URL: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id,
+        "url": url
+    }))
+}
+
+async fn execute_get_title(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get title. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let title = cdp_client
+        .get_title()
+        .await
+        .map_err(|e| anyhow!("Could not get title: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id,
+        "title": title
+    }))
+}
+
+async fn execute_go_back(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not go back. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .evaluate("history.back()")
+        .await
+        .map_err(|e| anyhow!("Could not go back: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_go_forward(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not go forward. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .evaluate("history.forward()")
+        .await
+        .map_err(|e| anyhow!("Could not go forward: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_reload(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not reload page. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    cdp_client
+        .evaluate("location.reload()")
+        .await
+        .map_err(|e| anyhow!("Could not reload page: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_wait_for_navigation(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let timeout_ms = parameters
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(30_000);
+
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not wait for navigation. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let script = format!(
+        r#"
+        new Promise((resolve, reject) => {{
+            const timeout = {};
+            const interval = 100;
+            let elapsed = 0;
+
+            const check = () => {{
+                if (document.readyState === 'complete') {{
+                    resolve(true);
+                    return;
+                }}
+
+                elapsed += interval;
+                if (elapsed >= timeout) {{
+                    reject(new Error('Timeout waiting for navigation'));
+                    return;
+                }}
+
+                setTimeout(check, interval);
+            }};
+
+            check();
+        }})
+        "#,
+        timeout_ms
+    );
+
+    cdp_client
+        .evaluate(&script)
+        .await
+        .map_err(|e| anyhow!("Navigation wait failed: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id
+    }))
+}
+
+async fn execute_get_dom_snapshot(
+    parameters: &HashMap<String, Value>,
+    context: &ExecutorContext,
+) -> Result<Value> {
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "Could not get DOM snapshot. Browser automation is not available."
+        ));
+    };
+
+    let (cdp_client, target_tab_id) =
+        get_cdp_client(app, parameters.get("tab_id").and_then(|v| v.as_str()), false, None).await?;
+
+    let html = cdp_client
+        .evaluate("document.documentElement.outerHTML")
+        .await
+        .map_err(|e| anyhow!("Could not capture DOM snapshot: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "tab_id": target_tab_id,
+        "html": html
     }))
 }
 
@@ -366,6 +1123,11 @@ mod tests {
         assert!(names.contains(&"browser_navigate"));
         assert!(names.contains(&"browser_click"));
         assert!(names.contains(&"browser_extract"));
+        assert!(names.contains(&"browser_type"));
+        assert!(names.contains(&"browser_wait_for_selector"));
+        assert!(names.contains(&"browser_screenshot"));
+        assert!(names.contains(&"browser_execute_async_js"));
+        assert!(names.contains(&"browser_get_dom_snapshot"));
     }
 
     #[test]

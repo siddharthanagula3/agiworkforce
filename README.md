@@ -362,11 +362,11 @@ pnpm build                    # Build all packages
 
 ## Documentation
 
-- **[PLAIN_ENGLISH_OVERVIEW.md](docs/PLAIN_ENGLISH_OVERVIEW.md)** - Complete user guide in plain language
-- **[HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** - Technical architecture explained simply
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture deep-dive
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
-- **[CLAUDE.md](CLAUDE.md)** - AI assistant development guide
+- **[PLAIN_ENGLISH_OVERVIEW.md](docs/plain-english-overview.md)** - Complete user guide in plain language
+- **[HOW_IT_WORKS.md](docs/how-it-works.md)** - Technical architecture explained simply
+- **[ARCHITECTURE.md](docs/architecture/system-architecture.md)** - System architecture deep-dive
+- **[CONTRIBUTING.md](docs/guides/contributing.md)** - Contribution guidelines
+- **[CLAUDE.md](docs/guides/claude-guidelines.md)** - AI assistant development guide
 
 ---
 
@@ -374,7 +374,7 @@ pnpm build                    # Build all packages
 
 ### v1.0.9 (Current)
 
-- Implemented 17 missing tool handlers (file*list, memory*_, browser\__, api_download)
+- Implemented 17 missing tool handlers (file*list, memory*\_, browser\_\_, api_download)
 - Complete tool feedback loop verification
 - Chat-first autonomous architecture with undo system
 - Latest 2026 model support (GPT-5.2, Gemini 3, Claude Opus 4.5)
@@ -404,7 +404,7 @@ See [CHANGELOG.md](docs/CHANGELOG.md) for full history.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please see [CONTRIBUTING.md](docs/guides/contributing.md) for guidelines.
 
 ### Quick Contribution Guide
 

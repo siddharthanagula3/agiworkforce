@@ -130,6 +130,10 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "focusMode")]
     pub focus_mode: Option<String>,
 
+    /// Deep research task ID for progress/event correlation
+    #[serde(default, alias = "researchTaskId")]
+    pub research_task_id: Option<String>,
+
     #[serde(default)]
     pub attachments: Option<Vec<ChatAttachment>>,
     #[serde(default, alias = "thinkingMode")]

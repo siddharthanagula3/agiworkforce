@@ -136,7 +136,7 @@ impl AGICore {
             config.enable_self_improvement,
         )?);
 
-        tool_registry.register_all_tools(automation.clone(), router.clone())?;
+        tool_registry.register_all_tools()?;
 
         // Create reflection engine for multi-turn reasoning
         let reflection_engine = Arc::new(ReflectionEngine::new(
@@ -220,7 +220,7 @@ impl AGICore {
             config.enable_self_improvement,
         )?);
 
-        tool_registry.register_all_tools(automation.clone(), router.clone())?;
+        tool_registry.register_all_tools()?;
 
         // Create reflection engine for multi-turn reasoning
         let reflection_engine = Arc::new(ReflectionEngine::new(

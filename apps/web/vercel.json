@@ -61,6 +61,11 @@
       "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
     },
     {
+      "source": "/v1/audio/transcriptions",
+      "destination": "/api/llm/v1/audio/transcriptions",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    },
+    {
       "source": "/health",
       "destination": "/api/health",
       "has": [{ "type": "host", "value": "api.agiworkforce.com" }]

@@ -28,35 +28,12 @@ pub fn validate_api_key(provider: &str, key: &str) -> Result<(), ValidationError
     }
 
     match provider {
-        "openai" => {
-            if !key.starts_with("sk-") {
-                return Err(ValidationError::InvalidFormat {
-                    key: format!("{}_api_key", provider),
-                    message: "OpenAI API key must start with 'sk-'".to_string(),
-                });
-            }
-            if key.len() < 20 {
-                return Err(ValidationError::InvalidValue {
-                    key: format!("{}_api_key", provider),
-                    message: "API key is too short".to_string(),
-                });
-            }
-        }
-        "anthropic" => {
-            if !key.starts_with("sk-ant-") {
-                return Err(ValidationError::InvalidFormat {
-                    key: format!("{}_api_key", provider),
-                    message: "Anthropic API key must start with 'sk-ant-'".to_string(),
-                });
-            }
-        }
-        "google" => {
-            if key.len() < 20 {
-                return Err(ValidationError::InvalidValue {
-                    key: format!("{}_api_key", provider),
-                    message: "API key is too short".to_string(),
-                });
-            }
+        "openai" | "anthropic" | "google" => {
+            return Err(ValidationError::InvalidValue {
+                key: format!("{}_api_key", provider),
+                message: "Direct API keys are disabled. Use managed cloud credentials instead."
+                    .to_string(),
+            });
         }
         _ => {
             if key.len() < 10 {
@@ -207,9 +184,9 @@ mod tests {
 
     #[test]
     fn test_validate_api_key() {
-        assert!(validate_api_key("openai", "sk-abcdefghijklmnopqrstuvwxyz").is_ok());
-        assert!(validate_api_key("anthropic", "sk-ant-abcdefghijklmnopqrstuvwxyz").is_ok());
-        assert!(validate_api_key("google", "abcdefghijklmnopqrstuvwxyz").is_ok());
+        assert!(validate_api_key("openai", "sk-abcdefghijklmnopqrstuvwxyz").is_err());
+        assert!(validate_api_key("anthropic", "sk-ant-abcdefghijklmnopqrstuvwxyz").is_err());
+        assert!(validate_api_key("google", "abcdefghijklmnopqrstuvwxyz").is_err());
 
         assert!(validate_api_key("openai", "").is_err());
         assert!(validate_api_key("openai", "invalid").is_err());
