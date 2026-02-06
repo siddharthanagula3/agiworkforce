@@ -50,7 +50,8 @@ export type ArtifactType =
   | 'spreadsheet'
   | 'presentation'
   | 'html'
-  | 'image';
+  | 'image'
+  | 'document';
 
 export interface Artifact {
   id: string;

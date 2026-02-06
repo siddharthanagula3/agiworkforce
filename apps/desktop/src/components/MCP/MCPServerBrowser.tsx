@@ -242,13 +242,34 @@ export function MCPServerBrowser() {
   };
 
   const handleInstall = async (server: ServerPackage) => {
-    console.log('Installing server:', server.id);
+    try {
+      toast({
+        title: 'Installing tool',
+        description: `Installing ${server.name}...`,
+      });
 
-    toast({
-      title: 'Installing tool',
-      description: `Installing ${server.name}...`,
-    });
-    setDetailsOpen(false);
+      await invoke('mcp_install_server', {
+        serverId: server.id,
+      });
+
+      // Refresh the server list to show the newly installed server
+      const updatedServers = await invoke<ServerPackage[]>('mcp_get_registry');
+      setServers(updatedServers);
+
+      toast({
+        title: 'Installation complete',
+        description: `${server.name} has been installed. Enable it in settings to start using it.`,
+      });
+
+      setDetailsOpen(false);
+    } catch (err) {
+      console.error('Failed to install server:', err);
+      toast({
+        title: 'Installation failed',
+        description: err instanceof Error ? err.message : 'Failed to install server',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (

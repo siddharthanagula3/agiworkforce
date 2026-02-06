@@ -5,8 +5,8 @@
  * Each handler returns an InlinePanel with the command results.
  */
 
-import { invoke } from '../lib/tauri-mock';
-import { InlinePanel } from '../stores/unifiedChatStore';
+import { invoke, listen } from '../lib/tauri-mock';
+import { InlinePanel, useUnifiedChatStore } from '../stores/unifiedChatStore';
 
 /**
  * Executes a shell command and returns results in an inline panel.
@@ -19,8 +19,12 @@ import { InlinePanel } from '../stores/unifiedChatStore';
  * const panel = await executeTerminalCommand('git status');
  * // panel.content.terminal.stdout contains the command output
  */
-export async function executeTerminalCommand(command: string): Promise<InlinePanel> {
+export async function executeTerminalCommand(
+  command: string,
+  messageId?: string,
+): Promise<InlinePanel> {
   const panelId = `terminal-${Date.now()}`;
+  const streamId = panelId;
 
   const panel: InlinePanel = {
     id: panelId,
@@ -40,47 +44,138 @@ export async function executeTerminalCommand(command: string): Promise<InlinePan
     timestamp: new Date(),
     metadata: {
       status: 'running',
+      streamId,
     },
   };
 
-  try {
-    // Invoke Tauri command to execute terminal command
-    const response = await invoke<{
-      stdout: string;
-      stderr: string;
-      exitCode: number | null;
-      durationMs: number;
-    }>('execute_terminal_command', { command, cwd: null, shell: null });
+  if (!messageId) {
+    try {
+      // Invoke Tauri command to execute terminal command
+      const response = await invoke<{
+        stdout: string;
+        stderr: string;
+        exitCode: number | null;
+        durationMs: number;
+      }>('execute_terminal_command', { command, cwd: null, shell: null });
 
-    const isSuccess = (response.exitCode ?? 0) === 0;
+      const isSuccess = (response.exitCode ?? 0) === 0;
 
-    panel.content.terminal = {
-      command,
-      cwd: undefined,
-      stdout: response.stdout,
-      stderr: response.stderr,
-      exitCode: response.exitCode ?? 0,
-      duration: response.durationMs,
-      status: isSuccess ? 'success' : 'error',
-    };
+      panel.content.terminal = {
+        command,
+        cwd: undefined,
+        stdout: response.stdout,
+        stderr: response.stderr,
+        exitCode: response.exitCode ?? 0,
+        duration: response.durationMs,
+        status: isSuccess ? 'success' : 'error',
+      };
 
-    panel.metadata = {
-      status: isSuccess ? 'success' : 'error',
-      duration: response.durationMs,
-    };
-  } catch (error) {
-    panel.content.terminal = {
-      command,
-      status: 'error',
-      stdout: '',
-      stderr: error instanceof Error ? error.message : String(error),
-      exitCode: 1,
-    };
+      panel.metadata = {
+        status: isSuccess ? 'success' : 'error',
+        duration: response.durationMs,
+      };
+    } catch (error) {
+      panel.content.terminal = {
+        command,
+        status: 'error',
+        stdout: '',
+        stderr: error instanceof Error ? error.message : String(error),
+        exitCode: 1,
+      };
 
-    panel.metadata = {
-      status: 'error',
-    };
+      panel.metadata = {
+        status: 'error',
+      };
+    }
+
+    return panel;
   }
+
+  let stdoutBuffer = panel.content.terminal.stdout ?? '';
+  let stderrBuffer = panel.content.terminal.stderr ?? '';
+
+  const updatePanel = (updates: Partial<InlinePanel['content']>) => {
+    useUnifiedChatStore.getState().updateInlinePanel(messageId, panelId, updates);
+  };
+
+  const outputEvent = `terminal-output-${streamId}`;
+  const exitEvent = `terminal-exit-${streamId}`;
+
+  let outputUnlisten: (() => void) | undefined;
+  let exitUnlisten: (() => void) | undefined;
+
+  outputUnlisten = await listen<{ stream?: string; data?: string }>(outputEvent, (event) => {
+    const payload = event.payload;
+    const chunk = typeof payload === 'string' ? payload : (payload?.data ?? '');
+
+    const stream = typeof payload === 'string' ? 'stdout' : (payload?.stream ?? 'stdout');
+
+    if (stream === 'stderr') {
+      stderrBuffer += chunk;
+    } else {
+      stdoutBuffer += chunk;
+    }
+
+    updatePanel({
+      terminal: {
+        command,
+        cwd: undefined,
+        stdout: stdoutBuffer,
+        stderr: stderrBuffer,
+        status: 'running',
+      },
+    });
+  });
+
+  exitUnlisten = await listen(exitEvent, () => {
+    outputUnlisten?.();
+    exitUnlisten?.();
+  });
+
+  void invoke<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    durationMs: number;
+  }>('execute_terminal_command', {
+    command,
+    cwd: null,
+    shell: null,
+    stream_id: streamId,
+    emit_events: true,
+  })
+    .then((response) => {
+      const isSuccess = (response.exitCode ?? 0) === 0;
+      stdoutBuffer = response.stdout;
+      stderrBuffer = response.stderr;
+      updatePanel({
+        terminal: {
+          command,
+          cwd: undefined,
+          stdout: stdoutBuffer,
+          stderr: stderrBuffer,
+          exitCode: response.exitCode ?? 0,
+          duration: response.durationMs,
+          status: isSuccess ? 'success' : 'error',
+        },
+      });
+    })
+    .catch((error) => {
+      updatePanel({
+        terminal: {
+          command,
+          cwd: undefined,
+          stdout: stdoutBuffer,
+          stderr: error instanceof Error ? error.message : String(error),
+          exitCode: 1,
+          status: 'error',
+        },
+      });
+    })
+    .finally(() => {
+      outputUnlisten?.();
+      exitUnlisten?.();
+    });
 
   return panel;
 }

@@ -1,4 +1,5 @@
 use crate::data::db::models::PermissionType;
+use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::AppDatabase;
 
 use base64::{engine::general_purpose, Engine as _};
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,10 +205,36 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
 }
 
+fn default_allowed_directories() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    if let Some(home) = dirs::home_dir() {
+        dirs.push(home);
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        dirs.push(cwd);
+    }
+
+    dirs.push(std::env::temp_dir());
+
+    dirs
+}
+
+fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
+    let canonical_normalized = canonical_path.replace('\\', "/");
+    allowed_dirs.iter().any(|dir| {
+        let dir_str = dir.to_string_lossy();
+        let dir_normalized = dir_str.replace('\\', "/");
+        canonical_normalized.starts_with(&dir_normalized)
+    })
+}
+
 async fn check_file_permission(
     path: &str,
     operation: FileOperation,
     _db: &AppDatabase,
+    app: Option<&AppHandle>,
 ) -> Result<bool, String> {
     let canonical_path = if Path::new(path).exists() {
         match std::fs::canonicalize(path) {
@@ -247,6 +274,35 @@ async fn check_file_permission(
     let is_destructive = matches!(operation, FileOperation::Delete | FileOperation::Write);
     if is_destructive {
         debug!("Destructive operation {} on {}", operation.as_str(), path);
+    }
+
+    let allowed_dirs = if let Some(app_handle) = app {
+        if let Some(settings_state) = app_handle.try_state::<SettingsState>() {
+            let settings = settings_state.settings.lock().await;
+            if settings.allowed_directories.is_empty() {
+                warn!("No allowed directories configured; denying file operation");
+                return Ok(false);
+            }
+
+            settings
+                .allowed_directories
+                .iter()
+                .map(|dir| {
+                    std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir))
+                })
+                .collect::<Vec<_>>()
+        } else {
+            default_allowed_directories()
+        }
+    } else {
+        default_allowed_directories()
+    };
+    if !is_path_allowed(&canonical_path, &allowed_dirs) {
+        warn!(
+            "Path not in allowed directories: {} (canonical: {})",
+            path, canonical_path
+        );
+        return Ok(false);
     }
 
     Ok(true)
@@ -322,6 +378,7 @@ async fn _confirm_dangerous_operation(
 
 #[tauri::command]
 pub async fn file_read(
+    app: AppHandle,
     path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
@@ -344,7 +401,7 @@ pub async fn file_read(
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &path,
@@ -380,6 +437,7 @@ pub async fn file_read(
 
 #[tauri::command]
 pub async fn file_write(
+    app: AppHandle,
     path: String,
     content: String,
     state: tauri::State<'_, AppDatabase>,
@@ -395,7 +453,7 @@ pub async fn file_write(
         ));
     }
 
-    if !check_file_permission(&path, FileOperation::Write, &state).await? {
+    if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &path,
@@ -437,7 +495,11 @@ pub async fn file_write(
 }
 
 #[tauri::command]
-pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
+pub async fn file_delete(
+    app: AppHandle,
+    path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
     debug!("Deleting file: {}", path);
 
     let _ = validate_path_security(&path)?;
@@ -456,7 +518,7 @@ pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> 
         }
     }
 
-    if !check_file_permission(&path, FileOperation::Delete, &state).await? {
+    if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &path,
@@ -492,6 +554,7 @@ pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> 
 
 #[tauri::command]
 pub async fn file_rename(
+    app: AppHandle,
     old_path: String,
     new_path: String,
     state: tauri::State<'_, AppDatabase>,
@@ -512,10 +575,10 @@ pub async fn file_rename(
         ));
     }
 
-    if !check_file_permission(&old_path, FileOperation::Delete, &state).await? {
+    if !check_file_permission(&old_path, FileOperation::Delete, &state, Some(&app)).await? {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&new_path, FileOperation::Write, &state).await? {
+    if !check_file_permission(&new_path, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied for destination file".to_string());
     }
 
@@ -535,6 +598,7 @@ pub async fn file_rename(
 
 #[tauri::command]
 pub async fn file_copy(
+    app: AppHandle,
     src: String,
     dest: String,
     state: tauri::State<'_, AppDatabase>,
@@ -567,10 +631,10 @@ pub async fn file_copy(
         ));
     }
 
-    if !check_file_permission(&src, FileOperation::Read, &state).await? {
+    if !check_file_permission(&src, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&dest, FileOperation::Write, &state).await? {
+    if !check_file_permission(&dest, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied for destination file".to_string());
     }
 
@@ -589,6 +653,7 @@ pub async fn file_copy(
 
 #[tauri::command]
 pub async fn file_move(
+    app: AppHandle,
     src: String,
     dest: String,
     state: tauri::State<'_, AppDatabase>,
@@ -621,10 +686,10 @@ pub async fn file_move(
         ));
     }
 
-    if !check_file_permission(&src, FileOperation::Delete, &state).await? {
+    if !check_file_permission(&src, FileOperation::Delete, &state, Some(&app)).await? {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&dest, FileOperation::Write, &state).await? {
+    if !check_file_permission(&dest, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied for destination file".to_string());
     }
 
@@ -694,7 +759,11 @@ pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
 }
 
 #[tauri::command]
-pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
+pub async fn dir_create(
+    app: AppHandle,
+    path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
     debug!("Creating directory: {}", path);
 
     let _ = validate_path_security(&path)?;
@@ -703,7 +772,7 @@ pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> R
         return Err(format!("Path already exists: {}", path));
     }
 
-    if !check_file_permission(&path, FileOperation::Write, &state).await? {
+    if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
@@ -722,6 +791,7 @@ pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> R
 
 #[tauri::command]
 pub async fn dir_list(
+    app: AppHandle,
     path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<DirEntry>, String> {
@@ -738,7 +808,7 @@ pub async fn dir_list(
         Err(_) => return Err(format!("Directory does not exist: {}", path)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
@@ -776,6 +846,7 @@ pub async fn dir_list(
 
 #[tauri::command]
 pub async fn dir_delete(
+    app: AppHandle,
     path: String,
     recursive: bool,
     state: tauri::State<'_, AppDatabase>,
@@ -800,7 +871,7 @@ pub async fn dir_delete(
         warn!("Recursive directory deletion requested for: {}", path);
     }
 
-    if !check_file_permission(&path, FileOperation::Delete, &state).await? {
+    if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
@@ -825,6 +896,7 @@ pub async fn dir_delete(
 
 #[tauri::command]
 pub async fn dir_traverse(
+    app: AppHandle,
     path: String,
     glob_pattern: String,
     state: tauri::State<'_, AppDatabase>,
@@ -855,7 +927,7 @@ pub async fn dir_traverse(
         Err(_) => return Err(format!("Directory does not exist: {}", path)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
@@ -954,6 +1026,7 @@ fn detect_language(path: &str) -> Option<String> {
 
 #[tauri::command]
 pub async fn fs_read_file_content(
+    app: AppHandle,
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<FileContextContent, String> {
@@ -978,7 +1051,7 @@ pub async fn fs_read_file_content(
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
     }
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1045,6 +1118,7 @@ pub struct WorkspaceFile {
 
 #[tauri::command]
 pub async fn fs_get_workspace_files(
+    app: AppHandle,
     workspace_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<WorkspaceFile>, String> {
@@ -1061,7 +1135,7 @@ pub async fn fs_get_workspace_files(
         Err(_) => return Err(format!("Directory does not exist: {}", workspace_path)),
     }
 
-    if !check_file_permission(&workspace_path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&workspace_path, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
@@ -1177,12 +1251,13 @@ mod tests {
 
 #[tauri::command]
 pub async fn file_read_text(
+    app: AppHandle,
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
     let _ = validate_path_security(&file_path)?;
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1217,6 +1292,7 @@ pub async fn file_read_text(
 
 #[tauri::command]
 pub async fn file_write_text(
+    app: AppHandle,
     file_path: String,
     content: String,
     state: tauri::State<'_, AppDatabase>,
@@ -1230,7 +1306,7 @@ pub async fn file_write_text(
         ));
     }
 
-    if !check_file_permission(&file_path, FileOperation::Write, &state).await? {
+    if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1271,12 +1347,13 @@ pub async fn file_write_text(
 
 #[tauri::command]
 pub async fn file_read_binary(
+    app: AppHandle,
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
     let _ = validate_path_security(&file_path)?;
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1311,6 +1388,7 @@ pub async fn file_read_binary(
 
 #[tauri::command]
 pub async fn file_write_binary(
+    app: AppHandle,
     file_path: String,
     base64_content: String,
     state: tauri::State<'_, AppDatabase>,
@@ -1321,7 +1399,7 @@ pub async fn file_write_binary(
         return Err("Content too large. Maximum is 100MB decoded".to_string());
     }
 
-    if !check_file_permission(&file_path, FileOperation::Write, &state).await? {
+    if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1397,6 +1475,7 @@ pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String
 
 #[tauri::command]
 pub async fn undo_file_operation(
+    app: AppHandle,
     operation: String,
     path: String,
     content: Option<String>,
@@ -1417,7 +1496,7 @@ pub async fn undo_file_operation(
                 ));
             }
 
-            if !check_file_permission(&path, FileOperation::Write, &state).await? {
+            if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
                 return Err("Permission denied".to_string());
             }
 
@@ -1434,7 +1513,7 @@ pub async fn undo_file_operation(
             Ok(())
         }
         "delete" => {
-            if !check_file_permission(&path, FileOperation::Delete, &state).await? {
+            if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
                 return Err("Permission denied".to_string());
             }
 
@@ -1455,7 +1534,7 @@ pub async fn undo_file_operation(
                 ));
             }
 
-            if !check_file_permission(&path, FileOperation::Write, &state).await? {
+            if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
                 return Err("Permission denied".to_string());
             }
 

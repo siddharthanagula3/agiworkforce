@@ -5,7 +5,7 @@ use crate::sys::security::command_validator::{
     validate_command, validate_interactive_input, ValidationConfig,
 };
 use std::time::Instant;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,13 +14,17 @@ pub struct ExecuteResult {
     stderr: String,
     exit_code: Option<i32>,
     duration_ms: u64,
+    stream_id: Option<String>,
 }
 
 #[tauri::command]
 pub async fn execute_terminal_command(
+    app: AppHandle,
     command: String,
     cwd: Option<String>,
     shell: Option<String>,
+    stream_id: Option<String>,
+    emit_events: Option<bool>,
 ) -> Result<ExecuteResult, String> {
     use std::path::Path;
     use std::process::Stdio;
@@ -115,6 +119,10 @@ pub async fn execute_terminal_command(
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let start_time = Instant::now();
+    let stream_id = stream_id.unwrap_or_else(|| format!("oneshot-{}", correlation_id));
+    let emit_events = emit_events.unwrap_or(false);
+    let output_event = format!("terminal-output-{}", stream_id);
+    let exit_event = format!("terminal-exit-{}", stream_id);
 
     let mut child = cmd
         .spawn()
@@ -123,18 +131,60 @@ pub async fn execute_terminal_command(
     let stdout_handle = child.stdout.take();
     let stderr_handle = child.stderr.take();
 
+    let stdout_event = output_event.clone();
+    let app_stdout = app.clone();
     let stdout_task = tokio::spawn(async move {
         let mut buffer = Vec::new();
         if let Some(mut stdout) = stdout_handle {
-            let _ = stdout.read_to_end(&mut buffer).await;
+            let mut chunk = [0u8; 4096];
+            loop {
+                match stdout.read(&mut chunk).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buffer.extend_from_slice(&chunk[..n]);
+                        if emit_events {
+                            let text = String::from_utf8_lossy(&chunk[..n]).to_string();
+                            let _ = app_stdout.emit(
+                                stdout_event.as_str(),
+                                serde_json::json!({
+                                    "stream": "stdout",
+                                    "data": text
+                                }),
+                            );
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
         }
         buffer
     });
 
+    let stderr_event = output_event.clone();
+    let app_stderr = app.clone();
     let stderr_task = tokio::spawn(async move {
         let mut buffer = Vec::new();
         if let Some(mut stderr) = stderr_handle {
-            let _ = stderr.read_to_end(&mut buffer).await;
+            let mut chunk = [0u8; 4096];
+            loop {
+                match stderr.read(&mut chunk).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        buffer.extend_from_slice(&chunk[..n]);
+                        if emit_events {
+                            let text = String::from_utf8_lossy(&chunk[..n]).to_string();
+                            let _ = app_stderr.emit(
+                                stderr_event.as_str(),
+                                serde_json::json!({
+                                    "stream": "stderr",
+                                    "data": text
+                                }),
+                            );
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
         }
         buffer
     });
@@ -152,11 +202,19 @@ pub async fn execute_terminal_command(
     let stderr_bytes = stderr_task.await.unwrap_or_default();
     let duration = start_time.elapsed();
 
+    if emit_events {
+        let _ = app.emit(
+            exit_event.as_str(),
+            serde_json::json!({ "exit_code": status.code() }),
+        );
+    }
+
     Ok(ExecuteResult {
         stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
         stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
         exit_code: status.code(),
         duration_ms: duration.as_millis() as u64,
+        stream_id: Some(stream_id),
     })
 }
 

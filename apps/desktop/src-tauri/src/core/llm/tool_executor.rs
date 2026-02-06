@@ -202,14 +202,41 @@ impl ToolExecutor {
             let settings_state = app_handle.state::<SettingsState>();
             let settings = settings_state.settings.lock().await;
 
-            let allowed = &settings.allowed_directories;
+            let mut allowed = if settings.allowed_directories.is_empty() {
+                let mut defaults = Vec::new();
+
+                if let Some(ref project_folder) = self.project_folder {
+                    defaults.push(project_folder.clone());
+                }
+                if let Some(home) = dirs::home_dir() {
+                    defaults.push(home.to_string_lossy().to_string());
+                }
+                if let Ok(cwd) = std::env::current_dir() {
+                    defaults.push(cwd.to_string_lossy().to_string());
+                }
+                defaults.push(std::env::temp_dir().to_string_lossy().to_string());
+
+                defaults
+            } else {
+                settings.allowed_directories.clone()
+            };
+
             if allowed.is_empty() {
-                return Ok(());
+                return Err(anyhow!(
+                    "Access denied: No allowed directories configured."
+                ));
+            }
+
+            // Canonicalize allowed directories when possible
+            for dir in &mut allowed {
+                if let Ok(canon) = std::fs::canonicalize(dir.as_str()) {
+                    *dir = canon.to_string_lossy().to_string();
+                }
             }
 
             let path_normalized = path_str.replace('\\', "/");
 
-            for allowed_dir in allowed {
+            for allowed_dir in &allowed {
                 let allowed_normalized = allowed_dir.replace('\\', "/");
                 if path_normalized.starts_with(&allowed_normalized) {
                     return Ok(());
@@ -270,6 +297,51 @@ impl ToolExecutor {
                 &tool_call.name,
                 Some(metadata_snapshot.clone()),
             );
+        }
+
+        // Enforce tool policy validation (allowed tools, parameters, and path rules)
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
+                if let Err(e) = confirmation_state
+                    .tool_guard()
+                    .validate_tool_call(&tool_call.name, &metadata_snapshot)
+                    .await
+                {
+                    self.emit_tool_action(
+                        &action_id,
+                        &tool_call.name,
+                        "blocked",
+                        &metadata_snapshot,
+                        Some(e.to_string()),
+                    );
+                    self.emit_tool_metrics(
+                        &action_id,
+                        &tool_call.name,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+
+                    if let Some(app_handle) = &self.app_handle {
+                        emit_tool_error(
+                            app_handle,
+                            &action_id,
+                            &e.to_string(),
+                            0,
+                            false,
+                        );
+                    }
+
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "policy_blocked": true }),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([
+                            ("requires_confirmation".to_string(), json!(true)),
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                        ]),
+                    });
+                }
+            }
         }
 
         // Safety tier check: determine if user confirmation is required
@@ -515,6 +587,8 @@ impl ToolExecutor {
         &self,
         args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+
         // Generate a unique tool ID for streaming events
         let tool_id = format!("terminal-{}", Uuid::new_v4());
 
@@ -538,6 +612,17 @@ impl ToolExecutor {
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(60_000);
+
+        // Validate command using centralized validator (one-shot mode)
+        let validation = ValidationConfig::oneshot().with_correlation_id(&tool_id);
+        if let Err(e) = validate_command(&command, &validation) {
+            return Ok(ToolResult {
+                success: false,
+                data: json!(null),
+                error: Some(e.to_string()),
+                metadata: HashMap::new(),
+            });
+        }
 
         // Emit progress: starting command
         if let Some(app_handle) = &self.app_handle {
@@ -602,20 +687,62 @@ impl ToolExecutor {
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
 
+        let stdout_app_handle = self.app_handle.clone();
+        let stdout_tool_id = tool_id.clone();
         let stdout_task = tokio::spawn(async move {
-            let mut buffer = Vec::new();
+            let mut collected = Vec::new();
             if let Some(mut stdout) = stdout_handle {
-                stdout.read_to_end(&mut buffer).await?;
+                let mut chunk = vec![0u8; 1024];
+                loop {
+                    let read = stdout.read(&mut chunk).await?;
+                    if read == 0 {
+                        break;
+                    }
+                    collected.extend_from_slice(&chunk[..read]);
+                    if let Some(app_handle) = &stdout_app_handle {
+                        let text = String::from_utf8_lossy(&chunk[..read]).to_string();
+                        if !text.is_empty() {
+                            emit_tool_output_chunk(
+                                app_handle,
+                                &stdout_tool_id,
+                                &text,
+                                OutputChunkType::Stdout,
+                                false,
+                            );
+                        }
+                    }
+                }
             }
-            Ok::<Vec<u8>, std::io::Error>(buffer)
+            Ok::<Vec<u8>, std::io::Error>(collected)
         });
 
+        let stderr_app_handle = self.app_handle.clone();
+        let stderr_tool_id = tool_id.clone();
         let stderr_task = tokio::spawn(async move {
-            let mut buffer = Vec::new();
+            let mut collected = Vec::new();
             if let Some(mut stderr) = stderr_handle {
-                stderr.read_to_end(&mut buffer).await?;
+                let mut chunk = vec![0u8; 1024];
+                loop {
+                    let read = stderr.read(&mut chunk).await?;
+                    if read == 0 {
+                        break;
+                    }
+                    collected.extend_from_slice(&chunk[..read]);
+                    if let Some(app_handle) = &stderr_app_handle {
+                        let text = String::from_utf8_lossy(&chunk[..read]).to_string();
+                        if !text.is_empty() {
+                            emit_tool_output_chunk(
+                                app_handle,
+                                &stderr_tool_id,
+                                &text,
+                                OutputChunkType::Stderr,
+                                false,
+                            );
+                        }
+                    }
+                }
             }
-            Ok::<Vec<u8>, std::io::Error>(buffer)
+            Ok::<Vec<u8>, std::io::Error>(collected)
         });
 
         let start = Instant::now();
@@ -714,26 +841,6 @@ impl ToolExecutor {
                 agent_id: None,
             };
             emit_terminal_command(app_handle, terminal_event);
-
-            // Emit output chunks for real-time display in UI
-            if !stdout.is_empty() {
-                emit_tool_output_chunk(
-                    app_handle,
-                    &tool_id,
-                    &stdout,
-                    OutputChunkType::Stdout,
-                    false,
-                );
-            }
-            if !stderr.is_empty() {
-                emit_tool_output_chunk(
-                    app_handle,
-                    &tool_id,
-                    &stderr,
-                    OutputChunkType::Stderr,
-                    false,
-                );
-            }
 
             // Final progress update
             emit_tool_progress(app_handle, &tool_id, 1.0, Some("Complete"));
@@ -1371,7 +1478,9 @@ impl ToolExecutor {
                 }
             }
             "search_web" => {
-                use crate::features::search::{SearchType, WebSearchConfig, WebSearchService};
+                use crate::core::agi::executors::search_executor::{
+                    SearchExecutor, SearchType as ExecSearchType,
+                };
 
                 // Generate a unique tool ID for streaming events
                 let tool_id = format!("search-{}", Uuid::new_v4());
@@ -1402,86 +1511,122 @@ impl ToolExecutor {
                     .get("search_type")
                     .and_then(|v| v.as_str())
                     .map(|s| match s.to_lowercase().as_str() {
-                        "news" => SearchType::News,
-                        "images" => SearchType::Images,
-                        _ => SearchType::Web,
+                        "news" => ExecSearchType::News,
+                        "images" => ExecSearchType::General,
+                        "code" | "programming" => ExecSearchType::Code,
+                        "academic" | "scholarly" => ExecSearchType::Academic,
+                        _ => ExecSearchType::General,
                     })
-                    .unwrap_or(SearchType::Web);
-
-                let config = WebSearchConfig {
-                    num_results,
-                    search_type,
-                    ..Default::default()
-                };
+                    .unwrap_or(ExecSearchType::General);
 
                 // Emit progress: search in progress
                 if let Some(app_handle) = &self.app_handle {
                     emit_tool_progress(app_handle, &tool_id, 0.5, Some("Fetching results..."));
                 }
 
-                match WebSearchService::new() {
-                    Ok(service) => match service.search(&query, Some(config)).await {
-                        Ok(response) => {
-                            // Emit progress: processing results
-                            if let Some(app_handle) = &self.app_handle {
-                                emit_tool_progress(
-                                    app_handle,
-                                    &tool_id,
-                                    1.0,
-                                    Some(&format!("Found {} results", response.count)),
-                                );
+                let start = Instant::now();
+                let executor = SearchExecutor::new();
+                match executor
+                    .run_search(&query, search_type, num_results)
+                    .await
+                {
+                    Ok(raw) => {
+                        let duration_ms = start.elapsed().as_millis() as u64;
+                        let provider = raw
+                            .get("provider")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+
+                        let results = raw
+                            .get("results")
+                            .and_then(|v| v.as_array())
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let access_timestamp = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+
+                        let mut normalized = Vec::new();
+                        for (idx, item) in results.iter().enumerate() {
+                            let title = item
+                                .get("title")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let url = item
+                                .get("url")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let snippet = item
+                                .get("snippet")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            if url.is_empty() && title.is_empty() {
+                                continue;
                             }
 
-                            // Format results for the frontend
-                            let results: Vec<serde_json::Value> = response
-                                .results
-                                .iter()
-                                .map(|r| {
-                                    json!({
-                                        "title": r.title,
-                                        "url": r.url,
-                                        "snippet": r.snippet,
-                                        "favicon": r.favicon,
-                                        "domain": r.domain,
-                                        "position": r.position
-                                    })
-                                })
-                                .collect();
+                            let domain = url::Url::parse(&url)
+                                .ok()
+                                .and_then(|u| u.host_str().map(|h| h.to_string()));
 
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "query": response.query,
-                                    "results": results,
-                                    "count": response.count,
-                                    "provider": response.provider,
-                                    "duration_ms": response.duration_ms
-                                }),
-                                error: None,
-                                metadata: HashMap::from([
-                                    ("query".to_string(), json!(query)),
-                                    ("provider".to_string(), json!(response.provider)),
-                                    ("result_count".to_string(), json!(response.count)),
-                                ]),
-                            })
+                            let position = idx + 1;
+                            normalized.push(json!({
+                                "title": title,
+                                "url": url,
+                                "snippet": snippet,
+                                "domain": domain,
+                                "position": position,
+                                "citation_id": format!("cite-{}", position),
+                                "access_timestamp": access_timestamp,
+                            }));
                         }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
+
+                        let count = raw
+                            .get("results_count")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(normalized.len() as u64);
+
+                        if let Some(app_handle) = &self.app_handle {
+                            emit_tool_progress(
+                                app_handle,
+                                &tool_id,
+                                1.0,
+                                Some(&format!("Found {} results", count)),
+                            );
+                        }
+
+                        Ok(ToolResult {
+                            success: true,
                             data: json!({
-                                "query": query,
-                                "results": [],
-                                "count": 0,
-                                "error": e.to_string()
+                                "query": raw.get("query").and_then(|v| v.as_str()).unwrap_or(&query),
+                                "results": normalized,
+                                "count": count,
+                                "provider": provider,
+                                "duration_ms": duration_ms
                             }),
-                            error: Some(format!("Web search failed: {}", e)),
-                            metadata: HashMap::from([("query".to_string(), json!(query))]),
-                        }),
-                    },
+                            error: None,
+                            metadata: HashMap::from([
+                                ("query".to_string(), json!(query)),
+                                ("provider".to_string(), json!(provider)),
+                                ("result_count".to_string(), json!(count)),
+                            ]),
+                        })
+                    }
                     Err(e) => Ok(ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some(format!("Failed to initialize web search service: {}", e)),
-                        metadata: HashMap::new(),
+                        data: json!({
+                            "query": query,
+                            "results": [],
+                            "count": 0,
+                            "error": e.to_string()
+                        }),
+                        error: Some(format!("Web search failed: {}", e)),
+                        metadata: HashMap::from([("query".to_string(), json!(query))]),
                     }),
                 }
             }

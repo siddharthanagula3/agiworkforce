@@ -302,7 +302,7 @@ export const useUIStore = create<UIState>()(
             isOpen: false,
             activeMode: 'code',
             contextId: null,
-            autoTrigger: false,
+            autoTrigger: true,
           },
 
           // --- Simple Mode State (Initial) ---
@@ -944,7 +944,7 @@ export const useUIStore = create<UIState>()(
                   isOpen: false,
                   activeMode: 'code',
                   contextId: null,
-                  autoTrigger: false,
+                  autoTrigger: true,
                 };
 
                 // Note: mode, onboardingCompleted, showModeSwitcherHint are kept

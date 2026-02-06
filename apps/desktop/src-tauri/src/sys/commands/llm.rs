@@ -92,7 +92,27 @@ pub async fn llm_send_message(
     let is_managed_cloud_request = request
         .provider
         .as_ref()
-        .map(|p| matches!(p.as_str(), "managed_cloud" | "managedcloud" | "cloud"))
+        .map(|p| {
+            matches!(
+                p.as_str(),
+                "managed_cloud"
+                    | "managedcloud"
+                    | "cloud"
+                    | "openai"
+                    | "anthropic"
+                    | "google"
+                    | "xai"
+                    | "grok"
+                    | "deepseek"
+                    | "qwen"
+                    | "alibaba"
+                    | "moonshot"
+                    | "perplexity"
+                    | "zhipu"
+                    | "glm"
+                    | "sonar"
+            )
+        })
         .unwrap_or(false);
 
     if request.prefer_cloud_credits || is_managed_cloud_request {
@@ -106,15 +126,21 @@ pub async fn llm_send_message(
 
     let provider_name = request.provider.clone();
     let provider = request.provider.as_deref().and_then(|p| match p {
-        "openai" => Some(Provider::OpenAI),
-        "anthropic" => Some(Provider::Anthropic),
-        "google" => Some(Provider::Google),
+        // Route all cloud providers through ManagedCloud (no local API keys)
+        "openai"
+        | "anthropic"
+        | "google"
+        | "xai"
+        | "grok"
+        | "deepseek"
+        | "qwen"
+        | "alibaba"
+        | "moonshot"
+        | "perplexity"
+        | "zhipu"
+        | "glm"
+        | "sonar" => Some(Provider::ManagedCloud),
         "ollama" => Some(Provider::Ollama),
-        "xai" | "grok" => Some(Provider::XAI),
-        "deepseek" => Some(Provider::DeepSeek),
-        "qwen" | "alibaba" => Some(Provider::Qwen),
-        "moonshot" => Some(Provider::Moonshot),
-        "perplexity" => Some(Provider::Perplexity),
         "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
         _ => None,
     });
@@ -352,13 +378,10 @@ pub async fn llm_set_default_provider(
     let mut router = state.router.write().await;
 
     let provider_enum = match provider.as_str() {
-        "openai" => Provider::OpenAI,
-        "anthropic" => Provider::Anthropic,
-        "google" => Provider::Google,
+        // Direct providers are routed through managed cloud (no local API keys)
+        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek"
+        | "qwen" | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
         "ollama" => Provider::Ollama,
-        "xai" | "grok" => Provider::XAI,
-        "deepseek" => Provider::DeepSeek,
-        "qwen" | "alibaba" => Provider::Qwen,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
@@ -711,17 +734,19 @@ pub async fn llm_check_provider_status(
     let router = state.router.read().await;
 
     let provider_enum = match provider.as_str() {
-        "openai" => Provider::OpenAI,
-        "anthropic" => Provider::Anthropic,
-        "google" => Provider::Google,
+        // Direct providers are routed through managed cloud (no local API keys)
+        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek"
+        | "qwen" | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
         "ollama" => Provider::Ollama,
-        "xai" | "grok" => Provider::XAI,
-        "deepseek" => Provider::DeepSeek,
-        "qwen" | "alibaba" => Provider::Qwen,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
-    let configured = router.has_provider(provider_enum);
+    let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
+    let configured = match provider_enum {
+        Provider::ManagedCloud => managed_cloud_available,
+        Provider::Ollama => router.has_provider(Provider::Ollama),
+        _ => router.has_provider(provider_enum),
+    };
 
     let mut ollama_running = None;
     if provider == "ollama" {
@@ -752,7 +777,7 @@ pub async fn llm_check_provider_status(
         available,
         configured,
         error: if !configured && provider != "ollama" {
-            Some("Provider not configured. Please add API key in settings.".to_string())
+            Some("Cloud authentication required. Sign in to use managed models.".to_string())
         } else if provider == "ollama" && !ollama_running.unwrap_or(false) {
             Some("Ollama server is not running. Start with 'ollama serve'".to_string())
         } else {
