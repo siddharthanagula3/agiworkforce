@@ -1049,7 +1049,10 @@ class SupabaseAuthService {
         const errorMessage = 'OAuth URL missing from provider response.';
         this.updateState({ isLoading: false, error: errorMessage });
         return {
-          data: response.data,
+          data: {
+            provider,
+            url: null,
+          },
           error: new AuthError(errorMessage, 500, 'OAuthError'),
         };
       }
@@ -1061,7 +1064,10 @@ class SupabaseAuthService {
         const message = error instanceof Error ? error.message : String(error);
         this.updateState({ isLoading: false, error: message });
         return {
-          data: response.data,
+          data: {
+            provider,
+            url: null,
+          },
           error: new AuthError(message, 500, 'OAuthError'),
         };
       }
