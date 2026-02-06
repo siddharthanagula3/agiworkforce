@@ -3,6 +3,8 @@
 //! Provides direct web search capabilities using DuckDuckGo (free, no API key required).
 
 use anyhow::{anyhow, Result};
+use serde_json::Value;
+use tauri::command;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -77,6 +79,121 @@ pub struct WebSearchResponse {
     pub provider: String,
     /// Search duration in milliseconds
     pub duration_ms: u64,
+}
+
+/// Tauri command: web_search
+///
+/// Routes to the core SearchExecutor (Perplexity with DuckDuckGo fallback)
+/// and returns a normalized response for the frontend.
+#[command]
+pub async fn web_search(
+    query: String,
+    num_results: Option<usize>,
+    search_type: Option<String>,
+) -> Result<WebSearchResponse, String> {
+    use crate::core::agi::executors::search_executor::{SearchExecutor, SearchType as ExecSearchType};
+
+    let start = std::time::Instant::now();
+    let trimmed_query = query.trim().to_string();
+
+    let requested_type = search_type
+        .as_deref()
+        .unwrap_or("general")
+        .to_lowercase();
+
+    let exec_search_type = match requested_type.as_str() {
+        // Map UI-friendly terms to executor types
+        "web" | "general" => ExecSearchType::General,
+        "code" | "programming" => ExecSearchType::Code,
+        "academic" | "scholarly" | "research" => ExecSearchType::Academic,
+        "news" => ExecSearchType::News,
+        // Images are not supported by the executor; fallback to general web search
+        "images" => ExecSearchType::General,
+        _ => ExecSearchType::General,
+    };
+
+    let exec = SearchExecutor::new();
+    let raw = exec
+        .run_search(&trimmed_query, exec_search_type, num_results.unwrap_or(10))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    let provider = raw
+        .get("provider")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+
+    let results = raw
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let access_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let mut normalized = Vec::new();
+    for (idx, item) in results.iter().enumerate() {
+        let title = item
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let url = item
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let snippet = item
+            .get("snippet")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+
+        if url.is_empty() && title.is_empty() {
+            continue;
+        }
+
+        let domain = extract_domain(&url);
+        let favicon = domain
+            .as_ref()
+            .map(|d| format!("https://www.google.com/s2/favicons?domain={}&sz=32", d));
+
+        let position = idx + 1;
+        normalized.push(WebSearchResult {
+            title,
+            url,
+            snippet,
+            favicon,
+            domain,
+            position,
+            citation_id: Some(format!("cite-{}", position)),
+            access_timestamp: Some(access_timestamp),
+        });
+    }
+
+    let count = raw
+        .get("results_count")
+        .and_then(Value::as_u64)
+        .map(|v| v as usize)
+        .unwrap_or_else(|| normalized.len());
+
+    Ok(WebSearchResponse {
+        query: raw
+            .get("query")
+            .and_then(Value::as_str)
+            .unwrap_or(&trimmed_query)
+            .to_string(),
+        results: normalized,
+        count,
+        provider,
+        duration_ms,
+    })
 }
 
 /// Web search provider trait

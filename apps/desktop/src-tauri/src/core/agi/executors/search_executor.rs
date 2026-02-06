@@ -521,16 +521,15 @@ impl ToolExecutor for SearchExecutor {
 }
 
 impl SearchExecutor {
-    /// Execute search_web operation.
+    /// Execute a web search with typed parameters.
     ///
-    /// Performs a web search using Perplexity API (if configured) with fallback to DuckDuckGo.
-    /// Supports different search types: general, code, academic, news, research.
-    async fn execute_search(&self, parameters: &HashMap<String, Value>) -> Result<Value> {
-        let query = parameters
-            .get("query")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Missing 'query' parameter"))?;
-
+    /// This is a public entrypoint for Tauri commands and other internal callers.
+    pub async fn run_search(
+        &self,
+        query: &str,
+        search_type: SearchType,
+        num_results: usize,
+    ) -> Result<Value> {
         // Validate query
         let query_trimmed = query.trim();
         if query_trimmed.is_empty() {
@@ -544,7 +543,47 @@ impl SearchExecutor {
             ));
         }
 
-        // Get optional parameters with defaults
+        let num_results = num_results.clamp(1, 20);
+
+        tracing::info!(
+            "[SearchExecutor] search_web: query='{}' type={:?} num_results={}",
+            &query_trimmed[..query_trimmed.len().min(50)],
+            search_type,
+            num_results
+        );
+
+        // Try Perplexity first if API key is available (all tiers)
+        if let Some(api_key) = Self::get_perplexity_api_key() {
+            match self
+                .search_with_perplexity(query_trimmed, search_type, num_results, &api_key)
+                .await
+            {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    tracing::warn!(
+                        "[SearchExecutor] Perplexity search failed, falling back to DuckDuckGo: {}",
+                        e
+                    );
+                    // Fall through to DuckDuckGo
+                }
+            }
+        }
+
+        // Fallback (or Hobby tier): DuckDuckGo
+        self.search_with_duckduckgo(query_trimmed, search_type, num_results)
+            .await
+    }
+
+    /// Execute search_web operation.
+    ///
+    /// Performs a web search using Perplexity API (if configured) with fallback to DuckDuckGo.
+    /// Supports different search types: general, code, academic, news, research.
+    async fn execute_search(&self, parameters: &HashMap<String, Value>) -> Result<Value> {
+        let query = parameters
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing 'query' parameter"))?;
+
         let num_results = parameters
             .get("num_results")
             .and_then(|v| v.as_i64())
@@ -565,33 +604,7 @@ impl SearchExecutor {
             SearchType::General
         });
 
-        tracing::info!(
-            "[SearchExecutor] search_web: query='{}' type={:?} num_results={}",
-            &query_trimmed[..query_trimmed.len().min(50)],
-            search_type,
-            num_results
-        );
-
-        // Try Perplexity first if API key is available
-        if let Some(api_key) = Self::get_perplexity_api_key() {
-            match self
-                .search_with_perplexity(query_trimmed, search_type, num_results, &api_key)
-                .await
-            {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    tracing::warn!(
-                        "[SearchExecutor] Perplexity search failed, falling back to DuckDuckGo: {}",
-                        e
-                    );
-                    // Fall through to DuckDuckGo
-                }
-            }
-        }
-
-        // Fallback to DuckDuckGo
-        self.search_with_duckduckgo(query_trimmed, search_type, num_results)
-            .await
+        self.run_search(query, search_type, num_results).await
     }
 }
 

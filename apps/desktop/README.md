@@ -132,9 +132,8 @@ The OCR feature uses Tesseract for extracting text from images. It's **disabled 
 Create `.env.local` from `.env.example`:
 
 ```env
-VITE_OPENAI_API_KEY=sk-...
-VITE_ANTHROPIC_API_KEY=sk-ant-...
-VITE_GOOGLE_API_KEY=AIza...
+VITE_API_BASE_URL=https://api.agiworkforce.com
+AGI_API_URL=https://api.agiworkforce.com
 VITE_ENABLE_OLLAMA=true
 ```
 

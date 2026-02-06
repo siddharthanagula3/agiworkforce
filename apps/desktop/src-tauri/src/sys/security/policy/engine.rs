@@ -550,10 +550,13 @@ impl PolicyEngine {
         context: &PolicyContext,
     ) -> Result<PolicyDecision> {
         let safe_domains = [
-            "api.openai.com",
-            "api.anthropic.com",
+            "api.agiworkforce.com",
+            "agiworkforce.com",
+            "supabase.co",
             "github.com",
             "api.github.com",
+            "localhost",
+            "127.0.0.1",
         ];
 
         if safe_domains.iter().any(|d| domain.contains(d)) {

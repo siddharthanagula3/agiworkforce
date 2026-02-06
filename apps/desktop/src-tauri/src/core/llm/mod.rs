@@ -4,6 +4,7 @@ pub mod fallback_chain;
 pub mod function_executor;
 pub mod llm_router;
 pub mod memory_integration;
+pub mod prompt_policy;
 pub mod providers;
 pub mod sse_parser;
 pub mod thinking;

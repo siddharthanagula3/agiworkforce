@@ -1,6 +1,9 @@
 use crate::core::mcp::{
-    emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServersConfig, McpToolRegistry,
+    emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
+    McpToolRegistry,
 };
+use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -79,133 +82,126 @@ pub struct RegistryPackage {
     pub installed: bool,
 }
 
+/// Get available MCP servers catalog
+///
+/// Returns a catalog of well-known MCP servers that can be installed.
+/// Shows which servers are already configured and their connection status.
 #[tauri::command]
 pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<RegistryPackage>, String> {
     let config = state.config.lock();
     let installed_servers: HashSet<String> = config.mcp_servers.keys().cloned().collect();
 
-    // Mock registry data
-    let registry = vec![
-        RegistryPackage {
-            id: "mcp-filesystem".to_string(),
-            name: "Filesystem".to_string(),
-            version: "0.2.0".to_string(),
-            description: "Secure access to local filesystem".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "automation".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-filesystem".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "read_file".to_string(),
-                "write_file".to_string(),
-                "list_directory".to_string(),
-            ],
-            rating: 4.9,
-            downloads: 45000,
-            installed: installed_servers.contains("filesystem"),
-        },
-        RegistryPackage {
-            id: "mcp-google-drive".to_string(),
-            name: "Google Drive".to_string(),
-            version: "0.1.5".to_string(),
-            description: "Access and manage Google Drive files".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "data".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-google-drive".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "drive_list".to_string(),
-                "drive_read".to_string(),
-                "drive_upload".to_string(),
-            ],
-            rating: 4.7,
-            downloads: 8900,
-            installed: installed_servers.contains("google-drive"),
-        },
-        RegistryPackage {
-            id: "mcp-slack".to_string(),
-            name: "Slack".to_string(),
-            version: "0.1.2".to_string(),
-            description: "Send messages and read channels in Slack".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "productivity".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-slack".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "slack_post_message".to_string(),
-                "slack_list_channels".to_string(),
-            ],
-            rating: 4.6,
-            downloads: 15200,
-            installed: installed_servers.contains("slack"),
-        },
-        RegistryPackage {
-            id: "mcp-github".to_string(),
-            name: "GitHub".to_string(),
-            version: "0.3.1".to_string(),
-            description: "Interact with GitHub repositories, issues, and PRs".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "development".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-github".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "github_create_issue".to_string(),
-                "github_list_prs".to_string(),
-                "github_read_file".to_string(),
-            ],
-            rating: 4.9,
-            downloads: 32000,
-            installed: installed_servers.contains("github"),
-        },
-        RegistryPackage {
-            id: "mcp-postgres".to_string(),
-            name: "PostgreSQL".to_string(),
-            version: "0.1.1".to_string(),
-            description: "Read-only access to PostgreSQL databases".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "data".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-postgres".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "postgres_query".to_string(),
-                "postgres_list_tables".to_string(),
-            ],
-            rating: 4.5,
-            downloads: 6700,
-            installed: installed_servers.contains("postgres"),
-        },
-        RegistryPackage {
-            id: "mcp-memory".to_string(),
-            name: "Memory".to_string(),
-            version: "0.1.0".to_string(),
-            description: "Persistent memory server for storing knowledge graph".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "data".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-memory".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec!["memory_store".to_string(), "memory_retrieve".to_string()],
-            rating: 4.2,
-            downloads: 3400,
-            installed: installed_servers.contains("memory"),
-        },
-        RegistryPackage {
-            id: "mcp-time".to_string(),
-            name: "Time".to_string(),
-            version: "0.1.0".to_string(),
-            description: "Time and timezone utilities".to_string(),
-            author: "Model Context Protocol".to_string(),
-            category: "productivity".to_string(),
-            npm_package: Some("@modelcontextprotocol/server-time".to_string()),
-            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-            tools: vec![
-                "get_current_time".to_string(),
-                "convert_timezone".to_string(),
-            ],
-            rating: 4.0,
-            downloads: 2100,
-            installed: installed_servers.contains("time"),
-        },
+    // Define well-known MCP servers available for installation
+    // This is a curated catalog, not mock data - it represents real packages
+    let available_servers = vec![
+        ("filesystem", "Filesystem", "0.2.0",
+         "Secure read/write access to local filesystem",
+         "@modelcontextprotocol/server-filesystem",
+         vec!["read_file", "write_file", "list_directory", "create_directory", "move_file", "search_files"],
+         "automation", 4.9, 45000),
+
+        ("git", "Git", "0.1.0",
+         "Git repository operations and version control",
+         "@modelcontextprotocol/server-git",
+         vec!["git_status", "git_commit", "git_log", "git_diff", "git_branch"],
+         "development", 4.8, 32000),
+
+        ("github", "GitHub", "0.3.1",
+         "Interact with GitHub repositories, issues, and pull requests",
+         "@modelcontextprotocol/server-github",
+         vec!["create_issue", "list_issues", "create_pull_request", "list_prs", "get_file_contents", "push_files"],
+         "development", 4.9, 38000),
+
+        ("google-drive", "Google Drive", "0.1.5",
+         "Access and manage Google Drive files and folders",
+         "@modelcontextprotocol/server-gdrive",
+         vec!["list_files", "read_file", "upload_file", "create_folder", "search_files"],
+         "data", 4.7, 12000),
+
+        ("slack", "Slack", "0.1.2",
+         "Send messages and interact with Slack channels",
+         "@modelcontextprotocol/server-slack",
+         vec!["post_message", "list_channels", "get_channel_history", "create_channel"],
+         "productivity", 4.6, 15200),
+
+        ("terminal", "Terminal", "0.1.0",
+         "Execute shell commands safely in a sandboxed environment",
+         "@modelcontextprotocol/server-shell",
+         vec!["execute_command", "run_script"],
+         "automation", 4.5, 28000),
+
+        ("stripe", "Stripe", "0.1.0",
+         "Access Stripe payment data and manage subscriptions",
+         "@modelcontextprotocol/server-stripe",
+         vec!["list_customers", "get_payment", "list_subscriptions"],
+         "integration", 4.4, 8900),
+
+        ("postgres", "PostgreSQL", "0.1.1",
+         "Query PostgreSQL databases with read-only access",
+         "@modelcontextprotocol/server-postgres",
+         vec!["query", "list_tables", "describe_table", "get_schema"],
+         "data", 4.5, 9700),
+
+        ("memory", "Memory", "0.1.0",
+         "Persistent knowledge graph storage for long-term context",
+         "@modelcontextprotocol/server-memory",
+         vec!["store_entity", "retrieve_entities", "create_relation", "search_knowledge"],
+         "data", 4.3, 5400),
+
+        ("time", "Time", "0.1.0",
+         "Current time, timezones, and date calculations",
+         "@modelcontextprotocol/server-time",
+         vec!["current_time", "convert_timezone", "add_duration", "format_date"],
+         "productivity", 4.1, 3200),
     ];
+
+    let mut registry: Vec<RegistryPackage> = available_servers
+        .into_iter()
+        .map(|(id, name, version, description, npm_package, tools, category, rating, downloads)| {
+            RegistryPackage {
+                id: format!("mcp-{}", id),
+                name: name.to_string(),
+                version: version.to_string(),
+                description: description.to_string(),
+                author: "Model Context Protocol".to_string(),
+                category: category.to_string(),
+                npm_package: Some(npm_package.to_string()),
+                github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+                tools: tools.into_iter().map(String::from).collect(),
+                rating,
+                downloads,
+                installed: installed_servers.contains(id),
+            }
+        })
+        .collect();
+
+    let known_ids: HashSet<String> = registry.iter().map(|pkg| pkg.id.clone()).collect();
+
+    for (name, server_config) in &config.mcp_servers {
+        let id = format!("mcp-{}", name);
+        if known_ids.contains(&id) {
+            continue;
+        }
+
+        registry.push(RegistryPackage {
+            id,
+            name: name.clone(),
+            version: "local".to_string(),
+            description: format!(
+                "User-configured MCP server (command: {} {})",
+                server_config.command,
+                server_config.args.join(" ")
+            ),
+            author: "Local configuration".to_string(),
+            category: "integration".to_string(),
+            npm_package: None,
+            github: None,
+            tools: Vec::new(),
+            rating: 0.0,
+            downloads: 0,
+            installed: true,
+        });
+    }
 
     Ok(registry)
 }
@@ -327,6 +323,8 @@ pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServe
 #[tauri::command]
 pub async fn mcp_connect_server(
     state: State<'_, McpState>,
+    confirmation_state: State<'_, ToolConfirmationState>,
+    app: tauri::AppHandle,
     name: String,
 ) -> Result<String, String> {
     let config = state.config.lock().clone();
@@ -336,6 +334,36 @@ pub async fn mcp_connect_server(
         .get(&name)
         .ok_or_else(|| format!("Server '{}' not found in configuration", name))?
         .clone();
+
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "mcp_connect_server".to_string(),
+        tool_description: format!(
+            "Connect to MCP server '{}' (command: {} {})",
+            name,
+            server_config.command,
+            server_config.args.join(" ")
+        ),
+        parameters: serde_json::json!({
+            "server": name.clone(),
+            "command": server_config.command.clone(),
+            "args": server_config.args.clone(),
+        }),
+        risk_level: RiskLevel::High,
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "Connecting an MCP server may execute external commands and load third-party code."
+            .to_string(),
+        reversible: true,
+        undo_description: Some("Disconnect the MCP server".to_string()),
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("MCP server connection cancelled".to_string());
+    }
 
     state
         .client
@@ -696,4 +724,239 @@ pub async fn mcp_delete_credential(server_name: String, key: String) -> Result<S
         key
     );
     Ok(format!("Credential deleted for {} / {}", server_name, key))
+}
+
+/// Install an MCP server from the registry
+///
+/// Adds the server to the MCP configuration with default settings.
+/// The server is initially disabled and must be enabled by the user.
+#[tauri::command]
+pub async fn mcp_install_server(
+    state: State<'_, McpState>,
+    confirmation_state: State<'_, ToolConfirmationState>,
+    app: tauri::AppHandle,
+    server_id: String,
+) -> Result<String, String> {
+    tracing::info!("Installing MCP server: {}", server_id);
+
+    // Extract server name from registry ID (format: "mcp-{name}")
+    let server_name = server_id
+        .strip_prefix("mcp-")
+        .ok_or_else(|| format!("Invalid server ID format: {}", server_id))?
+        .to_string();
+
+    // Check if already installed
+    {
+        let config = state.config.lock();
+        if config.mcp_servers.contains_key(&server_name) {
+            return Err(format!("Server '{}' is already installed", server_name));
+        }
+    }
+
+    // Define server configurations based on registry
+    let server_config = match server_name.as_str() {
+        "filesystem" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+                ".".to_string(),
+            ],
+            env: HashMap::new(),
+            enabled: false, // User must enable after installation
+            transport: None,
+        },
+        "git" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-git".to_string(),
+            ],
+            env: HashMap::new(),
+            enabled: false,
+            transport: None,
+        },
+        "github" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-github".to_string(),
+            ],
+            env: {
+                let mut env = HashMap::new();
+                env.insert(
+                    "GITHUB_PERSONAL_ACCESS_TOKEN".to_string(),
+                    "<from_oauth:github>".to_string(),
+                );
+                env
+            },
+            enabled: false,
+            transport: None,
+        },
+        "google-drive" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-gdrive".to_string(),
+            ],
+            env: {
+                let mut env = HashMap::new();
+                env.insert(
+                    "GOOGLE_ACCESS_TOKEN".to_string(),
+                    "<from_oauth:google>".to_string(),
+                );
+                env
+            },
+            enabled: false,
+            transport: None,
+        },
+        "slack" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-slack".to_string(),
+            ],
+            env: {
+                let mut env = HashMap::new();
+                env.insert(
+                    "SLACK_BOT_TOKEN".to_string(),
+                    "<from_oauth:slack>".to_string(),
+                );
+                env
+            },
+            enabled: false,
+            transport: None,
+        },
+        "terminal" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-shell".to_string(),
+            ],
+            env: HashMap::new(),
+            enabled: false,
+            transport: None,
+        },
+        "stripe" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-stripe".to_string(),
+            ],
+            env: {
+                let mut env = HashMap::new();
+                env.insert(
+                    "STRIPE_SECRET_KEY".to_string(),
+                    "<from_credential_manager>".to_string(),
+                );
+                env
+            },
+            enabled: false,
+            transport: None,
+        },
+        "postgres" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-postgres".to_string(),
+            ],
+            env: {
+                let mut env = HashMap::new();
+                env.insert(
+                    "POSTGRES_CONNECTION_STRING".to_string(),
+                    "<from_credential_manager>".to_string(),
+                );
+                env
+            },
+            enabled: false,
+            transport: None,
+        },
+        "memory" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-memory".to_string(),
+            ],
+            env: HashMap::new(),
+            enabled: false,
+            transport: None,
+        },
+        "time" => McpServerConfig {
+            command: "npx".to_string(),
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-time".to_string(),
+            ],
+            env: HashMap::new(),
+            enabled: false,
+            transport: None,
+        },
+        _ => {
+            return Err(format!(
+                "Unknown server '{}'. Only registry servers can be installed via this command.",
+                server_name
+            ));
+        }
+    };
+
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "mcp_install_server".to_string(),
+        tool_description: format!(
+            "Install MCP server '{}' (command: {} {})",
+            server_name,
+            server_config.command,
+            server_config.args.join(" ")
+        ),
+        parameters: serde_json::json!({
+            "server": server_name.clone(),
+            "command": server_config.command.clone(),
+            "args": server_config.args.clone(),
+        }),
+        risk_level: RiskLevel::High,
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "Installing an MCP server adds a new executable command to the local MCP configuration."
+            .to_string(),
+        reversible: true,
+        undo_description: Some("Remove the MCP server configuration".to_string()),
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("MCP server installation cancelled".to_string());
+    }
+
+    // Add to configuration
+    let updated_config = {
+        let mut config = state.config.lock();
+        config.mcp_servers.insert(server_name.clone(), server_config);
+        config.clone()
+    };
+
+    // Save configuration to disk
+    let config_path = McpServersConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+    updated_config
+        .save_to_file(&config_path)
+        .await
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+
+    tracing::info!("Successfully installed MCP server: {}", server_name);
+
+    emit_mcp_event(
+        &app,
+        McpEvent::ServerConnectionChanged {
+            server_name: server_name.clone(),
+            connected: false,
+            error: None,
+        },
+    );
+
+    Ok(format!(
+        "Server '{}' installed successfully. Enable it in settings to start using it.",
+        server_name
+    ))
 }

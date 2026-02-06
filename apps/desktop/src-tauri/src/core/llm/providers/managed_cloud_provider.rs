@@ -1,7 +1,10 @@
 use crate::core::llm::sse_parser::StreamChunk;
-use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse};
+use crate::core::llm::{
+    ChatMessage, ContentPart, ImageDetail, ImageFormat, LLMProvider, LLMRequest, LLMResponse,
+};
 use crate::sys::account::{get_access_token, get_api_base_url};
 use async_trait::async_trait;
+use base64::Engine;
 use futures_util::Stream;
 use reqwest::Client;
 use serde_json::Value;
@@ -86,6 +89,9 @@ impl ManagedCloudProvider {
         let mut transformed =
             serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
 
+        // Transform messages to OpenAI multimodal format
+        transformed["messages"] = serde_json::json!(self.transform_messages(&request.messages));
+
         // Transform tools if present
         if let Some(tools) = &request.tools {
             transformed["tools"] = serde_json::json!(Self::transform_tools_to_openai_format(tools));
@@ -100,6 +106,78 @@ impl ManagedCloudProvider {
         }
 
         transformed
+    }
+
+    fn transform_messages(&self, messages: &[ChatMessage]) -> Vec<Value> {
+        messages
+            .iter()
+            .map(|message| {
+                let mut msg = serde_json::json!({
+                    "role": message.role,
+                    "content": message.content,
+                });
+
+                if let Some(tool_calls) = &message.tool_calls {
+                    msg["tool_calls"] = serde_json::json!(tool_calls);
+                }
+                if let Some(tool_call_id) = &message.tool_call_id {
+                    msg["tool_call_id"] = serde_json::json!(tool_call_id);
+                }
+
+                if let Some(parts) = &message.multimodal_content {
+                    let mut content_parts: Vec<Value> = Vec::new();
+
+                    if !message.content.is_empty() {
+                        content_parts.push(serde_json::json!({
+                            "type": "text",
+                            "text": message.content,
+                        }));
+                    }
+
+                    for part in parts {
+                        match part {
+                            ContentPart::Text { text } => content_parts.push(serde_json::json!({
+                                "type": "text",
+                                "text": text,
+                            })),
+                            ContentPart::Image { image } => {
+                                let mime = Self::image_format_to_mime(image.format);
+                                let encoded =
+                                    base64::engine::general_purpose::STANDARD.encode(&image.data);
+                                content_parts.push(serde_json::json!({
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": format!("data:{};base64,{}", mime, encoded),
+                                        "detail": Self::image_detail_to_str(image.detail),
+                                    }
+                                }));
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    msg["content"] = serde_json::json!(content_parts);
+                }
+
+                msg
+            })
+            .collect()
+    }
+
+    fn image_format_to_mime(format: ImageFormat) -> &'static str {
+        match format {
+            ImageFormat::Png => "image/png",
+            ImageFormat::Jpeg => "image/jpeg",
+            ImageFormat::Webp => "image/webp",
+        }
+    }
+
+    fn image_detail_to_str(detail: ImageDetail) -> &'static str {
+        match detail {
+            ImageDetail::Low => "low",
+            ImageDetail::High => "high",
+            ImageDetail::Auto => "auto",
+        }
     }
 }
 
