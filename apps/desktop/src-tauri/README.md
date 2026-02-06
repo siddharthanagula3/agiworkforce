@@ -288,8 +288,7 @@ pnpm build:desktop
 | Variable | Description |
 |----------|-------------|
 | `RUST_LOG` | Logging: debug, info, warn, error |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `AGI_API_URL` | Base URL for the AGI Workforce managed cloud (Vercel proxy) |
 
 ### SQLite Optimizations
 

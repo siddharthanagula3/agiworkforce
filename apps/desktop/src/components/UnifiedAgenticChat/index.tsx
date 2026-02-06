@@ -953,7 +953,7 @@ export const UnifiedAgenticChat: React.FC<{
             panel = await executeBrowserCommand(slashCommand.args);
             break;
           case 'terminal':
-            panel = await executeTerminalCommand(slashCommand.args);
+            panel = await executeTerminalCommand(slashCommand.args, userMessageId);
             break;
           case 'code':
             panel = await executeCodeCommand(slashCommand.args);

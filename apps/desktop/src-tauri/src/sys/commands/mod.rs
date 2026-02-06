@@ -192,3 +192,5 @@ pub use vision::*;
 pub use voice::*;
 pub use window::*;
 pub use workspace::*;
+
+// Re-export web_search command from features

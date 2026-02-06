@@ -9,6 +9,7 @@ use crate::features::speech::{
     TtsProvider, Voice, VoiceWake, WakeWordConfig, WhisperLocal, WhisperModelInfo,
     WhisperModelSize,
 };
+use crate::sys::account::{get_access_token, get_api_base_url};
 #[cfg(feature = "vad")]
 use crate::features::speech::{BargeInDetector, SharedVad};
 use reqwest::Client;
@@ -33,7 +34,6 @@ pub struct VoiceTranscription {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceSettings {
     pub provider: VoiceProvider,
-    pub openai_api_key: Option<String>,
     pub model: String,
     pub language: Option<String>,
 }
@@ -41,7 +41,7 @@ pub struct VoiceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum VoiceProvider {
-    OpenAI,
+    Cloud,
     WebSpeech,
     Local,
 }
@@ -125,8 +125,7 @@ impl VoiceState {
     pub fn new() -> Self {
         Self {
             settings: Arc::new(Mutex::new(VoiceSettings {
-                provider: VoiceProvider::OpenAI,
-                openai_api_key: None,
+                provider: VoiceProvider::Cloud,
                 model: "whisper-1".to_string(),
                 language: None,
             })),
@@ -187,9 +186,7 @@ pub async fn voice_transcribe_file(
     let settings = voice_state.settings.lock().await;
 
     match settings.provider {
-        VoiceProvider::OpenAI => {
-            transcribe_with_openai(&audio_path, &settings, &voice_state.client).await
-        }
+        VoiceProvider::Cloud => transcribe_with_cloud(&audio_path, &settings, &voice_state.client).await,
         VoiceProvider::WebSpeech => {
             Err("Web Speech API transcription must be done from frontend".to_string())
         }
@@ -230,7 +227,6 @@ pub async fn voice_transcribe_blob(
 #[tauri::command]
 pub async fn voice_configure(
     provider: String,
-    api_key: Option<String>,
     model: Option<String>,
     language: Option<String>,
     state: State<'_, Arc<Mutex<VoiceState>>>,
@@ -241,15 +237,11 @@ pub async fn voice_configure(
     let mut settings = voice_state.settings.lock().await;
 
     settings.provider = match provider.as_str() {
-        "openai" => VoiceProvider::OpenAI,
+        "cloud" | "managed_cloud" | "managedcloud" => VoiceProvider::Cloud,
         "webspeech" => VoiceProvider::WebSpeech,
         "local" => VoiceProvider::Local,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
-
-    if let Some(key) = api_key {
-        settings.openai_api_key = Some(key);
-    }
 
     if let Some(m) = model {
         settings.model = m;
@@ -271,17 +263,15 @@ pub async fn voice_get_settings(
     Ok(settings.clone())
 }
 
-#[tauri::command]
-pub async fn voice_start_recording() -> Result<String, String> {
-    tracing::info!("Voice recording started (handled by frontend)");
-    Ok("recording".to_string())
-}
-
-#[tauri::command]
-pub async fn voice_stop_recording() -> Result<(), String> {
-    tracing::info!("Voice recording stopped (handled by frontend)");
-    Ok(())
-}
+// NOTE: Voice recording is handled entirely in the frontend using browser MediaRecorder API.
+// This provides better UX with real-time visual feedback and access to audio constraints.
+// Backend transcription happens via voice_transcribe_blob command.
+//
+// If you need backend recording in the future:
+// 1. Add audio capture using cpal or rodio crate
+// 2. Store audio chunks in VoiceState
+// 3. Return transcription result from voice_stop_recording
+// 4. Update VoiceMicButton to use the returned transcription
 
 #[tauri::command]
 pub async fn voice_check_local_whisper() -> Result<bool, String> {
@@ -311,16 +301,11 @@ pub async fn voice_check_local_whisper() -> Result<bool, String> {
     Ok(false)
 }
 
-async fn transcribe_with_openai(
+async fn transcribe_with_cloud(
     audio_path: &PathBuf,
     settings: &VoiceSettings,
     client: &Client,
 ) -> Result<VoiceTranscription, String> {
-    let api_key = settings
-        .openai_api_key
-        .as_ref()
-        .ok_or("OpenAI API key not configured")?;
-
     let audio_data =
         std::fs::read(audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
 
@@ -342,9 +327,21 @@ async fn transcribe_with_openai(
         form = form.text("language", lang.clone());
     }
 
+    transcribe_with_managed_cloud(client, form).await
+}
+
+async fn transcribe_with_managed_cloud(
+    client: &Client,
+    form: reqwest::multipart::Form,
+) -> Result<VoiceTranscription, String> {
+    let token = get_access_token()
+        .map_err(|e| format!("Managed Cloud auth required: {}", e))?;
+    let base = get_api_base_url();
+    let url = format!("{}/api/llm/v1/audio/transcriptions", base);
+
     let response = client
-        .post("https://api.openai.com/v1/audio/transcriptions")
-        .header("Authorization", format!("Bearer {}", api_key))
+        .post(url)
+        .bearer_auth(token)
         .multipart(form)
         .send()
         .await
@@ -355,7 +352,7 @@ async fn transcribe_with_openai(
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Whisper API error: {}", error_text));
+        return Err(format!("Whisper Cloud API error: {}", error_text));
     }
 
     let whisper_response: WhisperResponse = response
@@ -370,6 +367,7 @@ async fn transcribe_with_openai(
         confidence: None,
     })
 }
+
 
 #[derive(Debug, Deserialize)]
 struct WhisperResponse {

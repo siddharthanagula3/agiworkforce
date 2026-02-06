@@ -101,14 +101,13 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'claude-haiku-4.5', label: 'Claude 4.5 Haiku' },
   ],
   google: [
-    { value: 'gemini-3-ultra', label: 'Gemini 3 Ultra' },
     { value: 'gemini-3-pro', label: 'Gemini 3 Pro' },
     { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
   ],
   xai: [
     { value: 'grok-4.1', label: 'Grok 4.1' },
     { value: 'grok-4.1-fast-reasoning', label: 'Grok 4.1 Fast Reasoning' },
-    { value: 'grok-4.1-mini', label: 'Grok 4.1 Mini' },
+    { value: 'grok-4.1-fast-non-reasoning', label: 'Grok 4.1 Fast (Non-Reasoning)' },
   ],
   deepseek: [
     { value: 'deepseek-v3.2', label: 'DeepSeek V3.2' },
@@ -116,13 +115,9 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   ],
   qwen: [
     { value: 'qwen3-max', label: 'Qwen3 Max' },
-    { value: 'qwen3-coder-plus', label: 'Qwen3 Coder Plus' },
     { value: 'qwen-flash', label: 'Qwen Flash' },
   ],
-  moonshot: [
-    { value: 'kimi-k2.5-thinking', label: 'Kimi K2.5 Thinking' },
-    { value: 'kimi-k2.5-turbo', label: 'Kimi K2.5 Turbo' },
-  ],
+  moonshot: [{ value: 'kimi-k2.5', label: 'Kimi K2.5' }],
   perplexity: [
     { value: 'sonar', label: 'Sonar' },
     { value: 'sonar-reasoning', label: 'Sonar Reasoning' },
@@ -159,12 +154,10 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-v3.2',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5-thinking',
+    'kimi-k2.5',
     'grok-4.1-fast-reasoning',
     'claude-haiku-4.5',
-    'qwen3-coder-flash',
-    'grok-4.1-mini',
-    'qwen-turbo',
+    'grok-4.1-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
     // Search models
@@ -177,12 +170,10 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-v3.2',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5-thinking',
+    'kimi-k2.5',
     'grok-4.1-fast-reasoning',
     'claude-haiku-4.5',
-    'qwen3-coder-flash',
-    'grok-4.1-mini',
-    'qwen-turbo',
+    'grok-4.1-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
     'sonar',
@@ -193,9 +184,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'gpt-5.2',
     'claude-sonnet-4.5',
     'gemini-3-pro',
-    'kimi-k2.5-turbo',
     'qwen3-max',
-    'qwen3-coder-plus',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -205,12 +194,10 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-v3.2',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5-thinking',
+    'kimi-k2.5',
     'grok-4.1-fast-reasoning',
     'claude-haiku-4.5',
-    'qwen3-coder-flash',
-    'grok-4.1-mini',
-    'qwen-turbo',
+    'grok-4.1-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
     'sonar',
@@ -220,7 +207,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     // Flagship models
     'claude-opus-4.5',
     'gpt-5-pro',
-    'gemini-3-ultra',
     'o3',
     'grok-4.1',
     'deepseek-r1',
@@ -228,9 +214,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'gpt-5.2',
     'claude-sonnet-4.5',
     'gemini-3-pro',
-    'kimi-k2.5-turbo',
     'qwen3-max',
-    'qwen3-coder-plus',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -240,12 +224,10 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-v3.2',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5-thinking',
+    'kimi-k2.5',
     'grok-4.1-fast-reasoning',
     'claude-haiku-4.5',
-    'qwen3-coder-flash',
-    'grok-4.1-mini',
-    'qwen-turbo',
+    'grok-4.1-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
     'sonar',
@@ -254,16 +236,13 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
   enterprise: [
     'claude-opus-4.5',
     'gpt-5-pro',
-    'gemini-3-ultra',
     'o3',
     'grok-4.1',
     'deepseek-r1',
     'gpt-5.2',
     'claude-sonnet-4.5',
     'gemini-3-pro',
-    'kimi-k2.5-turbo',
     'qwen3-max',
-    'qwen3-coder-plus',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -272,12 +251,10 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-v3.2',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5-thinking',
+    'kimi-k2.5',
     'grok-4.1-fast-reasoning',
     'claude-haiku-4.5',
-    'qwen3-coder-flash',
-    'grok-4.1-mini',
-    'qwen-turbo',
+    'grok-4.1-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
     'sonar',
@@ -328,29 +305,22 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-opus-4.5': 200_000,
   'claude-sonnet-4.5': 200_000,
   'claude-haiku-4.5': 200_000, // Claude Haiku 4.5 - cheapest Anthropic
-  // Google
-  'gemini-3-ultra': 2_000_000, // Gemini 3 Ultra - flagship Google model
+  // Google (no Ultra tier exists in Gemini 3 API)
   'gemini-3-pro': 2_000_000,
   'gemini-3-flash': 1_000_000,
   // xAI
   'grok-4.1': 256_000,
   'grok-4.1-fast': 2_000_000, // Grok 4.1 Fast - cheapest xAI with 2M context
   'grok-4.1-fast-reasoning': 2_000_000,
-  'grok-4.1-mini': 128_000,
+  'grok-4.1-fast-non-reasoning': 2_000_000, // Per official xAI docs
   // DeepSeek
   'deepseek-v3.2': 128_000,
   'deepseek-r1': 128_000,
-  // Qwen
-  'qwen-3': 128_000,
-  'qwen3-max': 128_000,
-  'qwen3-coder-plus': 128_000,
-  'qwen3-coder-flash': 128_000,
-  'qwen-flash': 128_000,
-  'qwen-turbo': 128_000,
-  // Moonshot K2.5 (replaces K2)
-  'kimi-k2.5': 256_000,
-  'kimi-k2.5-thinking': 256_000,
-  'kimi-k2.5-turbo': 256_000,
+  // Qwen (via MuleRouter)
+  'qwen3-max': 128_000, // Flagship model
+  'qwen-flash': 1_000_000, // 1M per MuleRouter docs
+  // Moonshot K2.5 (thinking controlled via API parameter, not separate model)
+  'kimi-k2.5': 256_000, // 262,144 per official docs
   // Perplexity
   sonar: 128_000,
   'sonar-reasoning': 128_000,
@@ -802,43 +772,8 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // GOOGLE MODELS
   // Source: https://ai.google.dev/gemini-api/docs/models
   // Capabilities verified January 2026
+  // NOTE: Gemini 3 only has Pro and Flash tiers (no Ultra tier exists in API)
   // ============================================
-  'gemini-3-ultra': {
-    id: 'gemini-3-ultra',
-    apiModelId: 'gemini-3-ultra',
-    name: 'Gemini 3 Ultra',
-    provider: 'google',
-    modelType: 'reasoning',
-    contextWindow: 2_000_000, // 2M context window
-    inputCost: 3.5, // $3.50/1M input
-    outputCost: 14.0, // $14/1M output
-    capabilities: {
-      streaming: true,
-      tools: true, // Full function calling
-      vision: true, // Native multimodal (images, video, audio)
-      json: true, // JSON mode supported
-      thinking: true, // Deep Think / reasoning mode
-      computerUse: false, // Not available
-      agentic: true, // Excellent for multi-step tasks
-      imageGen: false, // Separate Imagen model
-      videoGen: false, // Separate Veo model
-      search: true, // Google Search grounding
-      research: true, // Deep research via grounding
-      codeExecution: true, // Native code execution sandbox
-    },
-    benchmarks: {
-      swebench: 76.2, // SWE-bench verified (Jan 2026)
-      humaneval: 96.0,
-      mmlu: 90.1, // MMLU-Pro
-      gpqa: 93.8, // GPQA Diamond (Deep Think)
-      aime: 95.0, // AIME 2025 (with tools)
-    },
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['Complex Research', 'Long Context', 'Multimodal Analysis', 'Enterprise Tasks'],
-    released: 'January 2026',
-  },
   'gemini-3-pro': {
     id: 'gemini-3-pro',
     apiModelId: 'gemini-3-pro',
@@ -1037,45 +972,39 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
 
   // ============================================
-  // QWEN MODELS
-  // Source: https://help.aliyun.com/zh/model-studio/developer-reference/qwen
-  // Capabilities verified January 2026
-  // NOTE: Vision requires separate qwen-vl model
+  // QWEN MODELS (via MuleRouter)
+  // Source: https://www.mulerouter.ai/collections/qwen
+  // MuleRouter provides OpenAI-compatible API for Qwen models
   // ============================================
-  'qwen-3': {
-    id: 'qwen-3',
-    apiModelId: 'qwen-max-2025-01',
-    name: 'Qwen 3',
+
+  'qwen3-max': {
+    id: 'qwen3-max',
+    apiModelId: 'qwen3-max',
+    name: 'Qwen3 Max',
     provider: 'qwen',
-    modelType: 'chat',
-    contextWindow: 128_000,
-    inputCost: 0.4, // $0.40/1M input
-    outputCost: 1.2, // $1.20/1M output
+    modelType: 'reasoning',
+    contextWindow: 128_000, // 252K per MuleRouter docs
+    inputCost: 1.2, // $1.2/1M for 0-32K tokens
+    outputCost: 6.0, // $6/1M for 0-32K tokens
     capabilities: {
       streaming: true,
-      tools: true, // MCP + function calling supported
-      vision: false, // NO VISION - requires separate qwen-vl model
-      json: true, // JSON mode available
-      thinking: true, // Dual-mode thinking (enable_thinking param)
-      computerUse: false, // Not available
-      agentic: false, // Basic agentic via tools
+      tools: true,
+      vision: false,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
       imageGen: false,
       videoGen: false,
-      search: false, // No built-in web search
-      research: false, // No built-in research
-      codeExecution: false, // Via Qwen-Agent only
+      search: true,
+      research: false,
+      codeExecution: true,
     },
-    benchmarks: {
-      swebench: 45.2,
-      humaneval: 89.5,
-      mmlu: 86.2,
-      gpqa: 62.5,
-      aime: 48.0,
-    },
-    speed: 'fast',
-    quality: 'good',
+    benchmarks: { swebench: 58, humaneval: 93, mmlu: 88, gpqa: 65, aime: 60 },
+    speed: 'medium',
+    quality: 'excellent',
     qualityTier: 'balanced',
-    bestFor: ['Multilingual', 'Chinese', 'General Tasks', 'Reasoning'],
+    bestFor: ['Complex Reasoning', 'Multilingual', 'Research'],
     released: 'January 2026',
   },
 
@@ -1115,27 +1044,27 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2026',
   },
 
-  // xAI Grok 4.1 Mini
-  'grok-4.1-mini': {
-    id: 'grok-4.1-mini',
-    apiModelId: 'grok-4.1-mini',
-    name: 'Grok 4.1 Mini',
+  // xAI Grok 4.1 Fast (Non-Reasoning) - formerly misnamed as "mini"
+  'grok-4.1-fast-non-reasoning': {
+    id: 'grok-4.1-fast-non-reasoning',
+    apiModelId: 'grok-4.1-fast-non-reasoning',
+    name: 'Grok 4.1 Fast (Non-Reasoning)',
     provider: 'xai',
     modelType: 'chat',
-    contextWindow: 128_000,
-    inputCost: 0.05,
-    outputCost: 0.2,
+    contextWindow: 2_000_000, // 2M context per official docs
+    inputCost: 0.2, // $0.20/1M per official docs
+    outputCost: 0.5, // $0.50/1M per official docs
     capabilities: {
       streaming: true,
       tools: true,
       vision: false,
       json: true,
-      thinking: false,
+      thinking: false, // Non-reasoning variant
       computerUse: false,
       agentic: false,
       imageGen: false,
       videoGen: false,
-      search: false,
+      search: true, // X/Twitter search available
       research: false,
       codeExecution: false,
     },
@@ -1143,7 +1072,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'fair',
     qualityTier: 'fast',
-    bestFor: ['Quick Tasks', 'Simple Queries', 'Budget Usage'],
+    bestFor: ['Quick Tasks', 'Simple Queries', 'Long Context', 'Budget Usage'],
     released: 'January 2026',
   },
 
@@ -1211,18 +1140,15 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2025',
   },
 
-  // ============================================
-  // QWEN MODELS (New)
-  // ============================================
   'qwen-flash': {
     id: 'qwen-flash',
     apiModelId: 'qwen-flash',
     name: 'Qwen Flash',
     provider: 'qwen',
     modelType: 'chat',
-    contextWindow: 128_000,
-    inputCost: 0.05,
-    outputCost: 0.15,
+    contextWindow: 1_000_000, // 1M per MuleRouter docs
+    inputCost: 0.05, // $0.05/1M for 0-256K tokens
+    outputCost: 0.4, // $0.40/1M for 0-256K tokens
     capabilities: {
       streaming: true,
       tools: true,
@@ -1241,132 +1167,15 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'fair',
     qualityTier: 'fast',
-    bestFor: ['Quick Tasks', 'Budget Usage', 'Multilingual'],
-    released: 'January 2026',
-  },
-  'qwen-turbo': {
-    id: 'qwen-turbo',
-    apiModelId: 'qwen-turbo',
-    name: 'Qwen Turbo',
-    provider: 'qwen',
-    modelType: 'chat',
-    contextWindow: 128_000,
-    inputCost: 0.1,
-    outputCost: 0.3,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-      thinking: false,
-      computerUse: false,
-      agentic: false,
-      imageGen: false,
-      videoGen: false,
-      search: false,
-      research: false,
-      codeExecution: false,
-    },
-    benchmarks: { swebench: 30, humaneval: 75, mmlu: 78, gpqa: 40, aime: 30 },
-    speed: 'fast',
-    quality: 'fair',
-    qualityTier: 'fast',
-    bestFor: ['General Tasks', 'Multilingual', 'Fast Response'],
-    released: 'January 2026',
-  },
-  'qwen3-coder-flash': {
-    id: 'qwen3-coder-flash',
-    apiModelId: 'qwen3-coder-flash',
-    name: 'Qwen3 Coder Flash',
-    provider: 'qwen',
-    modelType: 'code',
-    contextWindow: 128_000,
-    inputCost: 0.22,
-    outputCost: 0.95,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-      thinking: false,
-      computerUse: false,
-      agentic: true, // Alibaba "agentic coding model", task decomposition
-      imageGen: false,
-      videoGen: false,
-      search: false,
-      research: false,
-      codeExecution: false,
-    },
-    benchmarks: { swebench: 45, humaneval: 88, mmlu: 80, gpqa: 45, aime: 40 },
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['Agentic Tasks', 'Coding', 'Fast Code Generation', 'Budget Coding'],
-    released: 'January 2026',
-  },
-  'qwen3-coder-plus': {
-    id: 'qwen3-coder-plus',
-    apiModelId: 'qwen3-coder-plus',
-    name: 'Qwen3 Coder Plus',
-    provider: 'qwen',
-    modelType: 'code',
-    contextWindow: 128_000,
-    inputCost: 0.5,
-    outputCost: 2.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-      thinking: true,
-      computerUse: false,
-      agentic: true,
-      imageGen: false,
-      videoGen: false,
-      search: false,
-      research: false,
-      codeExecution: false,
-    },
-    benchmarks: { swebench: 55, humaneval: 92, mmlu: 85, gpqa: 55, aime: 50 },
-    speed: 'medium',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['Advanced Coding', 'Code Review', 'Refactoring'],
-    released: 'January 2026',
-  },
-  'qwen3-max': {
-    id: 'qwen3-max',
-    apiModelId: 'qwen3-max-2026-01-23',
-    name: 'Qwen3 Max',
-    provider: 'qwen',
-    modelType: 'reasoning',
-    contextWindow: 128_000,
-    inputCost: 1.2,
-    outputCost: 6.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-      thinking: true,
-      computerUse: false,
-      agentic: true,
-      imageGen: false,
-      videoGen: false,
-      search: true,
-      research: false,
-      codeExecution: true,
-    },
-    benchmarks: { swebench: 58, humaneval: 93, mmlu: 88, gpqa: 65, aime: 60 },
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'balanced',
-    bestFor: ['Complex Reasoning', 'Multilingual', 'Research'],
-    released: 'January 2026',
+    bestFor: ['Quick Tasks', 'Budget Usage', 'Multilingual', 'Long Context'],
+    released: 'November 2025',
   },
 
   // ============================================
-  // MOONSHOT K2.5 MODELS (replaces K2)
+  // MOONSHOT K2.5 MODELS
+  // Source: https://platform.moonshot.cn/docs
+  // NOTE: K2.5 is the latest model with native multimodal support and thinking mode
+  // Thinking mode is controlled via API parameter, not separate model IDs
   // ============================================
   'kimi-k2.5': {
     id: 'kimi-k2.5',
@@ -1374,47 +1183,17 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     name: 'Kimi K2.5',
     provider: 'moonshot',
     modelType: 'multimodal',
-    contextWindow: 256_000,
-    inputCost: 0.8,
-    outputCost: 3.5,
+    contextWindow: 256_000, // 262,144 per official docs
+    inputCost: 0.8, // ¥4.00/1M = ~$0.56 (using official pricing)
+    outputCost: 3.5, // ¥21.00/1M = ~$2.94
     capabilities: {
       streaming: true,
       tools: true,
-      vision: true,
+      vision: true, // Native multimodal
       json: true,
-      thinking: false,
+      thinking: true, // Controlled via {"thinking": {"type": "enabled"}} parameter
       computerUse: false,
-      agentic: true,
-      imageGen: false,
-      videoGen: false,
-      search: false,
-      research: false,
-      codeExecution: false,
-    },
-    benchmarks: { swebench: 52, humaneval: 90, mmlu: 87, gpqa: 72, aime: 85 },
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'balanced',
-    bestFor: ['Vision', 'Math', 'Reasoning', 'Agent Swarms'],
-    released: 'January 2026',
-  },
-  'kimi-k2.5-thinking': {
-    id: 'kimi-k2.5-thinking',
-    apiModelId: 'kimi-k2.5-thinking',
-    name: 'Kimi K2.5 Thinking',
-    provider: 'moonshot',
-    modelType: 'reasoning',
-    contextWindow: 256_000,
-    inputCost: 0.8,
-    outputCost: 3.5,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-      thinking: true,
-      computerUse: false,
-      agentic: true,
+      agentic: true, // State-of-the-art Agent performance
       imageGen: false,
       videoGen: false,
       search: false,
@@ -1425,37 +1204,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'medium',
     quality: 'excellent',
     qualityTier: 'balanced',
-    bestFor: ['Complex Reasoning', 'Math', 'Agent Swarms'],
-    released: 'January 2026',
-  },
-  'kimi-k2.5-turbo': {
-    id: 'kimi-k2.5-turbo',
-    apiModelId: 'kimi-k2.5-turbo',
-    name: 'Kimi K2.5 Turbo',
-    provider: 'moonshot',
-    modelType: 'reasoning',
-    contextWindow: 256_000,
-    inputCost: 1.25,
-    outputCost: 8.5,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-      thinking: true,
-      computerUse: false,
-      agentic: true,
-      imageGen: false,
-      videoGen: false,
-      search: false,
-      research: false,
-      codeExecution: false,
-    },
-    benchmarks: { swebench: 58, humaneval: 93, mmlu: 89, gpqa: 85, aime: 99 },
-    speed: 'fast',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['Fast Reasoning', 'Math', 'Speed-Critical'],
+    bestFor: ['Vision', 'Math', 'Reasoning', 'Agent Tasks', 'Multimodal'],
     released: 'January 2026',
   },
 

@@ -205,8 +205,6 @@ macro_rules! core_command_handlers {
             $crate::sys::commands::voice_transcribe_blob,
             $crate::sys::commands::voice_configure,
             $crate::sys::commands::voice_get_settings,
-            $crate::sys::commands::voice_start_recording,
-            $crate::sys::commands::voice_stop_recording,
             $crate::sys::commands::voice_check_local_whisper,
             // Deepgram Streaming STT
             $crate::sys::commands::voice_deepgram_configure,

@@ -44,6 +44,22 @@ fn default_prompt_completion_enabled() -> bool {
     true
 }
 
+fn default_allowed_directories() -> Vec<String> {
+    let mut dirs = Vec::new();
+
+    if let Some(home) = dirs::home_dir() {
+        dirs.push(home.to_string_lossy().to_string());
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        dirs.push(cwd.to_string_lossy().to_string());
+    }
+
+    dirs.push(std::env::temp_dir().to_string_lossy().to_string());
+
+    dirs
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -89,7 +105,7 @@ impl SettingsState {
                     prompt_completion_enabled: true,
                     show_timestamps: false,
                 }),
-                allowed_directories: Vec::new(),
+                allowed_directories: default_allowed_directories(),
             })),
         }
     }
