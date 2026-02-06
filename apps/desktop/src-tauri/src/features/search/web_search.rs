@@ -3,11 +3,11 @@
 //! Provides direct web search capabilities using DuckDuckGo (free, no API key required).
 
 use anyhow::{anyhow, Result};
-use serde_json::Value;
-use tauri::command;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::time::Duration;
+use tauri::command;
 
 /// A single web search result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,15 +91,14 @@ pub async fn web_search(
     num_results: Option<usize>,
     search_type: Option<String>,
 ) -> Result<WebSearchResponse, String> {
-    use crate::core::agi::executors::search_executor::{SearchExecutor, SearchType as ExecSearchType};
+    use crate::core::agi::executors::search_executor::{
+        SearchExecutor, SearchType as ExecSearchType,
+    };
 
     let start = std::time::Instant::now();
     let trimmed_query = query.trim().to_string();
 
-    let requested_type = search_type
-        .as_deref()
-        .unwrap_or("general")
-        .to_lowercase();
+    let requested_type = search_type.as_deref().unwrap_or("general").to_lowercase();
 
     let exec_search_type = match requested_type.as_str() {
         // Map UI-friendly terms to executor types

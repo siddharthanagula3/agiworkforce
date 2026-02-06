@@ -106,8 +106,7 @@ pub async fn media_generate_image(
     app: tauri::AppHandle,
     request: MediaImageRequest,
 ) -> Result<MediaImageResponse, String> {
-    let token = get_access_token()
-        .map_err(|e| format!("Authentication required: {}", e))?;
+    let token = get_access_token().map_err(|e| format!("Authentication required: {}", e))?;
     let base_url = get_api_base_url();
     let url = format!("{}/api/media/image/generate", base_url);
 
@@ -148,7 +147,9 @@ pub async fn media_generate_image(
     }
 
     let images: Vec<GeneratedImage> = serde_json::from_value(
-        body.get("images").cloned().unwrap_or_else(|| serde_json::json!([])),
+        body.get("images")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
     )
     .map_err(|e| format!("Failed to parse images: {}", e))?;
 
@@ -157,7 +158,10 @@ pub async fn media_generate_image(
         .and_then(|v| v.as_str())
         .unwrap_or("managed_cloud")
         .to_string();
-    let model = body.get("model").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let model = body
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let cost_estimate = body.get("cost_estimate").and_then(|v| v.as_f64());
 
     // Save to history
@@ -204,8 +208,7 @@ pub async fn media_generate_video(
         }
     }
 
-    let token = get_access_token()
-        .map_err(|e| format!("Authentication required: {}", e))?;
+    let token = get_access_token().map_err(|e| format!("Authentication required: {}", e))?;
     let base_url = get_api_base_url();
     let generate_url = format!("{}/api/media/video/generate", base_url);
 

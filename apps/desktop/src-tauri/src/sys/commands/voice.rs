@@ -9,9 +9,9 @@ use crate::features::speech::{
     TtsProvider, Voice, VoiceWake, WakeWordConfig, WhisperLocal, WhisperModelInfo,
     WhisperModelSize,
 };
-use crate::sys::account::{get_access_token, get_api_base_url};
 #[cfg(feature = "vad")]
 use crate::features::speech::{BargeInDetector, SharedVad};
+use crate::sys::account::{get_access_token, get_api_base_url};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -186,7 +186,9 @@ pub async fn voice_transcribe_file(
     let settings = voice_state.settings.lock().await;
 
     match settings.provider {
-        VoiceProvider::Cloud => transcribe_with_cloud(&audio_path, &settings, &voice_state.client).await,
+        VoiceProvider::Cloud => {
+            transcribe_with_cloud(&audio_path, &settings, &voice_state.client).await
+        }
         VoiceProvider::WebSpeech => {
             Err("Web Speech API transcription must be done from frontend".to_string())
         }
@@ -334,8 +336,7 @@ async fn transcribe_with_managed_cloud(
     client: &Client,
     form: reqwest::multipart::Form,
 ) -> Result<VoiceTranscription, String> {
-    let token = get_access_token()
-        .map_err(|e| format!("Managed Cloud auth required: {}", e))?;
+    let token = get_access_token().map_err(|e| format!("Managed Cloud auth required: {}", e))?;
     let base = get_api_base_url();
     let url = format!("{}/api/llm/v1/audio/transcriptions", base);
 
@@ -367,7 +368,6 @@ async fn transcribe_with_managed_cloud(
         confidence: None,
     })
 }
-
 
 #[derive(Debug, Deserialize)]
 struct WhisperResponse {

@@ -222,9 +222,7 @@ impl ToolExecutor {
             };
 
             if allowed.is_empty() {
-                return Err(anyhow!(
-                    "Access denied: No allowed directories configured."
-                ));
+                return Err(anyhow!("Access denied: No allowed directories configured."));
             }
 
             // Canonicalize allowed directories when possible
@@ -322,13 +320,7 @@ impl ToolExecutor {
                     );
 
                     if let Some(app_handle) = &self.app_handle {
-                        emit_tool_error(
-                            app_handle,
-                            &action_id,
-                            &e.to_string(),
-                            0,
-                            false,
-                        );
+                        emit_tool_error(app_handle, &action_id, &e.to_string(), 0, false);
                     }
 
                     return Ok(ToolResult {
@@ -1526,10 +1518,7 @@ impl ToolExecutor {
 
                 let start = Instant::now();
                 let executor = SearchExecutor::new();
-                match executor
-                    .run_search(&query, search_type, num_results)
-                    .await
-                {
+                match executor.run_search(&query, search_type, num_results).await {
                     Ok(raw) => {
                         let duration_ms = start.elapsed().as_millis() as u64;
                         let provider = raw

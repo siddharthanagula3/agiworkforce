@@ -127,19 +127,8 @@ pub async fn llm_send_message(
     let provider_name = request.provider.clone();
     let provider = request.provider.as_deref().and_then(|p| match p {
         // Route all cloud providers through ManagedCloud (no local API keys)
-        "openai"
-        | "anthropic"
-        | "google"
-        | "xai"
-        | "grok"
-        | "deepseek"
-        | "qwen"
-        | "alibaba"
-        | "moonshot"
-        | "perplexity"
-        | "zhipu"
-        | "glm"
-        | "sonar" => Some(Provider::ManagedCloud),
+        "openai" | "anthropic" | "google" | "xai" | "grok" | "deepseek" | "qwen" | "alibaba"
+        | "moonshot" | "perplexity" | "zhipu" | "glm" | "sonar" => Some(Provider::ManagedCloud),
         "ollama" => Some(Provider::Ollama),
         "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
         _ => None,
@@ -379,8 +368,8 @@ pub async fn llm_set_default_provider(
 
     let provider_enum = match provider.as_str() {
         // Direct providers are routed through managed cloud (no local API keys)
-        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek"
-        | "qwen" | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
+        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek" | "qwen"
+        | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
         "ollama" => Provider::Ollama,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
@@ -735,8 +724,8 @@ pub async fn llm_check_provider_status(
 
     let provider_enum = match provider.as_str() {
         // Direct providers are routed through managed cloud (no local API keys)
-        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek"
-        | "qwen" | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
+        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek" | "qwen"
+        | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
         "ollama" => Provider::Ollama,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
