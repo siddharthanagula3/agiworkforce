@@ -57,11 +57,7 @@ pub fn apply_no_xml_rule(request: &mut LLMRequest) {
         return;
     }
 
-    if let Some(idx) = request
-        .messages
-        .iter()
-        .rposition(|m| m.role == "system")
-    {
+    if let Some(idx) = request.messages.iter().rposition(|m| m.role == "system") {
         let updated = append_no_xml_rule(&request.messages[idx].content);
         request.messages[idx].content = updated;
         return;

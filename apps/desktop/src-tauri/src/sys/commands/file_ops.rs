@@ -287,9 +287,7 @@ async fn check_file_permission(
             settings
                 .allowed_directories
                 .iter()
-                .map(|dir| {
-                    std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir))
-                })
+                .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
                 .collect::<Vec<_>>()
         } else {
             default_allowed_directories()

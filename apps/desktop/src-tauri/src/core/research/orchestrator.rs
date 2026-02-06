@@ -849,11 +849,8 @@ Be objective and note any conflicting information or gaps in the research."#,
                 payload["task_id"] = serde_json::json!(task_id);
             }
             payload["time_elapsed"] = serde_json::json!(format!("{}s", progress.elapsed_secs));
-            payload["time_remaining"] = serde_json::json!(
-                progress
-                    .estimated_remaining_secs
-                    .map(|s| format!("{}s", s))
-            );
+            payload["time_remaining"] =
+                serde_json::json!(progress.estimated_remaining_secs.map(|s| format!("{}s", s)));
             let _ = app.emit("research:progress", payload);
         }
     }

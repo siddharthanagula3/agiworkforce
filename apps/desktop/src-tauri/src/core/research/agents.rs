@@ -198,10 +198,9 @@ impl WebSearchAgent {
     ) -> Result<Vec<SearchResult>, ResearchError> {
         // If configured with external API, use it; otherwise fall back to built-in search executor.
         if self.configured {
-            let endpoint = self
-                .api_endpoint
-                .as_ref()
-                .ok_or_else(|| ResearchError::ConfigError("No search endpoint configured".into()))?;
+            let endpoint = self.api_endpoint.as_ref().ok_or_else(|| {
+                ResearchError::ConfigError("No search endpoint configured".into())
+            })?;
 
             let api_key = self
                 .api_key
@@ -264,7 +263,9 @@ impl WebSearchAgent {
         }
 
         // Built-in fallback using SearchExecutor (Perplexity if configured, else DuckDuckGo)
-        use crate::core::agi::executors::search_executor::{SearchExecutor, SearchType as ExecSearchType};
+        use crate::core::agi::executors::search_executor::{
+            SearchExecutor, SearchType as ExecSearchType,
+        };
         let executor = SearchExecutor::new();
         let raw = executor
             .run_search(query, ExecSearchType::General, max_results)
