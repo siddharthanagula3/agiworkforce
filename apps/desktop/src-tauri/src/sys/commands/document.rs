@@ -157,7 +157,9 @@ pub async fn document_create_pdf_simple(
 fn resolve_output_path(output_path: &str) -> Result<String> {
     let trimmed = output_path.trim();
     if trimmed.is_empty() {
-        return Err(Error::InvalidPath("output_path cannot be empty".to_string()));
+        return Err(Error::InvalidPath(
+            "output_path cannot be empty".to_string(),
+        ));
     }
 
     let mut resolved = if trimmed == "~" || trimmed.starts_with("~/") {
