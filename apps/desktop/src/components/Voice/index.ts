@@ -5,8 +5,4 @@
  */
 
 export { VoiceMicButton } from './VoiceMicButton';
-export type {
-  VoiceMicButtonProps,
-  VoiceMicButtonState,
-  VoiceTranscriptionResult,
-} from './VoiceMicButton';
+export type { VoiceMicButtonProps } from './VoiceMicButton';
