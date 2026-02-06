@@ -91,8 +91,8 @@ export async function executeTerminalCommand(
     return panel;
   }
 
-  let stdoutBuffer = panel.content.terminal.stdout ?? '';
-  let stderrBuffer = panel.content.terminal.stderr ?? '';
+  let stdoutBuffer = panel.content.terminal?.stdout ?? '';
+  let stderrBuffer = panel.content.terminal?.stderr ?? '';
 
   const updatePanel = (updates: Partial<InlinePanel['content']>) => {
     useUnifiedChatStore.getState().updateInlinePanel(messageId, panelId, updates);
