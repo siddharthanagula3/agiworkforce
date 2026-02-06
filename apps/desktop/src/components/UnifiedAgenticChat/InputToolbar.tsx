@@ -10,6 +10,8 @@ import { cn } from '../../lib/utils';
 import { getModelMetadata } from '../../constants/llm';
 import { VoiceInputButton } from './VoiceInputButton';
 import { FolderSelector } from './FolderSelector';
+import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
+import type { CaptureResult } from '../../types/capture';
 
 export interface InputToolbarProps {
   /** Whether input is disabled */
@@ -40,6 +42,10 @@ export interface InputToolbarProps {
   onModeSelectorChange: (open: boolean) => void;
   /** Callback to change local Whisper preference */
   onPreferLocalWhisperChange: (prefer: boolean) => void;
+  /** Callback when screenshot is captured */
+  onScreenCapture?: (result: CaptureResult) => void;
+  /** Current conversation ID for screenshot association */
+  conversationId?: number;
 }
 
 export const InputToolbar: React.FC<InputToolbarProps> = ({
@@ -57,6 +63,8 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   onToggleRecording,
   onModeSelectorChange,
   onPreferLocalWhisperChange,
+  onScreenCapture,
+  conversationId,
 }) => {
   const modelMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
   const visionUnsupported = modelMetadata?.capabilities.vision === false;
@@ -87,6 +95,20 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
         >
           <Paperclip size={18} aria-hidden="true" />
         </button>
+      )}
+
+      {/* Screen Capture Button - always enabled even without vision (OCR can extract text) */}
+      {enableAttachments && (
+        <ScreenCaptureButton
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          mode="menu"
+          conversationId={conversationId}
+          onCaptureComplete={onScreenCapture}
+          suppressToasts={false}
+          className="p-2"
+        />
       )}
 
       <VoiceInputButton

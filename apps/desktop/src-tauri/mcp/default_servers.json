@@ -19,6 +19,15 @@
       "env": {},
       "enabled": true
     },
+    "terminal": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-shell"
+      ],
+      "env": {},
+      "enabled": true
+    },
     "github": {
       "command": "npx",
       "args": [
@@ -28,7 +37,7 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_oauth:github>"
       },
-      "enabled": true
+      "enabled": false
     },
     "google-drive": {
       "command": "npx",
@@ -39,7 +48,7 @@
       "env": {
         "GOOGLE_ACCESS_TOKEN": "<from_oauth:google>"
       },
-      "enabled": true
+      "enabled": false
     },
     "slack": {
       "command": "npx",
@@ -50,16 +59,7 @@
       "env": {
         "SLACK_BOT_TOKEN": "<from_oauth:slack>"
       },
-      "enabled": true
-    },
-    "terminal": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-shell"
-      ],
-      "env": {},
-      "enabled": true
+      "enabled": false
     },
     "windows_ui": {
       "command": "powershell.exe",
@@ -70,7 +70,7 @@
         "%APPDATA%/agiworkforce/scripts/windows_ui_mcp.ps1"
       ],
       "env": {},
-      "enabled": true
+      "enabled": false
     },
     "stripe": {
       "command": "npx",
@@ -81,7 +81,7 @@
       "env": {
         "STRIPE_SECRET_KEY": "<from_credential_manager>"
       },
-      "enabled": true
+      "enabled": false
     }
   }
 }

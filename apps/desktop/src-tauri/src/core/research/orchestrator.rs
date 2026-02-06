@@ -114,6 +114,8 @@ pub struct ResearchOrchestrator {
 
     /// Optional app handle for emitting progress events
     app_handle: Option<tauri::AppHandle>,
+    /// Optional task ID for frontend correlation
+    task_id: Option<String>,
 }
 
 impl ResearchOrchestrator {
@@ -156,12 +158,18 @@ impl ResearchOrchestrator {
             config,
             agents,
             app_handle: None,
+            task_id: None,
         })
     }
 
     /// Sets the Tauri app handle for emitting progress events.
     pub fn with_app_handle(mut self, handle: tauri::AppHandle) -> Self {
         self.app_handle = Some(handle);
+        self
+    }
+
+    pub fn with_task_id(mut self, task_id: Option<String>) -> Self {
+        self.task_id = task_id;
         self
     }
 
@@ -188,12 +196,22 @@ impl ResearchOrchestrator {
         self.emit_progress(&session.progress);
 
         // Phase 1: Analyze query and generate strategies
+        self.emit_step_started(0, "Analyzing query and planning research strategy");
         session.set_phase(ResearchPhase::AnalyzingQuery);
         session.set_status("Analyzing research query...");
         session.set_progress(5);
         self.emit_progress(&session.progress);
 
-        let analyzed_query = self.analyze_query(&session.query).await?;
+        let analyzed_query = match self.analyze_query(&session.query).await {
+            Ok(query) => {
+                self.emit_step_completed(0, true, None);
+                query
+            }
+            Err(e) => {
+                self.emit_step_completed(0, false, Some(e.to_string()));
+                return Err(e);
+            }
+        };
         session.query = analyzed_query;
 
         if session.is_cancelled() {
@@ -201,6 +219,7 @@ impl ResearchOrchestrator {
         }
 
         // Phase 2: Execute search strategies
+        self.emit_step_started(1, "Searching for relevant sources");
         session.set_phase(ResearchPhase::Searching);
         session.set_progress(10);
 
@@ -234,9 +253,16 @@ impl ResearchOrchestrator {
             self.emit_progress(&session.progress);
 
             // Execute strategies for this iteration
-            let iteration_results = self
+            let iteration_results = match self
                 .execute_iteration(&session.query, iteration, session.query.mode)
-                .await?;
+                .await
+            {
+                Ok(results) => results,
+                Err(e) => {
+                    self.emit_step_completed(1, false, Some(e.to_string()));
+                    return Err(e);
+                }
+            };
 
             // Track active agents
             session.progress.active_agents = iteration_results
@@ -263,7 +289,14 @@ impl ResearchOrchestrator {
             return self.handle_cancellation(&mut session);
         }
 
+        self.emit_step_completed(
+            1,
+            true,
+            Some(format!("Found {} sources", all_results.len())),
+        );
+
         // Phase 3: Collect and deduplicate results
+        self.emit_step_started(2, "Extracting key information");
         session.set_phase(ResearchPhase::CollectingResults);
         session.set_status("Collecting and organizing results...");
         session.set_progress(70);
@@ -271,28 +304,54 @@ impl ResearchOrchestrator {
 
         let deduplicated = self.deduplicate_results(all_results);
         session.results = deduplicated;
+        self.emit_step_completed(
+            2,
+            true,
+            Some(format!("Organized {} sources", session.results.len())),
+        );
 
         // Phase 4: Synthesize findings
+        self.emit_step_started(3, "Synthesizing findings");
         session.set_phase(ResearchPhase::Synthesizing);
         session.set_status("Synthesizing research findings...");
         session.set_progress(80);
         self.emit_progress(&session.progress);
 
-        let synthesis = self
+        let synthesis = match self
             .synthesize_findings(&session.query, &session.results)
-            .await?;
+            .await
+        {
+            Ok(result) => {
+                self.emit_step_completed(3, true, None);
+                result
+            }
+            Err(e) => {
+                self.emit_step_completed(3, false, Some(e.to_string()));
+                return Err(e);
+            }
+        };
 
         if session.is_cancelled() {
             return self.handle_cancellation(&mut session);
         }
 
         // Phase 5: Generate report
+        self.emit_step_started(4, "Compiling final report");
         session.set_phase(ResearchPhase::GeneratingReport);
         session.set_status("Generating research report...");
         session.set_progress(90);
         self.emit_progress(&session.progress);
 
-        let report = self.generate_report(&session, synthesis).await?;
+        let report = match self.generate_report(&session, synthesis).await {
+            Ok(report) => {
+                self.emit_step_completed(4, true, None);
+                report
+            }
+            Err(e) => {
+                self.emit_step_completed(4, false, Some(e.to_string()));
+                return Err(e);
+            }
+        };
 
         // Complete
         session.set_phase(ResearchPhase::Complete);
@@ -785,26 +844,76 @@ Be objective and note any conflicting information or gaps in the research."#,
     /// Emits a progress event to the frontend.
     fn emit_progress(&self, progress: &ResearchProgress) {
         if let Some(ref app) = self.app_handle {
-            let _ = app.emit(
-                "research:progress",
-                serde_json::to_value(progress).unwrap_or_default(),
+            let mut payload = serde_json::to_value(progress).unwrap_or_default();
+            if let Some(task_id) = &self.task_id {
+                payload["task_id"] = serde_json::json!(task_id);
+            }
+            payload["time_elapsed"] = serde_json::json!(format!("{}s", progress.elapsed_secs));
+            payload["time_remaining"] = serde_json::json!(
+                progress
+                    .estimated_remaining_secs
+                    .map(|s| format!("{}s", s))
             );
+            let _ = app.emit("research:progress", payload);
+        }
+    }
+
+    fn emit_step_started(&self, step_index: usize, description: &str) {
+        if let Some(ref app) = self.app_handle {
+            let step_id = if let Some(task_id) = &self.task_id {
+                format!("{}-step-{}", task_id, step_index + 1)
+            } else {
+                format!("step-{}", step_index + 1)
+            };
+            let payload = serde_json::json!({
+                "task_id": self.task_id,
+                "step_id": step_id,
+                "step_index": step_index,
+                "description": description,
+            });
+            let _ = app.emit("research:step_started", payload);
+        }
+    }
+
+    fn emit_step_completed(&self, step_index: usize, success: bool, details: Option<String>) {
+        if let Some(ref app) = self.app_handle {
+            let step_id = if let Some(task_id) = &self.task_id {
+                format!("{}-step-{}", task_id, step_index + 1)
+            } else {
+                format!("step-{}", step_index + 1)
+            };
+            let payload = serde_json::json!({
+                "task_id": self.task_id,
+                "step_id": step_id,
+                "step_index": step_index,
+                "success": success,
+                "details": details,
+            });
+            let _ = app.emit("research:step_completed", payload);
         }
     }
 
     /// Emits a research completion event.
     fn emit_research_complete(&self, result: &ResearchResult) {
         if let Some(ref app) = self.app_handle {
-            let _ = app.emit(
-                "research:complete",
-                serde_json::json!({
-                    "session_id": result.session_id,
-                    "query": result.query,
-                    "confidence": format!("{:?}", result.confidence),
-                    "sources_count": result.citations.len(),
-                    "duration_secs": result.metadata.duration_secs,
-                }),
-            );
+            let success = !result
+                .metadata
+                .warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("cancelled"));
+            let time_elapsed = format!("{}s", result.metadata.duration_secs);
+            let payload = serde_json::json!({
+                "session_id": result.session_id,
+                "task_id": self.task_id,
+                "query": result.query,
+                "confidence": format!("{:?}", result.confidence),
+                "sources_count": result.citations.len(),
+                "duration_secs": result.metadata.duration_secs,
+                "time_elapsed": time_elapsed,
+                "success": success,
+            });
+            let _ = app.emit("research:complete", payload.clone());
+            let _ = app.emit("research:completed", payload);
         }
     }
 

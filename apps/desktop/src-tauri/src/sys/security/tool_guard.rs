@@ -154,6 +154,26 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
+            "file_list".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "file_delete".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
             "ui_screenshot".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 20,
@@ -190,6 +210,359 @@ impl ToolExecutionGuard {
                 requires_approval: true,
                 allowed_parameters: vec!["url".to_string()],
                 risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_click".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "x".to_string(),
+                    "y".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_extract".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "attribute".to_string(),
+                    "extract_type".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_type".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "text".to_string(),
+                    "clear_first".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_wait_for_selector".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "timeout_ms".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_text".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 120,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_attribute".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 120,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "attribute".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_screenshot".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["full_page".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_hover".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_focus".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_scroll_into_view".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_query_all".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_execute_async_js".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "script".to_string(),
+                    "args".to_string(),
+                    "timeout_ms".to_string(),
+                    "retry_count".to_string(),
+                    "retry_delay_ms".to_string(),
+                    "await_promise".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_element_state".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_wait_for_interactive".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "timeout_ms".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_select_option".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "selector".to_string(),
+                    "value".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_check".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_uncheck".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: true,
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_url".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 120,
+                requires_approval: false,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_title".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 120,
+                requires_approval: false,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_go_back".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: true,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_go_forward".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: true,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_reload".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: true,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_wait_for_navigation".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["timeout_ms".to_string(), "tab_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_dom_snapshot".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "search_web".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "query".to_string(),
+                    "num_results".to_string(),
+                    "search_type".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "terminal_execute".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "command".to_string(),
+                    "cwd".to_string(),
+                    "shell".to_string(),
+                    "timeout_ms".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_create_pdf".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "output_path".to_string(),
+                    "title".to_string(),
+                    "author".to_string(),
+                    "paragraphs".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_create_word".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "output_path".to_string(),
+                    "title".to_string(),
+                    "author".to_string(),
+                    "paragraphs".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_create_excel".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "output_path".to_string(),
+                    "sheet_name".to_string(),
+                    "headers".to_string(),
+                    "rows".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
             },
         );
 
@@ -251,6 +624,14 @@ impl ToolExecutionGuard {
         }
     }
 
+    /// Override the allowed paths for file operations.
+    /// Use this to enforce per-user allowed directories from settings.
+    pub fn set_allowed_paths(&mut self, paths: Vec<PathBuf>) {
+        if !paths.is_empty() {
+            self.allowed_paths = paths;
+        }
+    }
+
     pub async fn validate_tool_call(
         &self,
         tool_name: &str,
@@ -269,12 +650,24 @@ impl ToolExecutionGuard {
         self.check_rate_limit(tool_name, policy).await?;
 
         match tool_name {
-            "file_read" | "file_write" => {
+            "file_read" | "file_write" | "file_delete" | "file_list" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
                     self.validate_file_path(path)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
+                    ));
+                }
+            }
+            "document_create_pdf" | "document_create_word" | "document_create_excel" => {
+                if let Some(path) = parameters
+                    .get("output_path")
+                    .and_then(|p| p.as_str())
+                {
+                    self.validate_file_path(path)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'output_path' parameter".to_string(),
                     ));
                 }
             }
@@ -284,6 +677,13 @@ impl ToolExecutionGuard {
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'url' parameter".to_string(),
+                    ));
+                }
+            }
+            "terminal_execute" => {
+                if parameters.get("command").and_then(|c| c.as_str()).is_none() {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'command' parameter".to_string(),
                     ));
                 }
             }

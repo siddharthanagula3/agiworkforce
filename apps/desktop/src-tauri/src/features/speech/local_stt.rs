@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "local-whisper")]
+use std::sync::Arc;
+#[cfg(feature = "local-whisper")]
+use tokio::sync::RwLock;
+#[cfg(feature = "local-whisper")]
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 /// Whisper model size options with tradeoffs between speed and accuracy

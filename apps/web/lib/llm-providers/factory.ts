@@ -21,7 +21,7 @@ import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
  */
 const MODEL_ID_TO_API_ID: Record<string, string> = {
   // Google Gemini 3 models (per docs/llm-provider-reference.md)
-  'gemini-3-ultra': 'gemini-3-pro-preview', // Gemini 3 Ultra
+  // NOTE: No "Ultra" tier exists in Gemini 3 API - only Pro and Flash
   'gemini-3-pro': 'gemini-3-pro-preview', // Gemini 3 Pro
   'gemini-3-flash': 'gemini-3-flash-preview', // Gemini 3 Flash
   // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
@@ -38,20 +38,17 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'grok-4.1': 'grok-4-1-fast-reasoning', // Grok 4.1
   'grok-4.1-fast-reasoning': 'grok-4-1-fast-reasoning', // Grok Fast Reasoning
   'grok-4.1-fast': 'grok-4-1-fast-non-reasoning', // Grok Fast Non-Reasoning
-  'grok-4.1-mini': 'grok-4-1-fast-non-reasoning', // Grok Mini
+  'grok-4.1-fast-non-reasoning': 'grok-4-1-fast-non-reasoning', // Grok Fast Non-Reasoning (correct name)
   // DeepSeek models
   'deepseek-v3.2': 'deepseek-chat', // DeepSeek V3.2 maps to deepseek-chat
   'deepseek-r1': 'deepseek-reasoner', // DeepSeek R1 reasoning model
-  // Qwen models (via MuleRouter) - per docs/llm-provider-reference.md
-  'qwen3-max': 'qwen3-max', // Qwen3 Max
-  'qwen3-coder-plus': 'qwen-plus', // Qwen3 Coder Plus
-  'qwen3-coder-flash': 'qwen-flash', // Qwen3 Coder Flash
-  'qwen-turbo': 'qwen-flash', // Qwen Turbo maps to Flash
-  'qwen-flash': 'qwen-flash', // Qwen Flash
+  // Qwen models (via MuleRouter) - per https://www.mulerouter.ai/collections/qwen
+  // MuleRouter model IDs: qwen3-max, qwen-flash
+  'qwen3-max': 'qwen3-max', // Qwen3 Max (flagship model)
+  'qwen-flash': 'qwen-flash', // Qwen Flash (economy model)
   // Moonshot/Kimi models - per docs/llm-provider-reference.md
-  'kimi-k2.5': 'kimi-k2.5', // Kimi K2.5 latest
-  'kimi-k2.5-thinking': 'kimi-k2-thinking', // Kimi K2.5 Thinking
-  'kimi-k2.5-turbo': 'kimi-k2-turbo-preview', // Kimi K2.5 Turbo
+  // NOTE: K2.5 is a single model - thinking mode controlled via API parameter
+  'kimi-k2.5': 'kimi-k2.5', // Kimi K2.5 (thinking mode via API parameter)
   // Perplexity models
   sonar: 'sonar',
   'sonar-pro': 'sonar-pro',

@@ -922,6 +922,9 @@ impl LLMRouter {
             routed_request.model = candidate.model.clone();
         }
 
+        // Enforce output protocol to prevent XML/tool-tag leakage
+        crate::core::llm::prompt_policy::apply_no_xml_rule(&mut routed_request);
+
         let mut response = provider
             .send_message(&routed_request)
             .await

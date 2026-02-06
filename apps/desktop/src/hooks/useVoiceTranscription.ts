@@ -22,8 +22,7 @@ export interface VoiceTranscription {
  * Voice settings from the backend
  */
 export interface VoiceSettings {
-  provider: 'openai' | 'webspeech' | 'local';
-  openai_api_key: string | null;
+  provider: 'cloud' | 'webspeech' | 'local';
   model: string;
   language: string | null;
 }
@@ -157,8 +156,7 @@ export function useVoiceTranscription(
     async (settings: Partial<VoiceSettings>): Promise<void> => {
       try {
         await invoke('voice_configure', {
-          provider: settings.provider || 'openai',
-          apiKey: settings.openai_api_key,
+          provider: settings.provider || 'cloud',
           model: settings.model,
           language: settings.language,
         });
@@ -218,11 +216,11 @@ export function useVoiceTranscription(
   useEffect(() => {
     if (preferLocal && availableLocalWhisper.length > 0) {
       configureImpl({ provider: 'local' as const }).catch((err) => {
-        // AUDIT-P3-ERROR: Log local provider failure, then fallback to OpenAI
-        console.debug('[VoiceTranscription] Local provider failed, falling back to OpenAI:', err);
-        configureImpl({ provider: 'openai' as const }).catch((fallbackErr) => {
+        // AUDIT-P3-ERROR: Log local provider failure, then fallback to Cloud
+        console.debug('[VoiceTranscription] Local provider failed, falling back to Cloud:', err);
+        configureImpl({ provider: 'cloud' as const }).catch((fallbackErr) => {
           // AUDIT-P3-ERROR: Both providers failed - error state already set by configureImpl
-          console.debug('[VoiceTranscription] OpenAI fallback also failed:', fallbackErr);
+          console.debug('[VoiceTranscription] Cloud fallback also failed:', fallbackErr);
         });
       });
     }
@@ -330,11 +328,6 @@ export function useVoiceTranscription(
         interimTranscript: '',
       }));
 
-      // Notify backend that recording started (for logging)
-      invoke('voice_start_recording').catch((err) => {
-        console.warn('[VoiceTranscription] Failed to notify backend of recording start:', err);
-      });
-
       onRecordingStart?.();
     } catch (err) {
       const errorMessage = getMediaErrorMessage(err);
@@ -364,11 +357,6 @@ export function useVoiceTranscription(
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
-
-        // Notify backend that recording stopped
-        invoke('voice_stop_recording').catch((err) => {
-          console.warn('[VoiceTranscription] Failed to notify backend of recording stop:', err);
-        });
 
         onRecordingStop?.();
 

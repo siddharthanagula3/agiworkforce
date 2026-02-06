@@ -472,6 +472,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         return <Presentation className="h-4 w-4" />;
       case 'html':
         return <Globe className="h-4 w-4" />;
+      case 'document':
+        return <FileText className="h-4 w-4" />;
       default:
         return <Code2 className="h-4 w-4" />;
     }
@@ -619,6 +621,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
             <PresentationArtifact artifact={artifact} />
           ) : artifact.type === 'html' ? (
             <HtmlArtifact artifact={artifact} />
+          ) : artifact.type === 'document' ? (
+            <DocumentArtifact artifact={artifact} />
           ) : (
             <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
           )}
@@ -1464,6 +1468,15 @@ ${content}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+function DocumentArtifact({ artifact }: { artifact: Artifact }) {
+  return (
+    <div className="p-4 bg-white/5 rounded-lg overflow-auto max-h-[500px]">
+      <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap font-sans">
+        {artifact.content}
+      </pre>
     </div>
   );
 }

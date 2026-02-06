@@ -3,8 +3,6 @@ pub mod skill_tool;
 pub use skill_tool::{create_list_skills_tool, create_skill_use_tool, SkillTool, SkillToolInput};
 
 use super::*;
-use crate::automation::AutomationService;
-use crate::core::llm::LLMRouter;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -85,11 +83,7 @@ impl ToolRegistry {
         })
     }
 
-    pub fn register_all_tools(
-        &self,
-        _automation: Arc<AutomationService>,
-        _router: Arc<tokio::sync::RwLock<LLMRouter>>,
-    ) -> Result<()> {
+    pub fn register_all_tools(&self) -> Result<()> {
         self.register_tool(Tool {
             id: "file_read".to_string(),
             name: "Read File".to_string(),
@@ -369,6 +363,667 @@ impl ToolRegistry {
             estimated_resources: ResourceUsage {
                 cpu_percent: 5.0,
                 memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_type".to_string(),
+            name: "Type in Browser".to_string(),
+            description: "Type text into a browser element using a CSS selector".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the input element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "text".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Text to type into the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "clear_first".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Clear existing content before typing (default: true)".to_string(),
+                    default: Some(serde_json::json!(true)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_wait_for_selector".to_string(),
+            name: "Wait for Selector".to_string(),
+            description: "Wait for a CSS selector to appear in the browser".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector to wait for".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Timeout in milliseconds (default: 30000)".to_string(),
+                    default: Some(serde_json::json!(30000)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_text".to_string(),
+            name: "Get Browser Text".to_string(),
+            description: "Get text content from a browser element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_attribute".to_string(),
+            name: "Get Browser Attribute".to_string(),
+            description: "Get an attribute from a browser element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "attribute".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Attribute name to retrieve".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_screenshot".to_string(),
+            name: "Browser Screenshot".to_string(),
+            description: "Capture a screenshot of the current page".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::ImageProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "full_page".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Capture full page (default: false)".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 100,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_hover".to_string(),
+            name: "Hover Browser Element".to_string(),
+            description: "Hover over a browser element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_focus".to_string(),
+            name: "Focus Browser Element".to_string(),
+            description: "Focus a browser element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_scroll_into_view".to_string(),
+            name: "Scroll Element Into View".to_string(),
+            description: "Scroll a browser element into view".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_query_all".to_string(),
+            name: "Query All Browser Elements".to_string(),
+            description: "Query multiple browser elements and return their metadata".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::DataAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for elements".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_execute_async_js".to_string(),
+            name: "Execute Async JavaScript".to_string(),
+            description: "Execute async JavaScript in the browser and return the result".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "script".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "JavaScript to execute".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "args".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "Arguments passed to the script".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Execution timeout in milliseconds".to_string(),
+                    default: Some(serde_json::json!(30000)),
+                },
+                ToolParameter {
+                    name: "retry_count".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Retry attempts on failure".to_string(),
+                    default: Some(serde_json::json!(3)),
+                },
+                ToolParameter {
+                    name: "retry_delay_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Delay between retries in milliseconds".to_string(),
+                    default: Some(serde_json::json!(1000)),
+                },
+                ToolParameter {
+                    name: "await_promise".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Await promise results (default: true)".to_string(),
+                    default: Some(serde_json::json!(true)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 80,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_element_state".to_string(),
+            name: "Get Element State".to_string(),
+            description: "Get visibility/interactivity state for a browser element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::DataAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 40,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_wait_for_interactive".to_string(),
+            name: "Wait for Interactive Element".to_string(),
+            description: "Wait until an element is interactive and ready".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Timeout in milliseconds (default: 30000)".to_string(),
+                    default: Some(serde_json::json!(30000)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_select_option".to_string(),
+            name: "Select Browser Option".to_string(),
+            description: "Select an option value in a browser select element".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the select element".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "value".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Option value to select".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_check".to_string(),
+            name: "Check Browser Checkbox".to_string(),
+            description: "Check a checkbox in the browser".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the checkbox".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_uncheck".to_string(),
+            name: "Uncheck Browser Checkbox".to_string(),
+            description: "Uncheck a checkbox in the browser".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the checkbox".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_url".to_string(),
+            name: "Get Browser URL".to_string(),
+            description: "Get the current page URL".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_title".to_string(),
+            name: "Get Browser Title".to_string(),
+            description: "Get the current page title".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_go_back".to_string(),
+            name: "Browser Back".to_string(),
+            description: "Navigate back in browser history".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_go_forward".to_string(),
+            name: "Browser Forward".to_string(),
+            description: "Navigate forward in browser history".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_reload".to_string(),
+            name: "Browser Reload".to_string(),
+            description: "Reload the current browser page".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 1.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_wait_for_navigation".to_string(),
+            name: "Wait for Navigation".to_string(),
+            description: "Wait for page navigation to complete".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Timeout in milliseconds (default: 30000)".to_string(),
+                    default: Some(serde_json::json!(30000)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_get_dom_snapshot".to_string(),
+            name: "Get DOM Snapshot".to_string(),
+            description: "Get the full HTML DOM snapshot of the current page".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 60,
                 network_mb: 0.0,
             },
             dependencies: vec![],
