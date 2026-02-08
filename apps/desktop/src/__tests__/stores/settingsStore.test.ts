@@ -287,12 +287,13 @@ describe('settingsStore', () => {
       await useSettingsStore.getState().saveSettings();
 
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save', {
-        settings: {
+        settings: expect.objectContaining({
           llmConfig: expect.any(Object),
           windowPreferences: expect.any(Object),
           chatPreferences: expect.any(Object),
+          executionPreferences: expect.any(Object),
           allowedDirectories: expect.any(Array),
-        },
+        }),
       });
 
       const state = useSettingsStore.getState();

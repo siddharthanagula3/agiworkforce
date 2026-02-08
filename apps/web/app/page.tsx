@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     'GPT-5',
     'Claude 4.5',
     'Gemini 3',
-    'DeepSeek V3',
+    'DeepSeek Chat',
     'Llama 3.3',
     'local AI',
     'productivity tools',
@@ -81,7 +81,7 @@ const jsonLd = {
     },
     featureList: [
       'Autonomous AI Agents',
-      'Multi-LLM Support (GPT-5, Claude 4.5, Gemini 3, DeepSeek V3)',
+      'Multi-LLM Support (GPT-5, Claude 4.5, Gemini 3, DeepSeek Chat)',
       'Desktop and Web Automation',
       'Local-First Privacy',
       'Native Performance with Rust',
@@ -192,7 +192,7 @@ export default function Home() {
                   {
                     icon: Bot,
                     title: 'Multi-LLM Support',
-                    desc: 'Switch instantly between GPT-5, Claude 4.5, Gemini 3, Grok 4.1, DeepSeek V3, Qwen 3, or local Llama 3.3 models.',
+                    desc: 'Switch instantly between GPT-5, Claude 4.5, Gemini 3, Grok 4, DeepSeek Chat, Qwen 3, or local Llama 3.3 models.',
                   },
                   {
                     icon: Sparkles,

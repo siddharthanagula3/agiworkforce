@@ -61,12 +61,14 @@ class FeatureFlagsService {
 
   private getDefaultFlags(): Record<string, FeatureFlag> {
     return {
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.PARALLEL_EXECUTION]: {
         name: FeatureFlagName.PARALLEL_EXECUTION,
         enabled: true,
         enabledForAll: true,
         description: 'Enable parallel agent execution (Cursor 2.0-style)',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.AUTONOMOUS_AGENT]: {
         name: FeatureFlagName.AUTONOMOUS_AGENT,
         enabled: true,
@@ -85,18 +87,21 @@ class FeatureFlagsService {
         rolloutPercentage: 10,
         description: 'New redesigned dashboard',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.DARK_MODE]: {
         name: FeatureFlagName.DARK_MODE,
         enabled: true,
         enabledForAll: true,
         description: 'Dark mode theme',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.COMMAND_PALETTE]: {
         name: FeatureFlagName.COMMAND_PALETTE,
         enabled: true,
         enabledForAll: true,
         description: 'Command palette (Cmd/Ctrl+K)',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.BROWSER_AUTOMATION]: {
         name: FeatureFlagName.BROWSER_AUTOMATION,
         enabled: true,
@@ -109,12 +114,14 @@ class FeatureFlagsService {
         targetPlanTiers: ['pro', 'enterprise'],
         description: 'Database integration (SQL/NoSQL)',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.API_AUTOMATION]: {
         name: FeatureFlagName.API_AUTOMATION,
         enabled: true,
         enabledForAll: true,
         description: 'API automation and webhooks',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.STREAMING_RESPONSES]: {
         name: FeatureFlagName.STREAMING_RESPONSES,
         enabled: true,
@@ -127,12 +134,14 @@ class FeatureFlagsService {
         rolloutPercentage: 20,
         description: 'AI code completion in editor',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.FUNCTION_CALLING]: {
         name: FeatureFlagName.FUNCTION_CALLING,
         enabled: true,
         enabledForAll: true,
         description: 'Function calling for tool use',
       },
+      // Always enabled — can be removed when all consumers are migrated
       [FeatureFlagName.RESPONSE_CACHING]: {
         name: FeatureFlagName.RESPONSE_CACHING,
         enabled: true,
@@ -313,9 +322,19 @@ class FeatureFlagsService {
 
   private async fetchRemoteFlags() {
     try {
-      const remoteFlags = await invoke<Record<string, boolean>>('feature_flag_get_all');
+      const remoteFlagsResult = await invoke<unknown>('feature_flag_get_all');
+      if (
+        !remoteFlagsResult ||
+        typeof remoteFlagsResult !== 'object' ||
+        Array.isArray(remoteFlagsResult)
+      ) {
+        return;
+      }
 
-      Object.entries(remoteFlags).forEach(([name, enabled]) => {
+      Object.entries(remoteFlagsResult).forEach(([name, enabled]) => {
+        if (typeof enabled !== 'boolean') {
+          return;
+        }
         if (this.config.flags[name]) {
           this.config.flags[name]!.enabled = enabled;
         } else {

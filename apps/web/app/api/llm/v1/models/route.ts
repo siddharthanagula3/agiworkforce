@@ -145,24 +145,24 @@ const MODELS = [
 
   // Google Models
   {
-    id: 'gemini-3-pro',
+    id: 'gemini-3-pro-preview',
     object: 'model',
     created: 1704067200,
     owned_by: 'google',
     permission: [],
-    root: 'gemini-3-pro',
+    root: 'gemini-3-pro-preview',
     parent: null,
     tier: 'pro', // Pro tier - mid-range model
     context_window: 2000000,
     max_output: 8192,
   },
   {
-    id: 'gemini-3-flash',
+    id: 'gemini-3-flash-preview',
     object: 'model',
     created: 1704067200,
     owned_by: 'google',
     permission: [],
-    root: 'gemini-3-flash',
+    root: 'gemini-3-flash-preview',
     parent: null,
     tier: 'hobby',
     context_window: 1000000,
@@ -221,24 +221,24 @@ const MODELS = [
 
   // xAI/Grok Models
   {
-    id: 'grok-4.1',
+    id: 'grok-4',
     object: 'model',
     created: 1704067200,
     owned_by: 'xai',
     permission: [],
-    root: 'grok-4.1',
+    root: 'grok-4',
     parent: null,
     tier: 'max', // Max tier - flagship model
     context_window: 131072,
     max_output: 16384,
   },
   {
-    id: 'grok-4.1-fast',
+    id: 'grok-4-fast',
     object: 'model',
     created: 1704067200,
     owned_by: 'xai',
     permission: [],
-    root: 'grok-4.1-fast',
+    root: 'grok-4-fast',
     parent: null,
     tier: 'hobby',
     context_window: 131072,
@@ -254,7 +254,7 @@ const MODELS = [
     permission: [],
     root: 'qwen-max',
     parent: null,
-    tier: 'pro', // Pro tier - mid-range model (maps to qwen3-max)
+    tier: 'pro', // Pro tier - mid-range model (maps to qwen-max)
     context_window: 32000,
     max_output: 8192,
   },

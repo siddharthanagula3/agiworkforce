@@ -84,17 +84,63 @@ impl ManagedCloudProvider {
             .collect()
     }
 
-    /// Transform LLMRequest to OpenAI-compatible format for the web API
+    /// Transform LLMRequest to OpenAI-compatible format for the web API.
+    /// For Claude models, we preserve Anthropic-native features (server tools,
+    /// prompt caching, thinking) so the managed cloud can proxy them correctly.
     fn transform_request(&self, request: &LLMRequest) -> Value {
+        let is_claude_model = request.model.to_lowercase().contains("claude");
+
         let mut transformed =
             serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
 
-        // Transform messages to OpenAI multimodal format
-        transformed["messages"] = serde_json::json!(self.transform_messages(&request.messages));
+        // Transform messages: OpenAI format for GPT models, Anthropic format for Claude
+        transformed["messages"] =
+            serde_json::json!(self.transform_messages(&request.messages, is_claude_model));
 
         // Transform tools if present
         if let Some(tools) = &request.tools {
-            transformed["tools"] = serde_json::json!(Self::transform_tools_to_openai_format(tools));
+            if is_claude_model {
+                // For Claude models routed through managed cloud, use Anthropic's
+                // native tool format (flat + server tools) rather than OpenAI wrapper.
+                // The managed cloud backend will detect the Claude model and forward
+                // appropriately.
+                use crate::core::llm::server_tools;
+                let anthropic_tools: Vec<Value> = tools
+                    .iter()
+                    .filter_map(|tool| {
+                        let tool_name = tool.name.as_str();
+                        if server_tools::is_anthropic_server_tool(tool_name) {
+                            server_tools::build_server_tool_definition(tool_name)
+                        } else {
+                            Some(serde_json::json!({
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.parameters
+                            }))
+                        }
+                    })
+                    .collect();
+                transformed["tools"] = serde_json::json!(anthropic_tools);
+            } else {
+                transformed["tools"] =
+                    serde_json::json!(Self::transform_tools_to_openai_format(tools));
+            }
+        }
+
+        // For Claude models, preserve cache_control, thinking, and effort parameters.
+        // These are stripped by default serialization since they're Anthropic-specific.
+        if is_claude_model {
+            if let Some(ref cache_control) = request.cache_control {
+                transformed["cache_control"] =
+                    serde_json::to_value(cache_control).unwrap_or_else(|_| serde_json::json!(null));
+            }
+            if let Some(ref thinking) = request.thinking {
+                transformed["thinking"] =
+                    serde_json::to_value(thinking).unwrap_or_else(|_| serde_json::json!(null));
+            }
+            if let Some(ref effort) = request.effort {
+                transformed["effort"] = serde_json::json!(effort);
+            }
         }
 
         // GPT-5 nano doesn't support custom temperature (only default value of 1.0)
@@ -108,7 +154,12 @@ impl ManagedCloudProvider {
         transformed
     }
 
-    fn transform_messages(&self, messages: &[ChatMessage]) -> Vec<Value> {
+    fn transform_messages(&self, messages: &[ChatMessage], is_claude_model: bool) -> Vec<Value> {
+        if is_claude_model {
+            return self.transform_messages_anthropic(messages);
+        }
+
+        // OpenAI-compatible format (unchanged)
         messages
             .iter()
             .map(|message| {
@@ -162,6 +213,118 @@ impl ManagedCloudProvider {
                 msg
             })
             .collect()
+    }
+
+    /// Transform messages to Anthropic format for Claude models.
+    /// Converts OpenAI-style tool messages to Anthropic's content block format:
+    /// - Assistant `tool_calls` → `tool_use` content blocks
+    /// - `role: "tool"` messages → `tool_result` content blocks in a `role: "user"` message
+    /// - Consecutive tool results are merged into a single user message
+    ///   (Anthropic disallows consecutive messages with the same role)
+    fn transform_messages_anthropic(&self, messages: &[ChatMessage]) -> Vec<Value> {
+        let mut result: Vec<Value> = Vec::new();
+        let mut i = 0;
+
+        while i < messages.len() {
+            let message = &messages[i];
+
+            // Merge consecutive tool result messages into one "user" message.
+            // Anthropic requires tool_result blocks inside a role:"user" message.
+            if message.role == "tool" {
+                let mut tool_results: Vec<Value> = Vec::new();
+                while i < messages.len() && messages[i].role == "tool" {
+                    let tool_msg = &messages[i];
+                    if let Some(ref tool_call_id) = tool_msg.tool_call_id {
+                        tool_results.push(serde_json::json!({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call_id,
+                            "content": tool_msg.content,
+                        }));
+                    }
+                    i += 1;
+                }
+                if !tool_results.is_empty() {
+                    result.push(serde_json::json!({
+                        "role": "user",
+                        "content": tool_results,
+                    }));
+                }
+                continue;
+            }
+
+            // Assistant messages with tool_calls → Anthropic tool_use content blocks
+            if message.role == "assistant" {
+                if let Some(ref tool_calls) = message.tool_calls {
+                    let mut content_parts: Vec<Value> = Vec::new();
+                    if !message.content.is_empty() {
+                        content_parts.push(serde_json::json!({
+                            "type": "text",
+                            "text": message.content,
+                        }));
+                    }
+                    for tc in tool_calls {
+                        let input: Value = serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({}));
+                        content_parts.push(serde_json::json!({
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": input,
+                        }));
+                    }
+                    result.push(serde_json::json!({
+                        "role": "assistant",
+                        "content": content_parts,
+                    }));
+                    i += 1;
+                    continue;
+                }
+            }
+
+            // All other messages (user, system, regular assistant without tool_calls):
+            // standard format with multimodal support
+            let mut msg = serde_json::json!({
+                "role": message.role,
+                "content": message.content,
+            });
+
+            if let Some(parts) = &message.multimodal_content {
+                let mut content_parts: Vec<Value> = Vec::new();
+                if !message.content.is_empty() {
+                    content_parts.push(serde_json::json!({
+                        "type": "text",
+                        "text": message.content,
+                    }));
+                }
+                for part in parts {
+                    match part {
+                        ContentPart::Text { text } => content_parts.push(serde_json::json!({
+                            "type": "text",
+                            "text": text,
+                        })),
+                        ContentPart::Image { image } => {
+                            let mime = Self::image_format_to_mime(image.format);
+                            let encoded =
+                                base64::engine::general_purpose::STANDARD.encode(&image.data);
+                            content_parts.push(serde_json::json!({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": format!("data:{};base64,{}", mime, encoded),
+                                    "detail": Self::image_detail_to_str(image.detail),
+                                }
+                            }));
+                        }
+                        _ => {}
+                    }
+                }
+                msg["content"] = serde_json::json!(content_parts);
+            }
+
+            result.push(msg);
+            i += 1;
+        }
+
+        result
     }
 
     fn image_format_to_mime(format: ImageFormat) -> &'static str {

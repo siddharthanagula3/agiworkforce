@@ -88,8 +88,6 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-3-ultra': { inputCostPer1MTokens: 3.5, outputCostPer1MTokens: 14.0 },
   'gemini-3-pro-preview': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 12.0 },
   'gemini-3-flash-preview': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 },
-  'gemini-3-pro': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 12.0 },
-  'gemini-3-flash': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 },
   // Gemini 2.5 Series
   'gemini-2.5-pro': { inputCostPer1MTokens: 1.25, outputCostPer1MTokens: 10.0 },
   'gemini-2.5-flash': { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 2.5 },
@@ -107,45 +105,38 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'veo-3.0-generate-preview': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 750.0 },
 
   // ---------------------------------------------------------------------------
-  // xAI Grok 4.1 (Updated 2026-01-28)
+  // xAI Grok 4 (Updated 2026-01-28)
   // https://docs.x.ai/docs/models
   // ---------------------------------------------------------------------------
-  'grok-4.1-mini': { inputCostPer1MTokens: 0.05, outputCostPer1MTokens: 0.2 },
-  'grok-4.1-fast-reasoning': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.4 },
-  'grok-4-1-fast-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
-  'grok-4-1-fast-non-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
-  'grok-4-1-fast': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
   'grok-4': { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 },
-  'grok-4-fast': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
-  'grok-code-fast-1': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
+  'grok-4-fast-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
+  'grok-4-fast-non-reasoning': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 },
+  'grok-code-fast-1': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 1.5 },
   // Vision
   'grok-2-vision-1212': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 1.5 },
   // Image Generation
   'grok-2-image-1212': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 30.0 },
 
   // ---------------------------------------------------------------------------
-  // DeepSeek V3.2 (Updated 2026-01-03) - Best Value
+  // DeepSeek (Updated 2026-02-07) - Best Value
   // https://api-docs.deepseek.com/quick_start/pricing
   // ---------------------------------------------------------------------------
   'deepseek-chat': { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 },
-  'deepseek-reasoner': { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 },
-  'deepseek-v3.2': { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 },
-  'deepseek-v3': { inputCostPer1MTokens: 0.27, outputCostPer1MTokens: 0.42 },
-  'deepseek-r1': { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 1.68 },
+  'deepseek-reasoner': { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 2.19 },
+  'deepseek-r1': { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 2.19 },
 
   // ---------------------------------------------------------------------------
-  // Qwen3 (Updated 2026-01-28)
+  // Qwen (Updated 2026-02-07)
   // https://www.alibabacloud.com/help/en/model-studio/models
   // ---------------------------------------------------------------------------
-  'qwen3-max': { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 },
-  'qwen3-max-preview': { inputCostPer1MTokens: 2.15, outputCostPer1MTokens: 8.6 },
-  'qwen-max': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 4.0 },
-  'qwen-plus': { inputCostPer1MTokens: 0.4, outputCostPer1MTokens: 2.0 },
+  'qwen-max': { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 },
+  'qwen-plus': { inputCostPer1MTokens: 0.4, outputCostPer1MTokens: 1.2 },
   'qwen-turbo': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.3 },
   'qwen-flash': { inputCostPer1MTokens: 0.05, outputCostPer1MTokens: 0.15 },
   // Coding
-  'qwen3-coder-plus': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 2.0 },
-  'qwen3-coder-flash': { inputCostPer1MTokens: 0.22, outputCostPer1MTokens: 0.95 },
+  'qwen-coder': { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 1.5 },
+  'qwen-coder-plus': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 2.0 },
+  'qwen-coder-flash': { inputCostPer1MTokens: 0.22, outputCostPer1MTokens: 0.95 },
   // Vision
   'qwen3-vl-plus': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.0 },
   'qwen3-vl-flash': { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 1.2 },
@@ -195,9 +186,9 @@ const PROVIDER_DEFAULTS: Record<string, ModelPricing> = {
   openai: { inputCostPer1MTokens: 1.75, outputCostPer1MTokens: 14.0 }, // GPT-5.2
   anthropic: { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 }, // Sonnet 4.5
   google: { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 }, // Gemini 3 Flash
-  xai: { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 }, // Grok 4.1 Fast
+  xai: { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 }, // Grok 4 Fast
   deepseek: { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 }, // V3.2
-  qwen: { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 }, // Qwen3 Max
+  qwen: { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 }, // Qwen Max
   moonshot: { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 }, // Kimi K2.5
   perplexity: { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 }, // Sonar Deep Research
   ollama: { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 }, // Local models

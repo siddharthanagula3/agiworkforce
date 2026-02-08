@@ -157,6 +157,32 @@ pub struct ChatSendMessageRequest {
     /// When set, file and terminal tools will use this as the default working directory
     #[serde(default, alias = "projectFolder")]
     pub project_folder: Option<String>,
+
+    /// Model capabilities from the frontend model registry.
+    /// Used to filter which tools are sent to the model (e.g. don't send
+    /// browser tools to models without `computerUse` capability).
+    #[serde(default, alias = "modelCapabilities")]
+    pub model_capabilities: Option<ModelCapabilitiesDto>,
+}
+
+/// Subset of model capabilities passed from the frontend to control tool filtering.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCapabilitiesDto {
+    #[serde(default)]
+    pub tools: bool,
+    #[serde(default)]
+    pub vision: bool,
+    #[serde(default)]
+    pub computer_use: bool,
+    #[serde(default)]
+    pub search: bool,
+    #[serde(default)]
+    pub code_execution: bool,
+    #[serde(default)]
+    pub image_gen: bool,
+    #[serde(default)]
+    pub agentic: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -251,13 +277,52 @@ pub struct CostAnalyticsResponse {
 
 impl Validate for CreateConversationRequest {
     fn validate(&self) -> Result<(), ValidationError> {
-        if self.title.is_empty() {
+        // Trim before checking to match command-handler behaviour
+        let trimmed = self.title.trim();
+        if trimmed.is_empty() {
             return Err(ValidationError {
                 field: "title".to_string(),
                 message: "Title cannot be empty".to_string(),
             });
         }
-        if self.title.len() > MAX_TITLE_LENGTH {
+        if trimmed.len() > MAX_TITLE_LENGTH {
+            return Err(ValidationError {
+                field: "title".to_string(),
+                message: format!(
+                    "Title exceeds maximum length of {} characters",
+                    MAX_TITLE_LENGTH
+                ),
+            });
+        }
+        if self.user_id.is_empty() {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: "User ID cannot be empty".to_string(),
+            });
+        }
+        if self.user_id.len() > MAX_USER_ID_LENGTH {
+            return Err(ValidationError {
+                field: "user_id".to_string(),
+                message: format!(
+                    "User ID exceeds maximum length of {} characters",
+                    MAX_USER_ID_LENGTH
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Validate for UpdateConversationRequest {
+    fn validate(&self) -> Result<(), ValidationError> {
+        let trimmed = self.title.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError {
+                field: "title".to_string(),
+                message: "Title cannot be empty".to_string(),
+            });
+        }
+        if trimmed.len() > MAX_TITLE_LENGTH {
             return Err(ValidationError {
                 field: "title".to_string(),
                 message: format!(

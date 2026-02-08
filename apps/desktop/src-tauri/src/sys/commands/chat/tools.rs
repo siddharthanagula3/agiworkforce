@@ -61,6 +61,9 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
 
 /// Build tool definitions for chat.
 /// Returns a list of tools the LLM can call during conversation.
+/// If `capabilities` is provided, tools are filtered to only include those
+/// the model can actually use (e.g. no browser tools for models without
+/// `computerUse`).
 pub fn build_chat_tools(
     tool_registry: Option<&Arc<ToolRegistry>>,
     mcp_state: Option<&McpState>,
@@ -86,6 +89,46 @@ pub fn build_chat_tools(
     }
 
     tools
+}
+
+/// Filter tools based on model capabilities.
+/// This prevents sending tools that the model can't use (e.g. browser tools
+/// to models without computerUse, search tools to models without search).
+pub fn filter_tools_by_capabilities(
+    tools: Vec<ToolDefinition>,
+    capabilities: &super::types::ModelCapabilitiesDto,
+) -> Vec<ToolDefinition> {
+    // If the model doesn't support tools at all, return empty
+    if !capabilities.tools {
+        return Vec::new();
+    }
+
+    tools
+        .into_iter()
+        .filter(|tool| {
+            let name = tool.name.as_str();
+
+            // Browser / computer-use tools require computerUse capability
+            if name.starts_with("browser_") || name.starts_with("ui_") {
+                return capabilities.computer_use;
+            }
+
+            // Search tools require search capability
+            if name == "search_web" {
+                return capabilities.search;
+            }
+
+            // Terminal execution requires code_execution capability
+            if name == "terminal_execute" {
+                return capabilities.code_execution;
+            }
+
+            // Document generation requires tools (already checked above)
+            // File operations are always allowed if tools is true
+
+            true
+        })
+        .collect()
 }
 
 /// Convert a Tool struct to ToolDefinition for LLM
@@ -981,6 +1024,8 @@ pub async fn execute_chat_tool(
         arguments: arguments_json.to_string(),
     };
 
-    let result = executor.execute_tool_call(&tool_call).await?;
+    let result = executor.execute_tool_call(&tool_call).await;
+
+    let result = result?;
     Ok(executor.format_tool_result(&tool_call, &result))
 }

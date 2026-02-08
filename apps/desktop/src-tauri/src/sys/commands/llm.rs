@@ -13,6 +13,19 @@ use std::time::Duration;
 use tauri::State;
 use tokio::sync::RwLock;
 
+const DEFAULT_MODEL: &str = "gpt-5-nano";
+const OLLAMA_BASE_URL: &str = "http://localhost:11434";
+
+/// Resolves a provider string to the appropriate Provider enum for routing.
+/// Cloud providers (OpenAI, Anthropic, etc.) are routed through ManagedCloud
+/// since local API keys are not used. Only Ollama remains as a direct provider.
+fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
+    Provider::from_string(s).map(|p| match p {
+        Provider::Ollama => Provider::Ollama,
+        _ => Provider::ManagedCloud,
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMSendMessageRequest {
     pub messages: Vec<ChatMessage>,
@@ -93,25 +106,9 @@ pub async fn llm_send_message(
         .provider
         .as_ref()
         .map(|p| {
-            matches!(
-                p.as_str(),
-                "managed_cloud"
-                    | "managedcloud"
-                    | "cloud"
-                    | "openai"
-                    | "anthropic"
-                    | "google"
-                    | "xai"
-                    | "grok"
-                    | "deepseek"
-                    | "qwen"
-                    | "alibaba"
-                    | "moonshot"
-                    | "perplexity"
-                    | "zhipu"
-                    | "glm"
-                    | "sonar"
-            )
+            Provider::from_string(p)
+                .map(|provider| provider != Provider::Ollama)
+                .unwrap_or(false)
         })
         .unwrap_or(false);
 
@@ -125,19 +122,15 @@ pub async fn llm_send_message(
     }
 
     let provider_name = request.provider.clone();
-    let provider = request.provider.as_deref().and_then(|p| match p {
-        // Route all cloud providers through ManagedCloud (no local API keys)
-        "openai" | "anthropic" | "google" | "xai" | "grok" | "deepseek" | "qwen" | "alibaba"
-        | "moonshot" | "perplexity" | "zhipu" | "glm" | "sonar" => Some(Provider::ManagedCloud),
-        "ollama" => Some(Provider::Ollama),
-        "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
-        _ => None,
-    });
+    let provider = request
+        .provider
+        .as_deref()
+        .and_then(resolve_provider_for_routing);
 
     let model = request
         .model
         .clone()
-        .unwrap_or_else(|| "gpt-5-nano".to_string());
+        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
     let llm_request = LLMRequest {
         messages: request.messages,
@@ -183,7 +176,7 @@ pub async fn llm_send_message(
                 model: request
                     .model
                     .clone()
-                    .unwrap_or_else(|| "gpt-5-nano".to_string()),
+                    .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
                 reason: "fallback-redirect-to-managed-cloud",
                 strategy: None,
             };
@@ -366,14 +359,8 @@ pub async fn llm_set_default_provider(
 
     let mut router = state.router.write().await;
 
-    let provider_enum = match provider.as_str() {
-        // Direct providers are routed through managed cloud (no local API keys)
-        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek" | "qwen"
-        | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
-        "ollama" => Provider::Ollama,
-        "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
-        _ => return Err(format!("Unknown provider: {}", provider)),
-    };
+    let provider_enum = resolve_provider_for_routing(&provider)
+        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
     router.set_default_provider(provider_enum);
     Ok(())
@@ -466,6 +453,30 @@ pub async fn llm_get_available_models(
             provider: "openai".to_string(),
             available: false,
         },
+        ModelInfo {
+            id: "gpt-5.2-codex-low".to_string(),
+            name: "GPT-5.2 Codex (Low)".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.2-codex-medium".to_string(),
+            name: "GPT-5.2 Codex (Medium)".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.2-codex-high".to_string(),
+            name: "GPT-5.2 Codex (High)".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.2-codex-xhigh".to_string(),
+            name: "GPT-5.2 Codex (XHigh)".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
         // Premium
         ModelInfo {
             id: "gpt-5-pro".to_string(),
@@ -498,8 +509,8 @@ pub async fn llm_get_available_models(
         },
         // Premium
         ModelInfo {
-            id: "claude-opus-4.5".to_string(),
-            name: "Claude Opus 4.5".to_string(),
+            id: "claude-opus-4.6".to_string(),
+            name: "Claude Opus 4.6".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
@@ -508,14 +519,14 @@ pub async fn llm_get_available_models(
         // =====================================================================
         // Economy
         ModelInfo {
-            id: "gemini-3-flash".to_string(),
+            id: "gemini-3-flash-preview".to_string(),
             name: "Gemini 3 Flash".to_string(),
             provider: "google".to_string(),
             available: false,
         },
         // Pro
         ModelInfo {
-            id: "gemini-3-pro".to_string(),
+            id: "gemini-3-pro-preview".to_string(),
             name: "Gemini 3 Pro".to_string(),
             provider: "google".to_string(),
             available: false,
@@ -532,21 +543,21 @@ pub async fn llm_get_available_models(
         // =====================================================================
         // Economy
         ModelInfo {
-            id: "grok-4.1-mini".to_string(),
-            name: "Grok 4.1 Mini".to_string(),
+            id: "grok-4-mini".to_string(),
+            name: "Grok 4 Mini".to_string(),
             provider: "xai".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "grok-4.1-fast-reasoning".to_string(),
-            name: "Grok 4.1 Fast Reasoning".to_string(),
+            id: "grok-4-fast-reasoning".to_string(),
+            name: "Grok 4 Fast Reasoning".to_string(),
             provider: "xai".to_string(),
             available: false,
         },
         // Premium
         ModelInfo {
-            id: "grok-4.1".to_string(),
-            name: "Grok 4.1".to_string(),
+            id: "grok-4".to_string(),
+            name: "Grok 4".to_string(),
             provider: "xai".to_string(),
             available: false,
         },
@@ -555,8 +566,8 @@ pub async fn llm_get_available_models(
         // =====================================================================
         // Economy
         ModelInfo {
-            id: "deepseek-v3.2".to_string(),
-            name: "DeepSeek V3.2".to_string(),
+            id: "deepseek-chat".to_string(),
+            name: "DeepSeek Chat (V3)".to_string(),
             provider: "deepseek".to_string(),
             available: false,
         },
@@ -584,21 +595,21 @@ pub async fn llm_get_available_models(
             available: false,
         },
         ModelInfo {
-            id: "qwen3-coder-flash".to_string(),
-            name: "Qwen3 Coder Flash".to_string(),
+            id: "qwen-coder-flash".to_string(),
+            name: "Qwen Coder Flash".to_string(),
             provider: "qwen".to_string(),
             available: false,
         },
         // Pro
         ModelInfo {
-            id: "qwen3-max".to_string(),
-            name: "Qwen3 Max".to_string(),
+            id: "qwen-max".to_string(),
+            name: "Qwen Max".to_string(),
             provider: "qwen".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "qwen3-coder-plus".to_string(),
-            name: "Qwen3 Coder Plus".to_string(),
+            id: "qwen-coder-plus".to_string(),
+            name: "Qwen Coder Plus".to_string(),
             provider: "qwen".to_string(),
             available: false,
         },
@@ -677,17 +688,9 @@ pub async fn llm_get_available_models(
     let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
 
     for mut model in all_models {
-        let provider_enum = match model.provider.as_str() {
-            "openai" => Provider::OpenAI,
-            "anthropic" => Provider::Anthropic,
-            "google" => Provider::Google,
-            "xai" => Provider::XAI,
-            "deepseek" => Provider::DeepSeek,
-            "qwen" => Provider::Qwen,
-            "moonshot" => Provider::Moonshot,
-            "perplexity" => Provider::Perplexity,
-            "zhipu" => Provider::Zhipu,
-            _ => continue,
+        let provider_enum = match Provider::from_string(&model.provider) {
+            Some(p) => p,
+            None => continue,
         };
 
         if router.has_provider(provider_enum) || managed_cloud_available {
@@ -722,14 +725,8 @@ pub async fn llm_check_provider_status(
 ) -> Result<ProviderStatus, String> {
     let router = state.router.read().await;
 
-    let provider_enum = match provider.as_str() {
-        // Direct providers are routed through managed cloud (no local API keys)
-        "openai" | "anthropic" | "google" | "perplexity" | "xai" | "grok" | "deepseek" | "qwen"
-        | "alibaba" | "moonshot" | "zhipu" => Provider::ManagedCloud,
-        "ollama" => Provider::Ollama,
-        "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
-        _ => return Err(format!("Unknown provider: {}", provider)),
-    };
+    let provider_enum = resolve_provider_for_routing(&provider)
+        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
     let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
     let configured = match provider_enum {
         Provider::ManagedCloud => managed_cloud_available,
@@ -741,7 +738,7 @@ pub async fn llm_check_provider_status(
     if provider == "ollama" {
         let client = reqwest::Client::new();
         match client
-            .get("http://localhost:11434/api/tags")
+            .get(format!("{}/api/tags", OLLAMA_BASE_URL))
             .timeout(std::time::Duration::from_secs(2))
             .send()
             .await
@@ -896,7 +893,7 @@ struct LlmOllamaTagsResponse {
 pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
     let client = reqwest::Client::new();
     let response = client
-        .get("http://localhost:11434/api/tags")
+        .get(format!("{}/api/tags", OLLAMA_BASE_URL))
         .timeout(Duration::from_secs(5))
         .send()
         .await

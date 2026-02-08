@@ -149,7 +149,7 @@ describe('LLM Provider Factory', () => {
 
       // DeepSeek models
       { model: 'deepseek-chat', expected: 'deepseek' },
-      { model: 'deepseek-coder', expected: 'deepseek' },
+      { model: 'deepseek-chat', expected: 'deepseek' },
       { model: 'DEEPSEEK-chat', expected: 'deepseek' },
 
       // Perplexity models

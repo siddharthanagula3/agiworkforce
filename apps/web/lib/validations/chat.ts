@@ -34,21 +34,21 @@ export const SUPPORTED_MODELS = [
   'gpt-3.5-turbo',
   // Google Gemini 3 models
   'gemini-3-ultra',
-  'gemini-3-pro',
-  'gemini-3-flash',
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
   // Legacy Google models
   'gemini-1.5-pro',
   'gemini-1.5-flash',
   'gemini-pro',
   // xAI Grok models
-  'grok-4.1',
-  'grok-4.1-fast-reasoning',
-  'grok-4.1-fast',
-  'grok-4.1-mini',
+  'grok-4',
+  'grok-4-fast-reasoning',
+  'grok-4-fast',
+  'grok-4-mini',
   // Qwen models
-  'qwen3-max',
-  'qwen3-coder-plus',
-  'qwen3-coder-flash',
+  'qwen-max',
+  'qwen-coder-plus',
+  'qwen-coder-flash',
   'qwen-turbo',
   'qwen-flash',
   // Moonshot/Kimi models
@@ -56,7 +56,7 @@ export const SUPPORTED_MODELS = [
   'kimi-k2.5-thinking',
   'kimi-k2.5-turbo',
   // DeepSeek models
-  'deepseek-v3.2',
+  'deepseek-chat',
   'deepseek-r1',
   'deepseek-chat',
   'deepseek-reasoner',

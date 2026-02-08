@@ -104,14 +104,14 @@ describe('LLMCostCalculator', () => {
   // calculateCost Tests - Google Models
   // =========================================================================
   describe('calculateCost - Google Models', () => {
-    it('should calculate cost for gemini-3-pro', () => {
-      const cost = LLMCostCalculator.calculateCost('google', 'gemini-3-pro', {
+    it('should calculate cost for gemini-3-pro-preview', () => {
+      const cost = LLMCostCalculator.calculateCost('google', 'gemini-3-pro-preview', {
         promptTokens: 20000,
         completionTokens: 5000,
         totalTokens: 25000,
       });
 
-      // gemini-3-pro: $2.0/1M input, $12.0/1M output
+      // gemini-3-pro-preview: $2.0/1M input, $12.0/1M output
       // (20000/1M * 2.0 + 5000/1M * 12.0) * 100 = (0.04 + 0.06) * 100 = 10 cents
       expect(cost).toBe(10);
     });
@@ -146,14 +146,14 @@ describe('LLMCostCalculator', () => {
   // calculateCost Tests - xAI (Grok) Models
   // =========================================================================
   describe('calculateCost - xAI Models', () => {
-    it('should calculate cost for grok-4-1-fast', () => {
-      const cost = LLMCostCalculator.calculateCost('xai', 'grok-4-1-fast', {
+    it('should calculate cost for grok-4-fast-reasoning', () => {
+      const cost = LLMCostCalculator.calculateCost('xai', 'grok-4-fast-reasoning', {
         promptTokens: 50000,
         completionTokens: 10000,
         totalTokens: 60000,
       });
 
-      // grok-4-1-fast: $0.2/1M input, $0.5/1M output
+      // grok-4-fast-reasoning: $0.2/1M input, $0.5/1M output
       // (50000/1M * 0.2 + 10000/1M * 0.5) * 100 = (0.01 + 0.005) * 100 = 1.5 cents
       // Rounded = 2
       expect(cost).toBe(2);
@@ -219,14 +219,14 @@ describe('LLMCostCalculator', () => {
       expect(cost).toBe(4);
     });
 
-    it('should calculate cost for qwen3-max', () => {
-      const cost = LLMCostCalculator.calculateCost('qwen', 'qwen3-max', {
+    it('should calculate cost for qwen-max', () => {
+      const cost = LLMCostCalculator.calculateCost('qwen', 'qwen-max', {
         promptTokens: 10000,
         completionTokens: 5000,
         totalTokens: 15000,
       });
 
-      // qwen3-max: $1.2/1M input, $6.0/1M output
+      // qwen-max: $1.2/1M input, $6.0/1M output
       // (10000/1M * 1.2 + 5000/1M * 6.0) * 100 = (0.012 + 0.03) * 100 = 4.2 cents
       // Rounded = 4
       expect(cost).toBe(4);
@@ -447,7 +447,7 @@ describe('LLMCostCalculator', () => {
       expect(models).toContain('claude-opus-4-5');
       expect(models).toContain('claude-sonnet-4-5');
       expect(models).toContain('gpt-5.2');
-      expect(models).toContain('gemini-3-pro');
+      expect(models).toContain('gemini-3-pro-preview');
       expect(models).toContain('deepseek-chat');
     });
   });
