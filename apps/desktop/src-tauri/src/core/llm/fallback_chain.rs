@@ -26,7 +26,7 @@
 //! let candidates = vec![
 //!     ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4-5"),
 //!     ModelCandidate::new(Provider::OpenAI, "gpt-5.2"),
-//!     ModelCandidate::new(Provider::Google, "gemini-3-pro"),
+//!     ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
 //! ];
 //!
 //! let result = chain.run_with_fallback(&candidates, |candidate| async {
@@ -1036,7 +1036,7 @@ mod tests {
         let candidates = CandidateBuilder::new()
             .add(Provider::Anthropic, "claude-sonnet-4-5")
             .add_with_priority(Provider::OpenAI, "gpt-5.2", 1)
-            .add_with_reason(Provider::Google, "gemini-3-pro", "fallback")
+            .add_with_reason(Provider::Google, "gemini-3-pro-preview", "fallback")
             .build();
 
         assert_eq!(candidates.len(), 3);

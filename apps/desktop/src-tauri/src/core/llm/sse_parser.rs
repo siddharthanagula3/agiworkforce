@@ -198,6 +198,11 @@ fn parse_sse_event(
     }
 }
 
+fn extract_data_payload(line: &str) -> Option<&str> {
+    line.strip_prefix("data:")
+        .map(|data| data.strip_prefix(' ').unwrap_or(data))
+}
+
 fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
     let mut content = String::new();
     let mut done = false;
@@ -205,9 +210,10 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut model = None;
     let mut usage = None;
     let mut credits = None;
+    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
 
     for line in event.lines() {
-        if let Some(data) = line.strip_prefix("data: ") {
+        if let Some(data) = extract_data_payload(line) {
             if data == "[DONE]" {
                 done = true;
                 break;
@@ -244,6 +250,52 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                     if let Some(delta) = choice.get("delta") {
                         if let Some(text) = delta.get("content").and_then(|c| c.as_str()) {
                             content.push_str(text);
+                        } else if let Some(parts) = delta.get("content").and_then(|c| c.as_array())
+                        {
+                            for part in parts {
+                                if let Some(text) = part.as_str() {
+                                    content.push_str(text);
+                                } else if let Some(text) = part.get("text").and_then(|t| t.as_str())
+                                {
+                                    content.push_str(text);
+                                }
+                            }
+                        }
+
+                        if let Some(delta_tool_calls) =
+                            delta.get("tool_calls").and_then(|tc| tc.as_array())
+                        {
+                            for (position, tool_call) in delta_tool_calls.iter().enumerate() {
+                                let index = tool_call
+                                    .get("index")
+                                    .and_then(|i| i.as_u64())
+                                    .map(|idx| idx as usize)
+                                    .unwrap_or(position);
+                                let id = tool_call
+                                    .get("id")
+                                    .and_then(|i| i.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let name = tool_call
+                                    .get("function")
+                                    .and_then(|f| f.get("name"))
+                                    .and_then(|n| n.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let arguments = tool_call
+                                    .get("function")
+                                    .and_then(|f| f.get("arguments"))
+                                    .and_then(|a| a.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+
+                                tool_calls.push(StreamingToolCall {
+                                    index,
+                                    id,
+                                    name,
+                                    arguments,
+                                });
+                            }
                         }
                     }
                     if let Some(finish) = choice.get("finish_reason").and_then(|f| f.as_str()) {
@@ -300,7 +352,11 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model,
         usage,
         credits,
-        tool_calls: None,
+        tool_calls: if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        },
     })
 }
 
@@ -310,6 +366,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
     let mut finish_reason = None;
     let mut model = None;
     let mut usage = None;
+    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
 
     let mut event_type = None;
     let mut data_str = None;
@@ -317,7 +374,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
     for line in event.lines() {
         if let Some(evt) = line.strip_prefix("event: ") {
             event_type = Some(evt.to_string());
-        } else if let Some(data) = line.strip_prefix("data: ") {
+        } else if let Some(data) = extract_data_payload(line) {
             data_str = Some(data.to_string());
         }
     }
@@ -346,31 +403,142 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                     format!("Anthropic API error ({}): {}", error_type, error_message).into(),
                 );
             }
-            Some("content_block_delta") => {
-                if let Some(delta) = json.get("delta") {
-                    if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
-                        content.push_str(text);
+
+            // ── content_block_start ──────────────────────────────────────
+            // Anthropic signals a new content block (text, tool_use, or
+            // server_tool_use).  For tool_use / server_tool_use we emit a
+            // StreamingToolCall with the id + name so the accumulation
+            // logic in chat/mod.rs can start tracking it by index.
+            Some("content_block_start") => {
+                if let Some(block) = json.get("content_block") {
+                    let block_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    let index = json.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+
+                    match block_type {
+                        "tool_use" | "server_tool_use" => {
+                            let id = block
+                                .get("id")
+                                .and_then(|i| i.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let name = block
+                                .get("name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            tool_calls.push(StreamingToolCall {
+                                index,
+                                id,
+                                name,
+                                arguments: String::new(),
+                            });
+                        }
+                        // web_search_tool_result / web_fetch_tool_result are
+                        // server-side result blocks.  They don't need client
+                        // execution – they are informational.  We surface them
+                        // as text so the frontend can display them.
+                        "web_search_tool_result" | "web_fetch_tool_result" => {
+                            // These are result blocks from server-side tools.
+                            // The actual search results are in the content_block
+                            // and will be consumed by the model automatically.
+                            // We just note that a search happened for the UI.
+                            let tool_use_id = block
+                                .get("tool_use_id")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or("");
+                            tracing::debug!(
+                                "[Anthropic SSE] Server tool result block: {} for {}",
+                                block_type,
+                                tool_use_id
+                            );
+                        }
+                        _ => {
+                            // "text", "thinking", etc. – nothing to do here
+                        }
                     }
                 }
             }
+
+            // ── content_block_delta ──────────────────────────────────────
+            // Anthropic streams content incrementally via delta types:
+            //   - text_delta        → regular text content
+            //   - thinking_delta    → extended thinking content (ignored here)
+            //   - input_json_delta  → partial JSON for tool_use arguments
+            Some("content_block_delta") => {
+                let index = json.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+
+                if let Some(delta) = json.get("delta") {
+                    let delta_type = delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+                    match delta_type {
+                        "text_delta" => {
+                            if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
+                                content.push_str(text);
+                            }
+                        }
+                        "input_json_delta" => {
+                            // Streaming tool call arguments as partial JSON.
+                            // We emit a StreamingToolCall with just the argument
+                            // fragment – the accumulation loop in chat/mod.rs
+                            // will merge it by index.
+                            let partial_json = delta
+                                .get("partial_json")
+                                .and_then(|p| p.as_str())
+                                .unwrap_or("");
+                            tool_calls.push(StreamingToolCall {
+                                index,
+                                id: String::new(), // already sent in content_block_start
+                                name: String::new(), // already sent in content_block_start
+                                arguments: partial_json.to_string(),
+                            });
+                        }
+                        "thinking_delta" | "signature_delta" => {
+                            // Extended thinking content – not surfaced to
+                            // the streaming output (thinking is internal).
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // ── content_block_stop ───────────────────────────────────────
+            // Signals that a content block is complete.  We don't need to
+            // do anything special – the accumulator in chat/mod.rs will
+            // consider the tool call complete once it sees the message_delta
+            // with stop_reason "tool_use".
+            Some("content_block_stop") => {
+                // No action needed; handled by accumulation logic.
+            }
+
             Some("message_delta") => {
                 if let Some(delta) = json.get("delta") {
                     if let Some(stop_reason) = delta.get("stop_reason").and_then(|r| r.as_str()) {
                         finish_reason = Some(stop_reason.to_string());
+                        // Anthropic uses "end_turn" for normal completion and
+                        // "tool_use" when the model wants to call tools.
+                        // Both signal that the current message is done.
                         done = true;
                     }
                 }
                 if let Some(usage_data) = json.get("usage") {
+                    let input = usage_data
+                        .get("input_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32);
+                    let output = usage_data
+                        .get("output_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32);
+                    let total = match (input, output) {
+                        (Some(i), Some(o)) => Some(i + o),
+                        (Some(i), None) => Some(i),
+                        (None, Some(o)) => Some(o),
+                        (None, None) => None,
+                    };
                     usage = Some(TokenUsage {
-                        prompt_tokens: usage_data
-                            .get("input_tokens")
-                            .and_then(|t| t.as_u64())
-                            .map(|t| t as u32),
-                        completion_tokens: usage_data
-                            .get("output_tokens")
-                            .and_then(|t| t.as_u64())
-                            .map(|t| t as u32),
-                        total_tokens: None,
+                        prompt_tokens: input,
+                        completion_tokens: output,
+                        total_tokens: total,
                     });
                 }
             }
@@ -385,6 +553,34 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                 {
                     model = Some(m.to_string());
                 }
+                // Also extract usage from message_start (input token count
+                // is available here for Anthropic).
+                if let Some(msg) = json.get("message") {
+                    if let Some(usage_data) = msg.get("usage") {
+                        let input = usage_data
+                            .get("input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32);
+                        let output = usage_data
+                            .get("output_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32);
+                        let total = match (input, output) {
+                            (Some(i), Some(o)) => Some(i + o),
+                            (Some(i), None) => Some(i),
+                            (None, Some(o)) => Some(o),
+                            (None, None) => None,
+                        };
+                        usage = Some(TokenUsage {
+                            prompt_tokens: input,
+                            completion_tokens: output,
+                            total_tokens: total,
+                        });
+                    }
+                }
+            }
+            Some("ping") => {
+                // Keep-alive event, nothing to do.
             }
             _ => {}
         }
@@ -397,7 +593,11 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         model,
         usage,
         credits: None,
-        tool_calls: None,
+        tool_calls: if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        },
     })
 }
 
@@ -407,9 +607,10 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut finish_reason = None;
     let mut model = None;
     let mut usage = None;
+    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
 
     for line in event.lines() {
-        if let Some(data) = line.strip_prefix("data: ") {
+        if let Some(data) = extract_data_payload(line) {
             let json: Value = serde_json::from_str(data)?;
 
             // Check for Google API error responses in streaming format
@@ -445,18 +646,38 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                         .get("name")
                                         .and_then(|n| n.as_str())
                                         .unwrap_or("tool");
-                                    // Return a status message so the bubble isn't blank
-                                    content.push_str(&format!("🛠️ Executing {}...", name));
+                                    let args = function_call
+                                        .get("args")
+                                        .map(|a| {
+                                            serde_json::to_string(a)
+                                                .unwrap_or_else(|_| "{}".to_string())
+                                        })
+                                        .unwrap_or_else(|| "{}".to_string());
+                                    // Google doesn't provide IDs; generate one
+                                    let id = format!("call_{}", uuid::Uuid::new_v4());
+                                    tool_calls.push(StreamingToolCall {
+                                        index: tool_calls.len(),
+                                        id,
+                                        name: name.to_string(),
+                                        arguments: args,
+                                    });
                                 }
                             }
                         }
                     }
                     if let Some(finish) = candidate.get("finishReason").and_then(|f| f.as_str()) {
                         // Check for safety filter blocks before accepting the finish reason
-                        if finish == "SAFETY" {
-                            return Err("Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.".into());
-                        } else if finish == "RECITATION" {
-                            return Err("Response was blocked due to recitation concerns. Try rephrasing your request.".into());
+                        match finish {
+                            "SAFETY" | "BLOCKLIST" | "PROHIBITED_CONTENT" | "SPII" => {
+                                return Err("Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.".into());
+                            }
+                            "RECITATION" => {
+                                return Err("Response was blocked due to recitation concerns. Try rephrasing your request.".into());
+                            }
+                            "MALFORMED_FUNCTION_CALL" => {
+                                return Err("Google returned a malformed function call. Try simplifying your request or tool definitions.".into());
+                            }
+                            _ => {}
                         }
                         finish_reason = Some(finish.to_string());
                         done = true;
@@ -494,7 +715,11 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model,
         usage,
         credits: None,
-        tool_calls: None,
+        tool_calls: if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        },
     })
 }
 
@@ -510,10 +735,44 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut done = false;
     let mut model = None;
     let mut usage = None;
+    let mut tool_calls: Vec<StreamingToolCall> = Vec::new();
 
     if let Some(message) = json.get("message") {
         if let Some(text) = message.get("content").and_then(|c| c.as_str()) {
             content.push_str(text);
+        }
+
+        // Parse tool calls from Ollama streaming messages
+        if let Some(tc_arr) = message.get("tool_calls").and_then(|tc| tc.as_array()) {
+            for (idx, call) in tc_arr.iter().enumerate() {
+                if let Some(func) = call.get("function") {
+                    let name = func
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("tool")
+                        .to_string();
+                    // Ollama may return arguments as object or string
+                    let arguments =
+                        if let Some(args_str) = func.get("arguments").and_then(|a| a.as_str()) {
+                            args_str.to_string()
+                        } else if let Some(args_val) = func.get("arguments") {
+                            serde_json::to_string(args_val).unwrap_or_else(|_| "{}".to_string())
+                        } else {
+                            "{}".to_string()
+                        };
+                    let id = call
+                        .get("id")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    tool_calls.push(StreamingToolCall {
+                        index: idx,
+                        id,
+                        name,
+                        arguments,
+                    });
+                }
+            }
         }
     }
 
@@ -550,14 +809,31 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         }
     }
 
+    // Extract finish reason: Ollama sends done_reason when done=true.
+    // Synthesize "tool_calls" if tool calls are present (Ollama doesn't always signal this).
+    let finish_reason = if !tool_calls.is_empty() {
+        Some("tool_calls".to_string())
+    } else if done {
+        json.get("done_reason")
+            .and_then(|r| r.as_str())
+            .map(|r| r.to_string())
+            .or_else(|| Some("stop".to_string()))
+    } else {
+        None
+    };
+
     Ok(StreamChunk {
         content,
         done,
-        finish_reason: None,
+        finish_reason,
         model,
         usage,
         credits: None,
-        tool_calls: None,
+        tool_calls: if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        },
     })
 }
 
@@ -605,5 +881,155 @@ mod stream_tests {
         }
 
         assert_eq!(full_content, "🚀");
+    }
+
+    #[test]
+    fn test_parse_openai_sse_extracts_streaming_tool_calls() {
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc123","type":"function","function":{"name":"document_create_pdf","arguments":"{\"title\":\"Q4 Plan\""}}]},"finish_reason":null}],"model":"gpt-5"}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+
+        assert!(chunk.tool_calls.is_some());
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].id, "call_abc123");
+        assert_eq!(tool_calls[0].name, "document_create_pdf");
+        assert!(tool_calls[0].arguments.contains("\"title\":\"Q4 Plan\""));
+        assert_eq!(chunk.model.as_deref(), Some("gpt-5"));
+        assert_eq!(chunk.finish_reason, None);
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_parse_openai_sse_extracts_tool_call_finish_reason() {
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"~/report.pdf\"}"}}]},"finish_reason":"tool_calls"}]}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_calls"));
+        assert!(chunk.done);
+        assert!(chunk.tool_calls.is_some());
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].arguments, "~/report.pdf\"}");
+    }
+
+    #[test]
+    fn test_parse_openai_sse_accepts_data_prefix_without_space() {
+        let event = r#"data:{"choices":[{"delta":{"content":"hello"}}],"model":"gpt-5"}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk.content, "hello");
+        assert_eq!(chunk.model.as_deref(), Some("gpt-5"));
+        assert!(chunk.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_parse_openai_sse_falls_back_to_position_for_missing_tool_index() {
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"call_a","type":"function","function":{"name":"image_generate","arguments":"{"}},{"id":"call_b","type":"function","function":{"name":"video_generate","arguments":"}"}}]}}]}"#;
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
+        let tool_calls = chunk.tool_calls.unwrap();
+
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].id, "call_a");
+        assert_eq!(tool_calls[1].index, 1);
+        assert_eq!(tool_calls[1].id, "call_b");
+    }
+
+    // ── Anthropic SSE tool call tests ────────────────────────────────
+
+    #[test]
+    fn test_parse_anthropic_sse_content_block_start_tool_use() {
+        let event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01ABC\",\"name\":\"get_weather\",\"input\":{}}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert!(chunk.tool_calls.is_some());
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 1);
+        assert_eq!(tool_calls[0].id, "toolu_01ABC");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].arguments, "");
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_input_json_delta() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"location\\\":\\\"San Fra\"}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert!(chunk.tool_calls.is_some());
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 1);
+        assert_eq!(tool_calls[0].arguments, "{\"location\":\"San Fra");
+        // id and name are empty for delta chunks (sent in content_block_start)
+        assert_eq!(tool_calls[0].id, "");
+        assert_eq!(tool_calls[0].name, "");
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_text_delta_unchanged() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello!\"}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.content, "Hello!");
+        assert!(chunk.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_tool_use_stop_reason() {
+        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":89}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_use"));
+        assert!(chunk.done);
+        assert!(chunk.usage.is_some());
+        assert_eq!(chunk.usage.unwrap().completion_tokens, Some(89));
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_server_tool_use() {
+        let event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srvtoolu_01XYZ\",\"name\":\"web_search\",\"input\":{}}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert!(chunk.tool_calls.is_some());
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "srvtoolu_01XYZ");
+        assert_eq!(tool_calls[0].name, "web_search");
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_message_start_with_usage() {
+        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":472,\"output_tokens\":2}}}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.model.as_deref(), Some("claude-opus-4-6"));
+        assert!(chunk.usage.is_some());
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(472));
+        assert_eq!(usage.completion_tokens, Some(2));
+    }
+
+    #[test]
+    fn test_parse_anthropic_sse_ping_event() {
+        let event = "event: ping\ndata: {\"type\":\"ping\"}";
+
+        let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.content, "");
+        assert!(!chunk.done);
+        assert!(chunk.tool_calls.is_none());
     }
 }

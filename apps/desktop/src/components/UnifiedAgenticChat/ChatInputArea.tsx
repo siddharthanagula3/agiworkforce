@@ -238,7 +238,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isInputDisabled = disabled || isSending;
   const isQueueMode = isLoading || isStreaming;
   const isEmptyState = messages.length === 0;
-  const showStopButton = isStreaming && onStopGeneration;
+  const showStopButton = (isStreaming || isLoading) && onStopGeneration;
   const pendingCount = pendingMessages.length;
   const placeholder = getFocusModePlaceholder(focusMode, defaultPlaceholder);
 

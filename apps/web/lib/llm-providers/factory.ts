@@ -22,8 +22,8 @@ import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
 const MODEL_ID_TO_API_ID: Record<string, string> = {
   // Google Gemini 3 models (per docs/llm-provider-reference.md)
   // NOTE: No "Ultra" tier exists in Gemini 3 API - only Pro and Flash
-  'gemini-3-pro': 'gemini-3-pro-preview', // Gemini 3 Pro
-  'gemini-3-flash': 'gemini-3-flash-preview', // Gemini 3 Flash
+  'gemini-3-pro-preview': 'gemini-3-pro-preview', // Gemini 3 Pro
+  'gemini-3-flash-preview': 'gemini-3-flash-preview', // Gemini 3 Flash
   // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
   // Anthropic requires date suffixes in model IDs
   'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
@@ -34,17 +34,16 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'gpt-5-pro': 'gpt-5-pro-2025-10-06', // GPT-5 Pro (use snapshot for stability)
   'gpt-5-nano': 'gpt-5-nano', // GPT-5 Nano (no date suffix per OpenAI docs)
   o3: 'o3-2025-04-16', // o3 reasoning model
-  // xAI Grok 4.1 models (per docs/llm-provider-reference.md)
-  'grok-4.1': 'grok-4-1-fast-reasoning', // Grok 4.1
-  'grok-4.1-fast-reasoning': 'grok-4-1-fast-reasoning', // Grok Fast Reasoning
-  'grok-4.1-fast': 'grok-4-1-fast-non-reasoning', // Grok Fast Non-Reasoning
-  'grok-4.1-fast-non-reasoning': 'grok-4-1-fast-non-reasoning', // Grok Fast Non-Reasoning (correct name)
+  // xAI Grok 4 models (per docs/llm-provider-reference.md)
+  'grok-4': 'grok-4', // Grok 4 flagship
+  'grok-4-fast-reasoning': 'grok-4-fast-reasoning', // Grok Fast Reasoning
+  'grok-4-fast-non-reasoning': 'grok-4-fast-non-reasoning', // Grok Fast Non-Reasoning
   // DeepSeek models
-  'deepseek-v3.2': 'deepseek-chat', // DeepSeek V3.2 maps to deepseek-chat
+  'deepseek-chat': 'deepseek-chat', // DeepSeek Chat (V3)
   'deepseek-r1': 'deepseek-reasoner', // DeepSeek R1 reasoning model
   // Qwen models (via MuleRouter) - per https://www.mulerouter.ai/collections/qwen
-  // MuleRouter model IDs: qwen3-max, qwen-flash
-  'qwen3-max': 'qwen3-max', // Qwen3 Max (flagship model)
+  // MuleRouter model IDs: qwen-max, qwen-flash
+  'qwen-max': 'qwen-max', // Qwen Max (flagship model)
   'qwen-flash': 'qwen-flash', // Qwen Flash (economy model)
   // Moonshot/Kimi models - per docs/llm-provider-reference.md
   // NOTE: K2.5 is a single model - thinking mode controlled via API parameter
