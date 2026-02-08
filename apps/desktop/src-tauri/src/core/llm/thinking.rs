@@ -194,18 +194,19 @@ impl ThinkingConfig {
     pub fn model_supports_thinking(model: &str) -> bool {
         let model_lower = model.to_lowercase();
 
-        // Claude 4.5 and newer models support extended thinking
+        // Claude 4+ and 3.5 models support extended thinking
+        // (broader "claude-sonnet-4" already covers "claude-sonnet-4-5", etc.)
         model_lower.contains("claude-sonnet-4")
             || model_lower.contains("claude-opus-4")
             || model_lower.contains("claude-haiku-4")
             || model_lower.contains("claude-4")
-            // Also support explicit version patterns
-            || model_lower.contains("claude-sonnet-4-5")
-            || model_lower.contains("claude-opus-4-5")
-            || model_lower.contains("claude-haiku-4-5")
-            // Legacy 3.5 models also support it
             || model_lower.contains("claude-3-5")
             || model_lower.contains("claude-3.5")
+            // OpenAI reasoning models
+            || model_lower.contains("o3")
+            || model_lower.contains("o4")
+            // Google deep thinking models
+            || (model_lower.contains("gemini") && model_lower.contains("think"))
     }
 }
 
@@ -407,7 +408,7 @@ mod tests {
     #[test]
     fn test_model_supports_thinking() {
         assert!(ThinkingConfig::model_supports_thinking("claude-sonnet-4-5"));
-        assert!(ThinkingConfig::model_supports_thinking("claude-opus-4-5"));
+        assert!(ThinkingConfig::model_supports_thinking("claude-opus-4-6"));
         assert!(ThinkingConfig::model_supports_thinking("claude-haiku-4-5"));
         assert!(ThinkingConfig::model_supports_thinking(
             "claude-3-5-sonnet-20241022"

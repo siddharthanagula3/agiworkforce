@@ -46,8 +46,8 @@
  *    - Filter by capabilities and select optimal model
  *
  * IMPORTANT CAPABILITY NOTES (January 2026):
- * - DeepSeek V3: NO vision (requires separate deepseek-vl model)
- * - Grok 4.1: NO vision (requires separate grok-2-vision model)
+ * - DeepSeek Chat: NO vision (requires separate deepseek-vl model)
+ * - Grok 4: NO vision (requires separate grok-2-vision model)
  * - Qwen 3: NO vision (requires separate qwen-vl model)
  * - Claude models: NO code execution sandbox (use MCP tools instead)
  * - GPT-5 Nano: Economy model, not optimized for agentic (use GPT-5.2+ for agentic)
@@ -156,21 +156,17 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
   // =========================================================================
   'auto-economy': [
     // === TOP BENCHMARK (Best quality in economy tier) ===
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
+    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
-    'deepseek-v3.2', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
+    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
     'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
 
     // === MID BENCHMARK (Good quality, very cheap) ===
-    'kimi-k2.5-thinking', // 55% SWE-bench, 88% MMLU, 99% AIME - V✓ T✓ Th✓ A✓
-    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
+    'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
     'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
     'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ A✓ (128K ctx)
 
     // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
-    'grok-4.1-mini', // 35% SWE-bench, 78% MMLU - T✓ (128K ctx)
-    'qwen-turbo', // 30% SWE-bench, 78% MMLU - T✓ (128K ctx)
     'qwen-flash', // 25% SWE-bench, 75% MMLU - T✓ (128K ctx)
     'gpt-5-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
 
@@ -184,25 +180,19 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     // === TOP BENCHMARK (Pro-tier additions first) ===
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
-    'gemini-3-pro', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
+    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
+    'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'deepseek-v3.2', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
+    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
     'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx)
 
     // === MID-HIGH BENCHMARK ===
-    'kimi-k2.5-turbo', // 58% SWE-bench, 89% MMLU, 99% AIME - V✓ T✓ Th✓ A✓
-    'qwen3-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
-    'kimi-k2.5-thinking', // 55% SWE-bench, 88% MMLU, 99% AIME - V✓ T✓ Th✓ A✓
-    'qwen3-coder-plus', // 55% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'grok-4.1-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
+    'qwen-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
+    'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
     'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
     'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench, 80% MMLU - T✓ A✓ (128K ctx)
 
     // === LOWER BENCHMARK (fallbacks) ===
-    'grok-4.1-mini',
-    'qwen-turbo',
     'qwen-flash',
     'gpt-5-nano',
 
@@ -216,33 +206,27 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
   // =========================================================================
   'auto-premium': [
     // === FLAGSHIP BENCHMARK (Best of the best) ===
-    'claude-opus-4.5', // 80.9% SWE-bench - BEST CODING MODEL
+    'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU, 100% AIME - BEST REASONING
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU
-    'gemini-3-ultra', // 76.2% SWE-bench, 93.8% GPQA - BEST MULTIMODAL
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality + A✓
+    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality + A✓
     'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
-    'gemini-3-pro', // 74.2% SWE-bench, 91.9% GPQA
+    'gemini-3-pro-preview', // 74.2% SWE-bench, 91.9% GPQA
     'glm-4.7', // 73.8% SWE-bench - BEST OPEN-WEIGHT
-    'deepseek-v3.2', // 68.8% SWE-bench - BEST VALUE
+    'deepseek-chat', // 68.8% SWE-bench - BEST VALUE
     'glm-4.6v', // 68% SWE-bench - VISION + TOOLS
     'o3', // 65% SWE-bench - REASONING SPECIALIST
 
     // === HIGH BENCHMARK ===
-    'kimi-k2.5-turbo', // 58% SWE-bench, 99% AIME
-    'qwen3-max', // 58% SWE-bench
-    'grok-4.1', // 55.3% SWE-bench - REAL-TIME DATA
-    'kimi-k2.5-thinking', // 55% SWE-bench, 99% AIME
+    'qwen-max', // 58% SWE-bench
+    'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
+    'kimi-k2.5', // 55% SWE-bench, 99% AIME - V✓ T✓ Th✓ A✓
     'deepseek-r1', // 55% SWE-bench - BUDGET REASONING
-    'qwen3-coder-plus', // 55% SWE-bench
-    'grok-4.1-fast-reasoning', // 48% SWE-bench - 2M CONTEXT + A✓
+    'grok-4-fast-reasoning', // 48% SWE-bench - 2M CONTEXT + A✓
     'claude-haiku-4.5', // 45% SWE-bench + A✓
     'glm-4.6v-flash', // 45% SWE-bench - FREE!
-    'qwen3-coder-flash', // 45% SWE-bench + A✓
 
     // === LOWER BENCHMARK (fast/cheap fallbacks) ===
-    'grok-4.1-mini',
-    'qwen-turbo',
     'qwen-flash',
     'gpt-5-nano',
 
@@ -379,7 +363,7 @@ const TASK_KEYWORDS: Record<TaskType, { high: string[]; medium: string[] }> = {
 
 /**
  * Complexity level for cost-optimized routing
- * - simple: 70% of traffic → cheapest models (DeepSeek V3.2, Qwen Flash)
+ * - simple: 70% of traffic → cheapest models (DeepSeek Chat.2, Qwen Flash)
  * - moderate: 20% of traffic → mid-tier models (GLM-4.7, Gemini Flash)
  * - complex: 10% of traffic → premium-at-tier (Claude Haiku, GLM-4.6V)
  */
@@ -515,34 +499,32 @@ export function estimateComplexity(
  * Used by selectModelFromPool to prioritize highest quality within each tier
  *
  * Based on January 2026 benchmarks:
- * - Coding: Claude Opus 4.5 (80.9% SWE-bench), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
+ * - Coding: Claude Opus 4.6 (80.9% SWE-bench), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
  * - General: GPT-5.2 (93.2% MMLU), Gemini 3 (88.6% MMLU), GLM-4.7 (88% MMLU)
- * - Agentic: GPT-5.2 (97% τ²-bench), Claude Opus 4.5 for orchestration
+ * - Agentic: GPT-5.2 (97% τ²-bench), Claude Opus 4.6 for orchestration
  * - Reasoning: GPT-5.2 (100% AIME), GLM-4.7 (95.7% AIME)
  */
 export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
   // 70% of traffic - BENCHMARK-FIRST among budget models (Jan 2026 update)
   // Priority: Best benchmark → Second-best → ... → Cost as tiebreaker
   simple: [
-    'deepseek-v3.2', // 68.8% SWE-bench, 85% MMLU - BEST benchmark in budget tier
+    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - BEST benchmark in budget tier
     'glm-4.6v-flash', // ~65% SWE-bench - FREE with vision + tools
     'qwen-flash', // ~60% SWE-bench - Ultra-cheap fallback
-    'grok-4.1-mini', // ~55% SWE-bench - Real-time data access
     'gpt-5-nano', // ~50% SWE-bench - OpenAI budget option
   ],
   // 20% of traffic - mid-tier models ordered by benchmark
   moderate: [
-    'gemini-3-flash', // 76.2% SWE-bench, 88.6% MMLU - BEST in mid-tier
+    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - BEST in mid-tier
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - Open-weight champion
-    'qwen3-coder-flash', // ~68% SWE-bench - Coding specialist
-    'kimi-k2.5-thinking', // ~65% - Long context reasoning
-    'grok-4.1-fast-reasoning', // ~60% - Real-time reasoning
+    'kimi-k2.5', // ~65% - Long context reasoning + vision
+    'grok-4-fast-reasoning', // ~60% - Real-time reasoning
   ],
   // 10% of traffic - best benchmarks available in economy pool
   complex: [
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
     'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration
-    'gemini-3-pro', // ~75% SWE-bench - 2M context window
+    'gemini-3-pro-preview', // ~75% SWE-bench - 2M context window
     'claude-haiku-4.5', // ~70% - Best writing quality
     'glm-4.6v', // 68% SWE-bench - Vision + tools
   ],
@@ -553,43 +535,43 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
  * These override complexity preferences when task type is known
  */
 export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
-  // Coding: Claude Opus 4.5 (80.9%), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
+  // Coding: Claude Opus 4.6 (80.9%), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
   coding: [
-    'claude-opus-4.5', // 80.9% SWE-bench - PUBLIC #1 for coding
+    'claude-opus-4.6', // 80.9% SWE-bench - PUBLIC #1 for coding
     'gpt-5.2', // 80.0% SWE-bench - #2, best tool integration
     'glm-4.7', // 73.8% SWE-bench - #3, best open-weight
     'claude-sonnet-4.5', // Great coding, more affordable
-    'deepseek-v3.2', // Budget coding champion
+    'deepseek-chat', // Budget coding champion
   ],
   // Reasoning: GPT-5.2 for math, Claude for complex analysis
   reasoning: [
     'gpt-5.2', // 100% AIME 2025 - PUBLIC #1 for math
-    'claude-opus-4.5', // Best for nuanced reasoning
-    'gemini-3-ultra', // Deep Think for exam-style
+    'claude-opus-4.6', // Best for nuanced reasoning
     'o3', // OpenAI reasoning specialist
+    'gemini-3-pro-preview', // Deep Think for exam-style
     'glm-4.7', // 95.7% AIME - strong alternative
   ],
   // General: ChatGPT versatile, Claude for writing, DeepSeek for budget
   general: [
     'gpt-5.2', // PUBLIC #1 for versatility
     'claude-sonnet-4.5', // Best for writing/creative
-    'deepseek-v3.2', // Budget champion
-    'gemini-3-flash', // Fast, good quality
+    'deepseek-chat', // Budget champion
+    'gemini-3-flash-preview', // Fast, good quality
     'glm-4.7', // Solid all-rounder
   ],
   // Agentic: GPT-5.2 for tool-calling (97% τ²-bench), Claude for orchestration
   agentic: [
     'gpt-5.2', // 97% τ²-bench - PUBLIC #1 for tool-calling
-    'claude-opus-4.5', // Best multi-step orchestration
+    'claude-opus-4.6', // Best multi-step orchestration
     'claude-sonnet-4.5', // More affordable agentic
-    'gemini-3-pro', // Good tool use, 2M context
+    'gemini-3-pro-preview', // Good tool use, 2M context
     'glm-4.7', // Agentic-capable open model
   ],
   // Multimodal: Gemini for best vision, Claude for analysis
   multimodal: [
-    'gemini-3-ultra', // PUBLIC #1 for multimodal (native video)
     'gpt-5.2', // Excellent vision + tools
-    'claude-opus-4.5', // Best visual analysis
+    'gemini-3-pro-preview', // Best multimodal (native video, 2M context)
+    'claude-opus-4.6', // Best visual analysis
     'claude-sonnet-4.5', // Good vision, more affordable
     'glm-4.6v', // Vision + native tool calling
   ],
@@ -747,7 +729,7 @@ function hasRequiredCapabilities(model: ModelMetadata, taskType: TaskType): bool
   switch (taskType) {
     case 'multimodal':
       // HARD REQUIREMENT: Model must support vision for image tasks
-      // Models without vision: DeepSeek V3, Grok 4.1, Qwen 3
+      // Models without vision: DeepSeek Chat, Grok 4, Qwen 3
       return model.capabilities.vision === true;
 
     case 'agentic':
@@ -937,7 +919,7 @@ export function selectModelFromPool(
     }
 
     // Last resort: First model in pool (better than nothing)
-    const firstModelId = pool[0] ?? 'gemini-3-flash';
+    const firstModelId = pool[0] ?? 'gemini-3-flash-preview';
     const fallback = MODEL_METADATA[firstModelId];
     return {
       modelId: firstModelId,
@@ -1295,7 +1277,7 @@ export function routeIntelligentlySync(
 
   // Build classification options
   const classificationOptions: ClassificationOptions = {
-    tier: 'hobby', // Force local classification
+    tier, // Use computed tier from autoMode (local classification is already guaranteed by classifyIntentLocally)
     hasAttachments: !!(options.hasImages || options.hasAudio || options.hasVideo),
     attachmentTypes: [
       ...(options.hasImages ? ['image' as const] : []),

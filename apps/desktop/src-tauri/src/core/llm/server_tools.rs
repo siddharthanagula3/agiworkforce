@@ -1,7 +1,7 @@
 //! Server-side tool definitions for Anthropic Claude API.
 //!
 //! These tools are executed server-side by Anthropic's API, not client-side.
-//! Includes: text_editor, web_search, web_fetch, memory, bash, computer_use, tool_search.
+//! Includes: text_editor, web_search, web_fetch, memory, bash, computer, tool_search.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,8 +10,8 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerTool {
-    /// Text editor tool for file operations (Claude 4.x: text_editor_20250728)
-    TextEditor20250728 {
+    /// Text editor tool for file operations (Claude 4.x: text_editor_20250124)
+    TextEditor20250124 {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         max_characters: Option<u32>,
@@ -30,8 +30,8 @@ pub enum ServerTool {
         user_location: Option<UserLocation>,
     },
 
-    /// Web fetch tool for retrieving web content (web_fetch_20250910)
-    WebFetch20250910 {
+    /// Web fetch tool for retrieving web content (web_fetch_20250305)
+    WebFetch20250305 {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         max_uses: Option<u32>,
@@ -45,14 +45,14 @@ pub enum ServerTool {
         max_content_tokens: Option<u32>,
     },
 
-    /// Memory tool for persistent storage (memory_20250818)
-    Memory20250818 { name: String },
+    /// Memory tool for persistent storage (memory_20250728)
+    Memory20250728 { name: String },
 
     /// Bash tool for command execution (bash_20250124)
     Bash20250124 { name: String },
 
-    /// Computer use tool for desktop interaction (computer-use-2025-11-24)
-    ComputerUse20251124 {
+    /// Computer use tool for desktop interaction (computer_20250124)
+    Computer20250124 {
         name: String,
         display_width_px: u32,
         display_height_px: u32,
@@ -64,6 +64,10 @@ pub enum ServerTool {
 
     /// Tool search tool with BM25 (tool_search_tool_bm25_20251119)
     ToolSearchBm2520251119 { name: String },
+
+    /// Code execution tool for sandboxed Python (code_execution_20250522)
+    #[serde(rename = "code_execution_20250522")]
+    CodeExecution20250522 { name: String },
 }
 
 /// User location for web search localization
@@ -134,7 +138,82 @@ pub struct WebFetchResult {
     pub retrieved_at: String,
 }
 
-use super::DocumentContent;
+/// Content from a fetched document
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: String,
+}
+
+/// Known Anthropic server tool names for detection during request adaptation.
+/// When a tool name matches one of these, it should be sent in the server-tool
+/// format (`{"type": "web_search_20250305", ...}`) rather than the regular
+/// function-calling format (`{"name": ..., "input_schema": ...}`).
+pub const ANTHROPIC_SERVER_TOOL_NAMES: &[&str] = &[
+    "web_search",
+    "web_fetch",
+    "text_editor",
+    "bash",
+    "memory",
+    "computer",
+    "code_execution",
+    "tool_search_regex",
+    "tool_search_bm25",
+];
+
+/// Check if a tool name corresponds to a known Anthropic server-side tool.
+pub fn is_anthropic_server_tool(name: &str) -> bool {
+    ANTHROPIC_SERVER_TOOL_NAMES.contains(&name)
+}
+
+/// Build the server-tool JSON definition for the Anthropic API.
+/// Server tools use a typed format: `{"type": "<versioned_type>", "name": "<name>", ...}`
+pub fn build_server_tool_definition(name: &str) -> Option<serde_json::Value> {
+    match name {
+        "web_search" => Some(serde_json::json!({
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 5
+        })),
+        "web_fetch" => Some(serde_json::json!({
+            "type": "web_fetch_20250305",
+            "name": "web_fetch",
+            "max_uses": 5
+        })),
+        "text_editor" => Some(serde_json::json!({
+            "type": "text_editor_20250124",
+            "name": "text_editor"
+        })),
+        "bash" => Some(serde_json::json!({
+            "type": "bash_20250124",
+            "name": "bash"
+        })),
+        "memory" => Some(serde_json::json!({
+            "type": "memory_20250728",
+            "name": "memory"
+        })),
+        "computer" => Some(serde_json::json!({
+            "type": "computer_20250124",
+            "name": "computer",
+            "display_width_px": 1920,
+            "display_height_px": 1080
+        })),
+        "code_execution" => Some(serde_json::json!({
+            "type": "code_execution_20250522",
+            "name": "code_execution"
+        })),
+        "tool_search_regex" => Some(serde_json::json!({
+            "type": "tool_search_tool_regex_20251119",
+            "name": "tool_search_regex"
+        })),
+        "tool_search_bm25" => Some(serde_json::json!({
+            "type": "tool_search_tool_bm25_20251119",
+            "name": "tool_search_bm25"
+        })),
+        _ => None,
+    }
+}
 
 #[cfg(test)]
 mod tests {

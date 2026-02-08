@@ -8,6 +8,7 @@ export interface ImageGenerationData {
   images?: Array<{
     url?: string;
     base64?: string;
+    b64_json?: string;
     size?: string;
   }>;
   provider?: string;
@@ -19,7 +20,9 @@ export interface ImageGenerationData {
 export interface VideoGenerationData {
   prompt?: string;
   videoUrl?: string;
+  video_url?: string;
   duration?: number;
+  duration_secs?: number;
   resolution?: string;
   provider?: string;
   cost?: number;
@@ -32,6 +35,10 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
   if (!data) return null;
 
   const { prompt = '', images = [], success = true, error } = data;
+  const normalizedImages = images.map((img) => ({
+    ...img,
+    base64: img.base64 ?? img.b64_json,
+  }));
 
   if (status === 'running') {
     return (
@@ -45,7 +52,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  if (!success || error || images.length === 0) {
+  if (!success || error || normalizedImages.length === 0) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
@@ -72,7 +79,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
 
       {/* Image Grid */}
       <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {images.map((img, i) => (
+        {normalizedImages.map((img, i) => (
           <div
             key={i}
             className="group relative rounded-lg overflow-hidden bg-black/30 aspect-square border border-border/30 hover:border-amber-400/50 transition"
@@ -121,7 +128,9 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
   const data = result?.data as VideoGenerationData | undefined;
   if (!data) return null;
 
-  const { prompt = '', videoUrl, duration, resolution, success = true, error } = data;
+  const { prompt = '', resolution, success = true, error } = data;
+  const resolvedVideoUrl = data.videoUrl || data.video_url;
+  const resolvedDuration = data.duration ?? data.duration_secs;
 
   if (status === 'running') {
     return (
@@ -135,7 +144,7 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  if (!success || error || !videoUrl) {
+  if (!success || error || !resolvedVideoUrl) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
@@ -162,15 +171,29 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
 
       {/* Video Player */}
       <div className="relative bg-black/40 aspect-video">
-        <video src={videoUrl} controls className="w-full h-full" />
+        <video src={resolvedVideoUrl} controls className="w-full h-full" />
       </div>
 
       {/* Info Footer */}
       <div className="px-3 py-2 border-t border-border/30 bg-surface-base/50 flex items-center justify-between text-xs text-muted-foreground">
         <div className="space-x-3 flex">
-          {duration && <span>{Math.round(duration)}s</span>}
+          {resolvedDuration && <span>{Math.round(resolvedDuration)}s</span>}
           {resolution && <span>{resolution}</span>}
         </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="gap-2"
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = resolvedVideoUrl;
+            link.download = `generated-video-${Date.now()}.mp4`;
+            link.click();
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Download
+        </Button>
       </div>
     </div>
   );

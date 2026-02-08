@@ -95,6 +95,7 @@ interface SettingsState {
 
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
+  setCompactMode: (enabled: boolean) => void;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;

@@ -115,7 +115,7 @@ describe('POST /api/llm/completion', () => {
     });
     mockSendRequest.mockResolvedValue({
       content: 'Hello, how can I help you?',
-      model: 'deepseek-v3.2',
+      model: 'deepseek-chat',
       promptTokens: 100,
       completionTokens: 50,
       totalTokens: 150,
@@ -145,7 +145,7 @@ describe('POST /api/llm/completion', () => {
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -165,7 +165,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Basic invalid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -189,7 +189,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer invalid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -211,7 +211,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -237,7 +237,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -263,7 +263,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -343,11 +343,11 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect Google provider from gemini model', async () => {
-      // gemini-3-flash is in ECONOMY_MODELS
+      // gemini-3-flash-preview is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('google');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Gemini',
-        model: 'gemini-3-flash',
+        model: 'gemini-3-flash-preview',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -360,26 +360,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gemini-3-flash',
+          model: 'gemini-3-flash-preview',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-3-flash');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-3-flash-preview');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'google',
-        expect.objectContaining({ model: 'gemini-3-flash' }),
+        expect.objectContaining({ model: 'gemini-3-flash-preview' }),
       );
     });
 
     it('should detect xAI provider from grok model', async () => {
-      // grok-4.1-mini is in ECONOMY_MODELS
+      // grok-4-mini is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4.1-mini',
+        model: 'grok-4-mini',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -392,26 +392,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4.1-mini',
+          model: 'grok-4-mini',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4.1-mini');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4-mini');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4.1-mini' }),
+        expect.objectContaining({ model: 'grok-4-mini' }),
       );
     });
 
     it('should detect DeepSeek provider from deepseek model', async () => {
-      // deepseek-v3.2 is in ECONOMY_MODELS
+      // deepseek-chat is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('deepseek');
       mockSendRequest.mockResolvedValue({
         content: 'Response from DeepSeek',
-        model: 'deepseek-v3.2',
+        model: 'deepseek-chat',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -424,17 +424,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('deepseek-v3.2');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('deepseek-chat');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'deepseek',
-        expect.objectContaining({ model: 'deepseek-v3.2' }),
+        expect.objectContaining({ model: 'deepseek-chat' }),
       );
     });
   });
@@ -508,7 +508,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -534,7 +534,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: false,
         }),
@@ -566,7 +566,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
         }),
@@ -589,7 +589,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
         }),
@@ -628,7 +628,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -660,7 +660,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -720,7 +720,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [],
         }),
       });
@@ -739,7 +739,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'x'.repeat(100001) }],
         }),
       });
@@ -765,7 +765,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages,
         }),
       });
@@ -790,7 +790,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -816,7 +816,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -838,7 +838,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -867,7 +867,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -895,7 +895,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'deepseek-v3.2',
+          model: 'deepseek-chat',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });

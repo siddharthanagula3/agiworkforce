@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ErrorToastContainer, useErrorToast } from '../components/Errors/ErrorToast';
 import useErrorStore from '../stores/errorStore';
 
 describe('ErrorToast', () => {
   beforeEach(() => {
-    useErrorStore.setState({
-      errors: [],
-      toasts: [],
+    act(() => {
+      useErrorStore.setState({
+        errors: [],
+        toasts: [],
+      });
     });
   });
 
@@ -20,10 +22,12 @@ describe('ErrorToast', () => {
     it('should render toast when error is added', async () => {
       render(<ErrorToastContainer />);
 
-      useErrorStore.getState().addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
+      act(() => {
+        useErrorStore.getState().addError({
+          type: 'NETWORK_ERROR',
+          severity: 'error',
+          message: 'Connection failed',
+        });
       });
 
       await waitFor(() => {
@@ -36,10 +40,12 @@ describe('ErrorToast', () => {
     it('should dismiss toast when X button is clicked', async () => {
       render(<ErrorToastContainer />);
 
-      useErrorStore.getState().addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
+      act(() => {
+        useErrorStore.getState().addError({
+          type: 'NETWORK_ERROR',
+          severity: 'error',
+          message: 'Connection failed',
+        });
       });
 
       await waitFor(() => {
@@ -57,17 +63,19 @@ describe('ErrorToast', () => {
     it('should show error count when error occurs multiple times', async () => {
       render(<ErrorToastContainer />);
 
-      const addError = useErrorStore.getState().addError;
-      addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
-      });
+      act(() => {
+        const addError = useErrorStore.getState().addError;
+        addError({
+          type: 'NETWORK_ERROR',
+          severity: 'error',
+          message: 'Connection failed',
+        });
 
-      addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
+        addError({
+          type: 'NETWORK_ERROR',
+          severity: 'error',
+          message: 'Connection failed',
+        });
       });
 
       await waitFor(() => {
@@ -78,11 +86,13 @@ describe('ErrorToast', () => {
     it('should show details when details section is expanded', async () => {
       render(<ErrorToastContainer />);
 
-      useErrorStore.getState().addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
-        details: 'Detailed error information',
+      act(() => {
+        useErrorStore.getState().addError({
+          type: 'NETWORK_ERROR',
+          severity: 'error',
+          message: 'Connection failed',
+          details: 'Detailed error information',
+        });
       });
 
       await waitFor(() => {
@@ -98,31 +108,37 @@ describe('ErrorToast', () => {
     it('should render different severity levels with correct styling', () => {
       const { rerender } = render(<ErrorToastContainer />);
 
-      useErrorStore.getState().addError({
-        type: 'INFO',
-        severity: 'info',
-        message: 'Info message',
+      act(() => {
+        useErrorStore.getState().addError({
+          type: 'INFO',
+          severity: 'info',
+          message: 'Info message',
+        });
       });
       rerender(<ErrorToastContainer />);
 
       const infoAlert = screen.getByRole('alert');
       expect(infoAlert).toHaveClass('bg-blue-50');
 
-      useErrorStore.getState().clearHistory();
-      useErrorStore.getState().addError({
-        type: 'WARNING',
-        severity: 'warning',
-        message: 'Warning message',
+      act(() => {
+        useErrorStore.getState().clearHistory();
+        useErrorStore.getState().addError({
+          type: 'WARNING',
+          severity: 'warning',
+          message: 'Warning message',
+        });
       });
       rerender(<ErrorToastContainer />);
       const warningAlert = screen.getByRole('alert');
       expect(warningAlert).toHaveClass('bg-yellow-50');
 
-      useErrorStore.getState().clearHistory();
-      useErrorStore.getState().addError({
-        type: 'ERROR',
-        severity: 'error',
-        message: 'Error message',
+      act(() => {
+        useErrorStore.getState().clearHistory();
+        useErrorStore.getState().addError({
+          type: 'ERROR',
+          severity: 'error',
+          message: 'Error message',
+        });
       });
       rerender(<ErrorToastContainer />);
       const errorAlert = screen.getByRole('alert');
@@ -132,13 +148,15 @@ describe('ErrorToast', () => {
     it('should limit number of visible toasts', () => {
       render(<ErrorToastContainer />);
 
-      for (let i = 0; i < 10; i++) {
-        useErrorStore.getState().addError({
-          type: `ERROR_${i}`,
-          severity: 'error',
-          message: `Error ${i}`,
-        });
-      }
+      act(() => {
+        for (let i = 0; i < 10; i++) {
+          useErrorStore.getState().addError({
+            type: `ERROR_${i}`,
+            severity: 'error',
+            message: `Error ${i}`,
+          });
+        }
+      });
 
       const toasts = useErrorStore.getState().toasts;
       expect(toasts.length).toBeLessThanOrEqual(5);

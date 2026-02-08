@@ -551,15 +551,15 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("gemini-3-pro"),
+            executor.infer_provider_from_model("gemini-3-pro-preview"),
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("deepseek-v3.2"),
+            executor.infer_provider_from_model("deepseek-chat"),
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("grok-4.1"),
+            executor.infer_provider_from_model("grok-4"),
             Provider::ManagedCloud
         );
         assert_eq!(

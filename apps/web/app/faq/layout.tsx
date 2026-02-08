@@ -141,7 +141,7 @@ const jsonLd = {
       name: 'Which AI providers are supported?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, Grok 4.1, DeepSeek V3, Qwen 3, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
+        text: 'AGI Workforce supports GPT-5, Claude 4.5, Gemini 3, Grok 4, DeepSeek Chat, Qwen 3, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
       },
     },
     {

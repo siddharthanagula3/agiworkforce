@@ -519,16 +519,11 @@ export const useModelStore = create<ModelState>()(
           // Use the model router to determine the actual model
           const routingResult = getModelForRequest(effectiveModel, message, hasImages);
 
-          // Get task type from routing (default to 'general' for manual selections)
-          let taskType: TaskType = 'general';
-          if (routingResult.wasRouted) {
-            // Extract task type from reason if available
-            const taskMatch = routingResult.reason.match(/Keywords:.*?(\w+) task/i);
-            const matchedType = taskMatch?.[1];
-            if (matchedType) {
-              taskType = matchedType.toLowerCase() as TaskType;
-            }
-          }
+          // Task type defaults to 'general' — the routing reason string format is
+          // inconsistent across code paths (task preferences, complexity-based, benchmark-based)
+          // so regex extraction is unreliable. The actual routing decision already used the
+          // correct task type internally; this field is only for UI display.
+          const taskType: TaskType = 'general';
 
           const decision: RoutingDecision = {
             routedModelId: routingResult.modelId,
@@ -553,8 +548,8 @@ export const useModelStore = create<ModelState>()(
         reset: () => {
           set(
             {
-              selectedModel: null,
-              selectedProvider: null,
+              selectedModel: 'auto-economy',
+              selectedProvider: 'managed_cloud',
               favorites: [],
               recentModels: [],
               providerStatuses: {
@@ -573,6 +568,7 @@ export const useModelStore = create<ModelState>()(
                 suno: null,
                 udio: null,
               },
+              availableModels: [],
               usageStats: null,
               // Reset Ollama state
               ollamaModels: [],
