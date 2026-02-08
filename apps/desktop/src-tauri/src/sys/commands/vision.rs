@@ -11,6 +11,7 @@ use tauri::State;
 
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const JPEG_QUALITY: u8 = 85;
+const DEFAULT_VISION_MODEL: &str = "gpt-5.2";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VisionRequest {
@@ -130,7 +131,7 @@ pub async fn vision_send_message(
     let selected_model = request
         .model
         .clone()
-        .unwrap_or_else(|| "gpt-5.2".to_string());
+        .unwrap_or_else(|| DEFAULT_VISION_MODEL.to_string());
 
     let llm_request = LLMRequest {
         messages,
@@ -259,7 +260,7 @@ pub async fn vision_extract_text(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-5.2".to_string()),
+        model: Some(DEFAULT_VISION_MODEL.to_string()),
         temperature: Some(0.0),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
@@ -311,7 +312,7 @@ pub async fn vision_compare_images(
             },
         ],
         provider,
-        model: Some("gpt-5.2".to_string()),
+        model: Some(DEFAULT_VISION_MODEL.to_string()),
         temperature: Some(0.3),
         max_tokens: Some(1500),
         detail_level: Some("high".to_string()),
@@ -364,7 +365,7 @@ pub async fn vision_locate_element(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-5.2".to_string()),
+        model: Some(DEFAULT_VISION_MODEL.to_string()),
         temperature: Some(0.0),
         max_tokens: Some(500),
         detail_level: Some("high".to_string()),
@@ -401,7 +402,7 @@ pub async fn vision_describe_ui_elements(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-5.2".to_string()),
+        model: Some(DEFAULT_VISION_MODEL.to_string()),
         temperature: Some(0.3),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
@@ -438,8 +439,16 @@ pub async fn vision_answer_question(
     vision_send_message(request, state, db).await
 }
 
-fn load_image_from_path(path: &str) -> Result<DynamicImage, String> {
-    image::open(path).map_err(|e| format!("Failed to load image from path: {}", e))
+fn load_image_from_path(file_path: &str) -> Result<DynamicImage, String> {
+    let path = std::path::Path::new(file_path);
+    if !path.exists() || !path.is_file() {
+        return Err(format!("Invalid image path: {}", file_path));
+    }
+    // Reject paths with .. to prevent directory traversal
+    if file_path.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    image::open(file_path).map_err(|e| format!("Failed to load image from path: {}", e))
 }
 
 fn decode_base64_image(base64_str: &str) -> Result<DynamicImage, String> {

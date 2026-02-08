@@ -34,26 +34,12 @@ impl CostCalculator {
         let mut pricing = HashMap::new();
 
         // ---------------------------------------------------------
-        // DeepSeek Models (Best Value Leaders) - Updated 2026-01-01
+        // DeepSeek Models (Best Value Leaders) - Updated 2026-02-07
         // ---------------------------------------------------------
-        pricing.insert(
-            (Provider::DeepSeek, "deepseek-v3.2"),
-            Pricing {
-                input_per_million: 0.28, // Cache miss price
-                output_per_million: 0.42,
-            },
-        );
-        pricing.insert(
-            (Provider::DeepSeek, "deepseek-v3"),
-            Pricing {
-                input_per_million: 0.27,
-                output_per_million: 0.42,
-            },
-        );
         pricing.insert(
             (Provider::DeepSeek, "deepseek-chat"),
             Pricing {
-                input_per_million: 0.27,
+                input_per_million: 0.28,
                 output_per_million: 0.42,
             },
         );
@@ -61,14 +47,14 @@ impl CostCalculator {
             (Provider::DeepSeek, "deepseek-r1"),
             Pricing {
                 input_per_million: 0.55,
-                output_per_million: 1.68, // Reduced from $2.19
+                output_per_million: 2.19,
             },
         );
         pricing.insert(
             (Provider::DeepSeek, "deepseek-reasoner"),
             Pricing {
                 input_per_million: 0.55,
-                output_per_million: 1.68,
+                output_per_million: 2.19,
             },
         );
 
@@ -83,14 +69,14 @@ impl CostCalculator {
             },
         );
         pricing.insert(
-            (Provider::Google, "gemini-3-flash"),
+            (Provider::Google, "gemini-3-flash-preview"),
             Pricing {
                 input_per_million: 0.50,
                 output_per_million: 3.00,
             },
         );
         pricing.insert(
-            (Provider::Google, "gemini-3-pro"),
+            (Provider::Google, "gemini-3-pro-preview"),
             Pricing {
                 input_per_million: 2.00,
                 output_per_million: 12.00,
@@ -159,6 +145,13 @@ impl CostCalculator {
             },
         );
         pricing.insert(
+            (Provider::Anthropic, "claude-haiku-4.5"),
+            Pricing {
+                input_per_million: 1.00,
+                output_per_million: 5.00,
+            },
+        );
+        pricing.insert(
             (Provider::Anthropic, "claude-sonnet-4-5"),
             Pricing {
                 input_per_million: 3.00,
@@ -166,10 +159,24 @@ impl CostCalculator {
             },
         );
         pricing.insert(
-            (Provider::Anthropic, "claude-opus-4-5"),
+            (Provider::Anthropic, "claude-sonnet-4.5"),
+            Pricing {
+                input_per_million: 3.00,
+                output_per_million: 15.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Anthropic, "claude-opus-4-6"),
             Pricing {
                 input_per_million: 5.00,   // Reduced from $15 (67% cut)
                 output_per_million: 25.00, // Reduced from $75
+            },
+        );
+        pricing.insert(
+            (Provider::Anthropic, "claude-opus-4.6"),
+            Pricing {
+                input_per_million: 5.00,
+                output_per_million: 25.00,
             },
         );
 
@@ -188,6 +195,48 @@ impl CostCalculator {
             Pricing {
                 input_per_million: 1.75,
                 output_per_million: 14.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5-codex"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-codex"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-codex-low"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-codex-medium"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-codex-high"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-codex-xhigh"),
+            Pricing {
+                input_per_million: 1.25,
+                output_per_million: 10.00,
             },
         );
         pricing.insert(
@@ -280,7 +329,7 @@ impl CostCalculator {
         );
 
         // ---------------------------------------------------------
-        // xAI Grok 4 (Updated 2026-01-01)
+        // xAI Grok 4 (Updated 2026-02-07)
         // ---------------------------------------------------------
         pricing.insert(
             (Provider::XAI, "grok-4"),
@@ -290,38 +339,24 @@ impl CostCalculator {
             },
         );
         pricing.insert(
-            (Provider::XAI, "grok-4-fast"),
+            (Provider::XAI, "grok-4-fast-reasoning"),
             Pricing {
                 input_per_million: 0.20,
                 output_per_million: 0.50,
             },
         );
         pricing.insert(
-            (Provider::XAI, "grok-4.1"),
+            (Provider::XAI, "grok-4-fast-non-reasoning"),
             Pricing {
-                input_per_million: 5.50,
-                output_per_million: 16.50,
+                input_per_million: 0.20,
+                output_per_million: 0.50,
             },
         );
         pricing.insert(
-            (Provider::XAI, "grok-4.1-fast"),
+            (Provider::XAI, "grok-code-fast-1"),
             Pricing {
-                input_per_million: 0.10,
-                output_per_million: 0.40,
-            },
-        );
-        pricing.insert(
-            (Provider::XAI, "grok-4.1-fast-reasoning"),
-            Pricing {
-                input_per_million: 0.10,
-                output_per_million: 0.40,
-            },
-        );
-        pricing.insert(
-            (Provider::XAI, "grok-4.1-mini"),
-            Pricing {
-                input_per_million: 0.05,
-                output_per_million: 0.20,
+                input_per_million: 0.20,
+                output_per_million: 1.50,
             },
         );
 
@@ -351,7 +386,7 @@ impl CostCalculator {
         );
 
         // ---------------------------------------------------------
-        // Qwen3 (Updated 2026-01-28)
+        // Qwen (Updated 2026-02-07)
         // ---------------------------------------------------------
         pricing.insert(
             (Provider::Qwen, "qwen-flash"),
@@ -368,28 +403,35 @@ impl CostCalculator {
             },
         );
         pricing.insert(
-            (Provider::Qwen, "qwen3-coder-flash"),
+            (Provider::Qwen, "qwen-coder-flash"),
             Pricing {
                 input_per_million: 0.22,
                 output_per_million: 0.95,
             },
         );
         pricing.insert(
-            (Provider::Qwen, "qwen3-coder-plus"),
+            (Provider::Qwen, "qwen-coder"),
+            Pricing {
+                input_per_million: 0.30,
+                output_per_million: 1.50,
+            },
+        );
+        pricing.insert(
+            (Provider::Qwen, "qwen-coder-plus"),
             Pricing {
                 input_per_million: 0.50,
                 output_per_million: 2.00,
             },
         );
         pricing.insert(
-            (Provider::Qwen, "qwen3-max"),
+            (Provider::Qwen, "qwen-max"),
             Pricing {
                 input_per_million: 1.20,
                 output_per_million: 6.00,
             },
         );
         pricing.insert(
-            (Provider::Qwen, "qwen3-max-preview"),
+            (Provider::Qwen, "qwen-max-preview"),
             Pricing {
                 input_per_million: 2.15,
                 output_per_million: 8.60,
@@ -552,7 +594,7 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::XAI,
             Pricing {
-                input_per_million: 0.20, // Grok 4.1 pricing as default
+                input_per_million: 0.20, // grok-4-fast pricing as default
                 output_per_million: 0.50,
             },
         );
@@ -566,7 +608,7 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::Qwen,
             Pricing {
-                input_per_million: 1.20, // Qwen3 Max pricing as default
+                input_per_million: 1.20, // Qwen Max pricing as default
                 output_per_million: 6.00,
             },
         );
@@ -594,7 +636,7 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::ManagedCloud,
             Pricing {
-                input_per_million: 0.27, // DeepSeek V3 pricing as default
+                input_per_million: 0.27, // DeepSeek Chat pricing as default
                 output_per_million: 0.42,
             },
         );
@@ -618,6 +660,22 @@ impl CostCalculator {
         );
     }
 
+    /// Providers whose pricing entries ManagedCloud may proxy through.
+    /// ManagedCloud routes to models like `gpt-5-nano` (OpenAI), `deepseek-reasoner`
+    /// (DeepSeek), `gemini-3-flash-preview` (Google), etc. — instead of duplicating every
+    /// pricing entry, we look up the model under its original provider.
+    const MANAGED_CLOUD_ORIGIN_PROVIDERS: &'static [Provider] = &[
+        Provider::OpenAI,
+        Provider::Anthropic,
+        Provider::Google,
+        Provider::DeepSeek,
+        Provider::XAI,
+        Provider::Moonshot,
+        Provider::Qwen,
+        Provider::Perplexity,
+        Provider::Zhipu,
+    ];
+
     pub fn calculate(
         &self,
         provider: Provider,
@@ -633,6 +691,17 @@ impl CostCalculator {
         let pricing = self
             .pricing
             .get(&key)
+            .or_else(|| {
+                // ManagedCloud routes to models from other providers, so look up
+                // pricing under the model's original provider before falling back.
+                if provider == Provider::ManagedCloud {
+                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
+                        .iter()
+                        .find_map(|&p| self.pricing.get(&(p, model)))
+                } else {
+                    None
+                }
+            })
             .or_else(|| self.provider_defaults.get(&provider))
             .cloned()
             .unwrap_or(Pricing {

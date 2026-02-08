@@ -93,28 +93,32 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   openai: [
     { value: 'gpt-5-pro', label: 'GPT-5 Pro' },
     { value: 'gpt-5.2', label: 'GPT-5.2' },
+    { value: 'gpt-5.2-codex-low', label: 'GPT-5.2 Codex (Low)' },
+    { value: 'gpt-5.2-codex-medium', label: 'GPT-5.2 Codex (Medium)' },
+    { value: 'gpt-5.2-codex-high', label: 'GPT-5.2 Codex (High)' },
+    { value: 'gpt-5.2-codex-xhigh', label: 'GPT-5.2 Codex (XHigh)' },
     { value: 'gpt-5-nano', label: 'GPT-5 Nano' },
   ],
   anthropic: [
-    { value: 'claude-opus-4.5', label: 'Claude 4.5 Opus' },
+    { value: 'claude-opus-4.6', label: 'Claude 4.6 Opus' },
     { value: 'claude-sonnet-4.5', label: 'Claude 4.5 Sonnet' },
     { value: 'claude-haiku-4.5', label: 'Claude 4.5 Haiku' },
   ],
   google: [
-    { value: 'gemini-3-pro', label: 'Gemini 3 Pro' },
-    { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
+    { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
   ],
   xai: [
-    { value: 'grok-4.1', label: 'Grok 4.1' },
-    { value: 'grok-4.1-fast-reasoning', label: 'Grok 4.1 Fast Reasoning' },
-    { value: 'grok-4.1-fast-non-reasoning', label: 'Grok 4.1 Fast (Non-Reasoning)' },
+    { value: 'grok-4', label: 'Grok 4' },
+    { value: 'grok-4-fast-reasoning', label: 'Grok 4 Fast Reasoning' },
+    { value: 'grok-4-fast-non-reasoning', label: 'Grok 4 Fast (Non-Reasoning)' },
   ],
   deepseek: [
-    { value: 'deepseek-v3.2', label: 'DeepSeek V3.2' },
+    { value: 'deepseek-chat', label: 'DeepSeek Chat (V3)' },
     { value: 'deepseek-r1', label: 'DeepSeek R1' },
   ],
   qwen: [
-    { value: 'qwen3-max', label: 'Qwen3 Max' },
+    { value: 'qwen-max', label: 'Qwen Max' },
     { value: 'qwen-flash', label: 'Qwen Flash' },
   ],
   moonshot: [{ value: 'kimi-k2.5', label: 'Kimi K2.5' }],
@@ -149,114 +153,125 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
   // Free/Hobby: Economy tier models only (< $1/1M output tokens)
   free: [
     // Economy models - best value
-    'gemini-3-flash',
+    'gemini-3-flash-preview',
     'glm-4.7',
-    'deepseek-v3.2',
+    'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
     'kimi-k2.5',
-    'grok-4.1-fast-reasoning',
+    'grok-4-fast-reasoning',
     'claude-haiku-4.5',
-    'grok-4.1-fast-non-reasoning',
+    'grok-4-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
+    'gpt-5.2-codex-low',
     // Search models
     'sonar',
   ],
   hobby: [
     // Same as free
-    'gemini-3-flash',
+    'gemini-3-flash-preview',
     'glm-4.7',
-    'deepseek-v3.2',
+    'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
     'kimi-k2.5',
-    'grok-4.1-fast-reasoning',
+    'grok-4-fast-reasoning',
     'claude-haiku-4.5',
-    'grok-4.1-fast-non-reasoning',
+    'grok-4-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
+    'gpt-5.2-codex-low',
     'sonar',
   ],
   // Pro: Economy + balanced tier models ($1-15/1M output tokens)
   pro: [
     // Pro-tier additions
     'gpt-5.2',
+    'gpt-5.2-codex-medium',
     'claude-sonnet-4.5',
-    'gemini-3-pro',
-    'qwen3-max',
+    'gemini-3-pro-preview',
+    'qwen-max',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
     // All economy models
-    'gemini-3-flash',
+    'gemini-3-flash-preview',
     'glm-4.7',
-    'deepseek-v3.2',
+    'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
     'kimi-k2.5',
-    'grok-4.1-fast-reasoning',
+    'grok-4-fast-reasoning',
     'claude-haiku-4.5',
-    'grok-4.1-fast-non-reasoning',
+    'grok-4-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
+    'gpt-5.2-codex-low',
     'sonar',
   ],
   // Max: All models including flagships
   max: [
     // Flagship models
-    'claude-opus-4.5',
+    'claude-opus-4.6',
     'gpt-5-pro',
     'o3',
-    'grok-4.1',
+    'grok-4',
     'deepseek-r1',
     // Pro-tier models
     'gpt-5.2',
+    'gpt-5.2-codex-high',
+    'gpt-5.2-codex-medium',
     'claude-sonnet-4.5',
-    'gemini-3-pro',
-    'qwen3-max',
+    'gemini-3-pro-preview',
+    'qwen-max',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
     // Economy models
-    'gemini-3-flash',
+    'gemini-3-flash-preview',
     'glm-4.7',
-    'deepseek-v3.2',
+    'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
     'kimi-k2.5',
-    'grok-4.1-fast-reasoning',
+    'grok-4-fast-reasoning',
     'claude-haiku-4.5',
-    'grok-4.1-fast-non-reasoning',
+    'grok-4-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
+    'gpt-5.2-codex-low',
     'sonar',
   ],
   // Enterprise: Same as max (full access)
   enterprise: [
-    'claude-opus-4.5',
+    'claude-opus-4.6',
     'gpt-5-pro',
     'o3',
-    'grok-4.1',
+    'grok-4',
     'deepseek-r1',
     'gpt-5.2',
+    'gpt-5.2-codex-xhigh',
+    'gpt-5.2-codex-high',
+    'gpt-5.2-codex-medium',
     'claude-sonnet-4.5',
-    'gemini-3-pro',
-    'qwen3-max',
+    'gemini-3-pro-preview',
+    'qwen-max',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
-    'gemini-3-flash',
+    'gemini-3-flash-preview',
     'glm-4.7',
-    'deepseek-v3.2',
+    'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
     'kimi-k2.5',
-    'grok-4.1-fast-reasoning',
+    'grok-4-fast-reasoning',
     'claude-haiku-4.5',
-    'grok-4.1-fast-non-reasoning',
+    'grok-4-fast-non-reasoning',
     'qwen-flash',
     'gpt-5-nano',
+    'gpt-5.2-codex-low',
     'sonar',
   ],
 };
@@ -299,25 +314,29 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'auto-premium': 400_000, // GPT-5.2 has 400K
   // OpenAI
   'gpt-5.2': 400_000, // Updated Jan 2026
+  'gpt-5.2-codex-low': 400_000,
+  'gpt-5.2-codex-medium': 400_000,
+  'gpt-5.2-codex-high': 400_000,
+  'gpt-5.2-codex-xhigh': 400_000,
   'gpt-5-pro': 512_000, // GPT-5 Pro - flagship OpenAI model
   'gpt-5-nano': 128_000, // GPT-5 Nano - cheapest OpenAI model
   // Anthropic
-  'claude-opus-4.5': 200_000,
+  'claude-opus-4.6': 200_000,
   'claude-sonnet-4.5': 200_000,
   'claude-haiku-4.5': 200_000, // Claude Haiku 4.5 - cheapest Anthropic
   // Google (no Ultra tier exists in Gemini 3 API)
-  'gemini-3-pro': 2_000_000,
-  'gemini-3-flash': 1_000_000,
+  'gemini-3-pro-preview': 2_000_000,
+  'gemini-3-flash-preview': 1_000_000,
   // xAI
-  'grok-4.1': 256_000,
-  'grok-4.1-fast': 2_000_000, // Grok 4.1 Fast - cheapest xAI with 2M context
-  'grok-4.1-fast-reasoning': 2_000_000,
-  'grok-4.1-fast-non-reasoning': 2_000_000, // Per official xAI docs
+  'grok-4': 256_000,
+  'grok-4-fast': 2_000_000, // Grok 4 Fast - cheapest xAI with 2M context
+  'grok-4-fast-reasoning': 2_000_000,
+  'grok-4-fast-non-reasoning': 2_000_000, // Per official xAI docs
   // DeepSeek
-  'deepseek-v3.2': 128_000,
+  'deepseek-chat': 128_000,
   'deepseek-r1': 128_000,
   // Qwen (via MuleRouter)
-  'qwen3-max': 128_000, // Flagship model
+  'qwen-max': 128_000, // Flagship model
   'qwen-flash': 1_000_000, // 1M per MuleRouter docs
   // Moonshot K2.5 (thinking controlled via API parameter, not separate model)
   'kimi-k2.5': 256_000, // 262,144 per official docs
@@ -396,6 +415,15 @@ export interface ModelMetadata {
     mmlu?: number;
     gpqa?: number;
     aime?: number;
+    // Additional benchmark dimensions used by newer model releases
+    sweBenchPro?: number;
+    terminalBench2?: number;
+    osWorldVerified?: number;
+    gdpvalWinsOrTies?: number;
+    ctfChallenges?: number;
+    sweLancerIcDiamond?: number;
+    aiderPolyglot?: number;
+    tau2Telecom?: number;
   };
   speed: 'very-fast' | 'fast' | 'medium' | 'slow';
   quality: 'excellent' | 'good' | 'fair';
@@ -547,7 +575,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // ============================================
   'gpt-5.2': {
     id: 'gpt-5.2',
-    apiModelId: 'gpt-5.2-2026-01',
+    apiModelId: 'gpt-5.2',
     name: 'GPT-5.2',
     provider: 'openai',
     modelType: 'reasoning',
@@ -569,17 +597,175 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       codeExecution: true, // Code Interpreter sandbox
     },
     benchmarks: {
-      swebench: 80.0, // SWE-bench verified (Jan 2026)
-      humaneval: 98.5,
-      mmlu: 93.2,
-      gpqa: 93.2, // GPQA Diamond
-      aime: 100.0, // AIME 2025 (with thinking)
+      // OpenAI has not published a standalone GPT-5.2 benchmark table yet.
+      // Use latest official GPT-5.2/GPT-5 family published metrics as proxy.
+      swebench: 80.0, // SWE-bench Verified (GPT-5.2 Thinking)
+      sweBenchPro: 55.6, // SWE-Bench Pro (GPT-5.2/GPT-5.2-Codex comparator table)
+      aiderPolyglot: 88.0, // GPT-5 high
+      mmlu: 93.2, // Retained proxy for general routing (no official 5.2 MMLU published)
+      gpqa: 92.4, // GPQA Diamond (GPT-5.2 Thinking)
+      aime: 100.0, // AIME 2025 (GPT-5.2 Thinking)
+      gdpvalWinsOrTies: 70.9, // GDPval
+      tau2Telecom: 96.7, // τ²-bench telecom (GPT-5 high)
     },
     speed: 'medium',
     quality: 'excellent',
     qualityTier: 'best',
     bestFor: ['Agentic Tasks', 'Complex Reasoning', 'Research'],
-    released: 'January 2026',
+    released: 'December 2025',
+  },
+  'gpt-5.2-codex-low': {
+    id: 'gpt-5.2-codex-low',
+    apiModelId: 'gpt-5-codex',
+    name: 'GPT-5.2 Codex (Low)',
+    provider: 'openai',
+    modelType: 'code',
+    contextWindow: 400_000,
+    inputCost: 1.25,
+    outputCost: 10.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: true,
+    },
+    benchmarks: {
+      // Public GPT-5.2-Codex benchmark disclosures are reported at xhigh effort.
+      swebench: 56.8, // Mapped from SWE-Bench Pro (Public)
+      sweBenchPro: 56.8,
+      terminalBench2: 77.3,
+      osWorldVerified: 64.7,
+      gdpvalWinsOrTies: 70.9,
+      ctfChallenges: 77.6,
+      sweLancerIcDiamond: 81.4,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Coding', 'Agentic Coding', 'Tool Use'],
+    released: '2026',
+  },
+  'gpt-5.2-codex-medium': {
+    id: 'gpt-5.2-codex-medium',
+    apiModelId: 'gpt-5-codex',
+    name: 'GPT-5.2 Codex (Medium)',
+    provider: 'openai',
+    modelType: 'code',
+    contextWindow: 400_000,
+    inputCost: 1.25,
+    outputCost: 10.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: true,
+    },
+    benchmarks: {
+      swebench: 56.8, // Mapped from SWE-Bench Pro (Public)
+      sweBenchPro: 56.8,
+      terminalBench2: 77.3,
+      osWorldVerified: 64.7,
+      gdpvalWinsOrTies: 70.9,
+      ctfChallenges: 77.6,
+      sweLancerIcDiamond: 81.4,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Coding', 'Agentic Coding', 'Tool Use'],
+    released: '2026',
+  },
+  'gpt-5.2-codex-high': {
+    id: 'gpt-5.2-codex-high',
+    apiModelId: 'gpt-5-codex',
+    name: 'GPT-5.2 Codex (High)',
+    provider: 'openai',
+    modelType: 'code',
+    contextWindow: 400_000,
+    inputCost: 1.25,
+    outputCost: 10.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: true,
+    },
+    benchmarks: {
+      swebench: 56.8, // Mapped from SWE-Bench Pro (Public)
+      sweBenchPro: 56.8,
+      terminalBench2: 77.3,
+      osWorldVerified: 64.7,
+      gdpvalWinsOrTies: 70.9,
+      ctfChallenges: 77.6,
+      sweLancerIcDiamond: 81.4,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Coding', 'Agentic Coding', 'Tool Use'],
+    released: '2026',
+  },
+  'gpt-5.2-codex-xhigh': {
+    id: 'gpt-5.2-codex-xhigh',
+    apiModelId: 'gpt-5-codex',
+    name: 'GPT-5.2 Codex (XHigh)',
+    provider: 'openai',
+    modelType: 'code',
+    contextWindow: 400_000,
+    inputCost: 1.25,
+    outputCost: 10.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: true,
+      research: true,
+      codeExecution: true,
+    },
+    benchmarks: {
+      swebench: 56.8, // Mapped from SWE-Bench Pro (Public)
+      sweBenchPro: 56.8,
+      terminalBench2: 77.3,
+      osWorldVerified: 64.7,
+      gdpvalWinsOrTies: 70.9,
+      ctfChallenges: 77.6,
+      sweLancerIcDiamond: 81.4,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Coding', 'Agentic Coding', 'Tool Use'],
+    released: '2026',
   },
   'gpt-5-pro': {
     id: 'gpt-5-pro',
@@ -659,10 +845,10 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // Source: https://docs.anthropic.com/en/docs/models-overview
   // Capabilities verified January 2026
   // ============================================
-  'claude-opus-4.5': {
-    id: 'claude-opus-4.5',
-    apiModelId: 'claude-opus-4-5-20251101',
-    name: 'Claude 4.5 Opus',
+  'claude-opus-4.6': {
+    id: 'claude-opus-4.6',
+    apiModelId: 'claude-opus-4-6',
+    name: 'Claude 4.6 Opus',
     provider: 'anthropic',
     modelType: 'reasoning',
     contextWindow: 200_000,
@@ -774,15 +960,15 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // Capabilities verified January 2026
   // NOTE: Gemini 3 only has Pro and Flash tiers (no Ultra tier exists in API)
   // ============================================
-  'gemini-3-pro': {
-    id: 'gemini-3-pro',
-    apiModelId: 'gemini-3-pro',
+  'gemini-3-pro-preview': {
+    id: 'gemini-3-pro-preview',
+    apiModelId: 'gemini-3-pro-preview',
     name: 'Gemini 3 Pro',
     provider: 'google',
     modelType: 'reasoning',
     contextWindow: 2_000_000, // 2M context window
-    inputCost: 1.25, // $1.25/1M input
-    outputCost: 5.0, // $5/1M output
+    inputCost: 2.0, // $2.00/1M input
+    outputCost: 12.0, // $12.00/1M output
     capabilities: {
       streaming: true,
       tools: true, // Full function calling
@@ -810,9 +996,9 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['Long Context', 'Research', 'Multimodal', 'Code Execution'],
     released: 'December 2025',
   },
-  'gemini-3-flash': {
-    id: 'gemini-3-flash',
-    apiModelId: 'gemini-3-flash',
+  'gemini-3-flash-preview': {
+    id: 'gemini-3-flash-preview',
+    apiModelId: 'gemini-3-flash-preview',
     name: 'Gemini 3 Flash',
     provider: 'google',
     modelType: 'chat',
@@ -853,10 +1039,10 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // Capabilities verified January 2026
   // NOTE: Vision requires separate grok-2-vision model
   // ============================================
-  'grok-4.1': {
-    id: 'grok-4.1',
-    apiModelId: 'grok-4.1',
-    name: 'Grok 4.1',
+  'grok-4': {
+    id: 'grok-4',
+    apiModelId: 'grok-4',
+    name: 'Grok 4',
     provider: 'xai',
     modelType: 'reasoning',
     contextWindow: 256_000,
@@ -890,11 +1076,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2026',
   },
 
-  // Grok 4.1 Fast - Economy model with massive context (latest)
-  'grok-4.1-fast': {
-    id: 'grok-4.1-fast',
-    apiModelId: 'grok-4.1-fast',
-    name: 'Grok 4.1 Fast',
+  // Grok 4 Fast - Economy model with massive context (latest)
+  'grok-4-fast': {
+    id: 'grok-4-fast',
+    apiModelId: 'grok-4-fast',
+    name: 'Grok 4 Fast',
     provider: 'xai',
     modelType: 'chat',
     contextWindow: 2_000_000, // 2M context - largest available
@@ -934,15 +1120,15 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // Capabilities verified January 2026
   // NOTE: Vision requires separate deepseek-vl model
   // ============================================
-  'deepseek-v3.2': {
-    id: 'deepseek-v3.2',
-    apiModelId: 'deepseek-chat-v3.2',
-    name: 'DeepSeek V3.2',
+  'deepseek-chat': {
+    id: 'deepseek-chat',
+    apiModelId: 'deepseek-chat',
+    name: 'DeepSeek Chat (V3)',
     provider: 'deepseek',
     modelType: 'code',
     contextWindow: 128_000,
-    inputCost: 0.27, // $0.27/1M input - Very cheap
-    outputCost: 1.1, // $1.10/1M output
+    inputCost: 0.28, // $0.28/1M input - Very cheap
+    outputCost: 0.42, // $0.42/1M output
     capabilities: {
       streaming: true,
       tools: true, // Function calling supported
@@ -977,10 +1163,10 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // MuleRouter provides OpenAI-compatible API for Qwen models
   // ============================================
 
-  'qwen3-max': {
-    id: 'qwen3-max',
-    apiModelId: 'qwen3-max',
-    name: 'Qwen3 Max',
+  'qwen-max': {
+    id: 'qwen-max',
+    apiModelId: 'qwen-max',
+    name: 'Qwen Max',
     provider: 'qwen',
     modelType: 'reasoning',
     contextWindow: 128_000, // 252K per MuleRouter docs
@@ -1044,11 +1230,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2026',
   },
 
-  // xAI Grok 4.1 Fast (Non-Reasoning) - formerly misnamed as "mini"
-  'grok-4.1-fast-non-reasoning': {
-    id: 'grok-4.1-fast-non-reasoning',
-    apiModelId: 'grok-4.1-fast-non-reasoning',
-    name: 'Grok 4.1 Fast (Non-Reasoning)',
+  // xAI Grok 4 Fast (Non-Reasoning) - formerly misnamed as "mini"
+  'grok-4-fast-non-reasoning': {
+    id: 'grok-4-fast-non-reasoning',
+    apiModelId: 'grok-4-fast-non-reasoning',
+    name: 'Grok 4 Fast (Non-Reasoning)',
     provider: 'xai',
     modelType: 'chat',
     contextWindow: 2_000_000, // 2M context per official docs
@@ -1076,16 +1262,16 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     released: 'January 2026',
   },
 
-  // xAI Grok 4.1 Fast Reasoning
-  'grok-4.1-fast-reasoning': {
-    id: 'grok-4.1-fast-reasoning',
-    apiModelId: 'grok-4.1-fast-reasoning',
-    name: 'Grok 4.1 Fast Reasoning',
+  // xAI Grok 4 Fast Reasoning
+  'grok-4-fast-reasoning': {
+    id: 'grok-4-fast-reasoning',
+    apiModelId: 'grok-4-fast-reasoning',
+    name: 'Grok 4 Fast Reasoning',
     provider: 'xai',
     modelType: 'reasoning',
     contextWindow: 2_000_000,
-    inputCost: 0.1,
-    outputCost: 0.4,
+    inputCost: 0.2,
+    outputCost: 0.5,
     capabilities: {
       streaming: true,
       tools: true,
@@ -1645,7 +1831,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     id: 'flux-2-pro',
     apiModelId: 'flux-2-pro',
     name: 'Flux 2 Pro',
-    provider: 'openai',
+    provider: 'black-forest-labs', // Black Forest Labs (same as flux-1.1-pro)
     modelType: 'image',
     contextWindow: 4000,
     inputCost: 0.0,
@@ -1674,7 +1860,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     id: 'ideogram-2',
     apiModelId: 'ideogram-2.0',
     name: 'Ideogram 2.0',
-    provider: 'openai',
+    provider: 'managed_cloud', // Routed via ManagedCloud proxy (Ideogram)
     modelType: 'image',
     contextWindow: 4000,
     inputCost: 0.0,

@@ -11,6 +11,10 @@ use std::time::Duration;
 struct OllamaMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,6 +27,8 @@ struct OllamaRequest {
     options: Option<OllamaOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     images: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,6 +99,12 @@ impl OllamaProvider {
             || m.contains("minicpm")
             || m.contains("llama3-v")
             || m.contains("qwen-vl")
+            // Modern vision-capable models (2025-2026)
+            || m.contains("llama4-maverick")
+            || m.contains("llama3.2-vision")
+            || m.contains("gemma3")
+            || m.contains("phi-4-multimodal")
+            || m.contains("minicpm-v")
     }
 }
 
@@ -122,14 +134,51 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
+        let tools = request.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .map(|tool| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
+                .collect()
+        });
+
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
                 .messages
                 .iter()
-                .map(|m| OllamaMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
+                .map(|m| {
+                    let tool_calls = m.tool_calls.as_ref().map(|calls| {
+                        calls
+                            .iter()
+                            .map(|tc| {
+                                let args: serde_json::Value = serde_json::from_str(&tc.arguments)
+                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                                serde_json::json!({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.name,
+                                        "arguments": args
+                                    }
+                                })
+                            })
+                            .collect()
+                    });
+                    OllamaMessage {
+                        role: m.role.clone(),
+                        content: m.content.clone(),
+                        tool_calls,
+                        tool_call_id: m.tool_call_id.clone(),
+                    }
                 })
                 .collect(),
             stream: Some(false),
@@ -138,6 +187,7 @@ impl LLMProvider for OllamaProvider {
                 num_predict: request.max_tokens,
             }),
             images,
+            tools,
         };
 
         let response = self
@@ -175,6 +225,46 @@ impl LLMProvider for OllamaProvider {
             (None, None) => None,
         };
 
+        // Extract tool calls from the Ollama response
+        let response_tool_calls = ollama_response.message.tool_calls.as_ref().map(|calls| {
+            calls
+                .iter()
+                .filter_map(|tc| {
+                    let func = tc.get("function")?;
+                    let name = func.get("name")?.as_str()?.to_string();
+                    let arguments = func
+                        .get("arguments")
+                        .map(|a| {
+                            if a.is_string() {
+                                a.as_str().unwrap_or("{}").to_string()
+                            } else {
+                                serde_json::to_string(a).unwrap_or_else(|_| "{}".to_string())
+                            }
+                        })
+                        .unwrap_or_else(|| "{}".to_string());
+                    let id = tc
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    Some(crate::core::llm::ToolCall {
+                        id,
+                        name,
+                        arguments,
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let finish_reason = if response_tool_calls
+            .as_ref()
+            .is_some_and(|tc| !tc.is_empty())
+        {
+            Some("tool_calls".to_string())
+        } else {
+            None
+        };
+
         Ok(LLMResponse {
             content: ollama_response.message.content,
             tokens: total_tokens,
@@ -182,12 +272,14 @@ impl LLMProvider for OllamaProvider {
             completion_tokens,
             cost: Some(0.0),
             model: ollama_response.model,
+            tool_calls: response_tool_calls,
+            finish_reason,
             ..LLMResponse::default()
         })
     }
 
     fn is_configured(&self) -> bool {
-        true
+        !self.base_url.is_empty()
     }
 
     fn name(&self) -> &str {
@@ -229,14 +321,51 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
+        let tools = request.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .map(|tool| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
+                .collect()
+        });
+
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
                 .messages
                 .iter()
-                .map(|m| OllamaMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
+                .map(|m| {
+                    let tool_calls = m.tool_calls.as_ref().map(|calls| {
+                        calls
+                            .iter()
+                            .map(|tc| {
+                                let args: serde_json::Value = serde_json::from_str(&tc.arguments)
+                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                                serde_json::json!({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.name,
+                                        "arguments": args
+                                    }
+                                })
+                            })
+                            .collect()
+                    });
+                    OllamaMessage {
+                        role: m.role.clone(),
+                        content: m.content.clone(),
+                        tool_calls,
+                        tool_call_id: m.tool_call_id.clone(),
+                    }
                 })
                 .collect(),
             stream: Some(true),
@@ -245,6 +374,7 @@ impl LLMProvider for OllamaProvider {
                 num_predict: request.max_tokens,
             }),
             images,
+            tools,
         };
 
         tracing::debug!(

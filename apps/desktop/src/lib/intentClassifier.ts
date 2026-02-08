@@ -16,7 +16,7 @@
  *
  * Recommended classifier models (in order of preference):
  * 1. gemini-2.0-flash - $0.10/$0.40, extremely fast, Dec 2025 cutoff, 1M context
- * 2. grok-4.1-fast-reasoning - $0.10/$0.40, fast with reasoning, Jan 2026 cutoff
+ * 2. grok-4-fast-reasoning - $0.10/$0.40, fast with reasoning, Jan 2026 cutoff
  * 3. gpt-5-nano - $0.05/$0.40, cheapest, Nov 2025 cutoff
  *
  * Intent Types:

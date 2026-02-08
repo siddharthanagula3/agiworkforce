@@ -35,7 +35,7 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   'gpt-5-pro': ['max', 'enterprise'],
   'gemini-3-ultra': ['max', 'enterprise'],
   o3: ['max', 'enterprise'],
-  'grok-4.1': ['max', 'enterprise'],
+  'grok-4': ['max', 'enterprise'],
   'deepseek-r1': ['max', 'enterprise'],
 
   // =========================================================================
@@ -43,10 +43,10 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   // =========================================================================
   'gpt-5.2': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
-  'gemini-3-pro': ['pro', 'max', 'enterprise'],
+  'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
   'kimi-k2.5-turbo': ['pro', 'max', 'enterprise'],
-  'qwen3-max': ['pro', 'max', 'enterprise'],
-  'qwen3-coder-plus': ['pro', 'max', 'enterprise'],
+  'qwen-max': ['pro', 'max', 'enterprise'],
+  'qwen-coder-plus': ['pro', 'max', 'enterprise'],
   'sonar-pro': ['pro', 'max', 'enterprise'],
   'sonar-reasoning': ['pro', 'max', 'enterprise'],
   'sonar-deep-research': ['pro', 'max', 'enterprise'],
@@ -54,9 +54,9 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   // =========================================================================
   // HOBBY/ECONOMY TIER - All paid users have access
   // Models NOT in this list are restricted to Pro+ by the checkModelTierAccess function
-  // Economy models: gemini-3-flash, glm-4.7, deepseek-v3.2, glm-4.6v, glm-4.6v-flash,
-  // kimi-k2.5-thinking, grok-4.1-fast-reasoning, claude-haiku-4.5, qwen3-coder-flash,
-  // grok-4.1-mini, qwen-turbo, qwen-flash, gpt-5-nano, sonar
+  // Economy models: gemini-3-flash-preview, glm-4.7, deepseek-chat, glm-4.6v, glm-4.6v-flash,
+  // kimi-k2.5-thinking, grok-4-fast-reasoning, claude-haiku-4.5, qwen-coder-flash,
+  // grok-4-mini, qwen-turbo, qwen-flash, gpt-5-nano, sonar
   // =========================================================================
 };
 
@@ -65,16 +65,16 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
  * These are budget-friendly models under $1/1M output tokens
  */
 const ECONOMY_MODELS = new Set([
-  'gemini-3-flash',
+  'gemini-3-flash-preview',
   'glm-4.7',
-  'deepseek-v3.2',
+  'deepseek-chat',
   'glm-4.6v',
   'glm-4.6v-flash',
   'kimi-k2.5-thinking',
-  'grok-4.1-fast-reasoning',
+  'grok-4-fast-reasoning',
   'claude-haiku-4.5',
-  'qwen3-coder-flash',
-  'grok-4.1-mini',
+  'qwen-coder-flash',
+  'grok-4-mini',
   'qwen-turbo',
   'qwen-flash',
   'gpt-5-nano',
@@ -140,12 +140,12 @@ function findCheaperFallbackModel(
   // Define fallback models ordered by cost (cheapest first)
   // These are the most cost-effective models available as of January 2026
   const fallbackModels = [
-    { model: 'deepseek-v3.2', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek V3.2, best value
+    { model: 'deepseek-chat', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek Chat (V3), best value
     { model: 'qwen-flash', provider: 'qwen' }, // $0.05/$0.15 per 1M - Ultra cheap Qwen
     { model: 'gpt-5-nano', provider: 'openai' }, // $0.05/$0.4 per 1M - OpenAI's cheapest
     { model: 'qwen-turbo', provider: 'qwen' }, // $0.1/$0.3 per 1M - Fast Qwen
-    { model: 'gemini-3-flash', provider: 'google' }, // $0.50/$3.0 per 1M - Gemini 3 Flash
-    { model: 'grok-4.1-fast-reasoning', provider: 'xai' }, // $0.1/$0.4 per 1M - Grok 4.1 Fast Reasoning
+    { model: 'gemini-3-flash-preview', provider: 'google' }, // $0.50/$3.0 per 1M - Gemini 3 Flash
+    { model: 'grok-4-fast-reasoning', provider: 'xai' }, // $0.1/$0.4 per 1M - Grok 4 Fast Reasoning
     { model: 'claude-haiku-4.5', provider: 'anthropic' }, // $1.0/$5.0 per 1M - Claude 4.5 Haiku
     { model: 'glm-4.7', provider: 'zhipu' }, // $0.14/$0.42 per 1M - GLM-4.7
   ];

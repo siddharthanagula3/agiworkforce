@@ -6,6 +6,7 @@ pub mod llm_router;
 pub mod memory_integration;
 pub mod prompt_policy;
 pub mod providers;
+pub mod server_tools;
 pub mod sse_parser;
 pub mod thinking;
 pub mod token_counter;
@@ -76,6 +77,11 @@ pub struct LLMRequest {
     pub previous_response_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
+
+    // Effort parameter (Anthropic Claude Opus 4.6+ – controls thinking depth)
+    // Values: "low", "medium", "high"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
 
     // Request metadata
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -312,9 +318,16 @@ pub enum ThinkingParameter {
     },
     /// Token budget for thinking (Anthropic style)
     Budget {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        thinking_type: Option<String>,
+        #[serde(rename = "type")]
+        thinking_type: String,
         budget_tokens: u32,
+    },
+    /// Adaptive thinking (Claude Opus 4.6+) – lets the model decide when
+    /// and how deeply to think.  Recommended for tool use workflows.
+    /// Serialises as `{"type": "adaptive"}`.
+    Adaptive {
+        #[serde(rename = "type")]
+        thinking_type: String, // always "adaptive"
     },
 }
 
@@ -479,7 +492,7 @@ impl Provider {
             "anthropic" => Some(Provider::Anthropic),
             "google" => Some(Provider::Google),
             "ollama" => Some(Provider::Ollama),
-            "perplexity" | "pplx" => Some(Provider::Perplexity),
+            "perplexity" | "pplx" | "sonar" => Some(Provider::Perplexity),
             "xai" | "grok" => Some(Provider::XAI),
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
@@ -494,22 +507,22 @@ impl Provider {
         match self {
             Provider::OpenAI => "gpt-5.2",
             Provider::Anthropic => "claude-sonnet-4-5",
-            Provider::Google => "gemini-3-pro",
+            Provider::Google => "gemini-3-pro-preview",
             Provider::Ollama => "llama4-maverick",
             Provider::Perplexity => "sonar-deep-research",
-            Provider::XAI => "grok-4.1",
-            Provider::DeepSeek => "deepseek-v3",
-            Provider::Qwen => "qwen3-max",
-            Provider::Moonshot => "kimi-k2-thinking",
+            Provider::XAI => "grok-4",
+            Provider::DeepSeek => "deepseek-chat",
+            Provider::Qwen => "qwen-max",
+            Provider::Moonshot => "kimi-k2.5-thinking",
             Provider::Zhipu => "glm-4.7",
-            Provider::ManagedCloud => "deepseek-v3",
+            Provider::ManagedCloud => "deepseek-chat",
         }
     }
 
     pub fn get_model_for_task(&self, task: TaskType) -> &'static str {
         match (self, task) {
             (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5.2-codex",
+            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5.2-codex-medium",
             (Provider::OpenAI, TaskType::ComplexReasoning) => "o3",
             (Provider::OpenAI, TaskType::Chat) => "gpt-5.2",
             (Provider::OpenAI, TaskType::Vision) => "gpt-5.2",
@@ -517,32 +530,32 @@ impl Provider {
 
             (Provider::Anthropic, TaskType::FastCompletion) => "claude-haiku-4-5",
             (Provider::Anthropic, TaskType::CodeGeneration) => "claude-sonnet-4-5",
-            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-5",
+            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-6",
             (Provider::Anthropic, _) => "claude-sonnet-4-5",
 
-            (Provider::Google, TaskType::FastCompletion) => "gemini-3-flash",
-            (Provider::Google, TaskType::CodeGeneration) => "gemini-3-pro",
+            (Provider::Google, TaskType::FastCompletion) => "gemini-3-flash-preview",
+            (Provider::Google, TaskType::CodeGeneration) => "gemini-3-pro-preview",
             (Provider::Google, TaskType::ComplexReasoning) => "gemini-3-deep-think",
-            (Provider::Google, TaskType::Vision) => "gemini-3-pro",
-            (Provider::Google, TaskType::LongContext) => "gemini-3-pro",
-            (Provider::Google, _) => "gemini-3-flash",
+            (Provider::Google, TaskType::Vision) => "gemini-3-pro-preview",
+            (Provider::Google, TaskType::LongContext) => "gemini-3-pro-preview",
+            (Provider::Google, _) => "gemini-3-flash-preview",
 
-            (Provider::XAI, TaskType::FastCompletion) => "grok-4.1-fast",
-            (Provider::XAI, TaskType::ComplexReasoning) => "grok-4.1-fast-reasoning",
-            (Provider::XAI, _) => "grok-4.1",
+            (Provider::XAI, TaskType::FastCompletion) => "grok-4-fast",
+            (Provider::XAI, TaskType::ComplexReasoning) => "grok-4-fast-reasoning",
+            (Provider::XAI, _) => "grok-4",
 
-            (Provider::DeepSeek, TaskType::CodeGeneration) => "deepseek-coder",
+            (Provider::DeepSeek, TaskType::CodeGeneration) => "deepseek-chat",
             (Provider::DeepSeek, TaskType::ComplexReasoning) => "deepseek-reasoner",
-            (Provider::DeepSeek, _) => "deepseek-v3",
+            (Provider::DeepSeek, _) => "deepseek-chat",
 
-            (Provider::Qwen, TaskType::CodeGeneration) => "qwen3-coder",
-            (Provider::Qwen, _) => "qwen3-max",
+            (Provider::Qwen, TaskType::CodeGeneration) => "qwen-coder",
+            (Provider::Qwen, _) => "qwen-max",
 
             (Provider::Ollama, TaskType::CodeGeneration) => "llama4-maverick",
             (Provider::Ollama, _) => "llama4-maverick",
 
-            (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
-            (Provider::Moonshot, _) => "kimi-k2-thinking",
+            (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2.5-thinking",
+            (Provider::Moonshot, _) => "kimi-k2.5-thinking",
 
             (Provider::Perplexity, _) => "sonar-deep-research",
 
@@ -553,11 +566,11 @@ impl Provider {
             (Provider::Zhipu, _) => "glm-4.7",
 
             (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-coder",
+            (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-chat",
             (Provider::ManagedCloud, TaskType::ComplexReasoning) => "deepseek-reasoner",
-            (Provider::ManagedCloud, TaskType::Chat) => "deepseek-v3",
-            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash",
-            (Provider::ManagedCloud, TaskType::LongContext) => "deepseek-v3",
+            (Provider::ManagedCloud, TaskType::Chat) => "deepseek-chat",
+            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash-preview",
+            (Provider::ManagedCloud, TaskType::LongContext) => "deepseek-chat",
         }
     }
 }
