@@ -193,7 +193,33 @@ impl ToolExecutor {
             return resolved.to_string_lossy().to_string();
         }
 
-        // No project folder set, return as-is
+        // No project folder set -- fall back to home directory or cwd so
+        // relative paths don't silently resolve against an arbitrary dir.
+        // This is the most common cause of "file not found" errors.
+        if let Some(home) = dirs::home_dir() {
+            let resolved = home.join(path);
+            tracing::warn!(
+                "[ToolExecutor] No project folder set. Resolving '{}' against home dir: '{}'",
+                path_str,
+                resolved.display()
+            );
+            return resolved.to_string_lossy().to_string();
+        }
+
+        if let Ok(cwd) = std::env::current_dir() {
+            let resolved = cwd.join(path);
+            tracing::warn!(
+                "[ToolExecutor] No project folder or home dir. Resolving '{}' against cwd: '{}'",
+                path_str,
+                resolved.display()
+            );
+            return resolved.to_string_lossy().to_string();
+        }
+
+        tracing::error!(
+            "[ToolExecutor] Cannot resolve relative path '{}': no project folder, home, or cwd",
+            path_str
+        );
         path_str.to_string()
     }
 
@@ -232,7 +258,32 @@ impl ToolExecutor {
                 }
             }
 
-            let path_normalized = path_str.replace('\\', "/");
+            // Canonicalize the input path to resolve symlinks and .. components.
+            // This prevents path traversal via symlinks or relative components.
+            let path_canonical = match std::fs::canonicalize(path_str) {
+                Ok(canon) => canon.to_string_lossy().to_string(),
+                Err(_) => {
+                    // Path doesn't exist yet (e.g., file_write to a new file).
+                    // Canonicalize the parent directory and append the filename.
+                    let path = std::path::Path::new(path_str);
+                    if let Some(parent) = path.parent() {
+                        match std::fs::canonicalize(parent) {
+                            Ok(canon_parent) => {
+                                if let Some(filename) = path.file_name() {
+                                    canon_parent.join(filename).to_string_lossy().to_string()
+                                } else {
+                                    path_str.replace('\\', "/")
+                                }
+                            }
+                            Err(_) => path_str.replace('\\', "/"),
+                        }
+                    } else {
+                        path_str.replace('\\', "/")
+                    }
+                }
+            };
+
+            let path_normalized = path_canonical.replace('\\', "/");
 
             for allowed_dir in &allowed {
                 let allowed_normalized = allowed_dir.replace('\\', "/");
@@ -595,10 +646,15 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone());
+        let default_shell = if cfg!(target_os = "windows") {
+            "powershell"
+        } else {
+            "bash"
+        };
         let shell = args
             .get("shell")
             .and_then(|v| v.as_str())
-            .unwrap_or("powershell")
+            .unwrap_or(default_shell)
             .to_lowercase();
         let timeout_ms = args
             .get("timeout_ms")

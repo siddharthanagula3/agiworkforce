@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unified Agentic Chat
  *
  * The main container component for the AGI chat interface.
@@ -18,6 +18,7 @@ import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { getModelForRequest } from '../../lib/modelRouter';
+import { getModelMetadata } from '../../constants/llm';
 import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -27,7 +28,7 @@ import { useCustomInstructionsStore } from '../../stores/customInstructionsStore
 import { useExecutionStore } from '../../stores/executionStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
-import type { ResearchTask } from '../../types/chat';
+import type { Artifact, ResearchTask } from '../../types/chat';
 import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
@@ -51,6 +52,59 @@ import {
   executeUndoCommand,
 } from '../../handlers/slashCommandHandlers';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
+  const normalized = toolName.toLowerCase();
+  if (normalized.includes('image') || normalized.includes('video')) return 'image';
+  if (normalized.includes('document') || normalized.includes('pdf') || normalized.includes('word'))
+    return 'document';
+  if (normalized.includes('excel') || normalized.includes('sheet') || normalized.includes('table'))
+    return 'spreadsheet';
+  return 'code';
+};
+
+const toolNameToTitle = (toolName: string): string =>
+  toolName.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+
+const normalizeInlineToolData = (
+  toolName: string,
+  rawData: Record<string, unknown>,
+): Record<string, unknown> => {
+  const normalizedTool = toolName.toLowerCase();
+  const data = { ...rawData };
+
+  if (normalizedTool.includes('image')) {
+    const images = Array.isArray(data['images']) ? data['images'] : [];
+    data['images'] = images.map((image) => {
+      if (image && typeof image === 'object') {
+        const img = image as Record<string, unknown>;
+        return {
+          ...img,
+          base64: (img['base64'] as string | undefined) ?? (img['b64_json'] as string | undefined),
+        };
+      }
+      return image;
+    });
+  }
+
+  if (normalizedTool.includes('video')) {
+    data['videoUrl'] =
+      (data['videoUrl'] as string | undefined) ?? (data['video_url'] as string | undefined);
+    data['duration'] =
+      (data['duration'] as number | undefined) ?? (data['duration_secs'] as number | undefined);
+  }
+
+  if (normalizedTool.includes('document')) {
+    data['filePath'] =
+      (data['filePath'] as string | undefined) ??
+      (data['file_path'] as string | undefined) ??
+      (data['output_path'] as string | undefined);
+    data['downloadUrl'] =
+      (data['downloadUrl'] as string | undefined) ?? (data['download_url'] as string | undefined);
+  }
+
+  return data;
+};
 
 /**
  * Wrapper component that shows active tool streams above the chat input
@@ -209,6 +263,84 @@ export const UnifiedAgenticChat: React.FC<{
         } catch (error) {
           console.error('[UnifiedAgenticChat] Failed to setup listener:', error);
         }
+      };
+
+      const resolveStreamTargetMessageId = (
+        conversationId: number,
+        payloadMessageId?: string | number,
+      ): string | null => {
+        const state = useUnifiedChatStore.getState();
+        const sessionMessageId = activeStreamSessionsRef.current.get(conversationId);
+        const normalizedPayloadId =
+          payloadMessageId === undefined || payloadMessageId === null
+            ? null
+            : String(payloadMessageId);
+
+        if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
+          return sessionMessageId;
+        }
+        if (normalizedPayloadId && state.messages.some((m) => m.id === normalizedPayloadId)) {
+          return normalizedPayloadId;
+        }
+        if (
+          state.currentStreamingMessageId &&
+          state.messages.some((m) => m.id === state.currentStreamingMessageId)
+        ) {
+          return state.currentStreamingMessageId;
+        }
+        return null;
+      };
+
+      const upsertToolArtifact = (
+        conversationId: number,
+        toolCallId: string,
+        patch: Record<string, unknown>,
+      ) => {
+        const state = useUnifiedChatStore.getState();
+        const targetMessageId = resolveStreamTargetMessageId(conversationId);
+        if (!targetMessageId) return;
+
+        const targetMessage = state.messages.find((msg) => msg.id === targetMessageId);
+        if (!targetMessage) return;
+
+        const baseArtifacts = [
+          ...(targetMessage.artifacts || []),
+          ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
+            (artifact) =>
+              !targetMessage.artifacts?.some(
+                (existing) => existing.id === artifact.id || existing.content === artifact.content,
+              ),
+          ) as Artifact[]),
+        ] as Artifact[];
+
+        const index = baseArtifacts.findIndex((artifact) => artifact.id === toolCallId);
+        const existing = index >= 0 ? baseArtifacts[index] : null;
+        const patchToolName = String(
+          patch['toolName'] || (existing as Record<string, unknown> | null)?.['toolName'] || 'code',
+        );
+        const patchContent = String(
+          patch['content'] || (existing as Record<string, unknown> | null)?.['content'] || '',
+        );
+        const nextArtifact = {
+          id: toolCallId,
+          type: toolNameToArtifactType(patchToolName),
+          title: toolNameToTitle(patchToolName),
+          content: patchContent,
+          ...existing,
+          ...patch,
+        };
+
+        const nextArtifacts =
+          index >= 0
+            ? baseArtifacts.map((artifact, i) => (i === index ? nextArtifact : artifact))
+            : [...baseArtifacts, nextArtifact];
+
+        state.updateMessage(targetMessageId, {
+          artifacts: nextArtifacts as Artifact[],
+          metadata: {
+            artifacts: nextArtifacts as Artifact[],
+          },
+        });
       };
 
       registerListener(
@@ -496,6 +628,14 @@ export const UnifiedAgenticChat: React.FC<{
           // This creates a seamless experience where queued messages are automatically sent
           // Process messages sequentially with delays to avoid race conditions
           for (let i = 0; i < payload.pending_messages.length; i++) {
+            // Check if component is still mounted before processing each message
+            if (!isMountedRef.current) {
+              console.log(
+                '[UnifiedAgenticChat] Component unmounted, stopping pending message processing',
+              );
+              break;
+            }
+
             const pending = payload.pending_messages[i];
             if (!pending) continue;
 
@@ -619,6 +759,28 @@ export const UnifiedAgenticChat: React.FC<{
           console.log('[UnifiedAgenticChat] Tool calls detected:', payload.tool_calls.length);
           // Add to action trail to show which tools are being called
           for (const tc of payload.tool_calls) {
+            let parsedArguments: Record<string, unknown> = {};
+            try {
+              parsedArguments = tc.arguments
+                ? (JSON.parse(tc.arguments) as Record<string, unknown>)
+                : {};
+            } catch {
+              // Keep fallback empty object if arguments are partial/non-JSON.
+            }
+
+            upsertToolArtifact(payload.conversation_id, tc.id, {
+              toolName: tc.name,
+              type: toolNameToArtifactType(tc.name),
+              title: toolNameToTitle(tc.name),
+              status: 'running',
+              content: '',
+              ...(parsedArguments['prompt'] ? { prompt: parsedArguments['prompt'] } : {}),
+              ...(parsedArguments['output_path']
+                ? { filePath: parsedArguments['output_path'] }
+                : {}),
+              ...(parsedArguments['file_path'] ? { filePath: parsedArguments['file_path'] } : {}),
+            });
+
             useUnifiedChatStore.getState().addActionTrailEntry({
               type: 'running',
               message: `Calling ${tc.name}...`,
@@ -645,6 +807,28 @@ export const UnifiedAgenticChat: React.FC<{
         }),
       );
 
+      // Listen for agent progress events (iteration tracking for OpenClaw-style runs)
+      registerListener(
+        listen<{
+          conversation_id: number;
+          iteration: number;
+          max_iterations: number;
+          status: string;
+          tool_count?: number;
+        }>('chat:agent-progress', ({ payload }) => {
+          console.log(
+            `[UnifiedAgenticChat] Agent progress: iteration ${payload.iteration}/${payload.max_iterations} (${payload.status})`,
+          );
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: payload.status === 'limit_reached' ? 'error' : 'running',
+            message:
+              payload.status === 'limit_reached'
+                ? `Agent reached iteration limit (${payload.max_iterations})`
+                : `Agent iteration ${payload.iteration}/${payload.max_iterations}${payload.tool_count ? ` — ${payload.tool_count} tool(s)` : ''}`,
+          });
+        }),
+      );
+
       registerListener(
         listen<{
           conversation_id: number;
@@ -652,12 +836,38 @@ export const UnifiedAgenticChat: React.FC<{
           tool_name: string;
           success: boolean;
           result: string;
+          result_data?: Record<string, unknown>;
         }>('chat:tool-result', ({ payload }) => {
           console.log(
             '[UnifiedAgenticChat] Tool result:',
             payload.tool_name,
             payload.success ? 'succeeded' : 'failed',
           );
+
+          let parsedData: Record<string, unknown> = payload.result_data || {};
+          if (!payload.result_data && payload.result) {
+            try {
+              const parsed = JSON.parse(payload.result);
+              if (parsed && typeof parsed === 'object') {
+                parsedData = parsed as Record<string, unknown>;
+              }
+            } catch {
+              // Keep preview-only mode when result payload is truncated text.
+            }
+          }
+
+          const normalizedData = normalizeInlineToolData(payload.tool_name, parsedData);
+          upsertToolArtifact(payload.conversation_id, payload.tool_call_id, {
+            toolName: payload.tool_name,
+            type: toolNameToArtifactType(payload.tool_name),
+            title: toolNameToTitle(payload.tool_name),
+            status: payload.success ? 'completed' : 'failed',
+            success: payload.success,
+            error: payload.success ? undefined : payload.result,
+            content: payload.result || '',
+            ...normalizedData,
+          });
+
           // Update action trail with result
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: payload.success ? 'completed' : 'error',
@@ -805,9 +1015,22 @@ export const UnifiedAgenticChat: React.FC<{
       console.error('[UnifiedAgenticChat] Failed to setup listeners:', error);
     });
 
+    // Capture ref values inside the effect for safe cleanup
+    const activeStreamSessions = activeStreamSessionsRef.current;
+
     return () => {
       // Mark as unmounted first to prevent new registrations
       isMountedRef.current = false;
+
+      // Abort any active streaming to prevent background work after unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Clear stale stream session tracking
+      activeStreamSessions.clear();
+
       // Clean up all registered listeners - handle both sync and async unlisten functions
       // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections
       const listeners = [...unlistenFnsRef.current];
@@ -1223,6 +1446,26 @@ export const UnifiedAgenticChat: React.FC<{
         // Get current project folder for scoped file operations
         const currentProjectFolder = useProjectStore.getState().currentFolder;
 
+        // Nudge user to select a project folder when sending file-related messages
+        if (!currentProjectFolder) {
+          const fileKeywords =
+            /\b(file|folder|directory|read|write|edit|create|delete|save|open|path|code|project|src|component)\b/i;
+          if (fileKeywords.test(content)) {
+            toast({
+              variant: 'default',
+              title: 'No project folder selected',
+              description:
+                'Select a project folder (top-right folder icon) so the AI can access your files. Without it, file operations may fail.',
+              duration: 8000,
+            });
+          }
+        }
+
+        // Look up model capabilities to help backend filter tools appropriately
+        const effectiveModel = enrichedOptions.modelOverride || selectedModel || 'auto';
+        const modelMeta = getModelMetadata(effectiveModel);
+        const modelCapabilities = modelMeta?.capabilities ?? undefined;
+
         interface ChatSendMessageResponse {
           conversation?: { id: number };
           message?: { id: number; content: string };
@@ -1262,6 +1505,8 @@ export const UnifiedAgenticChat: React.FC<{
             enableAgentMode: alwaysUseAgentMode ? true : undefined,
             // Project folder for scoped file operations (like Claude Code)
             projectFolder: currentProjectFolder || undefined,
+            // Model capabilities for tool filtering (Phase 6)
+            modelCapabilities: modelCapabilities || undefined,
           },
         });
 

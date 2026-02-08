@@ -132,8 +132,13 @@ Multi-provider routing — 30+ files.
 | `cache_manager.rs` | Response caching |
 | `sse_parser.rs` | Streaming SSE parsing |
 
-**Providers** (11):
-`anthropic.rs`, `openai.rs`, `google.rs`, `deepseek.rs`, `xai.rs`, `perplexity.rs`, `ollama.rs`, `moonshot.rs`, `qwen.rs`, `managed_cloud_provider.rs`
+**Active Providers** (3 compiled):
+`managed_cloud_provider.rs` (proxy to any cloud provider), `ollama.rs` (local models), `http_client.rs` (shared client)
+
+**Archived** (not compiled):
+`google.rs.backup` (complete Google Gemini provider — preserved for future re-integration)
+
+**Note**: Most providers (OpenAI, Anthropic, DeepSeek, xAI, Moonshot, Qwen, Zhipu, Perplexity) are routed through the ManagedCloud proxy. Only Ollama runs direct API calls locally.
 
 ### MCP System (`core/mcp/`)
 

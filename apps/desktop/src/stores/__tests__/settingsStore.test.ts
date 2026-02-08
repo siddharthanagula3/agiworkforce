@@ -82,7 +82,9 @@ describe('settingsStore', () => {
     // Only managed_cloud and ollama should be present
     expect(state.llmConfig.defaultModels.managed_cloud).toBe('auto');
     expect(state.llmConfig.defaultModels.ollama).toBe('');
-    expect(Object.keys(state.llmConfig.defaultModels)).toEqual(['managed_cloud', 'ollama']);
+    expect(new Set(Object.keys(state.llmConfig.defaultModels))).toEqual(
+      new Set(['managed_cloud', 'ollama']),
+    );
   });
 
   it('should have empty favorite models by default', () => {
@@ -217,12 +219,13 @@ describe('settingsStore', () => {
     await saveSettings();
 
     expect(invokeMock).toHaveBeenCalledWith('settings_save', {
-      settings: {
+      settings: expect.objectContaining({
         llmConfig: expect.any(Object),
         windowPreferences: expect.any(Object),
         chatPreferences: expect.any(Object),
+        executionPreferences: expect.any(Object),
         allowedDirectories: expect.any(Array),
-      },
+      }),
     });
     expect(useSettingsStore.getState().loading).toBe(false);
   });

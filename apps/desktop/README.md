@@ -92,7 +92,7 @@ cd ../.. && pnpm build:desktop
 - **Browser Automation**: Web task automation
 - **Workflow Engine**: Visual automation flows
 - **MCP Integration**: Extensible tool ecosystem
-- **Multi-model Support**: OpenAI, Anthropic, Google, DeepSeek, xAI, Ollama
+- **Multi-model Support**: OpenAI (GPT-5.2), Anthropic (Claude 4.6 Opus), Google (Gemini 3), DeepSeek, xAI (Grok 4.1), Ollama, Qwen, Moonshot, Perplexity
 
 ## Optional Features
 
