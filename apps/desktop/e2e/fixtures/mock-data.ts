@@ -141,13 +141,13 @@ export function calculateEstimatedCost(
 ): number {
   // Pricing per 1M tokens (simplified)
   const pricing: Record<string, { input: number; output: number }> = {
-    'gpt-5.2': { input: 1.25, output: 10.0 },
+    'gpt-5.2': { input: 1.75, output: 14.0 },
     'gpt-4': { input: 0.03, output: 0.06 },
     'gpt-3.5': { input: 0.0005, output: 0.0015 },
     'claude-opus': { input: 5.0, output: 25.0 },
     'claude-sonnet': { input: 3.0, output: 15.0 },
     'gemini-pro': { input: 0.5, output: 3.0 },
-    'deepseek-v3': { input: 0.28, output: 0.42 },
+    'deepseek-chat': { input: 0.28, output: 0.42 },
   };
 
   const modelPricing = pricing[model] || pricing['gpt-4'];
@@ -223,14 +223,14 @@ export const MOCK_MODELS: ModelInfo[] = [
     id: 'gpt-5.2',
     name: 'GPT-5.2',
     provider: 'openai',
-    contextWindow: 128000,
-    inputCost: 1.25,
-    outputCost: 10.0,
+    contextWindow: 400000,
+    inputCost: 1.75,
+    outputCost: 14.0,
     capabilities: ['chat', 'code', 'vision', 'tools'],
   },
   {
-    id: 'claude-opus-4.5',
-    name: 'Claude Opus 4.5',
+    id: 'claude-opus-4.6',
+    name: 'Claude Opus 4.6',
     provider: 'anthropic',
     contextWindow: 200000,
     inputCost: 5.0,
@@ -238,7 +238,7 @@ export const MOCK_MODELS: ModelInfo[] = [
     capabilities: ['chat', 'code', 'vision', 'thinking'],
   },
   {
-    id: 'gemini-3-pro',
+    id: 'gemini-3-pro-preview',
     name: 'Gemini 3 Pro',
     provider: 'google',
     contextWindow: 1000000,
@@ -247,8 +247,8 @@ export const MOCK_MODELS: ModelInfo[] = [
     capabilities: ['chat', 'code', 'vision'],
   },
   {
-    id: 'deepseek-v3.2',
-    name: 'DeepSeek V3.2',
+    id: 'deepseek-chat',
+    name: 'DeepSeek Chat (V3)',
     provider: 'deepseek',
     contextWindow: 64000,
     inputCost: 0.28,
@@ -256,8 +256,8 @@ export const MOCK_MODELS: ModelInfo[] = [
     capabilities: ['chat', 'code', 'reasoning'],
   },
   {
-    id: 'qwen3-max',
-    name: 'Qwen3 Max',
+    id: 'qwen-max',
+    name: 'Qwen Max',
     provider: 'qwen',
     contextWindow: 128000,
     inputCost: 0.5,

@@ -136,19 +136,20 @@ The AI improves over time:
 
 ### 🔀 Multi-Provider LLM Router
 
-Intelligent routing across **11 LLM providers**:
+Intelligent routing across **10 LLM providers**:
 
 | Provider | Models |
 |----------|--------|
-| OpenAI | GPT-4o, GPT-4, o1, o3 |
-| Anthropic | Claude 3.5, Claude 4 |
-| Google | Gemini Pro, Gemini Ultra |
-| DeepSeek | DeepSeek models |
-| xAI | Grok |
-| Perplexity | Search-enhanced LLM |
-| Ollama | Any local model |
-| Qwen | Qwen models |
-| Moonshot | Moonshot models |
+| OpenAI | GPT-5.2, GPT-5, GPT-5-nano, o3 |
+| Anthropic | Claude 4.6 Opus, Claude 4.5 Sonnet, Claude 4.5 Haiku |
+| Google | Gemini 3 Pro, Gemini 3 Flash (via ManagedCloud) |
+| DeepSeek | DeepSeek V3, DeepSeek Reasoner |
+| xAI | Grok 4.1, Grok 4 |
+| Perplexity | Sonar Pro, Sonar Reasoning |
+| Ollama | Any local model (Llama 4, Gemma 3, etc.) |
+| Qwen | Qwen3 Max, Qwen3 Coder |
+| Moonshot | Kimi K2.5 |
+| ManagedCloud | Proxy routing to any provider |
 
 **Features**:
 - Automatic fallback on provider failure
@@ -306,6 +307,8 @@ PRAGMA cache_size = -64000;   -- 64MB cache
 
 - **[Developer Guide](./DEVELOPER_GUIDE.md)** — Commands, database, security
 - **[Updater Keys](./UPDATER_KEYS.md)** — Auto-updater configuration
+- **[UI Components](../UI_COMPONENTS.md)** — Component catalog
+- **[Component Documentation](../COMPONENT_DOCUMENTATION.md)** — Feature components
 
 ---
 
@@ -361,4 +364,4 @@ See LICENSE file.
 
 **Built with** Tauri 2.9 • Rust • React 19 • SQLite • Tokio
 
-**Version**: 1.0.5 with global auto-updater
+**Version**: 1.1.1 with global auto-updater

@@ -1,3 +1,12 @@
+// NOTE: This module is currently NOT included in the module tree (not declared in mod.rs).
+// It provides conversation state management with persistence, but has known issues:
+// - No database migration/table creation for conversation_states table
+// - TOCTOU race condition in update() method
+// - std::sync::RwLock poison can be silently swallowed
+//
+// The conversation state is currently managed by the chat command handler in
+// sys/commands/chat/mod.rs directly.
+
 //! Conversation state management for multi-turn optimization and context tracking.
 //!
 //! This module provides conversation state tracking that enables:

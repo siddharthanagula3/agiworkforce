@@ -36,6 +36,10 @@ const InlineVideoGeneration = React.lazy(() =>
   import('./InlineMediaGeneration').then((m) => ({ default: m.InlineVideoGeneration })),
 );
 
+const InlineDocumentGeneration = React.lazy(() =>
+  import('./InlineDocumentGeneration').then((m) => ({ default: m.InlineDocumentGeneration })),
+);
+
 const InlineGitHubPR = React.lazy(() =>
   import('./InlineGitHub').then((m) => ({ default: m.InlineGitHubPR })),
 );
@@ -95,6 +99,11 @@ export const TOOL_RENDERERS: Record<
   imagen_generate: InlineImageGeneration,
   video_generate: InlineVideoGeneration,
   veo_generate: InlineVideoGeneration,
+  document_create_pdf: InlineDocumentGeneration,
+  document_create_word: InlineDocumentGeneration,
+  document_create_docx: InlineDocumentGeneration,
+  document_create_excel: InlineDocumentGeneration,
+  document_create_xlsx: InlineDocumentGeneration,
 
   // GitHub operations
   github_pr_create: InlineGitHubPR,

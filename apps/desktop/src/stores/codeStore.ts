@@ -113,33 +113,41 @@ export const useCodeStore = create<CodeState>()(
                 isDirty: false,
               };
 
-              let nextOpenFiles = [...state.openFiles, newFile];
-              // AUDIT-006-004 fix: Cap openFiles at 50 entries, close oldest non-dirty files first
-              if (nextOpenFiles.length > 50) {
-                // Find and remove the oldest non-dirty file (excluding the new one and active file)
-                const oldestNonDirtyIndex = nextOpenFiles.findIndex(
-                  (f) => !f.isDirty && f.path !== path && f.path !== state.activeFilePath,
-                );
-                if (oldestNonDirtyIndex >= 0) {
-                  nextOpenFiles = nextOpenFiles.filter((_, i) => i !== oldestNonDirtyIndex);
-                } else {
-                  // If all files are dirty or active, just drop the oldest one (excluding new file)
-                  nextOpenFiles = nextOpenFiles.slice(-50);
-                }
-              }
-              const alreadyPersisted = state.persistedOpenPaths.includes(path);
-              let nextPersisted = alreadyPersisted
-                ? state.persistedOpenPaths
-                : [...state.persistedOpenPaths, path];
-              // Keep persistedOpenPaths in sync with actual open files
-              const openPaths = new Set(nextOpenFiles.map((f) => f.path));
-              nextPersisted = nextPersisted.filter((p) => openPaths.has(p));
-
               set(
-                {
-                  openFiles: nextOpenFiles,
-                  activeFilePath: shouldActivate ? path : state.activeFilePath,
-                  persistedOpenPaths: nextPersisted,
+                (prevState) => {
+                  // Prevent duplicate tabs during concurrent hydration/open operations.
+                  if (prevState.openFiles.some((f) => f.path === path)) {
+                    return shouldActivate ? { activeFilePath: path } : {};
+                  }
+
+                  let nextOpenFiles = [...prevState.openFiles, newFile];
+                  // AUDIT-006-004 fix: Cap openFiles at 50 entries, close oldest non-dirty files first
+                  if (nextOpenFiles.length > 50) {
+                    // Find and remove the oldest non-dirty file (excluding the new one and active file)
+                    const oldestNonDirtyIndex = nextOpenFiles.findIndex(
+                      (f) => !f.isDirty && f.path !== path && f.path !== prevState.activeFilePath,
+                    );
+                    if (oldestNonDirtyIndex >= 0) {
+                      nextOpenFiles = nextOpenFiles.filter((_, i) => i !== oldestNonDirtyIndex);
+                    } else {
+                      // If all files are dirty or active, just drop the oldest one (excluding new file)
+                      nextOpenFiles = nextOpenFiles.slice(-50);
+                    }
+                  }
+
+                  const alreadyPersisted = prevState.persistedOpenPaths.includes(path);
+                  let nextPersisted = alreadyPersisted
+                    ? prevState.persistedOpenPaths
+                    : [...prevState.persistedOpenPaths, path];
+                  // Keep persistedOpenPaths in sync with actual open files
+                  const openPaths = new Set(nextOpenFiles.map((f) => f.path));
+                  nextPersisted = nextPersisted.filter((p) => openPaths.has(p));
+
+                  return {
+                    openFiles: nextOpenFiles,
+                    activeFilePath: shouldActivate ? path : prevState.activeFilePath,
+                    persistedOpenPaths: nextPersisted,
+                  };
                 },
                 undefined,
                 'code/openFile',
@@ -312,8 +320,8 @@ export const useCodeStore = create<CodeState>()(
           },
 
           saveAllFiles: async () => {
-            const state = get();
-            const dirtyFiles = state.openFiles.filter((f) => f.isDirty);
+            const dirtyFiles = get().openFiles.filter((f) => f.isDirty);
+            const dirtyPaths = new Set(dirtyFiles.map((f) => f.path));
 
             const savePromises = dirtyFiles.map((file) =>
               invoke('file_write', { path: file.path, content: file.content }),
@@ -322,11 +330,14 @@ export const useCodeStore = create<CodeState>()(
             try {
               await Promise.all(savePromises);
 
-              const newOpenFiles = state.openFiles.map((file) =>
-                file.isDirty ? { ...file, originalContent: file.content, isDirty: false } : file,
+              // Re-read fresh state after await to avoid overwriting concurrent changes
+              const freshOpenFiles = get().openFiles.map((file) =>
+                dirtyPaths.has(file.path) && file.isDirty
+                  ? { ...file, originalContent: file.content, isDirty: false }
+                  : file,
               );
 
-              set({ openFiles: newOpenFiles }, undefined, 'code/saveAllFiles');
+              set({ openFiles: freshOpenFiles }, undefined, 'code/saveAllFiles');
             } catch (error) {
               console.error('Failed to save all files:', error);
               throw error;
@@ -371,9 +382,9 @@ export const useCodeStore = create<CodeState>()(
 
             // Reload successfully reverted files from disk
             if (result.reverted_files.length > 0) {
-              const state = get();
               for (const path of result.reverted_files) {
-                const fileIndex = state.openFiles.findIndex((f) => f.path === path);
+                const currentFiles = get().openFiles;
+                const fileIndex = currentFiles.findIndex((f) => f.path === path);
                 if (fileIndex !== -1) {
                   try {
                     const content = await invoke<string>('file_read', { path });

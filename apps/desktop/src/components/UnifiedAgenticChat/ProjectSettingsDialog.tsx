@@ -98,10 +98,11 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const updateProject = useProjectStore((state) => state.updateProject);
   const conversations = useUnifiedChatStore((state) => state.conversations);
 
-  // Reset form when dialog opens/closes or project changes
+  // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
+  const projectId = project?.id ?? null;
   useEffect(() => {
     if (open) {
-      if (mode === 'edit' && project) {
+      if (mode === 'edit' && project != null) {
         setName(project.name);
         setDescription(project.description);
         setCustomInstructions(project.customInstructions);
@@ -121,7 +122,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       }
       setActiveTab('general');
     }
-  }, [open, mode, project]);
+  }, [open, mode, projectId]);
 
   const handleSave = async () => {
     if (!name.trim()) {

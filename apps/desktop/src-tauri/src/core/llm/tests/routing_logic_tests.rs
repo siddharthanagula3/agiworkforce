@@ -69,7 +69,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v3.2");
+        assert_eq!(suggestion.model, "deepseek-chat");
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
     #[test]
@@ -103,7 +103,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro"); // Creative uses Pro for vision/multimodal
+        assert_eq!(suggestion.model, "gemini-3-pro-preview"); // Creative uses Pro for vision/multimodal
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v3.2");
+        assert_eq!(suggestion.model, "deepseek-chat");
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
     #[test]
@@ -156,7 +156,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v3.2");
+        assert_eq!(suggestion.model, "deepseek-chat");
     }
 
     #[test]
@@ -174,7 +174,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash"); // Budget plan heavy context -> Gemini Flash
+        assert_eq!(suggestion.model, "gemini-3-flash-preview"); // Budget plan heavy context -> Gemini Flash
     }
 
     // ============================================
@@ -222,13 +222,13 @@ mod tests {
             "hobby",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3-flash"),
+            Some("gemini-3-flash-preview"),
         );
 
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
     #[test]
@@ -236,12 +236,12 @@ mod tests {
     fn test_intelligent_routing_infer_deepseek_provider() {
         let router = LLMRouter::new();
         let context =
-            intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-v3.2"));
+            intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
 
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v3.2");
+        assert_eq!(suggestion.model, "deepseek-chat");
     }
 
     #[test]
@@ -264,13 +264,13 @@ mod tests {
             "hobby",
             Some("reasoning"),
             Some("chat"),
-            Some("grok-4.1-fast-reasoning"),
+            Some("grok-4-fast-reasoning"),
         );
 
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4.1-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4-fast-reasoning");
     }
 
     #[test]
@@ -289,7 +289,7 @@ mod tests {
 
         // Coding intent + hobby plan should route to DeepSeek
         assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-v3.2");
+        assert_eq!(suggestion.model, "deepseek-chat");
     }
 
     #[test]
@@ -361,7 +361,7 @@ mod tests {
 
         // Reasoning intent + hobby should route to Grok Fast Reasoning (same price as non-reasoning)
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4.1-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4-fast-reasoning");
     }
 
     #[test]
@@ -397,7 +397,7 @@ mod tests {
 
         // Agentic intent + hobby should route to Gemini Flash
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
     #[test]
@@ -433,7 +433,7 @@ mod tests {
 
         // Multimodal intent should route to Gemini for vision
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
     #[test]
@@ -451,7 +451,7 @@ mod tests {
 
         // Chat intent + hobby should route to Gemini Flash
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
     #[test]
@@ -469,7 +469,7 @@ mod tests {
 
         // Chat intent + pro should route to Gemini Pro
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
     #[test]

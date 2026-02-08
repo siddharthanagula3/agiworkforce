@@ -438,7 +438,32 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                           : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
                       )}
                     >
-                      <span className="truncate">{model.name}</span>
+                      <span className="flex items-center gap-1 truncate">
+                        <span className="truncate">{model.name}</span>
+                        {/* Capability badges */}
+                        <span className="flex items-center gap-0.5 shrink-0">
+                          {model.capabilities.tools && (
+                            <span aria-label="Tool use">
+                              <Wand2 size={10} className="text-blue-500 dark:text-blue-400" />
+                            </span>
+                          )}
+                          {model.capabilities.thinking && (
+                            <span aria-label="Extended thinking">
+                              <Brain size={10} className="text-purple-500 dark:text-purple-400" />
+                            </span>
+                          )}
+                          {model.capabilities.vision && (
+                            <span aria-label="Vision">
+                              <Sparkles size={10} className="text-amber-500 dark:text-amber-400" />
+                            </span>
+                          )}
+                          {model.capabilities.search && (
+                            <span aria-label="Web search">
+                              <Search size={10} className="text-green-500 dark:text-green-400" />
+                            </span>
+                          )}
+                        </span>
+                      </span>
                       {isActive ? (
                         <Check size={14} className="text-primary shrink-0" />
                       ) : (

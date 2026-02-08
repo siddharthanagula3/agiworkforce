@@ -277,7 +277,7 @@ impl LLMRouter {
         let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
 
         let mut provider = if is_budget_plan {
-            Provider::DeepSeek // DeepSeek V3 is best value
+            Provider::DeepSeek // DeepSeek Chat is best value
         } else {
             Provider::Google // Gemini 3 Pro is best balanced/quality
         };
@@ -312,9 +312,9 @@ impl LLMRouter {
         }) {
             if is_budget_plan {
                 // Budget plans use affordable models
-                provider = Provider::DeepSeek; // DeepSeek V3 is excellent for code
+                provider = Provider::DeepSeek; // DeepSeek Chat is excellent for code
                 task_category = TaskCategory::Complex;
-                reason = "Developer workflow + budget plan - routing to DeepSeek V3.".to_string();
+                reason = "Developer workflow + budget plan - routing to DeepSeek Chat.".to_string();
             } else {
                 provider = Provider::Anthropic;
                 task_category = TaskCategory::Complex;
@@ -384,8 +384,8 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::DeepSeek,
-                        "deepseek-v3.2".to_string(),
-                        "Coding intent + budget plan - routing to DeepSeek V3.2 (best coding value).".to_string(),
+                        "deepseek-chat".to_string(),
+                        "Coding intent + budget plan - routing to DeepSeek Chat.2 (best coding value).".to_string(),
                     )
                 } else {
                     (
@@ -402,8 +402,8 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::XAI,
-                        "grok-4.1-fast-reasoning".to_string(),
-                        "Reasoning intent + budget plan - routing to Grok 4.1 Fast Reasoning."
+                        "grok-4-fast-reasoning".to_string(),
+                        "Reasoning intent + budget plan - routing to Grok 4 Fast Reasoning."
                             .to_string(),
                     )
                 } else {
@@ -421,7 +421,7 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash".to_string(),
+                        "gemini-3-flash-preview".to_string(),
                         "Agentic intent + budget plan - routing to Gemini 3 Flash for tool use."
                             .to_string(),
                     )
@@ -438,9 +438,9 @@ impl LLMRouter {
             "multimodal" => (
                 Provider::Google,
                 if is_budget_plan {
-                    "gemini-3-flash".to_string()
+                    "gemini-3-flash-preview".to_string()
                 } else {
-                    "gemini-3-pro".to_string()
+                    "gemini-3-pro-preview".to_string()
                 },
                 "Multimodal intent detected - routing to Google Gemini for vision capabilities."
                     .to_string(),
@@ -460,13 +460,13 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash".to_string(),
+                        "gemini-3-flash-preview".to_string(),
                         "Chat intent + budget plan - routing to Gemini 3 Flash.".to_string(),
                     )
                 } else {
                     (
                         Provider::Google,
-                        "gemini-3-pro".to_string(),
+                        "gemini-3-pro-preview".to_string(),
                         "Chat intent detected - routing to Gemini 3 Pro.".to_string(),
                     )
                 }
@@ -716,7 +716,7 @@ impl LLMRouter {
 
         // If user prefers cloud credits and ManagedCloud is available, prioritize it
         // BUT skip this if we are using an Auto strategy, as the strategy itself will handle
-        // ManagedCloud selection with better model specificity (e.g. AutoEconomy -> deepseek-v3)
+        // ManagedCloud selection with better model specificity (e.g. AutoEconomy -> deepseek-chat)
         let is_auto_strategy = matches!(
             preferences.strategy,
             RoutingStrategy::Auto
@@ -790,6 +790,8 @@ impl LLMRouter {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Perplexity,
+            Provider::Ollama,
             Provider::Zhipu,
         ] {
             if order.iter().any(|c| c.provider == provider) {
@@ -880,9 +882,9 @@ impl LLMRouter {
                     if token_count < 1000 {
                         "gpt-5-nano" // $0.05/$0.40 per 1M - cheapest OpenAI
                     } else if token_count < 8000 {
-                        "deepseek-v3.2" // $0.28/$0.42 per 1M - best value for medium context
+                        "deepseek-chat" // $0.28/$0.42 per 1M - best value for medium context
                     } else {
-                        "gemini-3-flash" // $0.50/$3.00 per 1M - long context value
+                        "gemini-3-flash-preview" // $0.50/$3.00 per 1M - long context value
                     }
                 }
                 RoutingStrategy::AutoBalanced => {
@@ -900,7 +902,7 @@ impl LLMRouter {
                     if token_count < 16000 {
                         "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
                     } else {
-                        "claude-opus-4-5" // $5/$25 per 1M - best for heavy lifting
+                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
                     }
                 }
                 _ => candidate.model.as_str(),
@@ -1122,20 +1124,27 @@ impl LLMRouter {
     ) -> Vec<RouteCandidate> {
         match strategy {
             RoutingStrategy::LocalFirst => {
-                // LocalFirst strategy removed - use ManagedCloud or cloud providers instead
-                vec![RouteCandidate {
-                    strategy: None,
-                    provider: Provider::ManagedCloud,
-                    model: "managed-cloud-auto".to_string(),
-                    reason: "strategy-cloud-first",
-                }]
+                vec![
+                    RouteCandidate {
+                        strategy: None,
+                        provider: Provider::Ollama,
+                        model: "llama4-maverick".to_string(),
+                        reason: "strategy-local-first",
+                    },
+                    RouteCandidate {
+                        strategy: None,
+                        provider: Provider::ManagedCloud,
+                        model: "managed-cloud-auto".to_string(),
+                        reason: "strategy-local-first-fallback",
+                    },
+                ]
             }
             RoutingStrategy::CostOptimized => match task {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-3-flash".to_string(),
+                        model: "gemini-3-flash-preview".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1169,7 +1178,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-3-pro".to_string(),
+                        model: "gemini-3-pro-preview".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1190,7 +1199,7 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::Google,
-                    model: "gemini-3-flash".to_string(),
+                    model: "gemini-3-flash-preview".to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -1223,19 +1232,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "deepseek-v3.2".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3.2".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench
+                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench
                                 reason: "auto-economy-best-value",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
+                                model: "gemini-3-flash-preview".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
@@ -1257,37 +1266,37 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME
+                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME
                                 reason: "auto-economy-best-value",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
+                                model: "gemini-3-flash-preview".to_string(), // Best value: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Managed Cloud Reasoning
+                                model: "grok-4-fast-reasoning".to_string(), // Managed Cloud Reasoning
                                 reason: "auto-economy-xai-reasoning-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
+                                model: "grok-4-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
@@ -1309,19 +1318,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
+                                model: "gemini-3-flash-preview".to_string(), // Best value, multimodal: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
                                 reason: "auto-economy-deepseek-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
+                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-economy-deepseek",
                             },
                             RouteCandidate {
@@ -1339,13 +1348,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
+                                model: "grok-4-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
@@ -1364,7 +1373,7 @@ impl LLMRouter {
                 //
                 // Reasoning Model Priority (December 2025):
                 // When same provider offers reasoning and non-reasoning at same price, prioritize reasoning.
-                // Example: grok-4.1-fast-reasoning ($0.50/1M) over grok-4.1-fast ($0.50/1M)
+                // Example: grok-4-fast-reasoning ($0.50/1M) over grok-4-fast ($0.50/1M)
                 match task {
                     TaskCategory::Simple => {
                         vec![
@@ -1377,7 +1386,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning
+                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
                             RouteCandidate {
@@ -1389,13 +1398,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(),
+                                model: "kimi-k2.5-thinking".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3.2".to_string(),
+                                model: "deepseek-chat".to_string(),
                                 reason: "auto-balanced-deepseek",
                             },
                         ]
@@ -1435,19 +1444,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
+                                model: "kimi-k2.5-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M, best open-source coding: 69.6% SWE-bench, 92.1% HumanEval
+                                model: "qwen-max".to_string(), // Reasoning model with thinking mode: $12.50/1M, best open-source coding: 69.6% SWE-bench, 92.1% HumanEval
                                 reason: "auto-balanced-reasoning-coding",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
+                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1459,19 +1468,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // Fast, 2M context (non-reasoning)
+                                model: "grok-4-fast".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
+                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-balanced-deepseek",
                             },
                         ]
@@ -1487,19 +1496,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
+                                model: "kimi-k2.5-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
+                                model: "qwen-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
+                                model: "gemini-3-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1517,13 +1526,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
+                                model: "grok-4-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // Fast, 2M context (non-reasoning)
+                                model: "grok-4-fast".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
                             },
                         ]
@@ -1556,31 +1565,31 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo
+                                model: "gpt-5-pro".to_string(), // Best all-around quality
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), // Best reasoning/coding
+                                model: "claude-opus-4-6".to_string(), // Best reasoning/coding
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best multimodal
+                                model: "gemini-3-pro-preview".to_string(), // Best multimodal
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-4.1".to_string(),
+                                model: "grok-4".to_string(),
                                 reason: "auto-premium-xai",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3.2".to_string(),
+                                model: "deepseek-chat".to_string(),
                                 reason: "auto-premium-deepseek", // Good backup
                             },
                         ]
@@ -1596,7 +1605,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(),
+                                model: "claude-opus-4-6".to_string(),
                                 reason: "auto-premium-reasoning",
                             },
                             RouteCandidate {
@@ -1608,13 +1617,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), // Best coding: 80.9% SWE-bench
+                                model: "claude-opus-4-6".to_string(), // Best coding: 80.9% SWE-bench
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-codex".to_string(), // Best code generation
+                                model: "gpt-5.2-codex-high".to_string(), // Best code generation
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
@@ -1626,13 +1635,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(),
+                                model: "gemini-3-pro-preview".to_string(),
                                 reason: "auto-premium-complex",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3.2".to_string(), // Strong code reasoning
+                                model: "deepseek-chat".to_string(), // Strong code reasoning
                                 reason: "auto-premium-deepseek",
                             },
                         ]
@@ -1648,19 +1657,19 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best multimodal/creative
+                                model: "gemini-3-pro-preview".to_string(), // Best multimodal/creative
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-pro".to_string(), // High creativity
+                                model: "gpt-5-pro".to_string(), // High creativity
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(),
+                                model: "claude-opus-4-6".to_string(),
                                 reason: "auto-premium-creative",
                             },
                         ]
@@ -1677,11 +1686,11 @@ impl LLMRouter {
     /// we prioritize the reasoning variant to get better capabilities without additional cost.
     ///
     /// **Confirmed Same-Price Reasoning Variants (December 2025):**
-    /// - **xAI**: `grok-4.1-fast-reasoning` ($0.50/1M) prioritized over `grok-4.1-fast` ($0.50/1M)
+    /// - **xAI**: `grok-4-fast-reasoning` ($0.50/1M) prioritized over `grok-4-fast` ($0.50/1M)
     ///
     /// **Other Providers Checked:**
-    /// - **Qwen**: `qwen3-max` has thinking mode built-in (always reasoning, no separate non-reasoning variant)
-    /// - **OpenAI**: GPT-5.2 "thinking" mode mentioned but separate model ID not confirmed at same price
+    /// - **Qwen**: `qwen-max` has thinking mode built-in (always reasoning, no separate non-reasoning variant)
+    /// - **OpenAI**: GPT-5.2 supports effort-based reasoning controls without a separate "thinking" model ID
     /// - **DeepSeek**: V3.2-Exp Reasoner mentioned but model ID not in current codebase
     /// - **Anthropic**: Reasoning variants (Opus) priced higher than non-reasoning (Sonnet)
     /// - **Google**: Reasoning variants (Deep Think) priced higher than non-reasoning (Pro/Flash)
@@ -1698,31 +1707,31 @@ impl LLMRouter {
                 TaskCategory::Creative => "claude-sonnet-4-5".to_string(),
             },
             Provider::Google => match task {
-                TaskCategory::Simple => "gemini-3-flash".to_string(),
-                TaskCategory::Complex => "gemini-3-pro".to_string(),
-                TaskCategory::Creative => "gemini-3-pro".to_string(),
+                TaskCategory::Simple => "gemini-3-flash-preview".to_string(),
+                TaskCategory::Complex => "gemini-3-pro-preview".to_string(),
+                TaskCategory::Creative => "gemini-3-pro-preview".to_string(),
             },
             Provider::Ollama => "llama4-maverick".to_string(),
             Provider::XAI => match task {
-                // Prioritize reasoning variant when same price as non-reasoning (December 2025: Grok 4.1 Fast reasoning = $0.50/1M, same as non-reasoning)
-                TaskCategory::Simple => "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, 2M context (prioritized - same price as non-reasoning)
-                TaskCategory::Complex => "grok-4.1".to_string(),
-                TaskCategory::Creative => "grok-4.1".to_string(),
+                // Prioritize reasoning variant when same price as non-reasoning (December 2025: Grok 4 Fast reasoning = $0.50/1M, same as non-reasoning)
+                TaskCategory::Simple => "grok-4-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, 2M context (prioritized - same price as non-reasoning)
+                TaskCategory::Complex => "grok-4".to_string(),
+                TaskCategory::Creative => "grok-4".to_string(),
             },
             Provider::DeepSeek => match task {
-                TaskCategory::Simple => "deepseek-v3.2".to_string(), // DeepSeek V3.2
-                TaskCategory::Complex => "deepseek-v3.2".to_string(), // DeepSeek V3.2
-                TaskCategory::Creative => "deepseek-v3.2".to_string(), // DeepSeek V3.2
+                TaskCategory::Simple => "deepseek-chat".to_string(), // DeepSeek Chat.2
+                TaskCategory::Complex => "deepseek-chat".to_string(), // DeepSeek Chat.2
+                TaskCategory::Creative => "deepseek-chat".to_string(), // DeepSeek Chat.2
             },
             Provider::Qwen => match task {
-                TaskCategory::Simple => "qwen-max-2025-01-25".to_string(),
-                TaskCategory::Complex => "qwen-max-2025-01-25".to_string(),
-                TaskCategory::Creative => "qwen-max-2025-01-25".to_string(),
+                TaskCategory::Simple => "qwen-max".to_string(),
+                TaskCategory::Complex => "qwen-max".to_string(),
+                TaskCategory::Creative => "qwen-max".to_string(),
             },
             Provider::Moonshot => match task {
-                TaskCategory::Simple => "kimi-k2-thinking".to_string(),
-                TaskCategory::Complex => "kimi-k2-thinking".to_string(),
-                TaskCategory::Creative => "kimi-k2-thinking".to_string(),
+                TaskCategory::Simple => "kimi-k2.5-thinking".to_string(),
+                TaskCategory::Complex => "kimi-k2.5-thinking".to_string(),
+                TaskCategory::Creative => "kimi-k2.5-thinking".to_string(),
             },
             // ZhipuAI - GLM-4.7 is excellent for coding (73.8% SWE-bench)
             Provider::Zhipu => match task {
@@ -1751,6 +1760,29 @@ enum TaskCategory {
     Creative,
 }
 
+/// Checks if `text` contains `word` as a whole word (surrounded by non-alphabetic
+/// characters or at string boundaries). Both `text` and `word` should already be
+/// lowercase when used with `classify_request`.
+fn contains_word(text: &str, word: &str) -> bool {
+    let text_bytes = text.as_bytes();
+    let word_bytes = word.as_bytes();
+    let word_len = word_bytes.len();
+    if word_len == 0 || text_bytes.len() < word_len {
+        return false;
+    }
+    for i in 0..=text_bytes.len() - word_len {
+        if text_bytes[i..i + word_len] == *word_bytes {
+            let before_ok = i == 0 || !text_bytes[i - 1].is_ascii_alphabetic();
+            let after_ok =
+                i + word_len == text_bytes.len() || !text_bytes[i + word_len].is_ascii_alphabetic();
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn classify_request(request: &LLMRequest) -> TaskCategory {
     let last_user_message = request
         .messages
@@ -1760,19 +1792,38 @@ fn classify_request(request: &LLMRequest) -> TaskCategory {
 
     if let Some(message) = last_user_message {
         let content = message.content.to_lowercase();
-        if content.contains("code") || content.contains("function") || content.contains("debug") {
+
+        // Complex: programming / debugging tasks
+        // Use word-boundary matching to avoid false positives like "barcode", "encode",
+        // "malfunction", "dysfunction", "airplane", "planet", "history", "season".
+        if contains_word(&content, "code")
+            || content.contains("coding")
+            || content.contains("coder")
+            || contains_word(&content, "function")
+            || contains_word(&content, "debug")
+            || content.contains("debugging")
+        {
             return TaskCategory::Complex;
         }
 
-        if content.contains("design")
-            || content.contains("story")
+        // Creative: design, storytelling, artistic tasks
+        if contains_word(&content, "design")
+            || contains_word(&content, "story")
+            || content.contains("storytelling")
             || content.contains("creative")
             || content.contains("write a poem")
         {
             return TaskCategory::Creative;
         }
 
-        if content.contains("analyze") || content.contains("plan") || content.contains("reason") {
+        // Complex: analytical / planning / reasoning tasks
+        if content.contains("analyze")
+            || content.contains("analysis")
+            || contains_word(&content, "plan")
+            || content.contains("planning")
+            || contains_word(&content, "reason")
+            || content.contains("reasoning")
+        {
             return TaskCategory::Complex;
         }
     }
@@ -1918,7 +1969,60 @@ impl LLMRouter {
             .ok_or_else(|| anyhow!("Provider {:?} not configured", candidate.provider))?;
 
         let mut routed_request = request.clone();
-        routed_request.model = candidate.model.clone();
+
+        // Handle dynamic model resolution based on strategy (mirrors non-streaming invoke_candidate)
+        if let Some(strategy) = candidate.strategy {
+            let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
+
+            // Resolve logic based on strategy and tokens (Updated January 2026)
+            let resolved_model = match strategy {
+                RoutingStrategy::AutoEconomy => {
+                    // Cost-optimized: simple queries use cheap models, complex use capable
+                    if token_count < 1000 {
+                        "gpt-5-nano" // $0.05/$0.40 per 1M - cheapest OpenAI
+                    } else if token_count < 8000 {
+                        "deepseek-chat" // $0.28/$0.42 per 1M - best value for medium context
+                    } else {
+                        "gemini-3-flash-preview" // $0.50/$3.00 per 1M - long context value
+                    }
+                }
+                RoutingStrategy::AutoBalanced => {
+                    // Balance: cheap for simple, quality for complex
+                    if token_count < 500 {
+                        "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
+                    } else if token_count < 4000 {
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
+                    } else {
+                        "gpt-5" // $1.25/$10 per 1M - strong performance
+                    }
+                }
+                RoutingStrategy::AutoPremium => {
+                    // Premium: Always best models, switch based on context window needs
+                    if token_count < 16000 {
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
+                    } else {
+                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
+                    }
+                }
+                _ => candidate.model.as_str(),
+            };
+
+            tracing::info!(
+                "Dynamic Routing (Streaming) [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
+                strategy,
+                token_count,
+                resolved_model
+            );
+
+            routed_request.model = resolved_model.to_string();
+        } else if candidate.model == "auto" {
+            // Check if strategy is somehow missing but model is auto (fallback)
+            // Use a safe default (January 2026: GPT-5 is the balanced default)
+            routed_request.model = "gpt-5".to_string();
+        } else {
+            routed_request.model = candidate.model.clone();
+        }
+
         routed_request.stream = true;
 
         let mut last_error: Option<anyhow::Error> = None;

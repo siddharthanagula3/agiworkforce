@@ -39,22 +39,22 @@ describe('TimeoutWarningDialog', () => {
 
   it('renders when isOpen is true and warning is provided', () => {
     render(<TimeoutWarningDialog {...defaultProps} />);
-    expect(screen.getByText(/time running out/i)).toBeInTheDocument();
+    expect(screen.getByText(/timeout approaching/i)).toBeInTheDocument();
   });
 
   it('does not render when isOpen is false', () => {
     render(<TimeoutWarningDialog {...defaultProps} isOpen={false} />);
-    expect(screen.queryByText(/time running out/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/timeout approaching/i)).not.toBeInTheDocument();
   });
 
   it('does not render when warning is null', () => {
     render(<TimeoutWarningDialog {...defaultProps} warning={null} />);
-    expect(screen.queryByText(/time running out/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/timeout approaching/i)).not.toBeInTheDocument();
   });
 
   it('displays task name in the dialog', () => {
     render(<TimeoutWarningDialog {...defaultProps} />);
-    expect(screen.getByText('Data Analysis Task')).toBeInTheDocument();
+    expect(screen.getByText(/task:\s*data analysis task/i)).toBeInTheDocument();
   });
 
   it('displays remaining time correctly', () => {
@@ -64,7 +64,7 @@ describe('TimeoutWarningDialog', () => {
 
   it('displays executed steps', () => {
     render(<TimeoutWarningDialog {...defaultProps} />);
-    expect(screen.getByText('45')).toBeInTheDocument();
+    expect(screen.getByText(/45 \/ 100/)).toBeInTheDocument();
   });
 
   it('displays total estimated steps', () => {
@@ -74,7 +74,7 @@ describe('TimeoutWarningDialog', () => {
 
   it('displays max timeout minutes', () => {
     render(<TimeoutWarningDialog {...defaultProps} />);
-    expect(screen.getByText(/60m max/)).toBeInTheDocument();
+    expect(screen.getByText(/60m/)).toBeInTheDocument();
   });
 
   it('displays current step when provided', () => {

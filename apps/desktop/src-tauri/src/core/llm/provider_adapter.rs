@@ -1,3 +1,12 @@
+// NOTE: This module is currently NOT included in the module tree (not declared in mod.rs).
+// It contains adapter patterns for each LLM provider but has compile errors that must be
+// fixed before it can be activated:
+// - ToolDefinition is a struct in mod.rs but this file uses it as an enum (Flat/Nested)
+// - ContentPart::ToolUse/ToolResult destructuring uses wrong field names
+//
+// The actual provider request/response formatting is currently handled inline in
+// managed_cloud_provider.rs, ollama.rs, and the chat command handler.
+
 //! Provider adapters for translating between AGI Workforce's unified format and provider-specific formats.
 //!
 //! This module provides adapters that handle the differences in request/response formats across
@@ -324,6 +333,30 @@ impl ProviderAdapter for OpenAIAdapter {
 }
 
 impl OpenAIAdapter {
+    fn codex_model_effort_override(model: &str) -> Option<&'static str> {
+        if model.ends_with("-low") {
+            Some("low")
+        } else if model.ends_with("-medium") {
+            Some("medium")
+        } else if model.ends_with("-high") || model.ends_with("-xhigh") {
+            // OpenAI reasoning.effort does not have xhigh, map to high.
+            Some("high")
+        } else {
+            None
+        }
+    }
+
+    fn canonicalize_model(model: &str) -> String {
+        if model == "gpt-5.2-codex"
+            || model.starts_with("gpt-5.2-codex-")
+            || model == "gpt-5-codex"
+        {
+            "gpt-5-codex".to_string()
+        } else {
+            model.to_string()
+        }
+    }
+
     /// Calculate token count for an image based on dimensions and detail level
     ///
     /// OpenAI's vision token calculation:
@@ -516,8 +549,11 @@ impl OpenAIAdapter {
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let canonical_model = Self::canonicalize_model(&request.model);
+        let codex_effort_override = Self::codex_model_effort_override(&request.model);
+
         let mut api_request = serde_json::json!({
-            "model": request.model,
+            "model": canonical_model,
         });
 
         // Add previous_response_id for conversation continuity
@@ -577,8 +613,9 @@ impl OpenAIAdapter {
                         } else {
                             "high"
                         };
+                        let chosen_effort = codex_effort_override.unwrap_or(effort);
                         api_request["reasoning"] = serde_json::json!({
-                            "effort": effort
+                            "effort": chosen_effort
                         });
                     }
                     ThinkingParameter::Level { level, .. } => {
@@ -589,19 +626,25 @@ impl OpenAIAdapter {
                             "high" | "extreme" => "high",
                             _ => "medium",
                         };
+                        let chosen_effort = codex_effort_override.unwrap_or(effort);
                         api_request["reasoning"] = serde_json::json!({
-                            "effort": effort
+                            "effort": chosen_effort
                         });
                     }
                     ThinkingParameter::Enabled(true) => {
+                        let chosen_effort = codex_effort_override.unwrap_or("medium");
                         api_request["reasoning"] = serde_json::json!({
-                            "effort": "medium"
+                            "effort": chosen_effort
                         });
                     }
                     ThinkingParameter::Enabled(false) => {
                         // Don't add reasoning parameter if disabled
                     }
                 }
+            } else if let Some(effort) = codex_effort_override {
+                api_request["reasoning"] = serde_json::json!({
+                    "effort": effort
+                });
             }
         }
 
@@ -1272,64 +1315,98 @@ struct AnthropicAdapter;
 
 impl ProviderAdapter for AnthropicAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let canonical_model = Self::canonicalize_model(&request.model);
+
         // Anthropic uses Messages API format with flat tool definitions
         let mut anthropic_request = serde_json::json!({
-            "model": request.model,
+            "model": canonical_model,
             "max_tokens": request.max_tokens.unwrap_or(4096),
             "messages": request.messages,
         });
 
-        // Add system prompt if present
+        // ── System prompt with prompt caching ────────────────────────
+        // When cache_control is requested we wrap the system prompt in
+        // a content-block array with a cache_control marker, which
+        // enables Anthropic's prompt caching (up to 90 % cost savings).
         if let Some(system) = &request.system {
-            anthropic_request["system"] = serde_json::json!(system);
+            if request.cache_control.is_some() {
+                anthropic_request["system"] = serde_json::json!([
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": { "type": "ephemeral" }
+                    }
+                ]);
+            } else {
+                anthropic_request["system"] = serde_json::json!(system);
+            }
         }
 
-        // Add tools if present - Anthropic uses flat format with input_schema
+        // ── Tools ────────────────────────────────────────────────────
+        // Anthropic has two tool formats:
+        //   1. Client tools  → { "name", "description", "input_schema" }
+        //   2. Server tools  → { "type": "<versioned>", "name", ... }
+        // We detect known server-tool names and serialise them correctly.
         if let Some(tools) = &request.tools {
+            use crate::core::llm::server_tools;
+
             let anthropic_tools: Vec<Value> = tools
                 .iter()
-                .map(|tool| {
-                    serde_json::json!({
-                        "name": tool.name(),
-                        "description": tool.description(),
-                        "input_schema": tool.parameters()
-                    })
+                .filter_map(|tool| {
+                    let tool_name = tool.name();
+
+                    // Check if this is a known Anthropic server-side tool
+                    if server_tools::is_anthropic_server_tool(tool_name) {
+                        // Use the server-tool definition format
+                        server_tools::build_server_tool_definition(tool_name)
+                    } else {
+                        // Regular client tool – flat format with input_schema
+                        Some(serde_json::json!({
+                            "name": tool_name,
+                            "description": tool.description(),
+                            "input_schema": tool.parameters()
+                        }))
+                    }
                 })
                 .collect();
-            anthropic_request["tools"] = serde_json::json!(anthropic_tools);
+
+            if !anthropic_tools.is_empty() {
+                anthropic_request["tools"] = serde_json::json!(anthropic_tools);
+            }
         }
 
-        // Add temperature if present
+        // ── Sampling parameters ──────────────────────────────────────
         if let Some(temp) = request.temperature {
             anthropic_request["temperature"] = serde_json::json!(temp);
         }
-
-        // Add top_p if present
         if let Some(top_p) = request.top_p {
             anthropic_request["top_p"] = serde_json::json!(top_p);
         }
-
-        // Add top_k if present
         if let Some(top_k) = request.top_k {
             anthropic_request["top_k"] = serde_json::json!(top_k);
         }
 
-        // Add stream flag if present
+        // ── Streaming ────────────────────────────────────────────────
         if request.stream {
             anthropic_request["stream"] = serde_json::json!(true);
         }
 
-        // Add extended thinking support
+        // ── Extended thinking / adaptive thinking ────────────────────
         if let Some(thinking) = &request.thinking {
             anthropic_request["thinking"] = serde_json::to_value(thinking)?;
         }
 
-        // Add structured outputs (response_format)
+        // ── Effort parameter (Claude Opus 4.6+, GA) ─────────────────
+        if let Some(effort) = &request.effort {
+            anthropic_request["effort"] = serde_json::json!(effort);
+        }
+
+        // ── Structured outputs (response_format) ─────────────────────
         if let Some(response_format) = &request.response_format {
             anthropic_request["response_format"] = serde_json::to_value(response_format)?;
         }
 
-        // Add metadata if present
+        // ── Metadata ─────────────────────────────────────────────────
         if let Some(metadata) = &request.metadata {
             anthropic_request["metadata"] = metadata.clone();
         }
@@ -1353,6 +1430,8 @@ impl ProviderAdapter for AnthropicAdapter {
                             content.push_str(text);
                         }
                     }
+
+                    // ── Client-side tool use ─────────────────────────
                     Some("tool_use") => {
                         if let (Some(id), Some(name), Some(input)) = (
                             block["id"].as_str(),
@@ -1362,12 +1441,61 @@ impl ProviderAdapter for AnthropicAdapter {
                             tool_calls_vec.push(ToolCall {
                                 id: id.to_string(),
                                 name: name.to_string(),
-                                // Anthropic returns input as object, we need to serialize to string
                                 arguments: serde_json::to_string(input)
                                     .unwrap_or_else(|_| "{}".to_string()),
                             });
                         }
                     }
+
+                    // ── Server-side tool use (web_search, web_fetch, etc.) ──
+                    // Server tools are executed by Anthropic's API.  We
+                    // still surface them as tool calls so the agentic loop
+                    // and UI can display what happened.  The results are
+                    // in subsequent `web_search_tool_result` blocks which
+                    // are transparently consumed by the model.
+                    Some("server_tool_use") => {
+                        if let (Some(id), Some(name), Some(input)) = (
+                            block["id"].as_str(),
+                            block["name"].as_str(),
+                            block.get("input"),
+                        ) {
+                            tool_calls_vec.push(ToolCall {
+                                id: id.to_string(),
+                                name: format!("__server__{}", name), // prefix to skip client execution
+                                arguments: serde_json::to_string(input)
+                                    .unwrap_or_else(|_| "{}".to_string()),
+                            });
+                        }
+                    }
+
+                    // ── Server tool result blocks ────────────────────
+                    // These contain the search/fetch results.  We don't
+                    // need to act on them (the model consumes them), but
+                    // we append a note to the content for UI visibility.
+                    Some("web_search_tool_result") => {
+                        // Results are encrypted and consumed by the model.
+                        // Count how many results were returned for logging.
+                        let result_count = block
+                            .get("content")
+                            .and_then(|c| c.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        tracing::debug!(
+                            "[Anthropic] web_search_tool_result with {} results",
+                            result_count
+                        );
+                    }
+                    Some("web_fetch_tool_result") => {
+                        tracing::debug!("[Anthropic] web_fetch_tool_result received");
+                    }
+
+                    // ── Thinking blocks ──────────────────────────────
+                    Some("thinking") => {
+                        // Extended thinking content – not included in the
+                        // main response content; could be surfaced via a
+                        // separate field in the future.
+                    }
+
                     _ => {}
                 }
             }
@@ -1426,6 +1554,18 @@ impl ProviderAdapter for AnthropicAdapter {
 
     fn supports_batch_processing(&self) -> bool {
         true
+    }
+}
+
+impl AnthropicAdapter {
+    fn canonicalize_model(model: &str) -> String {
+        match model {
+            // Frontend uses dotted IDs; Anthropic API expects hyphenated IDs.
+            "claude-haiku-4.5" => "claude-haiku-4-5".to_string(),
+            "claude-sonnet-4.5" => "claude-sonnet-4-5".to_string(),
+            "claude-opus-4.6" => "claude-opus-4-6".to_string(),
+            _ => model.to_string(),
+        }
     }
 }
 
@@ -1635,12 +1775,21 @@ impl ProviderAdapter for OllamaAdapter {
                 calls
                     .iter()
                     .filter_map(|call| {
-                        let id = call["id"].as_str().unwrap_or("").to_string();
-                        let name = call["function"]["name"].as_str()?.to_string();
-                        let arguments = call["function"]["arguments"]
+                        let id = call["id"]
                             .as_str()
-                            .unwrap_or("{}")
-                            .to_string();
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| format!("call_{}", uuid::Uuid::new_v4()));
+                        let name = call["function"]["name"].as_str()?.to_string();
+                        // Ollama may return arguments as a JSON object or a string
+                        let arguments =
+                            if let Some(args_str) = call["function"]["arguments"].as_str() {
+                                args_str.to_string()
+                            } else if let Some(args_val) = call["function"].get("arguments") {
+                                serde_json::to_string(args_val)
+                                    .unwrap_or_else(|_| "{}".to_string())
+                            } else {
+                                "{}".to_string()
+                            };
                         Some(ToolCall {
                             id,
                             name,
