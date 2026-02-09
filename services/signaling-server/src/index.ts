@@ -526,6 +526,11 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     httpUrl: publicHttpUrl,
     wsUrl: publicWsUrl,
     qrData: buildQrPayload(code),
+    // Nested shape expected by desktop client (connectionStore PairingResponse)
+    signaling: {
+      httpUrl: publicHttpUrl,
+      wsUrl: publicWsUrl,
+    },
   });
 });
 
