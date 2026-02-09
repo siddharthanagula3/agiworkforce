@@ -1,9 +1,7 @@
 name: Release
 
+# Desktop releases use release-desktop.yml on v* tags. This workflow is manual-only to avoid duplicate drafts.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
