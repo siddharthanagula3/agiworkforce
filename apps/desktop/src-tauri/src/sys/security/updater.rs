@@ -186,13 +186,17 @@ impl UpdateSecurityManager {
             return Err("Update URL must use HTTPS".to_string());
         }
 
-        let allowed_domains = vec!["releases.agiworkforce.com", "github.com"];
+        // API is at agiworkforce.com; also allow GitHub release assets
+        let allowed_domains = vec!["agiworkforce.com", "releases.agiworkforce.com", "github.com"];
 
         let url_parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
 
         let domain = url_parsed.host_str().ok_or("URL has no host")?;
 
-        if !allowed_domains.iter().any(|d| domain.ends_with(d)) {
+        let allowed = allowed_domains.iter().any(|d| {
+            domain == *d || domain.ends_with(&format!(".{}", d))
+        });
+        if !allowed {
             return Err(format!(
                 "Update domain '{}' is not in allowed list: {:?}",
                 domain, allowed_domains
