@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 
 const SIGNALING_HTTP_URL =
-  (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:3001';
+  (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:4000';
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
