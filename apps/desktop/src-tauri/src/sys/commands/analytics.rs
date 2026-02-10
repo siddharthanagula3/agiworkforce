@@ -85,58 +85,40 @@ pub async fn metrics_get_app(state: State<'_, TelemetryState>) -> Result<AppMetr
     Ok(collector.collect_app_metrics())
 }
 
-#[tauri::command]
-pub async fn feature_flag_get(flag_name: String) -> Result<bool, String> {
-    let default_flags: HashMap<String, bool> = [
-        ("parallel_execution".to_string(), true),
-        ("autonomous_agent".to_string(), true),
-        ("vision_automation".to_string(), true),
-        ("new_dashboard".to_string(), false),
-        ("dark_mode".to_string(), true),
-        ("command_palette".to_string(), true),
-        ("browser_automation".to_string(), true),
-        ("database_integration".to_string(), true),
-        ("api_automation".to_string(), true),
-        ("streaming_responses".to_string(), true),
-        ("code_completion".to_string(), false),
-        ("function_calling".to_string(), true),
-        ("response_caching".to_string(), true),
-        ("prefetching".to_string(), false),
-        ("mobile_app".to_string(), false),
-        ("browser_extension".to_string(), false),
-        ("marketplace".to_string(), false),
-    ]
-    .iter()
-    .cloned()
-    .collect();
+use crate::sys::commands::settings::SettingsState;
 
-    Ok(default_flags.get(&flag_name).copied().unwrap_or(false))
+#[tauri::command]
+pub async fn feature_flag_get(
+    flag_name: String,
+    settings_state: State<'_, SettingsState>,
+) -> Result<bool, String> {
+    get_feature_flag(&flag_name, &settings_state).await
+}
+
+pub async fn get_feature_flag(
+    flag_name: &str,
+    settings_state: &SettingsState,
+) -> Result<bool, String> {
+    let settings = settings_state.settings.lock().await;
+    Ok(settings
+        .feature_flags
+        .get(flag_name)
+        .copied()
+        .unwrap_or(false))
 }
 
 #[tauri::command]
-pub async fn feature_flag_get_all() -> Result<HashMap<String, bool>, String> {
-    Ok([
-        ("parallel_execution".to_string(), true),
-        ("autonomous_agent".to_string(), true),
-        ("vision_automation".to_string(), true),
-        ("new_dashboard".to_string(), false),
-        ("dark_mode".to_string(), true),
-        ("command_palette".to_string(), true),
-        ("browser_automation".to_string(), true),
-        ("database_integration".to_string(), true),
-        ("api_automation".to_string(), true),
-        ("streaming_responses".to_string(), true),
-        ("code_completion".to_string(), false),
-        ("function_calling".to_string(), true),
-        ("response_caching".to_string(), true),
-        ("prefetching".to_string(), false),
-        ("mobile_app".to_string(), false),
-        ("browser_extension".to_string(), false),
-        ("marketplace".to_string(), false),
-    ]
-    .iter()
-    .cloned()
-    .collect())
+pub async fn feature_flag_get_all(
+    settings_state: State<'_, SettingsState>,
+) -> Result<HashMap<String, bool>, String> {
+    get_all_feature_flags(&settings_state).await
+}
+
+pub async fn get_all_feature_flags(
+    settings_state: &SettingsState,
+) -> Result<HashMap<String, bool>, String> {
+    let settings = settings_state.settings.lock().await;
+    Ok(settings.feature_flags.clone())
 }
 
 #[tauri::command]
@@ -640,18 +622,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_feature_flag_get() {
-        let result = feature_flag_get("parallel_execution".to_string()).await;
+        let state = SettingsState::new();
+        // Insert parallel_execution = true
+        {
+            let mut settings = state.settings.lock().await;
+            settings
+                .feature_flags
+                .insert("parallel_execution".to_string(), true);
+        }
+
+        let result = get_feature_flag("parallel_execution", &state).await;
         assert!(result.is_ok());
         assert!(result.unwrap());
 
-        let result = feature_flag_get("unknown_flag".to_string()).await;
+        let result = get_feature_flag("unknown_flag", &state).await;
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }
 
     #[tokio::test]
     async fn test_feature_flag_get_all() {
-        let result = feature_flag_get_all().await;
+        let state = SettingsState::new();
+        {
+            let mut settings = state.settings.lock().await;
+            settings
+                .feature_flags
+                .insert("parallel_execution".to_string(), true);
+        }
+
+        let result = get_all_feature_flags(&state).await;
         assert!(result.is_ok());
 
         let flags = result.unwrap();

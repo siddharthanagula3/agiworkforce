@@ -3,7 +3,7 @@ use crate::automation::{
     input::{lock_enigo, KeyboardSimulator, MouseSimulator},
     AutomationService,
 };
-use crate::core::sync_utils::MutexExt;
+
 use anyhow::Result;
 use enigo::Key;
 use std::sync::Arc;
@@ -191,11 +191,7 @@ impl TaskExecutor {
                 ))
             }
             Action::Scroll { direction, amount } => {
-                self.automation
-                    .mouse
-                    .safe_lock()
-                    .map_err(|e| anyhow::anyhow!("{}", e))?
-                    .scroll(*amount)?;
+                self.automation.mouse.lock().await.scroll(*amount)?;
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
             Action::PressKey { keys } => {

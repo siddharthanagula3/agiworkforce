@@ -79,6 +79,24 @@ The browser extension connects via Native Messaging:
 }
 ```
 
+### Advanced Configuration (Profiles & Proxies)
+
+The browser automation engine supports custom profiles and proxy configurations for enhanced privacy and state management.
+
+```typescript
+// Configure via the automation settings API
+await invoke('update_automation_settings', {
+  settings: {
+    use_custom_profile: true,
+    profile_path: '/path/to/profile', // Optional: separate profile per task
+    proxy: {
+      url: 'http://proxy.example.com',
+      auth: 'user:pass', // Optional
+    },
+  },
+});
+```
+
 ### Extension Setup
 
 1. Build extension: `cd apps/extension && pnpm build`
