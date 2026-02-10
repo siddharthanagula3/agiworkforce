@@ -289,6 +289,7 @@ pub struct AppSettings {
     pub ui_preferences: UIPreferences,
     pub window_preferences: WindowStatePreferences,
     pub security_settings: SecuritySettings,
+    pub feature_flags: HashMap<String, bool>,
     pub schema_version: u32,
 }
 
@@ -304,6 +305,29 @@ impl Default for AppSettings {
         );
         let provider_configs = HashMap::new();
 
+        let feature_flags: HashMap<String, bool> = [
+            ("parallel_execution".to_string(), true),
+            ("autonomous_agent".to_string(), true),
+            ("vision_automation".to_string(), true),
+            ("new_dashboard".to_string(), false),
+            ("dark_mode".to_string(), true),
+            ("command_palette".to_string(), true),
+            ("browser_automation".to_string(), true),
+            ("database_integration".to_string(), true),
+            ("api_automation".to_string(), true),
+            ("streaming_responses".to_string(), true),
+            ("code_completion".to_string(), false),
+            ("function_calling".to_string(), true),
+            ("response_caching".to_string(), true),
+            ("prefetching".to_string(), false),
+            ("mobile_app".to_string(), false),
+            ("browser_extension".to_string(), false),
+            ("marketplace".to_string(), false),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
         Self {
             default_provider: "managed_cloud".to_string(),
             default_model: "gpt-5-nano".to_string(),
@@ -312,6 +336,7 @@ impl Default for AppSettings {
             ui_preferences: UIPreferences::default(),
             window_preferences: WindowStatePreferences::default(),
             security_settings: SecuritySettings::default(),
+            feature_flags,
             schema_version: 1,
         }
     }

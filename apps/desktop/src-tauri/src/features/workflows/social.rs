@@ -67,18 +67,20 @@ impl WorkflowSocial {
             return Err("Rating must be between 1 and 5".to_string());
         }
 
-        let conn = self
-            .db
-            .lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+        {
+            let conn = self
+                .db
+                .lock()
+                .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let now = Utc::now().timestamp();
+            let now = Utc::now().timestamp();
 
-        conn.execute(
-            "INSERT OR REPLACE INTO workflow_ratings (workflow_id, user_id, rating, comment, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![workflow_id, user_id, rating, comment, now],
-        ).map_err(|e| format!("Failed to insert rating: {}", e))?;
+            conn.execute(
+                "INSERT OR REPLACE INTO workflow_ratings (workflow_id, user_id, rating, comment, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![workflow_id, user_id, rating, comment, now],
+            ).map_err(|e| format!("Failed to insert rating: {}", e))?;
+        }
 
         self.update_aggregate_rating(workflow_id)?;
 

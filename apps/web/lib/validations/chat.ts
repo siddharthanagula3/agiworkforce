@@ -14,11 +14,7 @@ export const SUPPORTED_MODELS = [
   'claude-opus-4.5',
   'claude-sonnet-4.5',
   'claude-haiku-4.5',
-  // Legacy Claude models
-  'claude-3.5-sonnet',
-  'claude-3-opus',
-  'claude-3-sonnet',
-  'claude-3-haiku',
+  // Claude 4.x models
   'claude-opus-4',
   'claude-sonnet-4',
   // OpenAI GPT-5 models

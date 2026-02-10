@@ -1,0 +1,293 @@
+- [Developer Guide](https://docs.anthropic.com/docs/en/intro)
+- [API Reference](https://docs.anthropic.com/docs/en/api/overview)
+- [MCP](https://modelcontextprotocol.io)
+- [Resources](https://docs.anthropic.com/docs/en/resources/overview)
+- [Release Notes](https://docs.anthropic.com/docs/en/release-notes/overview)
+[Developer Guide](https://docs.anthropic.com/docs/en/intro)
+[API Reference](https://docs.anthropic.com/docs/en/api/overview)
+[MCP](https://modelcontextprotocol.io)
+[Resources](https://docs.anthropic.com/docs/en/resources/overview)
+[Release Notes](https://docs.anthropic.com/docs/en/release-notes/overview)
+[Log in](https://docs.anthropic.com/login?returnTo=%2Fdocs%2Fen%2Fabout-claude%2Fmodels%2Fchoosing-a-model)
+[Intro to Claude](https://docs.anthropic.com/docs/en/intro)
+[Quickstart](https://docs.anthropic.com/docs/en/get-started)
+[Models overview](https://docs.anthropic.com/docs/en/about-claude/models/overview)
+[Choosing a model](https://docs.anthropic.com/docs/en/about-claude/models/choosing-a-model)
+[What's new in Claude 4.6](https://docs.anthropic.com/docs/en/about-claude/models/whats-new-claude-4-6)
+[Migration guide](https://docs.anthropic.com/docs/en/about-claude/models/migration-guide)
+[Model deprecations](https://docs.anthropic.com/docs/en/about-claude/model-deprecations)
+[Pricing](https://docs.anthropic.com/docs/en/about-claude/pricing)
+[Features overview](https://docs.anthropic.com/docs/en/build-with-claude/overview)
+[Using the Messages API](https://docs.anthropic.com/docs/en/build-with-claude/working-with-messages)
+[Handling stop reasons](https://docs.anthropic.com/docs/en/build-with-claude/handling-stop-reasons)
+[Prompting best practices](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
+[Context windows](https://docs.anthropic.com/docs/en/build-with-claude/context-windows)
+[Compaction](https://docs.anthropic.com/docs/en/build-with-claude/compaction)
+[Context editing](https://docs.anthropic.com/docs/en/build-with-claude/context-editing)
+[Prompt caching](https://docs.anthropic.com/docs/en/build-with-claude/prompt-caching)
+[Extended thinking](https://docs.anthropic.com/docs/en/build-with-claude/extended-thinking)
+[Adaptive thinking](https://docs.anthropic.com/docs/en/build-with-claude/adaptive-thinking)
+[Effort](https://docs.anthropic.com/docs/en/build-with-claude/effort)
+[Fast mode (research preview)](https://docs.anthropic.com/docs/en/build-with-claude/fast-mode)
+[Streaming Messages](https://docs.anthropic.com/docs/en/build-with-claude/streaming)
+[Batch processing](https://docs.anthropic.com/docs/en/build-with-claude/batch-processing)
+[Citations](https://docs.anthropic.com/docs/en/build-with-claude/citations)
+[Multilingual support](https://docs.anthropic.com/docs/en/build-with-claude/multilingual-support)
+[Token counting](https://docs.anthropic.com/docs/en/build-with-claude/token-counting)
+[Embeddings](https://docs.anthropic.com/docs/en/build-with-claude/embeddings)
+[Vision](https://docs.anthropic.com/docs/en/build-with-claude/vision)
+[PDF support](https://docs.anthropic.com/docs/en/build-with-claude/pdf-support)
+[Files API](https://docs.anthropic.com/docs/en/build-with-claude/files)
+[Search results](https://docs.anthropic.com/docs/en/build-with-claude/search-results)
+[Structured outputs](https://docs.anthropic.com/docs/en/build-with-claude/structured-outputs)
+[Overview](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/overview)
+[How to implement tool use](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/implement-tool-use)
+[Fine-grained tool streaming](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/fine-grained-tool-streaming)
+[Bash tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/bash-tool)
+[Code execution tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/code-execution-tool)
+[Programmatic tool calling](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling)
+[Computer use tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/computer-use-tool)
+[Text editor tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/text-editor-tool)
+[Web fetch tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/web-fetch-tool)
+[Web search tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/web-search-tool)
+[Memory tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/memory-tool)
+
+[Tool search tool](https://docs.anthropic.com/docs/en/agents-and-tools/tool-use/tool-search-tool)
+[Overview](https://docs.anthropic.com/docs/en/agents-and-tools/agent-skills/overview)
+[Quickstart](https://docs.anthropic.com/docs/en/agents-and-tools/agent-skills/quickstart)
+[Best practices](https://docs.anthropic.com/docs/en/agents-and-tools/agent-skills/best-practices)
+[Skills for enterprise](https://docs.anthropic.com/docs/en/agents-and-tools/agent-skills/enterprise)
+[Using Skills with the API](https://docs.anthropic.com/docs/en/build-with-claude/skills-guide)
+[Overview](https://docs.anthropic.com/docs/en/agent-sdk/overview)
+[Quickstart](https://docs.anthropic.com/docs/en/agent-sdk/quickstart)
+[TypeScript SDK](https://docs.anthropic.com/docs/en/agent-sdk/typescript)
+[TypeScript V2 (preview)](https://docs.anthropic.com/docs/en/agent-sdk/typescript-v2-preview)
+[Python SDK](https://docs.anthropic.com/docs/en/agent-sdk/python)
+[Migration Guide](https://docs.anthropic.com/docs/en/agent-sdk/migration-guide)
+[MCP connector](https://docs.anthropic.com/docs/en/agents-and-tools/mcp-connector)
+[Remote MCP servers](https://docs.anthropic.com/docs/en/agents-and-tools/remote-mcp-servers)
+[Amazon Bedrock](https://docs.anthropic.com/docs/en/build-with-claude/claude-on-amazon-bedrock)
+[Microsoft Foundry](https://docs.anthropic.com/docs/en/build-with-claude/claude-in-microsoft-foundry)
+[Vertex AI](https://docs.anthropic.com/docs/en/build-with-claude/claude-on-vertex-ai)
+[Overview](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/overview)
+[Prompt generator](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/prompt-generator)
+[Use prompt templates](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/prompt-templates-and-variables)
+[Prompt improver](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/prompt-improver)
+[Be clear and direct](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/be-clear-and-direct)
+[Use examples (multishot prompting)](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/multishot-prompting)
+[Let Claude think (CoT)](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/chain-of-thought)
+[Use XML tags](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/use-xml-tags)
+[Give Claude a role (system prompts)](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/system-prompts)
+[Chain complex prompts](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/chain-prompts)
+[Long context tips](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/long-context-tips)
+[Extended thinking tips](https://docs.anthropic.com/docs/en/build-with-claude/prompt-engineering/extended-thinking-tips)
+[Define success criteria](https://docs.anthropic.com/docs/en/test-and-evaluate/define-success)
+[Develop test cases](https://docs.anthropic.com/docs/en/test-and-evaluate/develop-tests)
+[Using the Evaluation Tool](https://docs.anthropic.com/docs/en/test-and-evaluate/eval-tool)
+[Reducing latency](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-latency)
+[Reduce hallucinations](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations)
+[Increase output consistency](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/increase-consistency)
+[Mitigate jailbreaks](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks)
+[Streaming refusals](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/handle-streaming-refusals)
+[Reduce prompt leak](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-prompt-leak)
+[Keep Claude in character](https://docs.anthropic.com/docs/en/test-and-evaluate/strengthen-guardrails/keep-claude-in-character)
+[Admin API overview](https://docs.anthropic.com/docs/en/build-with-claude/administration-api)
+[Data residency](https://docs.anthropic.com/docs/en/build-with-claude/data-residency)
+[Workspaces](https://docs.anthropic.com/docs/en/build-with-claude/workspaces)
+[Usage and Cost API](https://docs.anthropic.com/docs/en/build-with-claude/usage-cost-api)
+[Claude Code Analytics API](https://docs.anthropic.com/docs/en/build-with-claude/claude-code-analytics-api)
+
+[Zero Data Retention](https://docs.anthropic.com/docs/en/build-with-claude/zero-data-retention)
+[Console](https://docs.anthropic.com/)
+[Log in](https://docs.anthropic.com/login)
+
+### Solutions
+- [AI agents](https://claude.com/solutions/agents)
+- [Code modernization](https://claude.com/solutions/code-modernization)
+- [Coding](https://claude.com/solutions/coding)
+- [Customer support](https://claude.com/solutions/customer-support)
+- [Education](https://claude.com/solutions/education)
+- [Financial services](https://claude.com/solutions/financial-services)
+- [Government](https://claude.com/solutions/government)
+- [Life sciences](https://claude.com/solutions/life-sciences)
+[AI agents](https://claude.com/solutions/agents)
+[Code modernization](https://claude.com/solutions/code-modernization)
+[Coding](https://claude.com/solutions/coding)
+[Customer support](https://claude.com/solutions/customer-support)
+[Education](https://claude.com/solutions/education)
+[Financial services](https://claude.com/solutions/financial-services)
+[Government](https://claude.com/solutions/government)
+[Life sciences](https://claude.com/solutions/life-sciences)
+
+### Partners
+- [Amazon Bedrock](https://claude.com/partners/amazon-bedrock)
+- [Google Cloud's Vertex AI](https://claude.com/partners/google-cloud-vertex-ai)
+[Amazon Bedrock](https://claude.com/partners/amazon-bedrock)
+[Google Cloud's Vertex AI](https://claude.com/partners/google-cloud-vertex-ai)
+
+### Learn
+- [Blog](https://claude.com/blog)
+- [Catalog](https://claude.ai/catalog/artifacts)
+- [Courses](https://www.anthropic.com/learn)
+- [Use cases](https://claude.com/resources/use-cases)
+- [Connectors](https://claude.com/partners/mcp)
+- [Customer stories](https://claude.com/customers)
+- [Engineering at Anthropic](https://www.anthropic.com/engineering)
+- [Events](https://www.anthropic.com/events)
+- [Powered by Claude](https://claude.com/partners/powered-by-claude)
+- [Service partners](https://claude.com/partners/services)
+- [Startups program](https://claude.com/programs/startups)
+[Blog](https://claude.com/blog)
+[Catalog](https://claude.ai/catalog/artifacts)
+[Courses](https://www.anthropic.com/learn)
+[Use cases](https://claude.com/resources/use-cases)
+[Connectors](https://claude.com/partners/mcp)
+[Customer stories](https://claude.com/customers)
+[Engineering at Anthropic](https://www.anthropic.com/engineering)
+[Events](https://www.anthropic.com/events)
+[Powered by Claude](https://claude.com/partners/powered-by-claude)
+[Service partners](https://claude.com/partners/services)
+[Startups program](https://claude.com/programs/startups)
+
+### Company
+- [Anthropic](https://www.anthropic.com/company)
+- [Careers](https://www.anthropic.com/careers)
+- [Economic Futures](https://www.anthropic.com/economic-futures)
+- [Research](https://www.anthropic.com/research)
+- [News](https://www.anthropic.com/news)
+- [Responsible Scaling Policy](https://www.anthropic.com/news/announcing-our-updated-responsible-scaling-policy)
+- [Security and compliance](https://trust.anthropic.com)
+- [Transparency](https://www.anthropic.com/transparency)
+[Anthropic](https://www.anthropic.com/company)
+[Careers](https://www.anthropic.com/careers)
+[Economic Futures](https://www.anthropic.com/economic-futures)
+[Research](https://www.anthropic.com/research)
+[News](https://www.anthropic.com/news)
+[Responsible Scaling Policy](https://www.anthropic.com/news/announcing-our-updated-responsible-scaling-policy)
+[Security and compliance](https://trust.anthropic.com)
+[Transparency](https://www.anthropic.com/transparency)
+
+### Learn
+- [Blog](https://claude.com/blog)
+- [Catalog](https://claude.ai/catalog/artifacts)
+- [Courses](https://www.anthropic.com/learn)
+- [Use cases](https://claude.com/resources/use-cases)
+- [Connectors](https://claude.com/partners/mcp)
+- [Customer stories](https://claude.com/customers)
+- [Engineering at Anthropic](https://www.anthropic.com/engineering)
+- [Events](https://www.anthropic.com/events)
+- [Powered by Claude](https://claude.com/partners/powered-by-claude)
+- [Service partners](https://claude.com/partners/services)
+- [Startups program](https://claude.com/programs/startups)
+[Blog](https://claude.com/blog)
+[Catalog](https://claude.ai/catalog/artifacts)
+[Courses](https://www.anthropic.com/learn)
+[Use cases](https://claude.com/resources/use-cases)
+[Connectors](https://claude.com/partners/mcp)
+[Customer stories](https://claude.com/customers)
+[Engineering at Anthropic](https://www.anthropic.com/engineering)
+[Events](https://www.anthropic.com/events)
+[Powered by Claude](https://claude.com/partners/powered-by-claude)
+[Service partners](https://claude.com/partners/services)
+[Startups program](https://claude.com/programs/startups)
+
+### Help and security
+- [Availability](https://www.anthropic.com/supported-countries)
+- [Status](https://status.claude.com/)
+- [Support](https://support.claude.com/)
+- [Discord](https://www.anthropic.com/discord)
+[Availability](https://www.anthropic.com/supported-countries)
+[Status](https://status.claude.com/)
+[Support](https://support.claude.com/)
+[Discord](https://www.anthropic.com/discord)
+
+### Terms and policies
+- [Privacy policy](https://www.anthropic.com/legal/privacy)
+- [Responsible disclosure policy](https://www.anthropic.com/responsible-disclosure-policy)
+- [Terms of service: Commercial](https://www.anthropic.com/legal/commercial-terms)
+- [Terms of service: Consumer](https://www.anthropic.com/legal/consumer-terms)
+- [Usage policy](https://www.anthropic.com/legal/aup)
+[Privacy policy](https://www.anthropic.com/legal/privacy)
+[Responsible disclosure policy](https://www.anthropic.com/responsible-disclosure-policy)
+[Terms of service: Commercial](https://www.anthropic.com/legal/commercial-terms)
+[Terms of service: Consumer](https://www.anthropic.com/legal/consumer-terms)
+[Usage policy](https://www.anthropic.com/legal/aup)
+
+## Establish key criteria
+When choosing a Claude model, we recommend first evaluating these factors:
+- Capabilities: What specific features or capabilities will you need the model to have in order to meet your needs?
+- Speed: How quickly does the model need to respond in your application? For Claude Opus 4.6, [fast mode](https://docs.anthropic.com/docs/en/build-with-claude/fast-mode) (research preview) can provide up to 2.5x higher output speed at premium pricing.
+- Cost: What's your budget for both development and production usage?
+[fast mode](https://docs.anthropic.com/docs/en/build-with-claude/fast-mode)
+Knowing these answers in advance will make narrowing down and deciding which model to use much easier.
+
+## Choose the best model to start with
+There are two general approaches you can use to start testing which Claude model best works for your needs.
+
+### Option 1: Start with a fast, cost-effective model
+For many applications, starting with a faster, more cost-effective model like Claude Haiku 4.5 can be the optimal approach:
+1. Begin implementation with Claude Haiku 4.5
+2. Test your use case thoroughly
+3. Evaluate if performance meets your requirements
+4. Upgrade only if necessary for specific capability gaps
+This approach allows for quick iteration, lower development costs, and is often sufficient for many common applications. This approach is best for:
+- Initial prototyping and development
+- Applications with tight latency requirements
+- Cost-sensitive implementations
+- High-volume, straightforward tasks
+
+### Option 2: Start with the most capable model
+For complex tasks where intelligence and advanced capabilities are paramount, you may want to start with the most capable model and then consider optimizing to more efficient models down the line:
+1. Implement with Claude Opus 4.6
+2. Optimize your prompts for these models
+3. Evaluate if performance meets your requirements
+4. Consider increasing efficiency by downgrading intelligence over time with greater workflow optimization
+This approach is best for:
+- Complex reasoning tasks
+- Scientific or mathematical applications
+- Tasks requiring nuanced understanding
+- Applications where accuracy outweighs cost considerations
+- Advanced coding
+
+## Decide whether to upgrade or change models
+To determine if you need to upgrade or change models, you should:
+1. [Create benchmark tests](https://docs.anthropic.com/docs/en/test-and-evaluate/develop-tests) specific to your use case - having a good evaluation set is the most important step in the process
+2. Test with your actual prompts and data
+3. Compare performance across models for:
+
+Accuracy of responses
+Response quality
+Handling of edge cases
+
+
+4. Accuracy of responses
+5. Response quality
+6. Handling of edge cases
+7. Weigh performance and cost tradeoffs
+[Create benchmark tests](https://docs.anthropic.com/docs/en/test-and-evaluate/develop-tests)
+- Accuracy of responses
+- Response quality
+- Handling of edge cases
+
+## Next steps
+[Model comparison chartSee detailed specifications and pricing for the latest Claude models](https://docs.anthropic.com/docs/en/about-claude/models/overview)
+See detailed specifications and pricing for the latest Claude models
+[What's new in Claude 4.6Explore the latest improvements in Claude 4.6 models](https://docs.anthropic.com/docs/en/about-claude/models/whats-new-claude-4-6)
+Explore the latest improvements in Claude 4.6 models
+[Start buildingGet started with your first API call](https://docs.anthropic.com/docs/en/get-started)
+Get started with your first API call
+Was this page helpful?
+- [Establish key criteria](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#establish-key-criteria)
+- [Choose the best model to start with](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#choose-the-best-model-to-start-with)
+- [Option 1: Start with a fast, cost-effective model](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#option-1-start-with-a-fast-cost-effective-model)
+- [Option 2: Start with the most capable model](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#option-2-start-with-the-most-capable-model)
+- [Model selection matrix](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#model-selection-matrix)
+- [Decide whether to upgrade or change models](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#decide-whether-to-upgrade-or-change-models)
+- [Next steps](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#next-steps)
+[Establish key criteria](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#establish-key-criteria)
+[Choose the best model to start with](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#choose-the-best-model-to-start-with)
+[Option 1: Start with a fast, cost-effective model](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#option-1-start-with-a-fast-cost-effective-model)
+[Option 2: Start with the most capable model](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#option-2-start-with-the-most-capable-model)
+[Model selection matrix](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#model-selection-matrix)
+[Decide whether to upgrade or change models](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#decide-whether-to-upgrade-or-change-models)
+[Next steps](https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model#next-steps)

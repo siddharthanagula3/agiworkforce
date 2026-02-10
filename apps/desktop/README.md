@@ -1,5 +1,7 @@
 # AGI Workforce Desktop
 
+> **Last Updated:** 2026-02-10
+
 > AI-powered desktop application for autonomous task completion
 
 The main AGI Workforce application built with Tauri (Rust + React).
@@ -87,9 +89,10 @@ cd ../.. && pnpm build:desktop
 
 ## Features
 
-- **Chat Interface**: Natural language AI interaction
+- **Chat Interface**: Natural language AI interaction with reasoning transparency
 - **Agent Mode**: Autonomous task completion
-- **Browser Automation**: Web task automation
+- **Managed Cloud**: Secure, keyless access to LLMs
+- **Browser Automation**: Advanced web task automation with profiles and proxies
 - **Workflow Engine**: Visual automation flows
 - **MCP Integration**: Extensible tool ecosystem
 - **Multi-model Support**: OpenAI (GPT-5.2), Anthropic (Claude 4.6 Opus), Google (Gemini 3), DeepSeek, xAI (Grok 4.1), Ollama, Qwen, Moonshot, Perplexity

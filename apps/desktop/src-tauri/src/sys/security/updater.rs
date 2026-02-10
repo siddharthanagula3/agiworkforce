@@ -187,15 +187,19 @@ impl UpdateSecurityManager {
         }
 
         // API is at agiworkforce.com; also allow GitHub release assets
-        let allowed_domains = vec!["agiworkforce.com", "releases.agiworkforce.com", "github.com"];
+        let allowed_domains = vec![
+            "agiworkforce.com",
+            "releases.agiworkforce.com",
+            "github.com",
+        ];
 
         let url_parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
 
         let domain = url_parsed.host_str().ok_or("URL has no host")?;
 
-        let allowed = allowed_domains.iter().any(|d| {
-            domain == *d || domain.ends_with(&format!(".{}", d))
-        });
+        let allowed = allowed_domains
+            .iter()
+            .any(|d| domain == *d || domain.ends_with(&format!(".{}", d)));
         if !allowed {
             return Err(format!(
                 "Update domain '{}' is not in allowed list: {:?}",
