@@ -3,6 +3,25 @@ import 'server-only';
 import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
 import { logger } from '@/lib/logger';
 
+/**
+ * Map messages to OpenAI-compatible format, preserving tool_calls and tool_call_id
+ */
+function mapMessages(messages: LLMProviderRequest['messages']) {
+  return messages.map((msg) => {
+    const mapped: Record<string, unknown> = {
+      role: msg.role,
+      content: msg.content,
+    };
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      mapped.tool_calls = msg.tool_calls;
+    }
+    if (msg.tool_call_id) {
+      mapped.tool_call_id = msg.tool_call_id;
+    }
+    return mapped;
+  });
+}
+
 export class XAIProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
     return 'https://api.x.ai/v1';
@@ -11,16 +30,21 @@ export class XAIProvider extends BaseLLMProvider {
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
     const url = `${this.baseUrl}/chat/completions`;
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
+      messages: mapMessages(request.messages),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(request.max_tokens !== undefined && { max_tokens: request.max_tokens }),
       ...(request.stream !== undefined && { stream: request.stream }),
     };
+
+    // Include tool definitions if provided
+    if (request.tools && request.tools.length > 0) {
+      body.tools = request.tools;
+      if (request.tool_choice !== undefined) {
+        body.tool_choice = request.tool_choice;
+      }
+    }
 
     try {
       const response = await fetch(url, {
@@ -92,6 +116,9 @@ export class XAIProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason,
+        // Extract tool_calls from response (OpenAI format)
+        ...(message?.tool_calls &&
+          message.tool_calls.length > 0 && { tool_calls: message.tool_calls }),
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'XAI request failed');
@@ -104,15 +131,20 @@ export class XAIProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
+      messages: mapMessages(request.messages),
       stream: true,
     };
 
     if (request.temperature !== undefined) body.temperature = request.temperature;
     if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+
+    // Include tool definitions if provided
+    if (request.tools && request.tools.length > 0) {
+      body.tools = request.tools;
+      if (request.tool_choice !== undefined) {
+        body.tool_choice = request.tool_choice;
+      }
+    }
 
     const response = await fetch(url, {
       method: 'POST',

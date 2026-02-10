@@ -329,7 +329,7 @@ vi.mock('../../../stores/modelStore', () => {
     selectedModel: 'gpt-4o',
     selectedProvider: 'managed_cloud',
     thinkingModeEnabled: false,
-    availableModels: ['gpt-4o', 'claude-3-5-sonnet'],
+    availableModels: ['gpt-4o', 'claude-sonnet-4-5'],
   };
 
   return {

@@ -114,11 +114,25 @@ impl AGICore {
         let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
         let resource_manager = Arc::new(ResourceManager::new(config.resource_limits.clone())?);
 
+        // Initialize learning system first as it is needed for reflection
+        let learning = Arc::new(LearningSystem::new(
+            config.enable_learning,
+            config.enable_self_improvement,
+        )?);
+
         let planner = Arc::new(AGIPlanner::new(
             router.clone(),
             tool_registry.clone(),
             knowledge_base.clone(),
         )?);
+
+        // Create reflection engine EARLY so we can pass it to executor
+        let reflection_engine = Arc::new(ReflectionEngine::new(
+            router.clone(),
+            knowledge_base.clone(),
+            learning.clone(),
+        )?);
+
         // Create a shared ChangeTracker for undo capability
         let change_tracker = Arc::new(ChangeTracker::new());
 
@@ -128,6 +142,7 @@ impl AGICore {
             automation.clone(),
             router.clone(),
             app_handle.clone(),
+            Some(reflection_engine.clone()),
             Some(change_tracker),
         )?);
         let memory = Arc::new(AGIMemory::new()?);
@@ -139,11 +154,12 @@ impl AGICore {
         tool_registry.register_all_tools()?;
 
         // Create reflection engine for multi-turn reasoning
-        let reflection_engine = Arc::new(ReflectionEngine::new(
-            router.clone(),
-            knowledge_base.clone(),
-            learning.clone(),
-        )?);
+        // MOVED UP to line 117 to be available for executor
+        // let reflection_engine = Arc::new(ReflectionEngine::new(
+        //    router.clone(),
+        //    knowledge_base.clone(),
+        //    learning.clone(),
+        // )?);
 
         Ok(Self {
             config,
@@ -203,7 +219,20 @@ impl AGICore {
         // Create a shared ChangeTracker for undo capability
         let change_tracker = Arc::new(ChangeTracker::new());
 
-        let executor = Arc::new(AGIExecutor::with_process_reasoning(
+        // Initialize learning system first
+        let learning = Arc::new(LearningSystem::new(
+            config.enable_learning,
+            config.enable_self_improvement,
+        )?);
+
+        // Create reflection engine EARLY
+        let reflection_engine = Arc::new(ReflectionEngine::new(
+            router.clone(),
+            knowledge_base.clone(),
+            learning.clone(),
+        )?);
+
+        let encoder = crate::core::agi::executor::AGIExecutor::with_process_reasoning(
             tool_registry.clone(),
             resource_manager.clone(),
             automation.clone(),
@@ -211,23 +240,18 @@ impl AGICore {
             app_handle.clone(),
             process_reasoning.clone(),
             outcome_tracker.clone(),
+            Some(reflection_engine.clone()),
             Some(change_tracker),
-        )?);
+        );
+
+        let executor = Arc::new(encoder?);
 
         let memory = Arc::new(AGIMemory::new()?);
-        let learning = Arc::new(LearningSystem::new(
-            config.enable_learning,
-            config.enable_self_improvement,
-        )?);
+        // learning already initialized above
 
         tool_registry.register_all_tools()?;
 
-        // Create reflection engine for multi-turn reasoning
-        let reflection_engine = Arc::new(ReflectionEngine::new(
-            router.clone(),
-            knowledge_base.clone(),
-            learning.clone(),
-        )?);
+        // Reflection engine already created above
 
         Ok(Self {
             config,

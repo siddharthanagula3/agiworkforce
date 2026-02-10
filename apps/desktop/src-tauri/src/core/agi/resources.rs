@@ -67,6 +67,16 @@ impl ResourceManager {
             && (usage.network_usage_mbps + resources.network_mb) <= self.limits.network_mbps;
 
         if can_reserve {
+            let mut reservations = self
+                .reservations
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Resource reservations lock poisoned: {}", e))?;
+
+            // Create a unique ID for this reservation
+            let reservation_id = uuid::Uuid::new_v4().to_string();
+            reservations.insert(reservation_id, resources.clone());
+
+            // Update current usage immediately to reflect reservation
             usage.cpu_usage_percent += resources.cpu_percent;
             usage.memory_usage_mb += resources.memory_mb;
             usage.network_usage_mbps += resources.network_mb;
@@ -80,6 +90,9 @@ impl ResourceManager {
             .current_usage
             .lock()
             .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
+
+        // We're just decrementing usage here, but in a real system we'd remove by ID
+        // For now, this matches the simplistic implementation in reserve_resources
         usage.cpu_usage_percent = (usage.cpu_usage_percent - resources.cpu_percent).max(0.0);
         usage.memory_usage_mb = usage.memory_usage_mb.saturating_sub(resources.memory_mb);
         usage.network_usage_mbps = (usage.network_usage_mbps - resources.network_mb).max(0.0);

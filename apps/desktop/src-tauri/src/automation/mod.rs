@@ -28,7 +28,6 @@ use mac::inspector_impl as platform_impl;
 pub use platform_impl::InspectorService;
 
 use once_cell::sync::Lazy;
-use std::sync::Mutex;
 
 use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator};
 
@@ -184,34 +183,43 @@ pub type PlatformDriver = mac::service::MacAutomationService;
 #[cfg(not(any(windows, target_os = "macos")))]
 pub type PlatformDriver = uia::UIAutomationService;
 
+// use once_cell::sync::Lazy; // Defined at line 30
+use std::sync::{Arc, Mutex as StdMutex};
+// use tokio::sync::Mutex; // Defined at line 189 but conflict with std::sync::Mutex if not qualified
+// use tokio::sync::Mutex as TokioMutex; // Unused
+
+// use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator}; // Defined at line 33
+
 pub struct AutomationService {
     pub native: PlatformDriver,
-    pub keyboard: Mutex<KeyboardSimulator>,
-    pub mouse: Mutex<MouseSimulator>,
-    pub clipboard: ClipboardManager,
+    pub keyboard: tokio::sync::Mutex<KeyboardSimulator>,
+    pub mouse: tokio::sync::Mutex<MouseSimulator>,
+    pub clipboard: tokio::sync::Mutex<ClipboardManager>,
 }
-
 impl AutomationService {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
             native: PlatformDriver::new()?,
-            keyboard: Mutex::new(KeyboardSimulator::new()?),
-            mouse: Mutex::new(MouseSimulator::new()?),
-            clipboard: ClipboardManager::new()?,
+            keyboard: tokio::sync::Mutex::new(KeyboardSimulator::new()?),
+            mouse: tokio::sync::Mutex::new(MouseSimulator::new()?),
+            clipboard: tokio::sync::Mutex::new(ClipboardManager::new()?),
         })
     }
 }
 
-pub static AUTOMATION_SINGLETON: Lazy<Mutex<Option<AutomationService>>> =
-    Lazy::new(|| Mutex::new(None));
+pub static AUTOMATION_SINGLETON: Lazy<StdMutex<Option<Arc<AutomationService>>>> =
+    Lazy::new(|| StdMutex::new(None));
 
-pub fn global_service() -> anyhow::Result<std::sync::MutexGuard<'static, Option<AutomationService>>>
-{
+pub fn global_service() -> anyhow::Result<Arc<AutomationService>> {
     let mut guard = AUTOMATION_SINGLETON
         .lock()
         .map_err(|e| anyhow::anyhow!("automation mutex poisoned: {}", e))?;
-    if guard.is_none() {
-        *guard = Some(AutomationService::new()?);
+
+    if let Some(service) = guard.as_ref() {
+        return Ok(service.clone());
     }
-    Ok(guard)
+
+    let service = Arc::new(AutomationService::new()?);
+    *guard = Some(service.clone());
+    Ok(service)
 }

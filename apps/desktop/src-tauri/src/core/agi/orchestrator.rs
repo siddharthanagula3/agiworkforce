@@ -265,6 +265,39 @@ impl AgentOrchestrator {
         Ok(agent_ids)
     }
 
+    pub async fn get_agent_result(&self, id: &str) -> Option<AgentResult> {
+        let agents = self.agents.lock().await;
+
+        if let Some(agent) = agents.get(id) {
+            let status = &agent.status;
+
+            // Extract the result if available (borrowed logic from wait_for_all)
+            let final_output = if let Some(ctx) = agent.core.get_goal_status(&agent.goal.id) {
+                ctx.tool_results.last().map(|tr| tr.result.clone())
+            } else {
+                None
+            };
+
+            let result = AgentResult {
+                agent_id: id.to_string(),
+                success: status.status == AgentState::Completed,
+                result: final_output,
+                error: status.error.clone(),
+                execution_time_ms: if let (Some(start), Some(end)) =
+                    (status.started_at, status.completed_at)
+                {
+                    ((end - start) * 1000) as u64
+                } else {
+                    0
+                },
+            };
+
+            return Some(result);
+        }
+
+        None
+    }
+
     pub async fn get_agent_status(&self, id: &str) -> Option<AgentStatus> {
         let agents = self.agents.lock().await;
         agents.get(id).map(|agent| {
