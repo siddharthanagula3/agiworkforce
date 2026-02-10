@@ -1,5 +1,7 @@
 # AGI Workforce
 
+> **Last Updated:** 2026-02-10
+
 [![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/siddhartha/agiworkforce)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
@@ -41,6 +43,7 @@ AGI Workforce figures out the steps needed and does them without asking you for 
 - **Multi-Provider Freedom**: Use OpenAI, Anthropic, Google, DeepSeek, xAI, or local models
 - **True Automation**: AI that can actually do things - browse the web, run commands, manage files
 - **Privacy-First**: Your data stays on your machine with local SQLite storage
+- **Managed Cloud Security**: Zero-trust architecture with Vercel-hosted API keys - no local secrets required
 - **Enterprise-Ready**: Built with security, audit logging, and team collaboration in mind
 - **Native Performance**: Rust-powered backend delivers blazing-fast, memory-efficient operation
 
@@ -102,6 +105,7 @@ When you ask AGI Workforce to do something:
 - **Vision & Multimodal**: Upload images for analysis, screenshots for debugging, documents for processing
 - **Conversation Memory**: Intelligent context management that remembers your conversation history
 - **Cost Tracking**: Real-time cost calculation showing exactly what each conversation costs
+- **Transparent Reasoning**: "Thinking..." states show you exactly how the AI analyzes problems, plans steps, and executes tools in real-time
 
 ### 2. Autonomous Task Execution
 
@@ -127,6 +131,7 @@ AGI Workforce can work with files on your computer:
 ### 4. Web Browsing & Automation
 
 - **Semantic Navigation**: Describe what you want ("fill out the contact form")
+- **Advanced Control**: Full support for custom profiles, proxies, and multi-tab management
 - **Web Scraping**: Extract structured data from websites
 - **Form Filling**: Automatically complete web forms
 - **Screenshot Analysis**: Capture and analyze web page content
@@ -375,6 +380,9 @@ pnpm build                    # Build all packages
 ### v1.0.9 (Current)
 
 - Implemented 17 missing tool handlers (file*list, memory*\_, browser\_\_, api_download)
+- **New Feature**: Managed Cloud Provider for secure, keyless API access
+- **New Feature**: "Thinking" UI state for transparent reasoning visibility
+- **Enhanced**: Browser automation with profile and proxy support
 - Complete tool feedback loop verification
 - Chat-first autonomous architecture with undo system
 - Latest 2026 model support (GPT-5.2, Gemini 3, Claude Opus 4.5)

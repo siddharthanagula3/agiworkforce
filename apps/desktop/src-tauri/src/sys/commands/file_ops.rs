@@ -351,9 +351,12 @@ async fn _confirm_dangerous_operation(
     paths: &[String],
     app_handle: &AppHandle,
 ) -> Result<bool, String> {
-    if paths.len() >= 10 {
+    // Dangerous if bulk operation OR recursive delete of a directory
+    let is_dangerous = paths.len() >= 10 || operation == "recursive_delete";
+
+    if is_dangerous {
         warn!(
-            "Dangerous operation detected: {} on {} files",
+            "Dangerous operation detected: {} on {} paths",
             operation,
             paths.len()
         );
@@ -368,6 +371,10 @@ async fn _confirm_dangerous_operation(
             .emit("dangerous-operation", event)
             .map_err(|e| format!("Failed to emit dangerous operation event: {}", e))?;
 
+        // Return false to block the operation until user approves (frontend should handle this)
+        // In this implementation, we block and fail, expecting frontend to retry with a "force" flag
+        // or we expect a separate confirmation flow.
+        // For now, we return false which will cause the caller to abort.
         return Ok(false);
     }
 
@@ -867,6 +874,11 @@ pub async fn dir_delete(
 
     if recursive {
         warn!("Recursive directory deletion requested for: {}", path);
+        if !_confirm_dangerous_operation("recursive_delete", &[path.clone()], &app).await? {
+            return Err(
+                "Operation blocked: User confirmation required for recursive delete".to_string(),
+            );
+        }
     }
 
     if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {

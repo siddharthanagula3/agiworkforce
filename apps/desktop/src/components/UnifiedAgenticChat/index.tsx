@@ -757,6 +757,46 @@ export const UnifiedAgenticChat: React.FC<{
           streaming: boolean;
         }>('chat:tool-calls', ({ payload }) => {
           console.log('[UnifiedAgenticChat] Tool calls detected:', payload.tool_calls.length);
+
+          // CHT-009 fix: Update message metadata so MessageBubble renders the ToolCallCard
+          // Find the target message
+          const state = useUnifiedChatStore.getState();
+          // Try session map first, then payload message_id if available (though tool-calls payload doesn't have message_id?)
+          // Wait, payload doesn't have message_id! It has conversation_id.
+          // We must rely on activeStreamSessionsRef or finding the last assistant message.
+
+          let targetMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
+
+          if (!targetMessageId) {
+            // Fallback: find the last streaming assistant message
+            const lastStreaming = state.messages
+              .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
+              .pop();
+            if (lastStreaming) targetMessageId = lastStreaming.id;
+          }
+
+          // If we found a target message, update its metadata
+          if (targetMessageId) {
+            const firstTool = payload.tool_calls[0];
+            if (firstTool) {
+              console.log(
+                `[UnifiedAgenticChat] Updating message ${targetMessageId} with tool metadata:`,
+                firstTool.name,
+              );
+              state.updateMessage(targetMessageId, {
+                metadata: {
+                  // key fields for MessageBubble to detect tool call
+                  tool: firstTool.name,
+                  tool_call: firstTool.id,
+                  name: firstTool.name,
+                  status: 'running',
+                  // also keep streaming true so it shows as active
+                  streaming: true,
+                },
+              });
+            }
+          }
+
           // Add to action trail to show which tools are being called
           for (const tc of payload.tool_calls) {
             let parsedArguments: Record<string, unknown> = {};
@@ -769,7 +809,7 @@ export const UnifiedAgenticChat: React.FC<{
             }
 
             upsertToolArtifact(payload.conversation_id, tc.id, {
-              toolName: tc.name,
+              toolName: tc.name, // Use 'toolName' consistently with upsertToolArtifact logic
               type: toolNameToArtifactType(tc.name),
               title: toolNameToTitle(tc.name),
               status: 'running',

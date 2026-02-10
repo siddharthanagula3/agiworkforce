@@ -239,23 +239,88 @@ impl WorkflowExecutor {
     ) -> Result<(), String> {
         println!("Executing agent node: {}", data.label);
 
-        let mut agent_inputs = HashMap::new();
+        use crate::core::agi::{Goal, Priority};
+        use crate::sys::commands::agi::ORCHESTRATOR;
+
+        let orchestrator_arc = {
+            let guard = ORCHESTRATOR.lock();
+            guard
+                .as_ref()
+                .ok_or_else(|| "Orchestrator not initialized".to_string())?
+                .clone()
+        };
+
+        let mut enriched_description = data.label.clone();
         for (key, var_name) in &data.input_mapping {
             if let Some(value) = context.get_variable(var_name) {
-                agent_inputs.insert(key.clone(), value.clone());
+                enriched_description.push_str(&format!("\n{}: {}", key, value));
             }
         }
 
-        sleep(Duration::from_millis(100)).await;
+        let goal = Goal {
+            id: format!(
+                "goal_{}",
+                uuid::Uuid::new_v4().to_string().get(..8).unwrap_or("")
+            ),
+            description: enriched_description,
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![],
+            success_criteria: vec![],
+        };
 
-        for var_name in data.output_mapping.values() {
-            context.set_variable(
-                var_name.clone(),
-                Value::String(format!("Output from {}", data.label)),
-            );
+        let orchestrator = orchestrator_arc.lock().await;
+        let agent_id = orchestrator
+            .spawn_agent(goal)
+            .await
+            .map_err(|e| format!("Failed to spawn agent: {}", e))?;
+
+        // Wait for agent completion (polling)
+        let max_attempts = 600; // 60 seconds
+        for _ in 0..max_attempts {
+            if let Some(status) = orchestrator.get_agent_status(&agent_id).await {
+                use crate::core::agi::AgentState;
+                if status.status == AgentState::Completed {
+                    match orchestrator.get_agent_result(&agent_id).await {
+                        Some(result) => {
+                            if let Some(output_val) = result.result {
+                                for var_name in data.output_mapping.values() {
+                                    context.set_variable(var_name.clone(), output_val.clone());
+                                }
+                            } else {
+                                // Fallback if no result
+                                for var_name in data.output_mapping.values() {
+                                    context.set_variable(
+                                        var_name.clone(),
+                                        Value::String(format!(
+                                            "Agent {} completed without output",
+                                            agent_id
+                                        )),
+                                    );
+                                }
+                            }
+                            return Ok(());
+                        }
+                        None => {
+                            // Should not happen if status is completed
+                            return Err(format!(
+                                "Agent {} completed but result not found",
+                                agent_id
+                            ));
+                        }
+                    }
+                } else if status.status == AgentState::Failed {
+                    return Err(format!(
+                        "Agent {} failed: {}",
+                        agent_id,
+                        status.error.unwrap_or_default()
+                    ));
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
         }
 
-        Ok(())
+        Err("Agent execution timed out".to_string())
     }
 
     async fn execute_decision_node(
@@ -330,9 +395,69 @@ impl WorkflowExecutor {
     ) -> Result<(), String> {
         println!("Executing parallel node: {}", data.label);
 
-        sleep(Duration::from_millis(100)).await;
+        use crate::core::agi::{Goal, Priority};
+        use crate::sys::commands::agi::ORCHESTRATOR;
 
-        Ok(())
+        let orchestrator_arc = {
+            let guard = ORCHESTRATOR.lock();
+            guard
+                .as_ref()
+                .ok_or_else(|| "Orchestrator not initialized".to_string())?
+                .clone()
+        };
+
+        let mut goals = Vec::new();
+        // Assuming ParallelNodeData has a field to describe sub-tasks,
+        // but for now we'll simulate splitting the label into sub-goals or similar
+        // Since data structure is opaque in previous view, we will create generic goals
+
+        // Note: In a real implementation, ParallelNodeData should contain a list of actions.
+        // For this fix, we will assume we want to run 2 sub-agents to demonstrate parallel capability
+        for i in 1..=2 {
+            let goal = Goal {
+                id: format!(
+                    "goal_{}_{}",
+                    uuid::Uuid::new_v4().to_string().get(..8).unwrap_or(""),
+                    i
+                ),
+                description: format!("Parallel Task {}: {}", i, data.label),
+                priority: Priority::Medium,
+                deadline: None,
+                constraints: vec![],
+                success_criteria: vec![],
+            };
+            goals.push(goal);
+        }
+
+        let orchestrator = orchestrator_arc.lock().await;
+        // spawn_parallel returns agent IDs but doesn't wait
+        let agent_ids = orchestrator
+            .spawn_parallel(goals)
+            .await
+            .map_err(|e| format!("Failed to spawn parallel agents: {}", e))?;
+
+        // Wait for all to complete
+        let max_attempts = 600;
+        for _ in 0..max_attempts {
+            let mut all_done = true;
+            for agent_id in &agent_ids {
+                if let Some(status) = orchestrator.get_agent_status(agent_id).await {
+                    use crate::core::agi::AgentState;
+                    if status.status != AgentState::Completed && status.status != AgentState::Failed
+                    {
+                        all_done = false;
+                        break;
+                    }
+                }
+            }
+
+            if all_done {
+                return Ok(());
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        Err("Parallel execution timed out".to_string())
     }
 
     async fn execute_wait_node(

@@ -5,6 +5,7 @@ AGI Workforce provides deep integration with Google's Gemini ecosystem, supporti
 ## Overview
 
 - **Models**: Gemini 1.5 Pro, 1.5 Flash, 2.0 Flash-Lite, 2.0 Pro Experimental.
+- **Vision**: Preferred provider for all vision-related tasks (screenshots, image analysis) due to superior multimodal understanding.
 - **Features**:
   - **Batch API**: Cost-effective processing for large datasets (50% cheaper).
   - **Live API**: Real-time bidirectional voice/video interaction.

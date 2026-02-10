@@ -14,7 +14,7 @@ use crate::{
         global_service,
         input::{KeyboardSimulator, MouseButton},
         types::{ElementQuery, UIElementInfo},
-        AutomationService,
+        // AutomationService, // Unused import
     },
     data::db::{
         models::{OverlayEvent, OverlayEventType},
@@ -62,7 +62,7 @@ pub struct ValueRequest {
     pub focus: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClickRequest {
     #[serde(default)]
@@ -158,7 +158,10 @@ fn default_drag_duration() -> u32 {
 #[tauri::command]
 pub fn automation_list_windows(app: AppHandle) -> Result<Vec<UIElementInfo>, AGIError> {
     ensure_overlay_ready(&app);
-    with_service(|service| service.native.list_windows()).map_err(AGIError::from)
+    global_service()?
+        .native
+        .list_windows()
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
@@ -175,31 +178,41 @@ pub fn automation_find_elements(
         max_results: request.max_results,
     };
 
-    with_service(|service| service.native.find_elements(request.parent_id, &query))
+    global_service()?
+        .native
+        .find_elements(request.parent_id, &query)
         .map_err(AGIError::from)
 }
 
 #[tauri::command]
 pub fn automation_invoke(request: InvokeRequest) -> Result<(), AGIError> {
-    with_service(|service| service.native.invoke(&request.element_id)).map_err(AGIError::from)
+    global_service()?
+        .native
+        .invoke(&request.element_id)
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
 pub fn automation_set_value(request: ValueRequest) -> Result<(), AGIError> {
-    with_service(|service| {
-        if request.focus.unwrap_or(false) {
-            service.native.set_focus(&request.element_id)?;
-        }
+    let service = global_service()?;
+    if request.focus.unwrap_or(false) {
         service
             .native
-            .set_value(&request.element_id, &request.value)
-    })
-    .map_err(AGIError::from)
+            .set_focus(&request.element_id)
+            .map_err(AGIError::from)?;
+    }
+    service
+        .native
+        .set_value(&request.element_id, &request.value)
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
 pub fn automation_get_value(element_id: String) -> Result<String, AGIError> {
-    with_service(|service| service.native.get_value(&element_id)).map_err(AGIError::from)
+    global_service()?
+        .native
+        .get_value(&element_id)
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
@@ -209,12 +222,18 @@ pub fn automation_get_text(element_id: String) -> Result<String, AGIError> {
 
 #[tauri::command]
 pub fn automation_toggle(element_id: String) -> Result<(), AGIError> {
-    with_service(|service| service.native.toggle(&element_id)).map_err(AGIError::from)
+    global_service()?
+        .native
+        .toggle(&element_id)
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
 pub fn automation_focus_window(element_id: String) -> Result<(), AGIError> {
-    with_service(|service| service.native.focus_window(&element_id)).map_err(AGIError::from)
+    global_service()?
+        .native
+        .focus_window(&element_id)
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
@@ -252,7 +271,7 @@ pub async fn automation_send_keys(
 }
 
 #[tauri::command]
-pub fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
+pub async fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
     let modifiers: Vec<Key> = request
         .modifiers
         .iter()
@@ -262,18 +281,16 @@ pub fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
     let key = KeyboardSimulator::vk_to_key(request.key)
         .ok_or_else(|| format!("Unsupported key code: {}", request.key))?;
 
-    with_service(|service| {
-        service
-            .keyboard
-            .lock()
-            .map_err(|e| anyhow!("Failed to lock keyboard service: {}", e))?
-            .send_hotkey(&modifiers, key)
-    })
-    .map_err(|err| err.to_string())
+    let service = global_service().map_err(|e| e.to_string())?;
+    let mut keyboard = service.keyboard.lock().await;
+
+    keyboard
+        .send_hotkey(&modifiers, key)
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-pub fn automation_click(
+pub async fn automation_click(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: ClickRequest,
@@ -295,7 +312,9 @@ pub fn automation_click(
         }
     }
 
-    let click_result = with_service(|service| {
+    let service = global_service().map_err(|e| e.to_string())?;
+
+    let setup = (|| -> AnyResult<(i32, i32, String)> {
         let (x, y) = if let Some(element_id) = &request.element_id {
             let rect = service
                 .native
@@ -311,28 +330,40 @@ pub fn automation_click(
         };
 
         let button_name = request.button.as_deref().unwrap_or("left").to_lowercase();
+        Ok((x, y, button_name))
+    })();
+
+    let (x, y, button_name) = match setup {
+        Ok(val) => val,
+        Err(err) => {
+            let err_str = err.to_string();
+            emit_ui_action(
+                &app,
+                "UI Click",
+                &format!("Failed to prepare click: {}", err_str),
+                "failed",
+                json!(request),
+                Some(err_str.clone()),
+            );
+            return Err(err_str);
+        }
+    };
+
+    {
+        let mut mouse = service.mouse.lock().await;
+
         let button = match button_name.as_str() {
             "right" => MouseButton::Right,
             "middle" => MouseButton::Middle,
             _ => MouseButton::Left,
         };
 
-        service
-            .mouse
-            .lock()
-            .map_err(|e| anyhow!("Failed to lock mouse service: {}", e))?
-            .click(x, y, button)?;
-        Ok((x, y, button_name))
-    })
-    .map_err(|err| err.to_string());
-
-    let (x, y, button_name) = match click_result {
-        Ok(value) => value,
-        Err(err) => {
+        if let Err(err) = mouse.click(x, y, button) {
+            let err_str = err.to_string();
             emit_ui_action(
                 &app,
                 "UI Click",
-                &format!("Failed to click: {}", err),
+                &format!("Failed to click: {}", err_str),
                 "failed",
                 json!({
                     "elementId": request.element_id,
@@ -340,11 +371,11 @@ pub fn automation_click(
                     "y": request.y,
                     "button": request.button
                 }),
-                Some(err.clone()),
+                Some(err_str.clone()),
             );
-            return Err(err);
+            return Err(err_str);
         }
-    };
+    }
 
     if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
@@ -429,7 +460,9 @@ pub async fn automation_drag_drop(
         ));
     }
 
-    let mut mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
+    let service = global_service().map_err(|e| e.to_string())?;
+    let mut mouse = service.mouse.lock().await;
+
     if let Err(err) = mouse
         .drag_and_drop(
             request.from_x,
@@ -489,12 +522,14 @@ pub async fn automation_drag_drop(
 }
 
 #[tauri::command]
-pub fn automation_clipboard_get() -> Result<String, String> {
-    with_service(|service| service.clipboard.get_text()).map_err(|err| err.to_string())
+pub async fn automation_clipboard_get() -> Result<String, String> {
+    let service = global_service().map_err(|e| e.to_string())?;
+    let mut clipboard = service.clipboard.lock().await;
+    clipboard.get_text().map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-pub fn automation_clipboard_set(text: String) -> Result<(), String> {
+pub async fn automation_clipboard_set(text: String) -> Result<(), String> {
     if text.len() > 10_000_000 {
         return Err(format!(
             "Clipboard text too large: {} characters. Maximum is 10MB",
@@ -502,7 +537,10 @@ pub fn automation_clipboard_set(text: String) -> Result<(), String> {
         ));
     }
 
-    with_service(|service| service.clipboard.set_text(&text))
+    let service = global_service().map_err(|e| e.to_string())?;
+    let mut clipboard = service.clipboard.lock().await;
+    clipboard
+        .set_text(&text)
         .map_err(|err| format!("Failed to set clipboard text: {}", err))
 }
 
@@ -554,7 +592,10 @@ pub async fn automation_screenshot(
     }
 
     if let Some(ref element_id) = request.element_id {
-        let bounds = with_service(|service| service.native.bounding_rect(element_id))
+        let service = global_service().map_err(|e| e.to_string())?;
+        let bounds = service
+            .native
+            .bounding_rect(element_id)
             .map_err(|err| err.to_string())?;
         if let Some(bounds) = bounds {
             let width = bounds.width.round().max(1.0) as u32;
@@ -575,17 +616,6 @@ pub async fn automation_screenshot(
     capture_screen_full(app, db, request.conversation_id).await
 }
 
-fn with_service<F, T>(operation: F) -> AnyResult<T>
-where
-    F: FnOnce(&mut AutomationService) -> AnyResult<T>,
-{
-    let mut guard = global_service()?;
-    let service = guard
-        .as_mut()
-        .ok_or_else(|| anyhow!("Automation service unavailable"))?;
-    operation(service)
-}
-
 async fn execute_text_input(
     app: &AppHandle,
     db: &State<'_, AppDatabase>,
@@ -599,9 +629,9 @@ async fn execute_text_input(
     let fallback_position = request.x.zip(request.y);
     let should_focus = force_focus || request.focus.unwrap_or(false);
 
-    let mut keyboard = KeyboardSimulator::new().map_err(|e| e.to_string())?;
+    let service = global_service().map_err(|e| e.to_string())?;
 
-    let location = match with_service(|service| {
+    let location = match (|| -> AnyResult<Option<(i32, i32)>> {
         if let Some(element_id) = &element_id {
             if should_focus {
                 let _ = service.native.set_focus(element_id);
@@ -615,7 +645,7 @@ async fn execute_text_input(
         }
 
         Ok(fallback_position)
-    }) {
+    })() {
         Ok(value) => value,
         Err(err) => {
             emit_ui_action(
@@ -633,6 +663,8 @@ async fn execute_text_input(
             return Err(err.to_string());
         }
     };
+
+    let mut keyboard = service.keyboard.lock().await;
 
     if let Err(err) = keyboard.send_text(&text).await {
         let error_string = err.to_string();

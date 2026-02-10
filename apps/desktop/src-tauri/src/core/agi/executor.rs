@@ -10,12 +10,13 @@ use crate::data::cache::ToolResultCache;
 use crate::sys::security::ToolExecutionGuard;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 // json! macro is used with full path (serde_json::json!) in parallel execution
 #[allow(unused_imports)]
 use serde_json::json;
 use std::collections::HashMap;
 // PathBuf is used indirectly through the executor registry
+use crate::core::agi::reflection::ReflectionEngine;
 #[allow(unused_imports)]
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -61,6 +62,7 @@ pub struct AGIExecutor {
     tool_cache: Arc<ToolResultCache>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
     outcome_tracker: Option<Arc<OutcomeTracker>>,
+    reflection_engine: Option<Arc<ReflectionEngine>>,
     security_guard: Arc<ToolExecutionGuard>,
     change_tracker: Option<Arc<ChangeTracker>>,
     executor_registry: ExecutorRegistry,
@@ -83,6 +85,7 @@ impl AGIExecutor {
         automation: Arc<AutomationService>,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
+        reflection_engine: Option<Arc<ReflectionEngine>>,
         change_tracker: Option<Arc<ChangeTracker>>,
     ) -> Result<Self> {
         let executor_registry = ExecutorRegistry::new(automation.clone(), router.clone());
@@ -96,6 +99,7 @@ impl AGIExecutor {
             tool_cache: Arc::new(ToolResultCache::new()),
             process_reasoning: None,
             outcome_tracker: None,
+            reflection_engine,
             security_guard: Arc::new(ToolExecutionGuard::new()),
             change_tracker,
             executor_registry,
@@ -114,6 +118,7 @@ impl AGIExecutor {
         app_handle: Option<tauri::AppHandle>,
         process_reasoning: Arc<ProcessReasoning>,
         outcome_tracker: Arc<OutcomeTracker>,
+        reflection_engine: Option<Arc<ReflectionEngine>>,
         change_tracker: Option<Arc<ChangeTracker>>,
     ) -> Result<Self> {
         let executor_registry = ExecutorRegistry::new(automation.clone(), router.clone());
@@ -127,6 +132,7 @@ impl AGIExecutor {
             tool_cache: Arc::new(ToolResultCache::new()),
             process_reasoning: Some(process_reasoning),
             outcome_tracker: Some(outcome_tracker),
+            reflection_engine,
             security_guard: Arc::new(ToolExecutionGuard::new()),
             change_tracker,
             executor_registry,
@@ -158,6 +164,7 @@ impl AGIExecutor {
             tool_cache: Arc::new(ToolResultCache::with_capacity(cache_size_bytes)),
             process_reasoning: None,
             outcome_tracker: None,
+            reflection_engine: None,
             security_guard: Arc::new(ToolExecutionGuard::new()),
             change_tracker,
             executor_registry,
@@ -592,6 +599,8 @@ impl AGIExecutor {
             let plan_id = plan.goal_id.clone();
             let goal_clone = goal.clone();
 
+            let app_handle = self.app_handle.clone();
+
             let handle = tokio::spawn(async move {
                 let start_time = Instant::now();
 
@@ -609,7 +618,7 @@ impl AGIExecutor {
                     context_memory: Vec::new(),
                 };
 
-                let mut executor = AGIExecutor::new(
+                let mut executor = AGIExecutor::with_process_reasoning(
                     tool_registry,
                     Arc::new(
                         ResourceManager::new(ResourceLimits {
@@ -621,8 +630,18 @@ impl AGIExecutor {
                         .unwrap(),
                     ),
                     automation,
-                    router,
-                    None,
+                    router.clone(),
+                    app_handle,
+                    // TODO: Pass actual reasoning/tracker if needed for sub-agents
+                    Arc::new(
+                        ProcessReasoning::new(router.clone())
+                            .expect("Failed to create process reasoning"),
+                    ),
+                    Arc::new(
+                        OutcomeTracker::new("outcome_tracker_parallel.db".to_string())
+                            .expect("Failed to create tracker"),
+                    ),
+                    None, // No reflection engine for parallel sub-tasks for now
                     None, // No change tracker for parallel execution
                 )
                 .unwrap();
@@ -733,11 +752,49 @@ impl AGIExecutor {
                 Ok(result) => {
                     steps_completed += 1;
                     output = result;
+
+                    // REFLECTION POINT: Success
+                    if let Some(ref _reflection) = self.reflection_engine {
+                        // We could also reflect on success to optimize future runs,
+                        // but prioritizing failure for now.
+                        tracing::debug!("[Executor] Step {} succeeded", step.id);
+                    }
                 }
                 Err(e) => {
                     steps_failed += 1;
                     error_msg = Some(e.to_string());
                     tracing::error!("[Executor] Step execution failed: {}", e);
+
+                    // REFLECTION POINT: Failure
+                    if let Some(ref reflection) = self.reflection_engine {
+                        tracing::info!(
+                            "[Executor] Triggering reflection for failed step: {}",
+                            step.id
+                        );
+
+                        // Create a synthetic plan for reflection context since we don't have the full object here
+                        let plan = planner::Plan {
+                            goal_id: goal.id.clone(),
+                            steps: vec![], // Placeholder
+                            estimated_duration: std::time::Duration::from_secs(0),
+                            estimated_resources: crate::core::agi::ResourceUsage {
+                                cpu_percent: 0.0,
+                                memory_mb: 0,
+                                network_mb: 0.0,
+                            },
+                        };
+
+                        match reflection.reflect(goal, &context, &plan).await {
+                            Ok(insight) => {
+                                tracing::info!("[Executor] Reflection Insight: {:?}", insight);
+                                // TODO: Act on insight (Corrections, SubGoals)
+                            }
+                            Err(re) => {
+                                tracing::warn!("[Executor] Reflection failed: {}", re);
+                            }
+                        }
+                    }
+
                     break;
                 }
             }

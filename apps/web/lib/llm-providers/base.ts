@@ -28,6 +28,11 @@ export interface LLMProviderRequest {
   tool_choice?: unknown;
   thinking_mode?: boolean;
   usePromptCache?: boolean;
+  thinking?: {
+    type: string;
+    budget_tokens?: number;
+  };
+  effort?: string;
 }
 
 export abstract class BaseLLMProvider {

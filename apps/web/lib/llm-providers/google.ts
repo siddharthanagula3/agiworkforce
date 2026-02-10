@@ -2,6 +2,136 @@ import 'server-only';
 
 import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
 import { logger } from '@/lib/logger';
+import { randomUUID } from 'crypto';
+
+/**
+ * Convert OpenAI-format tools to Google's functionDeclarations format.
+ * OpenAI: { type: "function", function: { name, description, parameters } }
+ * Google: { functionDeclarations: [{ name, description, parameters }] }
+ */
+function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations: unknown[] } {
+  const declarations = tools.map((tool: any) => {
+    // Handle OpenAI format: { type: "function", function: { name, description, parameters } }
+    if (tool.function) {
+      return {
+        name: tool.function.name,
+        description: tool.function.description || '',
+        parameters: tool.function.parameters || { type: 'object', properties: {} },
+      };
+    }
+    // Handle Anthropic format: { name, description, input_schema }
+    if (tool.input_schema) {
+      return {
+        name: tool.name,
+        description: tool.description || '',
+        parameters: tool.input_schema,
+      };
+    }
+    // Handle flat format (from desktop's transform): { name, description, parameters }
+    return {
+      name: tool.name,
+      description: tool.description || '',
+      parameters: tool.parameters || { type: 'object', properties: {} },
+    };
+  });
+
+  return { functionDeclarations: declarations };
+}
+
+/**
+ * Transform messages for Google Gemini, including tool call/result messages.
+ * - System messages are extracted separately for systemInstruction
+ * - Assistant messages with tool_calls become model messages with functionCall parts
+ * - Tool role messages become user messages with functionResponse parts
+ * - Consecutive same-role messages are merged (Gemini requires alternating roles)
+ */
+function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
+  contents: any[];
+  systemInstruction?: any;
+} {
+  const systemMessage = messages.find((msg) => msg.role === 'system');
+  const systemInstruction = systemMessage
+    ? { parts: [{ text: systemMessage.content }] }
+    : undefined;
+
+  const contents: any[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') continue;
+
+    if (msg.role === 'tool') {
+      // Tool result → Google's functionResponse part
+      // Parse the content as JSON if possible, otherwise wrap as text
+      let responseContent: any;
+      try {
+        responseContent = JSON.parse(msg.content);
+      } catch {
+        responseContent = { result: msg.content };
+      }
+
+      const functionResponse = {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              name: msg.tool_call_id || 'unknown_tool',
+              response: responseContent,
+            },
+          },
+        ],
+      };
+
+      // Merge with previous user message if last was also user role
+      const last = contents[contents.length - 1];
+      if (last && last.role === 'user') {
+        last.parts.push(...functionResponse.parts);
+      } else {
+        contents.push(functionResponse);
+      }
+      continue;
+    }
+
+    if (msg.role === 'assistant' && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+      // Assistant with tool_calls → model message with functionCall parts
+      const parts: any[] = [];
+      if (msg.content && msg.content.trim()) {
+        parts.push({ text: msg.content });
+      }
+      for (const tc of msg.tool_calls as any[]) {
+        const funcName = tc.function?.name || tc.name || 'unknown';
+        let funcArgs: any = {};
+        try {
+          const rawArgs = tc.function?.arguments || tc.arguments || '{}';
+          funcArgs = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
+        } catch {
+          funcArgs = {};
+        }
+        parts.push({
+          functionCall: {
+            name: funcName,
+            args: funcArgs,
+          },
+        });
+      }
+      contents.push({ role: 'model', parts });
+      continue;
+    }
+
+    // Regular user or assistant message
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    if (!msg.content || !msg.content.trim()) continue;
+
+    // Merge consecutive same-role messages (Gemini requires alternating)
+    const last = contents[contents.length - 1];
+    if (last && last.role === role) {
+      last.parts.push({ text: msg.content });
+    } else {
+      contents.push({ role, parts: [{ text: msg.content }] });
+    }
+  }
+
+  return { contents, systemInstruction };
+}
 
 export class GoogleProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
@@ -18,16 +148,8 @@ export class GoogleProvider extends BaseLLMProvider {
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
     const url = `${this.baseUrl}/models/${request.model}:generateContent?key=${this.apiKey}`;
 
-    // Convert messages format for Google Gemini
-    const contents = request.messages
-      .filter((msg) => msg.role !== 'system')
-      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
-      .map((msg) => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
-      }));
-
-    const systemInstruction = request.messages.find((msg) => msg.role === 'system');
+    // Convert messages format for Google Gemini (including tool call/result messages)
+    const { contents, systemInstruction } = transformMessagesForGoogle(request.messages);
 
     // CRITICAL: Gemini 3 models require temperature of 1.0
     // Lower values cause looping or degraded performance
@@ -36,11 +158,7 @@ export class GoogleProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       contents,
-      ...(systemInstruction && {
-        systemInstruction: {
-          parts: [{ text: systemInstruction.content }],
-        },
-      }),
+      ...(systemInstruction && { systemInstruction }),
       generationConfig: {
         ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
@@ -53,6 +171,11 @@ export class GoogleProvider extends BaseLLMProvider {
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
       ],
     };
+
+    // Add tool declarations if provided
+    if (request.tools && request.tools.length > 0) {
+      body.tools = [transformToolsToGoogleFormat(request.tools)];
+    }
 
     try {
       const response = await fetch(url, {
@@ -144,14 +267,31 @@ export class GoogleProvider extends BaseLLMProvider {
         throw new Error('Response was blocked by content filter');
       }
 
-      // Extract text from ALL parts, not just the first one
-      const allTextParts =
-        candidate.content?.parts?.filter((part: any) => part.text).map((part: any) => part.text) ||
-        [];
+      // Extract text and functionCall parts
+      const parts = candidate.content?.parts || [];
+      const allTextParts = parts.filter((part: any) => part.text).map((part: any) => part.text);
       const content = allTextParts.join('');
 
-      // Warn if response is empty despite successful completion
-      if (!content && finishReason !== 'SAFETY' && finishReason !== 'RECITATION') {
+      // Extract function calls (tool execution)
+      const toolCalls = parts
+        .filter((part: any) => part.functionCall)
+        .map((part: any, idx: number) => ({
+          id: `call_${randomUUID().replace(/-/g, '').substring(0, 24)}`,
+          type: 'function' as const,
+          function: {
+            name: part.functionCall.name,
+            arguments: JSON.stringify(part.functionCall.args || {}),
+          },
+          index: idx,
+        }));
+
+      // Warn if response is empty despite successful completion and no tool calls
+      if (
+        !content &&
+        toolCalls.length === 0 &&
+        finishReason !== 'SAFETY' &&
+        finishReason !== 'RECITATION'
+      ) {
         logger.warn(
           {
             model: request.model,
@@ -176,6 +316,7 @@ export class GoogleProvider extends BaseLLMProvider {
         completionTokens,
         totalTokens,
         finishReason,
+        ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'Google request failed');
@@ -187,16 +328,8 @@ export class GoogleProvider extends BaseLLMProvider {
     // IMPORTANT: alt=sse is required for streaming to work properly
     const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
-    // Convert messages format for Google Gemini
-    const contents = request.messages
-      .filter((msg) => msg.role !== 'system')
-      .filter((msg) => msg.content && msg.content.trim().length > 0) // Filter out empty messages
-      .map((msg) => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
-      }));
-
-    const systemInstruction = request.messages.find((msg) => msg.role === 'system');
+    // Convert messages format for Google Gemini (including tool call/result messages)
+    const { contents, systemInstruction } = transformMessagesForGoogle(request.messages);
 
     // CRITICAL: Gemini 3 models require temperature of 1.0
     // Lower values cause looping or degraded performance
@@ -205,11 +338,7 @@ export class GoogleProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       contents,
-      ...(systemInstruction && {
-        systemInstruction: {
-          parts: [{ text: systemInstruction.content }],
-        },
-      }),
+      ...(systemInstruction && { systemInstruction }),
       generationConfig: {
         ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
@@ -222,6 +351,11 @@ export class GoogleProvider extends BaseLLMProvider {
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
       ],
     };
+
+    // Add tool declarations if provided
+    if (request.tools && request.tools.length > 0) {
+      body.tools = [transformToolsToGoogleFormat(request.tools)];
+    }
 
     const response = await fetch(url, {
       method: 'POST',
@@ -297,10 +431,10 @@ export class GoogleProvider extends BaseLLMProvider {
             }
 
             // Extract text from ALL parts, not just the first one (fixes multi-part text loss)
-            const allTextParts =
-              candidate.content?.parts
-                ?.filter((part: any) => part.text)
-                .map((part: any) => part.text) || [];
+            const parts = candidate.content?.parts || [];
+            const allTextParts = parts
+              .filter((part: any) => part.text)
+              .map((part: any) => part.text);
             const textContent = allTextParts.join('');
 
             if (textContent) {
@@ -320,6 +454,34 @@ export class GoogleProvider extends BaseLLMProvider {
               controller.enqueue(new TextEncoder().encode(sseEvent));
             }
 
+            // Extract function calls and emit as OpenAI-format tool_calls
+            const functionCallParts = parts.filter((part: any) => part.functionCall);
+            if (functionCallParts.length > 0) {
+              hasTextContent = true; // Tool calls count as content
+              const toolCalls = functionCallParts.map((part: any, idx: number) => ({
+                index: idx,
+                id: `call_${randomUUID().replace(/-/g, '').substring(0, 24)}`,
+                type: 'function',
+                function: {
+                  name: part.functionCall.name,
+                  arguments: JSON.stringify(part.functionCall.args || {}),
+                },
+              }));
+
+              const toolEvent = `data: ${JSON.stringify({
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: toolCalls,
+                    },
+                    index: 0,
+                  },
+                ],
+                model: request.model,
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(toolEvent));
+            }
+
             // Send usage data if present
             if (data.usageMetadata) {
               const usageEvent = `data: ${JSON.stringify({
@@ -335,10 +497,16 @@ export class GoogleProvider extends BaseLLMProvider {
 
             // Send done signal if finished
             if (candidate.finishReason && candidate.finishReason !== 'SAFETY') {
+              // If functionCall parts were present, emit "tool_calls" finish_reason
+              // instead of Google's "STOP" to match OpenAI format
+              const hasToolCalls = functionCallParts.length > 0;
+              const finishReason = hasToolCalls
+                ? 'tool_calls'
+                : candidate.finishReason.toLowerCase();
               const doneEvent = `data: ${JSON.stringify({
                 choices: [
                   {
-                    finish_reason: candidate.finishReason.toLowerCase(),
+                    finish_reason: finishReason,
                     index: 0,
                   },
                 ],
