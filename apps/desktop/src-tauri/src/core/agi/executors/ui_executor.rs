@@ -179,11 +179,8 @@ impl UiExecutor {
             context.emit_progress(&format!("Clicking at ({}, {})...", x, y), Some(0.5));
 
             use crate::automation::input::MouseButton;
-            self.automation
-                .mouse
-                .lock()
-                .map_err(|e| anyhow!("Failed to acquire mouse lock: {}", e))?
-                .click(x, y, MouseButton::Left)?;
+            let mut mouse = self.automation.mouse.lock().await;
+            mouse.click(x, y, MouseButton::Left)?;
 
             context.emit_progress("Click completed", Some(1.0));
             return Ok(json!({ "success": true, "action": "clicked", "x": x, "y": y }));
@@ -271,7 +268,7 @@ impl UiExecutor {
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
-        use crate::automation::input::KeyboardSimulator;
+        // use crate::automation::input::KeyboardSimulator; // Unused
 
         let target = parameters
             .get("target")
@@ -332,9 +329,8 @@ impl UiExecutor {
 
         context.emit_progress("Typing text...", Some(0.5));
 
-        // Type the text using keyboard simulator
-        let mut keyboard = KeyboardSimulator::new()
-            .map_err(|e| anyhow!("Failed to create keyboard simulator: {}", e))?;
+        // Type the text using shared keyboard simulator
+        let mut keyboard = self.automation.keyboard.lock().await;
 
         keyboard
             .send_text(text)

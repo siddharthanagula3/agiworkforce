@@ -229,7 +229,7 @@ mod integration_tests {
             default_provider: "anthropic".to_string(),
             ..Default::default()
         };
-        settings.default_model = "claude-3-5-sonnet".to_string();
+        settings.default_model = "claude-sonnet-4-5".to_string();
         settings.ui_preferences.theme = "dark".to_string();
         settings.ui_preferences.font_size = 16;
 
@@ -238,7 +238,7 @@ mod integration_tests {
         let loaded = service.load_app_settings().unwrap();
 
         assert_eq!(loaded.default_provider, "anthropic");
-        assert_eq!(loaded.default_model, "claude-3-5-sonnet");
+        assert_eq!(loaded.default_model, "claude-sonnet-4-5");
         assert_eq!(loaded.ui_preferences.theme, "dark");
         assert_eq!(loaded.ui_preferences.font_size, 16);
     }

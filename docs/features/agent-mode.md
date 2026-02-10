@@ -62,6 +62,7 @@ Reflection evaluates progress:
 | Max Iterations       | 1000      | Prevent infinite loops   |
 | Timeout              | 5 minutes | Limit execution time     |
 | Consecutive Failures | 3         | Trigger goal abandonment |
+| Max Thinking Tokens  | 64k       | Limit reasoning depth    |
 
 ### Events
 

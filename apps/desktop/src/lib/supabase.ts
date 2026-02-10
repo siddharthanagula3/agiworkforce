@@ -5,9 +5,15 @@ const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    'Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your build environment or Vercel project settings.',
-  );
+  const errorMessage =
+    'Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file. ' +
+    'You can find these values in your Supabase project dashboard under Settings → API. ' +
+    'Example .env.local:\n' +
+    'VITE_SUPABASE_URL=https://xxxxx.supabase.co\n' +
+    'VITE_SUPABASE_ANON_KEY=your-anon-key-here';
+
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 }
 
 // Simple localStorage-based storage adapter for Supabase auth

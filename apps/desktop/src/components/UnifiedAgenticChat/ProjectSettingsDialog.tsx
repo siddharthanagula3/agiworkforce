@@ -122,6 +122,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       }
       setActiveTab('general');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, projectId]);
 
   const handleSave = async () => {
