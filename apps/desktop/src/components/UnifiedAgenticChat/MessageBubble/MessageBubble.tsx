@@ -9,6 +9,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 import { useExecutionStore } from '../../../stores/executionStore';
+import { useToolStore } from '../../../stores/chat/toolStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { getToolDisplayInfo } from '../../../lib/toolDisplayNames';
 import { EditableMessage } from '../EditableMessage';
@@ -24,6 +25,8 @@ import { MessageAttachments } from './MessageAttachments';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageAvatar } from './MessageAvatar';
 import { ToolCallCard } from './ToolCallCard';
+import { ToolResultCard } from '../../ToolCalling/ToolResultCard';
+import type { ToolResultUI } from '../../../types/toolCalling';
 import { ThinkingMessageBlock } from './ThinkingMessageBlock';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
@@ -146,6 +149,24 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const researchTasks = useExecutionStore((state) => state.researchTasks);
 
+  // Tool Call Actions ID - Hoisted for store access
+  const actionId =
+    message.metadata?.actionId || (message.metadata?.action_id as string | undefined);
+
+  // Track tool state from store for real-time updates
+  const toolState = useToolStore(
+    useCallback(
+      (state) => {
+        if (!actionId) return null;
+        return (
+          state.activeToolStreams.get(actionId) ||
+          state.toolExecutions.find((e) => e.id === actionId)
+        );
+      },
+      [actionId],
+    ),
+  );
+
   // Track which message IDs we've already opened the sidecar for
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
@@ -202,10 +223,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   // Tool call metadata
   const toolName = message.metadata?.tool || message.metadata?.tool_call || message.metadata?.name;
-  const toolStatus = message.metadata?.status || message.metadata?.state || message.metadata?.stage;
+
+  // Derive status from store if available, otherwise fallback to metadata
+  const toolStatus = useMemo(() => {
+    if (toolState) {
+      if ('status' in toolState) return toolState.status; // ToolStreamStateEntry
+      return toolState.success ? 'completed' : 'failed'; // ToolExecution
+    }
+    return message.metadata?.status || message.metadata?.state || message.metadata?.stage;
+  }, [toolState, message.metadata]);
+
   const toolCommand = message.metadata?.command || message.content;
   const requiresApproval = Boolean(message.metadata?.requiresApproval);
-  const actionId = message.metadata?.actionId || message.metadata?.action_id;
 
   // Research task
   const researchTaskId = message.metadata?.taskId;
@@ -254,45 +283,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   }
 
-  // Render thinking message
-  if (thinkingMatch) {
-    return (
-      <>
-        <ImageLightbox
-          isOpen={!!lightboxImage}
-          onClose={() => setLightboxImage(null)}
-          src={lightboxImage?.src || ''}
-          alt={lightboxImage?.alt}
-        />
-        <ThinkingMessageBlock
-          message={message}
-          thinkingMatch={thinkingMatch}
-          showAvatar={showAvatar}
-          showActions={showActions}
-          enableActions={enableActions}
-          copied={copied}
-          onCopy={handleCopy}
-          onBookmark={handleBookmark}
-          onImageClick={handleImageClick}
-          onMouseEnter={() => setShowActions(true)}
-          onMouseLeave={() => setShowActions(false)}
-        />
-      </>
-    );
-  }
-
-  // Render tool call
-  if (isToolCall) {
+  // Pre-render tool call content to share between standalone and dual-mode (thinking + tool)
+  const renderToolCall = (embedded = false) => {
     const compactMode = useSettingsStore.getState().chatPreferences.compactMode;
 
-    // In compact mode, show simple status message instead of detailed card
+    // In compact mode, show simple status message
     if (compactMode) {
       const toolDisplayInfo = getToolDisplayInfo(toolName);
       const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
       const statusText = isExecuting ? toolDisplayInfo.activeForm : toolDisplayInfo.completedForm;
 
       return (
-        <div className="px-4 py-2">
+        <div className={cn('px-4 py-2', embedded && 'pl-14')}>
           <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <div className="animate-pulse">•</div>
             <span>{statusText}</span>
@@ -307,7 +309,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
-        {showAvatar && <MessageAvatar isUser={isUser} isSystem={isSystem} />}
+        {/* If embedded (under thinking), hide avatar or show invisible spacer if needed for alignment */}
+        {showAvatar &&
+          (embedded ? (
+            <div className="w-8 shrink-0" />
+          ) : (
+            <MessageAvatar isUser={isUser} isSystem={isSystem} />
+          ))}
+
         <div className="flex-1">
           <ToolCallCard
             messageId={message.id}
@@ -318,9 +327,84 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             actionId={actionId as string | undefined}
             onToggleSidecar={onToggleSidecar}
           />
+
+          {/* Render Result if available and completed */}
+          {(() => {
+            const isCompleted = toolStatus === 'completed' || toolStatus === 'success';
+            const isFailed =
+              toolStatus === 'failed' || toolStatus === 'failure' || toolStatus === 'error';
+
+            if ((isCompleted || isFailed) && toolState) {
+              let resultData: any;
+              let success = false;
+
+              if ('status' in toolState) {
+                // ToolStreamStateEntry
+                resultData = toolState.result || toolState.outputBuffer;
+                success = toolState.status === 'completed';
+              } else {
+                // ToolExecution
+                resultData = toolState.output;
+                success = toolState.success;
+              }
+
+              const errorData = toolState.error;
+
+              const resultUI: ToolResultUI = {
+                tool_call_id: actionId || 'unknown', // Should exist if toolState exists
+                success: success,
+                data: resultData || errorData || 'No output',
+                error: errorData,
+                output_type: typeof resultData === 'object' ? 'json' : 'text',
+              };
+
+              return (
+                <div className="mt-3">
+                  <ToolResultCard result={resultUI} />
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     );
+  };
+
+  // Render thinking message (plus optional tool call)
+  if (thinkingMatch) {
+    return (
+      <div className="flex flex-col">
+        <>
+          <ImageLightbox
+            isOpen={!!lightboxImage}
+            onClose={() => setLightboxImage(null)}
+            src={lightboxImage?.src || ''}
+            alt={lightboxImage?.alt}
+          />
+          <ThinkingMessageBlock
+            message={message}
+            thinkingMatch={thinkingMatch}
+            showAvatar={showAvatar}
+            showActions={showActions}
+            enableActions={enableActions}
+            copied={copied}
+            onCopy={handleCopy}
+            onBookmark={handleBookmark}
+            onImageClick={handleImageClick}
+            onMouseEnter={() => setShowActions(true)}
+            onMouseLeave={() => setShowActions(false)}
+          />
+        </>
+        {/* If this message also has a tool call, render it below the thinking block */}
+        {isToolCall && renderToolCall(true)}
+      </div>
+    );
+  }
+
+  // Render standalone tool call
+  if (isToolCall) {
+    return renderToolCall(false);
   }
 
   // Render standard message

@@ -2,7 +2,7 @@
 
 This document contains official API documentation for all LLM providers integrated with AGI Workforce. Use this as the source of truth for model IDs, endpoints, and implementation details.
 
-> **Last Updated:** 2026-02-01
+> **Last Updated:** 2026-02-10
 
 ---
 
@@ -70,7 +70,8 @@ When Anthropic releases `claude-sonnet-4-5`:
 6. [Qwen (via MuleRouter)](#qwen-via-mulerouter)
 7. [Moonshot/Kimi](#moonshotkimi)
 8. [Perplexity](#perplexity)
-9. [ZhipuAI GLM](#zhipuai-glm)
+9. [Ollama (Local)](#ollama-local)
+10. [Managed Cloud](#managed-cloud)
 
 ---
 
@@ -798,13 +799,60 @@ response = client.chat.completions.create(
                 },
                 {
                     "type": "text",
-                    "text": "Please describe this image."
+                    "text": "What does this image show?"
                 }
             ]
         }
     ]
 )
 ```
+
+---
+
+## Ollama (Local)
+
+Run open-source models locally on your machine with full privacy.
+
+### Base URL
+
+```
+http://localhost:11434/v1 (Standard OpenAI-compatible API)
+```
+
+### Setup
+
+1. [Download Ollama](https://ollama.com)
+2. Pull a model: `ollama pull llama3`
+3. AGI Workforce automatically detects available models.
+
+### common Models
+
+- `llama3`
+- `mistral`
+- `codellama`
+- `phi3`
+
+---
+
+## Managed Cloud
+
+The **Managed Cloud Provider** allows the desktop application to access premium LLMs (GPT-5, Claude Opus, Gemini) without requiring local API keys.
+
+- **Zero-Trust**: No API keys stored on your device.
+- **Enterprise Billing**: Usage billed to your organization's centralized account.
+- **Auditable**: All requests logged centrally for compliance.
+
+### Configuration
+
+Selected by default in the Desktop app settings when "Managed Cloud" is chosen as the active provider.
+"text": "Please describe this image."
+}
+]
+}
+]
+)
+
+````
 
 ### Tool Use / Function Calling
 
@@ -834,7 +882,7 @@ completion = client.chat.completions.create(
     }],
     temperature=0.6,
 )
-```
+````
 
 ### Partial Mode (JSON Mode / Role-Playing)
 

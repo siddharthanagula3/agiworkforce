@@ -334,7 +334,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
 
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some("claude-3-haiku-20240307".to_string()),
+            model: Some("claude-haiku-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -348,7 +348,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-3-haiku-20240307".to_string(),
+            model: "claude-haiku-4-5".to_string(),
             temperature: Some(0.1),
             max_tokens: Some(50),
             stream: false,

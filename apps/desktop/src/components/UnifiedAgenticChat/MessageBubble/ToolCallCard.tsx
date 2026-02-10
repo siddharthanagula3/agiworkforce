@@ -3,22 +3,16 @@
  *
  * Renders a card displaying tool call status, with approval buttons
  * for actions requiring user approval.
+ *
+ * Refactored to use the shared ToolCalling component library.
  */
 
-import React, { memo, useState, useCallback } from 'react';
-import {
-  CheckCircle2,
-  FileText,
-  Globe2,
-  Image,
-  Loader2,
-  Terminal as TerminalIcon,
-} from 'lucide-react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { emit, isTauri } from '../../../lib/tauri-mock';
-import { getToolDisplayInfo } from '../../../lib/toolDisplayNames';
 import { SidecarMode } from '../../../stores/unifiedChatStore';
 import { useSimpleModeStore } from '../../../stores/ui';
-import { ApprovalState } from './types';
+import { ToolCallCard as SharedToolCallCard } from '../../ToolCalling/ToolCallCard';
+import { ToolCallUI } from '../../../types/toolCalling';
 
 export interface ToolCallCardProps {
   messageId: string;
@@ -39,69 +33,21 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   actionId,
   onToggleSidecar,
 }) => {
-  const [approvalState, setApprovalState] = useState<ApprovalState>('idle');
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
 
-  const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
-  const isCompleted = toolStatus === 'success' || toolStatus === 'completed';
-
-  // Get user-friendly tool display info for simple mode
-  const toolDisplayInfo = getToolDisplayInfo(toolName);
-  const displayToolName = isSimpleMode ? toolDisplayInfo.displayName : toolName || 'Tool call';
-  const displayStatus = isSimpleMode
-    ? isCompleted
-      ? toolDisplayInfo.completedForm
-      : isExecuting
-        ? toolDisplayInfo.activeForm
-        : 'Working...'
-    : toolStatus || 'running';
-
   // Determine target sidecar tab based on tool name
-  const lowerTool = (toolName || '').toString().toLowerCase();
-  const targetTab: SidecarMode = lowerTool.includes('browser')
-    ? 'browser'
-    : lowerTool.includes('file') || lowerTool.includes('read') || lowerTool.includes('edit')
-      ? 'code'
-      : lowerTool.includes('image') || lowerTool.includes('video') || lowerTool.includes('media')
-        ? 'preview'
-        : lowerTool.includes('code')
-          ? 'code'
-          : 'terminal';
-
-  const icon =
-    targetTab === 'browser' ? (
-      <Globe2 className="h-4 w-4" />
-    ) : targetTab === 'code' ? (
-      <FileText className="h-4 w-4" />
-    ) : targetTab === 'preview' ? (
-      <Image className="h-4 w-4" />
-    ) : (
-      <TerminalIcon className="h-4 w-4" />
-    );
-
-  const statusIcon =
-    isCompleted || approvalState === 'approved' ? (
-      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-    ) : isExecuting ? (
-      <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-    ) : (
-      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-    );
-
-  const statusLabel =
-    approvalState === 'approving'
-      ? 'approving'
-      : approvalState === 'denying'
-        ? 'denying'
-        : approvalState === 'approved'
-          ? 'approved'
-          : approvalState === 'denied'
-            ? 'denied'
-            : toolStatus || 'running';
-
-  const cardClasses = requiresApproval
-    ? 'rounded-2xl border border-amber-500/60 bg-amber-500/5 px-4 py-3 shadow-lg shadow-black/30'
-    : 'rounded-2xl border border-white/5 bg-black/60 px-4 py-3 shadow-lg shadow-black/30';
+  const targetTab = useMemo(() => {
+    const lowerTool = (toolName || '').toString().toLowerCase();
+    return lowerTool.includes('browser')
+      ? 'browser'
+      : lowerTool.includes('file') || lowerTool.includes('read') || lowerTool.includes('edit')
+        ? 'code'
+        : lowerTool.includes('image') || lowerTool.includes('video') || lowerTool.includes('media')
+          ? 'preview'
+          : lowerTool.includes('code')
+            ? 'code'
+            : 'terminal';
+  }, [toolName]);
 
   const emitAction = useCallback(
     async (eventName: string) => {
@@ -119,83 +65,71 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   );
 
   const handleApprove = useCallback(async () => {
-    try {
-      setApprovalState('approving');
-      await emitAction('resume_agent');
-      setApprovalState('approved');
-    } catch (error) {
-      console.error('[ToolCallCard] Failed to approve action', error);
-      setApprovalState('idle');
-    }
+    await emitAction('resume_agent');
   }, [emitAction]);
 
   const handleDeny = useCallback(async () => {
-    try {
-      setApprovalState('denying');
-      await emitAction('cancel_action');
-      setApprovalState('denied');
-    } catch (error) {
-      console.error('[ToolCallCard] Failed to deny action', error);
-      setApprovalState('idle');
-    }
+    await emitAction('cancel_action');
   }, [emitAction]);
 
+  const handleCancel = useCallback(async () => {
+    await emitAction('cancel_action');
+  }, [emitAction]);
+
+  // Construct ToolCallUI object from props
+  const toolCall: ToolCallUI = useMemo(() => {
+    // Determine status
+    let status: ToolCallUI['status'] = 'in_progress';
+    if (requiresApproval) status = 'awaiting_approval';
+    else if (toolStatus === 'success' || toolStatus === 'completed') status = 'completed';
+    else if (toolStatus === 'failure' || toolStatus === 'failed' || toolStatus === 'error')
+      status = 'failed';
+    else if (toolStatus === 'cancelled') status = 'cancelled';
+    else if (toolStatus === 'running' || toolStatus === 'executing') status = 'in_progress';
+    else status = (toolStatus as ToolCallUI['status']) || 'pending';
+
+    return {
+      id: actionId || messageId, // Use actionId if avail, fallback to messageId
+      tool_id: actionId || 'unknown',
+      tool_name: toolName || 'Unknown Tool',
+      tool_description: toolCommand || '',
+      parameters: {}, // We don't have structured params here easily without parsing toolCommand
+      status,
+      created_at: new Date().toISOString(),
+      requires_approval: requiresApproval,
+      // If we could parse duration from toolStatus string or similar, we would add it here
+    };
+  }, [actionId, messageId, toolName, toolCommand, toolStatus, requiresApproval]);
+
   return (
-    <div className={cardClasses}>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-sm text-zinc-100">
-          {icon}
-          <span className="font-semibold">{displayToolName}</span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/5 px-2 py-0.5 text-[11px] text-zinc-300">
-            {statusIcon}
-            <span className={isSimpleMode ? '' : 'capitalize'}>
-              {isSimpleMode ? displayStatus : statusLabel}
-            </span>
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="w-full">
+      <SharedToolCallCard
+        toolCall={toolCall}
+        onApprove={handleApprove}
+        onReject={handleDeny}
+        onCancel={handleCancel}
+        showParameters={!isSimpleMode}
+        defaultExpanded={requiresApproval} // Expand by default if approval needed
+        className="bg-black/20 border-white/5"
+      />
+      {/* 
+         In the original, there was a "View Output" button that toggled sidecar.
+         The SharedToolCallCard doesn't have that specific slot, but we can wrap it or add it below.
+         However, the SharedToolCallCard header is clickable to expand.
+         Let's add a small footer if we want that specific action, or relying on Sidecar's auto-open logic.
+         For now, to strictly resolve gaps, we rely on the card.
+         But the user might miss the "View Output" button.
+         Let's add a small link if sidecar toggle is available.
+      */}
+      {onToggleSidecar && (
+        <div className="flex justify-end mt-1 px-1">
           <button
-            type="button"
-            onClick={() => onToggleSidecar?.(targetTab)}
-            className="rounded-lg border border-white/5 px-3 py-1 text-xs font-semibold text-zinc-100 hover:border-zinc-500"
+            onClick={() => onToggleSidecar(targetTab as SidecarMode)}
+            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
           >
-            View Output
+            Open in {targetTab} view
           </button>
-          {requiresApproval && (
-            <>
-              <button
-                type="button"
-                onClick={() => void handleApprove()}
-                disabled={approvalState === 'approving' || approvalState === 'approved'}
-                className="rounded-lg border border-emerald-500/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-500/80 disabled:opacity-60"
-              >
-                {approvalState === 'approving'
-                  ? 'Approving...'
-                  : approvalState === 'approved'
-                    ? 'Approved'
-                    : 'Approve'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDeny()}
-                disabled={approvalState === 'denying' || approvalState === 'denied'}
-                className="rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-500/80 disabled:opacity-60"
-              >
-                {approvalState === 'denying'
-                  ? 'Denying...'
-                  : approvalState === 'denied'
-                    ? 'Denied'
-                    : 'Deny'}
-              </button>
-            </>
-          )}
         </div>
-      </div>
-      {/* Hide raw command in simple mode - only show for advanced users */}
-      {!isSimpleMode && (
-        <p className="mt-2 truncate text-sm text-zinc-300" title={toolCommand}>
-          {toolCommand}
-        </p>
       )}
     </div>
   );

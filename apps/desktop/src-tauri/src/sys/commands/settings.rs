@@ -67,8 +67,11 @@ pub struct Settings {
     pub window_preferences: WindowPreferences,
     #[serde(default)]
     pub chat_preferences: Option<ChatPreferences>,
+
     #[serde(default)]
     pub allowed_directories: Vec<String>,
+    #[serde(default)]
+    pub feature_flags: std::collections::HashMap<String, bool>,
 }
 
 pub struct SettingsState {
@@ -106,6 +109,7 @@ impl SettingsState {
                     show_timestamps: false,
                 }),
                 allowed_directories: default_allowed_directories(),
+                feature_flags: std::collections::HashMap::new(),
             })),
         }
     }

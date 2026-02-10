@@ -3,6 +3,7 @@ use crate::core::agi::{
     AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, ExecutionContext, Goal,
     Priority, ScoredResult,
 };
+// use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::Provider;
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::llm::LLMState;
@@ -75,6 +76,10 @@ pub async fn agi_init(
 
     let agi = AGICore::new(config, router_for_agi, automation_arc, Some(app.clone()))
         .map_err(|e| format!("Failed to create AGI: {}", e))?;
+
+    // We need to inject reflection engine into AGI, but AGICore::new doesn't take it yet.
+    // This implies AGICore needs update too.
+    // Let's check AGICore definition first.
 
     let agi_arc = Arc::new(TokioMutex::new(agi));
 
@@ -773,7 +778,7 @@ async fn get_user_tier_from_billing(billing: &BillingStateWrapper) -> String {
 /// Select best model and provider based on user tier
 fn select_best_model_by_tier(tier: &str) -> (&'static str, Provider) {
     match tier.to_lowercase().as_str() {
-        "max" | "enterprise" => ("claude-3-5-sonnet-20241022", Provider::Anthropic),
+        "max" | "enterprise" => ("claude-sonnet-4-5", Provider::Anthropic),
         "pro" => ("gpt-4o", Provider::OpenAI),
         _ => ("gpt-4o-mini", Provider::OpenAI), // Default/Free/Hobby
     }

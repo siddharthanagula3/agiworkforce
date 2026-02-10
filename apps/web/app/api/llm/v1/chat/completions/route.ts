@@ -72,6 +72,13 @@ const ChatCompletionRequestSchema = z.object({
   seed: z.number().int().optional(),
   // Extended parameters for AGI Workforce
   thinking_mode: z.boolean().optional(),
+  thinking: z
+    .object({
+      type: z.string(),
+      budget_tokens: z.number().int().positive().optional(),
+    })
+    .optional(),
+  effort: z.string().optional(),
   use_prompt_cache: z.boolean().optional(),
 });
 
@@ -558,6 +565,8 @@ async function handleChatCompletions(request: NextRequest) {
     tools: chatRequest.tools,
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
+    thinking: chatRequest.thinking,
+    effort: chatRequest.effort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
@@ -577,6 +586,9 @@ async function handleChatCompletions(request: NextRequest) {
       let outputTokens = 0;
       let buffer = '';
       const encoder = new TextEncoder();
+
+      // Track active block types to handle closing tags relative to block index
+      const activeBlockTypes = new Map<number, string>();
 
       // Single transform that handles both model name replacement and credit tracking
       const transformStream = new TransformStream({
@@ -647,6 +659,11 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_start' &&
                     event.content_block?.type === 'tool_use'
                   ) {
+                    // Track this block type
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'tool_use');
+                    }
+
                     // Transform tool call start to OpenAI format
                     // Anthropic sends: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_...","name":"tool_name"}}
                     transformedEvent = {
@@ -670,13 +687,58 @@ async function handleChatCompletions(request: NextRequest) {
                       ],
                       model: responseModelName,
                     };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'thinking'
+                  ) {
+                    // Track this block type
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'thinking');
+                    }
+
+                    // Transform thinking start to <thinking> tag for frontend parsing
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            content: '<thinking>',
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_delta' &&
+                    event.delta?.type === 'thinking_delta'
+                  ) {
+                    // Pass thinking content through as standard text content (inside the tags)
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            content: event.delta.thinking,
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
                   } else if (event.type === 'message_delta' && event.delta?.stop_reason) {
                     // Transform message_delta to OpenAI finish event
+                    // Normalize Anthropic stop_reason to OpenAI finish_reason
+                    const stopReason = event.delta.stop_reason;
+                    const finishReason =
+                      stopReason === 'tool_use'
+                        ? 'tool_calls'
+                        : stopReason === 'end_turn'
+                          ? 'stop'
+                          : stopReason;
                     transformedEvent = {
                       choices: [
                         {
                           delta: {},
-                          finish_reason: event.delta.stop_reason,
+                          finish_reason: finishReason,
                           index: 0,
                         },
                       ],
@@ -693,11 +755,31 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_start' &&
                     event.content_block?.type === 'text'
                   ) {
+                    // Track this block type
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'text');
+                    }
                     // Skip text block start, not needed in OpenAI format
                     continue;
                   } else if (event.type === 'content_block_stop') {
-                    // Skip block stop events, not needed in OpenAI format
-                    continue;
+                    // Check if we need to close a thinking block
+                    const blockType = activeBlockTypes.get(event.index || 0);
+                    if (blockType === 'thinking') {
+                      transformedEvent = {
+                        choices: [
+                          {
+                            delta: {
+                              content: '</thinking>',
+                            },
+                            index: 0,
+                          },
+                        ],
+                        model: responseModelName,
+                      };
+                    } else {
+                      // Skip other block stop events
+                      continue;
+                    }
                   }
                 }
 

@@ -1318,12 +1318,7 @@ impl ToolExecutor {
                     if let Some(coords) = target.get("coordinates") {
                         let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                         let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        match automation
-                            .mouse
-                            .lock()
-                            .map_err(|e| anyhow!("Failed to lock mouse mutex: {}", e))?
-                            .click(x, y, MouseButton::Left)
-                        {
+                        match automation.mouse.lock().await.click(x, y, MouseButton::Left) {
                             Ok(_) => Ok(ToolResult {
                                 success: true,
                                 data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),

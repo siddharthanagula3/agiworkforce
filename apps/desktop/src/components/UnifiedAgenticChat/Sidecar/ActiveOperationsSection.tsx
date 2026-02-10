@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
+import { ToolCallCard } from '../../ToolCalling/ToolCallCard';
+import { ToolCallUI } from '../../../types/toolCalling';
 
 export interface ActiveOperationsSectionProps {
   className?: string;
@@ -42,7 +44,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
 
   return (
     <div className={`active-operations-section h-full flex flex-col ${className}`}>
-      {}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <Activity size={18} className="text-gray-600 dark:text-gray-400" />
@@ -67,9 +69,9 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
         )}
       </div>
 
-      {}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {}
+        {/* Background Tasks */}
         {activeBackgroundTasks.length > 0 && (
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase">
@@ -104,7 +106,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           </div>
         )}
 
-        {}
+        {/* Active Agents */}
         {activeAgents.length > 0 && (
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
@@ -144,7 +146,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           </div>
         )}
 
-        {}
+        {/* Recent File Operations */}
         {recentFileOps.length > 0 && (
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
@@ -172,7 +174,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           </div>
         )}
 
-        {}
+        {/* Recent Commands */}
         {recentTerminalCmds.length > 0 && (
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
@@ -206,39 +208,41 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           </div>
         )}
 
-        {}
+        {/* Recent Tool Executions */}
         {recentToolExecs.length > 0 && (
           <div className="p-4">
             <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
               <Wrench size={12} />
               Recent Tool Executions
             </h4>
-            <div className="space-y-1">
-              {recentToolExecs.map((exec) => (
-                <div
-                  key={exec.id}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
-                >
-                  {exec.success ? (
-                    <CheckCircle size={14} className="text-green-500 shrink-0" />
-                  ) : (
-                    <XCircle size={14} className="text-red-500 shrink-0" />
-                  )}
-                  <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
-                    {exec.toolName}
-                  </span>
-                  <span className="text-gray-500">
-                    {exec.duration < 1000
-                      ? `${exec.duration}ms`
-                      : `${(exec.duration / 1000).toFixed(1)}s`}
-                  </span>
-                </div>
-              ))}
+            <div className="space-y-2">
+              {recentToolExecs.map((exec) => {
+                // Map store execution to ToolCallUI
+                const toolCall: ToolCallUI = {
+                  id: exec.id,
+                  tool_id: exec.id,
+                  tool_name: exec.toolName,
+                  tool_description: '',
+                  parameters: {}, // Params not readily available in summarized store view
+                  status: exec.success ? 'completed' : 'failed',
+                  created_at: new Date().toISOString(),
+                  duration_ms: exec.duration,
+                };
+
+                return (
+                  <ToolCallCard
+                    key={exec.id}
+                    toolCall={toolCall}
+                    className="bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+                    showParameters={false}
+                  />
+                );
+              })}
             </div>
           </div>
         )}
 
-        {}
+        {/* Empty State */}
         {totalActive === 0 &&
           recentFileOps.length === 0 &&
           recentTerminalCmds.length === 0 &&
