@@ -93,7 +93,13 @@ pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>>
 fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<(), Box<dyn std::error::Error>> {
     let mut log_files: Vec<_> = fs::read_dir(log_dir)?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("log"))
+        .filter(|entry| {
+            if let Some(ext) = entry.path().extension() {
+                ext == "log"
+            } else {
+                false
+            }
+        })
         .collect();
 
     log_files.sort_by_key(|entry| {
@@ -107,7 +113,9 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<(), Box<dyn s
     for entry in log_files.iter().skip(max_files) {
         let path = entry.path();
         tracing::debug!("Removing old log file: {:?}", path);
-        fs::remove_file(path)?;
+        if let Err(e) = fs::remove_file(&path) {
+            tracing::warn!("Failed to remove old log file {:?}: {}", path, e);
+        }
     }
 
     Ok(())
@@ -140,6 +148,11 @@ pub fn filter_sensitive_data(input: &str) -> String {
         (
             r#"(?i)(private[_-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#,
             "PRIVATE_KEY=***",
+        ),
+        // Match URI credentials: protocol://user:password@host
+        (
+            r#"(?i)([a-z]+://)([^:@\s]+):([^@\s]+)@([a-z0-9.-]+)"#,
+            "${1}${2}:***@${4}",
         ),
     ];
 
@@ -232,5 +245,12 @@ mod tests {
         assert!(filtered.contains("API_KEY=***"));
         assert!(filtered.contains("PASSWORD=***"));
         assert!(filtered.contains("TOKEN=***"));
+    }
+    #[test]
+    fn test_filter_uri_credentials() {
+        let input = "Connecting to postgres://user:password123@localhost:5432/mydb";
+        let filtered = filter_sensitive_data(input);
+        assert!(filtered.contains("postgres://user:***@localhost"));
+        assert!(!filtered.contains("password123"));
     }
 }

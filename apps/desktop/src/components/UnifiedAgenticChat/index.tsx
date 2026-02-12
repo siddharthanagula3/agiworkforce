@@ -43,6 +43,7 @@ import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
+import { respondToolConfirmation } from '../../api/toolConfirmation';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import {
   executeTerminalCommand,
@@ -740,6 +741,36 @@ export const UnifiedAgenticChat: React.FC<{
               completedAt: new Date(),
               error: payload.error,
             });
+          }
+        }),
+      );
+
+      // Tool Confirmation Request Listener
+      registerListener(
+        listen<{
+          request_id: string;
+          tool_name: string;
+          risk_level: string;
+          message: string;
+          safety_tier: string;
+        }>('tool-confirmation-request', async ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Tool confirmation requested:', payload);
+
+          const riskLevel =
+            payload.risk_level === 'High' || payload.risk_level === 'Critical' ? 'high' : 'medium';
+          const displayMessage = `Tool: ${payload.tool_name}\nSafety Tier: ${payload.safety_tier}\n\n${payload.message}`;
+
+          try {
+            const approved = await confirmRisk(riskLevel, displayMessage);
+
+            console.log(
+              `[UnifiedAgenticChat] Tool confirmation result: ${approved ? 'Approved' : 'Denied'}`,
+            );
+            await respondToolConfirmation(payload.request_id, approved);
+          } catch (error) {
+            console.error('[UnifiedAgenticChat] Error in tool confirmation:', error);
+            // Default to deny on error
+            await respondToolConfirmation(payload.request_id, false);
           }
         }),
       );

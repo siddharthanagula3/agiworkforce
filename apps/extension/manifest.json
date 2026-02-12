@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs4L2zqUBfyMdZ6THTJzF960PNsfHDiF8OpxRJ/ulHx5QMJh1ZzlYg06F2JWSckVcWMZ7ZgiwxHO0ZLIcaBGC9bZnMl8MIIG6DgneuFp2/VwQziAlkzTtQ5I5wvuGrDDy9nmO24dM3nRCGmeoT0xi5CfN0JNyoM64jqHd3Cm0xl+db+jfaVLUNRTUQBOgPovMsAi5UBvOa/DBex61jL3CfSorrypoM+GvcvYEliQTv0husJuhaP3cCkZ8oEv3EwYBVwQbiDC2kIB6lOOJkNgCZJnE92a160+hqjWra5e0glTUSF3IKQ3TJemWyvZw88ouJN40gnD+ToWHzifN5ReIKwIDAQAB",
   "name": "AGI Workforce Browser Automation",
   "version": "1.1.0",
   "description": "Intelligent browser automation and integration for AGI Workforce desktop application",

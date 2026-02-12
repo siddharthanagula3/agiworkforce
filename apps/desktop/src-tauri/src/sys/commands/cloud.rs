@@ -8,6 +8,7 @@ use crate::{
     },
     sys::error::Result,
 };
+use uuid::Uuid;
 
 pub struct CloudState {
     pub manager: Arc<CloudStorageManager>,
@@ -163,8 +164,22 @@ pub async fn cloud_upload(
     let remote_path = request.remote_path.clone();
     let local_path = request.local_path.clone();
 
+    // E2EE: Encrypt file to a temporary location before upload
+    let temp_name = format!("{}.enc", Uuid::new_v4());
+    let temp_path_buf = std::env::temp_dir().join(&temp_name);
+    let temp_path = temp_path_buf.to_string_lossy().to_string();
+
+    // Derive encryption key
+    let key = crate::sys::security::machine_key::derive_key(
+        crate::sys::security::machine_key::KeyPurpose::CloudEncryption,
+    );
+
+    // Encrypt
+    crate::sys::security::storage::encrypt_file_with_key(&local_path, &temp_path, &key)
+        .map_err(|e| crate::sys::error::Error::Other(format!("Encryption failed: {}", e)))?;
+
     let upload_remote_path = remote_path.clone();
-    let upload_local_path = local_path.clone();
+    let upload_local_path = temp_path.clone(); // Upload the ENCRYPTED file
 
     let result = state
         .manager
@@ -173,7 +188,15 @@ pub async fn cloud_upload(
             let local_path = upload_local_path.clone();
             Box::pin(async move { client.upload(&local_path, &remote_path).await })
         })
-        .await?;
+        .await;
+
+    // Clean up temp file regardless of upload success
+    if let Err(e) = std::fs::remove_file(&temp_path) {
+        tracing::warn!("Failed to remove temp encrypted file {}: {}", temp_path, e);
+    }
+
+    // Handle upload result
+    let result = result?;
 
     let _ = app.emit(
         "cloud:file_uploaded",
@@ -198,8 +221,13 @@ pub async fn cloud_download(
     let remote_path = request.remote_path.clone();
     let local_path = request.local_path.clone();
 
+    // E2EE: Download to a temporary location
+    let temp_name = format!("{}.enc", Uuid::new_v4());
+    let temp_path_buf = std::env::temp_dir().join(&temp_name);
+    let temp_path = temp_path_buf.to_string_lossy().to_string();
+
     let download_remote_path = remote_path.clone();
-    let download_local_path = local_path.clone();
+    let download_local_path = temp_path.clone();
 
     state
         .manager
@@ -209,6 +237,24 @@ pub async fn cloud_download(
             Box::pin(async move { client.download(&remote_path, &local_path).await })
         })
         .await?;
+
+    // Decrypt
+    // Derive encryption key
+    let key = crate::sys::security::machine_key::derive_key(
+        crate::sys::security::machine_key::KeyPurpose::CloudEncryption,
+    );
+
+    let decrypt_result =
+        crate::sys::security::storage::decrypt_file_with_key(&temp_path, &local_path, &key)
+            .map_err(|e| crate::sys::error::Error::Other(format!("Decryption failed: {}", e)));
+
+    // Clean up temp file
+    if let Err(e) = std::fs::remove_file(&temp_path) {
+        tracing::warn!("Failed to remove temp encrypted file {}: {}", temp_path, e);
+    }
+
+    // Return decryption result (or propagate error)
+    decrypt_result?;
 
     let _ = app.emit(
         "cloud:file_downloaded",
