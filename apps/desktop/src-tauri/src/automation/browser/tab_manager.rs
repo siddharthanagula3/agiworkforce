@@ -79,12 +79,16 @@ impl TabManager {
     }
 
     pub async fn open_tab(&self, url: &str) -> Result<TabId> {
-        tracing::info!("Opening new tab: {}", url);
-
         let tab_id = uuid::Uuid::new_v4().to_string();
+        self.register_tab(&tab_id, url).await?;
+        Ok(tab_id)
+    }
+
+    pub async fn register_tab(&self, id: &str, url: &str) -> Result<()> {
+        tracing::info!("Registering tab: {} ({})", id, url);
 
         let tab_info = TabInfo {
-            id: tab_id.clone(),
+            id: id.to_string(),
             url: url.to_string(),
             title: "Loading...".to_string(),
             favicon: None,
@@ -93,15 +97,15 @@ impl TabManager {
         };
 
         let mut tabs = self.tabs.lock().await;
-        tabs.insert(tab_id.clone(), tab_info);
+        tabs.insert(id.to_string(), tab_info);
 
         let mut active = self.active_tab.lock().await;
         if active.is_none() {
-            *active = Some(tab_id.clone());
+            *active = Some(id.to_string());
         }
 
-        tracing::info!("Tab opened with ID: {}", tab_id);
-        Ok(tab_id)
+        tracing::info!("Tab registered with ID: {}", id);
+        Ok(())
     }
 
     pub async fn close_tab(&self, id: &TabId) -> Result<()> {

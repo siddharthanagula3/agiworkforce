@@ -6,8 +6,8 @@ import type { ExtensionConfig, RateLimitState } from './types';
 
 // Configuration
 export const DEFAULT_CONFIG: ExtensionConfig = {
-  desktopAppPort: 3001,
-  desktopAppUrl: 'http://localhost:3001',
+  desktopAppPort: 8787,
+  desktopAppUrl: 'http://localhost:8787',
   enableLogging: true,
   maxRetries: 3,
   retryDelayMs: 1000,

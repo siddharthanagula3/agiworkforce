@@ -616,6 +616,56 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalRequired);
 
+      interface ToolConfirmationSummary {
+        request_id: string;
+        tool_name: string;
+        tool_display_name: string;
+        description: string;
+        parameters_summary: string;
+        risk_level: string;
+        safety_tier: string;
+        reason: string;
+        reversible: boolean;
+        undo_description?: string;
+      }
+
+      const unlistenToolConfirmation = await listen<ToolConfirmationSummary>(
+        'tool:confirmation_required',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const payload = event.payload;
+
+          handlersRef.current.addApprovalRequest({
+            id: payload.request_id,
+            type: 'mcp_tool',
+            description: payload.description,
+            riskLevel: (payload.risk_level.toLowerCase() as 'low' | 'medium' | 'high') || 'high',
+            details: {
+              tool: payload.tool_display_name,
+              toolName: payload.tool_name,
+              parameters: payload.parameters_summary,
+              reason: payload.reason,
+              reversible: payload.reversible,
+              safetyTier: payload.safety_tier,
+            },
+            timeoutSeconds: 120, // Match backend timeout
+          });
+
+          focusSidecar('approval');
+        },
+      );
+      push(unlistenToolConfirmation);
+
+      const unlistenToolTimeout = await listen<{ request_id: string }>(
+        'tool:confirmation_timeout',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { request_id } = event.payload;
+          handlersRef.current.rejectOperation(request_id, 'Operation timed out');
+        },
+      );
+      push(unlistenToolTimeout);
+
       interface ApprovalRequestPayload {
         id: string;
         type?: string;

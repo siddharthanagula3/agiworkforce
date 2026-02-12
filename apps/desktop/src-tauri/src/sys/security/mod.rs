@@ -64,7 +64,10 @@ pub use prompt_injection::{PromptInjectionDetector, SecurityAnalysis, SecurityRe
 pub use rate_limit::{RateLimitConfig, RateLimiter};
 pub use rbac::{Permission, RBACManager};
 pub use secret_manager::{SecretError, SecretManager};
-pub use storage::{decrypt_file, encrypt_file, EncryptedData, SecureStorage};
+pub use storage::{
+    decrypt_file, decrypt_file_with_key, encrypt_file, encrypt_file_with_key, EncryptedData,
+    SecureStorage,
+};
 pub use tool_guard::{
     SecurityError, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
     ToolPolicy, ToolSafetyTier,

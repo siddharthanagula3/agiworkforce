@@ -114,11 +114,13 @@ impl PatternMatcher {
             }
 
             // Normalize score
-            let max_possible =
-                (pattern.keywords.len() as f64 * 0.2) + (pattern.regex_patterns.len() as f64 * 0.3);
-            if max_possible > 0.0 {
-                score = (score / max_possible) * pattern.base_confidence;
-            }
+            // Instead of dividing by total possible (which punishes patterns with many keywords),
+            // we saturate at a reasonable threshold (e.g., matching 2-3 keywords or 1 regex is "full match").
+            // 1.0 represents "strong match" before base_confidence application.
+            let saturation_threshold: f64 = 1.0;
+            let normalized_score = (score / saturation_threshold).min(1.0);
+
+            score = normalized_score * pattern.base_confidence;
 
             if score > 0.1 {
                 matches.push(PatternMatch {

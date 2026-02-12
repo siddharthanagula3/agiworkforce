@@ -52,6 +52,10 @@ pub enum KeyPurpose {
     MasterEncryption,
     /// For encrypting email account credentials
     EmailCredentials,
+    /// For encrypting calendar account credentials
+    CalendarCredentials,
+    /// For encrypting cloud sync payloads
+    CloudEncryption,
 }
 
 impl KeyPurpose {
@@ -64,6 +68,8 @@ impl KeyPurpose {
             KeyPurpose::ApiKeys => "api_keys",
             KeyPurpose::MasterEncryption => "master_encryption",
             KeyPurpose::EmailCredentials => "email_credentials",
+            KeyPurpose::CalendarCredentials => "calendar_credentials",
+            KeyPurpose::CloudEncryption => "cloud_encryption",
         }
     }
 }
