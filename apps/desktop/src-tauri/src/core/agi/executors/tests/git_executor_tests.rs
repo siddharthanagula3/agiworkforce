@@ -1033,6 +1033,15 @@ mod tests {
         repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
             .unwrap();
 
+        // Ensure we have a branch named 'main'
+        let head = repo.head().unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        // If HEAD is not main, create main. Use force=true to handle if it exists or if we are renaming.
+        // Actually, easiest is just to create a branch pointer 'main' to the current commit.
+        if repo.find_branch("main", git2::BranchType::Local).is_err() {
+            repo.branch("main", &commit, false).unwrap();
+        }
+
         // Create feature branch
         let head = repo.head().unwrap();
         let head_commit = head.peel_to_commit().unwrap();

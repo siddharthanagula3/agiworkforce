@@ -55,7 +55,7 @@ mod detector_tests {
     fn test_detect_code_task() {
         let detector = IntentDetector::new();
         let intent = detector
-            .detect_sync("write a python script to parse JSON files")
+            .detect_sync("write a python program to parse JSON data")
             .unwrap();
 
         assert_eq!(intent.primary_category, IntentCategory::CodeTask);

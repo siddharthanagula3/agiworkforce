@@ -205,6 +205,8 @@ impl ThinkingConfig {
             || model_lower.contains("o4")
             // Google deep thinking models
             || (model_lower.contains("gemini") && model_lower.contains("think"))
+            // Claude 3.5 Sonnet (new)
+            || model_lower.contains("claude-3-5-sonnet")
     }
 }
 

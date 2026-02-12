@@ -41,7 +41,10 @@ export class WebSocketClient {
     this.teamId = teamId || null;
 
     try {
-      const url = await invoke<string>('connect_websocket', { userId, teamId });
+      const { url, token } = await invoke<{ url: string; token: string }>('connect_websocket', {
+        userId,
+        teamId,
+      });
 
       this.ws = new WebSocket(url);
 
@@ -52,6 +55,7 @@ export class WebSocketClient {
           type: 'Authenticate',
           user_id: userId,
           team_id: teamId,
+          token,
         });
       };
 

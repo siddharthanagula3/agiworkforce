@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::sys::error::{Error, Result};
+use crate::sys::error::Result;
 
 use super::cdp_client::CdpClient;
 use super::tab_manager::TabId;
@@ -120,63 +120,60 @@ impl DomOperations {
         Ok(())
     }
 
-    pub async fn click(tab_id: &TabId, selector: &str, options: ClickOptions) -> Result<()> {
-        tracing::info!("Clicking element in tab {}: {}", tab_id, selector);
+    pub async fn click(client: &CdpClient, selector: &str, options: ClickOptions) -> Result<()> {
+        tracing::debug!("Clicking element: {}", selector);
 
         if let Some(delay) = options.delay {
             tokio::time::sleep(Duration::from_millis(delay)).await;
         }
+
+        // Use CDP client to click
+        client.click_element(selector).await?;
 
         tracing::info!("Element clicked: {}", selector);
         Ok(())
     }
 
     pub async fn type_text(
-        tab_id: &TabId,
+        client: &CdpClient,
         selector: &str,
         text: &str,
         options: TypeOptions,
     ) -> Result<()> {
-        tracing::info!("Typing text in tab {}: {}", tab_id, selector);
-
-        if options.clear_first {
-            tracing::debug!("Clearing input field first");
-        }
+        tracing::debug!("Typing text into: {}", selector);
 
         if let Some(delay) = options.delay {
-            for _ch in text.chars() {
+            // If explicit delay requested, we might need a custom loop,
+            // but CdpClient::type_into_element handles basic typing.
+            // For now, we'll just sleep before typing if delay is set,
+            // or if we truly need character-by-character with delay, we'd need to extend CdpClient.
+            // Let's rely on CdpClient's atomic type_into_element for now unless specific delay logic is needed.
+            if delay > 0 {
                 tokio::time::sleep(Duration::from_millis(delay)).await;
             }
         }
+
+        client
+            .type_into_element(selector, text, options.clear_first)
+            .await?;
 
         tracing::info!("Text typed into element: {}", selector);
         Ok(())
     }
 
-    pub async fn get_text(tab_id: &TabId, selector: &str) -> Result<String> {
-        tracing::info!("Getting text from element in tab {}: {}", tab_id, selector);
-
-        let text = "Element text content".to_string();
-
-        tracing::info!("Got text from element: {}", text);
+    pub async fn get_text(client: &CdpClient, selector: &str) -> Result<String> {
+        tracing::debug!("Getting text from: {}", selector);
+        let text = client.get_text(selector).await?;
         Ok(text)
     }
 
     pub async fn get_attribute(
-        tab_id: &TabId,
+        client: &CdpClient,
         selector: &str,
         attribute: &str,
     ) -> Result<Option<String>> {
-        tracing::info!(
-            "Getting attribute {} from element in tab {}: {}",
-            attribute,
-            tab_id,
-            selector
-        );
-
-        let value = Some("attribute_value".to_string());
-
-        tracing::info!("Got attribute value: {:?}", value);
+        tracing::debug!("Getting attribute {} from: {}", attribute, selector);
+        let value = client.get_attribute(selector, attribute).await?;
         Ok(value)
     }
 
@@ -215,71 +212,45 @@ impl DomOperations {
         Ok(info)
     }
 
-    pub async fn wait_for_selector(tab_id: &TabId, selector: &str, timeout_ms: u64) -> Result<()> {
-        tracing::info!(
-            "Waiting for selector in tab {} (timeout {}ms): {}",
-            tab_id,
+    pub async fn wait_for_selector(
+        client: &CdpClient,
+        selector: &str,
+        timeout_ms: u64,
+    ) -> Result<()> {
+        tracing::debug!(
+            "Waiting for selector (timeout {}ms): {}",
             timeout_ms,
             selector
         );
-
-        let start = std::time::Instant::now();
-
-        loop {
-            let exists = Self::element_exists(tab_id, selector).await?;
-
-            if exists {
-                tracing::info!("Element found: {}", selector);
-                return Ok(());
-            }
-
-            if start.elapsed().as_millis() > timeout_ms as u128 {
-                return Err(Error::CommandTimeout(format!(
-                    "Element not found after {}ms: {}",
-                    timeout_ms, selector
-                )));
-            }
-
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    }
-
-    pub async fn element_exists(tab_id: &TabId, selector: &str) -> Result<bool> {
-        tracing::debug!("Checking if element exists in tab {}: {}", tab_id, selector);
-
-        Ok(true)
-    }
-
-    pub async fn select_option(tab_id: &TabId, selector: &str, value: &str) -> Result<()> {
-        tracing::info!(
-            "Selecting option in dropdown {} in tab {}: {}",
-            selector,
-            tab_id,
-            value
-        );
-
-        tracing::info!("Option selected: {}", value);
+        client.wait_for_selector(selector, timeout_ms).await?;
         Ok(())
     }
 
-    pub async fn check(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!("Checking element in tab {}: {}", tab_id, selector);
+    pub async fn element_exists(client: &CdpClient, selector: &str) -> Result<bool> {
+        client.element_exists(selector).await
+    }
 
-        tracing::info!("Element checked: {}", selector);
+    pub async fn select_option(client: &CdpClient, selector: &str, value: &str) -> Result<()> {
+        tracing::debug!("Selecting option in {}: {}", selector, value);
+        client.select_option(selector, value).await?;
         Ok(())
     }
 
-    pub async fn uncheck(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!("Unchecking element in tab {}: {}", tab_id, selector);
-
-        tracing::info!("Element unchecked: {}", selector);
+    pub async fn check(client: &CdpClient, selector: &str) -> Result<()> {
+        tracing::debug!("Checking element: {}", selector);
+        client.set_checked(selector, true).await?;
         Ok(())
     }
 
-    pub async fn focus(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!("Focusing element in tab {}: {}", tab_id, selector);
+    pub async fn uncheck(client: &CdpClient, selector: &str) -> Result<()> {
+        tracing::debug!("Unchecking element: {}", selector);
+        client.set_checked(selector, false).await?;
+        Ok(())
+    }
 
-        tracing::info!("Element focused: {}", selector);
+    pub async fn focus(client: &CdpClient, selector: &str) -> Result<()> {
+        tracing::debug!("Focusing element: {}", selector);
+        client.focus_element(selector).await?;
         Ok(())
     }
 
@@ -290,53 +261,48 @@ impl DomOperations {
         Ok(())
     }
 
-    pub async fn hover(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!("Hovering over element in tab {}: {}", tab_id, selector);
-
-        tracing::info!("Hovering over element: {}", selector);
+    pub async fn hover(client: &CdpClient, selector: &str) -> Result<()> {
+        tracing::debug!("Hovering element: {}", selector);
+        client.hover_element(selector).await?;
         Ok(())
     }
 
-    pub async fn evaluate(tab_id: &TabId, _script: &str) -> Result<serde_json::Value> {
-        tracing::info!("Evaluating script in tab {}", tab_id);
-
-        let result = serde_json::json!({"success": true});
-
-        tracing::info!("Script evaluated successfully");
-        Ok(result)
+    pub async fn evaluate(client: &CdpClient, script: &str) -> Result<serde_json::Value> {
+        tracing::debug!("Evaluating script");
+        client.evaluate(script).await
     }
 
-    pub async fn query_all(tab_id: &TabId, selector: &str) -> Result<Vec<ElementInfo>> {
-        tracing::info!("Querying all elements in tab {}: {}", tab_id, selector);
+    pub async fn query_all(client: &CdpClient, selector: &str) -> Result<Vec<ElementInfo>> {
+        tracing::debug!("Querying all elements: {}", selector);
+        let values = client.query_all(selector).await?;
 
-        let elements = vec![
-            ElementInfo {
-                tag_name: "div".to_string(),
-                text: "Element 1".to_string(),
-                attributes: std::collections::HashMap::new(),
-                bounds: None,
-            },
-            ElementInfo {
-                tag_name: "div".to_string(),
-                text: "Element 2".to_string(),
-                attributes: std::collections::HashMap::new(),
-                bounds: None,
-            },
-        ];
-
-        tracing::info!("Found {} elements", elements.len());
+        let mut elements = Vec::new();
+        for val in values {
+            if let Some(obj) = val.as_object() {
+                let tag_name = obj
+                    .get("tagName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let text = obj
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                // We could extract more if CdpClient returned it
+                elements.push(ElementInfo {
+                    tag_name,
+                    text,
+                    attributes: std::collections::HashMap::new(), // Todo: extract attributes
+                    bounds: None,
+                });
+            }
+        }
         Ok(elements)
     }
 
-    pub async fn scroll_into_view(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!(
-            "Scrolling element into view in tab {}: {}",
-            tab_id,
-            selector
-        );
-
-        tracing::info!("Element scrolled into view: {}", selector);
-        Ok(())
+    pub async fn scroll_into_view(client: &CdpClient, selector: &str) -> Result<()> {
+        client.scroll_into_view(selector).await
     }
 }
 

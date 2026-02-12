@@ -1,5 +1,10 @@
 use std::sync::Arc;
 
+use crate::sys::error::{Error, Result};
+use crate::sys::security::{
+    encryption::{decrypt_secret, encrypt_secret, EncryptedSecret},
+    machine_key::{self, KeyPurpose},
+};
 use chrono::{DateTime, TimeZone, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -14,7 +19,6 @@ use crate::features::calendar::{
     CalendarOAuthSettings, CalendarProvider, CreateEventRequest, EventListResponse,
     ListEventsRequest, UpdateEventRequest,
 };
-use crate::sys::error::{Error, Result};
 
 pub struct CalendarState {
     pub manager: Arc<CalendarManager>,
@@ -344,10 +348,20 @@ fn insert_calendar_account(
     info: &CalendarAccountInfo,
     created_at: i64,
 ) -> Result<()> {
-    let token_json = serde_json::to_string(&info.token)
-        .map_err(|e| Error::Generic(format!("Failed to serialize token: {}", e)))?;
     let config_json = serde_json::to_string(&info.settings)
         .map_err(|e| Error::Generic(format!("Failed to serialize settings: {}", e)))?;
+
+    let token_json_raw = serde_json::to_string(&info.token)
+        .map_err(|e| Error::Generic(format!("Failed to serialize token: {}", e)))?;
+
+    // ENCRYPTION: Encrypt the token JSON
+    let key = machine_key::derive_key(KeyPurpose::CalendarCredentials);
+    let encrypted_token = encrypt_secret(&key, &token_json_raw)
+        .map_err(|e| Error::Generic(format!("Failed to encrypt token: {}", e)))?;
+
+    // Store as JSON string of EncryptedSecret
+    let token_json = serde_json::to_string(&encrypted_token)
+        .map_err(|e| Error::Generic(format!("Failed to serialize encrypted token: {}", e)))?;
 
     conn.execute(
         "INSERT INTO calendar_accounts (id, provider, account_email, display_name, token_json, config_json, created_at, updated_at)
@@ -356,7 +370,7 @@ fn insert_calendar_account(
             provider = excluded.provider,
             account_email = excluded.account_email,
             display_name = excluded.display_name,
-            token_json = excluded.token_json,
+            token_json = excluded.token_json, // Updates with new encrypted value
             config_json = excluded.config_json,
             created_at = calendar_accounts.created_at,
             updated_at = excluded.updated_at",
@@ -384,7 +398,8 @@ fn fetch_calendar_account(
          FROM calendar_accounts WHERE id = ?1",
         params![account_id],
         |row| {
-            let provider: CalendarProvider = match row.get::<_, String>(0)?.as_str() {
+            let provider_str: String = row.get(0)?;
+            let provider = match provider_str.as_str() {
                 "google" => CalendarProvider::Google,
                 "outlook" => CalendarProvider::Outlook,
                 other => {
@@ -397,7 +412,8 @@ fn fetch_calendar_account(
             };
 
             let config_json: String = row.get(4)?;
-            let token_json: String = row.get(3)?;
+            let token_json_enc: String = row.get(3)?; // Now contains EncryptedSecret JSON
+
             let settings: CalendarOAuthSettings =
                 serde_json::from_str(&config_json).map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
@@ -406,13 +422,43 @@ fn fetch_calendar_account(
                         Box::new(e),
                     )
                 })?;
-            let token: TokenResponse = serde_json::from_str(&token_json).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    3,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+
+            // DECRYPTION:
+            let key = machine_key::derive_key(KeyPurpose::CalendarCredentials);
+
+            // Try to deserialize as EncryptedSecret
+            let token: TokenResponse =
+                match serde_json::from_str::<EncryptedSecret>(&token_json_enc) {
+                    Ok(encrypted_secret) => {
+                        // It's encrypted, decrypt it
+                        let decrypted_json =
+                            decrypt_secret(&key, &encrypted_secret).map_err(|e| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    3,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(Error::Generic(e)),
+                                )
+                            })?;
+                        serde_json::from_str(&decrypted_json).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                3,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })?
+                    }
+                    Err(_) => {
+                        // Fallback: Use as plain text (migration path for existing unencrypted data)
+                        // If parsing as EncryptedSecret fails, assume it's the old plain JSON
+                        serde_json::from_str(&token_json_enc).map_err(|e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                3,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        })?
+                    }
+                };
 
             let created_at: i64 = row.get(5)?;
             let connected_at = Utc
