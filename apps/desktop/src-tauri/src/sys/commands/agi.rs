@@ -57,7 +57,7 @@ static AGI_CORE: Mutex<Option<Arc<TokioMutex<AGICore>>>> = Mutex::new(None);
 #[tauri::command]
 pub async fn agi_init(
     config: AGIConfig,
-    automation: State<'_, Arc<Option<AutomationService>>>,
+    automation: State<'_, Option<Arc<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -69,10 +69,9 @@ pub async fn agi_init(
 
     let router_for_agi = llm_state.router.clone();
 
-    let automation_arc = Arc::new(
-        AutomationService::new()
-            .map_err(|e| format!("Failed to create automation service for AGI: {}", e))?,
-    );
+    let automation_arc = automation.inner().clone().ok_or_else(|| {
+        "Automation service not available. Please grant accessibility permissions.".to_string()
+    })?;
 
     let agi = AGICore::new(config, router_for_agi, automation_arc, Some(app.clone()))
         .map_err(|e| format!("Failed to create AGI: {}", e))?;
@@ -283,7 +282,7 @@ pub struct SpawnParallelAgentsResponse {
 #[tauri::command]
 pub async fn orchestrator_init(
     request: OrchestratorInitRequest,
-    automation: State<'_, Arc<Option<AutomationService>>>,
+    automation: State<'_, Option<Arc<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -295,10 +294,9 @@ pub async fn orchestrator_init(
 
     let router_for_orchestrator = llm_state.router.clone();
 
-    let automation_arc = Arc::new(
-        AutomationService::new()
-            .map_err(|e| format!("Failed to create automation service: {}", e))?,
-    );
+    let automation_arc = automation.inner().clone().ok_or_else(|| {
+        "Automation service not available. Please grant accessibility permissions.".to_string()
+    })?;
 
     let orchestrator = AgentOrchestrator::new(
         request.max_agents,
@@ -322,7 +320,7 @@ pub async fn orchestrator_init(
 
 #[tauri::command]
 pub async fn orchestrator_init_default(
-    automation: State<'_, Arc<Option<AutomationService>>>,
+    automation: State<'_, Option<Arc<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {

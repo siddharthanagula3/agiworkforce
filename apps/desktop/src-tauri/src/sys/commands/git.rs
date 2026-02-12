@@ -235,6 +235,7 @@ pub async fn git_commit(path: String, message: String) -> Result<String, String>
 
 #[tauri::command]
 pub async fn git_push(
+    app: tauri::AppHandle,
     path: String,
     remote: Option<String>,
     branch: Option<String>,
@@ -242,6 +243,29 @@ pub async fn git_push(
 ) -> Result<String, String> {
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Pushing to {}", remote_name);
+
+    // AUDIT-FIX: Enforce user confirmation for push
+    // We categorize this as "git_push" tool
+    let confirmation_args = serde_json::json!({
+        "path": path,
+        "remote": remote_name,
+        "branch": branch,
+        "force": force
+    });
+
+    // We treat git push as always requiring confirmation for now,
+    // or we could check command_validator::requires_confirmation("git push")
+    // But since this is a specific tool command, we can just enforce it directly
+    // or use the validator if we want centralized config.
+    // Let's use the validator to be consistent with terminal.rs
+    if crate::sys::security::command_validator::requires_confirmation("git push") {
+        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "git_push",
+            &confirmation_args,
+        )
+        .await?;
+    }
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
@@ -482,11 +506,28 @@ pub async fn git_list_branches(path: String) -> Result<Vec<GitBranch>, String> {
 
 #[tauri::command]
 pub async fn git_delete_branch(
+    app: tauri::AppHandle,
     path: String,
     branch_name: String,
     _force: bool,
 ) -> Result<String, String> {
     tracing::info!("Deleting branch: {}", branch_name);
+
+    // AUDIT-FIX: Enforce user confirmation for branch deletion
+    let confirmation_args = serde_json::json!({
+        "path": path,
+        "branch_name": branch_name,
+        "force": _force
+    });
+
+    if crate::sys::security::command_validator::requires_confirmation("git branch -D") {
+        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "git_delete_branch",
+            &confirmation_args,
+        )
+        .await?;
+    }
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
@@ -784,8 +825,29 @@ pub async fn git_stash_pop(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn git_reset(path: String, commit: String, mode: String) -> Result<String, String> {
+pub async fn git_reset(
+    app: tauri::AppHandle,
+    path: String,
+    commit: String,
+    mode: String,
+) -> Result<String, String> {
     tracing::info!("Resetting to {} ({})", commit, mode);
+
+    // AUDIT-FIX: Enforce user confirmation for reset
+    let confirmation_args = serde_json::json!({
+        "path": path,
+        "commit": commit,
+        "mode": mode
+    });
+
+    if crate::sys::security::command_validator::requires_confirmation("git reset") {
+        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "git_reset",
+            &confirmation_args,
+        )
+        .await?;
+    }
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;

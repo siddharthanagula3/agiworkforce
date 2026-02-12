@@ -20,14 +20,16 @@ pub struct RealtimeServer {
     clients: Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
     senders: Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
     presence: Arc<PresenceManager>,
+    token: String,
 }
 
 impl RealtimeServer {
-    pub fn new(presence: Arc<PresenceManager>) -> Self {
+    pub fn new(presence: Arc<PresenceManager>, token: String) -> Self {
         Self {
             clients: Arc::new(TokioMutex::new(HashMap::new())),
             senders: Arc::new(TokioMutex::new(HashMap::new())),
             presence,
+            token,
         }
     }
 
@@ -51,10 +53,11 @@ impl RealtimeServer {
                     let clients = self.clients.clone();
                     let senders = self.senders.clone();
                     let presence = self.presence.clone();
+                    let token = self.token.clone();
 
                     tokio::spawn(async move {
                         if let Err(e) = Self::handle_connection_wrapper(
-                            stream, peer, clients, senders, presence,
+                            stream, peer, clients, senders, presence, token,
                         )
                         .await
                         {
@@ -75,19 +78,62 @@ impl RealtimeServer {
         clients: Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
         senders: Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
         presence: Arc<PresenceManager>,
+        token: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let ws_stream = accept_async(stream).await?;
-        Self::handle_connection(ws_stream, peer, clients, senders, presence).await;
+        Self::handle_connection(ws_stream, peer, clients, senders, presence, token).await;
         Ok(())
     }
 
     async fn handle_connection(
-        ws_stream: WebSocketStream<TcpStream>,
+        mut ws_stream: WebSocketStream<TcpStream>,
         _peer: SocketAddr,
         clients: Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
         senders: Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
         presence: Arc<PresenceManager>,
+        token: String,
     ) {
+        // Enforce Authentication
+        tracing::debug!("Waiting for authentication...");
+        let mut authenticated = false;
+        let mut user_id_from_auth: Option<String> = None;
+        let mut team_id_from_auth: Option<String> = None;
+
+        if let Some(Ok(msg)) = ws_stream.next().await {
+            if let Message::Text(text) = msg {
+                if let Ok(RealtimeEvent::Authenticate {
+                    user_id,
+                    team_id,
+                    token: auth_token,
+                }) = serde_json::from_str::<RealtimeEvent>(&text)
+                {
+                    if let Some(sent_token) = auth_token {
+                        if sent_token == token {
+                            authenticated = true;
+                            user_id_from_auth = Some(user_id);
+                            team_id_from_auth = team_id;
+                            tracing::info!(
+                                "Authentication successful for user: {:?}",
+                                user_id_from_auth
+                            );
+                        } else {
+                            tracing::warn!("Authentication failed: Invalid token");
+                        }
+                    } else {
+                        tracing::warn!("Authentication failed: Missing token");
+                    }
+                } else {
+                    tracing::warn!("Authentication failed: Invalid event format");
+                }
+            }
+        }
+
+        if !authenticated {
+            let _ = ws_stream.close(None).await;
+            tracing::warn!("Connection closed due to authentication failure");
+            return;
+        }
+
         let (sender, receiver) = ws_stream.split();
         let client_id = uuid::Uuid::new_v4().to_string();
 
@@ -97,8 +143,8 @@ impl RealtimeServer {
                 client_id.clone(),
                 WebSocketClient {
                     id: client_id.clone(),
-                    user_id: None,
-                    team_id: None,
+                    user_id: user_id_from_auth,
+                    team_id: team_id_from_auth,
                 },
             );
         }
@@ -152,7 +198,9 @@ impl RealtimeServer {
         presence: &Arc<PresenceManager>,
     ) {
         match &event {
-            RealtimeEvent::Authenticate { user_id, team_id } => {
+            RealtimeEvent::Authenticate {
+                user_id, team_id, ..
+            } => {
                 {
                     let mut clients_lock = clients.lock().await;
                     if let Some(client) = clients_lock.get_mut(client_id) {
@@ -189,6 +237,27 @@ impl RealtimeServer {
             RealtimeEvent::CursorMoved { .. } => {
                 if let Some(team_id) = Self::get_client_team(client_id, clients).await {
                     Self::broadcast_to_team(&team_id, event.clone(), clients, senders).await;
+                }
+            }
+
+            RealtimeEvent::NativeMessage { id, payload } => {
+                tracing::info!("Received native message: {} {:?}", id, payload);
+                // Reply with success (Echo for now)
+                let response = RealtimeEvent::NativeResponse {
+                    id: id.clone(),
+                    success: true,
+                    data: Some(
+                        serde_json::json!({ "status": "native_proxy_received", "original_payload": payload }),
+                    ),
+                    error: None,
+                };
+
+                let message = Message::Text(serde_json::to_string(&response).unwrap_or_default());
+                let mut senders_lock = senders.lock().await; // Use write lock or whatever logic is used
+                                                             // The snippet used `broadcast_to_resource` pattern.
+                                                             // We need to send back to the *source* client_id.
+                if let Some(sender) = senders_lock.get_mut(client_id) {
+                    let _ = sender.send(message).await;
                 }
             }
 

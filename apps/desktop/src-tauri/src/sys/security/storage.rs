@@ -308,7 +308,80 @@ fn generate_salt() -> Vec<u8> {
     salt
 }
 
-/// Encrypt file at rest with AES-256-GCM
+/// Encrypt file at rest with AES-256-GCM using a provided key
+pub fn encrypt_file_with_key(
+    input_path: &str,
+    output_path: &str,
+    key: &[u8],
+) -> Result<(), String> {
+    use std::fs;
+
+    let plaintext = fs::read(input_path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    use aes_gcm::aead::rand_core::RngCore;
+    let mut nonce_bytes = [0u8; NONCE_SIZE];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_ref())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Format: [salt (32 bytes - ZEROED for raw key capability)][nonce (12 bytes)][ciphertext]
+    // We use a zeroed salt to indicate this wasn't password-derived, or just random
+    // Actually, to maintain compatibility with decrypt_file which expects a salt to SKIP,
+    // we should write a dummy salt.
+    let dummy_salt = [0u8; SALT_SIZE];
+
+    let mut output = Vec::new();
+    output.extend_from_slice(&dummy_salt);
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
+
+    fs::write(output_path, output).map_err(|e| format!("Failed to write encrypted file: {}", e))?;
+
+    Ok(())
+}
+
+/// Decrypt file with AES-256-GCM using a provided key
+pub fn decrypt_file_with_key(
+    input_path: &str,
+    output_path: &str,
+    key: &[u8],
+) -> Result<(), String> {
+    use std::fs;
+
+    let encrypted_data = fs::read(input_path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    if encrypted_data.len() < SALT_SIZE + NONCE_SIZE {
+        return Err("Invalid encrypted file format".to_string());
+    }
+
+    // Parse: [salt (32 bytes)][nonce (12 bytes)][ciphertext]
+    // We ignore salt because we are provided the key directly
+    let _salt = &encrypted_data[0..SALT_SIZE];
+    let nonce_bytes = &encrypted_data[SALT_SIZE..SALT_SIZE + NONCE_SIZE];
+    let ciphertext = &encrypted_data[SALT_SIZE + NONCE_SIZE..];
+
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+
+    fs::write(output_path, plaintext)
+        .map_err(|e| format!("Failed to write decrypted file: {}", e))?;
+
+    Ok(())
+}
+
+/// Encrypt file at rest with AES-256-GCM using password derivation
 #[allow(deprecated)]
 pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
@@ -341,7 +414,7 @@ pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Resu
     Ok(())
 }
 
-/// Decrypt file encrypted with encrypt_file
+/// Decrypt file encrypted with encrypt_file using password
 #[allow(deprecated)]
 pub fn decrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
@@ -354,6 +427,10 @@ pub fn decrypt_file(input_path: &str, output_path: &str, password: &str) -> Resu
 
     // Parse: [salt (32 bytes)][nonce (12 bytes)][ciphertext]
     let salt = &encrypted_data[0..SALT_SIZE];
+    // We can't use decrypt_file_with_key here easily because we need the salt from the file to derive the key
+    // so we keep the implementation duplicated or refactor slightly.
+    // Refactoring for safety:
+
     let nonce_bytes = &encrypted_data[SALT_SIZE..SALT_SIZE + NONCE_SIZE];
     let ciphertext = &encrypted_data[SALT_SIZE + NONCE_SIZE..];
 
