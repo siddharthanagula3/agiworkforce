@@ -52,6 +52,22 @@ pub async fn execute_terminal_command(
         return Err(e.to_string());
     }
 
+    // AUDIT-FIX: Enforce user confirmation for dangerous commands
+    if crate::sys::security::command_validator::requires_confirmation(&command) {
+        let confirmation_args = serde_json::json!({
+            "command": command,
+            "cwd": cwd,
+            "shell": shell,
+        });
+
+        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "terminal_execute",
+            &confirmation_args,
+        )
+        .await?;
+    }
+
     if let Some(ref dir) = cwd {
         if !Path::new(dir).exists() {
             return Err(format!("Working directory does not exist: {}", dir));

@@ -21,6 +21,7 @@ import {
 // Service worker state
 interface BackgroundState {
   isNativeConnected: boolean;
+  nativePort: chrome.runtime.Port | null;
   connectionStatus: ConnectionStatus;
   lastNativeError: string | null;
   rateLimiter: RateLimiter;
@@ -30,6 +31,7 @@ interface BackgroundState {
 
 const state: BackgroundState = {
   isNativeConnected: false,
+  nativePort: null,
   connectionStatus: 'disconnected',
   lastNativeError: null,
   rateLimiter: new RateLimiter(120, 500),
@@ -47,6 +49,8 @@ const pendingRequests = new Map<
   }
 >();
 
+const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
+
 /**
  * Initialize the background service worker
  */
@@ -59,13 +63,85 @@ function initialize(): void {
   // Set up context menu
   setupContextMenu();
 
-  // Check initial connection status
+  // Connect to native host
+  connectToNativeHost();
+
+  // Check initial connection status (keeping HTTP as fallback/health check for now)
   checkDesktopConnection();
 
   // Periodic connection check
-  setInterval(checkDesktopConnection, 30000);
+  setInterval(() => {
+    checkDesktopConnection();
+    if (!state.isNativeConnected) {
+      connectToNativeHost();
+    }
+  }, 30000);
 
   logger.info('Background service worker initialized');
+}
+
+/**
+ * Connect to the native messaging host
+ */
+function connectToNativeHost(): void {
+  if (state.nativePort) {
+    return;
+  }
+
+  try {
+    logger.info('Connecting to native host', { host: NATIVE_HOST_NAME });
+    const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+
+    port.onMessage.addListener(handleNativeMessage);
+    port.onDisconnect.addListener(handleNativeDisconnect);
+
+    state.nativePort = port;
+    state.isNativeConnected = true;
+    state.connectionStatus = 'connected';
+    state.lastNativeError = null;
+
+    notifyConnectionStatusChange();
+    logger.info('Connected to native host');
+  } catch (error) {
+    logger.error('Failed to connect to native host', error);
+    state.isNativeConnected = false;
+    state.nativePort = null;
+    state.connectionStatus = 'disconnected';
+    state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
+    notifyConnectionStatusChange();
+  }
+}
+
+/**
+ * Handle messages from the native host
+ */
+function handleNativeMessage(message: any): void {
+  logger.debug('Received native message', message);
+
+  if (message && message.id && pendingRequests.has(message.id)) {
+    const request = pendingRequests.get(message.id);
+    if (request) {
+      const { resolve, timeout } = request;
+      clearTimeout(timeout);
+      pendingRequests.delete(message.id);
+      resolve(message as ExtensionResponse);
+    }
+  }
+}
+
+/**
+ * Handle native host disconnection
+ */
+function handleNativeDisconnect(): void {
+  const error = chrome.runtime.lastError?.message || 'Native host disconnected';
+  logger.warn('Native host disconnected', { error });
+
+  state.nativePort = null;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  state.lastNativeError = error;
+
+  notifyConnectionStatusChange();
 }
 
 /**
@@ -185,40 +261,53 @@ async function forwardToContentScript(
  * Check desktop app connection status
  */
 async function checkDesktopConnection(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
-    const response = await fetch('http://localhost:3001/health', {
+    const response = await fetch('http://localhost:8787/health', {
       method: 'GET',
-      timeout: 5000,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const isConnected = response.ok;
 
     if (isConnected !== state.isNativeConnected) {
-      state.isNativeConnected = isConnected;
-      state.connectionStatus = isConnected ? 'connected' : 'disconnected';
-      state.lastNativeError = null;
+      // If we are native connected, we might not want to downgrade to "connected via HTTP" status
+      // unless native is ALSO disconnected.
+      // However, this function is mostly a fallback.
+      if (!state.isNativeConnected && isConnected) {
+        // Only update status if native is NOT connected.
+        // Native takes precedence.
+        state.connectionStatus = 'connected';
+      }
 
-      // Notify all tabs of connection status change
-      notifyConnectionStatusChange();
+      // If we are native connected, we don't care if HTTP fails,
+      // EXCEPT that we might want to log it.
+      // But if HTTP works, and Native works, we are good.
 
-      logger.info('Desktop connection status changed', {
-        connected: isConnected,
-      });
+      // Actually, if native is connected, we should trust native.
+      // This HTTP check is a legacy fallback.
+      // We will only update global status if native is NOT connected.
 
-      // Store connection status
-      await storageUtils.setItem('connectedToDesktop', isConnected);
+      if (!state.isNativeConnected) {
+        state.connectionStatus = isConnected ? 'connected' : 'disconnected';
+        notifyConnectionStatusChange();
+      }
+
+      await storageUtils.setItem('connectedToDesktop', isConnected || state.isNativeConnected);
     }
   } catch (error) {
-    if (state.isNativeConnected) {
-      state.isNativeConnected = false;
-      state.connectionStatus = 'disconnected';
-      state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
+    clearTimeout(timeoutId);
 
+    // Only update status if native is NOT connected
+    if (!state.isNativeConnected) {
+      state.connectionStatus = 'disconnected';
       notifyConnectionStatusChange();
-      logger.warn('Lost connection to desktop app', error);
     }
 
-    await storageUtils.setItem('connectedToDesktop', false);
+    await storageUtils.setItem('connectedToDesktop', state.isNativeConnected);
   }
 }
 
@@ -316,7 +405,7 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    const _response = await chrome.tabs.captureVisibleTab(tab.id, {
+    await chrome.tabs.captureVisibleTab(tab.id, {
       format: 'png',
       quality: 90,
     });
@@ -324,9 +413,12 @@ async function captureCurrentPage(): Promise<void> {
     logger.info('Page captured', { tabId: tab.id });
 
     // Increment action count
-    const { actionCount = 0 } = await storageUtils.getItem<{ actionCount: number }>('stats', {
+    const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
       actionCount: 0,
     });
+
+    // Safety check for stats
+    const actionCount = stats?.actionCount ?? 0;
 
     await storageUtils.setItem('stats', {
       actionCount: actionCount + 1,
@@ -345,12 +437,13 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   }
 
   const msg = message as Record<string, unknown>;
-  return typeof msg.type === 'string';
+  return typeof msg['type'] === 'string';
 }
 
 /**
  * Create request ID for tracking
  */
+// @ts-ignore: Unused helper
 function _createRequestId(): string {
   return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -358,6 +451,7 @@ function _createRequestId(): string {
 /**
  * Get pending request or create new one
  */
+// @ts-ignore: Unused helper
 function _getPendingRequest(id: string) {
   return pendingRequests.get(id);
 }
@@ -365,6 +459,7 @@ function _getPendingRequest(id: string) {
 /**
  * Clean up pending request
  */
+// @ts-ignore: Unused helper
 function _removePendingRequest(id: string): void {
   const request = pendingRequests.get(id);
   if (request) {

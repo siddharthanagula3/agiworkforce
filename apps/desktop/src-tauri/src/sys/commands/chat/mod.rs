@@ -2876,10 +2876,39 @@ Please confirm the tool permissions or try a different approach.",
                             }
                         };
 
-                        let output_cost = if let Some(p) = provider_enum_clone {
-                            CostCalculator::new().calculate(p, &model_clone, 0, token_count)
+                        // Implement accurate token/cost tracking favoring provider data
+                        // If we have explicit credits (e.g. ManagedCloud), use that cost directly
+                        // Otherwise calculate based on accurate token counts from usage statistics
+                        let (final_tokens, final_cost) = if let Some(credits) = &final_credits {
+                            let cost = credits.cost_cents / 100.0;
+                            let tokens = if let Some(usage) = &final_usage {
+                                usage.completion_tokens.unwrap_or(token_count)
+                            } else {
+                                token_count
+                            };
+                            (tokens, cost)
                         } else {
-                            0.0
+                            // Determine best estimate of output tokens
+                            let output_tokens = if let Some(usage) = &final_usage {
+                                if let Some(comp) = usage.completion_tokens {
+                                    comp
+                                } else if let (Some(total), Some(prompt)) =
+                                    (usage.total_tokens, usage.prompt_tokens)
+                                {
+                                    total.saturating_sub(prompt)
+                                } else {
+                                    token_count
+                                }
+                            } else {
+                                token_count
+                            };
+
+                            let cost = if let Some(p) = provider_enum_clone {
+                                CostCalculator::new().calculate(p, &model_clone, 0, output_tokens)
+                            } else {
+                                0.0
+                            };
+                            (output_tokens, cost)
                         };
 
                         let msg = Message {
@@ -2888,8 +2917,8 @@ Please confirm the tool permissions or try a different approach.",
                             user_id: user_id_clone.clone(),
                             role: MessageRole::Assistant,
                             content: full_content.clone(),
-                            tokens: Some(token_count as i32),
-                            cost: Some(output_cost),
+                            tokens: Some(final_tokens as i32),
+                            cost: Some(final_cost),
                             provider: provider_enum_clone.map(|p| p.as_string().to_string()),
                             model: Some(model_clone.clone()),
                             created_at: Utc::now(),

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,41 +346,6 @@ async fn log_file_operation(
     Ok(())
 }
 
-async fn _confirm_dangerous_operation(
-    operation: &str,
-    paths: &[String],
-    app_handle: &AppHandle,
-) -> Result<bool, String> {
-    // Dangerous if bulk operation OR recursive delete of a directory
-    let is_dangerous = paths.len() >= 10 || operation == "recursive_delete";
-
-    if is_dangerous {
-        warn!(
-            "Dangerous operation detected: {} on {} paths",
-            operation,
-            paths.len()
-        );
-
-        let event = DangerousOpEvent {
-            operation: operation.to_string(),
-            file_count: paths.len(),
-            paths: paths.to_vec(),
-        };
-
-        app_handle
-            .emit("dangerous-operation", event)
-            .map_err(|e| format!("Failed to emit dangerous operation event: {}", e))?;
-
-        // Return false to block the operation until user approves (frontend should handle this)
-        // In this implementation, we block and fail, expecting frontend to retry with a "force" flag
-        // or we expect a separate confirmation flow.
-        // For now, we return false which will cause the caller to abort.
-        return Ok(false);
-    }
-
-    Ok(true)
-}
-
 #[tauri::command]
 pub async fn file_read(
     app: AppHandle,
@@ -521,6 +486,16 @@ pub async fn file_delete(
         Err(_) => {
             return Err(format!("File does not exist: {}", path));
         }
+    }
+
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "file_delete",
+        &serde_json::json!({ "path": path }),
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
@@ -874,10 +849,14 @@ pub async fn dir_delete(
 
     if recursive {
         warn!("Recursive directory deletion requested for: {}", path);
-        if !_confirm_dangerous_operation("recursive_delete", &[path.clone()], &app).await? {
-            return Err(
-                "Operation blocked: User confirmation required for recursive delete".to_string(),
-            );
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            &app,
+            "dir_delete",
+            &serde_json::json!({ "path": path, "recursive": true }),
+        )
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
         }
     }
 

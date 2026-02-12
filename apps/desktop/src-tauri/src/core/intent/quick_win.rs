@@ -108,8 +108,8 @@ impl QuickWinOptimizer {
         let mut tool_priorities = HashMap::new();
 
         // Reading operations (fastest)
+        tool_priorities.insert("memory_recall".to_string(), 5); // Fastest and most fundamental
         tool_priorities.insert("file_read".to_string(), 10);
-        tool_priorities.insert("memory_recall".to_string(), 10);
         tool_priorities.insert("list_scheduled_tasks".to_string(), 10);
         tool_priorities.insert("git_status".to_string(), 15);
 

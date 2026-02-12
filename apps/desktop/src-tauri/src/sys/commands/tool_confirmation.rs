@@ -3,10 +3,10 @@
 //! This module provides Tauri commands for the tool confirmation dialog system.
 //! It handles user responses to tool confirmation requests and manages pending confirmations.
 
+use crate::sys::security::tool_guard::RiskLevel;
 #[allow(unused_imports)]
 use crate::sys::security::{
-    RiskLevel, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
-    ToolSafetyTier,
+    ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard, ToolSafetyTier,
 };
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -379,6 +379,38 @@ pub async fn request_tool_confirmation(
             ))
         }
     }
+}
+
+/// Request confirmation from user for a tool execution (Simplified version).
+/// Automatically retrieves state and constructs the request.
+pub async fn request_confirmation_simple(
+    app_handle: &tauri::AppHandle,
+    tool_name: &str,
+    args: &serde_json::Value,
+) -> Result<bool, String> {
+    use tauri::Manager;
+
+    let state = app_handle
+        .try_state::<ToolConfirmationState>()
+        .ok_or_else(|| "ToolConfirmationState not found".to_string())?;
+
+    let guard = state.tool_guard();
+    let risk_level = guard.get_risk_level(tool_name).unwrap_or(RiskLevel::High);
+    let safety_tier = guard.get_safety_tier(tool_name);
+
+    let request = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: tool_name.to_string(),
+        tool_description: format!("Execute command: {}", tool_name),
+        parameters: args.clone(),
+        risk_level,
+        safety_tier,
+        reason: "This action requires user confirmation.".to_string(),
+        reversible: false,
+        undo_description: None,
+    };
+
+    request_tool_confirmation(app_handle, &state, request, 120).await
 }
 
 #[cfg(test)]

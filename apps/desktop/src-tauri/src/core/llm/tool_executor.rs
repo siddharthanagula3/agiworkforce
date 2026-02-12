@@ -1848,34 +1848,51 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
+                if let Some(app) = &self.app_handle {
+                    if let Err(e) = self.validate_path(&path).await {
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(e.to_string()),
+                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        });
+                    }
+
+                    use crate::sys::commands::git::git_push;
+
+                    match git_push(
+                        app.clone(),
+                        path.clone(),
+                        remote.clone(),
+                        branch.clone(),
+                        false,
+                    )
+                    .await
+                    {
+                        Ok(msg) => Ok(ToolResult {
+                            success: true,
+                            data: json!({ "success": true, "message": msg }),
+                            error: None,
+                            metadata: HashMap::from([
+                                ("path".to_string(), json!(path)),
+                                ("remote".to_string(), json!(remote)),
+                                ("branch".to_string(), json!(branch)),
+                            ]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Git push failed: {}", e)),
+                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    });
-                }
-
-                use crate::sys::commands::git::git_push;
-
-                match git_push(path.clone(), remote.clone(), branch.clone(), false).await {
-                    Ok(msg) => Ok(ToolResult {
-                        success: true,
-                        data: json!({ "success": true, "message": msg }),
-                        error: None,
-                        metadata: HashMap::from([
-                            ("path".to_string(), json!(path)),
-                            ("remote".to_string(), json!(remote)),
-                            ("branch".to_string(), json!(branch)),
-                        ]),
-                    }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Git push failed: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
+                        error: Some("App handle not available for git_push".to_string()),
+                        metadata: HashMap::new(),
+                    })
                 }
             }
             "db_query" => {
