@@ -7,6 +7,7 @@ pub enum RealtimeEvent {
     Authenticate {
         user_id: String,
         team_id: Option<String>,
+        token: Option<String>,
     },
 
     UserPresenceChanged {
@@ -66,5 +67,18 @@ pub enum RealtimeEvent {
 
     MilestoneReached {
         milestone: serde_json::Value,
+    },
+
+    // Native Messaging
+    NativeMessage {
+        id: String,
+        payload: serde_json::Value,
+    },
+
+    NativeResponse {
+        id: String,
+        success: bool,
+        data: Option<serde_json::Value>,
+        error: Option<String>,
     },
 }

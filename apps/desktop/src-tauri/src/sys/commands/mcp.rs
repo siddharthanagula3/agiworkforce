@@ -544,6 +544,7 @@ pub async fn mcp_search_tools(
 #[tauri::command]
 pub async fn mcp_call_tool(
     state: State<'_, McpState>,
+    confirmation_state: State<'_, ToolConfirmationState>,
     app: tauri::AppHandle,
     tool_id: String,
     arguments: HashMap<String, Value>,
@@ -555,6 +556,27 @@ pub async fn mcp_call_tool(
         .and_then(|s| s.split("__").next())
         .unwrap_or("unknown")
         .to_string();
+
+    // 1. Enforce Tool Confirmation
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: tool_id.clone(),
+        tool_description: format!("Execute MCP tool '{}' on server '{}'", tool_id, server_name),
+        parameters: serde_json::to_value(&arguments).unwrap_or(serde_json::json!({})),
+        risk_level: RiskLevel::High, // Assume High risk for unknown MCP tools by default
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "MCP tools can access system resources and external APIs.".to_string(),
+        reversible: false, // Assume irreversible by default for safety
+        undo_description: None,
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("Tool execution cancelled by user".to_string());
+    }
 
     // Emit tool execution started event
     emit_mcp_event(

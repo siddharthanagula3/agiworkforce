@@ -13,6 +13,7 @@ import {
   Database,
   ChevronDown,
   ChevronRight,
+  Box,
 } from 'lucide-react';
 import { ApprovalRequest } from '../../../stores/unifiedChatStore';
 import { CodeBlock } from '../Visualizations/CodeBlock';
@@ -30,6 +31,7 @@ const TYPE_ICONS = {
   terminal_command: Terminal,
   api_call: Globe,
   data_modification: Database,
+  mcp_tool: Box,
 };
 
 const RISK_LEVEL_CONFIG = {

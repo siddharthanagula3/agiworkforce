@@ -31,7 +31,11 @@ impl PostgresPool {
     async fn create_connection(&self) -> Result<()> {
         let conn_str = self.config.build_connection_string()?;
 
-        tracing::debug!("Creating PostgreSQL connection: {}", conn_str);
+        tracing::debug!(
+            "Creating PostgreSQL connection to {}:{}",
+            self.config.host.as_deref().unwrap_or("unknown"),
+            self.config.port.unwrap_or(5432)
+        );
 
         let (client, connection) = tokio_postgres::connect(&conn_str, NoTls).await?;
 

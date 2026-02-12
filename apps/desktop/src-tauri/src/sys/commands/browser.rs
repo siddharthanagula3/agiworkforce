@@ -1,15 +1,14 @@
 use serde_json::Value;
+use std::sync::Arc;
 use tauri::{command, State};
 
+use crate::automation::browser::dom_operations::{ClickOptions, DomOperations, TypeOptions};
 use crate::automation::browser::playwright_bridge::{BrowserOptions, BrowserType};
 use crate::automation::browser::BrowserState;
 
 // =============================================================================
 // BROWSER STATE WRAPPER WITH GRACEFUL DEGRADATION
 // =============================================================================
-// This wrapper handles the case where browser automation initialization fails.
-// Instead of leaving no state managed (which would cause panics), we manage
-// a degraded state that returns clear error messages to the frontend.
 
 /// Error message returned when browser automation is unavailable
 const BROWSER_UNAVAILABLE_ERROR: &str =
@@ -17,12 +16,6 @@ const BROWSER_UNAVAILABLE_ERROR: &str =
      Please restart the application or check system requirements (Playwright/Chromium).";
 
 /// Wrapper for browser automation state with graceful degradation support.
-///
-/// # Design
-/// - Wraps `Option<BrowserState>` to handle initialization failures
-/// - Commands that need browser access call `get()` and receive clear errors
-/// - Commands that are stubs (don't use state) continue to work in degraded mode
-/// - Initialization error is captured for diagnostics
 pub struct BrowserStateWrapper {
     /// The browser state, None if initialization failed
     inner: Option<BrowserState>,
@@ -32,10 +25,6 @@ pub struct BrowserStateWrapper {
 
 impl BrowserStateWrapper {
     /// Creates a new browser state wrapper with full functionality.
-    ///
-    /// # Errors
-    /// Returns an error if BrowserState::new() fails, but this error
-    /// should be caught and `new_degraded()` should be used instead.
     pub async fn new() -> Result<Self, String> {
         match BrowserState::new().await {
             Ok(state) => {
@@ -54,12 +43,6 @@ impl BrowserStateWrapper {
     }
 
     /// Creates a degraded browser state wrapper when initialization fails.
-    ///
-    /// This ensures Tauri always has a state to manage, preventing panics
-    /// when commands try to access State<'_, BrowserStateWrapper>.
-    ///
-    /// # Arguments
-    /// * `error` - The error message from the failed initialization
     pub fn new_degraded(error: String) -> Self {
         tracing::warn!(
             "BrowserStateWrapper created in DEGRADED mode. Browser automation unavailable. \
@@ -83,10 +66,6 @@ impl BrowserStateWrapper {
     }
 
     /// Gets a reference to the inner BrowserState.
-    ///
-    /// # Errors
-    /// Returns an error with a descriptive message if browser automation
-    /// is not available due to initialization failure.
     pub fn get(&self) -> Result<&BrowserState, String> {
         self.inner.as_ref().ok_or_else(|| {
             if let Some(ref err) = self.init_error {
@@ -97,17 +76,7 @@ impl BrowserStateWrapper {
         })
     }
 
-    /// Gets a reference to the BrowserState for operations that can gracefully
-    /// handle missing browser functionality.
-    ///
-    /// Returns None if browser is unavailable, allowing commands to return
-    /// default/empty values instead of errors.
-    pub fn get_optional(&self) -> Option<&BrowserState> {
-        self.inner.as_ref()
-    }
-
     /// Returns the error message for when browser is unavailable.
-    /// Use this instead of `get().unwrap_err()` to avoid Debug trait requirements.
     pub fn get_error_message(&self) -> String {
         if let Some(ref err) = self.init_error {
             format!("{} Original error: {}", BROWSER_UNAVAILABLE_ERROR, err)
@@ -117,9 +86,6 @@ impl BrowserStateWrapper {
     }
 
     /// Gets the tab manager, returning an error if browser is unavailable.
-    ///
-    /// This is a convenience method that provides access to the tab_manager
-    /// with proper error handling for graceful degradation.
     pub fn get_tab_manager(
         &self,
     ) -> Result<&std::sync::Arc<tokio::sync::Mutex<crate::automation::browser::TabManager>>, String>
@@ -128,9 +94,6 @@ impl BrowserStateWrapper {
     }
 
     /// Gets the CDP client for a specific tab, returning an error if browser is unavailable.
-    ///
-    /// This is a convenience method that provides access to CDP client creation
-    /// with proper error handling for graceful degradation.
     pub async fn get_cdp_client_for_tab(
         &self,
         tab_id: &str,
@@ -141,12 +104,30 @@ impl BrowserStateWrapper {
             .await
             .map_err(|e| format!("Failed to get CDP client: {}", e))
     }
+
+    /// Helper to get CDP client for the active tab
+    pub async fn get_active_client(
+        &self,
+    ) -> Result<(Arc<crate::automation::browser::CdpClient>, String), String> {
+        let tab_manager = self.get_tab_manager()?;
+        let active_tab = tab_manager
+            .lock()
+            .await
+            .get_active_tab()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if let Some(tab) = active_tab {
+            let client = self.get_cdp_client_for_tab(&tab.id).await?;
+            Ok((client, tab.id))
+        } else {
+            Err("No active browser tab found. Please open a tab first.".to_string())
+        }
+    }
 }
 
 // Browser Automation Commands
 
-/// Initialize browser automation and return status.
-/// Returns Ok(()) if browser automation is available, Err with details if not.
 #[command]
 pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
     if state.is_available() {
@@ -156,8 +137,6 @@ pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<(), S
     }
 }
 
-/// Check if browser automation is available without throwing an error.
-/// Returns a JSON object with availability status and any error message.
 #[command]
 pub async fn browser_check_status(state: State<'_, BrowserStateWrapper>) -> Result<Value, String> {
     Ok(serde_json::json!({
@@ -171,7 +150,6 @@ pub async fn browser_launch(
     state: State<'_, BrowserStateWrapper>,
     options: Option<Value>,
 ) -> Result<String, String> {
-    // Get browser state, returning clear error if unavailable
     let browser_state = state.get()?;
 
     let mut browser_options = BrowserOptions::default();
@@ -195,10 +173,59 @@ pub async fn browser_launch(
 
 #[command]
 pub async fn browser_open_tab(
-    _state: State<'_, BrowserStateWrapper>,
-    _url: Option<String>,
+    state: State<'_, BrowserStateWrapper>,
+    url: Option<String>,
 ) -> Result<String, String> {
-    Ok("tab_id".to_string())
+    let browser_state = state.get()?;
+    let target_url = url.unwrap_or_else(|| "about:blank".to_string());
+
+    // Try to create tab via Chrome HTTP API
+    // We assume default port 9222 as per PlaywrightBridge default
+    // TODO: Get actual port from config/state if possible, but 9222 is hardcoded in PlaywrightBridge for now.
+    let create_url = format!("http://127.0.0.1:9222/json/new?{}", target_url);
+
+    let client = reqwest::Client::new();
+    // Use PUT to create new target
+    let resp = client.put(&create_url).send().await;
+
+    match resp {
+        Ok(response) => {
+            // Parse JSON: { "id": "...", ... }
+            // CDP returns the target info
+            if let Ok(json) = response.json::<Value>().await {
+                if let Some(id) = json.get("id").and_then(|v| v.as_str()) {
+                    let tab_id = id.to_string();
+                    // Register in TabManager with the actual Chrome Target ID
+                    browser_state
+                        .tab_manager
+                        .lock()
+                        .await
+                        .register_tab(&tab_id, &target_url)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    return Ok(tab_id);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to create tab via CDP HTTP: {}. Falling back to internal tracking.",
+                e
+            );
+        }
+    }
+
+    // Fallback: Just open internally (won't control browser)
+    tracing::warn!("Using fallback internal tab (no browser control)");
+    let tab_id = browser_state
+        .tab_manager
+        .lock()
+        .await
+        .open_tab(&target_url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(tab_id)
 }
 
 #[command]
@@ -206,186 +233,278 @@ pub async fn browser_close_tab(
     state: State<'_, BrowserStateWrapper>,
     tab_id: Option<String>,
 ) -> Result<(), String> {
-    // If no tab_id provided, nothing to close
-    let Some(id) = tab_id else {
-        return Ok(());
+    let browser_state = state.get()?;
+    let id = if let Some(i) = tab_id {
+        i
+    } else {
+        match browser_state
+            .tab_manager
+            .lock()
+            .await
+            .get_active_tab()
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            Some(t) => t.id,
+            None => return Ok(()), // Nothing to close
+        }
     };
 
-    // Get browser state, returning clear error if unavailable
-    let browser_state = state.get()?;
+    // Try to close via HTTP API first
+    let close_url = format!("http://127.0.0.1:9222/json/close/{}", id);
+    let _ = reqwest::get(&close_url).await; // Ignore error, might already be closed or unreachable
 
-    // Close the browser/tab by ID
-    let playwright = browser_state.playwright.lock().await;
-    playwright
-        .close_browser_by_id(&id)
+    browser_state
+        .tab_manager
+        .lock()
+        .await
+        .close_tab(&id)
         .await
         .map_err(|e| e.to_string())?;
-
     Ok(())
 }
 
 #[command]
 pub async fn browser_list_tabs(
-    _state: State<'_, BrowserStateWrapper>,
+    state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<String>, String> {
-    Ok(vec![])
+    let tab_manager = state.get_tab_manager()?;
+    let tabs = tab_manager
+        .lock()
+        .await
+        .list_tabs()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tabs.into_iter().map(|t| t.id).collect())
 }
 
 #[command]
 pub async fn browser_navigate(
-    _state: State<'_, BrowserStateWrapper>,
-    _url: String,
+    state: State<'_, BrowserStateWrapper>,
+    url: String,
 ) -> Result<(), String> {
+    let (client, _) = state.get_active_client().await?;
+    // Use CDP to navigate
+    client.navigate(&url).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[command]
-pub async fn browser_go_back(_state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+pub async fn browser_go_back(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+    let (client, _) = state.get_active_client().await?;
+    client
+        .evaluate("window.history.back()")
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[command]
-pub async fn browser_go_forward(_state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+pub async fn browser_go_forward(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+    let (client, _) = state.get_active_client().await?;
+    client
+        .evaluate("window.history.forward()")
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[command]
-pub async fn browser_reload(_state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+pub async fn browser_reload(state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
+    let (client, _) = state.get_active_client().await?;
+    client
+        .evaluate("window.location.reload()")
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[command]
-pub async fn browser_get_url(_state: State<'_, BrowserStateWrapper>) -> Result<String, String> {
-    Ok("https://example.com".to_string())
+pub async fn browser_get_url(state: State<'_, BrowserStateWrapper>) -> Result<String, String> {
+    let (client, _) = state.get_active_client().await?;
+    client.get_url().await.map_err(|e| e.to_string())
 }
 
 #[command]
-pub async fn browser_get_title(_state: State<'_, BrowserStateWrapper>) -> Result<String, String> {
-    Ok("Page Title".to_string())
+pub async fn browser_get_title(state: State<'_, BrowserStateWrapper>) -> Result<String, String> {
+    let (client, _) = state.get_active_client().await?;
+    client.get_title().await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_click(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::click(&client, &selector, ClickOptions::default())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_type(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
-    _text: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
+    text: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::type_text(&client, &selector, &text, TypeOptions::default())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_get_text(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<String, String> {
-    Ok("text".to_string())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::get_text(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_get_attribute(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
-    _attribute: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
+    attribute: String,
 ) -> Result<Option<String>, String> {
-    Ok(None)
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::get_attribute(&client, &selector, &attribute)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_wait_for_selector(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
-    _timeout: Option<u64>,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
+    timeout: Option<u64>,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::wait_for_selector(&client, &selector, timeout.unwrap_or(30000))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_select_option(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
-    _value: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
+    value: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::select_option(&client, &selector, &value)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_check(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::check(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_uncheck(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::uncheck(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_screenshot(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: Option<String>,
+    state: State<'_, BrowserStateWrapper>,
+    selector: Option<String>,
 ) -> Result<String, String> {
-    Ok("base64_image".to_string())
+    let (client, _) = state.get_active_client().await?;
+
+    if selector.is_some() {
+        return Err(
+            "Screenshot by selector not yet supported, use full page or viewport".to_string(),
+        );
+    }
+
+    let bytes = client
+        .capture_screenshot(false)
+        .await
+        .map_err(|e| e.to_string())?;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    Ok(STANDARD.encode(bytes))
 }
 
 #[command]
 pub async fn browser_evaluate(
-    _state: State<'_, BrowserStateWrapper>,
-    _script: String,
+    state: State<'_, BrowserStateWrapper>,
+    script: String,
 ) -> Result<Value, String> {
-    Ok(Value::Null)
+    let (client, _) = state.get_active_client().await?;
+    client.evaluate(&script).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_hover(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::hover(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_focus(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::focus(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn browser_query_all(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<Vec<String>, String> {
-    Ok(vec![])
+    let (client, _) = state.get_active_client().await?;
+    let elements = DomOperations::query_all(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(elements.iter().map(|e| e.text.clone()).collect())
 }
 
 #[command]
 pub async fn browser_scroll_into_view(
-    _state: State<'_, BrowserStateWrapper>,
-    _selector: String,
+    state: State<'_, BrowserStateWrapper>,
+    selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    let (client, _) = state.get_active_client().await?;
+    DomOperations::scroll_into_view(&client, &selector)
+        .await
+        .map_err(|e| e.to_string())
 }
 
+// Stubs for remaining commands
 #[command]
 pub async fn browser_execute_async_js(
     _state: State<'_, BrowserStateWrapper>,
     _script: String,
 ) -> Result<Value, String> {
-    Ok(Value::Null)
+    Err("execute_async_js not implemented".to_string())
 }
 
 #[command]
@@ -393,7 +512,7 @@ pub async fn browser_get_element_state(
     _state: State<'_, BrowserStateWrapper>,
     _selector: String,
 ) -> Result<Value, String> {
-    Ok(Value::Null)
+    Err("get_element_state not implemented".to_string())
 }
 
 #[command]
@@ -401,7 +520,7 @@ pub async fn browser_wait_for_interactive(
     _state: State<'_, BrowserStateWrapper>,
     _selector: String,
 ) -> Result<(), String> {
-    Ok(())
+    Err("wait_for_interactive not implemented".to_string())
 }
 
 #[command]
@@ -410,7 +529,7 @@ pub async fn browser_fill_form(
     _selector: String,
     _data: Value,
 ) -> Result<(), String> {
-    Ok(())
+    Err("fill_form not implemented".to_string())
 }
 
 #[command]
@@ -419,7 +538,7 @@ pub async fn browser_drag_and_drop(
     _source: String,
     _target: String,
 ) -> Result<(), String> {
-    Ok(())
+    Err("drag_and_drop not implemented".to_string())
 }
 
 #[command]
@@ -428,14 +547,14 @@ pub async fn browser_upload_file(
     _selector: String,
     _paths: Vec<String>,
 ) -> Result<(), String> {
-    Ok(())
+    Err("upload_file not implemented".to_string())
 }
 
 #[command]
 pub async fn browser_get_cookies(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<Value>, String> {
-    Ok(vec![])
+    Err("get_cookies not implemented".to_string())
 }
 
 #[command]
@@ -443,26 +562,26 @@ pub async fn browser_set_cookie(
     _state: State<'_, BrowserStateWrapper>,
     _cookie: Value,
 ) -> Result<(), String> {
-    Ok(())
+    Err("set_cookie not implemented".to_string())
 }
 
 #[command]
 pub async fn browser_clear_cookies(_state: State<'_, BrowserStateWrapper>) -> Result<(), String> {
-    Ok(())
+    Err("clear_cookies not implemented".to_string())
 }
 
 #[command]
 pub async fn browser_get_performance_metrics(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<Value, String> {
-    Ok(Value::Null)
+    Err("get_performance_metrics not implemented".to_string())
 }
 
 #[command]
 pub async fn browser_wait_for_navigation(
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
-    Ok(())
+    Err("wait_for_navigation not implemented".to_string())
 }
 
 #[command]

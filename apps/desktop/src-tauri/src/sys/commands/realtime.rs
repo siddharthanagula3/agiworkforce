@@ -2,16 +2,24 @@ use crate::integrations::realtime::{PresenceManager, UserActivity, UserPresence}
 use std::sync::Arc;
 use tauri::State;
 
+#[derive(serde::Serialize)]
+pub struct RealtimeConnectionInfo {
+    pub url: String,
+    pub token: String,
+}
+
 pub struct RealtimeState {
     pub presence: Arc<PresenceManager>,
     pub websocket_port: u16,
+    pub token: String,
 }
 
 impl RealtimeState {
-    pub fn new(presence: Arc<PresenceManager>, websocket_port: u16) -> Self {
+    pub fn new(presence: Arc<PresenceManager>, websocket_port: u16, token: String) -> Self {
         Self {
             presence,
             websocket_port,
+            token,
         }
     }
 }
@@ -21,8 +29,11 @@ pub async fn connect_websocket(
     state: State<'_, RealtimeState>,
     _user_id: String,
     _team_id: Option<String>,
-) -> Result<String, String> {
-    Ok(format!("ws://localhost:{}", state.websocket_port))
+) -> Result<RealtimeConnectionInfo, String> {
+    Ok(RealtimeConnectionInfo {
+        url: format!("ws://localhost:{}", state.websocket_port),
+        token: state.token.clone(),
+    })
 }
 
 #[tauri::command]

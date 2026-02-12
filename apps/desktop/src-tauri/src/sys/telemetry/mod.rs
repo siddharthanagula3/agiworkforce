@@ -75,15 +75,28 @@ fn initialize_sentry_if_configured(log_config: &LogConfig) -> Result<Option<Tele
             let environment =
                 std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
             let environment = environment.trim().to_string();
-            let guard = init_with_sentry(log_config.clone(), &dsn, &environment)?;
-            ::tracing::info!(
-                "Sentry crash reporting enabled (environment: {})",
-                environment
-            );
-            return Ok(Some(guard));
+
+            match init_with_sentry(log_config.clone(), &dsn, &environment) {
+                Ok(guard) => {
+                    ::tracing::info!(
+                        "Sentry crash reporting enabled (environment: {})",
+                        environment
+                    );
+                    return Ok(Some(guard));
+                }
+                Err(e) => {
+                    ::tracing::error!(
+                        "Failed to initialize Sentry: {}. Crash reporting will be disabled.",
+                        e
+                    );
+                    return Ok(None);
+                }
+            }
         } else {
-            ::tracing::warn!("SENTRY_DSN provided but empty; crash reporting not enabled");
+            ::tracing::debug!("SENTRY_DSN env var present but empty; crash reporting not enabled");
         }
+    } else {
+        ::tracing::debug!("SENTRY_DSN not set; crash reporting disabled");
     }
 
     Ok(None)

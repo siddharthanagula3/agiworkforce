@@ -5,6 +5,11 @@ import './styles/globals.css';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { Toaster } from './components/ui/Toaster';
 import { TooltipProvider } from './components/ui/Tooltip';
+import { errorTracking, setupGlobalErrorHandler } from './services/errorTracking';
+
+// Initialize error tracking
+errorTracking.initialize();
+setupGlobalErrorHandler();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

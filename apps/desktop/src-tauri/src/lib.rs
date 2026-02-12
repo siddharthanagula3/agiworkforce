@@ -116,6 +116,15 @@ pub fn run() {
                 tracing::error!("Failed to create data directory: {}", e);
             }
 
+
+
+            // Install native messaging manifest
+            if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(Some("bblfoadbknbnmbchfjpgcefpkccpdnfc")) {
+                tracing::warn!("Failed to install native messaging manifest: {}", e);
+            } else {
+                tracing::info!("Native messaging manifest installed/updated");
+            }
+
             let db_path = app_data_dir.join("agiworkforce.db");
             tracing::info!("Database initialized at {:?}", db_path);
 
@@ -327,18 +336,18 @@ pub fn run() {
                     tracing::info!("Project memory manager initialized");
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to initialize project memory manager: {}. Project memory features may be degraded.", e);
+                tracing::warn!("Failed to initialize project memory manager: {}. Project memory features may be degraded.", e);
                 }
             }
 
             match crate::automation::AutomationService::new() {
                 Ok(automation_service) => {
-                    app.manage(std::sync::Arc::new(Some(automation_service)));
+                    app.manage(Some(std::sync::Arc::new(automation_service)));
                     tracing::info!("Automation service initialized");
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize automation service: {}. Automation features may be degraded.", e);
-                    app.manage(std::sync::Arc::new(None::<crate::automation::AutomationService>));
+                    app.manage(None::<std::sync::Arc<crate::automation::AutomationService>>);
                 }
             }
 
@@ -404,7 +413,7 @@ pub fn run() {
             let app_for_orchestrator = app.handle().clone();
             async_runtime::spawn(async move {
                 let automation_state_ref: tauri::State<
-                    std::sync::Arc<Option<crate::automation::AutomationService>>,
+                    Option<std::sync::Arc<crate::automation::AutomationService>>,
                 > = app_for_orchestrator.state();
                 let llm_state_ref: tauri::State<LLMState> = app_for_orchestrator.state();
                 match crate::sys::commands::orchestrator_init_default(
@@ -534,7 +543,15 @@ pub fn run() {
             ));
             let presence_manager = Arc::new(crate::integrations::realtime::PresenceManager::new(presence_db));
             let websocket_port = 8787;
-            let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(presence_manager.clone()));
+
+            // Generate secure token for realtime auth
+            let realtime_token = uuid::Uuid::new_v4().to_string();
+            // Write token to file for Native Host to read
+            if let Err(e) = std::fs::write(app_data_dir.join(".ipc_token"), &realtime_token) {
+                tracing::error!("Failed to write .ipc_token: {}", e);
+            }
+
+            let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(presence_manager.clone(), realtime_token.clone()));
             {
                 let server = realtime_server.clone();
                 async_runtime::spawn(async move {
@@ -546,6 +563,7 @@ pub fn run() {
             app.manage(crate::sys::commands::RealtimeState::new(
                 presence_manager.clone(),
                 websocket_port,
+                realtime_token,
             ));
             let metrics_db = Arc::new(Mutex::new(
                 Connection::open(&db_path).context("Failed to open database for metrics")?,
@@ -2036,7 +2054,16 @@ pub fn run() {
             crate::features::updater::get_current_version,
             #[cfg(feature = "updater")]
             crate::features::updater::get_version_info,
+            // Swarm Commands (Phase 5 Wiring)
+            crate::sys::commands::swarm::swarm_init,
+            crate::sys::commands::swarm::swarm_execute_goal,
+            crate::sys::commands::swarm::swarm_get_stats,
+            crate::sys::commands::swarm::swarm_stop,
+
+            // Vision Commands (Phase 7 Wiring)
+            crate::sys::commands::vision::vision_send_message,
         ])
+        .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
