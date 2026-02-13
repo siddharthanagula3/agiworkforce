@@ -417,9 +417,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           path: result.path,
         });
 
-        // Convert number array to Uint8Array and then to base64
+        // Convert number array to Uint8Array and then to base64.
+        // Chunking avoids "Maximum call stack size exceeded" on large captures.
         const uint8Array = new Uint8Array(imageBytes);
-        const base64 = btoa(String.fromCharCode(...uint8Array));
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          binary += String.fromCharCode(...uint8Array.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
 
         // Determine mime type from file format
         const mimeType = result.path.endsWith('.png')

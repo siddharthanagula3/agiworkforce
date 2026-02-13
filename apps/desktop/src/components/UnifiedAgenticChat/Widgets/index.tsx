@@ -172,6 +172,25 @@ export interface ChartWidgetData {
 }
 
 // ============================================================================
+// Diff Viewer Widget Types
+// ============================================================================
+
+export interface DiffViewerWidgetData {
+  id: string;
+  type: 'diff-viewer';
+  oldContent: string;
+  newContent: string;
+  fileName?: string;
+  filePath?: string;
+  language?: string;
+  viewMode?: 'split' | 'unified';
+  showLineNumbers?: boolean;
+  highlightChanges?: boolean;
+  enableRevert?: boolean;
+  createdAt?: string;
+}
+
+// ============================================================================
 // Legacy Widget Registry (for compatibility with DataTableWidget/ChartWidget)
 // ============================================================================
 
@@ -293,6 +312,39 @@ export function createChartWidget(
   };
 }
 
+/**
+ * Create a diff viewer widget data object
+ */
+export function createDiffViewerWidget(
+  oldContent: string,
+  newContent: string,
+  options?: {
+    id?: string;
+    fileName?: string;
+    filePath?: string;
+    language?: string;
+    viewMode?: 'split' | 'unified';
+    showLineNumbers?: boolean;
+    highlightChanges?: boolean;
+    enableRevert?: boolean;
+  },
+): DiffViewerWidgetData {
+  return {
+    id: options?.id || generateWidgetId(),
+    type: 'diff-viewer',
+    oldContent,
+    newContent,
+    fileName: options?.fileName,
+    filePath: options?.filePath,
+    language: options?.language,
+    viewMode: options?.viewMode ?? 'split',
+    showLineNumbers: options?.showLineNumbers ?? true,
+    highlightChanges: options?.highlightChanges ?? true,
+    enableRevert: options?.enableRevert ?? false,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // ============================================================================
 // Component Exports
 // ============================================================================
@@ -305,6 +357,9 @@ export { DataTableWidget } from './DataTableWidget';
 
 // Export ChartWidget
 export { ChartWidget } from './ChartWidget';
+
+// Export DiffWidget
+export { DiffWidget } from './DiffWidget';
 
 // Export ConfirmationWidget
 export {

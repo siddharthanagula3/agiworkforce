@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};
-use xcap::Monitor;
+use xcap::{Monitor, Window};
 
 use super::dxgi::ScreenInfo;
 use super::xcap_lock::lock_xcap;
@@ -263,7 +263,25 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
 
 #[cfg(not(windows))]
 pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
-    Err(anyhow!("Window enumeration is only supported on Windows"))
+    let windows = Window::all().context("Failed to enumerate windows")?;
+
+    Ok(windows
+        .into_iter()
+        .filter(|window| !window.is_minimized())
+        .filter(|window| window.width() > 0 && window.height() > 0)
+        .map(|window| WindowInfo {
+            hwnd: window.id() as isize,
+            title: window.title().to_string(),
+            process_name: window.app_name().to_string(),
+            rect: WindowRect {
+                x: window.x(),
+                y: window.y(),
+                width: window.width() as i32,
+                height: window.height() as i32,
+            },
+            is_visible: true,
+        })
+        .collect())
 }
 
 #[cfg(windows)]
@@ -386,8 +404,32 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
 }
 
 #[cfg(not(windows))]
-pub fn capture_window(_hwnd: isize) -> Result<CapturedImage> {
-    Err(anyhow!("Window capture is only supported on Windows"))
+pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
+    let windows = Window::all().context("Failed to enumerate windows")?;
+    let target = windows
+        .into_iter()
+        .find(|window| window.id() as isize == hwnd)
+        .ok_or_else(|| anyhow!("Window not found"))?;
+
+    let image = target
+        .capture_image()
+        .context("Failed to capture window image")?;
+    let pixels = RgbaImage::from_raw(image.width(), image.height(), image.into_raw())
+        .ok_or_else(|| anyhow!("Failed to convert captured image"))?;
+
+    let monitor = target.current_monitor();
+    let monitors = Monitor::all().context("Failed to enumerate displays")?;
+    let screen_index = monitors
+        .iter()
+        .position(|m| m.id() == monitor.id())
+        .unwrap_or(0);
+    let display = ScreenInfo::from_monitor(&monitor, screen_index);
+
+    Ok(CapturedImage {
+        pixels,
+        screen_index,
+        display,
+    })
 }
 
 #[cfg(windows)]

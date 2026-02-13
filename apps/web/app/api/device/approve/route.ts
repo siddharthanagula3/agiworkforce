@@ -115,7 +115,10 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
         throw createError.conflict('This device code has already been processed');
       }
 
-      return NextResponse.json({ success: true, status: 'denied' }, { status: 200 });
+      return NextResponse.json(
+        { success: true, status: 'denied' },
+        { status: 200, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     // Approve: store the current session tokens for the device to retrieve exactly once.
@@ -153,7 +156,10 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       throw createError.conflict('This device code has already been processed');
     }
 
-    return NextResponse.json({ success: true, status: 'approved' }, { status: 200 });
+    return NextResponse.json(
+      { success: true, status: 'approved' },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },

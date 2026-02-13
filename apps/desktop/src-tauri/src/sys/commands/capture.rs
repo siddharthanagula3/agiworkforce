@@ -1,18 +1,18 @@
 use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use uuid::Uuid;
 
+#[cfg(not(target_os = "macos"))]
+use crate::automation::screen::{capture_primary_screen, capture_region, capture_window};
 use crate::{
-    automation::screen::{
-        capture_primary_screen, capture_region, capture_window, enumerate_windows,
-        paste_from_clipboard,
-    },
+    automation::screen::{enumerate_windows, paste_from_clipboard},
     sys::commands::AppDatabase,
-    ui::overlay::{dispatch_overlay_animation, ensure_overlay_ready, OverlayAnimation},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +65,15 @@ pub struct WindowInfo {
     pub handle: String,
     pub title: String,
     pub process: String,
+    pub bounds: Option<WindowBounds>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,44 +96,79 @@ pub async fn capture_screen_full(
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     tracing::info!("Capturing full screen");
-    ensure_overlay_ready(&app_handle);
 
-    let capture_id = Uuid::new_v4().to_string();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let capture =
-        capture_primary_screen().map_err(|e| format!("Failed to capture primary screen: {e}"))?;
-
-    let metadata = CaptureMetadata {
-        width: capture.pixels.width(),
-        height: capture.pixels.height(),
-        window_title: None,
-        region: None,
-        screen_index: Some(capture.screen_index),
-    };
-
-    let result = persist_capture(
-        &app_handle,
-        &db,
-        &capture_id,
-        CaptureType::Fullscreen,
-        &capture.pixels,
-        &metadata,
-        conversation_id,
-        timestamp,
-    )?;
-
+    #[cfg(target_os = "macos")]
     {
-        let conn = db.connection()?;
-        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let pixels = capture_with_macos_screencapture(&["-x"])?;
+        let metadata = CaptureMetadata {
+            width: pixels.width(),
+            height: pixels.height(),
+            window_title: None,
+            region: None,
+            screen_index: None,
+        };
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Fullscreen,
+            &pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!(
+            "Screen captured successfully (macOS native): {}",
+            capture_id
+        );
+        return Ok(result);
     }
 
-    tracing::info!("Screen captured successfully: {}", capture_id);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
 
-    Ok(result)
+        let capture = std::panic::catch_unwind(capture_primary_screen)
+            .map_err(|_| "Capture backend panicked while capturing full screen".to_string())?
+            .map_err(|e| format!("Failed to capture primary screen: {e}"))?;
+
+        let metadata = CaptureMetadata {
+            width: capture.pixels.width(),
+            height: capture.pixels.height(),
+            window_title: None,
+            region: None,
+            screen_index: Some(capture.screen_index),
+        };
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Fullscreen,
+            &capture.pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!("Screen captured successfully: {}", capture_id);
+        return Ok(result);
+    }
+
+    #[allow(unreachable_code)]
+    Err("Unsupported platform for capture_screen_full".to_string())
 }
 
 #[tauri::command]
@@ -138,66 +182,97 @@ pub async fn capture_screen_region(
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     tracing::info!("Capturing screen region: ({x}, {y}) {width}x{height}");
-    ensure_overlay_ready(&app_handle);
 
-    let capture_id = Uuid::new_v4().to_string();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let capture = capture_region(x, y, width, height)
-        .map_err(|e| format!("Failed to capture region: {e}"))?;
-
-    let actual_width = capture.pixels.width();
-    let actual_height = capture.pixels.height();
-
-    let metadata = CaptureMetadata {
-        width: actual_width,
-        height: actual_height,
-        window_title: None,
-        region: Some(Region {
-            x,
-            y,
-            width: actual_width,
-            height: actual_height,
-        }),
-        screen_index: Some(capture.screen_index),
-    };
-
-    let result = persist_capture(
-        &app_handle,
-        &db,
-        &capture_id,
-        CaptureType::Region,
-        &capture.pixels,
-        &metadata,
-        conversation_id,
-        timestamp,
-    )?;
-
+    #[cfg(target_os = "macos")]
     {
-        let conn = db.connection()?;
-        let region_animation = OverlayAnimation::RegionHighlight {
-            x,
-            y,
-            width: actual_width as i32,
-            height: actual_height as i32,
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        // Use native interactive region picker to capture from the real desktop.
+        let pixels = capture_with_macos_screencapture(&["-i", "-x"])?;
+        let metadata = CaptureMetadata {
+            width: pixels.width(),
+            height: pixels.height(),
+            window_title: None,
+            region: None,
+            screen_index: None,
         };
-        let _ = dispatch_overlay_animation(&app_handle, &conn, region_animation);
-        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Region,
+            &pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!(
+            "Region captured successfully (macOS native): {}",
+            capture_id
+        );
+        return Ok(result);
     }
 
-    tracing::info!("Region captured successfully: {}", capture_id);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
 
-    Ok(result)
+        let capture = std::panic::catch_unwind(|| capture_region(x, y, width, height))
+            .map_err(|_| "Capture backend panicked while capturing region".to_string())?
+            .map_err(|e| format!("Failed to capture region: {e}"))?;
+
+        let actual_width = capture.pixels.width();
+        let actual_height = capture.pixels.height();
+
+        let metadata = CaptureMetadata {
+            width: actual_width,
+            height: actual_height,
+            window_title: None,
+            region: Some(Region {
+                x,
+                y,
+                width: actual_width,
+                height: actual_height,
+            }),
+            screen_index: Some(capture.screen_index),
+        };
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Region,
+            &capture.pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!("Region captured successfully: {}", capture_id);
+        return Ok(result);
+    }
+
+    #[allow(unreachable_code)]
+    Err("Unsupported platform for capture_screen_region".to_string())
 }
 
 #[tauri::command]
 pub async fn capture_get_windows() -> Result<Vec<WindowInfo>, String> {
     tracing::info!("Getting available windows");
 
-    let windows = enumerate_windows().map_err(|e| format!("Failed to enumerate windows: {}", e))?;
+    let windows = std::panic::catch_unwind(enumerate_windows)
+        .map_err(|_| "Capture backend panicked while enumerating windows".to_string())?
+        .map_err(|e| format!("Failed to enumerate windows: {}", e))?;
 
     Ok(windows
         .into_iter()
@@ -205,6 +280,12 @@ pub async fn capture_get_windows() -> Result<Vec<WindowInfo>, String> {
             handle: w.hwnd.to_string(),
             title: w.title,
             process: w.process_name,
+            bounds: Some(WindowBounds {
+                x: w.rect.x,
+                y: w.rect.y,
+                width: w.rect.width,
+                height: w.rect.height,
+            }),
         })
         .collect())
 }
@@ -357,55 +438,91 @@ pub async fn capture_screen_window(
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     tracing::info!("Capturing window: {}", hwnd);
-    ensure_overlay_ready(&app_handle);
 
-    let capture_id = Uuid::new_v4().to_string();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let hwnd_val: isize = hwnd
-        .parse()
-        .map_err(|e| format!("Invalid window handle: {}", e))?;
-
-    let capture =
-        capture_window(hwnd_val).map_err(|e| format!("Failed to capture window: {}", e))?;
-
-    let window_title = enumerate_windows().ok().and_then(|windows| {
-        windows
-            .iter()
-            .find(|w| w.hwnd == hwnd_val)
-            .map(|w| w.title.clone())
-    });
-
-    let metadata = CaptureMetadata {
-        width: capture.pixels.width(),
-        height: capture.pixels.height(),
-        window_title,
-        region: None,
-        screen_index: Some(capture.screen_index),
-    };
-
-    let result = persist_capture(
-        &app_handle,
-        &db,
-        &capture_id,
-        CaptureType::Window,
-        &capture.pixels,
-        &metadata,
-        conversation_id,
-        timestamp,
-    )?;
-
+    #[cfg(target_os = "macos")]
     {
-        let conn = db.connection()?;
-        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        // Use native interactive window picker to target any app window on screen.
+        let pixels = capture_with_macos_screencapture(&["-i", "-W", "-x"])?;
+        let metadata = CaptureMetadata {
+            width: pixels.width(),
+            height: pixels.height(),
+            window_title: None,
+            region: None,
+            screen_index: None,
+        };
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Window,
+            &pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!(
+            "Window captured successfully (macOS native): {}",
+            capture_id
+        );
+        return Ok(result);
     }
 
-    tracing::info!("Window captured successfully: {}", capture_id);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let capture_id = Uuid::new_v4().to_string();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
 
-    Ok(result)
+        let hwnd_val: isize = hwnd
+            .parse()
+            .map_err(|e| format!("Invalid window handle: {}", e))?;
+
+        let capture = std::panic::catch_unwind(|| capture_window(hwnd_val))
+            .map_err(|_| "Capture backend panicked while capturing window".to_string())?
+            .map_err(|e| format!("Failed to capture window: {}", e))?;
+
+        let window_title = enumerate_windows().ok().and_then(|windows| {
+            windows
+                .iter()
+                .find(|w| w.hwnd == hwnd_val)
+                .map(|w| w.title.clone())
+        });
+
+        let metadata = CaptureMetadata {
+            width: capture.pixels.width(),
+            height: capture.pixels.height(),
+            window_title,
+            region: None,
+            screen_index: Some(capture.screen_index),
+        };
+
+        let result = persist_capture(
+            &app_handle,
+            &db,
+            &capture_id,
+            CaptureType::Window,
+            &capture.pixels,
+            &metadata,
+            conversation_id,
+            timestamp,
+        )?;
+
+        tracing::info!("Window captured successfully: {}", capture_id);
+        return Ok(result);
+    }
+
+    #[allow(unreachable_code)]
+    Err("Unsupported platform for capture_screen_window".to_string())
 }
 
 #[tauri::command]
@@ -415,7 +532,6 @@ pub async fn capture_from_clipboard(
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     tracing::info!("Capturing from clipboard");
-    ensure_overlay_ready(&app_handle);
 
     let capture_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
@@ -444,11 +560,6 @@ pub async fn capture_from_clipboard(
         conversation_id,
         timestamp,
     )?;
-
-    {
-        let conn = db.connection()?;
-        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
-    }
 
     tracing::info!("Clipboard captured successfully: {}", capture_id);
 
@@ -516,6 +627,33 @@ fn persist_capture(
         metadata: metadata.clone(),
         created_at: timestamp,
     })
+}
+
+#[cfg(target_os = "macos")]
+fn capture_with_macos_screencapture(args: &[&str]) -> Result<RgbaImage, String> {
+    let tmp_path = std::env::temp_dir().join(format!("agi-capture-{}.png", Uuid::new_v4()));
+    let output_path = tmp_path
+        .to_str()
+        .ok_or_else(|| "Invalid temporary capture path".to_string())?;
+
+    let status = Command::new("screencapture")
+        .args(args)
+        .arg(output_path)
+        .status()
+        .map_err(|e| format!("Failed to run macOS screencapture: {}", e))?;
+
+    if !status.success() {
+        return Err(
+            "Screen capture was cancelled or failed. Check Screen Recording permission."
+                .to_string(),
+        );
+    }
+
+    let image = image::open(&tmp_path)
+        .map_err(|e| format!("Failed to load captured screenshot: {}", e))?
+        .to_rgba8();
+    let _ = std::fs::remove_file(&tmp_path);
+    Ok(image)
 }
 
 fn generate_thumbnail(

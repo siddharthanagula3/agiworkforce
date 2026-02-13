@@ -15,6 +15,7 @@
 
 import rateLimit, { type Options, ipKeyGenerator } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
+import { logger } from '../lib/logger';
 
 /**
  * Rate limit configurations per endpoint category.
@@ -119,6 +120,35 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
       error: 'RATE_LIMIT_EXCEEDED',
       message: `Too many requests. Please try again after ${Math.ceil(config.windowMs / 1000)} seconds.`,
       retryAfter: Math.ceil(config.windowMs / 1000),
+    },
+    handler: (req, res, _next, _optionsUsed) => {
+      const userId = req.user?.userId ?? null;
+      const limitInfo = req.rateLimit;
+      const ip = ipKeyGenerator(req);
+
+      logger.warn(
+        {
+          event: 'rate_limit_exceeded',
+          limiterKey: key,
+          method: req.method,
+          path: req.path,
+          userId,
+          ip,
+          correlationId: req.headers['x-correlation-id'],
+          limit: limitInfo?.limit,
+          used: limitInfo?.used,
+          remaining: limitInfo?.remaining,
+          resetTime: limitInfo?.resetTime?.toISOString?.(),
+          retryAfterSeconds: Math.ceil(config.windowMs / 1000),
+        },
+        'Rate limit exceeded',
+      );
+
+      res.status(429).json({
+        error: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many requests. Please try again after ${Math.ceil(config.windowMs / 1000)} seconds.`,
+        retryAfter: Math.ceil(config.windowMs / 1000),
+      });
     },
     // Skip rate limiting for internal health checks from localhost in development
     skip: (req: Request) => {

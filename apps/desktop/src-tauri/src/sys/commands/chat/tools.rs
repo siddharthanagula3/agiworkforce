@@ -6,7 +6,7 @@
 use crate::core::agi::tools::{ParameterType, Tool, ToolRegistry};
 use crate::core::llm::ToolDefinition;
 use crate::sys::commands::mcp::McpState;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -118,9 +118,11 @@ pub fn filter_tools_by_capabilities(
                 return capabilities.search;
             }
 
-            // Terminal execution requires code_execution capability
+            // Terminal execution is an app-side tool. It should remain available
+            // whenever model-level tool calling is enabled, even if the model
+            // doesn't advertise built-in sandboxed code execution.
             if name == "terminal_execute" {
-                return capabilities.code_execution;
+                return true;
             }
 
             // Document generation requires tools (already checked above)
@@ -236,6 +238,23 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     "path": {
                         "type": "string",
                         "description": "The path to the directory to list"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum entries to return (default 500, max 2000)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pagination offset for large directories (default 0)"
+                    },
+                    "exclude": {
+                        "type": "array",
+                        "description": "Optional exact-name exclude patterns (e.g. [\"node_modules\", \".git\"])",
+                        "items": { "type": "string" }
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Optional operation timeout in milliseconds (default 10000, max 30000)"
                     }
                 },
                 "required": ["path"]
@@ -1024,8 +1043,67 @@ pub async fn execute_chat_tool(
         arguments: arguments_json.to_string(),
     };
 
-    let result = executor.execute_tool_call(&tool_call).await;
+    let result = executor.execute_tool_call(&tool_call).await?;
+    if result.success {
+        Ok(executor.format_tool_result(&tool_call, &result))
+    } else {
+        Err(anyhow!(
+            "{}",
+            result
+                .error
+                .clone()
+                .unwrap_or_else(|| "Tool execution failed".to_string())
+        ))
+    }
+}
 
-    let result = result?;
-    Ok(executor.format_tool_result(&tool_call, &result))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sys::commands::chat::types::ModelCapabilitiesDto;
+
+    fn test_tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description: String::new(),
+            parameters: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        }
+    }
+
+    #[test]
+    fn filter_keeps_terminal_when_tools_enabled_without_code_execution() {
+        let tools = vec![
+            test_tool("terminal_execute"),
+            test_tool("file_read"),
+            test_tool("search_web"),
+        ];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            search: false,
+            code_execution: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        let names: Vec<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
+
+        assert!(names.contains(&"terminal_execute"));
+        assert!(names.contains(&"file_read"));
+        assert!(!names.contains(&"search_web"));
+    }
+
+    #[test]
+    fn filter_removes_all_tools_when_tool_calling_is_disabled() {
+        let tools = vec![test_tool("terminal_execute"), test_tool("file_read")];
+        let caps = ModelCapabilitiesDto {
+            tools: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        assert!(filtered.is_empty());
+    }
 }

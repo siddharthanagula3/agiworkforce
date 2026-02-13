@@ -30,12 +30,102 @@ const MAX_FILE_EXTRACT_CHARS: usize = 100_000;
 const DEFAULT_CONVERSATION_LIST_LIMIT: i64 = 1000;
 /// Maximum length for pending user messages
 const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
+/// Max idle wait for next streaming chunk before failing the stream.
+const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 20;
+/// Max wait per follow-up model invocation in tool loop.
+const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 20;
+/// Max total wait across all candidate retries for a single follow-up call.
+const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 40;
+/// Limit fallback fan-out to avoid very long "thinking" states.
+const FOLLOWUP_MAX_CANDIDATES: usize = 2;
+/// Hard upper bound for a streaming tool loop.
+const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 180;
+/// Long-running operations that can legitimately take minutes.
+const LONG_RUNNING_TOOL_TIMEOUT_SECS: u64 = 300;
+/// Default timeout for most tools.
+const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 120;
+/// Fast metadata tools should fail quickly and surface guidance.
+const FAST_TOOL_TIMEOUT_SECS: u64 = 10;
 
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
 // Pending messages queue for mid-task user input
 static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
+
+fn emit_stream_failure(
+    app_handle: &tauri::AppHandle,
+    conversation_id: i64,
+    message_id: &str,
+    error: String,
+    partial_content: Option<&str>,
+) {
+    let _ = app_handle.emit(
+        "chat:stream-error",
+        serde_json::json!({
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "error": error
+        }),
+    );
+    let _ = app_handle.emit(
+        "chat:stream-end",
+        serde_json::json!({
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "content": partial_content.unwrap_or_default(),
+            "error": true,
+            "has_pending_messages": has_pending_messages()
+        }),
+    );
+}
+
+fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
+    let normalized = tool_name.to_lowercase();
+    if normalized == "file_list"
+        || normalized.contains("list_allowed_directories")
+        || normalized.contains("filesystem__list_allowed_directories")
+        || normalized.contains("read_text_file")
+        || normalized.contains("filesystem__read_text_file")
+    {
+        return FAST_TOOL_TIMEOUT_SECS;
+    }
+
+    if normalized == "terminal_execute" || normalized.starts_with("document_create_") {
+        return LONG_RUNNING_TOOL_TIMEOUT_SECS;
+    }
+
+    DEFAULT_TOOL_TIMEOUT_SECS
+}
+
+async fn execute_chat_tool_with_timeout(
+    tool_name: &str,
+    arguments_json: &str,
+    app_handle: &tauri::AppHandle,
+    project_folder: Option<String>,
+    conversation_mode: Option<String>,
+) -> Result<String, String> {
+    let timeout_secs = resolve_tool_execution_timeout_secs(tool_name);
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        tools::execute_chat_tool(
+            tool_name,
+            arguments_json,
+            Some(app_handle),
+            project_folder,
+            conversation_mode,
+        ),
+    )
+    .await
+    {
+        Ok(Ok(content)) => Ok(content),
+        Ok(Err(err)) => Err(err.to_string()),
+        Err(_) => Err(format!(
+            "Tool '{}' timed out after {}s",
+            tool_name, timeout_secs
+        )),
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PendingUserMessage {
@@ -1142,6 +1232,10 @@ pub async fn chat_send_message(
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
+    // Clear any stale stop flag from previous conversations/runs.
+    // Without this, one stopped run can leak into future chats.
+    reset_stop_flag();
+
     // Validate request fields (content length, user_id, attachments, etc.)
     request.validate().map_err(|e| e.to_string())?;
 
@@ -1893,13 +1987,12 @@ pub async fn chat_send_message(
                             let conn = match db_arc_clone.connection() {
                                 Ok(conn) => conn,
                                 Err(e) => {
-                                    let _ = app_handle_clone.emit(
-                                        "chat:stream-error",
-                                        serde_json::json!({
-                                            "conversation_id": conversation_id_clone,
-                                            "message_id": frontend_message_id_clone,
-                                            "error": format!("Database error: {e}")
-                                        }),
+                                    emit_stream_failure(
+                                        &app_handle_clone,
+                                        conversation_id_clone,
+                                        &frontend_message_id_clone,
+                                        format!("Database error: {e}"),
+                                        Some(&result.report),
                                     );
                                     return;
                                 }
@@ -1920,9 +2013,29 @@ pub async fn chat_send_message(
                             match repository::create_message(&conn, &msg) {
                                 Ok(id) => match repository::get_message(&conn, id) {
                                     Ok(msg) => msg,
-                                    Err(_) => return,
+                                    Err(e) => {
+                                        emit_stream_failure(
+                                            &app_handle_clone,
+                                            conversation_id_clone,
+                                            &frontend_message_id_clone,
+                                            format!(
+                                                "Failed to retrieve deep research message: {e}"
+                                            ),
+                                            Some(&result.report),
+                                        );
+                                        return;
+                                    }
                                 },
-                                Err(_) => return,
+                                Err(e) => {
+                                    emit_stream_failure(
+                                        &app_handle_clone,
+                                        conversation_id_clone,
+                                        &frontend_message_id_clone,
+                                        format!("Failed to save deep research message: {e}"),
+                                        Some(&result.report),
+                                    );
+                                    return;
+                                }
                             }
                         };
 
@@ -2179,7 +2292,16 @@ pub async fn chat_send_message(
                         let assistant_message = {
                             let conn = match db_arc_clone.connection() {
                                 Ok(conn) => conn,
-                                Err(_) => return,
+                                Err(e) => {
+                                    emit_stream_failure(
+                                        &app_handle_clone,
+                                        conversation_id_clone,
+                                        &frontend_message_id_clone,
+                                        format!("Database error while saving agent response: {e}"),
+                                        Some(&final_content),
+                                    );
+                                    return;
+                                }
                             };
 
                             let msg = Message {
@@ -2195,11 +2317,31 @@ pub async fn chat_send_message(
                                 created_at: Utc::now(),
                             };
                             match repository::create_message(&conn, &msg) {
-                                Ok(id) => match repository::get_message(&conn, id) {
-                                    Ok(msg) => msg,
-                                    Err(_) => return,
-                                },
-                                Err(_) => return,
+                                Ok(id) => {
+                                    match repository::get_message(&conn, id) {
+                                        Ok(msg) => msg,
+                                        Err(e) => {
+                                            emit_stream_failure(
+                                            &app_handle_clone,
+                                            conversation_id_clone,
+                                            &frontend_message_id_clone,
+                                            format!("Failed to retrieve agent response message: {e}"),
+                                            Some(&final_content),
+                                        );
+                                            return;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    emit_stream_failure(
+                                        &app_handle_clone,
+                                        conversation_id_clone,
+                                        &frontend_message_id_clone,
+                                        format!("Failed to save agent response message: {e}"),
+                                        Some(&final_content),
+                                    );
+                                    return;
+                                }
                             }
                         };
 
@@ -2309,7 +2451,46 @@ pub async fn chat_send_message(
                     > = HashMap::new();
 
                     let mut pending_notified = false;
-                    while let Some(chunk_result) = stream.next().await {
+                    loop {
+                        let next_chunk = match tokio::time::timeout(
+                            std::time::Duration::from_secs(STREAM_CHUNK_IDLE_TIMEOUT_SECS),
+                            stream.next(),
+                        )
+                        .await
+                        {
+                            Ok(value) => value,
+                            Err(_) => {
+                                let timeout_message = format!(
+                                    "Streaming timed out after {}s waiting for model output",
+                                    STREAM_CHUNK_IDLE_TIMEOUT_SECS
+                                );
+                                warn!("[Chat] {}", timeout_message);
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": timeout_message
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-end",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "content": full_content.clone(),
+                                        "error": true,
+                                        "has_pending_messages": has_pending_messages()
+                                    }),
+                                );
+                                return;
+                            }
+                        };
+
+                        let Some(chunk_result) = next_chunk else {
+                            break;
+                        };
+
                         if should_stop_generation() {
                             info!("[Chat] Generation stopped by user");
                             was_stopped = true;
@@ -2490,10 +2671,10 @@ pub async fn chat_send_message(
                             );
 
                             // Execute the tool
-                            let result = tools::execute_chat_tool(
+                            let result = execute_chat_tool_with_timeout(
                                 &tc.name,
                                 &tc.arguments,
-                                Some(&app_handle_clone),
+                                &app_handle_clone,
                                 project_folder_clone.clone(),
                                 conversation_mode_clone.clone(),
                             )
@@ -2549,9 +2730,31 @@ pub async fn chat_send_message(
                         let mut streaming_tool_iteration = 0;
                         let mut current_tool_calls = tool_calls;
                         let mut current_tool_results = tool_results;
+                        let streaming_tool_loop_started = std::time::Instant::now();
 
                         loop {
                             streaming_tool_iteration += 1;
+                            if streaming_tool_loop_started.elapsed().as_secs()
+                                >= STREAMING_TOOL_LOOP_MAX_SECS
+                            {
+                                warn!(
+                                    "[Chat] Streaming tool loop exceeded {}s, stopping",
+                                    STREAMING_TOOL_LOOP_MAX_SECS
+                                );
+                                full_content.push_str(
+                                    "\n\n*Stopped tool loop after timeout while waiting for follow-up responses.*",
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "chat:agent-progress",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "iteration": streaming_tool_iteration,
+                                        "max_iterations": max_streaming_tool_iterations,
+                                        "status": "timeout_reached"
+                                    }),
+                                );
+                                break;
+                            }
                             if streaming_tool_iteration > max_streaming_tool_iterations {
                                 warn!(
                                     "[Chat] Streaming tool iteration limit reached ({}), stopping",
@@ -2625,20 +2828,58 @@ pub async fn chat_send_message(
                                 ..Default::default()
                             };
 
-                            let candidates =
-                                router.candidates(&followup_request, &preferences_clone);
+                            let candidates = router
+                                .candidates(&followup_request, &preferences_clone)
+                                .into_iter()
+                                .take(FOLLOWUP_MAX_CANDIDATES)
+                                .collect::<Vec<_>>();
 
                             let mut followup_outcome = None;
+                            let followup_budget_started = tokio::time::Instant::now();
                             for candidate in candidates {
-                                match router.invoke_candidate(&candidate, &followup_request).await {
-                                    Ok(outcome) => {
+                                let elapsed = followup_budget_started.elapsed();
+                                let total_budget =
+                                    std::time::Duration::from_secs(FOLLOWUP_TOTAL_TIMEOUT_SECS);
+                                if elapsed >= total_budget {
+                                    warn!(
+                                        "[Chat] Follow-up total timeout reached after {}s",
+                                        FOLLOWUP_TOTAL_TIMEOUT_SECS
+                                    );
+                                    break;
+                                }
+
+                                let remaining_budget = total_budget
+                                    .checked_sub(elapsed)
+                                    .unwrap_or_else(|| std::time::Duration::from_secs(0));
+                                let candidate_timeout = remaining_budget.min(
+                                    std::time::Duration::from_secs(FOLLOWUP_INVOKE_TIMEOUT_SECS),
+                                );
+                                if candidate_timeout.is_zero() {
+                                    warn!("[Chat] Follow-up candidate budget exhausted");
+                                    break;
+                                }
+
+                                match tokio::time::timeout(
+                                    candidate_timeout,
+                                    router.invoke_candidate(&candidate, &followup_request),
+                                )
+                                .await
+                                {
+                                    Ok(Ok(outcome)) => {
                                         followup_outcome = Some(outcome);
                                         break;
                                     }
-                                    Err(e) => {
+                                    Ok(Err(e)) => {
                                         warn!(
                                             "[Chat] Follow-up candidate {} failed: {}",
                                             candidate.model, e
+                                        );
+                                        continue;
+                                    }
+                                    Err(_) => {
+                                        warn!(
+                                            "[Chat] Follow-up candidate {} timed out after {}s",
+                                            candidate.model, FOLLOWUP_INVOKE_TIMEOUT_SECS
                                         );
                                         continue;
                                     }
@@ -2732,10 +2973,10 @@ pub async fn chat_send_message(
                                                     }),
                                                 );
 
-                                                let result = tools::execute_chat_tool(
+                                                let result = execute_chat_tool_with_timeout(
                                                     &tc.name,
                                                     &tc.arguments,
-                                                    Some(&app_handle_clone),
+                                                    &app_handle_clone,
                                                     project_folder_clone.clone(),
                                                     conversation_mode_clone.clone(),
                                                 )
@@ -2864,13 +3105,12 @@ Please confirm the tool permissions or try a different approach.",
                         let conn = match db_arc_clone.connection() {
                             Ok(conn) => conn,
                             Err(e) => {
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-error",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "error": format!("Database error: {e}")
-                                    }),
+                                emit_stream_failure(
+                                    &app_handle_clone,
+                                    conversation_id_clone,
+                                    &frontend_message_id_clone,
+                                    format!("Database error: {e}"),
+                                    Some(&full_content),
                                 );
                                 return;
                             }
@@ -2927,25 +3167,23 @@ Please confirm the tool permissions or try a different approach.",
                             Ok(id) => match repository::get_message(&conn, id) {
                                 Ok(msg) => msg,
                                 Err(e) => {
-                                    let _ = app_handle_clone.emit(
-                                        "chat:stream-error",
-                                        serde_json::json!({
-                                            "conversation_id": conversation_id_clone,
-                                            "message_id": frontend_message_id_clone,
-                                            "error": format!("Failed to retrieve message: {e}")
-                                        }),
+                                    emit_stream_failure(
+                                        &app_handle_clone,
+                                        conversation_id_clone,
+                                        &frontend_message_id_clone,
+                                        format!("Failed to retrieve message: {e}"),
+                                        Some(&full_content),
                                     );
                                     return;
                                 }
                             },
                             Err(e) => {
-                                let _ = app_handle_clone.emit(
-                                    "chat:stream-error",
-                                    serde_json::json!({
-                                        "conversation_id": conversation_id_clone,
-                                        "message_id": frontend_message_id_clone,
-                                        "error": format!("Failed to save message: {e}")
-                                    }),
+                                emit_stream_failure(
+                                    &app_handle_clone,
+                                    conversation_id_clone,
+                                    &frontend_message_id_clone,
+                                    format!("Failed to save message: {e}"),
+                                    Some(&full_content),
                                 );
                                 return;
                             }
@@ -2985,13 +3223,12 @@ Please confirm the tool permissions or try a different approach.",
                     }
                 }
                 Err(e) => {
-                    let _ = app_handle_clone.emit(
-                        "chat:stream-error",
-                        serde_json::json!({
-                            "conversation_id": conversation_id_clone,
-                            "message_id": frontend_message_id_clone,
-                            "error": format!("Streaming failed: {e}")
-                        }),
+                    emit_stream_failure(
+                        &app_handle_clone,
+                        conversation_id_clone,
+                        &frontend_message_id_clone,
+                        format!("Streaming failed: {e}"),
+                        None,
                     );
                 }
             }
@@ -3414,10 +3651,10 @@ Please confirm the tool permissions or try a different approach.",
                         );
 
                         // Execute the tool using our chat tools executor
-                        let result = tools::execute_chat_tool(
+                        let result = execute_chat_tool_with_timeout(
                             &tool_call.name,
                             &tool_call.arguments,
-                            Some(&app_handle),
+                            &app_handle,
                             request.project_folder.clone(),
                             request.conversation_mode.clone(),
                         )
@@ -3484,11 +3721,15 @@ Please confirm the tool permissions or try a different approach.",
 
                     let followup_result = {
                         let router = _llm_state.router.read().await;
-                        router.invoke_candidate(&candidate, &followup_request).await
+                        tokio::time::timeout(
+                            std::time::Duration::from_secs(FOLLOWUP_INVOKE_TIMEOUT_SECS),
+                            router.invoke_candidate(&candidate, &followup_request),
+                        )
+                        .await
                     };
 
                     match followup_result {
-                        Ok(new_outcome) => {
+                        Ok(Ok(new_outcome)) => {
                             total_tool_tokens += new_outcome.response.tokens.unwrap_or(0);
                             final_content = new_outcome.response.content.clone();
 
@@ -3502,9 +3743,16 @@ Please confirm the tool permissions or try a different approach.",
 
                             outcome = new_outcome;
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
                             error!("[Chat] Follow-up LLM call failed: {}", e);
                             // Use the last successful content
+                            break;
+                        }
+                        Err(_) => {
+                            error!(
+                                "[Chat] Follow-up LLM call timed out after {}s",
+                                FOLLOWUP_INVOKE_TIMEOUT_SECS
+                            );
                             break;
                         }
                     }
@@ -4109,4 +4357,47 @@ pub async fn chat_handle_stop(app_handle: tauri::AppHandle) -> Result<bool, Stri
     info!("[Chat] AGI orchestrator cancellation event emitted");
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn stop_flag_can_be_reset_between_runs() {
+        STOP_GENERATION.store(true, Ordering::SeqCst);
+        assert!(should_stop_generation());
+
+        reset_stop_flag();
+        assert!(!should_stop_generation());
+    }
+
+    #[test]
+    fn tool_timeout_policy_matches_expected_classes() {
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("file_list"),
+            FAST_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("mcp__filesystem__list_allowed_directories"),
+            FAST_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("mcp__filesystem__read_text_file"),
+            FAST_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("terminal_execute"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("document_create_pdf"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("browser_navigate"),
+            DEFAULT_TOOL_TIMEOUT_SECS
+        );
+    }
 }

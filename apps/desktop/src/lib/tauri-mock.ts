@@ -85,6 +85,21 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'orchestrator_spawn_agent':
       throw new Error('Agent orchestration requires the desktop application');
 
+    // Realtime presence commands
+    case 'connect_websocket':
+      return {
+        url: 'ws://127.0.0.1:8787',
+        token: 'mock-token',
+      } as T;
+    case 'get_team_presence':
+      return [] as T;
+    case 'get_user_presence':
+      return null as T;
+    case 'set_user_online':
+    case 'set_user_offline':
+    case 'update_user_activity':
+      return undefined as T;
+
     // MCP Extension commands
     case 'extension_list':
       return [] as T;

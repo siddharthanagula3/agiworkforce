@@ -33,6 +33,7 @@ import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
+import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import { CanvasWorkspace } from '../Canvas';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { AppLayout } from './AppLayout';
@@ -46,6 +47,10 @@ import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationD
 import { respondToolConfirmation } from '../../api/toolConfirmation';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import {
+  resolveToolHardTimeoutMs,
+  shouldAbortGenerationOnToolTimeout,
+} from './toolTimeoutPolicy';
+import {
   executeTerminalCommand,
   executeBrowserCommand,
   executeCodeCommand,
@@ -53,6 +58,7 @@ import {
   executeUndoCommand,
 } from '../../handlers/slashCommandHandlers';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
 
 const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
   const normalized = toolName.toLowerCase();
@@ -225,6 +231,15 @@ export const UnifiedAgenticChat: React.FC<{
   // Note: Unlisten can return void or Promise<void> depending on the event type
   const unlistenFnsRef = useRef<Array<() => void | Promise<void>>>([]);
   const isMountedRef = useRef(true);
+  const toolExecutionTimeoutsRef = useRef<
+    Map<
+      string,
+      {
+        softTimeoutId: ReturnType<typeof setTimeout>;
+        hardTimeoutId: ReturnType<typeof setTimeout>;
+      }
+    >
+  >(new Map());
 
   // CHT-005 fix: Track active stream sessions to prevent race conditions
   // Maps conversation_id to the message_id being streamed for that conversation
@@ -289,6 +304,16 @@ export const UnifiedAgenticChat: React.FC<{
         ) {
           return state.currentStreamingMessageId;
         }
+        const lastStreamingAssistant = [...state.messages]
+          .reverse()
+          .find((m) => m.role === 'assistant' && Boolean(m.metadata?.streaming));
+        if (lastStreamingAssistant) {
+          return lastStreamingAssistant.id;
+        }
+        const lastAssistant = [...state.messages].reverse().find((m) => m.role === 'assistant');
+        if (lastAssistant) {
+          return lastAssistant.id;
+        }
         return null;
       };
 
@@ -342,6 +367,15 @@ export const UnifiedAgenticChat: React.FC<{
             artifacts: nextArtifacts as Artifact[],
           },
         });
+      };
+
+      const clearToolExecutionTimeout = (toolCallId: string) => {
+        const timeoutEntry = toolExecutionTimeoutsRef.current.get(toolCallId);
+        if (timeoutEntry) {
+          clearTimeout(timeoutEntry.softTimeoutId);
+          clearTimeout(timeoutEntry.hardTimeoutId);
+          toolExecutionTimeoutsRef.current.delete(toolCallId);
+        }
       };
 
       registerListener(
@@ -510,6 +544,11 @@ export const UnifiedAgenticChat: React.FC<{
 
           state.setIsLoading(false);
           state.setStreamingMessage(null);
+          toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+            clearTimeout(timeoutEntry.softTimeoutId);
+            clearTimeout(timeoutEntry.hardTimeoutId);
+          });
+          toolExecutionTimeoutsRef.current.clear();
         }),
       );
 
@@ -563,6 +602,11 @@ export const UnifiedAgenticChat: React.FC<{
 
             state.setIsLoading(false);
             state.setStreamingMessage(null);
+            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+              clearTimeout(timeoutEntry.softTimeoutId);
+              clearTimeout(timeoutEntry.hardTimeoutId);
+            });
+            toolExecutionTimeoutsRef.current.clear();
           },
         ),
       );
@@ -869,6 +913,77 @@ export const UnifiedAgenticChat: React.FC<{
           arguments: string;
         }>('chat:tool-executing', ({ payload }) => {
           console.log('[UnifiedAgenticChat] Tool executing:', payload.tool_name);
+          clearToolExecutionTimeout(payload.tool_call_id);
+          const toolHardTimeoutMs = resolveToolHardTimeoutMs(payload.tool_name);
+
+          const softTimeoutId = setTimeout(() => {
+            if (!isMountedRef.current) return;
+            if (!toolExecutionTimeoutsRef.current.has(payload.tool_call_id)) return;
+
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'running',
+              message: `${payload.tool_name} is still running... retrying status check`,
+              metadata: {
+                tool_call_id: payload.tool_call_id,
+                timeout_ms: TOOL_EXECUTION_SOFT_TIMEOUT_MS,
+              },
+              fadeAfter: 3500,
+            });
+          }, TOOL_EXECUTION_SOFT_TIMEOUT_MS);
+
+          const hardTimeoutId = setTimeout(() => {
+            if (!isMountedRef.current) return;
+            if (!toolExecutionTimeoutsRef.current.has(payload.tool_call_id)) return;
+
+            console.warn(
+              `[UnifiedAgenticChat] Tool execution timed out: ${payload.tool_name} (${payload.tool_call_id})`,
+            );
+            upsertToolArtifact(payload.conversation_id, payload.tool_call_id, {
+              toolName: payload.tool_name,
+              type: toolNameToArtifactType(payload.tool_name),
+              title: toolNameToTitle(payload.tool_name),
+              status: 'failed',
+              success: false,
+              error:
+                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+              content:
+                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+            });
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'error',
+              message: `${payload.tool_name} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
+              metadata: {
+                tool_call_id: payload.tool_call_id,
+                timeout_ms: toolHardTimeoutMs,
+              },
+              fadeAfter: 4500,
+            });
+
+            if (shouldAbortGenerationOnToolTimeout(payload.tool_name)) {
+              const state = useUnifiedChatStore.getState();
+              state.setIsLoading(false);
+              state.setStreamingMessage(null);
+              if (state.currentStreamingMessageId) {
+                state.updateMessage(state.currentStreamingMessageId, {
+                  metadata: { streaming: false },
+                });
+              }
+              if (isTauri) {
+                void invoke('chat_stop_generation').catch((error) => {
+                  console.warn(
+                    '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
+                    error,
+                  );
+                });
+              }
+            }
+            clearToolExecutionTimeout(payload.tool_call_id);
+          }, toolHardTimeoutMs);
+          toolExecutionTimeoutsRef.current.set(payload.tool_call_id, {
+            softTimeoutId,
+            hardTimeoutId,
+          });
+
           // Update action trail with executing status
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: 'running',
@@ -914,6 +1029,7 @@ export const UnifiedAgenticChat: React.FC<{
             payload.tool_name,
             payload.success ? 'succeeded' : 'failed',
           );
+          clearToolExecutionTimeout(payload.tool_call_id);
 
           let parsedData: Record<string, unknown> = payload.result_data || {};
           if (!payload.result_data && payload.result) {
@@ -1101,6 +1217,11 @@ export const UnifiedAgenticChat: React.FC<{
 
       // Clear stale stream session tracking
       activeStreamSessions.clear();
+      toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+        clearTimeout(timeoutEntry.softTimeoutId);
+        clearTimeout(timeoutEntry.hardTimeoutId);
+      });
+      toolExecutionTimeoutsRef.current.clear();
 
       // Clean up all registered listeners - handle both sync and async unlisten functions
       // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections
@@ -1700,6 +1821,43 @@ export const UnifiedAgenticChat: React.FC<{
     setIsLoading(false);
     setStreamingMessage(null);
   };
+
+  useEffect(() => {
+    const handleNewConversation = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      activeStreamSessionsRef.current.clear();
+      toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+        clearTimeout(timeoutEntry.softTimeoutId);
+        clearTimeout(timeoutEntry.hardTimeoutId);
+      });
+      toolExecutionTimeoutsRef.current.clear();
+
+      if (isTauri) {
+        void invoke('chat_stop_generation').catch((error) => {
+          console.warn('[UnifiedAgenticChat] Failed to stop generation on new chat:', error);
+        });
+      }
+
+      const state = useUnifiedChatStore.getState();
+      if (state.currentStreamingMessageId) {
+        updateMessage(state.currentStreamingMessageId, {
+          metadata: { streaming: false },
+        });
+      }
+      setIsLoading(false);
+      setStreamingMessage(null);
+      const unifiedState = useUnifiedChatStore.getState();
+      unifiedState.clearActionTrail();
+      unifiedState.clearToolStreams();
+    };
+
+    window.addEventListener(NEW_CHAT_ABORT_EVENT, handleNewConversation);
+    return () => window.removeEventListener(NEW_CHAT_ABORT_EVENT, handleNewConversation);
+  }, [setIsLoading, setStreamingMessage, updateMessage]);
 
   const openSidecar = (panel: SidecarMode, payload?: Record<string, unknown>) => {
     openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
