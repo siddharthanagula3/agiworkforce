@@ -380,6 +380,10 @@ app.get('/ready', (_req, res) => {
 app.get('/health', healthLimiter, (_req, res) => {
   const memUsage = process.memoryUsage();
   const stats = connectionManager.getStats();
+  const topCloseReasons = Array.from(stats.closeReasons.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([reason, count]) => ({ reason, count }));
 
   const healthStatus = {
     status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
@@ -388,6 +392,7 @@ app.get('/health', healthLimiter, (_req, res) => {
     connections: {
       total: stats.totalConnections,
       uniqueIps: stats.uniqueIps,
+      topCloseReasons,
     },
     sessions: {
       active: activeSessions.size,
@@ -691,6 +696,11 @@ wss.on('connection', (socket, request) => {
     }
   });
 
+  socket.on('pong', () => {
+    connectionManager.updateActivity(socket);
+    metrics.recordMessage('pong');
+  });
+
   socket.on('message', (raw) => {
     connectionManager.updateActivity(socket);
 
@@ -762,10 +772,16 @@ wss.on('connection', (socket, request) => {
     socket.send(JSON.stringify({ type: 'error', error: 'unsupported_message' }));
   });
 
-  socket.on('close', () => {
-    connectionManager.removeConnection(socket);
-    logger.debug({ correlationId }, 'WebSocket connection closed');
+  socket.on('close', (code, reasonBuffer) => {
+    const closeReason = reasonBuffer.toString() || 'client_disconnect';
+    connectionManager.removeConnection(socket, {
+      trigger: 'socket_close',
+      closeCode: code,
+      closeReason,
+    });
+    logger.debug({ correlationId, closeCode: code, closeReason }, 'WebSocket connection closed');
     metrics.recordMessage('disconnection');
+    metrics.recordError(`ws_close_${code}`);
 
     const client = clients.get(socket);
     if (!client) {

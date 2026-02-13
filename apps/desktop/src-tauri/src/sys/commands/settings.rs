@@ -38,9 +38,52 @@ pub struct ChatPreferences {
     pub prompt_completion_enabled: bool,
     #[serde(default)]
     pub show_timestamps: bool,
+    #[serde(default)]
+    pub always_use_agent_mode: bool,
+    #[serde(default = "default_compact_mode")]
+    pub compact_mode: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionPreferences {
+    #[serde(default = "default_max_timeout_minutes")]
+    pub max_timeout_minutes: u32,
+    #[serde(default = "default_enable_checkpointing")]
+    pub enable_checkpointing: bool,
+    #[serde(default = "default_checkpoint_interval")]
+    pub checkpoint_interval: u32,
+    #[serde(default = "default_auto_resume_on_restart")]
+    pub auto_resume_on_restart: bool,
+    #[serde(default = "default_enable_timeout_warnings")]
+    pub enable_timeout_warnings: bool,
 }
 
 fn default_prompt_completion_enabled() -> bool {
+    true
+}
+
+fn default_compact_mode() -> bool {
+    true
+}
+
+fn default_max_timeout_minutes() -> u32 {
+    1440
+}
+
+fn default_enable_checkpointing() -> bool {
+    true
+}
+
+fn default_checkpoint_interval() -> u32 {
+    5
+}
+
+fn default_auto_resume_on_restart() -> bool {
+    true
+}
+
+fn default_enable_timeout_warnings() -> bool {
     true
 }
 
@@ -67,6 +110,8 @@ pub struct Settings {
     pub window_preferences: WindowPreferences,
     #[serde(default)]
     pub chat_preferences: Option<ChatPreferences>,
+    #[serde(default)]
+    pub execution_preferences: Option<ExecutionPreferences>,
 
     #[serde(default)]
     pub allowed_directories: Vec<String>,
@@ -107,6 +152,15 @@ impl SettingsState {
                 chat_preferences: Some(ChatPreferences {
                     prompt_completion_enabled: true,
                     show_timestamps: false,
+                    always_use_agent_mode: false,
+                    compact_mode: true,
+                }),
+                execution_preferences: Some(ExecutionPreferences {
+                    max_timeout_minutes: default_max_timeout_minutes(),
+                    enable_checkpointing: default_enable_checkpointing(),
+                    checkpoint_interval: default_checkpoint_interval(),
+                    auto_resume_on_restart: default_auto_resume_on_restart(),
+                    enable_timeout_warnings: default_enable_timeout_warnings(),
                 }),
                 allowed_directories: default_allowed_directories(),
                 feature_flags: std::collections::HashMap::new(),
@@ -138,6 +192,9 @@ pub async fn settings_save(
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
     let settings_path = app_data_dir.join("settings.json");
+    if let Err(e) = tokio::fs::create_dir_all(&app_data_dir).await {
+        return Err(format!("Failed to create app data directory: {}", e));
+    }
 
     let json = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;

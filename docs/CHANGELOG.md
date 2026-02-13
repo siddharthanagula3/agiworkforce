@@ -32,3 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Architecture review results
   - Performance optimization recommendations
   - Technical debt migration guides
+
+### Release
+
+- Coordinated monorepo version bump for release readiness:
+  - `@agiworkforce/desktop` → `1.1.2`
+  - `@agiworkforce/web` → `0.1.1`
+  - `@agiworkforce/types` → `0.0.1`
+- Synchronized Tauri bundle versions:
+  - `apps/desktop/src-tauri/tauri.conf.json` → `1.1.2`
+  - `apps/desktop/src-tauri/tauri.appstore.conf.json` → `1.1.2`
+- Aligned updater documentation with active production config:
+  - Endpoint template: `https://agiworkforce.com/api/releases/{{target}}/{{current_version}}`
+  - Public key fingerprint: `418034B749732381`

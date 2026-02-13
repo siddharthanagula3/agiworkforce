@@ -485,12 +485,23 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           )}
 
           {/* Embedded Widgets (INT-001) */}
-          {message.metadata?.widgets &&
-            Array.isArray(message.metadata.widgets) &&
-            message.metadata.widgets.length > 0 && (
+          {(() => {
+            const metadata = message.metadata as Record<string, unknown> | undefined;
+            const widgets = Array.isArray(metadata?.['widgets'])
+              ? (metadata?.['widgets'] as WidgetData[])
+              : Array.isArray(metadata?.['toolWidgets'])
+                ? (metadata?.['toolWidgets'] as WidgetData[])
+                : [];
+
+            return widgets.length > 0;
+          })() && (
               <WidgetList
                 messageId={message.id}
-                widgets={message.metadata.widgets as WidgetData[]}
+                widgets={
+                  ((message.metadata as Record<string, unknown> | undefined)?.['widgets'] ||
+                    (message.metadata as Record<string, unknown> | undefined)
+                      ?.['toolWidgets']) as WidgetData[]
+                }
                 isAssistant={isAssistant}
                 isStreaming={Boolean(message.metadata?.streaming)}
               />

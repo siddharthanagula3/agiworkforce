@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { Region } from '../../types/capture';
 import { X, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -69,8 +70,12 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         onCancel();
       } else if (e.key === 'Enter' && region) {
+        e.preventDefault();
+        e.stopPropagation();
         handleConfirm();
       }
     },
@@ -78,13 +83,18 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
   );
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
+    // Capture phase ensures this wins over chat textarea Enter handlers.
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [handleKeyDown]);
 
-  return (
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 cursor-crosshair bg-black/50"
@@ -111,7 +121,11 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
       )}
 
       {}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 transform">
+      <div
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 transform"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex gap-2 rounded-lg bg-background p-2 shadow-lg">
           <Button size="sm" variant="outline" onClick={onCancel} className="gap-2">
             <X className="h-4 w-4" />
@@ -131,12 +145,17 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
 
       {}
       {!region && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 transform">
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 transform"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="rounded-lg bg-background px-4 py-2 text-sm shadow-lg">
             Click and drag to select a region
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -14,7 +14,15 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import React, { Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import React, {
+  Suspense,
+  useMemo,
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useDeferredValue,
+} from 'react';
 
 import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -34,6 +42,7 @@ interface ChatStreamProps {
 }
 
 import type { Artifact } from '../../types/chat';
+import type { EnhancedMessage } from '../../stores/chat/types';
 
 // Extended artifact type for message artifacts that may have additional properties
 interface MessageArtifact extends Partial<Artifact> {
@@ -46,6 +55,151 @@ interface MessageMetadataWithArtifacts {
   artifacts?: MessageArtifact[];
   [key: string]: unknown;
 }
+
+interface ChatMessageItemProps {
+  message: EnhancedMessage;
+  messageIndex: number;
+  isCurrentMatch: boolean;
+  isSearchMatch: boolean;
+  isKeyboardFocused: boolean;
+  showMessageTimestamps: boolean;
+  onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
+  onRetry: (id: string, content: string) => void;
+  onEditSave: (messageId: string, newContent: string) => void;
+}
+
+const ChatMessageItem = React.memo<ChatMessageItemProps>(
+  ({
+    message,
+    messageIndex,
+    isCurrentMatch,
+    isSearchMatch,
+    isKeyboardFocused,
+    showMessageTimestamps,
+    onOpenSidecar,
+    onRetry,
+    onEditSave,
+  }) => {
+    const renderInlineToolResult = (
+      toolName: string,
+      result: unknown,
+      status?: 'running' | 'completed' | 'failed' | 'success' | 'error' | 'idle',
+    ) => {
+      if (!hasInlineRenderer(toolName)) {
+        return null;
+      }
+
+      const Renderer = getToolRenderer(toolName);
+      if (!Renderer) {
+        return null;
+      }
+
+      const typedResult = result as { data?: unknown; status?: typeof status; error?: string };
+
+      return (
+        <Suspense
+          fallback={
+            <div className={`${card} animate-pulse`}>
+              <div className="h-24 bg-white/5 rounded" />
+            </div>
+          }
+        >
+          <Renderer result={typedResult} status={status} />
+        </Suspense>
+      );
+    };
+
+    return (
+      <div
+        data-message-index={messageIndex}
+        className={`space-y-3 transition-all duration-200 rounded-lg ${
+          isCurrentMatch
+            ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-zinc-900'
+            : isSearchMatch
+              ? 'ring-1 ring-zinc-600'
+              : isKeyboardFocused
+                ? 'ring-2 ring-blue-500/50 ring-offset-2 ring-offset-zinc-900 bg-blue-500/5'
+                : ''
+        }`}
+      >
+        <MessageBubble
+          message={message}
+          showAvatar
+          showTimestamp={showMessageTimestamps}
+          enableActions
+          onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
+          onRegenerate={() => onRetry(message.id, message.content)}
+          onEdit={(content) => onRetry(message.id, content)}
+          onEditSave={onEditSave}
+        />
+        {(message.artifacts || (message.metadata as MessageMetadataWithArtifacts)?.artifacts)
+          ?.length ? (
+          <div className="grid grid-cols-1 gap-2">
+            {(
+              message.artifacts ||
+              (message.metadata as MessageMetadataWithArtifacts)?.artifacts ||
+              []
+            ).map((artifact, idx) => {
+              const art = artifact as MessageArtifact;
+              const toolName = art.toolName || art.type;
+              const inlineRenderer =
+                toolName && hasInlineRenderer(toolName)
+                  ? renderInlineToolResult(toolName, { data: art }, art.status || 'completed')
+                  : null;
+
+              if (inlineRenderer) {
+                return (
+                  <div key={idx} className="space-y-2">
+                    {inlineRenderer}
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={idx}
+                  onClick={() => onOpenSidecar?.('preview', { artifact: art })}
+                  className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                      {art.type === 'image' ? (
+                        <FileText className="w-4 h-4" />
+                      ) : (
+                        <Braces className="w-4 h-4" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-zinc-200">
+                        {art.title || 'Generated Artifact'}
+                      </div>
+                      <div className="text-xs text-zinc-400">
+                        {art.type === 'code' ? art.language : art.type}
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-zinc-400 group-hover:text-white">
+                    View <PanelTopOpen className="ml-2 w-3 h-3" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.message === next.message &&
+    prev.isCurrentMatch === next.isCurrentMatch &&
+    prev.isSearchMatch === next.isSearchMatch &&
+    prev.isKeyboardFocused === next.isKeyboardFocused &&
+    prev.showMessageTimestamps === next.showMessageTimestamps &&
+    prev.onOpenSidecar === next.onOpenSidecar &&
+    prev.onRetry === next.onRetry &&
+    prev.onEditSave === next.onEditSave,
+);
+ChatMessageItem.displayName = 'ChatMessageItem';
 
 const card =
   'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.35)]';
@@ -77,6 +231,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
   // Message search state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,12 +273,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
   // Filter messages based on search
   const searchMatches = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
+    if (!showSearch || !deferredSearchQuery.trim()) return [];
+    const query = deferredSearchQuery.toLowerCase();
     return items
       .map((msg, index) => ({ msg, index }))
       .filter(({ msg }) => msg.content.toLowerCase().includes(query));
-  }, [items, searchQuery]);
+  }, [items, showSearch, deferredSearchQuery]);
 
   // AUDIT-005-002 fix: Ref to track focus timeout for cleanup
   const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -250,9 +405,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     };
   }, [items.length, isStreaming, lastMessageContentLength]);
 
-  const handleRetry = (id: string, content: string) => {
+  const handleRetry = useCallback((id: string, content: string) => {
     startEditingMessage(id, content);
-  };
+  }, [startEditingMessage]);
 
   const handleEditSave = useCallback(
     (messageId: string, newContent: string) => {
@@ -299,36 +454,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       <p className="mt-2 text-sm text-zinc-300">{body}</p>
     </div>
   );
-
-  const renderInlineToolResult = (
-    toolName: string,
-    result: unknown,
-    status?: 'running' | 'completed' | 'failed' | 'success' | 'error' | 'idle',
-  ) => {
-    if (!hasInlineRenderer(toolName)) {
-      return null;
-    }
-
-    const Renderer = getToolRenderer(toolName);
-    if (!Renderer) {
-      return null;
-    }
-
-    // Cast result to the expected ToolResultProps format
-    const typedResult = result as { data?: unknown; status?: typeof status; error?: string };
-
-    return (
-      <Suspense
-        fallback={
-          <div className={`${card} animate-pulse`}>
-            <div className="h-24 bg-white/5 rounded" />
-          </div>
-        }
-      >
-        <Renderer result={typedResult} status={status} />
-      </Suspense>
-    );
-  };
 
   return (
     <div className="relative flex-1">
@@ -575,96 +700,18 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             }
 
             return (
-              <div
+              <ChatMessageItem
                 key={message.id}
-                data-message-index={messageIndex}
-                className={`space-y-3 transition-all duration-200 rounded-lg ${
-                  isCurrentMatch
-                    ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-zinc-900'
-                    : isSearchMatch
-                      ? 'ring-1 ring-zinc-600'
-                      : isKeyboardFocused
-                        ? 'ring-2 ring-blue-500/50 ring-offset-2 ring-offset-zinc-900 bg-blue-500/5'
-                        : ''
-                }`}
-              >
-                <MessageBubble
-                  message={message}
-                  showAvatar
-                  showTimestamp={showMessageTimestamps}
-                  enableActions
-                  onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
-                  onRegenerate={() => handleRetry(message.id, message.content)}
-                  onEdit={(content) => handleRetry(message.id, content)}
-                  onEditSave={handleEditSave}
-                />
-                {(
-                  message.artifacts || (message.metadata as MessageMetadataWithArtifacts)?.artifacts
-                )?.length ? (
-                  <div className="grid grid-cols-1 gap-2">
-                    {(
-                      message.artifacts ||
-                      (message.metadata as MessageMetadataWithArtifacts)?.artifacts ||
-                      []
-                    ).map((artifact, idx) => {
-                      const art = artifact as MessageArtifact;
-                      // Check if this artifact has an inline renderer
-                      const toolName = art.toolName || art.type;
-                      const inlineRenderer =
-                        toolName && hasInlineRenderer(toolName)
-                          ? renderInlineToolResult(
-                              toolName,
-                              { data: art },
-                              art.status || 'completed',
-                            )
-                          : null;
-
-                      // If inline renderer exists, use it
-                      if (inlineRenderer) {
-                        return (
-                          <div key={idx} className="space-y-2">
-                            {inlineRenderer}
-                          </div>
-                        );
-                      }
-
-                      // Fallback to clickable card
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => onOpenSidecar?.('preview', { artifact: art })}
-                          className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
-                              {art.type === 'image' ? (
-                                <FileText className="w-4 h-4" />
-                              ) : (
-                                <Braces className="w-4 h-4" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-zinc-200">
-                                {art.title || 'Generated Artifact'}
-                              </div>
-                              <div className="text-xs text-zinc-400">
-                                {art.type === 'code' ? art.language : art.type}
-                              </div>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-zinc-400 group-hover:text-white"
-                          >
-                            View <PanelTopOpen className="ml-2 w-3 h-3" />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
+                message={message}
+                messageIndex={messageIndex}
+                isCurrentMatch={Boolean(isCurrentMatch)}
+                isSearchMatch={Boolean(isSearchMatch)}
+                isKeyboardFocused={Boolean(isKeyboardFocused)}
+                showMessageTimestamps={showMessageTimestamps}
+                onOpenSidecar={onOpenSidecar}
+                onRetry={handleRetry}
+                onEditSave={handleEditSave}
+              />
             );
           })
         )}

@@ -72,6 +72,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   const rootPath = useCodeStore((state) => state.rootPath);
   const openFile = useCodeStore((state) => state.openFile);
   const setActiveFile = useCodeStore((state) => state.setActiveFile);
+  const artifactStatus = (artifact as Artifact & { status?: string }).status;
+  const hasContent = typeof artifact.content === 'string' && artifact.content.trim().length > 0;
+  const awaitingOutput = artifactStatus === 'running' && !hasContent;
 
   // AUDIT-005-003 fix: Ref to track mount state and timeout for copy state reset
   const isMountedRef = useRef(true);
@@ -131,21 +134,34 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(artifact.content);
-    setCopied(true);
-    // AUDIT-005-003 fix: Clear previous timeout and add mount check
-    if (copyTimeoutRef.current) {
-      clearTimeout(copyTimeoutRef.current);
+    if (!hasContent) {
+      toast.error('No output available yet.');
+      return;
     }
-    copyTimeoutRef.current = setTimeout(() => {
-      if (isMountedRef.current) {
-        setCopied(false);
+    try {
+      await navigator.clipboard.writeText(artifact.content);
+      setCopied(true);
+      // AUDIT-005-003 fix: Clear previous timeout and add mount check
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
       }
-      copyTimeoutRef.current = null;
-    }, 2000);
+      copyTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setCopied(false);
+        }
+        copyTimeoutRef.current = null;
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy artifact output:', error);
+      toast.error('Failed to copy output');
+    }
   };
 
   const handleDownload = () => {
+    if (!hasContent) {
+      toast.error('No output available to download.');
+      return;
+    }
     const blob = new Blob([artifact.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -522,6 +538,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                   className="h-8 w-8"
                   onClick={handleCopy}
                   aria-label="Copy to clipboard"
+                  disabled={awaitingOutput}
                 >
                   {copied ? (
                     <>
@@ -534,7 +551,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{copied ? 'Copied!' : 'Copy to clipboard'}</p>
+                <p>{awaitingOutput ? 'Waiting for tool output' : copied ? 'Copied!' : 'Copy to clipboard'}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenu>
@@ -546,6 +563,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                       size="icon"
                       className="h-8 w-8"
                       aria-label="Download or export artifact"
+                      disabled={awaitingOutput}
                     >
                       <Download className="h-3.5 w-3.5" />
                       <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
@@ -553,7 +571,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Download / Export</p>
+                  <p>{awaitingOutput ? 'Waiting for tool output' : 'Download / Export'}</p>
                 </TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end" className="w-48">
@@ -607,7 +625,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {artifact.type === 'code' ? (
+          {awaitingOutput ? (
+            <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
+          ) : artifact.type === 'code' ? (
             <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
           ) : artifact.type === 'chart' ? (
             <ChartArtifact artifact={artifact} />

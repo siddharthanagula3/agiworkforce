@@ -14,6 +14,7 @@ import { WindowSelector } from './WindowSelector';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { Region, CaptureResult, WindowInfo } from '../../types/capture';
 import { toast } from 'sonner';
+import { isTauri } from '../../lib/tauri-mock';
 
 interface ScreenCaptureButtonProps {
   conversationId?: number;
@@ -38,7 +39,13 @@ export function ScreenCaptureButton({
 }: ScreenCaptureButtonProps) {
   const [showRegionSelector, setShowRegionSelector] = useState(false);
   const [showWindowSelector, setShowWindowSelector] = useState(false);
-  const { captureFullScreen, captureRegion, getAvailableWindows, isCapturing } = useScreenCapture();
+  const { captureFullScreen, captureRegion, captureWindow, getAvailableWindows, isCapturing } =
+    useScreenCapture();
+  const isMacOS =
+    typeof navigator !== 'undefined' &&
+    (/Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
+      /Mac OS X|Darwin/i.test(navigator.userAgent || ''));
+  const useNativeDesktopPicker = isTauri && isMacOS;
 
   const handleFullScreen = async () => {
     try {
@@ -48,16 +55,48 @@ export function ScreenCaptureButton({
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      toast.error('Failed to capture screen');
+      const message = error instanceof Error ? error.message : 'Failed to capture screen';
+      toast.error(message);
       console.error('Capture error:', error);
     }
   };
 
-  const handleRegionCapture = () => {
+  const handleRegionCapture = async () => {
+    if (useNativeDesktopPicker) {
+      try {
+        // macOS uses native interactive region picker across the entire desktop.
+        const result = await captureRegion({ x: 0, y: 0, width: 1, height: 1 }, conversationId);
+        if (!suppressToasts) {
+          toast.success('Region captured successfully');
+        }
+        onCaptureComplete?.(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to capture region';
+        toast.error(message);
+        console.error('Capture error:', error);
+      }
+      return;
+    }
     setShowRegionSelector(true);
   };
 
   const handleWindowCapture = async () => {
+    if (useNativeDesktopPicker) {
+      try {
+        // macOS uses native interactive window picker across all visible apps.
+        const result = await captureWindow('0', conversationId);
+        if (!suppressToasts) {
+          toast.success('Window captured successfully');
+        }
+        onCaptureComplete?.(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to capture window';
+        toast.error(message);
+        console.error('Window capture error:', error);
+      }
+      return;
+    }
+
     try {
       const windows = await getAvailableWindows();
       if (windows.length === 0) {
@@ -80,7 +119,8 @@ export function ScreenCaptureButton({
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      toast.error('Failed to capture region');
+      const message = error instanceof Error ? error.message : 'Failed to capture region';
+      toast.error(message);
       console.error('Capture error:', error);
     }
   };
@@ -88,20 +128,14 @@ export function ScreenCaptureButton({
   const handleWindowConfirm = async (window: WindowInfo) => {
     setShowWindowSelector(false);
     try {
-      // Capture the window by capturing its bounds as a region
-      const region: Region = {
-        x: window.bounds?.x || 0,
-        y: window.bounds?.y || 0,
-        width: window.bounds?.width || 800,
-        height: window.bounds?.height || 600,
-      };
-      const result = await captureRegion(region, conversationId);
+      const result = await captureWindow(window.handle, conversationId);
       if (!suppressToasts) {
         toast.success(`Window "${window.title}" captured successfully`);
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      toast.error('Failed to capture window');
+      const message = error instanceof Error ? error.message : 'Failed to capture window';
+      toast.error(message);
       console.error('Capture error:', error);
     }
   };
@@ -129,7 +163,7 @@ export function ScreenCaptureButton({
               <Camera className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent side="top" align="center" sideOffset={8} className="pointer-events-none">
             <p>Capture screenshot</p>
           </TooltipContent>
         </Tooltip>
@@ -157,7 +191,7 @@ export function ScreenCaptureButton({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent side="top" align="center" sideOffset={8} className="pointer-events-none">
             <p>Screen capture</p>
           </TooltipContent>
         </Tooltip>
