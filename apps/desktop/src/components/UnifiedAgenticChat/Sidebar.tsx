@@ -35,6 +35,7 @@ import {
 } from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
+import { resetInFlightChatState } from '../../lib/newChatReset';
 import { UserProfile } from '../Layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -470,6 +471,7 @@ export function Sidebar({
   }, [groupedConversations, expandedGroups, pinnedConversations]);
 
   const handleNewChat = useCallback(() => {
+    resetInFlightChatState();
     createConversation('New chat');
     setActiveView('chat');
     if (isMobile && onCollapsedChange) {

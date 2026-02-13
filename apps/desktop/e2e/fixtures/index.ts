@@ -22,6 +22,33 @@ type CustomFixtures = {
 };
 
 export const test = base.extend<CustomFixtures>({
+  context: async ({ context }, use) => {
+    const shouldMockSupabase = process.env['E2E_MOCK_SUPABASE'] !== '0';
+
+    if (shouldMockSupabase) {
+      await context.route('**/rest/v1/**', (route) => {
+        const method = route.request().method();
+
+        if (method === 'GET') {
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          });
+          return;
+        }
+
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({}),
+        });
+      });
+    }
+
+    await use(context);
+  },
+
   chatPage: async ({ page }, use) => {
     const chatPage = new ChatPage(page);
     await use(chatPage);

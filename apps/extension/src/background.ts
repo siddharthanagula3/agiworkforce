@@ -50,6 +50,7 @@ const pendingRequests = new Map<
 >();
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
+const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 
 /**
  * Initialize the background service worker
@@ -100,6 +101,10 @@ function connectToNativeHost(): void {
     state.connectionStatus = 'connected';
     state.lastNativeError = null;
 
+    void sendNativeRequest({ type: 'ping' }).catch((error) => {
+      logger.warn('Native host handshake failed', error);
+    });
+
     notifyConnectionStatusChange();
     logger.info('Connected to native host');
   } catch (error) {
@@ -110,6 +115,38 @@ function connectToNativeHost(): void {
     state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
     notifyConnectionStatusChange();
   }
+}
+
+function createRequestId(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
+  if (!state.nativePort || !state.isNativeConnected) {
+    return Promise.resolve({ success: false, error: 'Not connected to native host' });
+  }
+
+  const id = createRequestId();
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingRequests.delete(id);
+      reject(new Error(`Native request timeout after ${NATIVE_REQUEST_TIMEOUT_MS}ms`));
+    }, NATIVE_REQUEST_TIMEOUT_MS);
+
+    pendingRequests.set(id, { resolve, reject, timeout });
+
+    try {
+      state.nativePort?.postMessage({
+        id,
+        message,
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      pendingRequests.delete(id);
+      reject(error);
+    }
+  });
 }
 
 /**
@@ -198,6 +235,15 @@ async function handleMessageAsync(
 
   switch (message.type) {
     case 'GET_CONNECTION_STATUS':
+      if (state.isNativeConnected) {
+        void sendNativeRequest({ type: 'ping' }).catch((error) => {
+          logger.warn('Native ping failed during status check', error);
+          state.isNativeConnected = false;
+          state.connectionStatus = 'disconnected';
+          state.nativePort = null;
+          notifyConnectionStatusChange();
+        });
+      }
       return {
         success: true,
         nativeConnected: state.isNativeConnected,
@@ -261,6 +307,23 @@ async function forwardToContentScript(
  * Check desktop app connection status
  */
 async function checkDesktopConnection(): Promise<void> {
+  if (state.isNativeConnected) {
+    try {
+      await sendNativeRequest({ type: 'ping' });
+      if (state.connectionStatus !== 'connected') {
+        state.connectionStatus = 'connected';
+        notifyConnectionStatusChange();
+      }
+      await storageUtils.setItem('connectedToDesktop', true);
+      return;
+    } catch (error) {
+      logger.warn('Native ping failed, falling back to HTTP health check', error);
+      state.isNativeConnected = false;
+      state.nativePort = null;
+      state.connectionStatus = 'disconnected';
+    }
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 

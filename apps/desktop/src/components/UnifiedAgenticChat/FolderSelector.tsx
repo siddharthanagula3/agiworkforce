@@ -6,10 +6,11 @@
  * for file operations and helps the AI understand the project structure.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ChevronDown, Folder, FolderOpen, X, Clock, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { invoke } from '../../lib/tauri-mock';
 import {
   useProjectStore,
   selectCurrentFolder,
@@ -45,6 +46,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
+  const hasHydratedRef = useRef(false);
 
   // Store selectors
   const currentFolder = useProjectStore(selectCurrentFolder);
@@ -58,6 +60,13 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     if (!currentFolder) return null;
     return formatFolderPath(currentFolder);
   }, [currentFolder]);
+
+  const syncFolderContext = useCallback(
+    async (path: string | null) => {
+      await invoke('project_context_set_folder', { path });
+    },
+    [],
+  );
 
   // Handle folder selection via native dialog
   const handleSelectFolder = useCallback(async () => {
@@ -78,6 +87,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
       if (selected && typeof selected === 'string') {
         console.log('[FolderSelector] Setting folder to:', selected);
+        await syncFolderContext(selected);
         setCurrentFolder(selected);
       } else {
         console.log('[FolderSelector] Dialog cancelled or no selection');
@@ -91,15 +101,23 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     } finally {
       setIsSelecting(false);
     }
-  }, [isSelecting, setCurrentFolder]);
+  }, [isSelecting, setCurrentFolder, syncFolderContext]);
 
   // Handle selecting a recent folder
   const handleSelectRecentFolder = useCallback(
-    (path: string) => {
-      setCurrentFolder(path);
-      setIsOpen(false);
+    async (path: string) => {
+      try {
+        await syncFolderContext(path);
+        setCurrentFolder(path);
+        setIsOpen(false);
+      } catch (error) {
+        console.error('[FolderSelector] Failed to set recent folder context:', error);
+        alert(
+          `Failed to select folder: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     },
-    [setCurrentFolder],
+    [setCurrentFolder, syncFolderContext],
   );
 
   // Handle removing a recent folder
@@ -113,13 +131,39 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
   // Handle clearing current folder
   const handleClearFolder = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.stopPropagation();
-      setCurrentFolder(null);
-      setIsOpen(false);
+      try {
+        await syncFolderContext(null);
+        setCurrentFolder(null);
+        setIsOpen(false);
+      } catch (error) {
+        console.error('[FolderSelector] Failed to clear folder context:', error);
+      }
     },
-    [setCurrentFolder],
+    [setCurrentFolder, syncFolderContext],
   );
+
+  useEffect(() => {
+    if (hasHydratedRef.current) {
+      return;
+    }
+    hasHydratedRef.current = true;
+
+    if (!currentFolder) {
+      void syncFolderContext(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        await syncFolderContext(currentFolder);
+      } catch (error) {
+        console.warn('[FolderSelector] Persisted folder is invalid, clearing selection', error);
+        setCurrentFolder(null);
+      }
+    })();
+  }, [currentFolder, setCurrentFolder, syncFolderContext]);
 
   // Filter recent folders to not include current folder
   const filteredRecentFolders = useMemo(() => {

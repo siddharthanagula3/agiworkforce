@@ -56,7 +56,10 @@ async function handleDevicePoll(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ status: 'pending' });
+      return NextResponse.json(
+        { status: 'pending' },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     // Expiry check first (also treat already-consumed codes as expired)
@@ -68,7 +71,10 @@ async function handleDevicePoll(request: NextRequest) {
           .update({ status: 'expired', updated_at: new Date().toISOString() })
           .eq('device_id', device_id);
       }
-      return NextResponse.json({ status: 'expired' });
+      return NextResponse.json(
+        { status: 'expired' },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     // Device ownership verification: if a fingerprint was recorded, require a matching fingerprint.
@@ -112,19 +118,31 @@ async function handleDevicePoll(request: NextRequest) {
       } | null;
 
       if (!consumed?.status) {
-        return NextResponse.json({ status: 'pending' });
+        return NextResponse.json(
+          { status: 'pending' },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
       }
 
       if (consumed.status === 'expired' || consumed.status === 'consumed') {
-        return NextResponse.json({ status: 'expired' });
+        return NextResponse.json(
+          { status: 'expired' },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
       }
 
       if (consumed.status === 'denied' || consumed.status === 'revoked') {
-        return NextResponse.json({ status: 'denied' });
+        return NextResponse.json(
+          { status: 'denied' },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
       }
 
       if (consumed.status !== 'approved') {
-        return NextResponse.json({ status: 'pending' });
+        return NextResponse.json(
+          { status: 'pending' },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
       }
 
       if (!consumed.access_token || !consumed.refresh_token || !consumed.user_id) {
@@ -135,23 +153,35 @@ async function handleDevicePoll(request: NextRequest) {
         return NextResponse.json({ status: 'pending' });
       }
 
-      return NextResponse.json({
-        status: 'approved',
-        access_token: consumed.access_token,
-        refresh_token: consumed.refresh_token,
-        user: {
-          id: consumed.user_id,
-          email: consumed.user_email,
-          name: consumed.user_name,
+      return NextResponse.json(
+        {
+          status: 'approved',
+          access_token: consumed.access_token,
+          refresh_token: consumed.refresh_token,
+          user: {
+            id: consumed.user_id,
+            email: consumed.user_email,
+            name: consumed.user_name,
+          },
         },
-      });
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     } else if (data.status === 'denied') {
-      return NextResponse.json({ status: 'denied' });
+      return NextResponse.json(
+        { status: 'denied' },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     } else if (data.status === 'revoked') {
-      return NextResponse.json({ status: 'denied' });
+      return NextResponse.json(
+        { status: 'denied' },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
-    return NextResponse.json({ status: 'pending' });
+    return NextResponse.json(
+      { status: 'pending' },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
     logger.error(
       {

@@ -46,6 +46,7 @@ export type DynamicPanelType =
 interface DynamicSidecarProps {
   panelType: DynamicPanelType;
   payload?: Record<string, unknown>;
+  contextId?: string | null;
   allowedDirectory?: string;
   allowStatus?: 'allowed' | 'restricted';
   onClose?: () => void;
@@ -144,6 +145,7 @@ const sidecarVariants = {
 export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
   panelType,
   payload,
+  contextId,
   allowedDirectory,
   allowStatus = 'allowed',
   onClose,
@@ -234,6 +236,51 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           </div>
         );
 
+      case 'preview': {
+        const artifact = payload?.['artifact'] as Artifact | undefined;
+        if (artifact) {
+          return (
+            <div className="h-full overflow-y-auto">
+              <ArtifactRenderer artifact={artifact} className="h-full border-none shadow-none" />
+            </div>
+          );
+        }
+
+        if (typeof payload?.['content'] === 'string') {
+          return (
+            <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">
+              <pre className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+                {payload['content'] as string}
+              </pre>
+            </div>
+          );
+        }
+
+        const imageSrc =
+          (payload?.['src'] as string | undefined) || (payload?.['imageUrl'] as string | undefined);
+        if (imageSrc) {
+          return (
+            <div className="flex h-full items-center justify-center rounded-lg border border-white/10 bg-black/30 p-4">
+              <img
+                src={imageSrc}
+                alt="Preview"
+                className="max-h-full max-w-full rounded-lg border border-white/10 object-contain"
+              />
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-zinc-400">
+            <Shield className="h-6 w-6 text-zinc-500" />
+            <span>No preview content is available yet.</span>
+            {contextId ? (
+              <span className="text-xs text-zinc-500">Message ID: {contextId}</span>
+            ) : null}
+          </div>
+        );
+      }
+
       case 'data':
         return (
           <div className="flex h-full flex-col">
@@ -273,7 +320,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         return (
           <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-400">
             <Shield className="mb-2 h-6 w-6 text-zinc-500" />
-            Awaiting agent output…
+            Awaiting panel content…
           </div>
         );
     }

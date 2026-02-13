@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/tauri-mock';
+import { API_BASE_URL } from '../api/client';
+import { supabaseAuth } from '../services/supabaseAuth';
 
 /**
  * Transcription mode - kept for backward compatibility
@@ -7,6 +9,51 @@ import { invoke } from '../lib/tauri-mock';
  * 'whisper' uses backend Whisper transcription (more accurate, batch)
  */
 export type TranscriptionMode = 'web-speech' | 'whisper';
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}
 
 /**
  * Voice transcription result from the backend (Whisper)
@@ -31,7 +78,7 @@ export interface VoiceSettings {
  * Options for the useVoiceTranscription hook
  */
 export interface UseVoiceTranscriptionOptions {
-  /** Prefer local Whisper over Web Speech API */
+  /** Use Whisper (Cloud) when true, Web Speech when false */
   preferLocal?: boolean;
   /** Language code for transcription (e.g., 'en', 'es', 'fr') */
   language?: string;
@@ -132,10 +179,19 @@ export function useVoiceTranscription(
   const [availableLocalWhisper, setAvailableLocalWhisper] = useState<string[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const speechFinalTranscriptRef = useRef<string>('');
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   // HKS-005 fix: Track mount state to prevent setState after unmount
   const isMountedRef = useRef(true);
+
+  const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    const timeout = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]);
+  }, []);
 
   /**
    * Check available local Whisper implementations
@@ -209,6 +265,13 @@ export function useVoiceTranscription(
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {
+          // Ignore speech recognition shutdown failures
+        }
+      }
     };
   }, [checkLocalWhisperImpl]);
 
@@ -225,6 +288,16 @@ export function useVoiceTranscription(
       });
     }
   }, [preferLocal, availableLocalWhisper, configureImpl]);
+
+  // Auto-clear transient voice errors so stale banners do not block input affordances.
+  useEffect(() => {
+    if (!state.error) return;
+    const timeoutId = window.setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setState((prev) => ({ ...prev, error: null }));
+    }, 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [state.error]);
 
   // Configure language when it changes
   useEffect(() => {
@@ -272,6 +345,105 @@ export function useVoiceTranscription(
    * Start recording audio from the microphone
    */
   const startRecording = useCallback(async (): Promise<void> => {
+    if (!preferLocal) {
+      const SpeechRecognitionCtor =
+        typeof window !== 'undefined'
+          ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+          : undefined;
+
+      if (!SpeechRecognitionCtor) {
+        const error = 'Web Speech API is not supported in this environment';
+        setState((prev) => ({ ...prev, error }));
+        onError?.(error);
+        return;
+      }
+
+      if (state.isRecording) {
+        return;
+      }
+
+      speechFinalTranscriptRef.current = '';
+      const recognition = new SpeechRecognitionCtor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = language || 'en-US';
+
+      recognition.onresult = (event) => {
+        let interimText = '';
+        let finalText = speechFinalTranscriptRef.current;
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (!result || !result[0]) continue;
+          const transcriptText = result[0].transcript;
+          if (result.isFinal) {
+            finalText = `${finalText} ${transcriptText}`.trim();
+          } else {
+            interimText = `${interimText} ${transcriptText}`.trim();
+          }
+        }
+        speechFinalTranscriptRef.current = finalText;
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            transcript: finalText,
+            interimTranscript: interimText,
+            error: null,
+          }));
+        }
+        if (finalText) {
+          onResult?.(finalText);
+        }
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        const errorMessage = `Speech recognition error: ${event.error}`;
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            error: errorMessage,
+          }));
+        }
+        onError?.(errorMessage);
+      };
+
+      recognition.onend = () => {
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            interimTranscript: '',
+          }));
+        }
+        onRecordingStop?.();
+      };
+
+      try {
+        speechRecognitionRef.current = recognition;
+        recognition.start();
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: true,
+            error: null,
+            interimTranscript: '',
+          }));
+        }
+        onRecordingStart?.();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to start speech recognition';
+        if (isMountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            error: errorMessage,
+          }));
+        }
+        onError?.(errorMessage);
+      }
+      return;
+    }
+
     if (!isSupported) {
       const error = 'MediaRecorder is not supported in this browser';
       setState((prev) => ({ ...prev, error }));
@@ -338,12 +510,42 @@ export function useVoiceTranscription(
       }));
       onError?.(errorMessage);
     }
-  }, [isSupported, state.isRecording, getMimeType, onError, onRecordingStart]);
+  }, [
+    preferLocal,
+    language,
+    isSupported,
+    state.isRecording,
+    getMimeType,
+    onError,
+    onRecordingStart,
+    onRecordingStop,
+    onResult,
+  ]);
 
   /**
    * Stop recording and transcribe the audio
    */
   const stopRecording = useCallback(async (): Promise<string> => {
+    if (!preferLocal && speechRecognitionRef.current) {
+      const recognition = speechRecognitionRef.current;
+      speechRecognitionRef.current = null;
+      try {
+        recognition.stop();
+      } catch {
+        // noop
+      }
+      const final = speechFinalTranscriptRef.current.trim();
+      if (isMountedRef.current) {
+        setState((prev) => ({
+          ...prev,
+          isRecording: false,
+          interimTranscript: '',
+          transcript: final,
+        }));
+      }
+      return final;
+    }
+
     if (!state.isRecording || !mediaRecorderRef.current) {
       return state.transcript;
     }
@@ -392,20 +594,40 @@ export function useVoiceTranscription(
         }
 
         try {
-          // Convert blob to array buffer
-          const arrayBuffer = await audioBlob.arrayBuffer();
-          const audioData = Array.from(new Uint8Array(arrayBuffer));
+          const session = supabaseAuth.getSession();
+          const accessToken = session?.access_token;
+          if (!accessToken) {
+            throw new Error('Authentication required for Whisper Cloud transcription');
+          }
 
-          // Get format from MIME type
-          const format = getFormatFromMimeType(mimeType);
-
-          // Send to backend for transcription
-          const result = await invoke<VoiceTranscription>('voice_transcribe_blob', {
-            audioData,
-            format,
+          const transcriptionFile = new File([audioBlob], `voice.${getFormatFromMimeType(mimeType)}`, {
+            type: mimeType,
           });
+          const formData = new FormData();
+          formData.append('file', transcriptionFile);
+          formData.append('model', 'whisper-1');
+          if (language) {
+            formData.append('language', language);
+          }
 
-          const transcript = result.text.trim();
+          const response = await withTimeout(
+            fetch(`${API_BASE_URL}/api/voice/transcribe`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: formData,
+            }),
+            15000,
+          );
+
+          const payload = (await response.json().catch(() => null)) as
+            | { text?: string; error?: { message?: string } }
+            | null;
+          if (!response.ok) {
+            throw new Error(payload?.error?.message || 'Whisper Cloud transcription failed');
+          }
+          const transcript = (payload?.text || '').trim();
 
           // HKS-005 fix: Check if still mounted before setState
           if (isMountedRef.current) {
@@ -436,7 +658,16 @@ export function useVoiceTranscription(
 
       mediaRecorder.stop();
     });
-  }, [state.isRecording, state.transcript, onResult, onError, onRecordingStop]);
+  }, [
+    preferLocal,
+    language,
+    state.isRecording,
+    state.transcript,
+    onResult,
+    onError,
+    onRecordingStop,
+    withTimeout,
+  ]);
 
   /**
    * Toggle recording on/off

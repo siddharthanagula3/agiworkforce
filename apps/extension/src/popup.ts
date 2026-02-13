@@ -53,13 +53,13 @@ function setupEventListeners(): void {
 
   // Listen for storage changes
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.connectedToDesktop) {
+    if (changes['connectedToDesktop']) {
       updateStatus();
     }
 
-    if (changes.stats) {
-      const stats = changes.stats.newValue || {};
-      popupState.actionCount = stats.actionCount || 0;
+    if (changes['stats']) {
+      const stats = changes['stats'].newValue || {};
+      popupState.actionCount = (stats as { actionCount?: number }).actionCount || 0;
       updateStats();
     }
   });

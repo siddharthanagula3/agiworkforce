@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
-import { Send, Paperclip, X, Loader2, Square, Image as ImageIcon } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, Square, Image as ImageIcon, Mic, MicOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { Attachment } from '@/stores/chatStore';
+import { useMobileVoiceInput } from '@/lib/hooks/useMobileVoiceInput';
 
 interface ChatInputAreaProps {
   onSend: (content: string, attachments?: Attachment[]) => Promise<void>;
@@ -40,10 +41,24 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const {
+    isSupported: isVoiceSupported,
+    isRecording,
+    isTranscribing,
+    error: voiceError,
+    startRecording,
+    stopRecording,
+  } = useMobileVoiceInput({
+    onTranscript: (text) => {
+      setContent((prev) => (prev ? `${prev} ${text}` : text));
+    },
+    desktopAudioWsUrl: process.env.NEXT_PUBLIC_DESKTOP_AGENT_AUDIO_WS_URL,
+  });
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isInputDisabled = disabled || isSending;
+  const isInputDisabled = disabled || isSending || isTranscribing;
   const showStopButton = isStreaming && onStopGeneration;
 
   // Auto-resize textarea
@@ -316,7 +331,9 @@ export const ChatInputArea = memo(function ChatInputArea({
         )}
 
         {/* Error message */}
-        {error && <div className="px-4 pt-3 text-sm text-red-500">{error}</div>}
+        {(error || voiceError) && (
+          <div className="px-4 pt-3 text-sm text-red-500">{error || voiceError}</div>
+        )}
 
         {/* Main input row */}
         <div className="flex items-end gap-2 p-3">
@@ -335,6 +352,32 @@ export const ChatInputArea = memo(function ChatInputArea({
           >
             <Paperclip className="w-5 h-5" />
           </button>
+
+          {isVoiceSupported && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isRecording) {
+                  void stopRecording();
+                } else {
+                  void startRecording();
+                }
+              }}
+              disabled={isInputDisabled && !isRecording}
+              className={clsx(
+                'p-2 rounded-lg transition-colors',
+                isRecording
+                  ? 'bg-red-500 text-white'
+                  : isTranscribing
+                    ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/30'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+              title={isRecording ? 'Stop voice recording' : 'Start voice recording'}
+            >
+              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
 
           {/* Textarea */}
           <textarea

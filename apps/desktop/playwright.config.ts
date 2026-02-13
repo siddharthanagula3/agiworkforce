@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   fullyParallel: false,
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 2 : 0,
@@ -78,6 +79,11 @@ export default defineConfig({
     {
       name: 'agi-safety',
       testMatch: '**/agi-safety.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'self-healing',
+      testMatch: '**/tests/self-healing.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
   ],

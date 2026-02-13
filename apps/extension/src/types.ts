@@ -22,7 +22,9 @@ export type NativeMessageType =
   | 'SUBMIT_FORM'
   | 'GET_CONNECTION_STATUS'
   | 'CONNECTION_STATUS_CHANGED'
-  | 'TAB_READY';
+  | 'TAB_READY'
+  | 'CAPTURE_ELEMENT'
+  | 'GET_ELEMENT_INFO';
 
 // Base message structure
 export interface BaseMessage {
@@ -275,6 +277,21 @@ export interface TabReadyResponse {
   ready: boolean;
 }
 
+// Context-menu DOM capture
+export interface CaptureElementMessage extends BaseMessage {
+  type: 'CAPTURE_ELEMENT';
+}
+
+export interface GetElementInfoMessage extends BaseMessage {
+  type: 'GET_ELEMENT_INFO';
+}
+
+export interface ElementInfoResponse {
+  success: boolean;
+  element?: Record<string, unknown>;
+  error?: string;
+}
+
 // Union types for all messages
 export type ExtensionMessage =
   | CaptureScreenshotMessage
@@ -293,7 +310,9 @@ export type ExtensionMessage =
   | SubmitFormMessage
   | ConnectionStatusMessage
   | ConnectionStatusChangedMessage
-  | TabReadyMessage;
+  | TabReadyMessage
+  | CaptureElementMessage
+  | GetElementInfoMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -311,7 +330,8 @@ export type ExtensionResponse =
   | FillFormResponse
   | SubmitFormResponse
   | ConnectionStatusResponse
-  | TabReadyResponse;
+  | TabReadyResponse
+  | ElementInfoResponse;
 
 // Popup state
 export interface PopupState {

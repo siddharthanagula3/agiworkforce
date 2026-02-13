@@ -22,6 +22,7 @@ const automationState: AutomationState = {
   recordedActions: [],
   connectionStatus: 'disconnected',
 };
+let lastPointerTarget: Element | null = null;
 
 /**
  * Initialize content script
@@ -34,6 +35,10 @@ function initialize(): void {
 
   // Set up message listener
   chrome.runtime.onMessage.addListener(handleMessage);
+  document.addEventListener('mousemove', (event) => {
+    const target = event.target;
+    lastPointerTarget = target instanceof Element ? target : null;
+  });
 
   // Check connection status
   checkConnectionStatus();
@@ -76,9 +81,10 @@ function handleMessage(
  * Async message handler
  */
 async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionResponse> {
-  logger.debug('Processing message', { type: message.type });
+  const messageType = (message as unknown as Record<string, unknown>)['type'];
+  logger.debug('Processing message', { type: messageType });
 
-  switch (message.type) {
+  switch (messageType) {
     case 'TAB_READY':
       return { success: true, ready: true } as ExtensionResponse;
 
@@ -125,10 +131,78 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'SUBMIT_FORM':
       return handleSubmitForm(message as any);
+    case 'CAPTURE_ELEMENT':
+      return handleCaptureElement();
+    case 'GET_ELEMENT_INFO':
+      return handleGetElementInfo();
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
   }
+}
+
+function serializeElement(target: Element | null): Record<string, unknown> | null {
+  if (!target) {
+    return null;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const html = target.outerHTML || '';
+  return {
+    tag: target.tagName.toLowerCase(),
+    id: target.id || null,
+    className: target.className || null,
+    text: (target.textContent || '').trim().slice(0, 400),
+    selector: buildElementSelector(target),
+    rect: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    },
+    html: html.slice(0, 4000),
+  };
+}
+
+function buildElementSelector(element: Element): string {
+  if (element.id) {
+    return `#${CSS.escape(element.id)}`;
+  }
+
+  const parts: string[] = [];
+  let current: Element | null = element;
+  while (current && current.parentElement && parts.length < 4) {
+    const tag = current.tagName.toLowerCase();
+    const classPart =
+      typeof current.className === 'string' && current.className.trim()
+        ? `.${current.className.trim().split(/\s+/).slice(0, 2).map((cls) => CSS.escape(cls)).join('.')}`
+        : '';
+    const siblings = Array.from(current.parentElement.children).filter(
+      (child) => child.tagName === current!.tagName,
+    );
+    const nth = siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : '';
+    parts.unshift(`${tag}${classPart}${nth}`);
+    current = current.parentElement;
+  }
+  return parts.join(' > ');
+}
+
+function handleCaptureElement(): ExtensionResponse {
+  const payload = serializeElement(lastPointerTarget);
+  if (!payload) {
+    return { success: false, error: 'No element under pointer' };
+  }
+
+  return { success: true, element: payload } as ExtensionResponse;
+}
+
+function handleGetElementInfo(): ExtensionResponse {
+  const active = document.activeElement instanceof Element ? document.activeElement : null;
+  const payload = serializeElement(active || lastPointerTarget);
+  if (!payload) {
+    return { success: false, error: 'No active element found' };
+  }
+  return { success: true, element: payload } as ExtensionResponse;
 }
 
 /**
@@ -604,7 +678,7 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   }
 
   const msg = message as Record<string, unknown>;
-  return typeof msg.type === 'string';
+  return typeof msg['type'] === 'string';
 }
 
 // Initialize on script load
