@@ -107,14 +107,14 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
                 ? 'Stop recording'
                 : isTranscribing
                   ? 'Transcribing...'
-                  : `Voice input (${preferLocalWhisper ? 'Whisper' : 'Live'})`
+                  : `Voice input (${preferLocalWhisper ? 'Whisper (Cloud)' : 'Live'})`
             }
             aria-label={
               isTranscribing
                 ? 'Transcribing your voice...'
                 : isRecording
                   ? 'Stop voice recording'
-                  : `Start voice input using ${preferLocalWhisper ? 'Whisper' : 'Live'} mode`
+                  : `Start voice input using ${preferLocalWhisper ? 'Whisper (Cloud)' : 'Live'} mode`
             }
           >
             {isTranscribing ? (
@@ -185,11 +185,11 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
             >
               <Waves size={16} />
               <div className="flex-1">
-                <div className="text-sm font-medium">
-                  Whisper {availableLocalWhisper.length > 0 ? '(Local)' : '(Cloud)'}
-                </div>
+                <div className="text-sm font-medium">Whisper (Cloud)</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  More accurate, processes after recording
+                  {availableLocalWhisper.length > 0
+                    ? 'More accurate, uploads after recording (local engines available)'
+                    : 'More accurate, uploads after recording'}
                 </div>
               </div>
             </button>

@@ -6,6 +6,7 @@
 //! - Scope file operations and terminal commands to the project directory
 //! - Enable folder-aware tool execution
 
+use crate::sys::commands::settings::SettingsState;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -85,6 +86,19 @@ impl Default for ProjectContextState {
     }
 }
 
+fn normalize_path_for_compare(path: &str) -> String {
+    let normalized = PathBuf::from(path)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(path))
+        .to_string_lossy()
+        .replace('\\', "/");
+    if cfg!(windows) {
+        normalized.to_lowercase()
+    } else {
+        normalized
+    }
+}
+
 /// Set the active project folder
 ///
 /// This command validates the provided path and updates the project context.
@@ -100,9 +114,8 @@ impl Default for ProjectContextState {
 pub async fn project_context_set_folder(
     path: Option<String>,
     state: State<'_, ProjectContextState>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<ProjectContext, String> {
-    let mut ctx = state.context.write().await;
-
     if let Some(ref p) = path {
         // Validate path exists and is a directory
         let path_buf = PathBuf::from(p);
@@ -143,18 +156,36 @@ pub async fn project_context_set_folder(
             p, name
         );
 
+        // Ensure folder-scoped sessions have immediate filesystem access without
+        // requiring a separate manual allowed-directories update.
+        let normalized_project = normalize_path_for_compare(p);
+        let mut settings = settings_state.settings.lock().await;
+        let exists = settings
+            .allowed_directories
+            .iter()
+            .any(|dir| normalize_path_for_compare(dir) == normalized_project);
+        if !exists {
+            settings.allowed_directories.push(p.clone());
+            debug!(
+                "[ProjectContext] Added selected folder to allowed_directories: {}",
+                p
+            );
+        }
+
+        let mut ctx = state.context.write().await;
         ctx.folder = Some(p.clone());
         ctx.name = name;
         ctx.is_valid = true;
+        return Ok(ctx.clone());
     } else {
         // Clear the project folder
         info!("[ProjectContext] Cleared project folder");
+        let mut ctx = state.context.write().await;
         ctx.folder = None;
         ctx.name = None;
         ctx.is_valid = false;
+        return Ok(ctx.clone());
     }
-
-    Ok(ctx.clone())
 }
 
 /// Get the current project folder context

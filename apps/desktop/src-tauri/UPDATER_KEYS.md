@@ -43,7 +43,7 @@ The public key is stored in `tauri.conf.json`:
 {
   "plugins": {
     "updater": {
-      "pubkey": "RWQahuITpry6oPekJf8JP5xSoAxMiUVUohL85U3V/vq1wVfLYzejJZCM"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxODAzNEI3NDk3MzIzODEKUldTQkkzTkp0elNBUVhkUzdsanZXek5CTGJqTkFVSUlWelJZa25ueWdnWktQZ0JwWjJjeVhsdlAK"
     }
   }
 }
@@ -132,7 +132,7 @@ The updater checks for updates at the configured endpoint. The current configura
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://agiworkforce.com/api/releases/{{target}}/{{arch}}/{{current_version}}"
+        "https://agiworkforce.com/api/releases/{{target}}/{{current_version}}"
       ]
     }
   }
@@ -227,6 +227,9 @@ If you need to rotate keys (e.g., if the private key is compromised):
 
 ## Current Key Information
 
-- **Public Key:** `RWQahuITpry6oPekJf8JP5xSoAxMiUVUohL85U3V/vq1wVfLYzejJZCM`
+- **Public Key (base64 minisign block):** `dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxODAzNEI3NDk3MzIzODEKUldTQkkzTkp0elNBUVhkUzdsanZXek5CTGJqTkFVSUlWelJZa25ueWdnWktQZ0JwWjJjeVhsdlAK`
+- **Public Key (decoded):**
+  - `untrusted comment: minisign public key: 418034B749732381`
+  - `RWSBI3NJtzSAQXdS7ljvWzNBLbjNAUIIVzRYknnyggZKPgBpZ2cyXlvP`
 - **Algorithm:** Ed25519
 - **Key Location:** GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`)

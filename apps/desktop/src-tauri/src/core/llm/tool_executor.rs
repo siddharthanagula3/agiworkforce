@@ -5,6 +5,8 @@ use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::commands::undo::UndoState;
 #[allow(unused_imports)]
+use crate::sys::security::tool_guard::SecurityError;
+#[allow(unused_imports)]
 use crate::sys::security::ToolSafetyTier;
 use crate::ui::events::tool_stream::{
     emit_tool_completed, emit_tool_error, emit_tool_output_chunk, emit_tool_progress,
@@ -31,6 +33,13 @@ use uuid::Uuid;
 /// Default timeout for tool confirmation dialogs (in seconds)
 #[allow(dead_code)]
 const TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
+const MCP_TOOL_TIMEOUT_MS: u64 = 10_000;
+const FILE_LIST_TIMEOUT_MS: u64 = 10_000;
+const FILE_LIST_MAX_LIMIT: usize = 2_000;
+const FILE_LIST_DEFAULT_LIMIT: usize = 500;
+const FILE_LIST_MAX_OFFSET: usize = 100_000;
+const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
+    &[".git", "node_modules", "dist", "build", ".next", "target"];
 
 const DANGEROUS_TOOLS: &[&str] = &[
     "file_write",
@@ -63,6 +72,464 @@ pub struct ToolExecutor {
 }
 
 impl ToolExecutor {
+    async fn execute_browser_tool(
+        &self,
+        tool_id: &str,
+        args: HashMap<String, serde_json::Value>,
+    ) -> Result<ToolResult> {
+        use crate::automation::browser::dom_operations::{
+            ClickOptions, DomOperations, TypeOptions,
+        };
+        use crate::automation::browser::NavigationOptions;
+        use crate::sys::commands::BrowserStateWrapper;
+        use tauri::Manager;
+
+        let app = self
+            .app_handle
+            .as_ref()
+            .ok_or_else(|| anyhow!("App handle not available for browser automation"))?;
+        let browser_state = app.state::<BrowserStateWrapper>();
+
+        match tool_id {
+            "browser_get_url" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let url = client.get_url().await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "url": url, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_title" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let title = client.get_title().await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "title": title, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_go_back" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let tab_manager = browser_state
+                    .get_tab_manager()
+                    .map_err(anyhow::Error::msg)?;
+                tab_manager
+                    .lock()
+                    .await
+                    .go_back(&tab_id)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "tab_id": tab_id, "url": client.get_url().await.unwrap_or_default() }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_go_forward" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let tab_manager = browser_state
+                    .get_tab_manager()
+                    .map_err(anyhow::Error::msg)?;
+                tab_manager
+                    .lock()
+                    .await
+                    .go_forward(&tab_id)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "tab_id": tab_id, "url": client.get_url().await.unwrap_or_default() }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_reload" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let tab_manager = browser_state
+                    .get_tab_manager()
+                    .map_err(anyhow::Error::msg)?;
+                tab_manager
+                    .lock()
+                    .await
+                    .reload(&tab_id)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "tab_id": tab_id, "url": client.get_url().await.unwrap_or_default() }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_wait_for_navigation" => Err(anyhow!(
+                "browser_wait_for_navigation is not implemented in the browser subsystem yet."
+            )),
+            "browser_get_dom_snapshot" => Err(anyhow!(
+                "browser_get_dom_snapshot is not implemented in the browser subsystem yet."
+            )),
+            "browser_execute_async_js" => Err(anyhow!(
+                "browser_execute_async_js is not implemented in the browser subsystem yet."
+            )),
+            "browser_get_element_state" => Err(anyhow!(
+                "browser_get_element_state is not implemented in the browser subsystem yet."
+            )),
+            "browser_wait_for_interactive" => Err(anyhow!(
+                "browser_wait_for_interactive is not implemented in the browser subsystem yet."
+            )),
+            "browser_click" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::click(&client, selector, ClickOptions::default())
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_extract" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let text = if let Some(selector) = args.get("selector").and_then(|v| v.as_str()) {
+                    DomOperations::get_text(&client, selector)
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                } else {
+                    DomOperations::get_text(&client, "body")
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                };
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "content": text, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_type" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let text = args
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing text parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::type_text(&client, selector, text, TypeOptions::default())
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_wait_for_selector" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let timeout_ms = args
+                    .get("timeout")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(30_000);
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::wait_for_selector(&client, selector, timeout_ms)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_text" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let text = DomOperations::get_text(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "text": text, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_attribute" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let attribute = args
+                    .get("attribute")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing attribute parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let value = DomOperations::get_attribute(&client, selector, attribute)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "value": value,
+                        "selector": selector,
+                        "attribute": attribute,
+                        "tab_id": tab_id
+                    }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_screenshot" => {
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let bytes = client
+                    .capture_screenshot(false)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                use base64::{engine::general_purpose::STANDARD, Engine};
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "image_base64": STANDARD.encode(bytes), "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_hover" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::hover(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_focus" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::focus(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_scroll_into_view" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::scroll_into_view(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_query_all" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let elements = DomOperations::query_all(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let texts: Vec<String> = elements.into_iter().map(|e| e.text).collect();
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "results": texts, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_select_option" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let value = args
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing value parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::select_option(&client, selector, value)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "value": value, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_check" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::check(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_uncheck" => {
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let (client, tab_id) = browser_state
+                    .get_active_client()
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                DomOperations::uncheck(&client, selector)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_navigate" => {
+                let url = args
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
+                let tab_manager = browser_state
+                    .get_tab_manager()
+                    .map_err(anyhow::Error::msg)?;
+                let tab_manager = tab_manager.lock().await;
+                let tabs = tab_manager.list_tabs().await.map_err(anyhow::Error::msg)?;
+                let tab_id = if tabs.is_empty() {
+                    tab_manager
+                        .open_tab(url)
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                } else {
+                    tabs[0].id.clone()
+                };
+                tab_manager
+                    .navigate(&tab_id, url, NavigationOptions::default())
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "url": url, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            _ => Err(anyhow!("Unknown browser tool: {}", tool_id)),
+        }
+    }
+
+    fn parse_string_array_param(args: &HashMap<String, Value>, key: &str) -> Option<Vec<String>> {
+        args.get(key).and_then(|v| {
+            v.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+        })
+    }
+
+    fn should_exclude_file_list_entry(entry_name: &str, excludes: &[String]) -> bool {
+        excludes.iter().any(|pat| entry_name == pat)
+    }
+
     pub fn new(registry: Arc<ToolRegistry>) -> Self {
         Self {
             registry,
@@ -348,6 +815,182 @@ impl ToolExecutor {
             );
         }
 
+        // Reliability fast-path: this read-only filesystem metadata call should always
+        // return quickly, even when MCP server startup/connectivity is degraded.
+        // Important: this runs BEFORE policy/confirmation checks to avoid waiting
+        // on irrelevant approval paths for a local metadata lookup.
+        if tool_call.name == "mcp__filesystem__list_allowed_directories" {
+            let mut directories: Vec<String> = Vec::new();
+
+            if let Some(project_folder) = &self.project_folder {
+                directories.push(project_folder.clone());
+            }
+
+            if let Some(app_handle) = &self.app_handle {
+                if let Some(settings_state) = app_handle.try_state::<SettingsState>() {
+                    let settings = settings_state.settings.lock().await;
+                    directories.extend(settings.allowed_directories.clone());
+                }
+            }
+
+            // Keep deterministic ordering and avoid duplicates.
+            directories.retain(|d| !d.trim().is_empty());
+            directories.sort();
+            directories.dedup();
+            let directory_count = directories.len();
+
+            let result = ToolResult {
+                success: true,
+                data: json!({
+                    "directories": directories,
+                    "count": directory_count,
+                    "source": "local_fallback"
+                }),
+                error: None,
+                metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+            };
+
+            return self.finalize_tool_result(
+                &action_id,
+                &tool_call.name,
+                metadata_snapshot,
+                start_time,
+                Ok(result),
+            );
+        }
+
+        // Reliability fast-path: local bounded fallback for MCP text file reads.
+        // This avoids indefinite waiting when the MCP filesystem server is slow/unavailable.
+        if tool_call.name == "mcp__filesystem__read_text_file" {
+            let raw_path = match args
+                .get("path")
+                .or_else(|| args.get("file_path"))
+                .and_then(|v| v.as_str())
+            {
+                Some(path) if !path.trim().is_empty() => path.to_string(),
+                _ => {
+                    let result = ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(
+                            "Missing required 'path' parameter for mcp__filesystem__read_text_file"
+                                .to_string(),
+                        ),
+                        metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+                    };
+                    return self.finalize_tool_result(
+                        &action_id,
+                        &tool_call.name,
+                        metadata_snapshot,
+                        start_time,
+                        Ok(result),
+                    );
+                }
+            };
+
+            let path = self.resolve_path(&raw_path);
+            let timeout_ms = args
+                .get("timeout_ms")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(MCP_TOOL_TIMEOUT_MS)
+                .min(30_000);
+
+            if let Err(e) = self.validate_path(&path).await {
+                let result = ToolResult {
+                    success: false,
+                    data: json!({ "path": path }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("path".to_string(), json!(path)),
+                    ]),
+                };
+                return self.finalize_tool_result(
+                    &action_id,
+                    &tool_call.name,
+                    metadata_snapshot,
+                    start_time,
+                    Ok(result),
+                );
+            }
+
+            tracing::info!(
+                "[ToolExecutor] MCP local fallback read_text_file start path='{}' timeout_ms={}",
+                path,
+                timeout_ms
+            );
+
+            let read_result = timeout(
+                TokioDuration::from_millis(timeout_ms),
+                fs::read_to_string(&path),
+            )
+            .await;
+            let result = match read_result {
+                Ok(Ok(content)) => {
+                    if let Some(app_handle) = &self.app_handle {
+                        let file_op = create_file_read_event(&path, &content, true, None, None);
+                        emit_file_operation(app_handle, file_op);
+                    }
+
+                    ToolResult {
+                        success: true,
+                        data: json!({
+                            "path": path,
+                            "content": content,
+                            "source": "local_fallback"
+                        }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                            ("path".to_string(), json!(path)),
+                        ]),
+                    }
+                }
+                Ok(Err(e)) => {
+                    if let Some(app_handle) = &self.app_handle {
+                        let file_op =
+                            create_file_read_event(&path, "", false, Some(e.to_string()), None);
+                        emit_file_operation(app_handle, file_op);
+                    }
+
+                    ToolResult {
+                        success: false,
+                        data: json!({ "path": path }),
+                        error: Some(format!("Failed to read file: {}", e)),
+                        metadata: HashMap::from([
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                            ("path".to_string(), json!(path)),
+                        ]),
+                    }
+                }
+                Err(_) => ToolResult {
+                    success: false,
+                    data: json!({
+                        "path": path,
+                        "timeout_ms": timeout_ms
+                    }),
+                    error: Some(format!(
+                        "mcp__filesystem__read_text_file timed out after {}ms. Try a smaller file or verify permissions.",
+                        timeout_ms
+                    )),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("path".to_string(), json!(path)),
+                    ]),
+                },
+            };
+
+            return self.finalize_tool_result(
+                &action_id,
+                &tool_call.name,
+                metadata_snapshot,
+                start_time,
+                Ok(result),
+            );
+        }
+
+        let is_mcp_tool = tool_call.name.starts_with("mcp__");
+
         // Enforce tool policy validation (allowed tools, parameters, and path rules)
         if let Some(app_handle) = &self.app_handle {
             if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
@@ -356,6 +999,64 @@ impl ToolExecutor {
                     .validate_tool_call(&tool_call.name, &metadata_snapshot)
                     .await
                 {
+                    // MCP tools are dynamic and may not be pre-declared in ToolGuard.
+                    // Don't block execution solely because the tool name isn't in the static map.
+                    let is_unknown_mcp_tool =
+                        is_mcp_tool && matches!(&e, SecurityError::UnauthorizedTool(_));
+                    if is_unknown_mcp_tool {
+                        tracing::warn!(
+                            "[ToolExecutor] MCP tool '{}' is not declared in ToolGuard; allowing dynamic execution",
+                            tool_call.name
+                        );
+                    } else {
+                        self.emit_tool_action(
+                            &action_id,
+                            &tool_call.name,
+                            "blocked",
+                            &metadata_snapshot,
+                            Some(e.to_string()),
+                        );
+                        self.emit_tool_metrics(
+                            &action_id,
+                            &tool_call.name,
+                            start_time.elapsed().as_millis() as u64,
+                            false,
+                        );
+
+                        if let Some(app_handle) = &self.app_handle {
+                            emit_tool_error(app_handle, &action_id, &e.to_string(), 0, false);
+                        }
+
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "policy_blocked": true }),
+                            error: Some(e.to_string()),
+                            metadata: HashMap::from([
+                                ("requires_confirmation".to_string(), json!(true)),
+                                ("tool_name".to_string(), json!(tool_call.name)),
+                            ]),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Safety tier check: determine if user confirmation is required
+        // MCP tools are handled by dedicated manual-mode approval below; skip the generic
+        // safety gate here to avoid duplicate/hidden confirmation waits.
+        if !is_mcp_tool {
+            if let Some(app_handle) = &self.app_handle {
+                if let Err(e) = self
+                    .check_safety_tier_and_confirm(
+                        app_handle,
+                        &tool_call.name,
+                        &metadata_snapshot,
+                        &action_id,
+                        start_time,
+                    )
+                    .await
+                {
+                    // User denied or timeout - return approval required result
                     self.emit_tool_action(
                         &action_id,
                         &tool_call.name,
@@ -370,13 +1071,12 @@ impl ToolExecutor {
                         false,
                     );
 
-                    if let Some(app_handle) = &self.app_handle {
-                        emit_tool_error(app_handle, &action_id, &e.to_string(), 0, false);
-                    }
+                    // Emit tool error for stream tracking
+                    emit_tool_error(app_handle, &action_id, &e.to_string(), 0, true);
 
                     return Ok(ToolResult {
                         success: false,
-                        data: json!({ "policy_blocked": true }),
+                        data: json!({ "confirmation_denied": true }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([
                             ("requires_confirmation".to_string(), json!(true)),
@@ -384,48 +1084,6 @@ impl ToolExecutor {
                         ]),
                     });
                 }
-            }
-        }
-
-        // Safety tier check: determine if user confirmation is required
-        if let Some(app_handle) = &self.app_handle {
-            if let Err(e) = self
-                .check_safety_tier_and_confirm(
-                    app_handle,
-                    &tool_call.name,
-                    &metadata_snapshot,
-                    &action_id,
-                    start_time,
-                )
-                .await
-            {
-                // User denied or timeout - return approval required result
-                self.emit_tool_action(
-                    &action_id,
-                    &tool_call.name,
-                    "blocked",
-                    &metadata_snapshot,
-                    Some(e.to_string()),
-                );
-                self.emit_tool_metrics(
-                    &action_id,
-                    &tool_call.name,
-                    start_time.elapsed().as_millis() as u64,
-                    false,
-                );
-
-                // Emit tool error for stream tracking
-                emit_tool_error(app_handle, &action_id, &e.to_string(), 0, true);
-
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({ "confirmation_denied": true }),
-                    error: Some(e.to_string()),
-                    metadata: HashMap::from([
-                        ("requires_confirmation".to_string(), json!(true)),
-                        ("tool_name".to_string(), json!(tool_call.name)),
-                    ]),
-                });
             }
         }
 
@@ -968,19 +1626,72 @@ impl ToolExecutor {
             .and_then(|h| h.try_state::<McpState>())
             .ok_or_else(|| anyhow!("MCP state not available"))?;
 
-        match mcp_state.registry.execute_tool(&tool_call.name, args).await {
-            Ok(result_value) => Ok(ToolResult {
-                success: true,
-                data: result_value,
-                error: None,
-                metadata: HashMap::new(),
-            }),
-            Err(e) => Ok(ToolResult {
-                success: false,
-                data: json!(null),
-                error: Some(format!("MCP tool execution failed: {}", e)),
-                metadata: HashMap::new(),
-            }),
+        let timeout_ms = args
+            .get("timeout_ms")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(MCP_TOOL_TIMEOUT_MS)
+            .min(30_000);
+        let started = Instant::now();
+
+        tracing::info!(
+            "[ToolExecutor] MCP tool start name='{}' timeout_ms={}",
+            tool_call.name,
+            timeout_ms
+        );
+
+        match timeout(
+            TokioDuration::from_millis(timeout_ms),
+            mcp_state.registry.execute_tool(&tool_call.name, args),
+        )
+        .await
+        {
+            Ok(Ok(result_value)) => {
+                tracing::info!(
+                    "[ToolExecutor] MCP tool completed name='{}' elapsed_ms={}",
+                    tool_call.name,
+                    started.elapsed().as_millis()
+                );
+                Ok(ToolResult {
+                    success: true,
+                    data: result_value,
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            Ok(Err(e)) => {
+                tracing::error!(
+                    "[ToolExecutor] MCP tool failed name='{}' elapsed_ms={} error={}",
+                    tool_call.name,
+                    started.elapsed().as_millis(),
+                    e
+                );
+                Ok(ToolResult {
+                    success: false,
+                    data: json!(null),
+                    error: Some(format!("MCP tool execution failed: {}", e)),
+                    metadata: HashMap::new(),
+                })
+            }
+            Err(_) => {
+                tracing::error!(
+                    "[ToolExecutor] MCP tool timeout name='{}' elapsed_ms={} timeout_ms={}",
+                    tool_call.name,
+                    started.elapsed().as_millis(),
+                    timeout_ms
+                );
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "tool_name": tool_call.name,
+                        "timeout_ms": timeout_ms
+                    }),
+                    error: Some(format!(
+                        "MCP tool '{}' timed out after {}ms. Check MCP server health/access and retry.",
+                        tool_call.name, timeout_ms
+                    )),
+                    metadata: HashMap::new(),
+                })
+            }
         }
     }
 
@@ -3855,6 +4566,32 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?
                     .to_string();
+                let limit = args
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize)
+                    .unwrap_or(FILE_LIST_DEFAULT_LIMIT)
+                    .min(FILE_LIST_MAX_LIMIT);
+                let offset = args
+                    .get("offset")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize)
+                    .unwrap_or(0)
+                    .min(FILE_LIST_MAX_OFFSET);
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(FILE_LIST_TIMEOUT_MS)
+                    .min(30_000);
+                let mut excludes =
+                    Self::parse_string_array_param(&args, "exclude").unwrap_or_else(|| {
+                        FILE_LIST_DEFAULT_EXCLUDES
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect()
+                    });
+                excludes.sort();
+                excludes.dedup();
 
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
@@ -3865,48 +4602,137 @@ impl ToolExecutor {
                     });
                 }
 
-                match fs::read_dir(&path).await {
-                    Ok(mut entries) => {
-                        let mut items = Vec::new();
-                        while let Ok(Some(entry)) = entries.next_entry().await {
-                            let file_type = entry.file_type().await.ok();
-                            let type_str = match file_type {
-                                Some(ft) if ft.is_dir() => "directory",
-                                Some(ft) if ft.is_symlink() => "symlink",
-                                _ => "file",
-                            };
-                            let metadata = entry.metadata().await.ok();
-                            let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                tracing::info!(
+                    "[ToolExecutor] file_list start path='{}' offset={} limit={} timeout_ms={} excludes={:?}",
+                    path,
+                    offset,
+                    limit,
+                    timeout_ms,
+                    excludes
+                );
 
-                            items.push(json!({
-                                "name": entry.file_name().to_string_lossy(),
-                                "type": type_str,
-                                "path": entry.path().to_string_lossy(),
-                                "size": size
-                            }));
+                let started = Instant::now();
+                let list_result = timeout(TokioDuration::from_millis(timeout_ms), async {
+                    let mut entries = fs::read_dir(&path).await?;
+                    let mut matched = 0usize;
+                    let mut items = Vec::new();
+
+                    while let Some(entry) = entries.next_entry().await? {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if Self::should_exclude_file_list_entry(&name, &excludes) {
+                            continue;
                         }
 
-                        // Sort by name for consistent output
-                        items.sort_by(|a, b| {
-                            let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            name_a.cmp(name_b)
-                        });
+                        matched += 1;
+                        if matched <= offset {
+                            continue;
+                        }
+                        if items.len() >= limit + 1 {
+                            break;
+                        }
 
-                        let count = items.len();
+                        let file_type = entry.file_type().await.ok();
+                        let type_str = match file_type {
+                            Some(ft) if ft.is_dir() => "directory",
+                            Some(ft) if ft.is_symlink() => "symlink",
+                            _ => "file",
+                        };
+                        let metadata = entry.metadata().await.ok();
+                        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+
+                        items.push(json!({
+                            "name": name,
+                            "type": type_str,
+                            "path": entry.path().to_string_lossy(),
+                            "size": size
+                        }));
+                    }
+
+                    items.sort_by(|a, b| {
+                        let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        name_a.cmp(name_b)
+                    });
+
+                    let has_more = items.len() > limit;
+                    if has_more {
+                        items.truncate(limit);
+                    }
+                    let returned = items.len();
+                    let next_offset = if has_more {
+                        Some(offset + returned)
+                    } else {
+                        None
+                    };
+
+                    Ok::<Value, anyhow::Error>(json!({
+                        "entries": items,
+                        "count": offset + returned,
+                        "returned": returned,
+                        "offset": offset,
+                        "limit": limit,
+                        "has_more": has_more,
+                        "next_offset": next_offset,
+                        "path": &path,
+                        "excluded": excludes,
+                        "max_depth": 1
+                    }))
+                })
+                .await;
+
+                match list_result {
+                    Ok(Ok(data)) => {
+                        tracing::info!(
+                            "[ToolExecutor] file_list completed path='{}' elapsed_ms={} returned={} has_more={}",
+                            path,
+                            started.elapsed().as_millis(),
+                            data.get("returned").and_then(|v| v.as_u64()).unwrap_or(0),
+                            data.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false)
+                        );
                         Ok(ToolResult {
                             success: true,
-                            data: json!({ "entries": items, "count": count, "path": &path }),
+                            data,
                             error: None,
                             metadata: HashMap::from([("path".to_string(), json!(&path))]),
                         })
                     }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Failed to list directory: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    }),
+                    Ok(Err(e)) => {
+                        tracing::error!(
+                            "[ToolExecutor] file_list failed path='{}' elapsed_ms={} error={}",
+                            path,
+                            started.elapsed().as_millis(),
+                            e
+                        );
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to list directory: {}", e)),
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
+                    Err(_) => {
+                        let msg = format!(
+                            "file_list timed out after {}ms. Try a narrower path, increase 'offset', or lower 'limit'.",
+                            timeout_ms
+                        );
+                        tracing::error!(
+                            "[ToolExecutor] file_list timeout path='{}' elapsed_ms={} timeout_ms={}",
+                            path,
+                            started.elapsed().as_millis(),
+                            timeout_ms
+                        );
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({
+                                "path": &path,
+                                "offset": offset,
+                                "limit": limit,
+                                "timeout_ms": timeout_ms
+                            }),
+                            error: Some(msg),
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
                 }
             }
             "memory_remember" => {
@@ -4213,65 +5039,8 @@ impl ToolExecutor {
                     })
                 }
             }
-            "browser_click" => {
-                let selector = args
-                    .get("selector")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing selector parameter"))?
-                    .to_string();
-
-                if let Some(ref app) = self.app_handle {
-                    // Emit browser click event for the frontend to handle
-                    let _ = app.emit("browser:click", json!({ "selector": selector.clone() }));
-
-                    Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "success": true,
-                            "selector": selector,
-                            "message": format!("Click action initiated on element: {}", selector)
-                        }),
-                        error: None,
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                    })
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some("App handle not available for browser automation".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "browser_extract" => {
-                let selector = args
-                    .get("selector")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if let Some(ref app) = self.app_handle {
-                    // Emit browser extract event for the frontend to handle
-                    let _ = app.emit("browser:extract", json!({ "selector": selector.clone() }));
-
-                    Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "success": true,
-                            "selector": selector,
-                            "message": "Content extraction initiated. Results will be provided by the browser."
-                        }),
-                        error: None,
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                    })
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some("App handle not available for browser automation".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
+            "browser_click" => self.execute_browser_tool("browser_click", args).await,
+            "browser_extract" => self.execute_browser_tool("browser_extract", args).await,
             "api_download" => {
                 let url = args
                     .get("url")
@@ -4608,6 +5377,7 @@ impl ToolExecutor {
                     ]),
                 })
             }
+            id if id.starts_with("browser_") => self.execute_browser_tool(id, args).await,
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
     }
@@ -4922,6 +5692,74 @@ impl ToolExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::agi::tools::{ParameterType, ToolCapability, ToolParameter};
+    use crate::core::agi::ResourceUsage;
+    use std::sync::Arc;
+
+    fn create_registry_with_file_list() -> Arc<ToolRegistry> {
+        let registry = Arc::new(ToolRegistry::new().expect("registry"));
+        registry
+            .register_tool(crate::core::agi::tools::Tool {
+                id: "file_list".to_string(),
+                name: "List Files".to_string(),
+                description: "List files in a directory".to_string(),
+                capabilities: vec![ToolCapability::FileRead],
+                parameters: vec![
+                    ToolParameter {
+                        name: "path".to_string(),
+                        parameter_type: ParameterType::FilePath,
+                        required: true,
+                        description: "Path".to_string(),
+                        default: None,
+                    },
+                    ToolParameter {
+                        name: "limit".to_string(),
+                        parameter_type: ParameterType::Integer,
+                        required: false,
+                        description: "Limit".to_string(),
+                        default: None,
+                    },
+                    ToolParameter {
+                        name: "offset".to_string(),
+                        parameter_type: ParameterType::Integer,
+                        required: false,
+                        description: "Offset".to_string(),
+                        default: None,
+                    },
+                ],
+                estimated_resources: ResourceUsage {
+                    cpu_percent: 0.0,
+                    memory_mb: 0,
+                    network_mb: 0.0,
+                },
+                dependencies: vec![],
+            })
+            .expect("register file_list");
+        registry
+    }
+
+    fn create_registry_with_browser_tool(
+        tool_id: &str,
+        params: Vec<ToolParameter>,
+    ) -> Arc<ToolRegistry> {
+        let registry = Arc::new(ToolRegistry::new().expect("registry"));
+        registry
+            .register_tool(crate::core::agi::tools::Tool {
+                id: tool_id.to_string(),
+                name: tool_id.to_string(),
+                description: format!("{} tool", tool_id),
+                capabilities: vec![ToolCapability::UIAutomation],
+                parameters: params,
+                estimated_resources: ResourceUsage {
+                    cpu_percent: 0.0,
+                    memory_mb: 0,
+                    network_mb: 0.0,
+                },
+                dependencies: vec![],
+            })
+            .expect("register browser tool");
+        registry
+    }
 
     #[test]
     fn test_tool_call_parsing() {
@@ -5047,6 +5885,180 @@ mod tests {
         assert_eq!(
             args.get("query").and_then(|v| v.as_str()).unwrap(),
             "rust tauri"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_list_returns_entries_with_limits() {
+        use std::fs;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "a").unwrap();
+        fs::write(dir.path().join("b.txt"), "b").unwrap();
+        fs::create_dir(dir.path().join("nested")).unwrap();
+
+        let tool_call = ToolCall {
+            id: "test_file_list_basic".to_string(),
+            name: "file_list".to_string(),
+            arguments: serde_json::json!({
+                "path": dir.path().to_string_lossy(),
+                "limit": 2
+            })
+            .to_string(),
+        };
+
+        let executor = ToolExecutor::new(create_registry_with_file_list());
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+        assert!(result.success, "file_list should succeed");
+        assert_eq!(result.data["returned"].as_u64(), Some(2));
+        assert_eq!(result.data["has_more"].as_bool(), Some(true));
+        assert_eq!(result.data["next_offset"].as_u64(), Some(2));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_file_list_permission_denied_returns_error() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let blocked = dir.path().join("blocked");
+        fs::create_dir(&blocked).unwrap();
+        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let tool_call = ToolCall {
+            id: "test_file_list_denied".to_string(),
+            name: "file_list".to_string(),
+            arguments: serde_json::json!({
+                "path": blocked.to_string_lossy(),
+                "timeout_ms": 2000
+            })
+            .to_string(),
+        };
+
+        let executor = ToolExecutor::new(create_registry_with_file_list());
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(
+            !result.success,
+            "file_list should fail on permission denied"
+        );
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Failed to list directory"));
+    }
+
+    #[tokio::test]
+    async fn test_file_list_large_directory_paginates() {
+        use std::fs;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        for idx in 0..600usize {
+            fs::write(dir.path().join(format!("file_{idx}.txt")), "x").unwrap();
+        }
+
+        let tool_call = ToolCall {
+            id: "test_file_list_pagination".to_string(),
+            name: "file_list".to_string(),
+            arguments: serde_json::json!({
+                "path": dir.path().to_string_lossy(),
+                "limit": 100,
+                "offset": 200
+            })
+            .to_string(),
+        };
+
+        let executor = ToolExecutor::new(create_registry_with_file_list());
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.data["returned"].as_u64(), Some(100));
+        assert_eq!(result.data["offset"].as_u64(), Some(200));
+        assert_eq!(result.data["has_more"].as_bool(), Some(true));
+        assert_eq!(result.data["next_offset"].as_u64(), Some(300));
+    }
+
+    #[tokio::test]
+    async fn test_mcp_list_allowed_directories_uses_local_fallback() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let project_path = dir.path().to_string_lossy().to_string();
+
+        let mut executor = ToolExecutor::new(create_registry_with_file_list());
+        executor.set_project_folder(Some(project_path.clone()));
+
+        let tool_call = ToolCall {
+            id: "test_mcp_list_allowed_dirs".to_string(),
+            name: "mcp__filesystem__list_allowed_directories".to_string(),
+            arguments: serde_json::json!({}).to_string(),
+        };
+
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["source"].as_str(), Some("local_fallback"));
+        let directories = result.data["directories"]
+            .as_array()
+            .expect("directories should be an array");
+        assert!(
+            directories
+                .iter()
+                .any(|entry| entry.as_str() == Some(project_path.as_str())),
+            "fallback directories should include project folder"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mcp_read_text_file_uses_local_fallback() {
+        use std::fs;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("notes.txt");
+        fs::write(&file_path, "hello from fallback").unwrap();
+
+        let mut executor = ToolExecutor::new(create_registry_with_file_list());
+        executor.set_project_folder(Some(dir.path().to_string_lossy().to_string()));
+
+        let tool_call = ToolCall {
+            id: "test_mcp_read_text_file".to_string(),
+            name: "mcp__filesystem__read_text_file".to_string(),
+            arguments: serde_json::json!({
+                "path": file_path.to_string_lossy()
+            })
+            .to_string(),
+        };
+
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["source"].as_str(), Some("local_fallback"));
+        assert_eq!(result.data["content"].as_str(), Some("hello from fallback"));
+    }
+
+    #[tokio::test]
+    async fn test_browser_tool_is_routed_not_unknown() {
+        let tool_call = ToolCall {
+            id: "test_browser_get_url".to_string(),
+            name: "browser_get_url".to_string(),
+            arguments: serde_json::json!({}).to_string(),
+        };
+        let executor =
+            ToolExecutor::new(create_registry_with_browser_tool("browser_get_url", vec![]));
+        let err = executor
+            .execute_tool_call(&tool_call)
+            .await
+            .expect_err("browser tool should fail cleanly without app handle");
+        let message = err.to_string();
+        assert!(
+            message.contains("App handle not available for browser automation"),
+            "unexpected error: {message}"
         );
     }
 }

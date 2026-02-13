@@ -12,9 +12,19 @@ export function VerifyDeviceClient({ code }: { code: string }) {
     setMessage(null);
 
     try {
+      const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
+      const csrfJson = (await csrfRes.json().catch(() => null)) as { token?: string } | null;
+      if (!csrfRes.ok || !csrfJson?.token) {
+        throw new Error('Failed to acquire CSRF token');
+      }
+
       const res = await fetch('/api/device/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfJson.token,
+        },
+        credentials: 'include',
         body: JSON.stringify({ code, action }),
       });
 

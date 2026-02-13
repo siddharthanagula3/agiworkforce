@@ -42,46 +42,64 @@ async function handleDeviceLink(request: NextRequest) {
     });
 
     // Generate device code with 64-bit entropy (8 bytes = 16 hex chars = 2^64 possibilities)
-    // This makes brute-force attacks computationally infeasible even within the 15-minute window
-    const link_code = randomBytes(8).toString('hex').toUpperCase();
+    // Retry on rare uniqueness conflicts to avoid transient pairing failures.
+    let link_code = '';
+    let upsertError: unknown = null;
     const appUrl = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
-    const verify_url = `${appUrl}/verify?code=${link_code}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      link_code = randomBytes(8).toString('hex').toUpperCase();
+      const { error } = await supabase.from('device_authorization_codes').upsert(
+        {
+          device_id,
+          device_name: device_name || null,
+          device_type: resolvedDeviceType,
+          device_fingerprint: device_fingerprint || null,
+          user_code: link_code,
+          status: 'pending',
+          user_id: null,
+          user_email: null,
+          user_name: null,
+          access_token: null,
+          refresh_token: null,
+          authorized_at: null,
+          consumed_at: null,
+          denied_at: null,
+          revoked_at: null,
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'device_id' },
+      );
 
-    // Upsert by device_id (device_id is unique). This supports re-linking without throwing.
-    const { error } = await supabase.from('device_authorization_codes').upsert(
-      {
-        device_id,
-        device_name: device_name || null,
-        device_type: resolvedDeviceType,
-        device_fingerprint: device_fingerprint || null,
-        user_code: link_code,
-        status: 'pending',
-        user_id: null,
-        user_email: null,
-        user_name: null,
-        access_token: null,
-        refresh_token: null,
-        authorized_at: null,
-        consumed_at: null,
-        denied_at: null,
-        revoked_at: null,
-        expires_at: expiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'device_id' },
-    );
+      if (!error) {
+        upsertError = null;
+        break;
+      }
 
-    if (error) {
+      upsertError = error;
+      const isUniqueViolation =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === '23505';
+      if (!isUniqueViolation) {
+        break;
+      }
+    }
+
+    if (upsertError) {
       logger.error(
         {
-          error,
+          error: upsertError,
           device_id,
         },
         'Failed to create device code',
       );
       throw createError.internal('Failed to create device authorization code');
     }
+
+    const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 
     // Generate QR code URL using a reliable public service
     // The QR code encodes the verification URL for easy mobile scanning
@@ -96,7 +114,12 @@ async function handleDeviceLink(request: NextRequest) {
         expires_at: Math.floor(expiresAt.getTime() / 1000),
         qr_code_url,
       },
-      { status: 200 },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      },
     );
   } catch (error) {
     logger.error(

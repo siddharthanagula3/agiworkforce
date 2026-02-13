@@ -14,6 +14,7 @@ export interface UseScreenCaptureReturn {
   isCapturing: boolean;
   captureFullScreen: (conversationId?: number) => Promise<CaptureResult>;
   captureRegion: (region: Region, conversationId?: number) => Promise<CaptureResult>;
+  captureWindow: (windowHandle: string, conversationId?: number) => Promise<CaptureResult>;
   getAvailableWindows: () => Promise<WindowInfo[]>;
   getHistory: (conversationId?: number, limit?: number) => Promise<CaptureRecord[]>;
   deleteCapture: (captureId: string) => Promise<void>;
@@ -34,6 +35,18 @@ export function useScreenCapture(): UseScreenCaptureReturn {
     };
   }, []);
 
+  const withTimeout = useCallback(
+    async <T,>(label: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      });
+      return Promise.race([fn(), timeoutPromise]);
+    },
+    [],
+  );
+
   const captureFullScreen = useCallback(async (conversationId?: number): Promise<CaptureResult> => {
     // AUDIT-007-005 fix: Check isMounted before setState calls
     if (isMountedRef.current) {
@@ -46,7 +59,9 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       if (conversationId != null) {
         params['conversation_id'] = conversationId;
       }
-      const result = await invoke<RawCaptureResult>('capture_screen_full', params);
+      const result = await withTimeout('capture_screen_full', () =>
+        invoke<RawCaptureResult>('capture_screen_full', params),
+      );
       return normalizeCaptureResult(result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -59,7 +74,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         setIsCapturing(false);
       }
     }
-  }, []);
+  }, [withTimeout]);
 
   const captureRegion = useCallback(
     async (region: Region, conversationId?: number): Promise<CaptureResult> => {
@@ -79,7 +94,9 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         if (conversationId != null) {
           params['conversation_id'] = conversationId;
         }
-        const result = await invoke<RawCaptureResult>('capture_screen_region', params);
+        const result = await withTimeout('capture_screen_region', () =>
+          invoke<RawCaptureResult>('capture_screen_region', params),
+        );
         return normalizeCaptureResult(result);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -93,12 +110,47 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         }
       }
     },
-    [],
+    [withTimeout],
+  );
+
+  const captureWindow = useCallback(
+    async (windowHandle: string, conversationId?: number): Promise<CaptureResult> => {
+      if (isMountedRef.current) {
+        setIsCapturing(true);
+        setError(null);
+      }
+
+      try {
+        const params: Record<string, unknown> = {
+          hwnd: windowHandle,
+        };
+        if (conversationId != null) {
+          params['conversation_id'] = conversationId;
+        }
+        const result = await withTimeout('capture_screen_window', () =>
+          invoke<RawCaptureResult>('capture_screen_window', params),
+        );
+        return normalizeCaptureResult(result);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
+        throw new Error(errorMessage);
+      } finally {
+        if (isMountedRef.current) {
+          setIsCapturing(false);
+        }
+      }
+    },
+    [withTimeout],
   );
 
   const getAvailableWindows = useCallback(async (): Promise<WindowInfo[]> => {
     try {
-      const windows = await invoke<WindowInfo[]>('capture_get_windows');
+      const windows = await withTimeout('capture_get_windows', () =>
+        invoke<WindowInfo[]>('capture_get_windows'),
+      );
       return windows;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -108,7 +160,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       }
       return [];
     }
-  }, []);
+  }, [withTimeout]);
 
   const getHistory = useCallback(
     async (conversationId?: number, limit?: number): Promise<CaptureRecord[]> => {
@@ -164,6 +216,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
     isCapturing,
     captureFullScreen,
     captureRegion,
+    captureWindow,
     getAvailableWindows,
     getHistory,
     deleteCapture,
