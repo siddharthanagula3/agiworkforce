@@ -3,12 +3,22 @@ import { Page } from '@playwright/test';
 export class MockLLMProvider {
   private page: Page;
   private mockResponses: Map<string, string>;
+  private responseSequences: Map<string, string[]>;
+  private failOncePatterns: Map<
+    string,
+    {
+      status: number;
+      message: string;
+    }
+  >;
   private registeredRoutes: Set<string>;
   private initScriptId: string | null = null;
 
   constructor(page: Page) {
     this.page = page;
     this.mockResponses = new Map();
+    this.responseSequences = new Map();
+    this.failOncePatterns = new Map();
     this.registeredRoutes = new Set();
   }
 
@@ -19,6 +29,16 @@ export class MockLLMProvider {
           const request = route.request();
           const postData = request.postDataJSON();
           const prompt = postData?.messages?.[0]?.content || '';
+          const oneShotFailure = this.consumeFailureForPrompt(prompt);
+
+          if (oneShotFailure) {
+            route.fulfill({
+              status: oneShotFailure.status,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: oneShotFailure.message }),
+            });
+            return;
+          }
 
           const response = this.getResponseForPrompt(prompt);
 
@@ -59,6 +79,16 @@ export class MockLLMProvider {
           const request = route.request();
           const postData = request.postDataJSON();
           const prompt = postData?.messages?.[0]?.content || '';
+          const oneShotFailure = this.consumeFailureForPrompt(prompt);
+
+          if (oneShotFailure) {
+            route.fulfill({
+              status: oneShotFailure.status,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: oneShotFailure.message }),
+            });
+            return;
+          }
 
           const response = this.getResponseForPrompt(prompt);
 
@@ -167,6 +197,8 @@ export class MockLLMProvider {
 
     try {
       this.mockResponses.clear();
+      this.responseSequences.clear();
+      this.failOncePatterns.clear();
     } catch (error) {
       errors.push(
         `Failed to clear mock responses: ${error instanceof Error ? error.message : String(error)}`,
@@ -183,7 +215,51 @@ export class MockLLMProvider {
     this.mockResponses.set(key, response);
   }
 
+  setResponseSequence(pattern: string | RegExp, responses: string[]): void {
+    const key = pattern instanceof RegExp ? pattern.source : pattern;
+    this.responseSequences.set(key, [...responses]);
+  }
+
+  setFailOnce(
+    pattern: string | RegExp,
+    status: number = 500,
+    message: string = 'Simulated provider failure',
+  ): void {
+    const key = pattern instanceof RegExp ? pattern.source : pattern;
+    this.failOncePatterns.set(key, { status, message });
+  }
+
+  private consumeFailureForPrompt(prompt: string): { status: number; message: string } | null {
+    for (const [pattern, failure] of this.failOncePatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(prompt)) {
+          this.failOncePatterns.delete(pattern);
+          return failure;
+        }
+      } catch (error) {
+        console.warn(`[Mock] Invalid fail-once regex "${pattern}":`, error);
+      }
+    }
+    return null;
+  }
+
   private getResponseForPrompt(prompt: string): string {
+    for (const [pattern, queue] of this.responseSequences) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(prompt) && queue.length > 0) {
+          const response = queue.shift();
+          if (queue.length === 0) {
+            this.responseSequences.delete(pattern);
+          }
+          return response || '';
+        }
+      } catch (error) {
+        console.warn(`[Mock] Invalid sequence regex pattern "${pattern}":`, error);
+      }
+    }
+
     for (const [pattern, response] of this.mockResponses) {
       try {
         const regex = new RegExp(pattern, 'i');
@@ -220,12 +296,16 @@ export class MockLLMProvider {
     registeredRoutesCount: number;
     hasPendingInitScript: boolean;
     mockResponsesCount: number;
+    responseSequencesCount: number;
+    pendingFailOnceCount: number;
   } {
     return {
       hasRegisteredRoutes: this.registeredRoutes.size > 0,
       registeredRoutesCount: this.registeredRoutes.size,
       hasPendingInitScript: this.initScriptId !== null,
       mockResponsesCount: this.mockResponses.size,
+      responseSequencesCount: this.responseSequences.size,
+      pendingFailOnceCount: this.failOncePatterns.size,
     };
   }
 }

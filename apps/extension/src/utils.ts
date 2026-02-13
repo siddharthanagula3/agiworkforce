@@ -20,7 +20,9 @@ export const DEFAULT_CONFIG: ExtensionConfig = {
 export async function getConfig(): Promise<ExtensionConfig> {
   try {
     const stored = await chrome.storage.local.get('config');
-    return stored.config ? { ...DEFAULT_CONFIG, ...stored.config } : DEFAULT_CONFIG;
+    return stored['config']
+      ? { ...DEFAULT_CONFIG, ...(stored['config'] as Partial<ExtensionConfig>) }
+      : DEFAULT_CONFIG;
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -98,7 +100,7 @@ export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number = DEFAULT_CONFIG.requestTimeoutMs,
 ): Promise<T> {
-  let timeoutHandle: NodeJS.Timeout;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<T>((_resolve, reject) => {
     timeoutHandle = setTimeout(
@@ -110,7 +112,9 @@ export async function withTimeout<T>(
   try {
     return await Promise.race([promise, timeoutPromise]);
   } finally {
-    clearTimeout(timeoutHandle);
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 
@@ -379,8 +383,9 @@ export const formUtils = {
         form.submit();
       } else {
         const forms = this.getForms();
-        if (forms.length > 0) {
-          forms[0].submit();
+        const firstForm = forms[0];
+        if (firstForm) {
+          firstForm.submit();
         }
       }
       return true;

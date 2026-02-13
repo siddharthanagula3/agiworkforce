@@ -27,6 +27,7 @@ pub fn ensure_overlay_ready(app: &AppHandle) {
 
     match builder.build() {
         Ok(window) => {
+            let _ = window.set_shadow(false);
             let _ = window.set_ignore_cursor_events(true);
             let _ = window.set_always_on_top(true);
             #[cfg(target_os = "windows")]

@@ -553,6 +553,25 @@ const App = () => {
     }
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.body.dataset['windowMode'] = windowMode;
+    const root = document.getElementById('root');
+    if (root) {
+      root.dataset['windowMode'] = windowMode;
+    }
+
+    return () => {
+      delete document.body.dataset['windowMode'];
+      if (root) {
+        delete root.dataset['windowMode'];
+      }
+    };
+  }, [windowMode]);
+
   return (
     <ErrorBoundary>
       <TooltipProvider delayDuration={300}>

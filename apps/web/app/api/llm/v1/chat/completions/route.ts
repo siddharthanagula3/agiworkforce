@@ -15,6 +15,9 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
+const TTFT_SLO_TARGET_MS = Number(process.env.LLM_TTFT_SLO_TARGET_MS ?? 2500);
+const TTFT_SLO_BREACH_MS = Number(process.env.LLM_TTFT_SLO_BREACH_MS ?? 5000);
+
 /**
  * OpenAI-compatible Chat Completions API
  * Endpoint: POST /v1/chat/completions (via api.agiworkforce.com)
@@ -586,6 +589,8 @@ async function handleChatCompletions(request: NextRequest) {
       let outputTokens = 0;
       let buffer = '';
       const encoder = new TextEncoder();
+      const streamStartedAt = Date.now();
+      let firstTokenTimestampMs: number | null = null;
 
       // Track active block types to handle closing tags relative to block index
       const activeBlockTypes = new Map<number, string>();
@@ -810,6 +815,43 @@ async function handleChatCompletions(request: NextRequest) {
 
                 // Re-serialize with the corrected model name
                 processedLines.push(`data: ${JSON.stringify(transformedEvent)}`);
+
+                if (firstTokenTimestampMs === null) {
+                  const deltaContent = transformedEvent?.choices?.[0]?.delta?.content;
+                  const hasTextDelta = typeof deltaContent === 'string' && deltaContent.length > 0;
+                  if (hasTextDelta) {
+                    firstTokenTimestampMs = Date.now() - streamStartedAt;
+                    logger.info(
+                      {
+                        event: 'llm_ttft_observed',
+                        requestId,
+                        userId,
+                        provider: providerUsed,
+                        model: modelUsed,
+                        ttftMs: firstTokenTimestampMs,
+                        sloTargetMs: TTFT_SLO_TARGET_MS,
+                        sloBreachMs: TTFT_SLO_BREACH_MS,
+                      },
+                      'First token observed',
+                    );
+
+                    if (firstTokenTimestampMs > TTFT_SLO_BREACH_MS) {
+                      logger.warn(
+                        {
+                          event: 'llm_ttft_slo_breach',
+                          requestId,
+                          userId,
+                          provider: providerUsed,
+                          model: modelUsed,
+                          ttftMs: firstTokenTimestampMs,
+                          sloTargetMs: TTFT_SLO_TARGET_MS,
+                          sloBreachMs: TTFT_SLO_BREACH_MS,
+                        },
+                        'TTFT exceeded breach threshold',
+                      );
+                    }
+                  }
+                }
               } catch (parseError) {
                 // AUDIT-P3-008-014: Log JSON parsing errors at debug level for monitoring
                 logger.debug(
@@ -843,6 +885,19 @@ async function handleChatCompletions(request: NextRequest) {
           // CRITICAL: Errors here cannot return error responses (stream already started)
           // Log errors but don't crash the stream
           try {
+            if (firstTokenTimestampMs === null) {
+              logger.warn(
+                {
+                  event: 'llm_ttft_missing',
+                  requestId,
+                  userId,
+                  provider: providerUsed,
+                  model: modelUsed,
+                },
+                'Stream completed without observable first token',
+              );
+            }
+
             const totalTokens = inputTokens + outputTokens;
 
             if (totalTokens > 0) {

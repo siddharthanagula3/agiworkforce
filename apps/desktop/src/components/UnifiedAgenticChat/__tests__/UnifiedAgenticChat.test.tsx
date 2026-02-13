@@ -13,6 +13,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
+import { NEW_CHAT_ABORT_EVENT } from '../../../lib/newChatReset';
 
 // Mock monaco-editor before any imports
 vi.mock('monaco-editor', () => ({
@@ -231,6 +232,7 @@ vi.mock('../../../stores/unifiedChatStore', () => {
     // Add getActiveActionTrail function
     getActiveActionTrail: vi.fn(() => []),
     clearActionTrail: vi.fn(),
+    clearToolStreams: vi.fn(),
     removeActionTrailEntry: vi.fn(),
   };
 
@@ -672,5 +674,24 @@ describe('UnifiedAgenticChat', () => {
       const container = document.querySelector('.unified-agentic-chat');
       expect(container).toBeInTheDocument();
     });
+  });
+
+  it('should clear running action and tool stream state on new chat abort event', async () => {
+    await renderChat();
+
+    const state = (
+      await import('../../../stores/unifiedChatStore')
+    ).useUnifiedChatStore.getState() as {
+      clearActionTrail: ReturnType<typeof vi.fn>;
+      clearToolStreams: ReturnType<typeof vi.fn>;
+    };
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(NEW_CHAT_ABORT_EVENT));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(state.clearActionTrail).toHaveBeenCalledTimes(1);
+    expect(state.clearToolStreams).toHaveBeenCalledTimes(1);
   });
 });

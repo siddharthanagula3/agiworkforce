@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Limit GITHUB_TOKEN permissions to minimum required
 permissions:
   contents: read
@@ -65,6 +69,84 @@ jobs:
 
       - name: Clippy (Rust workspace, default features)
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  desktop-e2e:
+    name: Desktop E2E (deterministic mocks)
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/desktop
+        run: pnpm exec playwright install --with-deps
+
+      - name: Build desktop web frontend
+        working-directory: apps/desktop
+        env:
+          CI: true
+        run: pnpm build:web
+
+      - name: Start Vite dev server
+        working-directory: apps/desktop
+        run: |
+          VITE_DEV_PORT=5175 pnpm dev:vite > app.log 2>&1 &
+          echo $! > app.pid
+          sleep 20
+
+      - name: Wait for app
+        run: |
+          for i in {1..60}; do
+            if curl -f http://localhost:5175 >/dev/null 2>&1; then
+              echo "App is ready after $((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App failed to start"
+          cat apps/desktop/app.log
+          exit 1
+
+      - name: Run deterministic Playwright suite
+        working-directory: apps/desktop
+        env:
+          CI: true
+          E2E_MOCK_SUPABASE: '1'
+          E2E_MOCK_LLM: '1'
+        run: |
+          pnpm exec playwright test \
+            --project=smoke \
+            --project=self-healing \
+            --retries=2 \
+            --workers=1
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/desktop/playwright-report
+          retention-days: 14
+
+      - name: Stop Vite dev server
+        if: always()
+        run: |
+          if [ -f apps/desktop/app.pid ]; then
+            kill $(cat apps/desktop/app.pid) 2>/dev/null || true
+          fi
 
   clippy-all-features:
     name: Clippy (all features, non-blocking)

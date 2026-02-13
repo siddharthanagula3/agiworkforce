@@ -24,9 +24,16 @@ interface ConnectionInfo {
   correlationId: string;
 }
 
+interface RemoveConnectionMetadata {
+  trigger?: 'socket_close' | 'server_cleanup' | 'server_shutdown' | 'error';
+  closeCode?: number;
+  closeReason?: string;
+}
+
 class ConnectionManager {
   private connections = new Map<WebSocket, ConnectionInfo>();
   private ipConnectionCounts = new Map<string, number>();
+  private closeReasonCounts = new Map<string, number>();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   /**
@@ -95,7 +102,7 @@ class ConnectionManager {
   /**
    * Remove a connection
    */
-  removeConnection(socket: WebSocket): void {
+  removeConnection(socket: WebSocket, metadata: RemoveConnectionMetadata = {}): void {
     const info = this.connections.get(socket);
     if (!info) {
       return;
@@ -110,12 +117,21 @@ class ConnectionManager {
       this.ipConnectionCounts.set(info.ip, currentCount - 1);
     }
 
+    const idleDuration = Date.now() - info.lastActivity;
+    const closeReasonKey = metadata.closeReason || `code_${metadata.closeCode ?? 'unknown'}`;
+    const currentCloseReasonCount = this.closeReasonCounts.get(closeReasonKey) ?? 0;
+    this.closeReasonCounts.set(closeReasonKey, currentCloseReasonCount + 1);
+
     logger.debug(
       {
         ip: info.ip,
         correlationId: info.correlationId,
         totalConnections: this.connections.size,
         connectionDuration: Date.now() - info.connectedAt,
+        idleDuration,
+        trigger: metadata.trigger ?? 'socket_close',
+        closeCode: metadata.closeCode,
+        closeReason: metadata.closeReason,
       },
       'Connection removed',
     );
@@ -152,11 +168,13 @@ class ConnectionManager {
     totalConnections: number;
     uniqueIps: number;
     connectionsByIp: Map<string, number>;
+    closeReasons: Map<string, number>;
   } {
     return {
       totalConnections: this.connections.size,
       uniqueIps: this.ipConnectionCounts.size,
       connectionsByIp: new Map(this.ipConnectionCounts),
+      closeReasons: new Map(this.closeReasonCounts),
     };
   }
 
