@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, Monitor, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -66,7 +67,11 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
     };
   }, [handleKeyDown]);
 
-  return (
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-lg rounded-lg bg-background shadow-xl border border-border">
         {/* Header */}
@@ -168,6 +173,7 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

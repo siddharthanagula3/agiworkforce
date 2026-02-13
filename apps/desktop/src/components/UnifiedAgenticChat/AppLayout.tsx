@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { resetInFlightChatState } from '../../lib/newChatReset';
 import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
 import { ResizeHandle } from '../ui/ResizeHandle';
@@ -48,6 +49,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleNewChat = useCallback(() => {
+    resetInFlightChatState();
     createConversation('New chat');
   }, [createConversation]);
 
@@ -190,6 +192,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
           <DynamicSidecar
             panelType={sidecarState.activeMode}
             payload={sidecarState.context as Record<string, unknown> | undefined}
+            contextId={sidecarState.contextId}
             onClose={() => useUnifiedChatStore.getState().closeSidecar()}
           />
         </div>

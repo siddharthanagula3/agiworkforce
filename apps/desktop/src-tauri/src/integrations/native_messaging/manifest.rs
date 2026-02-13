@@ -121,9 +121,21 @@ pub fn get_edge_native_messaging_dir() -> Result<PathBuf> {
 pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
     let host_name = "com.agiworkforce.browser";
 
-    // Get current executable path
-    let exe_path =
+    // Prefer dedicated native messaging host binary next to the app executable.
+    // Fallback to current executable if the sidecar is not available.
+    let current_exe =
         std::env::current_exe().map_err(|e| anyhow!("Failed to get executable path: {}", e))?;
+    let mut exe_path = current_exe.clone();
+    if let Some(parent) = current_exe.parent() {
+        #[cfg(target_os = "windows")]
+        let candidate = parent.join("native_messaging_host.exe");
+        #[cfg(not(target_os = "windows"))]
+        let candidate = parent.join("native_messaging_host");
+
+        if candidate.exists() {
+            exe_path = candidate;
+        }
+    }
 
     let exe_path_str = exe_path
         .to_str()
