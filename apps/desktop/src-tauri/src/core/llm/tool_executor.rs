@@ -531,6 +531,259 @@ impl ToolExecutor {
         excludes.iter().any(|pat| entry_name == pat)
     }
 
+    fn extract_mcp_text_blocks(result_value: &Value) -> Vec<String> {
+        result_value
+            .get("content")
+            .and_then(Value::as_array)
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter_map(|block| {
+                        let block_type = block
+                            .get("type")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        if !block_type.eq_ignore_ascii_case("text") {
+                            return None;
+                        }
+                        block
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .map(|text| text.to_string())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }
+
+    fn normalize_mcp_filesystem_list_directory(
+        args: &HashMap<String, Value>,
+        result_value: &Value,
+    ) -> Option<Value> {
+        let path_hint = args.get("path").and_then(Value::as_str).map(str::trim);
+        let text_blocks = Self::extract_mcp_text_blocks(result_value);
+        if text_blocks.is_empty() {
+            return None;
+        }
+
+        let mut entries: Vec<Value> = Vec::new();
+        for text in text_blocks {
+            for line in text.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                let (entry_type, rest) = if let Some(rest) = trimmed.strip_prefix("[DIR]") {
+                    ("directory", rest.trim())
+                } else if let Some(rest) = trimmed.strip_prefix("[FILE]") {
+                    ("file", rest.trim())
+                } else if let Some(rest) = trimmed.strip_prefix("[SYMLINK]") {
+                    ("symlink", rest.trim())
+                } else {
+                    continue;
+                };
+
+                if rest.is_empty() {
+                    continue;
+                }
+
+                let mut name = rest.to_string();
+                if entry_type == "file" {
+                    if let Some(size_start) = name.rfind(" (") {
+                        if name.ends_with(')') {
+                            name.truncate(size_start);
+                            name = name.trim().to_string();
+                        }
+                    }
+                }
+                if name.is_empty() {
+                    continue;
+                }
+
+                let full_path = path_hint
+                    .map(|base| Path::new(base).join(&name).to_string_lossy().to_string())
+                    .unwrap_or_else(|| name.clone());
+
+                entries.push(json!({
+                    "name": name,
+                    "type": entry_type,
+                    "path": full_path,
+                    "size": 0
+                }));
+            }
+        }
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        entries.sort_by(|left, right| {
+            let left_name = left
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_lowercase();
+            let right_name = right
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_lowercase();
+            left_name.cmp(&right_name)
+        });
+
+        let returned = entries.len();
+        Some(json!({
+            "entries": entries,
+            "count": returned,
+            "returned": returned,
+            "offset": 0,
+            "limit": returned,
+            "has_more": false,
+            "next_offset": Value::Null,
+            "path": path_hint,
+            "excluded": [],
+            "max_depth": 1,
+            "source": "mcp_filesystem_list_directory"
+        }))
+    }
+
+    fn normalize_mcp_filesystem_list_allowed_directories(result_value: &Value) -> Option<Value> {
+        let text_blocks = Self::extract_mcp_text_blocks(result_value);
+        if text_blocks.is_empty() {
+            return None;
+        }
+
+        let mut directories: Vec<String> = Vec::new();
+        for text in &text_blocks {
+            if let Ok(parsed_json) = serde_json::from_str::<Value>(text) {
+                if let Some(list) = parsed_json.get("directories").and_then(Value::as_array) {
+                    directories.extend(
+                        list.iter()
+                            .filter_map(Value::as_str)
+                            .map(|value| value.trim().to_string())
+                            .filter(|value| !value.is_empty()),
+                    );
+                } else if let Some(list) = parsed_json.as_array() {
+                    directories.extend(
+                        list.iter()
+                            .filter_map(Value::as_str)
+                            .map(|value| value.trim().to_string())
+                            .filter(|value| !value.is_empty()),
+                    );
+                }
+            }
+
+            for raw_line in text.lines() {
+                let mut line = raw_line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Some(rest) = line.strip_prefix("[DIR]") {
+                    line = rest.trim();
+                }
+                if let Some(rest) = line.strip_prefix("- ") {
+                    line = rest.trim();
+                }
+                if let Some(rest) = line.strip_prefix("* ") {
+                    line = rest.trim();
+                }
+                if let Some((prefix, rest)) = line.split_once(':') {
+                    if prefix.to_lowercase().contains("allowed director") {
+                        line = rest.trim();
+                    }
+                }
+
+                if line.is_empty() {
+                    continue;
+                }
+                let looks_like_path = line.starts_with('/')
+                    || line.starts_with("~/")
+                    || line.starts_with("./")
+                    || line.starts_with("../")
+                    || line.contains(":\\");
+                if looks_like_path {
+                    directories.push(line.to_string());
+                }
+            }
+        }
+
+        directories.sort();
+        directories.dedup();
+        if directories.is_empty() {
+            return None;
+        }
+
+        Some(json!({
+            "directories": directories,
+            "count": directories.len(),
+            "source": "mcp_filesystem_list_allowed_directories"
+        }))
+    }
+
+    fn normalize_mcp_filesystem_read_text_file(
+        args: &HashMap<String, Value>,
+        result_value: &Value,
+    ) -> Option<Value> {
+        let text_blocks = Self::extract_mcp_text_blocks(result_value);
+        if text_blocks.is_empty() {
+            return None;
+        }
+
+        let content = text_blocks.join("\n");
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        Some(json!({
+            "path": path,
+            "content": content,
+            "source": "mcp_filesystem_read_text_file"
+        }))
+    }
+
+    fn normalize_mcp_tool_result(
+        tool_name: &str,
+        args: &HashMap<String, Value>,
+        result_value: Value,
+    ) -> Value {
+        let normalized_tool_name = tool_name.to_lowercase();
+        if !normalized_tool_name.starts_with("mcp__filesystem__") {
+            return result_value;
+        }
+
+        if normalized_tool_name.ends_with("list_directory")
+            || normalized_tool_name.ends_with("list_directory_with_sizes")
+        {
+            if let Some(normalized) =
+                Self::normalize_mcp_filesystem_list_directory(args, &result_value)
+            {
+                return normalized;
+            }
+        }
+
+        if normalized_tool_name.ends_with("list_allowed_directories") {
+            if let Some(normalized) =
+                Self::normalize_mcp_filesystem_list_allowed_directories(&result_value)
+            {
+                return normalized;
+            }
+        }
+
+        if normalized_tool_name.ends_with("read_text_file") {
+            if let Some(normalized) =
+                Self::normalize_mcp_filesystem_read_text_file(args, &result_value)
+            {
+                return normalized;
+            }
+        }
+
+        result_value
+    }
+
     pub fn new(registry: Arc<ToolRegistry>) -> Self {
         Self {
             registry,
@@ -798,7 +1051,10 @@ impl ToolExecutor {
         // file_list is frequently invoked from natural prompts like "this folder"
         // without an explicit path argument. Default to project folder/cwd so it
         // resolves quickly instead of entering retry loops.
-        if tool_call.name == "file_list" {
+        if tool_call.name == "file_list"
+            || tool_call.name == "mcp__filesystem__list_directory"
+            || tool_call.name == "mcp__filesystem__list_directory_with_sizes"
+        {
             let has_valid_path = args
                 .get("path")
                 .and_then(|value| value.as_str())
@@ -1649,6 +1905,7 @@ impl ToolExecutor {
             .as_ref()
             .and_then(|h| h.try_state::<McpState>())
             .ok_or_else(|| anyhow!("MCP state not available"))?;
+        let normalization_args = args.clone();
 
         let timeout_ms = args
             .get("timeout_ms")
@@ -1670,6 +1927,11 @@ impl ToolExecutor {
         .await
         {
             Ok(Ok(result_value)) => {
+                let normalized_result = Self::normalize_mcp_tool_result(
+                    &tool_call.name,
+                    &normalization_args,
+                    result_value,
+                );
                 tracing::info!(
                     "[ToolExecutor] MCP tool completed name='{}' elapsed_ms={}",
                     tool_call.name,
@@ -1677,7 +1939,7 @@ impl ToolExecutor {
                 );
                 Ok(ToolResult {
                     success: true,
-                    data: result_value,
+                    data: normalized_result,
                     error: None,
                     metadata: HashMap::new(),
                 })
@@ -6233,6 +6495,104 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.data["source"].as_str(), Some("local_fallback"));
         assert_eq!(result.data["content"].as_str(), Some("hello from fallback"));
+    }
+
+    #[test]
+    fn test_mcp_list_directory_payload_is_normalized() {
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), json!("/workspace/project"));
+        let raw_result = json!({
+            "content": [
+                {
+                    "type": "text",
+                    "text": "[DIR] src\n[FILE] Cargo.toml (382 bytes)"
+                }
+            ]
+        });
+
+        let normalized = ToolExecutor::normalize_mcp_tool_result(
+            "mcp__filesystem__list_directory",
+            &args,
+            raw_result,
+        );
+
+        assert_eq!(
+            normalized["source"].as_str(),
+            Some("mcp_filesystem_list_directory")
+        );
+        assert_eq!(normalized["returned"].as_u64(), Some(2));
+        let entries = normalized["entries"]
+            .as_array()
+            .expect("entries should be present");
+        assert!(entries
+            .iter()
+            .any(|entry| entry["name"].as_str() == Some("src")
+                && entry["type"].as_str() == Some("directory")));
+        assert!(entries
+            .iter()
+            .any(|entry| entry["name"].as_str() == Some("Cargo.toml")
+                && entry["type"].as_str() == Some("file")));
+    }
+
+    #[test]
+    fn test_mcp_list_allowed_directories_payload_is_normalized() {
+        let args = HashMap::new();
+        let raw_result = json!({
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Allowed directories:\n- /Users/sid/Documents\n- /tmp"
+                }
+            ]
+        });
+
+        let normalized = ToolExecutor::normalize_mcp_tool_result(
+            "mcp__filesystem__list_allowed_directories",
+            &args,
+            raw_result,
+        );
+
+        assert_eq!(
+            normalized["source"].as_str(),
+            Some("mcp_filesystem_list_allowed_directories")
+        );
+        let directories = normalized["directories"]
+            .as_array()
+            .expect("directories should be present");
+        assert!(directories
+            .iter()
+            .any(|value| value.as_str() == Some("/Users/sid/Documents")));
+        assert!(directories
+            .iter()
+            .any(|value| value.as_str() == Some("/tmp")));
+    }
+
+    #[test]
+    fn test_mcp_read_text_file_payload_is_normalized() {
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), json!("/workspace/project/notes.txt"));
+        let raw_result = json!({
+            "content": [
+                { "type": "text", "text": "line one" },
+                { "type": "text", "text": "line two" }
+            ]
+        });
+
+        let normalized = ToolExecutor::normalize_mcp_tool_result(
+            "mcp__filesystem__read_text_file",
+            &args,
+            raw_result,
+        );
+
+        assert_eq!(
+            normalized["source"].as_str(),
+            Some("mcp_filesystem_read_text_file")
+        );
+        assert_eq!(
+            normalized["path"].as_str(),
+            Some("/workspace/project/notes.txt")
+        );
+        assert_eq!(normalized["content"].as_str(), Some("line one\nline two"));
     }
 
     #[tokio::test]
