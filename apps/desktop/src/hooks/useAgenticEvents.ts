@@ -919,6 +919,19 @@ export function useAgenticEvents() {
         (event) => {
           if (!isMountedRef.current) return;
           const { event: streamEvent, timestamp } = event.payload;
+          const scheduleToolStreamCleanup = (toolId: string) => {
+            const existingTimeout = toolStreamCleanupTimeoutsRef.current.get(toolId);
+            if (existingTimeout) {
+              clearTimeout(existingTimeout);
+            }
+            const timeoutId = setTimeout(() => {
+              if (isMountedRef.current) {
+                handlersRef.current.removeToolStream(toolId);
+              }
+              toolStreamCleanupTimeoutsRef.current.delete(toolId);
+            }, 5000);
+            toolStreamCleanupTimeoutsRef.current.set(toolId, timeoutId);
+          };
 
           switch (streamEvent.type) {
             case 'started': {
@@ -979,21 +992,7 @@ export function useAgenticEvents() {
                 type: 'completed',
                 message: `${stream?.tool_name || 'Tool'} completed (${completedEvent.duration_ms}ms)`,
               });
-
-              // AUDIT-007-001 fix: Store timeout ID for cleanup on unmount
-              const existingTimeout = toolStreamCleanupTimeoutsRef.current.get(
-                completedEvent.tool_id,
-              );
-              if (existingTimeout) {
-                clearTimeout(existingTimeout);
-              }
-              const timeoutId = setTimeout(() => {
-                if (isMountedRef.current) {
-                  handlersRef.current.removeToolStream(completedEvent.tool_id);
-                }
-                toolStreamCleanupTimeoutsRef.current.delete(completedEvent.tool_id);
-              }, 5000);
-              toolStreamCleanupTimeoutsRef.current.set(completedEvent.tool_id, timeoutId);
+              scheduleToolStreamCleanup(completedEvent.tool_id);
               break;
             }
 
@@ -1015,6 +1014,7 @@ export function useAgenticEvents() {
                 type: 'error',
                 message: `${stream?.tool_name || 'Tool'} failed: ${errorEvent.error}`,
               });
+              scheduleToolStreamCleanup(errorEvent.tool_id);
               break;
             }
 
@@ -1026,6 +1026,7 @@ export function useAgenticEvents() {
                 completedAt: new Date(timestamp),
                 duration_ms: cancelledEvent.duration_ms,
               });
+              scheduleToolStreamCleanup(cancelledEvent.tool_id);
               break;
             }
           }
