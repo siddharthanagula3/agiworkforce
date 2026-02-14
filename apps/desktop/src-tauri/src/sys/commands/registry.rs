@@ -248,6 +248,7 @@ macro_rules! data_command_handlers {
             $crate::sys::commands::chat_delete_message,
             $crate::sys::commands::chat_send_message,
             $crate::sys::commands::chat_stop_generation,
+            $crate::sys::commands::cancel_tool_execution,
             $crate::sys::commands::chat_add_pending_message,
             $crate::sys::commands::chat_get_pending_messages,
             $crate::sys::commands::chat_clear_pending_messages,
