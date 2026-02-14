@@ -4,6 +4,8 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+type TeamsError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsConfig {
     pub tenant_id: String,
@@ -22,7 +24,7 @@ pub struct TeamsClient {
 }
 
 impl TeamsClient {
-    pub fn new(config: TeamsConfig) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(config: TeamsConfig) -> Result<Self, TeamsError> {
         let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         Ok(Self {
@@ -35,7 +37,7 @@ impl TeamsClient {
         })
     }
 
-    pub async fn authenticate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn authenticate(&mut self) -> Result<(), TeamsError> {
         let url = format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
             self.tenant_id
@@ -65,7 +67,7 @@ impl TeamsClient {
         Ok(())
     }
 
-    async fn ensure_authenticated(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn ensure_authenticated(&mut self) -> Result<(), TeamsError> {
         let token_valid = self
             .token_expires_at
             .map(|expiry| expiry > Instant::now())
@@ -77,7 +79,7 @@ impl TeamsClient {
         Ok(())
     }
 
-    fn auth_header(&self) -> Result<String, Box<dyn std::error::Error>> {
+    fn auth_header(&self) -> Result<String, TeamsError> {
         self.access_token
             .as_ref()
             .map(|token| format!("Bearer {}", token))
@@ -88,7 +90,7 @@ impl TeamsClient {
         &mut self,
         channel_id: &str,
         message: &str,
-    ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+    ) -> Result<TeamsMessage, TeamsError> {
         self.ensure_authenticated().await?;
 
         let parts: Vec<&str> = channel_id.split('/').collect();
@@ -132,7 +134,7 @@ impl TeamsClient {
         channel_id: &str,
         content: &str,
         content_type: &str,
-    ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+    ) -> Result<TeamsMessage, TeamsError> {
         self.ensure_authenticated().await?;
 
         let parts: Vec<&str> = channel_id.split('/').collect();
@@ -176,7 +178,7 @@ impl TeamsClient {
         &mut self,
         channel_id: &str,
         card: AdaptiveCard,
-    ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+    ) -> Result<TeamsMessage, TeamsError> {
         self.ensure_authenticated().await?;
 
         let parts: Vec<&str> = channel_id.split('/').collect();
@@ -228,7 +230,7 @@ impl TeamsClient {
         channel_id: &str,
         message_id: &str,
         reply_text: &str,
-    ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+    ) -> Result<TeamsMessage, TeamsError> {
         self.ensure_authenticated().await?;
 
         let parts: Vec<&str> = channel_id.split('/').collect();
@@ -271,7 +273,7 @@ impl TeamsClient {
         &mut self,
         channel_id: &str,
         limit: usize,
-    ) -> Result<Vec<TeamsMessage>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<TeamsMessage>, TeamsError> {
         self.ensure_authenticated().await?;
 
         let parts: Vec<&str> = channel_id.split('/').collect();
@@ -308,7 +310,7 @@ impl TeamsClient {
         start_time: &str,
         end_time: &str,
         attendees: Vec<String>,
-    ) -> Result<TeamsMeeting, Box<dyn std::error::Error>> {
+    ) -> Result<TeamsMeeting, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = "https://graph.microsoft.com/v1.0/me/onlineMeetings";
@@ -353,10 +355,7 @@ impl TeamsClient {
         Ok(result)
     }
 
-    pub fn handle_activity(
-        &self,
-        activity: TeamsActivity,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_activity(&self, activity: TeamsActivity) -> Result<(), TeamsError> {
         match activity.activity_type.as_str() {
             "message" => {
                 println!("Received message: {:?}", activity.text);
@@ -372,7 +371,7 @@ impl TeamsClient {
         Ok(())
     }
 
-    pub async fn list_teams(&mut self) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
+    pub async fn list_teams(&mut self) -> Result<Vec<Team>, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = "https://graph.microsoft.com/v1.0/me/joinedTeams";
@@ -396,7 +395,7 @@ impl TeamsClient {
     pub async fn list_channels(
         &mut self,
         team_id: &str,
-    ) -> Result<Vec<Channel>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Channel>, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = format!(
@@ -423,7 +422,7 @@ impl TeamsClient {
     pub async fn get_user_presence(
         &mut self,
         user_id: &str,
-    ) -> Result<UserPresence, Box<dyn std::error::Error>> {
+    ) -> Result<UserPresence, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = format!(
@@ -451,7 +450,7 @@ impl TeamsClient {
         &mut self,
         user_id: &str,
         notification: ActivityFeedNotification,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = format!(
