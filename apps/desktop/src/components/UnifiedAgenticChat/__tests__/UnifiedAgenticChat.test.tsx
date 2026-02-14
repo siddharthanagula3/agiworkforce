@@ -681,7 +681,7 @@ describe('UnifiedAgenticChat', () => {
 
     const state = (
       await import('../../../stores/unifiedChatStore')
-    ).useUnifiedChatStore.getState() as {
+    ).useUnifiedChatStore.getState() as unknown as {
       clearActionTrail: ReturnType<typeof vi.fn>;
       clearToolStreams: ReturnType<typeof vi.fn>;
     };
