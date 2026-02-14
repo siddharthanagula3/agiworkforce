@@ -38,6 +38,7 @@ const FILE_LIST_TIMEOUT_MS: u64 = 10_000;
 const FILE_LIST_MAX_LIMIT: usize = 2_000;
 const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 const FILE_LIST_MAX_OFFSET: usize = 100_000;
+const FILE_READ_MAX_CHARS: usize = 200_000;
 const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
 
@@ -1725,6 +1726,17 @@ impl ToolExecutor {
 
                 match fs::read_to_string(&path).await {
                     Ok(content) => {
+                        let content = if content.len() > FILE_READ_MAX_CHARS {
+                            format!(
+                                "{}\n\n... [truncated to first {} chars out of {}]",
+                                &content[..FILE_READ_MAX_CHARS],
+                                FILE_READ_MAX_CHARS,
+                                content.len()
+                            )
+                        } else {
+                            content
+                        };
+
                         if let Some(app_handle) = &self.app_handle {
                             let file_op = create_file_read_event(
                                 &path,
@@ -1742,6 +1754,103 @@ impl ToolExecutor {
                             error: None,
                             metadata: HashMap::from([("path".to_string(), json!(&path))]),
                         })
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                        let is_pdf = Path::new(&path)
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+
+                        if is_pdf {
+                            let path_clone = path.clone();
+                            let pdf_extract_result = tokio::task::spawn_blocking(move || {
+                                pdf_extract::extract_text(Path::new(&path_clone))
+                            })
+                            .await
+                            .map_err(|join_err| join_err.to_string())
+                            .and_then(|result| result.map_err(|extract_err| extract_err.to_string()));
+
+                            match pdf_extract_result {
+                                Ok(extracted_text) => {
+                                    let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
+                                        format!(
+                                            "{}\n\n... [truncated to first {} chars out of {}]",
+                                            &extracted_text[..FILE_READ_MAX_CHARS],
+                                            FILE_READ_MAX_CHARS,
+                                            extracted_text.len()
+                                        )
+                                    } else {
+                                        extracted_text
+                                    };
+
+                                    if let Some(app_handle) = &self.app_handle {
+                                        let file_op = create_file_read_event(
+                                            &path,
+                                            &content,
+                                            true,
+                                            None,
+                                            session_id.clone(),
+                                        );
+                                        emit_file_operation(app_handle, file_op);
+                                    }
+
+                                    Ok(ToolResult {
+                                        success: true,
+                                        data: json!({ "content": content, "path": &path }),
+                                        error: None,
+                                        metadata: HashMap::from([
+                                            ("path".to_string(), json!(&path)),
+                                            ("source".to_string(), json!("pdf_extract")),
+                                        ]),
+                                    })
+                                }
+                                Err(pdf_error) => {
+                                    let error = format!(
+                                        "Failed to read PDF '{}': {}. Try document_extract_text for structured extraction.",
+                                        path, pdf_error
+                                    );
+                                    if let Some(app_handle) = &self.app_handle {
+                                        let file_op = create_file_read_event(
+                                            &path,
+                                            "",
+                                            false,
+                                            Some(error.clone()),
+                                            session_id.clone(),
+                                        );
+                                        emit_file_operation(app_handle, file_op);
+                                    }
+
+                                    Ok(ToolResult {
+                                        success: false,
+                                        data: json!(null),
+                                        error: Some(error),
+                                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                                    })
+                                }
+                            }
+                        } else {
+                            let error = format!(
+                                "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary for binary files.",
+                                path
+                            );
+                            if let Some(app_handle) = &self.app_handle {
+                                let file_op = create_file_read_event(
+                                    &path,
+                                    "",
+                                    false,
+                                    Some(error.clone()),
+                                    session_id.clone(),
+                                );
+                                emit_file_operation(app_handle, file_op);
+                            }
+
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(error),
+                                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                            })
+                        }
                     }
                     Err(e) => {
                         if let Some(app_handle) = &self.app_handle {

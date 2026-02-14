@@ -99,7 +99,8 @@ fn emit_stream_failure(
 
 fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
     let normalized = tool_name.to_lowercase();
-    if normalized == "file_list"
+    if normalized == "file_read"
+        || normalized == "file_list"
         || normalized.contains("list_allowed_directories")
         || normalized.contains("filesystem__list_allowed_directories")
         || normalized.contains("read_text_file")
@@ -4509,6 +4510,10 @@ mod tests {
 
     #[test]
     fn tool_timeout_policy_matches_expected_classes() {
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("file_read"),
+            FAST_TOOL_TIMEOUT_SECS
+        );
         assert_eq!(
             resolve_tool_execution_timeout_secs("file_list"),
             FAST_TOOL_TIMEOUT_SECS
