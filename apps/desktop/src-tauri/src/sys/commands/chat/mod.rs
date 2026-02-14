@@ -101,6 +101,8 @@ fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
     let normalized = tool_name.to_lowercase();
     if normalized == "file_read"
         || normalized == "file_list"
+        || normalized.contains("list_directory")
+        || normalized.contains("filesystem__list_directory")
         || normalized.contains("list_allowed_directories")
         || normalized.contains("filesystem__list_allowed_directories")
         || normalized.contains("read_text_file")
@@ -4588,6 +4590,10 @@ mod tests {
             FAST_TOOL_TIMEOUT_SECS
         );
         assert_eq!(
+            resolve_tool_execution_timeout_secs("mcp__filesystem__list_directory"),
+            FAST_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
             resolve_tool_execution_timeout_secs("mcp__filesystem__list_allowed_directories"),
             FAST_TOOL_TIMEOUT_SECS
         );
@@ -4631,6 +4637,12 @@ mod tests {
             false,
             "Error: no access".to_string(),
         );
+        let failed_mcp_dir = tools::ChatToolResult::new(
+            "tool_2b".to_string(),
+            "mcp__filesystem__list_directory".to_string(),
+            false,
+            "Error: timeout".to_string(),
+        );
         let succeeded_file_list = tools::ChatToolResult::new(
             "tool_3".to_string(),
             "file_list".to_string(),
@@ -4646,6 +4658,10 @@ mod tests {
 
         assert!(did_fast_metadata_batch_fail(&[
             failed_file_list.clone(),
+            failed_mcp_list.clone()
+        ]));
+        assert!(did_fast_metadata_batch_fail(&[
+            failed_mcp_dir.clone(),
             failed_mcp_list.clone()
         ]));
         assert!(!did_fast_metadata_batch_fail(&[
