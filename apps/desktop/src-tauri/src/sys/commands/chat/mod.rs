@@ -37,10 +37,20 @@ const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 20;
 const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 20;
 /// Max total wait across all candidate retries for a single follow-up call.
 const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 40;
+/// Fast metadata follow-ups should fail much faster to avoid "stuck thinking" UX.
+const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 8;
+/// Fast metadata follow-ups should have a short overall retry budget.
+const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 16;
 /// Limit fallback fan-out to avoid very long "thinking" states.
 const FOLLOWUP_MAX_CANDIDATES: usize = 2;
 /// Hard upper bound for a streaming tool loop.
 const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 180;
+/// Fast metadata loops should never keep the UI waiting for minutes.
+const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 45;
+/// Default streaming tool-loop iteration limit.
+const STREAMING_TOOL_LOOP_MAX_ITERATIONS: usize = 25;
+/// Fast metadata loops should terminate quickly if the model keeps re-calling tools.
+const FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS: usize = 4;
 /// Long-running operations that can legitimately take minutes.
 const LONG_RUNNING_TOOL_TIMEOUT_SECS: u64 = 300;
 /// Default timeout for most tools.
@@ -143,6 +153,38 @@ fn build_fast_metadata_failure_message(tool_failure_summaries: &[String]) -> Str
 Please select or allow a project folder and retry.",
         tool_failure_summaries.join("; ")
     )
+}
+
+fn resolve_followup_invoke_timeout_secs(only_fast_metadata_tools: bool) -> u64 {
+    if only_fast_metadata_tools {
+        FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS
+    } else {
+        FOLLOWUP_INVOKE_TIMEOUT_SECS
+    }
+}
+
+fn resolve_followup_total_timeout_secs(only_fast_metadata_tools: bool) -> u64 {
+    if only_fast_metadata_tools {
+        FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS
+    } else {
+        FOLLOWUP_TOTAL_TIMEOUT_SECS
+    }
+}
+
+fn resolve_streaming_tool_loop_max_secs(only_fast_metadata_tools: bool) -> u64 {
+    if only_fast_metadata_tools {
+        FAST_METADATA_TOOL_LOOP_MAX_SECS
+    } else {
+        STREAMING_TOOL_LOOP_MAX_SECS
+    }
+}
+
+fn resolve_streaming_tool_loop_max_iterations(only_fast_metadata_tools: bool) -> usize {
+    if only_fast_metadata_tools {
+        FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS
+    } else {
+        STREAMING_TOOL_LOOP_MAX_ITERATIONS
+    }
 }
 
 async fn execute_chat_tool_with_timeout(
@@ -2880,22 +2922,27 @@ pub async fn chat_send_message(
                             // ── Streaming agentic loop ────────────────────────────
                             // Send follow-up requests to the LLM with tool results,
                             // continuing until the model stops requesting more tools
-                            // or we hit the safety limit.  25 iterations matches the
-                            // OpenClaw/Cowork "run until done" philosophy.
-                            let max_streaming_tool_iterations = 25;
+                            // or we hit the safety limit.
                             let mut streaming_tool_iteration = 0;
                             let mut current_tool_calls = tool_calls;
                             let mut current_tool_results = tool_results;
+                            let mut only_fast_metadata_tools =
+                                is_fast_metadata_batch(&current_tool_results);
+                            let mut max_streaming_tool_iterations =
+                                resolve_streaming_tool_loop_max_iterations(
+                                    only_fast_metadata_tools,
+                                );
                             let streaming_tool_loop_started = std::time::Instant::now();
 
                             loop {
                                 streaming_tool_iteration += 1;
-                                if streaming_tool_loop_started.elapsed().as_secs()
-                                    >= STREAMING_TOOL_LOOP_MAX_SECS
+                                let loop_max_secs =
+                                    resolve_streaming_tool_loop_max_secs(only_fast_metadata_tools);
+                                if streaming_tool_loop_started.elapsed().as_secs() >= loop_max_secs
                                 {
                                     warn!(
                                         "[Chat] Streaming tool loop exceeded {}s, stopping",
-                                        STREAMING_TOOL_LOOP_MAX_SECS
+                                        loop_max_secs
                                     );
                                     full_content.push_str(
                                         "\n\n*Stopped tool loop after timeout while waiting for follow-up responses.*",
@@ -2992,14 +3039,18 @@ pub async fn chat_send_message(
 
                                 let mut followup_outcome = None;
                                 let followup_budget_started = tokio::time::Instant::now();
+                                let followup_total_timeout_secs =
+                                    resolve_followup_total_timeout_secs(only_fast_metadata_tools);
+                                let followup_invoke_timeout_secs =
+                                    resolve_followup_invoke_timeout_secs(only_fast_metadata_tools);
                                 for candidate in candidates {
                                     let elapsed = followup_budget_started.elapsed();
                                     let total_budget =
-                                        std::time::Duration::from_secs(FOLLOWUP_TOTAL_TIMEOUT_SECS);
+                                        std::time::Duration::from_secs(followup_total_timeout_secs);
                                     if elapsed >= total_budget {
                                         warn!(
                                             "[Chat] Follow-up total timeout reached after {}s",
-                                            FOLLOWUP_TOTAL_TIMEOUT_SECS
+                                            followup_total_timeout_secs
                                         );
                                         break;
                                     }
@@ -3009,7 +3060,7 @@ pub async fn chat_send_message(
                                         .unwrap_or_else(|| std::time::Duration::from_secs(0));
                                     let candidate_timeout =
                                         remaining_budget.min(std::time::Duration::from_secs(
-                                            FOLLOWUP_INVOKE_TIMEOUT_SECS,
+                                            followup_invoke_timeout_secs,
                                         ));
                                     if candidate_timeout.is_zero() {
                                         warn!("[Chat] Follow-up candidate budget exhausted");
@@ -3036,7 +3087,7 @@ pub async fn chat_send_message(
                                         Err(_) => {
                                             warn!(
                                                 "[Chat] Follow-up candidate {} timed out after {}s",
-                                                candidate.model, FOLLOWUP_INVOKE_TIMEOUT_SECS
+                                                candidate.model, followup_invoke_timeout_secs
                                             );
                                             continue;
                                         }
@@ -3229,6 +3280,14 @@ pub async fn chat_send_message(
                                                     // Continue the loop with the new tool results
                                                     current_tool_calls = new_streaming_tcs;
                                                     current_tool_results = new_results;
+                                                    only_fast_metadata_tools =
+                                                        is_fast_metadata_batch(
+                                                            &current_tool_results,
+                                                        );
+                                                    max_streaming_tool_iterations =
+                                                        resolve_streaming_tool_loop_max_iterations(
+                                                            only_fast_metadata_tools,
+                                                        );
                                                     continue;
                                                 }
                                             }
@@ -4612,6 +4671,43 @@ mod tests {
         assert_eq!(
             resolve_tool_execution_timeout_secs("browser_navigate"),
             DEFAULT_TOOL_TIMEOUT_SECS
+        );
+    }
+
+    #[test]
+    fn fast_metadata_followup_policy_uses_tighter_budgets() {
+        assert_eq!(
+            resolve_followup_invoke_timeout_secs(true),
+            FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_followup_total_timeout_secs(true),
+            FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_streaming_tool_loop_max_secs(true),
+            FAST_METADATA_TOOL_LOOP_MAX_SECS
+        );
+        assert_eq!(
+            resolve_streaming_tool_loop_max_iterations(true),
+            FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS
+        );
+
+        assert_eq!(
+            resolve_followup_invoke_timeout_secs(false),
+            FOLLOWUP_INVOKE_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_followup_total_timeout_secs(false),
+            FOLLOWUP_TOTAL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_streaming_tool_loop_max_secs(false),
+            STREAMING_TOOL_LOOP_MAX_SECS
+        );
+        assert_eq!(
+            resolve_streaming_tool_loop_max_iterations(false),
+            STREAMING_TOOL_LOOP_MAX_ITERATIONS
         );
     }
 

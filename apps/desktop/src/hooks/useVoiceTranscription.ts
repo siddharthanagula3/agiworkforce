@@ -10,50 +10,31 @@ import { supabaseAuth } from '../services/supabaseAuth';
  */
 export type TranscriptionMode = 'web-speech' | 'whisper';
 
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionResultList {
-  length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-interface SpeechRecognition extends EventTarget {
+type SpeechRecognitionLike = EventTarget & {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   start(): void;
   stop(): void;
   abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: Event) => void) | null;
+  onerror: ((event: Event) => void) | null;
   onend: (() => void) | null;
-}
+  onstart?: (() => void) | null;
+};
 
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => SpeechRecognition;
-    webkitSpeechRecognition?: new () => SpeechRecognition;
+type SpeechRecognitionConstructorLike = new () => SpeechRecognitionLike;
+
+const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructorLike | undefined => {
+  if (typeof window === 'undefined') {
+    return undefined;
   }
-}
+  const windowWithSpeech = window as typeof globalThis & {
+    webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
+    SpeechRecognition?: SpeechRecognitionConstructorLike;
+  };
+  return windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
+};
 
 /**
  * Voice transcription result from the backend (Whisper)
@@ -179,16 +160,20 @@ export function useVoiceTranscription(
   const [availableLocalWhisper, setAvailableLocalWhisper] = useState<string[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechFinalTranscriptRef = useRef<string>('');
+  const speechLastEmittedRef = useRef<string>('');
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   // HKS-005 fix: Track mount state to prevent setState after unmount
   const isMountedRef = useRef(true);
 
-  const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     const timeout = new Promise<never>((_, reject) => {
-      window.setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
+      window.setTimeout(
+        () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
     });
     return Promise.race([promise, timeout]);
   }, []);
@@ -349,10 +334,7 @@ export function useVoiceTranscription(
    */
   const startRecording = useCallback(async (): Promise<void> => {
     if (!preferLocal) {
-      const SpeechRecognitionCtor =
-        typeof window !== 'undefined'
-          ? (window.SpeechRecognition || window.webkitSpeechRecognition)
-          : undefined;
+      const SpeechRecognitionCtor = getSpeechRecognitionConstructor();
 
       if (!SpeechRecognitionCtor) {
         const error = 'Web Speech API is not supported in this environment';
@@ -366,6 +348,7 @@ export function useVoiceTranscription(
       }
 
       speechFinalTranscriptRef.current = '';
+      speechLastEmittedRef.current = '';
       const recognition = new SpeechRecognitionCtor();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -374,10 +357,19 @@ export function useVoiceTranscription(
       recognition.onresult = (event) => {
         let interimText = '';
         let finalText = speechFinalTranscriptRef.current;
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
+        const speechEvent = event as Event & {
+          resultIndex?: number;
+          results?: ArrayLike<{ isFinal?: boolean; 0?: { transcript?: string } }>;
+        };
+        const resultIndex = speechEvent.resultIndex ?? 0;
+        const results = speechEvent.results;
+        if (!results) {
+          return;
+        }
+        for (let i = resultIndex; i < results.length; i++) {
+          const result = results[i];
           if (!result || !result[0]) continue;
-          const transcriptText = result[0].transcript;
+          const transcriptText = result[0].transcript || '';
           if (result.isFinal) {
             finalText = `${finalText} ${transcriptText}`.trim();
           } else {
@@ -394,12 +386,22 @@ export function useVoiceTranscription(
           }));
         }
         if (finalText) {
-          onResult?.(finalText);
+          const previous = speechLastEmittedRef.current;
+          let delta = finalText;
+          if (previous && finalText.startsWith(previous)) {
+            delta = finalText.slice(previous.length).trim();
+          }
+          speechLastEmittedRef.current = finalText;
+          if (delta) {
+            onResult?.(delta);
+          }
         }
       };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        const errorMessage = `Speech recognition error: ${event.error}`;
+      recognition.onerror = (event) => {
+        const speechEvent = event as Event & { error?: string };
+        const errorCode = speechEvent.error || 'unknown';
+        const errorMessage = `Speech recognition error: ${errorCode}`;
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -434,7 +436,8 @@ export function useVoiceTranscription(
         }
         onRecordingStart?.();
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to start speech recognition';
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to start speech recognition';
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -603,9 +606,13 @@ export function useVoiceTranscription(
             throw new Error('Authentication required for Whisper Cloud transcription');
           }
 
-          const transcriptionFile = new File([audioBlob], `voice.${getFormatFromMimeType(mimeType)}`, {
-            type: mimeType,
-          });
+          const transcriptionFile = new File(
+            [audioBlob],
+            `voice.${getFormatFromMimeType(mimeType)}`,
+            {
+              type: mimeType,
+            },
+          );
           const formData = new FormData();
           formData.append('file', transcriptionFile);
           formData.append('model', 'whisper-1');
@@ -624,9 +631,10 @@ export function useVoiceTranscription(
             15000,
           );
 
-          const payload = (await response.json().catch(() => null)) as
-            | { text?: string; error?: { message?: string } }
-            | null;
+          const payload = (await response.json().catch(() => null)) as {
+            text?: string;
+            error?: { message?: string };
+          } | null;
           if (!response.ok) {
             throw new Error(payload?.error?.message || 'Whisper Cloud transcription failed');
           }
