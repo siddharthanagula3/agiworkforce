@@ -163,7 +163,7 @@ export function ScreenCaptureButton({
               <Camera className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" sideOffset={8} className="pointer-events-none">
+          <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
             <p>Capture screenshot</p>
           </TooltipContent>
         </Tooltip>
@@ -191,7 +191,7 @@ export function ScreenCaptureButton({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="top" align="center" sideOffset={8} className="pointer-events-none">
+          <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
             <p>Screen capture</p>
           </TooltipContent>
         </Tooltip>
@@ -199,7 +199,7 @@ export function ScreenCaptureButton({
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing || disabled}>
             <Monitor className="mr-2 h-4 w-4" />
-            <span>Capture Full Screen</span>
+            <span>Capture Display</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+S</span>
           </DropdownMenuItem>
 
@@ -213,7 +213,7 @@ export function ScreenCaptureButton({
 
           <DropdownMenuItem onClick={handleWindowCapture} disabled={isCapturing || disabled}>
             <Image className="mr-2 h-4 w-4" />
-            <span>Capture Window</span>
+            <span>Capture App Window</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+W</span>
           </DropdownMenuItem>
         </DropdownMenuContent>

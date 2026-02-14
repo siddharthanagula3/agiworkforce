@@ -369,6 +369,74 @@ export const UnifiedAgenticChat: React.FC<{
         });
       };
 
+      const finalizeRunningArtifactsForMessage = (
+        messageId: string,
+        status: 'completed' | 'failed' | 'cancelled',
+        reason: string,
+      ) => {
+        const state = useUnifiedChatStore.getState();
+        const targetMessage = state.messages.find((msg) => msg.id === messageId);
+        if (!targetMessage) return;
+
+        const baseArtifacts = [
+          ...(targetMessage.artifacts || []),
+          ...(((targetMessage.metadata?.artifacts as Artifact[] | undefined) || []).filter(
+            (artifact) =>
+              !targetMessage.artifacts?.some(
+                (existing) => existing.id === artifact.id || existing.content === artifact.content,
+              ),
+          ) as Artifact[]),
+        ] as Artifact[];
+        if (baseArtifacts.length === 0) return;
+
+        let changed = false;
+        const nextArtifacts = baseArtifacts.map((artifact) => {
+          const withRuntimeFields = artifact as Artifact & {
+            status?: string;
+            success?: boolean;
+            error?: string;
+            content?: string;
+          };
+          if (withRuntimeFields.status !== 'running') {
+            return artifact;
+          }
+          changed = true;
+          const currentContent = (withRuntimeFields.content || '').trim();
+          if (status === 'completed') {
+            return {
+              ...withRuntimeFields,
+              status: 'completed',
+              success: true,
+              content: currentContent || 'Tool completed. Output included in assistant response.',
+            } as Artifact;
+          }
+          if (status === 'cancelled') {
+            return {
+              ...withRuntimeFields,
+              status: 'cancelled',
+              success: false,
+              error: reason,
+              content: currentContent || reason,
+            } as Artifact;
+          }
+          return {
+            ...withRuntimeFields,
+            status: 'failed',
+            success: false,
+            error: reason,
+            content: currentContent || reason,
+          } as Artifact;
+        });
+
+        if (!changed) return;
+        state.updateMessage(messageId, {
+          artifacts: nextArtifacts as Artifact[],
+          metadata: {
+            artifacts: nextArtifacts as Artifact[],
+          },
+        });
+      };
+
       const clearToolExecutionTimeout = (toolCallId: string) => {
         const timeoutEntry = toolExecutionTimeoutsRef.current.get(toolCallId);
         if (timeoutEntry) {
@@ -376,6 +444,89 @@ export const UnifiedAgenticChat: React.FC<{
           clearTimeout(timeoutEntry.hardTimeoutId);
           toolExecutionTimeoutsRef.current.delete(toolCallId);
         }
+      };
+
+      const scheduleToolExecutionTimeout = (
+        toolCallId: string,
+        toolName: string,
+        conversationId: number,
+        resetExisting: boolean,
+      ) => {
+        if (resetExisting) {
+          clearToolExecutionTimeout(toolCallId);
+        } else if (toolExecutionTimeoutsRef.current.has(toolCallId)) {
+          return;
+        }
+
+        const toolHardTimeoutMs = resolveToolHardTimeoutMs(toolName);
+        const softTimeoutId = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          if (!toolExecutionTimeoutsRef.current.has(toolCallId)) return;
+
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: 'running',
+            message: `${toolName} is still running... retrying status check`,
+            metadata: {
+              tool_call_id: toolCallId,
+              timeout_ms: TOOL_EXECUTION_SOFT_TIMEOUT_MS,
+            },
+            fadeAfter: 3500,
+          });
+        }, TOOL_EXECUTION_SOFT_TIMEOUT_MS);
+
+        const hardTimeoutId = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          if (!toolExecutionTimeoutsRef.current.has(toolCallId)) return;
+
+          console.warn(
+            `[UnifiedAgenticChat] Tool execution timed out: ${toolName} (${toolCallId})`,
+          );
+          upsertToolArtifact(conversationId, toolCallId, {
+            toolName,
+            type: toolNameToArtifactType(toolName),
+            title: toolNameToTitle(toolName),
+            status: 'failed',
+            success: false,
+            error:
+              'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+            content:
+              'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+          });
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: 'error',
+            message: `${toolName} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
+            metadata: {
+              tool_call_id: toolCallId,
+              timeout_ms: toolHardTimeoutMs,
+            },
+            fadeAfter: 4500,
+          });
+
+          if (shouldAbortGenerationOnToolTimeout(toolName)) {
+            const state = useUnifiedChatStore.getState();
+            state.setIsLoading(false);
+            state.setStreamingMessage(null);
+            if (state.currentStreamingMessageId) {
+              state.updateMessage(state.currentStreamingMessageId, {
+                metadata: { streaming: false },
+              });
+            }
+            if (isTauri) {
+              void invoke('chat_stop_generation').catch((error) => {
+                console.warn(
+                  '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
+                  error,
+                );
+              });
+            }
+          }
+          clearToolExecutionTimeout(toolCallId);
+        }, toolHardTimeoutMs);
+
+        toolExecutionTimeoutsRef.current.set(toolCallId, {
+          softTimeoutId,
+          hardTimeoutId,
+        });
       };
 
       registerListener(
@@ -525,6 +676,11 @@ export const UnifiedAgenticChat: React.FC<{
                 cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
               },
             });
+            finalizeRunningArtifactsForMessage(
+              targetId,
+              'completed',
+              'Tool completed without explicit terminal event.',
+            );
           }
 
           // CHT-005 fix: Clean up stream session tracking
@@ -589,6 +745,11 @@ export const UnifiedAgenticChat: React.FC<{
                 metadata: { streaming: false },
                 error: payload.error,
               });
+              finalizeRunningArtifactsForMessage(
+                targetId,
+                'failed',
+                payload.error || 'Tool failed while generating the response.',
+              );
             }
 
             // CHT-005 fix: Clean up stream session tracking on error
@@ -901,6 +1062,10 @@ export const UnifiedAgenticChat: React.FC<{
               message: `Calling ${tc.name}...`,
               metadata: { tool_call_id: tc.id, arguments: tc.arguments },
             });
+
+            // Guard against dropped/missed `chat:tool-executing` events.
+            // We start a timeout here as a fallback so every running tool resolves.
+            scheduleToolExecutionTimeout(tc.id, tc.name, payload.conversation_id, false);
           }
         }),
       );
@@ -913,76 +1078,12 @@ export const UnifiedAgenticChat: React.FC<{
           arguments: string;
         }>('chat:tool-executing', ({ payload }) => {
           console.log('[UnifiedAgenticChat] Tool executing:', payload.tool_name);
-          clearToolExecutionTimeout(payload.tool_call_id);
-          const toolHardTimeoutMs = resolveToolHardTimeoutMs(payload.tool_name);
-
-          const softTimeoutId = setTimeout(() => {
-            if (!isMountedRef.current) return;
-            if (!toolExecutionTimeoutsRef.current.has(payload.tool_call_id)) return;
-
-            useUnifiedChatStore.getState().addActionTrailEntry({
-              type: 'running',
-              message: `${payload.tool_name} is still running... retrying status check`,
-              metadata: {
-                tool_call_id: payload.tool_call_id,
-                timeout_ms: TOOL_EXECUTION_SOFT_TIMEOUT_MS,
-              },
-              fadeAfter: 3500,
-            });
-          }, TOOL_EXECUTION_SOFT_TIMEOUT_MS);
-
-          const hardTimeoutId = setTimeout(() => {
-            if (!isMountedRef.current) return;
-            if (!toolExecutionTimeoutsRef.current.has(payload.tool_call_id)) return;
-
-            console.warn(
-              `[UnifiedAgenticChat] Tool execution timed out: ${payload.tool_name} (${payload.tool_call_id})`,
-            );
-            upsertToolArtifact(payload.conversation_id, payload.tool_call_id, {
-              toolName: payload.tool_name,
-              type: toolNameToArtifactType(payload.tool_name),
-              title: toolNameToTitle(payload.tool_name),
-              status: 'failed',
-              success: false,
-              error:
-                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-              content:
-                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-            });
-            useUnifiedChatStore.getState().addActionTrailEntry({
-              type: 'error',
-              message: `${payload.tool_name} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
-              metadata: {
-                tool_call_id: payload.tool_call_id,
-                timeout_ms: toolHardTimeoutMs,
-              },
-              fadeAfter: 4500,
-            });
-
-            if (shouldAbortGenerationOnToolTimeout(payload.tool_name)) {
-              const state = useUnifiedChatStore.getState();
-              state.setIsLoading(false);
-              state.setStreamingMessage(null);
-              if (state.currentStreamingMessageId) {
-                state.updateMessage(state.currentStreamingMessageId, {
-                  metadata: { streaming: false },
-                });
-              }
-              if (isTauri) {
-                void invoke('chat_stop_generation').catch((error) => {
-                  console.warn(
-                    '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
-                    error,
-                  );
-                });
-              }
-            }
-            clearToolExecutionTimeout(payload.tool_call_id);
-          }, toolHardTimeoutMs);
-          toolExecutionTimeoutsRef.current.set(payload.tool_call_id, {
-            softTimeoutId,
-            hardTimeoutId,
-          });
+          scheduleToolExecutionTimeout(
+            payload.tool_call_id,
+            payload.tool_name,
+            payload.conversation_id,
+            true,
+          );
 
           // Update action trail with executing status
           useUnifiedChatStore.getState().addActionTrailEntry({
