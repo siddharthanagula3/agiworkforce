@@ -1957,6 +1957,15 @@ pub fn run() {
             crate::sys::commands::messaging::get_messaging_history,
             crate::sys::commands::messaging::disconnect_platform,
             crate::sys::commands::messaging::list_messaging_connections,
+            crate::sys::commands::messaging::send_message,
+
+            // Realtime presence
+            crate::sys::commands::realtime::connect_websocket,
+            crate::sys::commands::realtime::get_team_presence,
+            crate::sys::commands::realtime::get_user_presence,
+            crate::sys::commands::realtime::set_user_online,
+            crate::sys::commands::realtime::set_user_offline,
+            crate::sys::commands::realtime::update_user_activity,
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,
