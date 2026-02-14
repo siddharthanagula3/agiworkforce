@@ -18,53 +18,31 @@ export interface UseVoiceInputOptions {
   onEnd?: () => void;
 }
 
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionResultList {
-  length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-
-interface SpeechRecognition extends EventTarget {
+type SpeechRecognitionLike = EventTarget & {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   start(): void;
   stop(): void;
   abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: Event) => void) | null;
+  onerror: ((event: Event) => void) | null;
   onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
+  onstart?: (() => void) | null;
+};
 
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
+type SpeechRecognitionConstructorLike = new () => SpeechRecognitionLike;
+
+const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructorLike | undefined => {
+  if (typeof window === 'undefined') {
+    return undefined;
   }
-}
+  const windowWithSpeech = window as typeof globalThis & {
+    webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
+    SpeechRecognition?: SpeechRecognitionConstructorLike;
+  };
+  return windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
+};
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const {
@@ -85,7 +63,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     confidence: 0,
   });
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const isManualStop = useRef(false);
   // AUDIT-007-003 fix: Track mounted state to prevent auto-restart after unmount
   const isMountedRef = useRef(true);
@@ -102,13 +80,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, [onResult, onError, onEnd]);
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const isSupported = !!SpeechRecognition;
+    const SpeechRecognitionCtor = getSpeechRecognitionConstructor();
+    const isSupported = !!SpeechRecognitionCtor;
 
     setState((prev) => ({ ...prev, isSupported }));
 
     if (isSupported && !recognitionRef.current) {
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechRecognitionCtor();
       recognition.continuous = continuous;
       recognition.interimResults = interimResults;
       recognition.lang = language;
@@ -121,13 +99,26 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         }));
       };
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognition.onresult = (event) => {
         let finalTranscript = '';
         let interimTranscript = '';
         let maxConfidence = 0;
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results?.[i];
+        const speechEvent = event as Event & {
+          resultIndex?: number;
+          results?: ArrayLike<{
+            isFinal?: boolean;
+            0?: { transcript?: string; confidence?: number };
+          }>;
+        };
+        const resultIndex = speechEvent.resultIndex ?? 0;
+        const results = speechEvent.results;
+        if (!results) {
+          return;
+        }
+
+        for (let i = resultIndex; i < results.length; i++) {
+          const result = results?.[i];
           if (!result) continue;
 
           const transcript = result[0]?.transcript ?? '';
@@ -155,8 +146,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         }
       };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        const errorMessage = getErrorMessage(event.error);
+      recognition.onerror = (event) => {
+        const speechEvent = event as Event & { error?: string };
+        const errorMessage = getErrorMessage(speechEvent.error || 'unknown');
         setState((prev) => ({
           ...prev,
           isListening: false,

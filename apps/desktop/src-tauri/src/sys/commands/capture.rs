@@ -105,7 +105,9 @@ pub async fn capture_screen_full(
             .unwrap_or_default()
             .as_secs() as i64;
 
-        let pixels = capture_with_macos_screencapture(&["-x"])?;
+        let pixels = with_hidden_main_window_for_capture(&app_handle, || {
+            capture_with_macos_screencapture(&["-x"])
+        })?;
         let metadata = CaptureMetadata {
             width: pixels.width(),
             height: pixels.height(),
@@ -192,7 +194,9 @@ pub async fn capture_screen_region(
             .as_secs() as i64;
 
         // Use native interactive region picker to capture from the real desktop.
-        let pixels = capture_with_macos_screencapture(&["-i", "-x"])?;
+        let pixels = with_hidden_main_window_for_capture(&app_handle, || {
+            capture_with_macos_screencapture(&["-i", "-s", "-x"])
+        })?;
         let metadata = CaptureMetadata {
             width: pixels.width(),
             height: pixels.height(),
@@ -448,7 +452,15 @@ pub async fn capture_screen_window(
             .as_secs() as i64;
 
         // Use native interactive window picker to target any app window on screen.
-        let pixels = capture_with_macos_screencapture(&["-i", "-W", "-x"])?;
+        let pixels = with_hidden_main_window_for_capture(&app_handle, || {
+            capture_with_macos_screencapture(&["-i", "-W", "-x"]).or_else(|primary_err| {
+                tracing::warn!(
+                    "macOS window capture with -W failed, retrying legacy -w mode: {}",
+                    primary_err
+                );
+                capture_with_macos_screencapture(&["-i", "-w", "-x"])
+            })
+        })?;
         let metadata = CaptureMetadata {
             width: pixels.width(),
             height: pixels.height(),
@@ -627,6 +639,35 @@ fn persist_capture(
         metadata: metadata.clone(),
         created_at: timestamp,
     })
+}
+
+#[cfg(target_os = "macos")]
+fn with_hidden_main_window_for_capture<T, F>(
+    app_handle: &tauri::AppHandle,
+    action: F,
+) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+{
+    let mut was_visible = false;
+    if let Some(window) = app_handle.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            was_visible = true;
+            let _ = window.hide();
+            std::thread::sleep(std::time::Duration::from_millis(120));
+        }
+    }
+
+    let result = action();
+
+    if was_visible {
+        if let Some(window) = app_handle.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+
+    result
 }
 
 #[cfg(target_os = "macos")]
