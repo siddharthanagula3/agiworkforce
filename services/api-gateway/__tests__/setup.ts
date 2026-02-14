@@ -28,7 +28,7 @@ const originalFetch = globalThis.fetch;
 beforeAll(() => {
   // Deterministic LLM proxy stubbing for tests that call external AI endpoints.
   if (process.env['MOCK_LLM_RESPONSES'] === '1') {
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    globalThis.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
       if (/ollama|openai|anthropic|llm|completions|chat/.test(url)) {
