@@ -134,6 +134,13 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     description: 'Remove a file',
     category: 'file',
   },
+  file_list: {
+    displayName: 'List files',
+    activeForm: 'Listing files...',
+    completedForm: 'Listed files',
+    description: 'Show files and folders in a directory',
+    category: 'file',
+  },
   read_file: {
     displayName: 'Read file',
     activeForm: 'Reading file...',
@@ -270,6 +277,34 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     activeForm: 'Reading file...',
     completedForm: 'Read file',
     description: 'Open and read a file',
+    category: 'file',
+  },
+  mcp__filesystem__read_text_file: {
+    displayName: 'Read file',
+    activeForm: 'Reading file...',
+    completedForm: 'Read file',
+    description: 'Open and read a text file',
+    category: 'file',
+  },
+  mcp__filesystem__list_directory: {
+    displayName: 'List files',
+    activeForm: 'Listing files...',
+    completedForm: 'Listed files',
+    description: 'Show files in a directory',
+    category: 'file',
+  },
+  mcp__filesystem__list_directory_with_sizes: {
+    displayName: 'List files',
+    activeForm: 'Listing files...',
+    completedForm: 'Listed files',
+    description: 'Show files and sizes in a directory',
+    category: 'file',
+  },
+  mcp__filesystem__list_allowed_directories: {
+    displayName: 'List allowed folders',
+    activeForm: 'Checking access...',
+    completedForm: 'Access checked',
+    description: 'Show directories the filesystem server can access',
     category: 'file',
   },
   mcp__filesystem__write_file: {
