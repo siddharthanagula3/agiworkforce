@@ -45,7 +45,10 @@ export function ScreenCaptureButton({
     typeof navigator !== 'undefined' &&
     (/Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
       /Mac OS X|Darwin/i.test(navigator.userAgent || ''));
-  const useNativeDesktopPicker = isTauri && isMacOS;
+  const hasTauriInternals =
+    typeof window !== 'undefined' &&
+    ('__TAURI_INTERNALS__' in window || '__TAURI__' in (window as object));
+  const useNativeDesktopPicker = isMacOS && (isTauri || hasTauriInternals);
 
   const handleFullScreen = async () => {
     try {
@@ -163,7 +166,12 @@ export function ScreenCaptureButton({
               <Camera className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
+          <TooltipContent
+            side="right"
+            align="center"
+            sideOffset={10}
+            className="pointer-events-none"
+          >
             <p>Capture screenshot</p>
           </TooltipContent>
         </Tooltip>
@@ -191,7 +199,12 @@ export function ScreenCaptureButton({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
+          <TooltipContent
+            side="right"
+            align="center"
+            sideOffset={10}
+            className="pointer-events-none"
+          >
             <p>Screen capture</p>
           </TooltipContent>
         </Tooltip>
@@ -199,7 +212,7 @@ export function ScreenCaptureButton({
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing || disabled}>
             <Monitor className="mr-2 h-4 w-4" />
-            <span>Capture Display</span>
+            <span>Capture Full Screen</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+S</span>
           </DropdownMenuItem>
 
@@ -213,7 +226,7 @@ export function ScreenCaptureButton({
 
           <DropdownMenuItem onClick={handleWindowCapture} disabled={isCapturing || disabled}>
             <Image className="mr-2 h-4 w-4" />
-            <span>Capture App Window</span>
+            <span>Capture Window</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+W</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
