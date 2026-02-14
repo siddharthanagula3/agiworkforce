@@ -44,20 +44,24 @@ describe('useScreenCapture', () => {
 
     const { result } = renderHook(() => useScreenCapture());
 
-    let capturedError: Error | null = null;
+    let capturedError: unknown = null;
     await act(async () => {
       const capturePromise = result.current.captureFullScreen().catch((err: unknown) => {
-        capturedError = err instanceof Error ? err : new Error(String(err));
+        capturedError = err;
         return null;
       });
       await vi.advanceTimersByTimeAsync(30001);
       await capturePromise;
     });
 
-    expect(capturedError).not.toBeNull();
-    if (capturedError) {
-      expect(capturedError.message).toBe('capture_screen_full timed out after 30000ms');
-    }
+    const capturedMessage =
+      typeof capturedError === 'object' &&
+      capturedError !== null &&
+      'message' in capturedError &&
+      typeof (capturedError as { message?: unknown }).message === 'string'
+        ? (capturedError as { message: string }).message
+        : null;
+    expect(capturedMessage).toBe('capture_screen_full timed out after 30000ms');
     expect(result.current.error ?? '').toContain('timed out');
     expect(result.current.isCapturing).toBe(false);
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DynamicSidecar } from './DynamicSidecar';
@@ -19,4 +18,3 @@ describe('DynamicSidecar preview mode', () => {
     expect(screen.getByText('No preview content is available yet.')).toBeInTheDocument();
   });
 });
-
