@@ -19,7 +19,7 @@ class MockMediaRecorder {
   }
 
   mimeType = 'audio/webm';
-  ondataavailable: ((event: BlobEvent) => void) | null = null;
+  ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
   onstop: (() => void) | null = null;
 
@@ -27,7 +27,7 @@ class MockMediaRecorder {
 
   start() {
     const blob = new Blob(['audio-bytes'], { type: 'audio/webm' });
-    this.ondataavailable?.({ data: blob } as BlobEvent);
+    this.ondataavailable?.({ data: blob });
   }
 
   stop() {
