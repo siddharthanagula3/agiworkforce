@@ -5,6 +5,7 @@ const LONG_RUNNING_TOOL_TIMEOUT_MS = 300_000;
 export const resolveToolHardTimeoutMs = (toolName: string): number => {
   const normalized = toolName.toLowerCase();
   if (
+    normalized === 'file_read' ||
     normalized === 'file_list' ||
     normalized.includes('list_allowed_directories') ||
     normalized.includes('filesystem__list_allowed_directories') ||
@@ -24,6 +25,7 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
 export const shouldAbortGenerationOnToolTimeout = (toolName: string): boolean => {
   const normalized = toolName.toLowerCase();
   return (
+    normalized === 'file_read' ||
     normalized === 'file_list' ||
     normalized.includes('list_allowed_directories') ||
     normalized.includes('filesystem__list_allowed_directories') ||
