@@ -6,6 +6,7 @@ use crate::data::db::repository;
 use base64::Engine;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
@@ -52,6 +53,22 @@ static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 // Pending messages queue for mid-task user input
 static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
     Lazy::new(|| Mutex::new(Vec::new()));
+// Tracks tool_call IDs explicitly cancelled by the user so long-running handlers can stop early.
+static CANCELLED_TOOL_CALLS: Lazy<Mutex<HashSet<String>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
+
+fn mark_tool_cancelled(tool_call_id: &str) {
+    if let Ok(mut cancelled) = CANCELLED_TOOL_CALLS.lock() {
+        cancelled.insert(tool_call_id.to_string());
+    }
+}
+
+fn take_tool_cancelled(tool_call_id: &str) -> bool {
+    if let Ok(mut cancelled) = CANCELLED_TOOL_CALLS.lock() {
+        return cancelled.remove(tool_call_id);
+    }
+    false
+}
 
 fn emit_stream_failure(
     app_handle: &tauri::AppHandle,
@@ -104,26 +121,119 @@ async fn execute_chat_tool_with_timeout(
     app_handle: &tauri::AppHandle,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    tool_call_id: Option<&str>,
 ) -> Result<String, String> {
     let timeout_secs = resolve_tool_execution_timeout_secs(tool_name);
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        tools::execute_chat_tool(
-            tool_name,
-            arguments_json,
-            Some(app_handle),
-            project_folder,
-            conversation_mode,
-        ),
-    )
-    .await
-    {
-        Ok(Ok(content)) => Ok(content),
-        Ok(Err(err)) => Err(err.to_string()),
-        Err(_) => Err(format!(
-            "Tool '{}' timed out after {}s",
-            tool_name, timeout_secs
-        )),
+    let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+    let started_at = std::time::Instant::now();
+    let normalized_tool_call_id = tool_call_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if let Some(tool_id) = normalized_tool_call_id {
+        if take_tool_cancelled(tool_id) {
+            crate::ui::events::tool_stream::emit_tool_cancelled(
+                app_handle,
+                tool_id,
+                Some("Cancelled before execution"),
+                0,
+            );
+            return Err(format!("Tool '{}' cancelled by user", tool_name));
+        }
+    }
+
+    tracing::info!(
+        "[Chat] Tool invoke start id={} tool={} timeout={}s",
+        normalized_tool_call_id.unwrap_or("n/a"),
+        tool_name,
+        timeout_secs
+    );
+
+    let mut execute_future = std::pin::Pin::from(Box::new(tools::execute_chat_tool(
+        tool_name,
+        arguments_json,
+        Some(app_handle),
+        project_folder,
+        conversation_mode,
+        normalized_tool_call_id,
+    )));
+    let timeout_future = tokio::time::sleep(timeout_duration);
+    tokio::pin!(timeout_future);
+
+    let mut cancel_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+    cancel_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            result = &mut execute_future => {
+                if let Some(tool_id) = normalized_tool_call_id {
+                    let _ = take_tool_cancelled(tool_id);
+                }
+                let elapsed_ms = started_at.elapsed().as_millis();
+                match result {
+                    Ok(content) => {
+                        tracing::info!(
+                            "[Chat] Tool invoke completed id={} tool={} elapsed_ms={}",
+                            normalized_tool_call_id.unwrap_or("n/a"),
+                            tool_name,
+                            elapsed_ms
+                        );
+                        return Ok(content);
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            "[Chat] Tool invoke failed id={} tool={} elapsed_ms={} error={}",
+                            normalized_tool_call_id.unwrap_or("n/a"),
+                            tool_name,
+                            elapsed_ms,
+                            err
+                        );
+                        return Err(err.to_string());
+                    }
+                }
+            }
+            _ = &mut timeout_future => {
+                let elapsed_ms = started_at.elapsed().as_millis() as u64;
+                let message = format!("Tool '{}' timed out after {}s", tool_name, timeout_secs);
+                if let Some(tool_id) = normalized_tool_call_id {
+                    crate::ui::events::tool_stream::emit_tool_error(
+                        app_handle,
+                        tool_id,
+                        &message,
+                        elapsed_ms,
+                        true,
+                    );
+                    let _ = take_tool_cancelled(tool_id);
+                }
+                tracing::warn!(
+                    "[Chat] Tool invoke timeout id={} tool={} timeout={}s",
+                    normalized_tool_call_id.unwrap_or("n/a"),
+                    tool_name,
+                    timeout_secs
+                );
+                return Err(message);
+            }
+            _ = cancel_interval.tick(), if normalized_tool_call_id.is_some() => {
+                if let Some(tool_id) = normalized_tool_call_id {
+                    if take_tool_cancelled(tool_id) {
+                        let elapsed_ms = started_at.elapsed().as_millis() as u64;
+                        crate::ui::events::tool_stream::emit_tool_cancelled(
+                            app_handle,
+                            tool_id,
+                            Some("Cancelled by user"),
+                            elapsed_ms,
+                        );
+                        tracing::info!(
+                            "[Chat] Tool invoke cancelled id={} tool={} elapsed_ms={}",
+                            tool_id,
+                            tool_name,
+                            elapsed_ms
+                        );
+                        return Err(format!("Tool '{}' cancelled by user", tool_name));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2677,6 +2787,7 @@ pub async fn chat_send_message(
                                 &app_handle_clone,
                                 project_folder_clone.clone(),
                                 conversation_mode_clone.clone(),
+                                Some(tc.id.as_str()),
                             )
                             .await;
 
@@ -2979,6 +3090,7 @@ pub async fn chat_send_message(
                                                     &app_handle_clone,
                                                     project_folder_clone.clone(),
                                                     conversation_mode_clone.clone(),
+                                                    Some(tc.id.as_str()),
                                                 )
                                                 .await;
 
@@ -3657,6 +3769,7 @@ Please confirm the tool permissions or try a different approach.",
                             &app_handle,
                             request.project_folder.clone(),
                             request.conversation_mode.clone(),
+                            Some(tool_call.id.as_str()),
                         )
                         .await;
 
@@ -3986,6 +4099,27 @@ pub async fn chat_stop_generation() -> Result<(), String> {
     info!("[Chat] Stopping generation - setting stop flag");
     STOP_GENERATION.store(true, Ordering::SeqCst);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_tool_execution(
+    app_handle: tauri::AppHandle,
+    tool_id: String,
+) -> Result<bool, String> {
+    let trimmed = tool_id.trim();
+    if trimmed.is_empty() {
+        return Err("Tool id is required for cancellation".to_string());
+    }
+
+    mark_tool_cancelled(trimmed);
+    crate::ui::events::tool_stream::emit_tool_cancelled(
+        &app_handle,
+        trimmed,
+        Some("Cancelled by user"),
+        0,
+    );
+    info!("[Chat] Marked tool for cancellation: {}", trimmed);
+    Ok(true)
 }
 
 pub fn should_stop_generation() -> bool {
@@ -4399,5 +4533,13 @@ mod tests {
             resolve_tool_execution_timeout_secs("browser_navigate"),
             DEFAULT_TOOL_TIMEOUT_SECS
         );
+    }
+
+    #[test]
+    fn cancelled_tool_registry_is_one_shot() {
+        let tool_id = "tool-test-cancel";
+        mark_tool_cancelled(tool_id);
+        assert!(take_tool_cancelled(tool_id));
+        assert!(!take_tool_cancelled(tool_id));
     }
 }

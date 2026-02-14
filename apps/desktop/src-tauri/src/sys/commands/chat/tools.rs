@@ -1015,6 +1015,7 @@ pub async fn execute_chat_tool(
     app_handle: Option<&tauri::AppHandle>,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    tool_call_id: Option<&str>,
 ) -> Result<String> {
     use crate::core::agi::tools::ToolRegistry;
     use crate::core::llm::tool_executor::ToolExecutor;
@@ -1037,8 +1038,14 @@ pub async fn execute_chat_tool(
     executor.set_project_folder(project_folder);
     executor.set_conversation_mode(conversation_mode);
 
+    let tool_call_id = tool_call_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
     let tool_call = ToolCall {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: tool_call_id,
         name: resolved_tool_name.to_string(),
         arguments: arguments_json.to_string(),
     };

@@ -879,7 +879,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             {/* Left toolbar */}
             <InputToolbar
-              disabled={isInputDisabled}
+              // Keep tool affordances available while generation is in-flight.
+              disabled={disabled}
               enableAttachments={enableAttachments}
               selectedModel={selectedModel}
               isSimpleMode={isSimpleMode}
