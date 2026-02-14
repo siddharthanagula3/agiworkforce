@@ -392,10 +392,7 @@ impl TeamsClient {
         Ok(result.value)
     }
 
-    pub async fn list_channels(
-        &mut self,
-        team_id: &str,
-    ) -> Result<Vec<Channel>, TeamsError> {
+    pub async fn list_channels(&mut self, team_id: &str) -> Result<Vec<Channel>, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = format!(
@@ -419,10 +416,7 @@ impl TeamsClient {
         Ok(result.value)
     }
 
-    pub async fn get_user_presence(
-        &mut self,
-        user_id: &str,
-    ) -> Result<UserPresence, TeamsError> {
+    pub async fn get_user_presence(&mut self, user_id: &str) -> Result<UserPresence, TeamsError> {
         self.ensure_authenticated().await?;
 
         let url = format!(
