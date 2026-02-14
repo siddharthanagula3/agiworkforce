@@ -1,4 +1,3 @@
-import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
@@ -9,28 +8,6 @@ import { defineConfig, loadEnv, type ConfigEnv, type UserConfig } from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_DEV_PORT = 5173;
-
-/**
- * Finds an available port starting from the given port number.
- * Used when the default port is already in use.
- */
-async function findAvailablePort(port: number): Promise<number> {
-  const tryPort = (candidate: number): Promise<boolean> =>
-    new Promise((resolve) => {
-      const tester = net.createServer();
-      tester.once('error', () => resolve(false));
-      tester.once('listening', () => {
-        tester.close(() => resolve(true));
-      });
-      tester.listen(candidate, '0.0.0.0');
-    });
-
-  let candidate = port;
-  while (!(await tryPort(candidate))) {
-    candidate += 1;
-  }
-  return candidate;
-}
 
 /**
  * Vite 7 configuration for AGI Workforce Desktop app.
@@ -47,15 +24,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
 
   // Determine port configuration
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
-  const tauriDevHost = env['TAURI_DEV_HOST'];
-  const resolvedPort = tauriDevHost ? requestedPort : await findAvailablePort(requestedPort);
-
-  if (resolvedPort !== requestedPort) {
-    console.warn(
-      `[dev-server] Requested port ${requestedPort} is busy. Using ${resolvedPort} instead. ` +
-        'Set VITE_DEV_PORT or free the original port to change this behaviour.',
-    );
-  }
+  const tauriDevHost = env['TAURI_DEV_HOST'] || '127.0.0.1';
 
   // Determine build targets based on platform
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
@@ -82,17 +51,15 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     // Development Server
     // ===================
     server: {
-      port: resolvedPort,
-      strictPort: Boolean(tauriDevHost),
-      host: tauriDevHost || 'localhost',
+      port: requestedPort,
+      strictPort: true,
+      host: tauriDevHost,
       // Enable HMR with proper configuration for Tauri
-      hmr: tauriDevHost
-        ? {
-            protocol: 'ws',
-            host: tauriDevHost,
-            port: resolvedPort,
-          }
-        : undefined,
+      hmr: {
+        protocol: 'ws',
+        host: tauriDevHost,
+        port: requestedPort,
+      },
       // Watch configuration for better file watching
       watch: {
         // Ignore Rust source files and build artifacts
