@@ -10,6 +10,13 @@ import {
 
 export type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
 
+const CAPTURE_TIMEOUTS_MS = {
+  full: 30_000,
+  region: 90_000,
+  window: 90_000,
+  windowsList: 10_000,
+} as const;
+
 export interface UseScreenCaptureReturn {
   isCapturing: boolean;
   captureFullScreen: (conversationId?: number) => Promise<CaptureResult>;
@@ -37,12 +44,19 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const withTimeout = useCallback(
     async <T,>(label: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> => {
+      let timeoutId: number | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        window.setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
           reject(new Error(`${label} timed out after ${timeoutMs}ms`));
         }, timeoutMs);
       });
-      return Promise.race([fn(), timeoutPromise]);
+      try {
+        return await Promise.race([fn(), timeoutPromise]);
+      } finally {
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+      }
     },
     [],
   );
@@ -59,8 +73,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       if (conversationId != null) {
         params['conversation_id'] = conversationId;
       }
-      const result = await withTimeout('capture_screen_full', () =>
-        invoke<RawCaptureResult>('capture_screen_full', params),
+      const result = await withTimeout(
+        'capture_screen_full',
+        () => invoke<RawCaptureResult>('capture_screen_full', params),
+        CAPTURE_TIMEOUTS_MS.full,
       );
       return normalizeCaptureResult(result);
     } catch (err) {
@@ -94,8 +110,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         if (conversationId != null) {
           params['conversation_id'] = conversationId;
         }
-        const result = await withTimeout('capture_screen_region', () =>
-          invoke<RawCaptureResult>('capture_screen_region', params),
+        const result = await withTimeout(
+          'capture_screen_region',
+          () => invoke<RawCaptureResult>('capture_screen_region', params),
+          CAPTURE_TIMEOUTS_MS.region,
         );
         return normalizeCaptureResult(result);
       } catch (err) {
@@ -127,8 +145,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         if (conversationId != null) {
           params['conversation_id'] = conversationId;
         }
-        const result = await withTimeout('capture_screen_window', () =>
-          invoke<RawCaptureResult>('capture_screen_window', params),
+        const result = await withTimeout(
+          'capture_screen_window',
+          () => invoke<RawCaptureResult>('capture_screen_window', params),
+          CAPTURE_TIMEOUTS_MS.window,
         );
         return normalizeCaptureResult(result);
       } catch (err) {
@@ -148,8 +168,10 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const getAvailableWindows = useCallback(async (): Promise<WindowInfo[]> => {
     try {
-      const windows = await withTimeout('capture_get_windows', () =>
-        invoke<WindowInfo[]>('capture_get_windows'),
+      const windows = await withTimeout(
+        'capture_get_windows',
+        () => invoke<WindowInfo[]>('capture_get_windows'),
+        CAPTURE_TIMEOUTS_MS.windowsList,
       );
       return windows;
     } catch (err) {

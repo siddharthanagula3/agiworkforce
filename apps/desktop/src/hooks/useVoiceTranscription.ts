@@ -198,8 +198,11 @@ export function useVoiceTranscription(
    */
   const checkLocalWhisperImpl = useCallback(async (): Promise<string[]> => {
     try {
-      const available = await invoke<string[]>('voice_check_local_whisper');
-      return available;
+      const availability = await invoke<boolean | string[]>('voice_check_local_whisper');
+      if (Array.isArray(availability)) {
+        return availability.filter((engine): engine is string => typeof engine === 'string');
+      }
+      return availability ? ['whisper'] : [];
     } catch {
       return [];
     }

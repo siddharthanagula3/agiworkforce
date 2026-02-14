@@ -50,11 +50,14 @@ describe('useScreenCapture', () => {
         capturedError = err instanceof Error ? err : new Error(String(err));
         return null;
       });
-      await vi.advanceTimersByTimeAsync(10001);
+      await vi.advanceTimersByTimeAsync(30001);
       await capturePromise;
     });
 
-    expect(capturedError?.message).toBe('capture_screen_full timed out after 10000ms');
+    expect(capturedError).not.toBeNull();
+    if (capturedError) {
+      expect(capturedError.message).toBe('capture_screen_full timed out after 30000ms');
+    }
     expect(result.current.error ?? '').toContain('timed out');
     expect(result.current.isCapturing).toBe(false);
 
