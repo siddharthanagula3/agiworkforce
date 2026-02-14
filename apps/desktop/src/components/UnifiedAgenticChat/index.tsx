@@ -34,6 +34,7 @@ import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
+import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { CanvasWorkspace } from '../Canvas';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { AppLayout } from './AppLayout';
@@ -46,10 +47,7 @@ import { ProjectsView } from './ProjectsView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
 import { respondToolConfirmation } from '../../api/toolConfirmation';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
-import {
-  resolveToolHardTimeoutMs,
-  shouldAbortGenerationOnToolTimeout,
-} from './toolTimeoutPolicy';
+import { resolveToolHardTimeoutMs, shouldAbortGenerationOnToolTimeout } from './toolTimeoutPolicy';
 import {
   executeTerminalCommand,
   executeBrowserCommand,
@@ -70,8 +68,155 @@ const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
   return 'code';
 };
 
-const toolNameToTitle = (toolName: string): string =>
-  toolName.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+const toolNameToTitle = (toolName: string): string => {
+  const displayInfo = getToolDisplayInfo(toolName);
+  if (displayInfo.displayName !== 'Working') {
+    return displayInfo.displayName;
+  }
+  return toolName.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const extractMcpTextBlocks = (data: Record<string, unknown>): string[] => {
+  const content = data['content'];
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.flatMap((block) => {
+    if (!block || typeof block !== 'object') {
+      return [];
+    }
+    const typedBlock = block as Record<string, unknown>;
+    const blockType = String(typedBlock['type'] ?? '').toLowerCase();
+    const text = typedBlock['text'];
+    if (blockType !== 'text' || typeof text !== 'string' || text.trim().length === 0) {
+      return [];
+    }
+    return [text];
+  });
+};
+
+const normalizeMcpFilesystemInlineData = (
+  normalizedTool: string,
+  data: Record<string, unknown>,
+): void => {
+  if (!normalizedTool.startsWith('mcp__filesystem__')) {
+    return;
+  }
+
+  const textBlocks = extractMcpTextBlocks(data);
+  if (textBlocks.length === 0) {
+    return;
+  }
+
+  if (normalizedTool.endsWith('read_text_file') && typeof data['content'] !== 'string') {
+    data['content'] = textBlocks.join('\n');
+    data['source'] = (data['source'] as string | undefined) ?? 'mcp_filesystem_read_text_file';
+    return;
+  }
+
+  if (normalizedTool.endsWith('list_allowed_directories')) {
+    const directories = new Set<string>();
+    textBlocks.forEach((text) => {
+      text.split('\n').forEach((rawLine) => {
+        let line = rawLine.trim();
+        if (!line) {
+          return;
+        }
+        if (line.startsWith('- ')) {
+          line = line.slice(2).trim();
+        } else if (line.startsWith('* ')) {
+          line = line.slice(2).trim();
+        } else if (line.startsWith('[DIR]')) {
+          line = line.slice('[DIR]'.length).trim();
+        }
+        if (
+          line.startsWith('/') ||
+          line.startsWith('~/') ||
+          line.startsWith('./') ||
+          line.startsWith('../') ||
+          line.includes(':\\')
+        ) {
+          directories.add(line);
+        }
+      });
+    });
+    if (directories.size > 0) {
+      const values = Array.from(directories).sort();
+      data['directories'] = values;
+      data['count'] = values.length;
+      data['source'] =
+        (data['source'] as string | undefined) ?? 'mcp_filesystem_list_allowed_directories';
+    }
+    return;
+  }
+
+  if (
+    (normalizedTool.endsWith('list_directory') ||
+      normalizedTool.endsWith('list_directory_with_sizes')) &&
+    !Array.isArray(data['entries'])
+  ) {
+    const pathHint = typeof data['path'] === 'string' ? data['path'] : '';
+    const parsedEntries: Array<Record<string, unknown>> = [];
+
+    textBlocks.forEach((text) => {
+      text.split('\n').forEach((rawLine) => {
+        const line = rawLine.trim();
+        if (!line) {
+          return;
+        }
+
+        let type: 'file' | 'directory' | 'symlink' | null = null;
+        let name = '';
+        if (line.startsWith('[DIR]')) {
+          type = 'directory';
+          name = line.slice('[DIR]'.length).trim();
+        } else if (line.startsWith('[FILE]')) {
+          type = 'file';
+          name = line.slice('[FILE]'.length).trim();
+        } else if (line.startsWith('[SYMLINK]')) {
+          type = 'symlink';
+          name = line.slice('[SYMLINK]'.length).trim();
+        }
+        if (!type || !name) {
+          return;
+        }
+
+        if (type === 'file') {
+          const sizeMatch = name.match(/\s+\([^)]*\)$/);
+          if (sizeMatch) {
+            name = name.slice(0, -sizeMatch[0].length).trim();
+          }
+        }
+        if (!name) {
+          return;
+        }
+
+        const fullPath = pathHint ? `${pathHint.replace(/[\\/]$/, '')}/${name}` : name;
+        parsedEntries.push({
+          name,
+          type,
+          path: fullPath,
+          size: 0,
+        });
+      });
+    });
+
+    if (parsedEntries.length > 0) {
+      parsedEntries.sort((a, b) =>
+        String(a['name']).toLowerCase().localeCompare(String(b['name']).toLowerCase()),
+      );
+      data['entries'] = parsedEntries;
+      data['returned'] = parsedEntries.length;
+      data['count'] = parsedEntries.length;
+      data['offset'] = 0;
+      data['limit'] = parsedEntries.length;
+      data['has_more'] = false;
+      data['next_offset'] = null;
+      data['source'] = (data['source'] as string | undefined) ?? 'mcp_filesystem_list_directory';
+    }
+  }
+};
 
 const normalizeInlineToolData = (
   toolName: string,
@@ -109,6 +254,8 @@ const normalizeInlineToolData = (
     data['downloadUrl'] =
       (data['downloadUrl'] as string | undefined) ?? (data['download_url'] as string | undefined);
   }
+
+  normalizeMcpFilesystemInlineData(normalizedTool, data);
 
   return data;
 };

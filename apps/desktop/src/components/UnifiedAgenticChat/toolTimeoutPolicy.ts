@@ -7,6 +7,8 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
   if (
     normalized === 'file_read' ||
     normalized === 'file_list' ||
+    normalized.includes('list_directory') ||
+    normalized.includes('filesystem__list_directory') ||
     normalized.includes('list_allowed_directories') ||
     normalized.includes('filesystem__list_allowed_directories') ||
     normalized.includes('read_text_file') ||
@@ -27,6 +29,8 @@ export const shouldAbortGenerationOnToolTimeout = (toolName: string): boolean =>
   return (
     normalized === 'file_read' ||
     normalized === 'file_list' ||
+    normalized.includes('list_directory') ||
+    normalized.includes('filesystem__list_directory') ||
     normalized.includes('list_allowed_directories') ||
     normalized.includes('filesystem__list_allowed_directories') ||
     normalized.includes('read_text_file') ||
