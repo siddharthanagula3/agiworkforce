@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
+import { resetInFlightChatState } from '../../lib/newChatReset';
 import { cn } from '../../lib/utils';
 import {
   useChatStore,
@@ -66,6 +67,7 @@ export function Sidebar({
   );
 
   const handleNewChat = useCallback(async () => {
+    resetInFlightChatState();
     const id = await createConversation('New chat');
     selectConversationFn(id);
   }, [createConversation, selectConversationFn]);

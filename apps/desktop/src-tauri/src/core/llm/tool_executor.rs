@@ -791,9 +791,32 @@ impl ToolExecutor {
             }
         }
 
-        let args: HashMap<String, serde_json::Value> =
+        let mut args: HashMap<String, serde_json::Value> =
             serde_json::from_str(&tool_call.arguments)
                 .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
+
+        // file_list is frequently invoked from natural prompts like "this folder"
+        // without an explicit path argument. Default to project folder/cwd so it
+        // resolves quickly instead of entering retry loops.
+        if tool_call.name == "file_list" {
+            let has_valid_path = args
+                .get("path")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty());
+            if !has_valid_path {
+                let fallback_path = self
+                    .project_folder
+                    .clone()
+                    .or_else(|| {
+                        std::env::current_dir()
+                            .ok()
+                            .map(|cwd| cwd.to_string_lossy().to_string())
+                    })
+                    .unwrap_or_else(|| ".".to_string());
+                args.insert("path".to_string(), json!(fallback_path));
+            }
+        }
+
         let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
         let action_id = self.next_action_id(tool_call);
         let start_time = Instant::now();
@@ -1768,7 +1791,9 @@ impl ToolExecutor {
                             })
                             .await
                             .map_err(|join_err| join_err.to_string())
-                            .and_then(|result| result.map_err(|extract_err| extract_err.to_string()));
+                            .and_then(|result| {
+                                result.map_err(|extract_err| extract_err.to_string())
+                            });
 
                             match pdf_extract_result {
                                 Ok(extracted_text) => {
@@ -1824,7 +1849,10 @@ impl ToolExecutor {
                                         success: false,
                                         data: json!(null),
                                         error: Some(error),
-                                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                                        metadata: HashMap::from([(
+                                            "path".to_string(),
+                                            json!(&path),
+                                        )]),
                                     })
                                 }
                             }
@@ -4670,11 +4698,20 @@ impl ToolExecutor {
                 }
             }
             "file_list" => {
-                let path = args
+                let requested_path = args
                     .get("path")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(ToString::to_string)
+                    .or_else(|| self.project_folder.clone())
+                    .or_else(|| {
+                        std::env::current_dir()
+                            .ok()
+                            .map(|cwd| cwd.to_string_lossy().to_string())
+                    })
+                    .unwrap_or_else(|| ".".to_string());
+                let path = self.resolve_path(&requested_path);
                 let limit = args
                     .get("limit")
                     .and_then(|v| v.as_u64())
@@ -4707,7 +4744,10 @@ impl ToolExecutor {
                         success: false,
                         data: json!(null),
                         error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        metadata: HashMap::from([
+                            ("path".to_string(), json!(&path)),
+                            ("requested_path".to_string(), json!(&requested_path)),
+                        ]),
                     });
                 }
 
@@ -4816,7 +4856,10 @@ impl ToolExecutor {
                             success: false,
                             data: json!(null),
                             error: Some(format!("Failed to list directory: {}", e)),
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                            metadata: HashMap::from([
+                                ("path".to_string(), json!(&path)),
+                                ("requested_path".to_string(), json!(&requested_path)),
+                            ]),
                         })
                     }
                     Err(_) => {
@@ -4834,12 +4877,16 @@ impl ToolExecutor {
                             success: false,
                             data: json!({
                                 "path": &path,
+                                "requested_path": &requested_path,
                                 "offset": offset,
                                 "limit": limit,
                                 "timeout_ms": timeout_ms
                             }),
                             error: Some(msg),
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                            metadata: HashMap::from([
+                                ("path".to_string(), json!(&path)),
+                                ("requested_path".to_string(), json!(&requested_path)),
+                            ]),
                         })
                     }
                 }
@@ -6092,6 +6139,43 @@ mod tests {
         assert_eq!(result.data["offset"].as_u64(), Some(200));
         assert_eq!(result.data["has_more"].as_bool(), Some(true));
         assert_eq!(result.data["next_offset"].as_u64(), Some(300));
+    }
+
+    #[tokio::test]
+    async fn test_file_list_defaults_to_project_folder_when_path_missing() {
+        use std::fs;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("fallback.txt"), "ok").unwrap();
+
+        let tool_call = ToolCall {
+            id: "test_file_list_missing_path".to_string(),
+            name: "file_list".to_string(),
+            arguments: serde_json::json!({
+                "limit": 20
+            })
+            .to_string(),
+        };
+
+        let mut executor = ToolExecutor::new(create_registry_with_file_list());
+        executor.set_project_folder(Some(dir.path().to_string_lossy().to_string()));
+
+        let result = executor.execute_tool_call(&tool_call).await.unwrap();
+        assert!(
+            result.success,
+            "file_list should use project folder fallback, got error={:?} data={}",
+            result.error, result.data
+        );
+        let entries = result.data["entries"]
+            .as_array()
+            .expect("entries should be present");
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry["name"].as_str() == Some("fallback.txt")),
+            "fallback directory listing should include file from project folder"
+        );
     }
 
     #[tokio::test]
