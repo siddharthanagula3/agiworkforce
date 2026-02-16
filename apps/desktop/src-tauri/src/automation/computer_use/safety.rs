@@ -190,7 +190,7 @@ impl PromptInjectionDetector {
                 vec![
                     // Direct instruction injection
                     Regex::new(r"(?i)ignore\s+(all\s+)?previous\s+instructions?").unwrap(),
-                    Regex::new(r"(?i)disregard\s+(all\s+)?(prior|previous|above)").unwrap(),
+                    Regex::new(r"(?i)disregard\s+(all\s+)?(everything|prior|previous|above)").unwrap(),
                     Regex::new(r"(?i)forget\s+(everything|all|what)\s+(you|i)\s+(know|said|told)")
                         .unwrap(),
                     // Role manipulation
@@ -490,19 +490,20 @@ impl ComputerUseSafetyLayer {
     fn evaluate_hotkey(&self, modifiers: &[HotkeyModifier], key: &str) -> SafetyDecision {
         let hotkey_str = self.format_hotkey(modifiers, key);
 
-        // Check blocked hotkeys
-        for blocked in &self.config.blocked_hotkeys {
-            if hotkey_str.eq_ignore_ascii_case(blocked) {
-                return SafetyDecision::block(SafetyReason::BlockedHotkey { hotkey: hotkey_str });
-            }
-        }
-
-        // Alt+F4 special handling
+        // Alt+F4 special handling - check before blocked hotkeys
+        // so it can require confirmation instead of being blocked
         if modifiers.contains(&HotkeyModifier::Alt)
             && key.eq_ignore_ascii_case("f4")
             && self.config.require_confirmation_for_destructive
         {
             return SafetyDecision::needs_confirmation("Alt+F4 will close the current window");
+        }
+
+        // Check blocked hotkeys
+        for blocked in &self.config.blocked_hotkeys {
+            if hotkey_str.eq_ignore_ascii_case(blocked) {
+                return SafetyDecision::block(SafetyReason::BlockedHotkey { hotkey: hotkey_str });
+            }
         }
 
         SafetyDecision::allow()
