@@ -470,8 +470,8 @@ export function Sidebar({
     return visible;
   }, [groupedConversations, expandedGroups, pinnedConversations]);
 
-  const handleNewChat = useCallback(() => {
-    resetInFlightChatState();
+  const handleNewChat = useCallback(async () => {
+    await resetInFlightChatState();
     createConversation('New chat');
     setActiveView('chat');
     if (isMobile && onCollapsedChange) {

@@ -224,6 +224,22 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // Tool call metadata
   const toolName = message.metadata?.tool || message.metadata?.tool_call || message.metadata?.name;
 
+  // AUDIT-UI-052: Look up pending approval request ID for this tool
+  const pendingApprovalId = useToolStore(
+    useCallback((state) => {
+      if (!toolName && !actionId) return undefined;
+      // Find a pending approval that matches this tool
+      const pending = state.pendingApprovals.find(
+        (a) =>
+          a.status === 'pending' &&
+          ((a.details['toolName'] as string | undefined) === toolName ||
+            (a.details['tool'] as string | undefined) === toolName ||
+            a.actionId === actionId),
+      );
+      return pending?.id;
+    }, [toolName, actionId]),
+  );
+
   // Derive status from store if available, otherwise fallback to metadata
   const toolStatus = useMemo(() => {
     if (toolState) {
@@ -325,6 +341,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             toolCommand={toolCommand as string | undefined}
             requiresApproval={requiresApproval}
             actionId={actionId as string | undefined}
+            confirmationRequestId={pendingApprovalId}
             onToggleSidecar={onToggleSidecar}
           />
 

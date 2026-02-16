@@ -24,6 +24,10 @@ const InlineCodeDiff = React.lazy(() =>
   import('./InlineCodeDiff').then((m) => ({ default: m.InlineCodeDiff })),
 );
 
+const InlineDirectoryList = React.lazy(() =>
+  import('./InlineDirectoryList').then((m) => ({ default: m.InlineDirectoryList })),
+);
+
 const InlineTerminalOutput = React.lazy(() =>
   import('./InlineTerminalOutput').then((m) => ({ default: m.InlineTerminalOutput })),
 );
@@ -86,6 +90,13 @@ export const TOOL_RENDERERS: Record<
   file_create: InlineCodeDiff,
   code_edit: InlineCodeDiff,
 
+  // Directory/file listing operations (AUDIT-UI-024)
+  file_list: InlineDirectoryList,
+  list_directory: InlineDirectoryList,
+  list_directory_with_sizes: InlineDirectoryList,
+  mcp__filesystem__list_directory: InlineDirectoryList,
+  mcp__filesystem__list_allowed_directories: InlineDirectoryList,
+
   // Terminal operations
   terminal_execute: InlineTerminalOutput,
   shell_command: InlineTerminalOutput,
@@ -94,10 +105,12 @@ export const TOOL_RENDERERS: Record<
 
   // Media generation
   image_generate: InlineImageGeneration,
+  media_generate_image: InlineImageGeneration,
   dalle_generate: InlineImageGeneration,
   stable_diffusion_generate: InlineImageGeneration,
   imagen_generate: InlineImageGeneration,
   video_generate: InlineVideoGeneration,
+  media_generate_video: InlineVideoGeneration,
   veo_generate: InlineVideoGeneration,
   document_create_pdf: InlineDocumentGeneration,
   document_create_word: InlineDocumentGeneration,

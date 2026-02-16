@@ -4,7 +4,16 @@ import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface TerminalSession {
   id: string;
-  shellType: 'PowerShell' | 'Cmd' | 'Wsl' | 'GitBash';
+  shellType:
+    | 'powershell'
+    | 'cmd'
+    | 'wsl'
+    | 'gitbash'
+    | 'zsh'
+    | 'bash'
+    | 'fish'
+    | 'sh'
+    | 'default';
   title: string;
   cwd?: string;
   active: boolean;
@@ -45,9 +54,9 @@ interface TerminalState {
 
   aiSuggestCommand: (intent: string, shellType: ShellTypeLiteral, cwd?: string) => Promise<string>;
   aiExplainError: (
-    errorOutput: string,
+    error_output: string,
     command?: string,
-    shellType?: ShellTypeLiteral,
+    shell_type?: ShellTypeLiteral,
   ) => Promise<string>;
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
@@ -75,7 +84,7 @@ export const useTerminalStore = create<TerminalState>()(
         createSession: async (shellType: ShellTypeLiteral, cwd?: string, title?: string) => {
           try {
             const sessionId = await invoke<string>('terminal_create_session', {
-              shellType,
+              shell_type: shellType,
               cwd: cwd || undefined,
             });
 
@@ -127,7 +136,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             get().removeOutputListener(sessionId);
 
-            await invoke('terminal_kill', { sessionId });
+            await invoke('terminal_kill', { session_id: sessionId });
 
             set(
               (state) => {
@@ -187,7 +196,7 @@ export const useTerminalStore = create<TerminalState>()(
           }
 
           try {
-            await invoke('terminal_send_input', { sessionId, data });
+            await invoke('terminal_send_input', { session_id: sessionId, data });
           } catch (error) {
             console.error('Failed to send input to terminal:', error);
             throw error;
@@ -196,7 +205,7 @@ export const useTerminalStore = create<TerminalState>()(
 
         resizeTerminal: async (sessionId: string, cols: number, rows: number) => {
           try {
-            await invoke('terminal_resize', { sessionId, cols, rows });
+            await invoke('terminal_resize', { session_id: sessionId, cols, rows });
           } catch (error) {
             console.error('Failed to resize terminal:', error);
             throw error;
@@ -206,7 +215,7 @@ export const useTerminalStore = create<TerminalState>()(
         getHistory: async (sessionId: string, limit: number = 50) => {
           try {
             const history = await invoke<string[]>('terminal_get_history', {
-              sessionId,
+              session_id: sessionId,
               limit,
             });
             return history;
@@ -226,8 +235,17 @@ export const useTerminalStore = create<TerminalState>()(
 
           get().removeOutputListener(sessionId);
 
-          const outputUnlisten = await listen<string>(outputEvent, (event) => {
-            callback(event.payload);
+          // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
+          const outputUnlisten = await listen<string | { stream: string; data: string }>(outputEvent, (event) => {
+            let data: string;
+            if (typeof event.payload === 'string') {
+              data = event.payload;
+            } else if (event.payload && typeof event.payload === 'object' && 'data' in event.payload) {
+              data = event.payload.data;
+            } else {
+              data = String(event.payload);
+            }
+            callback(data);
           });
 
           const exitUnlisten = await listen(exitEvent, () => {
@@ -328,7 +346,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             const command = await invoke<string>('terminal_ai_suggest_command', {
               intent,
-              shellType,
+              shell_type: shellType,
               cwd,
             });
             return command;
@@ -339,15 +357,15 @@ export const useTerminalStore = create<TerminalState>()(
         },
 
         aiExplainError: async (
-          errorOutput: string,
+          error_output: string,
           command?: string,
-          shellType?: ShellTypeLiteral,
+          shell_type?: ShellTypeLiteral,
         ) => {
           try {
             const explanation = await invoke<string>('terminal_ai_explain_error', {
-              errorOutput,
+              error_output,
               command,
-              shellType: shellType || 'PowerShell',
+              shell_type: shell_type || 'zsh',
             });
             return explanation;
           } catch (error) {
@@ -359,7 +377,7 @@ export const useTerminalStore = create<TerminalState>()(
         smartCommit: async (sessionId: string) => {
           try {
             const result = await invoke<string>('terminal_smart_commit', {
-              sessionId,
+              session_id: sessionId,
             });
             return result;
           } catch (error) {
@@ -372,7 +390,7 @@ export const useTerminalStore = create<TerminalState>()(
           try {
             const suggestions = await invoke<string | null>('terminal_ai_suggest_improvements', {
               command,
-              shellType,
+              shell_type: shellType,
             });
             return suggestions;
           } catch (error) {

@@ -5,8 +5,7 @@
  * natural language or direct API calls.
  */
 
-// Check if running in Tauri environment
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+import { isTauri } from '../lib/tauri-mock';
 
 // Dynamic import of invoke to handle web development mode
 const getInvoke = async () => {

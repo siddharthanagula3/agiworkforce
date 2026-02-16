@@ -112,7 +112,7 @@ export const useROIStore = create<ROIState>()(
 
     fetchTodayStats: async () => {
       try {
-        const stats = await invoke<DayStats>('get_today_stats');
+        const stats = await invoke<DayStats>('get_today_stats', { user_id: 'default' });
         set((state) => {
           state.todayStats = stats;
           state.lastUpdate = Date.now();
@@ -125,7 +125,7 @@ export const useROIStore = create<ROIState>()(
 
     fetchWeekStats: async () => {
       try {
-        const stats = await invoke<WeekStats>('get_week_stats');
+        const stats = await invoke<WeekStats>('get_week_stats', { user_id: 'default' });
         set((state) => {
           state.weekStats = stats;
 
@@ -156,7 +156,7 @@ export const useROIStore = create<ROIState>()(
 
     fetchMonthStats: async () => {
       try {
-        const stats = await invoke<MonthStats>('get_month_stats');
+        const stats = await invoke<MonthStats>('get_month_stats', { user_id: 'default' });
         set((state) => {
           state.monthStats = stats;
         });
@@ -168,13 +168,13 @@ export const useROIStore = create<ROIState>()(
 
     fetchAllTimeStats: async () => {
       try {
-        const stats = await invoke<AllTimeStats>('get_all_time_stats');
+        const stats = await invoke<AllTimeStats>('get_all_time_stats', { user_id: 'default' });
         set((state) => {
           state.allTimeStats = stats;
         });
 
         const milestones = await invoke<Milestone[]>('get_milestones', {
-          userId: 'default',
+          user_id: 'default',
         });
         set((state) => {
           state.milestones = milestones;
@@ -236,7 +236,7 @@ export const useROIStore = create<ROIState>()(
 
     acknowledgeMilestone: async (milestoneId: string) => {
       try {
-        await invoke('acknowledge_milestone', { milestoneId });
+        await invoke('acknowledge_milestone', { milestone_id: milestoneId, user_id: 'default' });
 
         set((state) => {
           const milestone = state.milestones.find((m) => m.id === milestoneId);
@@ -267,15 +267,21 @@ export const useROIStore = create<ROIState>()(
 
         switch (mode) {
           case 'manual_vs_auto':
-            data = await invoke<ComparisonData>('get_manual_vs_automated_comparison');
+            data = await invoke<ComparisonData>('get_manual_vs_automated_comparison', {
+              automation_type: 'general',
+            });
             break;
           case 'period':
             data = await invoke<PeriodComparisonData>('get_period_comparison', {
+              user_id: 'default',
               period: 'month',
             });
             break;
           case 'benchmark':
-            data = await invoke<BenchmarkComparisonData>('get_benchmark_comparison');
+            data = await invoke<BenchmarkComparisonData>('get_benchmark_comparison', {
+              user_id: 'default',
+              role: 'developer',
+            });
             break;
           default:
             throw new Error(`Unknown comparison mode: ${mode}`);
@@ -295,6 +301,7 @@ export const useROIStore = create<ROIState>()(
     fetchRecentActivity: async () => {
       try {
         const activity = await invoke<ActivityItem[]>('get_recent_activity', {
+          user_id: 'default',
           limit: 50,
         });
 
@@ -308,7 +315,10 @@ export const useROIStore = create<ROIState>()(
 
     exportReport: async (options: ExportOptions) => {
       try {
-        const filePath = await invoke<string>('export_roi_report', { options });
+        const filePath = await invoke<string>('export_roi_report', {
+          options,
+          user_id: 'default',
+        });
         return filePath;
       } catch (error) {
         console.error('Failed to export report:', error);

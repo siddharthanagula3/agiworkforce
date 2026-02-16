@@ -158,7 +158,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
               return (
                 <div
                   key={idx}
-                  onClick={() => onOpenSidecar?.('preview', { artifact: art })}
+                  onClick={() => onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })}
                   className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                 >
                   <div className="flex items-center gap-3">

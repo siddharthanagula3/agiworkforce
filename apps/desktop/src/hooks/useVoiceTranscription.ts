@@ -59,8 +59,8 @@ export interface VoiceSettings {
  * Options for the useVoiceTranscription hook
  */
 export interface UseVoiceTranscriptionOptions {
-  /** Use Whisper (Cloud) when true, Web Speech when false */
-  preferLocal?: boolean;
+  /** Use Whisper Cloud (remote) when true, Web Speech API (local) when false (default) */
+  preferWhisperCloud?: boolean;
   /** Language code for transcription (e.g., 'en', 'es', 'fr') */
   language?: string;
   /** Audio format for recording (default: 'webm') */
@@ -139,7 +139,7 @@ export function useVoiceTranscription(
   options: UseVoiceTranscriptionOptions = {},
 ): UseVoiceTranscriptionReturn {
   const {
-    preferLocal = false,
+    preferWhisperCloud = false,
     language,
     audioFormat = 'webm',
     onResult,
@@ -169,13 +169,21 @@ export function useVoiceTranscription(
   const isMountedRef = useRef(true);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    let timeoutId: number | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      window.setTimeout(
+      timeoutId = window.setTimeout(
         () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
         timeoutMs,
       );
     });
-    return Promise.race([promise, timeout]);
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      // AUDIT-VOICE-042 fix: Clear timeout handle to prevent timer leak after promise resolution
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   }, []);
 
   /**
@@ -263,19 +271,16 @@ export function useVoiceTranscription(
     };
   }, [checkLocalWhisperImpl]);
 
-  // Configure provider when preferLocal changes
+  // Configure provider when preferWhisperCloud changes (configure backend for Whisper Cloud when enabled)
   useEffect(() => {
-    if (preferLocal && availableLocalWhisper.length > 0) {
-      configureImpl({ provider: 'local' as const }).catch((err) => {
-        // AUDIT-P3-ERROR: Log local provider failure, then fallback to Cloud
-        console.debug('[VoiceTranscription] Local provider failed, falling back to Cloud:', err);
-        configureImpl({ provider: 'cloud' as const }).catch((fallbackErr) => {
-          // AUDIT-P3-ERROR: Both providers failed - error state already set by configureImpl
-          console.debug('[VoiceTranscription] Cloud fallback also failed:', fallbackErr);
-        });
+    if (preferWhisperCloud) {
+      // When using Whisper Cloud, configure backend accordingly
+      configureImpl({ provider: 'cloud' as const }).catch((err) => {
+        // AUDIT-P3-ERROR: Cloud provider configuration failure
+        console.debug('[VoiceTranscription] Cloud provider configuration failed:', err);
       });
     }
-  }, [preferLocal, availableLocalWhisper, configureImpl]);
+  }, [preferWhisperCloud, configureImpl]);
 
   // Auto-clear transient voice errors so stale banners do not block input affordances.
   useEffect(() => {
@@ -333,7 +338,8 @@ export function useVoiceTranscription(
    * Start recording audio from the microphone
    */
   const startRecording = useCallback(async (): Promise<void> => {
-    if (!preferLocal) {
+    // AUDIT-VOICE-043 fix: Use preferWhisperCloud - when false, use Web Speech (local); when true, use Whisper Cloud
+    if (!preferWhisperCloud) {
       const SpeechRecognitionCtor = getSpeechRecognitionConstructor();
 
       if (!SpeechRecognitionCtor) {
@@ -517,7 +523,7 @@ export function useVoiceTranscription(
       onError?.(errorMessage);
     }
   }, [
-    preferLocal,
+    preferWhisperCloud,
     language,
     isSupported,
     state.isRecording,
@@ -532,7 +538,8 @@ export function useVoiceTranscription(
    * Stop recording and transcribe the audio
    */
   const stopRecording = useCallback(async (): Promise<string> => {
-    if (!preferLocal && speechRecognitionRef.current) {
+    // AUDIT-VOICE-043 fix: Check if using Web Speech (not Whisper Cloud)
+    if (!preferWhisperCloud && speechRecognitionRef.current) {
       const recognition = speechRecognitionRef.current;
       speechRecognitionRef.current = null;
       try {
@@ -670,7 +677,7 @@ export function useVoiceTranscription(
       mediaRecorder.stop();
     });
   }, [
-    preferLocal,
+    preferWhisperCloud,
     language,
     state.isRecording,
     state.transcript,

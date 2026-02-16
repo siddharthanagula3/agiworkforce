@@ -257,3 +257,34 @@ pub async fn submit_tutorial_feedback(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn record_help_session(
+    db: State<'_, AppDatabase>,
+    user_id: String,
+    context: String,
+    query: Option<String>,
+    help_article_id: Option<String>,
+    was_helpful: Option<bool>,
+) -> Result<(), String> {
+    let conn = db.connection()?;
+    let now = chrono::Utc::now().timestamp();
+    let id = uuid::Uuid::new_v4().to_string();
+
+    conn.execute(
+        "INSERT INTO help_sessions (id, user_id, context, query, help_article_id, was_helpful, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            id,
+            user_id,
+            context,
+            query,
+            help_article_id,
+            was_helpful.map(|v| if v { 1 } else { 0 }),
+            now
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

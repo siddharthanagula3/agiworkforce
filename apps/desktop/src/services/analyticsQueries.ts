@@ -7,8 +7,7 @@ import {
   TimeSeriesData,
   UsageStats,
 } from '../types/analytics';
-
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+import { isTauri } from '../lib/tauri-mock';
 
 const defaultEmptyStats: UsageStats = {
   dau: 0,

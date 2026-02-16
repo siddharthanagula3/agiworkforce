@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::State;
+use tokio::time::{timeout, Duration};
 
 pub struct McpState {
     pub client: Arc<McpClient>,
@@ -42,6 +43,78 @@ impl McpState {
     pub fn start_health_monitoring(&self, app_handle: tauri::AppHandle) {
         let monitor = self.health_monitor.clone();
         monitor.start_monitoring(std::time::Duration::from_secs(30), app_handle);
+    }
+
+    /// Update the filesystem MCP server root directory.
+    /// This couples folder selection with MCP filesystem server scope (AUDIT-MCP-050).
+    /// Returns Ok(true) if the server was restarted, Ok(false) if no change needed.
+    pub async fn update_filesystem_root(&self, new_root: &str) -> Result<bool, String> {
+        let root_path = std::path::Path::new(new_root);
+        if !root_path.exists() {
+            return Err(format!("Path does not exist: {}", new_root));
+        }
+        if !root_path.is_dir() {
+            return Err(format!("Path is not a directory: {}", new_root));
+        }
+
+        // Update config
+        let needs_restart = {
+            let mut config = self.config.lock();
+            if let Some(server_config) = config.mcp_servers.get_mut("filesystem") {
+                // Check current root (it's the last arg for filesystem server)
+                let current_root = server_config.args.last().cloned().unwrap_or_default();
+                if current_root == new_root {
+                    return Ok(false); // No change needed
+                }
+                // Update the args to use new root directory
+                server_config.args.pop(); // Remove old root
+                server_config.args.push(new_root.to_string()); // Add new root
+                tracing::info!(
+                    "[MCP] Updated filesystem server root from '{}' to '{}'",
+                    current_root,
+                    new_root
+                );
+                true
+            } else {
+                return Err("Filesystem server not found in config".to_string());
+            }
+        };
+
+        if !needs_restart {
+            return Ok(false);
+        }
+
+        // Restart the server to apply new config
+        let server_config = self.config.lock().mcp_servers.get("filesystem").cloned();
+
+        // Disconnect existing session if any
+        if self.client.list_servers().contains(&"filesystem".to_string()) {
+            if let Err(e) = self.client.disconnect_server("filesystem").await {
+                tracing::warn!("[MCP] Failed to disconnect filesystem server: {}", e);
+            }
+        }
+
+        // Reconnect with new config
+        if let Some(config) = server_config {
+            // Only restart if the server is enabled
+            if config.enabled {
+                match self.client.connect_server("filesystem".to_string(), config).await {
+                    Ok(_) => {
+                        tracing::info!("[MCP] Filesystem server restarted with new root: {}", new_root);
+                        Ok(true)
+                    }
+                    Err(e) => {
+                        tracing::error!("[MCP] Failed to restart filesystem server: {}", e);
+                        Err(format!("Failed to restart filesystem server: {}", e))
+                    }
+                }
+            } else {
+                tracing::info!("[MCP] Filesystem server not enabled, config updated but not started");
+                Ok(true)
+            }
+        } else {
+            Err("Could not get filesystem server config".to_string())
+        }
     }
 }
 
@@ -588,9 +661,32 @@ pub async fn mcp_call_tool(
     );
 
     let start_time = std::time::Instant::now();
-    let result = state.registry.execute_tool(&tool_id, arguments).await;
+
+    // AUDIT-MCP-026: Wrap tool execution with explicit timeout (5 minutes)
+    const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 300;
+    let result = timeout(
+        Duration::from_secs(TOOL_EXECUTION_TIMEOUT_SECS),
+        state.registry.execute_tool(&tool_id, arguments),
+    )
+    .await;
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
+
+    // Handle timeout vs actual result
+    let (success, final_result) = match result {
+        Ok(Ok(value)) => (true, Ok(value)),
+        Ok(Err(e)) => (false, Err(format!("Tool execution failed: {}", e))),
+        Err(_) => {
+            // Timeout elapsed
+            (
+                false,
+                Err(format!(
+                    "Tool execution timed out after {} seconds",
+                    TOOL_EXECUTION_TIMEOUT_SECS
+                )),
+            )
+        }
+    };
 
     // Emit tool execution completed event
     emit_mcp_event(
@@ -598,12 +694,12 @@ pub async fn mcp_call_tool(
         McpEvent::ToolExecutionCompleted {
             tool_id: tool_id.clone(),
             server_name,
-            success: result.is_ok(),
+            success,
             duration_ms,
         },
     );
 
-    result.map_err(|e| format!("Tool execution failed: {}", e))
+    final_result
 }
 
 #[tauri::command]

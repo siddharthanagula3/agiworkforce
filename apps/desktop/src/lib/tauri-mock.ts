@@ -1,4 +1,8 @@
-export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// AUDIT-ENV-064 fix: Unified Tauri runtime detection
+// Checks for both __TAURI_INTERNALS__ and __TAURI__ to handle different Tauri versions
+export const isTauri =
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 const isTestEnvironment =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
@@ -126,9 +130,70 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_task_cancel':
       return undefined as T;
 
-    default:
-      console.warn(`[Tauri] Command not available in web mode: ${command}`);
+    // Marketplace commands
+    case 'get_published_workflows':
+    case 'get_featured_workflows':
+    case 'get_trending_workflows':
+    case 'get_my_published_workflows':
+    case 'get_workflow_by_id':
+    case 'get_workflow_reviews':
+    case 'get_workflow_comments':
+    case 'get_workflow_analytics':
+    case 'get_workflow_stats':
+    case 'get_category_counts':
+    case 'get_popular_tags':
+    case 'search_marketplace_workflows':
       return [] as T;
+
+    case 'clone_marketplace_workflow':
+    case 'publish_workflow':
+    case 'unpublish_workflow':
+    case 'rate_workflow':
+    case 'favorite_workflow':
+    case 'unfavorite_workflow':
+    case 'comment_on_workflow':
+    case 'delete_workflow_comment':
+    case 'get_workflow_share_url':
+    case 'share_workflow':
+    case 'get_workflow_embed_code':
+    case 'increment_workflow_view_count':
+    case 'is_workflow_favorited':
+    case 'get_user_workflow_rating':
+      return undefined as T;
+
+    // ROI/Metrics commands
+    case 'get_today_stats':
+    case 'get_week_stats':
+    case 'get_month_stats':
+    case 'get_all_time_stats':
+    case 'get_milestones':
+    case 'get_manual_vs_automated_comparison':
+    case 'get_period_comparison':
+    case 'get_benchmark_comparison':
+    case 'get_recent_activity':
+    case 'acknowledge_milestone':
+      return {
+        totalTimeSavedHours: 0,
+        totalCostSavedUsd: 0,
+        automationsRun: 0,
+        avgQualityScore: 0,
+        changeFromYesterday: 0,
+        changeFromLastWeek: 0,
+        changeFromLastMonth: 0,
+        topEmployees: [],
+        dailyBreakdown: [],
+        weeklyBreakdown: [],
+        monthlyTrend: [],
+        milestonesAchieved: 0,
+      } as T;
+
+    case 'export_roi_report':
+      return 'mock_report_path.txt' as T;
+
+    default:
+      // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
+      console.error(`[Tauri] Unregistered command in test mode: ${command}`);
+      throw new Error(`Command not registered in tauri-mock: ${command}. This indicates a frontend-backend wiring issue.`);
   }
 }
 
