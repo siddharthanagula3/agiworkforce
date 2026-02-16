@@ -361,17 +361,20 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
   );
 
   // List all environment variables
-  const listEnv = useCallback(async (sessionId: string): Promise<EnvironmentVariable[]> => {
-    setError(null);
-    try {
-      const envVars = await invoke<[string, string][]>('terminal_list_env', {
-        session_id: sessionId,
-      });
-      return envVars.map(([key, value]) => ({ key, value }));
-    } catch (err) {
-      throw handleError(err);
-    }
-  }, []);
+  const listEnv = useCallback(
+    async (sessionId: string): Promise<EnvironmentVariable[]> => {
+      setError(null);
+      try {
+        const envVars = await invoke<[string, string][]>('terminal_list_env', {
+          session_id: sessionId,
+        });
+        return envVars.map(([key, value]) => ({ key, value }));
+      } catch (err) {
+        throw handleError(err);
+      }
+    },
+    [handleError],
+  );
 
   // Unset environment variable
   const unsetEnv = useCallback(
