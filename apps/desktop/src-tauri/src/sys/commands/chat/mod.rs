@@ -59,6 +59,9 @@ const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 120;
 const FAST_TOOL_TIMEOUT_SECS: u64 = 10;
 
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
+// AUDIT-STREAM-038 fix: Track active conversation for scoped stop
+static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> =
+    Lazy::new(|| Mutex::new(None));
 
 // Pending messages queue for mid-task user input
 static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
@@ -76,6 +79,16 @@ fn mark_tool_cancelled(tool_call_id: &str) {
 fn take_tool_cancelled(tool_call_id: &str) -> bool {
     if let Ok(mut cancelled) = CANCELLED_TOOL_CALLS.lock() {
         return cancelled.remove(tool_call_id);
+    }
+    false
+}
+
+/// Check if a tool has been cancelled without removing it from the set.
+/// This allows the cancellation check to be non-destructive so it can be polled frequently.
+/// AUDIT-CANCEL-060 fix: Added non-consuming check for immediate cancellation detection.
+fn is_tool_cancelled(tool_call_id: &str) -> bool {
+    if let Ok(cancelled) = CANCELLED_TOOL_CALLS.lock() {
+        return cancelled.contains(tool_call_id);
     }
     false
 }
@@ -227,14 +240,33 @@ async fn execute_chat_tool_with_timeout(
         timeout_secs
     );
 
-    let mut execute_future = std::pin::Pin::from(Box::new(tools::execute_chat_tool(
-        tool_name,
-        arguments_json,
-        Some(app_handle),
-        project_folder,
-        conversation_mode,
-        normalized_tool_call_id,
-    )));
+    // AUDIT-CANCEL-060 fix: Spawn tool execution as a task so it can be aborted on cancellation.
+    // This ensures that when a user cancels a tool, the underlying process is terminated,
+    // rather than relying on cooperative cancellation which may not work for long-running tools.
+    let tool_name_owned = tool_name.to_string();
+    let arguments_json_owned = arguments_json.to_string();
+    let project_folder_owned = project_folder.clone();
+    let conversation_mode_owned = conversation_mode.clone();
+    let tool_call_id_owned = normalized_tool_call_id.map(|s| s.to_string());
+    let app_handle_clone = app_handle.clone();
+
+    // AUDIT-CANCEL-060 fix: Spawn tool execution as a task so it can be aborted on cancellation.
+    let exec_task = tokio::task::spawn(async move {
+        tools::execute_chat_tool(
+            &tool_name_owned,
+            &arguments_json_owned,
+            Some(&app_handle_clone),
+            project_folder_owned,
+            conversation_mode_owned,
+            tool_call_id_owned.as_deref(),
+        )
+        .await
+    });
+    let exec_abort_handle = exec_task.abort_handle();
+
+    // Wrap in a pinned future to work with select!
+    let mut execute_future = std::pin::Pin::from(Box::new(exec_task) as Box<dyn std::future::Future<Output = Result<Result<String, anyhow::Error>, tokio::task::JoinError>> + Send>);
+
     let timeout_future = tokio::time::sleep(timeout_duration);
     tokio::pin!(timeout_future);
 
@@ -247,9 +279,30 @@ async fn execute_chat_tool_with_timeout(
                 if let Some(tool_id) = normalized_tool_call_id {
                     let _ = take_tool_cancelled(tool_id);
                 }
-                let elapsed_ms = started_at.elapsed().as_millis();
+                let elapsed_ms = started_at.elapsed().as_millis() as u64;
+
+                // AUDIT-STREAM-021 fix: Check if generation was stopped BEFORE processing result.
+                // This prevents continuing to process tool output after user requested stop.
+                if should_stop_generation() {
+                    if let Some(tool_id) = normalized_tool_call_id {
+                        crate::ui::events::tool_stream::emit_tool_cancelled(
+                            app_handle,
+                            tool_id,
+                            Some("Generation stopped by user"),
+                            elapsed_ms,
+                        );
+                    }
+                    tracing::info!(
+                        "[Chat] Tool execution stopped before result processing id={} tool={} elapsed_ms={}",
+                        normalized_tool_call_id.unwrap_or("n/a"),
+                        tool_name,
+                        elapsed_ms
+                    );
+                    return Err(format!("Tool '{}' stopped by user", tool_name));
+                }
+
                 match result {
-                    Ok(content) => {
+                    Ok(Ok(content)) => {
                         tracing::info!(
                             "[Chat] Tool invoke completed id={} tool={} elapsed_ms={}",
                             normalized_tool_call_id.unwrap_or("n/a"),
@@ -258,19 +311,45 @@ async fn execute_chat_tool_with_timeout(
                         );
                         return Ok(content);
                     }
-                    Err(err) => {
+                    Ok(Err(tool_error)) => {
+                        // Tool returned an error (not cancelled)
                         tracing::warn!(
                             "[Chat] Tool invoke failed id={} tool={} elapsed_ms={} error={}",
                             normalized_tool_call_id.unwrap_or("n/a"),
                             tool_name,
                             elapsed_ms,
-                            err
+                            tool_error
                         );
-                        return Err(err.to_string());
+                        return Err(tool_error.to_string());
+                    }
+                    Err(join_err) if join_err.is_cancelled() => {
+                        // AUDIT-CANCEL-060 fix: Handle task cancellation explicitly
+                        // This happens when we abort the task on user cancellation
+                        let elapsed_ms = started_at.elapsed().as_millis() as u64;
+                        tracing::info!(
+                            "[Chat] Tool invoke cancelled (task aborted) id={} tool={} elapsed_ms={}",
+                            normalized_tool_call_id.unwrap_or("n/a"),
+                            tool_name,
+                            elapsed_ms
+                        );
+                        return Err(format!("Tool '{}' cancelled by user", tool_name));
+                    }
+                    Err(join_err) => {
+                        // Other join error
+                        tracing::warn!(
+                            "[Chat] Tool invoke failed (join error) id={} tool={} elapsed_ms={} error={}",
+                            normalized_tool_call_id.unwrap_or("n/a"),
+                            tool_name,
+                            elapsed_ms,
+                            join_err
+                        );
+                        return Err(format!("Tool execution failed: {}", join_err));
                     }
                 }
             }
             _ = &mut timeout_future => {
+                // AUDIT-CANCEL-060 fix: Abort the task on timeout to stop the running tool
+                exec_abort_handle.abort();
                 let elapsed_ms = started_at.elapsed().as_millis() as u64;
                 let message = format!("Tool '{}' timed out after {}s", tool_name, timeout_secs);
                 if let Some(tool_id) = normalized_tool_call_id {
@@ -293,9 +372,14 @@ async fn execute_chat_tool_with_timeout(
             }
             _ = cancel_interval.tick(), if normalized_tool_call_id.is_some() => {
                 // AUDIT-STREAM-021 fix: Check both per-tool cancellation AND global stop flag
+                // AUDIT-CANCEL-060 fix: Use non-consuming check for polling, consume on actual handling, abort task
                 if let Some(tool_id) = normalized_tool_call_id {
-                    // First check per-tool cancellation
-                    if take_tool_cancelled(tool_id) {
+                    // First check per-tool cancellation (non-consuming check for frequent polling)
+                    if is_tool_cancelled(tool_id) {
+                        // Consume the cancellation flag now that we've detected it
+                        let _ = take_tool_cancelled(tool_id);
+                        // AUDIT-CANCEL-060 fix: Abort the spawned task to stop the running tool
+                        exec_abort_handle.abort();
                         let elapsed_ms = started_at.elapsed().as_millis() as u64;
                         crate::ui::events::tool_stream::emit_tool_cancelled(
                             app_handle,
@@ -314,6 +398,8 @@ async fn execute_chat_tool_with_timeout(
                 }
                 // Also check global stop generation flag
                 if should_stop_generation() {
+                    // AUDIT-CANCEL-060 fix: Abort the spawned task to stop the running tool
+                    exec_abort_handle.abort();
                     let elapsed_ms = started_at.elapsed().as_millis() as u64;
                     if let Some(tool_id) = normalized_tool_call_id {
                         crate::ui::events::tool_stream::emit_tool_cancelled(
@@ -2994,6 +3080,17 @@ pub async fn chat_send_message(
                                     full_content.push_str(
                                         "\n\n*Stopped tool loop after timeout while waiting for follow-up responses.*",
                                     );
+                                    // AUDIT-STREAM-027 fix: Emit stream-chunk for fallback text
+                                    let _ = app_handle_clone.emit(
+                                        "chat:stream-chunk",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "delta": "\n\n*Stopped tool loop after timeout while waiting for follow-up responses.*",
+                                            "content": full_content.clone(),
+                                            "has_pending_messages": has_pending_messages()
+                                        }),
+                                    );
                                     let _ = app_handle_clone.emit(
                                         "chat:agent-progress",
                                         serde_json::json!({
@@ -3394,6 +3491,17 @@ pub async fn chat_send_message(
                                         full_content.push_str(
                                             "\n\n*Tool execution completed but unable to generate final response.*",
                                         );
+                                        // AUDIT-STREAM-027 fix: Emit stream-chunk for fallback text
+                                        let _ = app_handle_clone.emit(
+                                            "chat:stream-chunk",
+                                            serde_json::json!({
+                                                "conversation_id": conversation_id_clone,
+                                                "message_id": frontend_message_id_clone,
+                                                "delta": "\n\n*Tool execution completed but unable to generate final response.*",
+                                                "content": full_content.clone(),
+                                                "has_pending_messages": has_pending_messages()
+                                            }),
+                                        );
                                         break;
                                     }
                                 }
@@ -3410,6 +3518,17 @@ pub async fn chat_send_message(
 
                     if was_stopped && !full_content.is_empty() {
                         full_content.push_str("\n\n*[Generation stopped by user]*");
+                        // AUDIT-STREAM-027 fix: Emit stream-chunk for stop message
+                        let _ = app_handle_clone.emit(
+                            "chat:stream-chunk",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
+                                "delta": "\n\n*[Generation stopped by user]*",
+                                "content": full_content.clone(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
                     }
 
                     if full_content.trim().is_empty() {
@@ -4370,9 +4489,15 @@ pub fn chat_set_monthly_budget(
 }
 
 #[tauri::command]
-pub async fn chat_stop_generation() -> Result<(), String> {
-    info!("[Chat] Stopping generation - setting stop flag");
+pub async fn chat_stop_generation(conversation_id: Option<i64>) -> Result<(), String> {
+    info!("[Chat] Stopping generation - setting stop flag for conversation: {:?}", conversation_id);
     STOP_GENERATION.store(true, Ordering::SeqCst);
+    // AUDIT-STREAM-038 fix: Track which conversation is being stopped
+    if let Some(conv_id) = conversation_id {
+        if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
+            *active = Some(conv_id);
+        }
+    }
     Ok(())
 }
 
@@ -4401,8 +4526,27 @@ pub fn should_stop_generation() -> bool {
     STOP_GENERATION.load(Ordering::SeqCst)
 }
 
+// AUDIT-STREAM-038 fix: Check if stop is scoped to a specific conversation
+pub fn should_stop_for_conversation(conversation_id: i64) -> bool {
+    if !STOP_GENERATION.load(Ordering::SeqCst) {
+        return false;
+    }
+    // If no active conversation is set, stop for all (backwards compatibility)
+    if let Ok(active) = ACTIVE_STOP_CONVERSATION.lock() {
+        if let Some(active_conv) = *active {
+            return active_conv == conversation_id;
+        }
+    }
+    // No active conversation set, allow stop for any (global stop)
+    true
+}
+
 pub fn reset_stop_flag() {
     STOP_GENERATION.store(false, Ordering::SeqCst);
+    // AUDIT-STREAM-038 fix: Clear active conversation
+    if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
+        *active = None;
+    }
 }
 
 // ============================================================================
@@ -4521,6 +4665,14 @@ pub fn has_pending_messages() -> bool {
         .unwrap_or(false)
 }
 
+// AUDIT-STREAM-062 fix: Check pending messages for a specific conversation
+pub fn has_pending_messages_for_conversation(conversation_id: i64) -> bool {
+    PENDING_MESSAGES
+        .lock()
+        .map(|q| q.iter().any(|m| m.conversation_id == Some(conversation_id)))
+        .unwrap_or(false)
+}
+
 /// Get pending messages count
 pub fn pending_messages_count() -> usize {
     PENDING_MESSAGES.lock().map(|q| q.len()).unwrap_or(0)
@@ -4531,6 +4683,14 @@ pub fn peek_pending_messages() -> Vec<PendingUserMessage> {
     PENDING_MESSAGES
         .lock()
         .map(|q| q.clone())
+        .unwrap_or_default()
+}
+
+// AUDIT-STREAM-062 fix: Peek at pending messages for a specific conversation
+pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<PendingUserMessage> {
+    PENDING_MESSAGES
+        .lock()
+        .map(|q| q.iter().filter(|m| m.conversation_id == Some(conversation_id)).cloned().collect())
         .unwrap_or_default()
 }
 
