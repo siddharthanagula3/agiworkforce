@@ -109,24 +109,21 @@ pub async fn swarm_execute_goal(
 }
 
 #[tauri::command]
-pub async fn swarm_get_stats(_state: State<'_, SwarmState>) -> Result<SwarmStats, String> {
-    // Note: This would require exposing stats from Orchestrator.
-    // For now returning default if not running or implementing if accessible.
-    // Assuming Orchestrator has a accessible stats field or method.
-    // Given the audit, Orchestrator has `stats: Arc<RwLock<SwarmStats>>` but it's private.
-    // We might need to add a getter in orchestrator.rs or similar.
-    // For this pass, we'll return a placeholder or try to access if publicly getter exists.
-
-    // Check orchestrator.rs in memory... it has `stats` field but no public getter in the lines I saw.
-    // I will return default for now to satisfy compliation, and add TODO.
+pub async fn swarm_get_stats(state: State<'_, SwarmState>) -> Result<SwarmStats, String> {
+    let guard = state.orchestrator.read().await;
+    if let Some(orchestrator) = guard.as_ref() {
+        return Ok(orchestrator.get_stats());
+    }
     Ok(SwarmStats::default())
 }
 
 #[tauri::command]
 pub async fn swarm_stop(state: State<'_, SwarmState>) -> Result<(), String> {
-    let guard = state.orchestrator.read().await;
-    if let Some(_orchestrator) = guard.as_ref() {
-        // orchestrator.stop(); // Assuming stop method exists
+    let guard = state.orchestrator.write().await;
+    if let Some(orchestrator) = guard.as_ref() {
+        orchestrator.stop();
+        // Also terminate all agents to ensure clean shutdown
+        orchestrator.terminate_all();
     }
     Ok(())
 }

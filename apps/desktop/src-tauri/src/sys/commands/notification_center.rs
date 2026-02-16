@@ -477,9 +477,35 @@ pub async fn notification_create(
 
     // Check do not disturb mode
     if settings.do_not_disturb {
-        // For now, just block all notifications in DND mode
-        // TODO: Implement time-based DND checking
-        return Err("Do not disturb mode is enabled".to_string());
+        // Check if we're within the time-based DND window
+        if let (Some(start_time), Some(end_time)) =
+            (&settings.dnd_start_time, &settings.dnd_end_time)
+        {
+            // Parse the time strings (HH:MM format)
+            let now = chrono::Local::now();
+            let current_time = now.format("%H:%M").to_string();
+
+            // Check if current time is within the DND time range
+            // Handle both overnight ranges (e.g., 22:00 to 06:00) and normal ranges
+            let is_within_dnd = if start_time <= end_time {
+                // Normal range: start_time <= end_time (e.g., 09:00 to 17:00)
+                current_time >= *start_time && current_time <= *end_time
+            } else {
+                // Overnight range: start_time > end_time (e.g., 22:00 to 06:00)
+                current_time >= *start_time || current_time <= *end_time
+            };
+
+            if is_within_dnd {
+                return Err(format!(
+                    "Do not disturb mode is enabled ({} - {})",
+                    start_time, end_time
+                ));
+            }
+            // If outside time range, allow notification even with DND enabled
+        } else {
+            // No time range set, block all notifications in DND mode
+            return Err("Do not disturb mode is enabled".to_string());
+        }
     }
 
     drop(settings);

@@ -264,8 +264,8 @@ describe('modelStore', () => {
       store.reset();
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBeNull();
-      expect(state.selectedProvider).toBeNull();
+      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedProvider).toBe('managed_cloud');
       expect(state.favorites).toEqual([]);
       expect(state.recentModels).toEqual([]);
       expect(state.error).toBeNull();

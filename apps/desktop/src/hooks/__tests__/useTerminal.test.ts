@@ -200,7 +200,7 @@ describe('useTerminal', () => {
 
   describe('environment variables', () => {
     it('should set environment variable', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockInvoke.mockResolvedValueOnce(undefined);
 
       const { result } = renderHook(() => useTerminal());
 
@@ -208,29 +208,36 @@ describe('useTerminal', () => {
         await result.current.setEnv('session-123', 'MY_VAR', 'my_value');
       });
 
-      expect(mockInvoke).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_set_env', {
+        session_id: 'session-123',
+        key: 'MY_VAR',
+        value: 'my_value',
+      });
     });
 
     it('should get environment variable', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockInvoke.mockResolvedValueOnce('test_value');
 
       const { result } = renderHook(() => useTerminal());
 
       let value: string | null | undefined;
       await act(async () => {
-        value = await result.current.getEnv('session-123', 'PATH');
+        value = await result.current.getEnv('session-123', 'MY_VAR');
       });
 
-      expect(value).toBeNull();
-      expect(mockInvoke).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(value).toBe('test_value');
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_get_env', {
+        session_id: 'session-123',
+        key: 'MY_VAR',
+      });
     });
 
     it('should list environment variables', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mockVars: [string, string][] = [
+        ['PATH', '/usr/bin'],
+        ['HOME', '/home/user'],
+      ];
+      mockInvoke.mockResolvedValueOnce(mockVars);
 
       const { result } = renderHook(() => useTerminal());
 
@@ -239,14 +246,17 @@ describe('useTerminal', () => {
         vars = await result.current.listEnv('session-123');
       });
 
-      expect(vars).toEqual([]);
-      expect(mockInvoke).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(vars).toEqual([
+        { key: 'PATH', value: '/usr/bin' },
+        { key: 'HOME', value: '/home/user' },
+      ]);
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_list_env', {
+        session_id: 'session-123',
+      });
     });
 
     it('should unset environment variable', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockInvoke.mockResolvedValueOnce(undefined);
 
       const { result } = renderHook(() => useTerminal());
 
@@ -254,9 +264,10 @@ describe('useTerminal', () => {
         await result.current.unsetEnv('session-123', 'MY_VAR');
       });
 
-      expect(mockInvoke).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_unset_env', {
+        session_id: 'session-123',
+        key: 'MY_VAR',
+      });
     });
   });
 
