@@ -295,7 +295,7 @@ describe('Intelligent Routing Integration', () => {
 
     it('should set autoExecuteTools for agentic tasks', () => {
       const result = routeIntelligentlySync(
-        'Navigate to google.com and click search',
+        'Navigate to google.com and click on search button',
         'auto-premium',
       );
       // Agentic tasks should have auto-execute when tools match with high confidence

@@ -962,47 +962,118 @@ impl PrCreationWorkflow {
 
     /// Check if a branch has an existing open PR.
     ///
-    /// This is a placeholder - actual implementation would need GitHub API access.
+    /// Uses the GitHub CLI (`gh`) to check for existing PRs.
     pub async fn check_existing_pr(
-        _owner: &str,
-        _repo: &str,
-        _head_branch: &str,
+        owner: &str,
+        repo: &str,
+        head_branch: &str,
     ) -> Result<Option<(u64, String)>> {
-        // TODO: Implement GitHub API call to check for existing PRs
-        // For now, return None (no existing PR)
+        // Use gh CLI to check for existing PRs
+        let output = tokio::process::Command::new("gh")
+            .args([
+                "pr",
+                "view",
+                "--json",
+                "number,title,state",
+                "--repo",
+                &format!("{}/{}", owner, repo),
+                head_branch,
+            ])
+            .output()
+            .await
+            .map_err(|e| anyhow!("Failed to run gh CLI: {}", e))?;
+
+        if !output.status.success() {
+            // No PR found or gh not available - return None
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("no open pull request") || stderr.is_empty() {
+                return Ok(None);
+            }
+            tracing::warn!("gh pr view failed: {}", stderr);
+            return Ok(None);
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Parse JSON response for PR info
+        if let Ok(pr_json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+            if let (Some(number), Some(title), Some(state)) = (
+                pr_json.get("number").and_then(|v| v.as_u64()),
+                pr_json.get("title").and_then(|v| v.as_str()),
+                pr_json.get("state").and_then(|v| v.as_str()),
+            ) {
+                if state == "OPEN" {
+                    return Ok(Some((number, title.to_string())));
+                }
+            }
+        }
+
         Ok(None)
     }
 
-    /// Create a PR via GitHub API.
+    /// Create a PR via GitHub CLI.
     ///
-    /// This is a placeholder - actual implementation would use MCP GitHub tools
-    /// or direct GitHub API calls.
+    /// Uses the GitHub CLI (`gh`) to create a pull request.
     pub async fn create_github_pr(
-        _owner: &str,
-        _repo: &str,
+        owner: &str,
+        repo: &str,
         config: &PrCreationConfig,
         title: &str,
         description: &str,
     ) -> Result<PrCreationResult> {
-        // TODO: Implement GitHub API call to create PR
-        // For now, return a placeholder result
-        // In production, this would call:
-        // 1. MCP GitHub server tools (mcp__github__create_pull_request)
-        // 2. Or direct GitHub API via reqwest
-
-        Err(anyhow!(
-            "GitHub PR creation not yet implemented. \
-             Use the 'gh' CLI or MCP GitHub tools to create PR:\n\
-             Title: {}\n\
-             Base: {} -> Head: {}\n\
-             Draft: {}\n\
-             Description:\n{}",
+        // Use gh CLI to create PR
+        let repo_full = format!("{}/{}", owner, repo);
+        let mut cmd_args = vec![
+            "pr",
+            "create",
+            "--repo",
+            &repo_full,
+            "--base",
+            &config.base_branch,
+            "--head",
+            &config.head_branch,
+            "--title",
             title,
-            config.base_branch,
-            config.head_branch,
-            config.draft,
-            description
-        ))
+            "--body",
+            description,
+        ];
+
+        if config.draft {
+            cmd_args.push("--draft");
+        }
+
+        let output = tokio::process::Command::new("gh")
+            .args(&cmd_args)
+            .output()
+            .await
+            .map_err(|e| anyhow!("Failed to run gh CLI: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("Failed to create PR: {}", stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let pr_url = stdout.trim().to_string();
+
+        // Extract PR number from URL
+        let pr_number = pr_url
+            .split('/')
+            .last()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+
+        tracing::info!("Created PR #{}: {}", pr_number, pr_url);
+
+        Ok(PrCreationResult {
+            pr_number,
+            pr_url: pr_url.clone(),
+            title: title.to_string(),
+            description: description.to_string(),
+            draft: config.draft,
+            files_changed: 0,
+            additions: 0,
+            deletions: 0,
+        })
     }
 
     /// Full PR creation workflow with AI assistance.
@@ -1070,22 +1141,148 @@ impl PrCreationWorkflow {
 
         tracing::info!("[PrCreationWorkflow] Generated title: {}", title);
 
-        // Step 3: Create the PR
-        // Note: This currently returns an error with instructions
-        // In production, integrate with MCP GitHub tools or direct API
+        // Step 3: Create the PR using gh CLI
+        // Try to create the PR via gh CLI, fall back to returning prepared content if unavailable
+        let pr_result = Self::create_pr_via_gh_cli(
+            repo_path,
+            &config.base_branch,
+            &config.head_branch,
+            &title,
+            &description,
+            config.draft,
+        )
+        .await;
 
-        // For now, return a result that indicates the PR content is ready
-        // but actual creation requires external tooling
-        Ok(PrCreationResult {
-            pr_number: 0, // Placeholder - would be filled by GitHub API
-            pr_url: String::new(),
-            title,
-            description,
-            draft: config.draft,
-            files_changed: diff_summary.files_changed.len(),
-            additions: diff_summary.total_additions,
-            deletions: diff_summary.total_deletions,
-        })
+        match pr_result {
+            Ok((pr_number, pr_url)) => {
+                tracing::info!(
+                    "[PrCreationWorkflow] Successfully created PR #{}: {}",
+                    pr_number,
+                    pr_url
+                );
+                Ok(PrCreationResult {
+                    pr_number,
+                    pr_url,
+                    title,
+                    description,
+                    draft: config.draft,
+                    files_changed: diff_summary.files_changed.len(),
+                    additions: diff_summary.total_additions,
+                    deletions: diff_summary.total_deletions,
+                })
+            }
+            Err(e) => {
+                // Return the prepared content but note that actual creation failed
+                tracing::warn!("[PrCreationWorkflow] Failed to create PR via gh CLI: {}", e);
+                tracing::info!(
+                    "[PrCreationWorkflow] Returning prepared PR content for manual creation"
+                );
+                Ok(PrCreationResult {
+                    pr_number: 0,
+                    pr_url: String::new(),
+                    title,
+                    description,
+                    draft: config.draft,
+                    files_changed: diff_summary.files_changed.len(),
+                    additions: diff_summary.total_additions,
+                    deletions: diff_summary.total_deletions,
+                })
+            }
+        }
+    }
+
+    /// Create a PR using the gh CLI tool.
+    async fn create_pr_via_gh_cli(
+        repo_path: &Path,
+        base_branch: &str,
+        head_branch: &str,
+        title: &str,
+        description: &str,
+        draft: bool,
+    ) -> Result<(u64, String)> {
+        use std::process::Command;
+
+        // Check if gh CLI is available
+        let gh_check = Command::new("gh")
+            .arg("--version")
+            .output()
+            .map_err(|e| anyhow!("gh CLI not found: {}", e))?;
+
+        if !gh_check.status.success() {
+            return Err(anyhow!("gh CLI not available"));
+        }
+
+        // Get the repo owner/name from git remote
+        let remote_output = Command::new("git")
+            .args(["remote", "get-url", "origin"])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| anyhow!("Failed to get git remote: {}", e))?;
+
+        if !remote_output.status.success() {
+            return Err(anyhow!("No git remote configured"));
+        }
+
+        let remote_url = String::from_utf8_lossy(&remote_output.stdout)
+            .trim()
+            .to_string();
+
+        // Extract owner and repo from URL (supports both HTTPS and SSH)
+        let _repo_identifier = if remote_url.starts_with("git@github.com:") {
+            remote_url
+                .trim_start_matches("git@github.com:")
+                .trim_end_matches(".git")
+                .to_string()
+        } else if remote_url.contains("github.com") {
+            remote_url
+                .split('/')
+                .skip_while(|s| !s.contains("github.com"))
+                .skip(1)
+                .take(2)
+                .collect::<Vec<_>>()
+                .join("/")
+        } else {
+            return Err(anyhow!("Not a GitHub remote"));
+        };
+
+        // Build the gh pr create command
+        let mut cmd = Command::new("gh");
+        cmd.arg("pr")
+            .arg("create")
+            .arg("--base")
+            .arg(base_branch)
+            .arg("--head")
+            .arg(head_branch)
+            .arg("--title")
+            .arg(title)
+            .arg("--body")
+            .arg(description);
+
+        if draft {
+            cmd.arg("--draft");
+        }
+
+        let output = cmd
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| anyhow!("Failed to execute gh pr create: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("gh pr create failed: {}", stderr));
+        }
+
+        // Parse the PR URL from output
+        let pr_url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        // Extract PR number from URL
+        let pr_number = pr_url
+            .split('/')
+            .last()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+
+        Ok((pr_number, pr_url))
     }
 }
 

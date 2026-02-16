@@ -161,6 +161,8 @@ impl McpToolRegistry {
         tool_id: &str,
         arguments: HashMap<String, Value>,
     ) -> McpResult<Value> {
+        tracing::debug!("[MCP Registry] execute_tool called: tool_id={}", tool_id);
+
         let (server_name, tool_name) = Self::parse_tool_id(tool_id)?;
 
         // Validate that the server exists before attempting to call the tool

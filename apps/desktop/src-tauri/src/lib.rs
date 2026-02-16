@@ -69,7 +69,19 @@ pub fn run() {
     };
 
     std::panic::set_hook(Box::new(|info| {
-        tracing::error!("Application Panic: {:?}", info);
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic".to_string()
+        };
+        tracing::error!("Application Panic at {}: {:?}", location, message);
+        eprintln!("PANIC at {}: {}", location, message);
     }));
 
     #[allow(unused_mut)]
