@@ -114,7 +114,9 @@ impl NotificationState {
                     } else {
                         tracing::info!("Delivered scheduled notification: {}", id);
                         // Emit event to frontend
-                        let _ = app.emit("notification_delivered", &id);
+                        if let Err(e) = app.emit("notification_delivered", &id) {
+                            tracing::warn!("Failed to emit notification_delivered event: {}", e);
+                        }
                     }
                 }
 

@@ -6,6 +6,152 @@ Owner: Codex + Siddhartha
 This file is the persistent audit ledger for tool/command wiring, streaming/status parity, and desktop reliability.
 New findings must be appended here immediately.
 
+---
+
+# NEW AUDIT FINDINGS (2026-02-16)
+
+## 1) Critical Issues
+
+### 1.1 Security
+
+- [x] **AUDIT-NEW-001**: XSS vulnerability in ArtifactRendererView.tsx
+  - Location: `apps/desktop/src/components/UnifiedAgenticChat/InlineToolResults/ArtifactRendererView.tsx:293`
+  - Issue: Uses `dangerouslySetInnerHTML` without sanitization
+  - Risk: Potential cross-site scripting attacks when rendering untrusted content
+  - Recommendation: Add DOMPurify or similar sanitization before using dangerouslySetInnerHTML
+
+### 1.2 Backend - HTTP/Network
+
+- [x] **AUDIT-NEW-002**: reqwest client without timeouts in browser.rs
+  - Location: `apps/desktop/src-tauri/src/sys/commands/browser.rs:201-203`
+  - Issue: HTTP client created without timeout configuration
+  - Risk: Requests can hang indefinitely, causing UI to remain in loading state
+  - Recommendation: Add timeout configuration to all reqwest client instantiations
+
+- [x] **AUDIT-NEW-003**: Multiple client instantiations without client-level timeouts
+  - Location: Multiple files in `apps/desktop/src-tauri/src/sys/commands/`
+  - Issue: HTTP clients are instantiated without consistent timeout policies
+  - Risk: Inconsistent network behavior across different command handlers
+  - Recommendation: Create a shared HTTP client with configured timeouts
+
+### 1.3 Backend - Error Handling
+
+- [x] **AUDIT-NEW-004**: Multiple .unwrap() calls in production code
+  - Location: Multiple locations across backend codebase
+  - Issue: Using `.unwrap()` on Option/Result types in production code
+  - Risk: Panics causing application crashes on unexpected None/Err values
+  - Recommendation: Replace with proper error handling (?, match, unwrap_or, etc.)
+
+- [x] **AUDIT-NEW-005**: Inconsistent error types across codebase
+  - Location: Multiple files in `apps/desktop/src-tauri/src/`
+  - Issue: Mix of anyhow, rusqlite, String, and custom error enums
+  - Risk: Difficult error propagation and debugging
+  - Recommendation: Standardize on a unified error type strategy
+
+### 1.4 Command Parity
+
+- [x] **AUDIT-NEW-006**: Duplicate team command registrations
+  - Location: `apps/desktop/src-tauri/src/lib.rs:1130-1155` and `apps/desktop/src-tauri/src/lib.rs:1768-1793`
+  - Issue: Team commands registered twice in the invoke handler
+  - Risk: Potential conflicts, duplicate execution, or undefined behavior
+  - Recommendation: Remove duplicate registration block
+
+---
+
+## 2) High Priority Issues
+
+### 2.1 TypeScript
+
+- [x] **AUDIT-NEW-007**: Excessive `any` types in multiple files
+  - Location: Multiple frontend files
+  - Issue: Heavy use of `any` type defeats TypeScript safety
+  - Risk: Runtime errors due to type mismatches, difficult debugging
+  - Recommendation: Add proper type definitions or use `unknown` with type guards
+
+- [x] **AUDIT-NEW-008**: Type mismatch in auth.ts
+  - Location: `apps/desktop/src/api/auth.ts:552`
+  - Issue: Type inconsistency between function signature and implementation
+  - Risk: Runtime type errors, incorrect behavior
+  - Recommendation: Fix type alignment in auth.ts
+
+### 2.2 React Issues
+
+- [x] **AUDIT-NEW-009**: setInterval without cleanup in service files
+  - Location: Multiple service files in `apps/desktop/src/services/`
+  - Issue: setInterval called without corresponding clearInterval in cleanup
+  - Risk: Memory leaks, stale timers firing after component unmount
+  - Recommendation: Add cleanup in useEffect return or use useInterval hook
+
+- [x] **AUDIT-NEW-010**: Event listeners without cleanup in components
+  - Location: Multiple component files
+  - Issue: addEventListener called without removeEventListener in cleanup
+  - Risk: Memory leaks, duplicate event handlers, stale closures
+  - Recommendation: Add cleanup in useEffect return
+
+### 2.3 Backend - Error Handling
+
+- [x] **AUDIT-NEW-011**: Silently ignored errors in spawned tasks
+  - Location: Multiple locations with `tokio::spawn` calls
+  - Issue: Errors in spawned tasks are not propagated or logged
+  - Risk: Silent failures, difficult debugging, unexpected behavior
+  - Recommendation: Add proper error handling (await with ?, .await with error logging)
+
+---
+
+## 3) Medium Priority Issues
+
+### 3.1 Error Handling - Frontend
+
+- [x] **AUDIT-NEW-012**: Unhandled promise rejections with only console.error
+  - Location: Multiple frontend service/hook files
+  - Issue: Promise rejections caught but only logged to console
+  - Risk: Silent failures, no user feedback, difficult debugging
+  - Recommendation: Add proper error state handling or user-facing error messages
+
+- [ ] **AUDIT-NEW-013**: Silent failures in useEffect auto-load
+  - Location: Multiple hook files with auto-loading data
+  - Issue: Errors in useEffect auto-load are silently swallowed
+  - Risk: Users unaware of failed data loads, stale UI state
+  - Recommendation: Add error state and user feedback for auto-load failures
+
+### 3.2 Implementation Gaps
+
+- [x] **AUDIT-NEW-014**: Terminal env variable functions not implemented
+  - Location: `apps/desktop/src/hooks/useTerminal.ts` (clearHistory, setEnv, getEnv, etc.)
+  - Issue: Functions throw errors or return empty values
+  - Risk: Users expect functionality that doesn't work
+  - Recommendation: Implement all terminal environment variable functions
+
+---
+
+## 4) Low Priority Issues
+
+- [ ] Performance: Spawned tasks without proper error propagation (related to AUDIT-NEW-011)
+- [ ] Code organization: Consider extracting shared HTTP client configuration
+- [ ] Documentation: Document error handling strategy in codebase
+
+---
+
+## 5) Already Fixed Items
+
+All items from the original audit that have been fixed are listed in Section 1-3 above.
+
+---
+
+## 6) Manual QA Items
+
+The following require manual testing and cannot be fixed through code changes alone:
+
+- [ ] Verify XSS fix works correctly (AUDIT-NEW-001)
+- [ ] Test HTTP timeout behavior (AUDIT-NEW-002, AUDIT-NEW-003)
+- [ ] Verify duplicate team command registration doesn't cause issues (AUDIT-NEW-006)
+- [ ] Test terminal env variable functions (AUDIT-NEW-014)
+- [ ] Verify error handling improvements don't break existing functionality
+
+---
+
+# ORIGINAL AUDIT CONTENT (Historical)
+
 ## 1) Completed in this pass
 
 - [x] Implemented all google_batch commands and registered in Tauri invoke handler.

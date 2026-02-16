@@ -132,6 +132,61 @@ impl PtySession {
             .map_err(|e| Error::Other(format!("Failed to kill process: {}", e)))?;
         Ok(())
     }
+
+    /// Execute a command in the PTY and return its output synchronously.
+    /// This is useful for environment variable operations.
+    pub fn execute_command(&mut self, command: &str) -> Result<String> {
+        // Clear any existing output in the buffer
+        let mut clear_buffer = [0u8; 4096];
+        while let Ok(n) = self.read_output(&mut clear_buffer) {
+            if n == 0 {
+                break;
+            }
+        }
+
+        // Write the command with a newline to execute it
+        let full_command = format!("{}\n", command);
+        self.write(&full_command)?;
+
+        // Wait for and read the output
+        // Use a reasonable timeout to avoid hanging
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_millis(2000);
+        let mut output = String::new();
+
+        while start.elapsed() < timeout {
+            let mut buffer = [0u8; 4096];
+            match self.read_output(&mut buffer) {
+                Ok(n) if n > 0 => {
+                    let chunk = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    output.push_str(&chunk);
+
+                    // Check if we got a prompt back (indicates command completed)
+                    // This is a heuristic - we look for common prompt patterns
+                    if output.lines().last().map(|l| l.ends_with('$') || l.ends_with('#') || l.ends_with('>')).unwrap_or(false) {
+                        break;
+                    }
+                }
+                Ok(0) => {
+                    // No data available, small sleep
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(e) => {
+                    tracing::warn!("Error reading PTY output: {}", e);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        // Remove the echo of the command we sent and clean up the output
+        let lines: Vec<&str> = output.lines().collect();
+        if !lines.is_empty() && lines[0].trim() == command.trim() {
+            output = lines[1..].join("\n");
+        }
+
+        Ok(output.trim().to_string())
+    }
 }
 
 fn get_shell_command(shell_type: &ShellType) -> Result<CommandBuilder> {

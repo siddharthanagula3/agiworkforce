@@ -414,6 +414,11 @@ macro_rules! automation_command_handlers {
             $crate::sys::commands::terminal_ai_explain_error,
             $crate::sys::commands::terminal_smart_commit,
             $crate::sys::commands::terminal_ai_suggest_improvements,
+            $crate::sys::commands::terminal_set_env,
+            $crate::sys::commands::terminal_get_env,
+            $crate::sys::commands::terminal_list_env,
+            $crate::sys::commands::terminal_unset_env,
+            $crate::sys::commands::terminal_clear_history,
             // Browser
             $crate::sys::commands::browser_init,
             $crate::sys::commands::browser_check_status,
