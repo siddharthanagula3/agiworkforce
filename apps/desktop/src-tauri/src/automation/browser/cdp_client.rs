@@ -509,6 +509,16 @@ impl CdpClient {
             None => Ok(String::new()),
         }
     }
+
+    pub async fn get_content(&self) -> Result<String> {
+        let script = "document.documentElement.outerHTML";
+        let result = self.evaluate(script).await?;
+
+        match result.as_str() {
+            Some(html) => Ok(html.to_string()),
+            None => Ok(String::new()),
+        }
+    }
 }
 
 #[cfg(test)]

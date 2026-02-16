@@ -127,7 +127,8 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     }
 
     const preferredShell =
-      availableShells.find((shell) => shell.available && shell.shell_type === 'PowerShell') ??
+      availableShells.find((shell) => shell.available && shell.shell_type === 'zsh') ??
+      availableShells.find((shell) => shell.available && shell.shell_type === 'bash') ??
       availableShells.find((shell) => shell.available);
 
     if (!preferredShell || isCreating) {

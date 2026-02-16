@@ -40,6 +40,7 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
     "browser_focus",
     "browser_scroll_into_view",
     "browser_query_all",
+    "browser_get_content",
     "browser_execute_async_js",
     "browser_get_element_state",
     "browser_wait_for_interactive",
@@ -57,6 +58,9 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
     "document_create_pdf",
     "document_create_word",
     "document_create_excel",
+    // Media generation
+    "image_generate",
+    "video_generate",
 ];
 
 /// Build tool definitions for chat.
@@ -64,6 +68,10 @@ const DEFAULT_CHAT_TOOLS: &[&str] = &[
 /// If `capabilities` is provided, tools are filtered to only include those
 /// the model can actually use (e.g. no browser tools for models without
 /// `computerUse`).
+///
+/// AUDIT-TOOLS-048 fix: When no registry is provided, create one internally
+/// to ensure schema/runtime consistency. This prevents drift between the
+/// tool definitions sent to the LLM and the actual execution behavior.
 pub fn build_chat_tools(
     tool_registry: Option<&Arc<ToolRegistry>>,
     mcp_state: Option<&McpState>,
@@ -78,8 +86,19 @@ pub fn build_chat_tools(
             }
         }
     } else {
-        // Fallback: create basic tool definitions manually
-        tools.extend(create_builtin_tool_definitions());
+        // AUDIT-TOOLS-048 fix: Create a fresh registry to ensure schema consistency
+        // This matches what happens at execution time in execute_chat_tool,
+        // preventing schema/runtime drift between LLM tool definitions and actual execution.
+        if let Ok(registry) = create_tool_registry_for_schema() {
+            for tool_id in DEFAULT_CHAT_TOOLS {
+                if let Some(tool) = registry.get_tool(tool_id) {
+                    tools.push(convert_tool_to_definition(&tool));
+                }
+            }
+        } else {
+            // Fallback: create basic tool definitions manually if registry creation fails
+            tools.extend(create_builtin_tool_definitions());
+        }
     }
 
     // Add MCP tools if available
@@ -89,6 +108,14 @@ pub fn build_chat_tools(
     }
 
     tools
+}
+
+/// Create a ToolRegistry specifically for schema generation.
+/// This ensures the tool definitions sent to the LLM match what's executed at runtime.
+fn create_tool_registry_for_schema() -> Result<Arc<ToolRegistry>> {
+    let registry = Arc::new(ToolRegistry::new()?);
+    registry.register_all_tools()?;
+    Ok(registry)
 }
 
 /// Filter tools based on model capabilities.
@@ -116,6 +143,11 @@ pub fn filter_tools_by_capabilities(
             // Search tools require search capability
             if name == "search_web" {
                 return capabilities.search;
+            }
+
+            // Image/video generation tools require image generation capability
+            if name == "image_generate" || name == "video_generate" {
+                return capabilities.image_gen;
             }
 
             // Terminal execution is an app-side tool. It should remain available
@@ -237,7 +269,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "The path to the directory to list"
+                        "description": "The path to the directory to list (defaults to project folder or current working directory)"
                     },
                     "limit": {
                         "type": "integer",
@@ -257,7 +289,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "description": "Optional operation timeout in milliseconds (default 10000, max 30000)"
                     }
                 },
-                "required": ["path"]
+                "required": []
             }),
         },
         // Screenshot
@@ -333,6 +365,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         // Terminal Execute
+        // AUDIT-TERMINAL-055 fix: Expose timeout_ms and shell parameters to the model
         ToolDefinition {
             name: "terminal_execute".to_string(),
             description: "Execute a shell command. Use this when the user asks to run a command, script, or terminal operation.".to_string(),
@@ -346,9 +379,59 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     "cwd": {
                         "type": "string",
                         "description": "Working directory for the command (optional)"
+                    },
+                    "shell": {
+                        "type": "string",
+                        "description": "Shell to use: bash, zsh, fish, sh, powershell, cmd, wsl, gitbash (default: system default shell)"
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds for command execution (default: 60000, max: 300000)"
                     }
                 },
                 "required": ["command"]
+            }),
+        },
+        // Image Generate
+        ToolDefinition {
+            name: "image_generate".to_string(),
+            description: "Generate an image from a prompt. Use this when the user asks to create or generate an image.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "The image prompt"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Optional provider (e.g. dalle3, imagen, sdxl)"
+                    },
+                    "size": {
+                        "type": "string",
+                        "description": "Optional size (e.g. 1024x1024, landscape, portrait)"
+                    }
+                },
+                "required": ["prompt"]
+            }),
+        },
+        // Video Generate
+        ToolDefinition {
+            name: "video_generate".to_string(),
+            description: "Generate a video from a prompt. Use this when the user asks to create or generate a video.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "The video prompt"
+                    },
+                    "duration_seconds": {
+                        "type": "integer",
+                        "description": "Optional video duration in seconds"
+                    }
+                },
+                "required": ["prompt"]
             }),
         },
         // Browser Navigate
@@ -816,6 +899,21 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 "required": []
             }),
         },
+        // Browser Get Content
+        ToolDefinition {
+            name: "browser_get_content".to_string(),
+            description: "Get the full HTML content of the current page.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Tab ID (optional)"
+                    }
+                },
+                "required": []
+            }),
+        },
         // Browser Wait For Navigation
         ToolDefinition {
             name: "browser_wait_for_navigation".to_string(),
@@ -1107,6 +1205,19 @@ mod tests {
         let tools = vec![test_tool("terminal_execute"), test_tool("file_read")];
         let caps = ModelCapabilitiesDto {
             tools: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_hides_media_generation_when_image_capability_is_disabled() {
+        let tools = vec![test_tool("image_generate"), test_tool("video_generate")];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            image_gen: false,
             ..Default::default()
         };
 

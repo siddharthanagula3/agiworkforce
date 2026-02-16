@@ -9,6 +9,7 @@ pub struct WorkflowFilters {
     pub min_rating: Option<f64>,
     pub tags: Vec<String>,
     pub verified_only: bool,
+    pub featured_only: bool,
     pub sort_by: SortOption,
     pub search_query: Option<String>,
 }
@@ -20,6 +21,7 @@ impl Default for WorkflowFilters {
             min_rating: None,
             tags: Vec::new(),
             verified_only: false,
+            featured_only: false,
             sort_by: SortOption::MostCloned,
             search_query: None,
         }
@@ -156,6 +158,10 @@ impl WorkflowMarketplace {
 
         if filters.verified_only {
             query.push_str(" AND is_verified = 1");
+        }
+
+        if filters.featured_only {
+            query.push_str(" AND is_featured = 1");
         }
 
         if let Some(search) = &filters.search_query {

@@ -149,7 +149,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       const { filters, currentPage, pageSize } = get();
       const workflows = await invoke<PublishedWorkflow[]>('get_published_workflows', {
         category: filters.category === 'all' ? null : filters.category,
-        sortBy: filters.sortBy,
+        sort_by: filters.sortBy,
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
@@ -181,7 +181,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchMyWorkflows: async (userId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const workflows = await invoke<PublishedWorkflow[]>('get_my_published_workflows', { userId });
+      const workflows = await invoke<PublishedWorkflow[]>('get_my_published_workflows', { user_id: userId });
       set({ myPublishedWorkflows: workflows, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch my workflows:', error);
@@ -192,7 +192,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchWorkflowById: async (workflowId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const workflow = await invoke<PublishedWorkflow>('get_workflow_by_id', { workflowId });
+      const workflow = await invoke<PublishedWorkflow>('get_workflow_by_id', { workflow_id: workflowId });
       set({ selectedWorkflow: workflow, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch workflow:', error);
@@ -202,7 +202,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowReviews: async (workflowId: string) => {
     try {
-      const reviews = await invoke<WorkflowReview[]>('get_workflow_reviews', { workflowId });
+      const reviews = await invoke<WorkflowReview[]>('get_workflow_reviews', { workflow_id: workflowId });
       set({ workflowReviews: reviews });
     } catch (error) {
       console.error('Failed to fetch reviews:', error);
@@ -211,7 +211,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowComments: async (workflowId: string) => {
     try {
-      const comments = await invoke<WorkflowComment[]>('get_workflow_comments', { workflowId });
+      const comments = await invoke<WorkflowComment[]>('get_workflow_comments', { workflow_id: workflowId });
       set({ workflowComments: comments });
     } catch (error) {
       console.error('Failed to fetch comments:', error);
@@ -220,7 +220,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowAnalytics: async (workflowId: string) => {
     try {
-      const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', { workflowId });
+      const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', { workflow_id: workflowId });
       set({ workflowAnalytics: analytics });
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
@@ -278,13 +278,13 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       const { filters, currentPage, pageSize } = get();
       const workflows = await invoke<PublishedWorkflow[]>('search_marketplace_workflows', {
-        searchQuery: filters.searchQuery || null,
+        search_query: filters.searchQuery || null,
         category: filters.category === 'all' ? null : filters.category,
-        sortBy: filters.sortBy,
-        minRating: filters.minRating,
+        sort_by: filters.sortBy,
+        min_rating: filters.minRating,
         tags: filters.tags,
-        verifiedOnly: filters.verifiedOnly,
-        featuredOnly: filters.featuredOnly,
+        verified_only: filters.verifiedOnly,
+        featured_only: filters.featuredOnly,
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
       });
@@ -300,10 +300,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       // MKT-007 fix: Use explicit parameter object to avoid type bypass
       const clonedId = await invoke<string>('clone_marketplace_workflow', {
-        workflowId: request.workflow_id,
-        userId: request.user_id,
-        userName: request.user_name,
-        customizeTitle: request.customize_title,
+        workflow_id: request.workflow_id,
+        user_id: request.user_id,
+        user_name: request.user_name,
+        customize_title: request.customize_title,
       });
 
       const { workflows, featuredWorkflows, trendingWorkflows } = get();
@@ -355,7 +355,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   unpublishWorkflow: async (workflowId: string) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('unpublish_workflow', { workflowId });
+      await invoke('unpublish_workflow', { workflow_id: workflowId, user_id: 'default' });
       set((state) => ({
         myPublishedWorkflows: state.myPublishedWorkflows.filter((w) => w.id !== workflowId),
         isLoading: false,
@@ -371,10 +371,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     try {
       // MKT-007 fix: Use explicit parameter object to avoid type bypass
       await invoke('rate_workflow', {
-        workflowId: request.workflow_id,
-        userId: request.user_id,
+        workflow_id: request.workflow_id,
+        user_id: request.user_id,
         rating: request.rating,
-        reviewText: request.review_text,
+        comment: request.review_text,
       });
 
       await get().fetchWorkflowReviews(request.workflow_id);
@@ -390,7 +390,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   favoriteWorkflow: async (workflowId: string, userId: string) => {
     try {
-      await invoke('favorite_workflow', { workflowId, userId });
+      await invoke('favorite_workflow', { workflow_id: workflowId, user_id: userId });
     } catch (error) {
       console.error('Failed to favorite workflow:', error);
       throw error;
@@ -399,7 +399,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   unfavoriteWorkflow: async (workflowId: string, userId: string) => {
     try {
-      await invoke('unfavorite_workflow', { workflowId, userId });
+      await invoke('unfavorite_workflow', { workflow_id: workflowId, user_id: userId });
     } catch (error) {
       console.error('Failed to unfavorite workflow:', error);
       throw error;
@@ -408,7 +408,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   isFavorited: async (workflowId: string, userId: string) => {
     try {
-      const favorited = await invoke<boolean>('is_workflow_favorited', { workflowId, userId });
+      const favorited = await invoke<boolean>('is_workflow_favorited', { workflow_id: workflowId, user_id: userId });
       return favorited;
     } catch (error) {
       console.error('Failed to check favorite status:', error);
@@ -436,7 +436,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     comment: string,
   ) => {
     try {
-      await invoke('comment_on_workflow', { workflowId, userId, userName, comment });
+      await invoke('comment_on_workflow', { workflow_id: workflowId, user_id: userId, user_name: userName, comment });
 
       await get().fetchWorkflowComments(workflowId);
     } catch (error) {
@@ -447,7 +447,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   deleteComment: async (commentId: string) => {
     try {
-      await invoke('delete_workflow_comment', { commentId });
+      await invoke('delete_workflow_comment', { comment_id: commentId, user_id: 'default' });
 
       set((state) => ({
         workflowComments: state.workflowComments.filter((c) => c.id !== commentId),
@@ -460,7 +460,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   getShareUrl: async (workflowId: string) => {
     try {
-      const url = await invoke<string>('get_workflow_share_url', { workflowId });
+      const url = await invoke<string>('get_workflow_share_url', { workflow_id: workflowId });
       return url;
     } catch (error) {
       console.error('Failed to get share URL:', error);
@@ -470,7 +470,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   shareWorkflow: async (workflowId: string, platform: string) => {
     try {
-      const url = await invoke<string>('share_workflow', { workflowId, platform });
+      const url = await invoke<string>('share_workflow', { workflow_id: workflowId, platform });
       return url;
     } catch (error) {
       console.error('Failed to generate share link:', error);
@@ -480,7 +480,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   getEmbedCode: async (workflowId: string) => {
     try {
-      const embedCode = await invoke<string>('get_workflow_embed_code', { workflowId });
+      const embedCode = await invoke<string>('get_workflow_embed_code', { workflow_id: workflowId });
       return embedCode;
     } catch (error) {
       console.error('Failed to get embed code:', error);
@@ -490,7 +490,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   trackWorkflowView: async (workflowId: string) => {
     try {
-      await invoke('track_workflow_view', { workflowId });
+      await invoke('increment_workflow_view_count', { workflow_id: workflowId });
     } catch (error) {
       console.error('Failed to track view:', error);
     }
