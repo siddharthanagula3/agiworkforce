@@ -67,7 +67,7 @@ export function Sidebar({
   );
 
   const handleNewChat = useCallback(async () => {
-    resetInFlightChatState();
+    await resetInFlightChatState();
     const id = await createConversation('New chat');
     selectConversationFn(id);
   }, [createConversation, selectConversationFn]);

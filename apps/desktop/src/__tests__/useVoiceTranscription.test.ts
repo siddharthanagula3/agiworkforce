@@ -66,7 +66,7 @@ describe('useVoiceTranscription', () => {
     const onResult = vi.fn();
     const { result } = renderHook(() =>
       useVoiceTranscription({
-        preferLocal: true,
+        preferWhisperCloud: true,
         language: 'en',
         onResult,
       }),

@@ -119,10 +119,19 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       const outputEvent = `terminal-output-${sessionId}`;
       const exitEvent = `terminal-exit-${sessionId}`;
 
-      const outputUnlisten = await listen<string>(outputEvent, (event) => {
+      // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
+      const outputUnlisten = await listen<string | { stream: string; data: string }>(outputEvent, (event) => {
+        let data: string;
+        if (typeof event.payload === 'string') {
+          data = event.payload;
+        } else if (event.payload && typeof event.payload === 'object' && 'data' in event.payload) {
+          data = event.payload.data;
+        } else {
+          data = String(event.payload);
+        }
         onOutput?.({
           sessionId,
-          data: event.payload,
+          data,
           timestamp: Date.now(),
         });
       });
@@ -162,7 +171,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const sessionId = await invoke<string>('terminal_create_session', {
-          shellType,
+          shell_type: shellType,
           cwd: cwd || undefined,
         });
 
@@ -188,7 +197,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         disconnectFromSession(sessionId);
-        await invoke('terminal_close_session', { sessionId });
+        await invoke('terminal_kill', { session_id: sessionId });
       } catch (err) {
         throw handleError(err);
       } finally {
@@ -204,8 +213,14 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     setError(null);
 
     try {
-      const sessions = await invoke<TerminalSession[]>('terminal_list_sessions');
-      return sessions;
+      const sessionIds = await invoke<string[]>('terminal_list_sessions');
+      return sessionIds.map((id) => ({
+        id,
+        shellType: 'default',
+        title: `Terminal ${id.slice(0, 8)}`,
+        active: true,
+        createdAt: Date.now(),
+      }));
     } catch (err) {
       throw handleError(err);
     } finally {
@@ -219,7 +234,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        await invoke('terminal_send_input', { sessionId, data });
+        await invoke('terminal_send_input', { session_id: sessionId, data });
       } catch (err) {
         throw handleError(err);
       }
@@ -233,8 +248,11 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        const output = await invoke<string>('terminal_get_output', { sessionId });
-        return output;
+        const history = await invoke<string[]>('terminal_get_history', {
+          session_id: sessionId,
+          limit: 1,
+        });
+        return history.join('\n');
       } catch (err) {
         throw handleError(err);
       }
@@ -248,7 +266,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        await invoke('terminal_resize', { sessionId, cols, rows });
+        await invoke('terminal_resize', { session_id: sessionId, cols, rows });
       } catch (err) {
         throw handleError(err);
       }
@@ -263,7 +281,7 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
 
       try {
         const history = await invoke<string[]>('terminal_get_history', {
-          sessionId,
+          session_id: sessionId,
           limit,
         });
         return history;
@@ -280,11 +298,14 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       setError(null);
 
       try {
-        const results = await invoke<string[]>('terminal_search_history', {
-          sessionId,
-          query,
-          limit,
+        const history = await invoke<string[]>('terminal_get_history', {
+          session_id: sessionId,
+          limit: Math.max(limit * 2, 100),
         });
+        const normalizedQuery = query.trim().toLowerCase();
+        const results = history
+          .filter((entry) => entry.toLowerCase().includes(normalizedQuery))
+          .slice(0, limit);
         return results;
       } catch (err) {
         throw handleError(err);
@@ -293,75 +314,54 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Clear command history
+  // Clear command history - NOT IMPLEMENTED in backend
+  // Note: The backend does not support clearing command history
   const clearHistory = useCallback(
-    async (sessionId: string): Promise<void> => {
+    async (_sessionId: string): Promise<void> => {
       setError(null);
-
-      try {
-        await invoke('terminal_clear_history', { sessionId });
-      } catch (err) {
-        throw handleError(err);
-      }
+      console.warn('terminal_clear_history is not implemented in backend');
+      // Throwing error to make it clear this operation is not supported
+      throw new Error('clearHistory is not implemented: command history cannot be cleared');
     },
-    [handleError],
+    [],
   );
 
-  // Set environment variable
+  // Set environment variable - NOT IMPLEMENTED in backend
+  // Note: The backend does not support setting env vars for PTY sessions
   const setEnv = useCallback(
-    async (sessionId: string, key: string, value: string): Promise<void> => {
+    async (_sessionId: string, _key: string, _value: string): Promise<void> => {
       setError(null);
-
-      try {
-        await invoke('terminal_set_env', { sessionId, key, value });
-      } catch (err) {
-        throw handleError(err);
-      }
+      console.warn('terminal_set_env is not implemented in backend');
+      throw new Error('setEnv is not implemented: cannot modify environment variables');
     },
-    [handleError],
+    [],
   );
 
-  // Get environment variable
+  // Get environment variable - NOT IMPLEMENTED in backend
   const getEnv = useCallback(
-    async (sessionId: string, key: string): Promise<string | null> => {
+    async (_sessionId: string, _key: string): Promise<string | null> => {
       setError(null);
-
-      try {
-        const value = await invoke<string | null>('terminal_get_env', { sessionId, key });
-        return value;
-      } catch (err) {
-        throw handleError(err);
-      }
+      console.warn('terminal_get_env is not implemented in backend');
+      throw new Error('getEnv is not implemented: cannot read environment variables');
     },
-    [handleError],
+    [],
   );
 
-  // List all environment variables
-  const listEnv = useCallback(async (sessionId: string): Promise<EnvironmentVariable[]> => {
+  // List all environment variables - NOT IMPLEMENTED in backend
+  const listEnv = useCallback(async (_sessionId: string): Promise<EnvironmentVariable[]> => {
     setError(null);
-
-    try {
-      const envVars = await invoke<EnvironmentVariable[]>('terminal_list_env', { sessionId });
-      return envVars;
-    } catch {
-      // If the backend doesn't support listing env vars, return empty array
-      console.warn('terminal_list_env not available, returning empty array');
-      return [];
-    }
+    console.warn('terminal_list_env is not implemented in backend');
+    throw new Error('listEnv is not implemented: cannot list environment variables');
   }, []);
 
-  // Unset environment variable
+  // Unset environment variable - NOT IMPLEMENTED in backend
   const unsetEnv = useCallback(
-    async (sessionId: string, key: string): Promise<void> => {
+    async (_sessionId: string, _key: string): Promise<void> => {
       setError(null);
-
-      try {
-        await invoke('terminal_unset_env', { sessionId, key });
-      } catch (err) {
-        throw handleError(err);
-      }
+      console.warn('terminal_unset_env is not implemented in backend');
+      throw new Error('unsetEnv is not implemented: cannot unset environment variables');
     },
-    [handleError],
+    [],
   );
 
   // Detect available shells

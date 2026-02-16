@@ -615,6 +615,43 @@ pub async fn email_delete(app_handle: AppHandle, account_id: i64, uid: u32) -> R
 }
 
 #[command]
+pub async fn email_move_message(
+    app_handle: AppHandle,
+    account_id: i64,
+    uid: u32,
+    from_folder: String,
+    to_folder: String,
+) -> Result<()> {
+    info!(
+        "Moving message UID {} from {} to {} for account {}",
+        uid, from_folder, to_folder, account_id
+    );
+
+    let conn = open_connection(&app_handle)?;
+    let record = fetch_account(&conn, account_id)?;
+    let password = get_email_password(&conn, account_id)?;
+
+    let mut imap = ImapClient::connect(
+        &record.imap_host,
+        record.imap_port,
+        &record.email,
+        &password,
+        record.imap_use_tls,
+    )
+    .await?;
+
+    imap.move_email(uid, &from_folder, &to_folder).await?;
+    imap.logout().await?;
+
+    info!(
+        "Successfully moved message UID {} from {} to {}",
+        uid, from_folder, to_folder
+    );
+
+    Ok(())
+}
+
+#[command]
 pub async fn email_download_attachment(
     app_handle: AppHandle,
     account_id: i64,
@@ -674,6 +711,103 @@ pub async fn email_send(app_handle: AppHandle, request: SendEmailRequest) -> Res
     };
 
     smtp.send(outgoing).await
+}
+
+// AUDIT-EMAIL-077 fix: Alias for email_fetch_inbox for frontend compatibility
+#[command]
+pub async fn email_list_messages(
+    app_handle: AppHandle,
+    account_id: i64,
+    folder: Option<String>,
+    limit: Option<usize>,
+    filter: Option<EmailFilter>,
+) -> Result<Vec<Email>> {
+    email_fetch_inbox(app_handle, account_id, folder, limit, filter).await
+}
+
+// AUDIT-EMAIL-077 fix: Alias for email_send for frontend compatibility
+#[command]
+pub async fn email_send_message(app_handle: AppHandle, request: SendEmailRequest) -> Result<String> {
+    email_send(app_handle, request).await
+}
+
+// AUDIT-EMAIL-077 fix: New command to get a single message
+#[command]
+pub async fn email_get_message(
+    app_handle: AppHandle,
+    account_id: i64,
+    folder: String,
+    uid: u32,
+) -> Result<Email> {
+    let conn = open_connection(&app_handle)?;
+    let record = fetch_account(&conn, account_id)?;
+    let password = get_email_password(&conn, account_id)?;
+
+    let mut imap = ImapClient::connect(
+        &record.imap_host,
+        record.imap_port,
+        &record.email,
+        &password,
+        record.imap_use_tls,
+    )
+    .await?;
+
+    // Fetch emails from the folder and find the one with matching UID
+    let emails = imap.fetch_emails(account_id, &folder, 100, None).await?;
+    imap.logout().await?;
+
+    emails.into_iter()
+        .find(|e| e.uid == uid)
+        .ok_or_else(|| Error::Generic("Message not found".to_string()))
+}
+
+// AUDIT-EMAIL-077 fix: New command to search emails
+#[command]
+pub async fn email_search(
+    app_handle: AppHandle,
+    account_id: i64,
+    query: String,
+    folder: Option<String>,
+    limit: Option<usize>,
+) -> Result<EmailSearchResult> {
+    let conn = open_connection(&app_handle)?;
+    let record = fetch_account(&conn, account_id)?;
+    let password = get_email_password(&conn, account_id)?;
+
+    let mut imap = ImapClient::connect(
+        &record.imap_host,
+        record.imap_port,
+        &record.email,
+        &password,
+        record.imap_use_tls,
+    )
+    .await?;
+
+    let folder_name = folder.unwrap_or_else(|| DEFAULT_FOLDER.to_string());
+    let max_messages = limit.unwrap_or(50);
+
+    // Use fetch_emails with subject filter to simulate search
+    let filter = EmailFilter {
+        subject_contains: Some(query.clone()),
+        ..Default::default()
+    };
+    
+    let emails = imap.fetch_emails(account_id, &folder_name, max_messages, Some(filter)).await?;
+    let total = emails.len();
+    imap.logout().await?;
+
+    Ok(EmailSearchResult {
+        messages: emails,
+        total,
+        query,
+    })
+}
+
+#[derive(Debug, Serialize)]
+pub struct EmailSearchResult {
+    pub messages: Vec<Email>,
+    pub total: usize,
+    pub query: String,
 }
 
 async fn contact_manager(app_handle: &AppHandle) -> Result<ContactManager> {

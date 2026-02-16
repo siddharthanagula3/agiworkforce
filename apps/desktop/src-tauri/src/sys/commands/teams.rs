@@ -3,6 +3,7 @@ use crate::features::teams::{
     TeamBilling, TeamBillingManager, TeamInvitation, TeamManager, TeamMember, TeamResource,
     TeamResourceManager, TeamRole, TeamUpdates, UsageMetrics,
 };
+use crate::features::teams::team_manager::TeamSettings;
 use crate::sys::commands::AppDatabase;
 use serde_json::json;
 use tauri::State;
@@ -36,6 +37,46 @@ pub async fn update_team(
         name,
         description,
         settings: None,
+    };
+    manager.update_team(&team_id, updates)
+}
+
+#[tauri::command]
+pub async fn update_team_settings(
+    team_id: String,
+    default_member_role: Option<String>,
+    allow_resource_sharing: Option<bool>,
+    require_approval_for_automations: Option<bool>,
+    enable_activity_notifications: Option<bool>,
+    max_members: Option<usize>,
+    db: State<'_, AppDatabase>,
+) -> Result<(), String> {
+    let manager = TeamManager::new(db.conn.clone());
+    let existing = manager
+        .get_team(&team_id)?
+        .ok_or_else(|| format!("Team not found: {}", team_id))?;
+
+    let resolved_role = if let Some(role) = default_member_role {
+        TeamRole::from_str(&role).ok_or_else(|| format!("Invalid role: {}", role))?
+    } else {
+        existing.settings.default_member_role
+    };
+
+    let merged_settings = TeamSettings {
+        default_member_role: resolved_role,
+        allow_resource_sharing: allow_resource_sharing
+            .unwrap_or(existing.settings.allow_resource_sharing),
+        require_approval_for_automations: require_approval_for_automations
+            .unwrap_or(existing.settings.require_approval_for_automations),
+        enable_activity_notifications: enable_activity_notifications
+            .unwrap_or(existing.settings.enable_activity_notifications),
+        max_members: max_members.or(existing.settings.max_members),
+    };
+
+    let updates = TeamUpdates {
+        name: None,
+        description: None,
+        settings: Some(merged_settings),
     };
     manager.update_team(&team_id, updates)
 }

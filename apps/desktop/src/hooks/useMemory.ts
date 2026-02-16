@@ -285,7 +285,8 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
       setError(null);
 
       try {
-        const deleted = await invoke<boolean>('memory_forget', {
+        // AUDIT-MEMORY-073 fix: Use memory_forget_topic which accepts category and topic
+        const deleted = await invoke<boolean>('memory_forget_topic', {
           category,
           topic,
         });

@@ -141,6 +141,18 @@ pub async fn memory_get_session_context(state: State<'_, MemoryState>) -> Result
     state.manager.get_session_context()
 }
 
+/// List all memory categories
+#[command]
+pub async fn memory_list_categories() -> Result<Vec<String>> {
+    // Return the standard memory categories
+    Ok(vec![
+        "preference".to_string(),
+        "fact".to_string(),
+        "decision".to_string(),
+        "context".to_string(),
+    ])
+}
+
 /// Export all memories for backup
 #[command]
 pub async fn memory_export_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {

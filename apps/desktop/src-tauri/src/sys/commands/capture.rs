@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 #[cfg(not(target_os = "macos"))]
 use crate::automation::screen::{capture_primary_screen, capture_region, capture_window};
+#[cfg(target_os = "macos")]
+use crate::automation::screen::{capture_region, capture_window};
 use crate::{
     automation::screen::{enumerate_windows, paste_from_clipboard},
     sys::commands::AppDatabase,
@@ -106,7 +108,8 @@ pub async fn capture_screen_full(
             .as_secs() as i64;
 
         let pixels = with_hidden_main_window_for_capture(&app_handle, || {
-            capture_with_macos_screencapture(&["-x"])
+            std::panic::catch_unwind(|| capture_with_macos_screencapture(&["-x"]))
+                .map_err(|_| "Capture backend panicked while capturing full screen".to_string())?
         })?;
         let metadata = CaptureMetadata {
             width: pixels.width(),
@@ -193,16 +196,27 @@ pub async fn capture_screen_region(
             .unwrap_or_default()
             .as_secs() as i64;
 
-        // Use native interactive region picker to capture from the real desktop.
-        let pixels = with_hidden_main_window_for_capture(&app_handle, || {
-            capture_with_macos_screencapture(&["-i", "-s", "-x"])
+        // Use the provided region coordinates instead of interactive picker.
+        let capture = with_hidden_main_window_for_capture(&app_handle, || {
+            std::panic::catch_unwind(|| capture_region(x, y, width, height))
+                .map_err(|_| "Capture backend panicked while capturing region".to_string())?
+                .map_err(|e| format!("Failed to capture region: {e}"))
         })?;
+
+        let actual_width = capture.pixels.width();
+        let actual_height = capture.pixels.height();
+
         let metadata = CaptureMetadata {
-            width: pixels.width(),
-            height: pixels.height(),
+            width: actual_width,
+            height: actual_height,
             window_title: None,
-            region: None,
-            screen_index: None,
+            region: Some(Region {
+                x,
+                y,
+                width: actual_width,
+                height: actual_height,
+            }),
+            screen_index: Some(capture.screen_index),
         };
 
         let result = persist_capture(
@@ -210,7 +224,7 @@ pub async fn capture_screen_region(
             &db,
             &capture_id,
             CaptureType::Region,
-            &pixels,
+            &capture.pixels,
             &metadata,
             conversation_id,
             timestamp,
@@ -451,22 +465,32 @@ pub async fn capture_screen_window(
             .unwrap_or_default()
             .as_secs() as i64;
 
-        // Use native interactive window picker to target any app window on screen.
-        let pixels = with_hidden_main_window_for_capture(&app_handle, || {
-            capture_with_macos_screencapture(&["-i", "-W", "-x"]).or_else(|primary_err| {
-                tracing::warn!(
-                    "macOS window capture with -W failed, retrying legacy -w mode: {}",
-                    primary_err
-                );
-                capture_with_macos_screencapture(&["-i", "-w", "-x"])
-            })
+        // Use the provided window handle instead of interactive picker.
+        let hwnd_val: isize = hwnd
+            .parse()
+            .map_err(|e| format!("Invalid window handle: {}", e))?;
+
+        let capture = with_hidden_main_window_for_capture(&app_handle, || {
+            std::panic::catch_unwind(|| capture_window(hwnd_val))
+                .map_err(|_| "Capture backend panicked while capturing window".to_string())?
+                .map_err(|e| format!("Failed to capture window: {e}"))
         })?;
+
+        let window_title = crate::automation::screen::enumerate_windows()
+            .ok()
+            .and_then(|windows| {
+                windows
+                    .iter()
+                    .find(|w| w.hwnd == hwnd_val)
+                    .map(|w| w.title.clone())
+            });
+
         let metadata = CaptureMetadata {
-            width: pixels.width(),
-            height: pixels.height(),
-            window_title: None,
+            width: capture.pixels.width(),
+            height: capture.pixels.height(),
+            window_title,
             region: None,
-            screen_index: None,
+            screen_index: Some(capture.screen_index),
         };
 
         let result = persist_capture(
@@ -474,7 +498,7 @@ pub async fn capture_screen_window(
             &db,
             &capture_id,
             CaptureType::Window,
-            &pixels,
+            &capture.pixels,
             &metadata,
             conversation_id,
             timestamp,
@@ -642,6 +666,53 @@ fn persist_capture(
 }
 
 #[cfg(target_os = "macos")]
+struct WindowRestoreGuard {
+    app_handle: tauri::AppHandle,
+    was_visible: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl WindowRestoreGuard {
+    fn new(app_handle: &tauri::AppHandle) -> Self {
+        let mut was_visible = false;
+        if let Some(window) = app_handle.get_webview_window("main") {
+            if window.is_visible().unwrap_or(false) {
+                was_visible = true;
+                if let Err(e) = window.hide() {
+                    tracing::warn!("Failed to hide main window before capture: {}", e);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(120));
+            }
+        }
+        Self {
+            app_handle: app_handle.clone(),
+            was_visible,
+        }
+    }
+
+    fn restore(&self) {
+        if self.was_visible {
+            if let Some(window) = self.app_handle.get_webview_window("main") {
+                // AUDIT-CAPTURE-041 fix: Log errors instead of silently ignoring
+                if let Err(e) = window.show() {
+                    tracing::error!("Failed to show main window after capture: {}", e);
+                }
+                if let Err(e) = window.set_focus() {
+                    tracing::error!("Failed to focus main window after capture: {}", e);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for WindowRestoreGuard {
+    fn drop(&mut self) {
+        self.restore();
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn with_hidden_main_window_for_capture<T, F>(
     app_handle: &tauri::AppHandle,
     action: F,
@@ -649,24 +720,10 @@ fn with_hidden_main_window_for_capture<T, F>(
 where
     F: FnOnce() -> Result<T, String>,
 {
-    let mut was_visible = false;
-    if let Some(window) = app_handle.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            was_visible = true;
-            let _ = window.hide();
-            std::thread::sleep(std::time::Duration::from_millis(120));
-        }
-    }
-
+    let _guard = WindowRestoreGuard::new(app_handle);
     let result = action();
-
-    if was_visible {
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-    }
-
+    // Explicitly restore before returning (guard will also restore on drop if this fails)
+    _guard.restore();
     result
 }
 

@@ -582,3 +582,86 @@ fn provider_to_string(provider: CalendarProvider) -> &'static str {
         CalendarProvider::Outlook => "outlook",
     }
 }
+
+// AUDIT-CALENDAR-078 fix: Add missing calendar_get_event command
+#[command]
+pub async fn calendar_get_event(
+    account_id: String,
+    calendar_id: String,
+    event_id: String,
+    state: State<'_, CalendarState>,
+    app: AppHandle,
+) -> Result<CalendarEvent> {
+    let conn = open_connection(&app)?;
+    let (info, _) = fetch_calendar_account(&conn, &account_id)?;
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None)?;
+
+    // Get events from the calendar and find the specific event
+    let now = Utc::now();
+    let end_time = now + chrono::Duration::days(30);
+    
+    let response = state.manager.list_events(&account_id, &ListEventsRequest {
+        calendar_id: calendar_id.clone(),
+        start_time: now,
+        end_time,
+        max_results: Some(100),
+        show_deleted: Some(false),
+    }).await?;
+    
+    // Find the event by ID
+    response.events.into_iter()
+        .find(|e| e.id == event_id)
+        .ok_or_else(|| Error::Generic("Event not found".to_string()))
+}
+
+// AUDIT-CALENDAR-078 fix: Add missing calendar_sync command
+#[command]
+pub async fn calendar_sync(
+    account_id: String,
+    state: State<'_, CalendarState>,
+    app: AppHandle,
+) -> Result<CalendarSyncResponse> {
+    let conn = open_connection(&app)?;
+    let (info, _) = fetch_calendar_account(&conn, &account_id)?;
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None)?;
+
+    // Sync calendars and events
+    let calendars = state.manager.list_calendars(&account_id).await?;
+    let mut events_synced = 0;
+    let mut errors = Vec::new();
+
+    let now = Utc::now();
+    let end_time = now + chrono::Duration::days(30);
+
+    for calendar in &calendars {
+        match state.manager.list_events(&account_id, &ListEventsRequest {
+            calendar_id: calendar.id.clone(),
+            start_time: now,
+            end_time,
+            max_results: Some(100),
+            show_deleted: Some(false),
+        }).await {
+            Ok(response) => events_synced += response.events.len(),
+            Err(e) => errors.push(format!("Failed to sync calendar {}: {}", calendar.id, e)),
+        }
+    }
+
+    persist_account(&state, &app, &account_id)?;
+
+    Ok(CalendarSyncResponse {
+        calendars_synced: calendars.len(),
+        events_synced,
+        errors,
+    })
+}
+
+#[derive(Serialize)]
+pub struct CalendarSyncResponse {
+    pub calendars_synced: usize,
+    pub events_synced: usize,
+    pub errors: Vec<String>,
+}

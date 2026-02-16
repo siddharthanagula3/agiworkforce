@@ -20,6 +20,10 @@ describe('tool timeout policy', () => {
   it('allows long runtime for terminal and document creation tools', () => {
     expect(resolveToolHardTimeoutMs('terminal_execute')).toBe(300_000);
     expect(resolveToolHardTimeoutMs('document_create_pdf')).toBe(300_000);
+    expect(resolveToolHardTimeoutMs('image_generate')).toBe(300_000);
+    expect(resolveToolHardTimeoutMs('media_generate_image')).toBe(300_000);
+    expect(resolveToolHardTimeoutMs('video_generate')).toBe(300_000);
+    expect(resolveToolHardTimeoutMs('media_generate_video')).toBe(300_000);
     expect(shouldAbortGenerationOnToolTimeout('terminal_execute')).toBe(false);
   });
 

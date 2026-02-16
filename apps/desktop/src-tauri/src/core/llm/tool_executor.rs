@@ -91,12 +91,18 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("App handle not available for browser automation"))?;
         let browser_state = app.state::<BrowserStateWrapper>();
 
+        // Helper to get client by tab_id from args, or fall back to active client
+        let get_client = || async {
+            let tab_id = args
+                .get("tab_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            browser_state.get_client_for_tab(tab_id).await.map_err(anyhow::Error::msg)
+        };
+
         match tool_id {
             "browser_get_url" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let url = client.get_url().await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
@@ -106,10 +112,7 @@ impl ToolExecutor {
                 })
             }
             "browser_get_title" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let title = client.get_title().await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
@@ -119,10 +122,7 @@ impl ToolExecutor {
                 })
             }
             "browser_go_back" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let tab_manager = browser_state
                     .get_tab_manager()
                     .map_err(anyhow::Error::msg)?;
@@ -140,10 +140,7 @@ impl ToolExecutor {
                 })
             }
             "browser_go_forward" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let tab_manager = browser_state
                     .get_tab_manager()
                     .map_err(anyhow::Error::msg)?;
@@ -161,10 +158,7 @@ impl ToolExecutor {
                 })
             }
             "browser_reload" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let tab_manager = browser_state
                     .get_tab_manager()
                     .map_err(anyhow::Error::msg)?;
@@ -181,30 +175,175 @@ impl ToolExecutor {
                     metadata: HashMap::new(),
                 })
             }
-            "browser_wait_for_navigation" => Err(anyhow!(
-                "browser_wait_for_navigation is not implemented in the browser subsystem yet."
-            )),
-            "browser_get_dom_snapshot" => Err(anyhow!(
-                "browser_get_dom_snapshot is not implemented in the browser subsystem yet."
-            )),
-            "browser_execute_async_js" => Err(anyhow!(
-                "browser_execute_async_js is not implemented in the browser subsystem yet."
-            )),
-            "browser_get_element_state" => Err(anyhow!(
-                "browser_get_element_state is not implemented in the browser subsystem yet."
-            )),
-            "browser_wait_for_interactive" => Err(anyhow!(
-                "browser_wait_for_interactive is not implemented in the browser subsystem yet."
-            )),
+            "browser_wait_for_navigation" => {
+                let (client, tab_id) = get_client().await?;
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(30000);
+                let script = format!(
+                    r#"
+                    new Promise((resolve, reject) => {{
+                        const navTimeout = {};
+                        let lastUrl = window.location.href;
+                        let resolved = false;
+
+                        const check = () => {{
+                            if (window.location.href !== lastUrl) {{
+                                resolved = true;
+                                resolve({{ newUrl: window.location.href }});
+                                return;
+                            }}
+
+                            if (!resolved) {{
+                                setTimeout(check, 100);
+                            }}
+                        }};
+
+                        setTimeout(() => {{
+                            if (!resolved) {{
+                                reject(new Error('Navigation timeout'));
+                            }}
+                        }}, navTimeout);
+
+                        check();
+                    }})
+                    "#,
+                    timeout_ms
+                );
+                let result = client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "result": result, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_execute_async_js" => {
+                let (client, tab_id) = get_client().await?;
+                let script = args
+                    .get("script")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing script parameter"))?;
+                // For async JS, wrap it in a Promise and await it
+                let await_promise = args
+                    .get("await_promise")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let wrapped_script = if await_promise {
+                    format!("new Promise((resolve) => {{ {}; resolve(undefined); }})", script)
+                } else {
+                    script.to_string()
+                };
+                let result = client.evaluate(&wrapped_script).await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "result": result, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_element_state" => {
+                let (client, tab_id) = get_client().await?;
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let script = format!(
+                    r#"
+                    (function() {{
+                        const el = document.querySelector('{}');
+                        if (!el) return {{ error: 'Element not found' }};
+                        const rect = el.getBoundingClientRect();
+                        return {{
+                            visible: rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none',
+                            enabled: !el.disabled,
+                            checked: el.checked,
+                            selected: el.selected,
+                            focused: document.activeElement === el,
+                            tagName: el.tagName.toLowerCase(),
+                            id: el.id,
+                            classes: el.className
+                        }};
+                    }})()
+                    "#,
+                    selector
+                );
+                let result = client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "state": result, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_wait_for_interactive" => {
+                let (client, tab_id) = get_client().await?;
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(30000);
+                let script = format!(
+                    r#"
+                    new Promise((resolve, reject) => {{
+                        const timeout = {};
+                        const interval = 100;
+                        let elapsed = 0;
+
+                        const check = () => {{
+                            const el = document.querySelector('{}');
+                            if (!el) {{
+                                elapsed += interval;
+                                if (elapsed >= timeout) {{
+                                    reject(new Error('Element not found'));
+                                    return;
+                                }}
+                                setTimeout(check, interval);
+                                return;
+                            }}
+
+                            const rect = el.getBoundingClientRect();
+                            const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                            const isEnabled = !el.disabled;
+
+                            if (isVisible && isEnabled) {{
+                                resolve(true);
+                                return;
+                            }}
+
+                            elapsed += interval;
+                            if (elapsed >= timeout) {{
+                                reject(new Error('Timeout waiting for element to be interactive'));
+                                return;
+                            }}
+
+
+                            setTimeout(check, interval);
+                        }};
+
+                        check();
+                    }})
+                    "#,
+                    timeout_ms, selector
+                );
+                client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
             "browser_click" => {
                 let selector = args
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::click(&client, selector, ClickOptions::default())
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -216,10 +355,7 @@ impl ToolExecutor {
                 })
             }
             "browser_extract" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let text = if let Some(selector) = args.get("selector").and_then(|v| v.as_str()) {
                     DomOperations::get_text(&client, selector)
                         .await
@@ -245,10 +381,7 @@ impl ToolExecutor {
                     .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing text parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::type_text(&client, selector, text, TypeOptions::default())
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -268,10 +401,7 @@ impl ToolExecutor {
                     .get("timeout")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(30_000);
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::wait_for_selector(&client, selector, timeout_ms)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -287,16 +417,33 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let text = DomOperations::get_text(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "text": text, "selector": selector, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_content" => {
+                let (client, tab_id) = get_client().await?;
+                let content = client.get_content().await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "content": content, "tab_id": tab_id }),
+                    error: None,
+                    metadata: HashMap::new(),
+                })
+            }
+            "browser_get_dom_snapshot" => {
+                let (client, tab_id) = get_client().await?;
+                let content = client.get_content().await.map_err(anyhow::Error::msg)?;
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "html": content, "tab_id": tab_id }),
                     error: None,
                     metadata: HashMap::new(),
                 })
@@ -310,10 +457,7 @@ impl ToolExecutor {
                     .get("attribute")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing attribute parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let value = DomOperations::get_attribute(&client, selector, attribute)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -330,10 +474,7 @@ impl ToolExecutor {
                 })
             }
             "browser_screenshot" => {
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let bytes = client
                     .capture_screenshot(false)
                     .await
@@ -351,10 +492,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::hover(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -370,10 +508,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::focus(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -389,10 +524,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::scroll_into_view(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -408,10 +540,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 let elements = DomOperations::query_all(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -432,10 +561,7 @@ impl ToolExecutor {
                     .get("value")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing value parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::select_option(&client, selector, value)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -451,10 +577,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::check(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -470,10 +593,7 @@ impl ToolExecutor {
                     .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let (client, tab_id) = browser_state
-                    .get_active_client()
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let (client, tab_id) = get_client().await?;
                 DomOperations::uncheck(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
@@ -1569,6 +1689,7 @@ impl ToolExecutor {
         args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
         use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+        use crate::features::terminal::{get_default_shell, ShellType};
 
         // Generate a unique tool ID for streaming events
         let tool_id = format!("terminal-{}", Uuid::new_v4());
@@ -1584,10 +1705,16 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone());
-        let default_shell = if cfg!(target_os = "windows") {
-            "powershell"
-        } else {
-            "bash"
+        // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded bash/powershell
+        let default_shell = match get_default_shell() {
+            ShellType::PowerShell => "powershell",
+            ShellType::Cmd => "cmd",
+            ShellType::Zsh => "zsh",
+            ShellType::Bash => "bash",
+            ShellType::Fish => "fish",
+            ShellType::Sh => "sh",
+            ShellType::Wsl => "wsl",
+            ShellType::GitBash => "gitbash",
         };
         let shell = args
             .get("shell")
@@ -1631,25 +1758,98 @@ impl ToolExecutor {
             }
         }
 
+        // AUDIT-TERMINAL-065/068 fix: Proper shell routing that honors requested shell
+        // and doesn't select powershell.exe on non-Windows for unknown shells
         let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
             "cmd" => (
                 "cmd.exe".to_string(),
                 vec!["/C".to_string(), command.clone()],
             ),
             "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+            "zsh" => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
+            "fish" => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
+            "sh" => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
             "wsl" => (
                 "wsl.exe".to_string(),
                 vec!["bash".to_string(), "-lc".to_string(), command.clone()],
             ),
-            _ => (
-                "powershell.exe".to_string(),
-                vec![
-                    "-NoLogo".to_string(),
-                    "-NoProfile".to_string(),
-                    "-Command".to_string(),
-                    command.clone(),
-                ],
-            ),
+            "gitbash" => {
+                if cfg!(target_os = "windows") {
+                    ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                } else {
+                    // Git Bash is Windows-specific; fall back to bash on non-Windows
+                    ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                }
+            }
+            "powershell" | "pwsh" => {
+                if cfg!(target_os = "windows") {
+                    (
+                        "powershell.exe".to_string(),
+                        vec![
+                            "-NoLogo".to_string(),
+                            "-NoProfile".to_string(),
+                            "-Command".to_string(),
+                            command.clone(),
+                        ],
+                    )
+                } else {
+                    (
+                        "pwsh".to_string(),
+                        vec![
+                            "-NoLogo".to_string(),
+                            "-NoProfile".to_string(),
+                            "-Command".to_string(),
+                            command.clone(),
+                        ],
+                    )
+                }
+            }
+            _ => {
+                // AUDIT-TERMINAL-068 fix: Don't silently fall back to powershell.exe
+                // Use system default shell for unknown shells instead
+                let default_shell_type = get_default_shell();
+                match default_shell_type {
+                    ShellType::PowerShell => {
+                        if cfg!(target_os = "windows") {
+                            (
+                                "powershell.exe".to_string(),
+                                vec![
+                                    "-NoLogo".to_string(),
+                                    "-NoProfile".to_string(),
+                                    "-Command".to_string(),
+                                    command.clone(),
+                                ],
+                            )
+                        } else {
+                            (
+                                "pwsh".to_string(),
+                                vec![
+                                    "-NoLogo".to_string(),
+                                    "-NoProfile".to_string(),
+                                    "-Command".to_string(),
+                                    command.clone(),
+                                ],
+                            )
+                        }
+                    }
+                    ShellType::Bash => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+                    ShellType::Zsh => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
+                    ShellType::Fish => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
+                    ShellType::Sh => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
+                    ShellType::Cmd => (
+                        "cmd.exe".to_string(),
+                        vec!["/C".to_string(), command.clone()],
+                    ),
+                    ShellType::Wsl => (
+                        "wsl.exe".to_string(),
+                        vec!["bash".to_string(), "-lc".to_string(), command.clone()],
+                    ),
+                    ShellType::GitBash => (
+                        "bash".to_string(),
+                        vec!["-lc".to_string(), command.clone()],
+                    ),
+                }
+            }
         };
 
         let mut cmd = Command::new(&program);
@@ -3491,7 +3691,7 @@ impl ToolExecutor {
                         negative_prompt: None,
                         provider,
                         model: None,
-                        size,
+                        size: size.clone(),
                         quality: None,
                         style: None,
                         n: Some(1),
@@ -3503,9 +3703,13 @@ impl ToolExecutor {
                         Ok(response) => {
                             let result_data = json!({
                                 "success": true,
+                                "prompt": prompt.clone(),
                                 "images": response.images,
                                 "provider": response.provider,
-                                "cost": response.cost_estimate
+                                "model": response.model,
+                                "size": size,
+                                "cost": response.cost_estimate,
+                                "latency_ms": response.latency_ms
                             });
                             Ok(ToolResult {
                                 success: true,
@@ -3540,6 +3744,10 @@ impl ToolExecutor {
                     .get("duration_seconds")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
+                let resolution = args
+                    .get("resolution")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
 
                 if let Some(ref app) = self.app_handle {
                     let provider = args
@@ -3555,11 +3763,11 @@ impl ToolExecutor {
                         prompt: prompt.clone(),
                         negative_prompt: None,
                         duration_secs,
-                        resolution: None,
+                        resolution: resolution.clone(),
                         style: None,
                         model: None,
                         plan: None,
-                        provider,
+                        provider: provider.clone(),
                         input_image_url,
                     };
 
@@ -3567,12 +3775,20 @@ impl ToolExecutor {
                         .await
                     {
                         Ok(response) => {
+                            let provider_label =
+                                provider.clone().unwrap_or_else(|| "runway".to_string());
                             let result_data = json!({
                                 "success": true,
+                                "prompt": prompt.clone(),
                                 "video_url": response.video_url,
                                 "thumbnail_url": response.thumbnail_url,
                                 "id": response.id,
-                                "status": response.status
+                                "status": response.status,
+                                "provider": provider_label,
+                                "duration_secs": response.duration_secs.or(duration_secs),
+                                "resolution": resolution,
+                                "cost": response.cost_estimate,
+                                "latency_ms": response.latency_ms
                             });
                             Ok(ToolResult {
                                 success: true,
