@@ -1142,15 +1142,27 @@ impl ToolExecutor {
     }
 
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+        // Generate correlation ID for request tracing (using action_id)
+        let action_id = self.next_action_id(tool_call);
+
+        tracing::info!(
+            target: "tool",
+            correlation_id = %action_id,
+            tool_name = %tool_call.name,
+            "Tool execution started"
+        );
+
         // Check for pending user messages before executing tool
         // This allows the AI to be aware of new user input mid-task
         if has_pending_messages() {
             if let Some(app_handle) = &self.app_handle {
                 let pending = peek_pending_messages();
                 tracing::info!(
-                    "[ToolExecutor] {} pending user message(s) detected before executing '{}'",
-                    pending.len(),
-                    tool_call.name
+                    target: "tool",
+                    correlation_id = %action_id,
+                    pending_count = pending.len(),
+                    tool_name = %tool_call.name,
+                    "Pending user message(s) detected before tool execution"
                 );
                 // Emit event so AI can incorporate the new context
                 let _ = app_handle.emit(
@@ -1194,7 +1206,6 @@ impl ToolExecutor {
         }
 
         let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
-        let action_id = self.next_action_id(tool_call);
         let start_time = Instant::now();
 
         self.emit_tool_action(
@@ -6102,6 +6113,26 @@ impl ToolExecutor {
                 } else {
                     "failed"
                 };
+
+                if tool_result.success {
+                    tracing::info!(
+                        target: "tool",
+                        correlation_id = %action_id,
+                        tool_name = %tool_name,
+                        duration_ms = duration_ms,
+                        "Tool execution completed successfully"
+                    );
+                } else {
+                    tracing::warn!(
+                        target: "tool",
+                        correlation_id = %action_id,
+                        tool_name = %tool_name,
+                        error = %tool_result.error.as_deref().unwrap_or("Unknown error"),
+                        duration_ms = duration_ms,
+                        "Tool execution completed with failure"
+                    );
+                }
+
                 self.emit_tool_action(
                     action_id,
                     tool_name,
@@ -6135,6 +6166,15 @@ impl ToolExecutor {
             }
             Err(err) => {
                 let message = err.to_string();
+                tracing::error!(
+                    target: "tool",
+                    correlation_id = %action_id,
+                    tool_name = %tool_name,
+                    error = %message,
+                    duration_ms = duration_ms,
+                    "Tool execution failed with error"
+                );
+
                 self.emit_tool_action(
                     action_id,
                     tool_name,

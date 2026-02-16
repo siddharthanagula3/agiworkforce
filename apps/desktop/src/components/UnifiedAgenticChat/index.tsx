@@ -1077,9 +1077,11 @@ export const UnifiedAgenticChat: React.FC<{
             // Remove from pending queue in store
             useUnifiedChatStore.getState().removePendingMessage(pending.id);
 
-            // Clear from backend queue
+            // Clear from backend queue - pass conversation_id to ensure we pop the right message
             try {
-              await ipcInvoke('chat_pop_pending_message');
+              await ipcInvoke('chat_pop_pending_message', {
+                request: { conversation_id: payload.conversation_id },
+              });
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
               // CHT-002 fix: Show user-visible error for pending message processing failure
