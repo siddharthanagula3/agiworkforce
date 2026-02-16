@@ -220,7 +220,7 @@ pub async fn project_context_set_folder(
         ctx.folder = Some(p.clone());
         ctx.name = name;
         ctx.is_valid = true;
-        return Ok(ctx.clone());
+        Ok(ctx.clone())
     } else {
         // Clear the project folder
         info!("[ProjectContext] Cleared project folder");
@@ -228,7 +228,7 @@ pub async fn project_context_set_folder(
         ctx.folder = None;
         ctx.name = None;
         ctx.is_valid = false;
-        return Ok(ctx.clone());
+        Ok(ctx.clone())
     }
 }
 

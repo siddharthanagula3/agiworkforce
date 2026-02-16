@@ -196,10 +196,10 @@ describe('LLMCostCalculator', () => {
         totalTokens: 60000,
       });
 
-      // deepseek-r1: $0.55/1M input, $1.68/1M output
-      // (50000/1M * 0.55 + 10000/1M * 1.68) * 100 = (0.0275 + 0.0168) * 100 = 4.43 cents
-      // Rounded = 4
-      expect(cost).toBe(4);
+      // deepseek-r1: $0.55/1M input, $2.19/1M output
+      // (50000/1M * 0.55 + 10000/1M * 2.19) * 100 = (0.0275 + 0.0219) * 100 = 4.94 cents
+      // Rounded = 5
+      expect(cost).toBe(5);
     });
   });
 

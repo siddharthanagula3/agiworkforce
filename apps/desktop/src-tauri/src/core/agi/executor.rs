@@ -784,7 +784,7 @@ impl AGIExecutor {
                             },
                         };
 
-                        match reflection.reflect(goal, &context, &plan).await {
+                        match reflection.reflect(goal, context, &plan).await {
                             Ok(insight) => {
                                 tracing::info!("[Executor] Reflection Insight: {:?}", insight);
                                 // TODO: Act on insight (Corrections, SubGoals)
