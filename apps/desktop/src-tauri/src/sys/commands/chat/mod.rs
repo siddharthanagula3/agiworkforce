@@ -3016,6 +3016,11 @@ pub async fn chat_send_message(
                             );
 
                             // Execute the tool
+                            tracing::info!(
+                                "[Chat] Starting tool execution: {} with id={}",
+                                tc.name,
+                                tc.id
+                            );
                             let result = execute_chat_tool_with_timeout(
                                 &tc.name,
                                 &tc.arguments,
@@ -3048,6 +3053,11 @@ pub async fn chat_send_message(
 
                             // Emit tool result event (full result for richer UI display)
                             // result_data contains the full parsed JSON for UI rendering
+                            tracing::info!(
+                                "[Chat] Emitting tool result event for {} success={}",
+                                tc.name,
+                                success
+                            );
                             let _ = app_handle_clone.emit(
                                 "chat:tool-result",
                                 serde_json::json!({

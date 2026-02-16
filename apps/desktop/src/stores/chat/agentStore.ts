@@ -407,7 +407,15 @@ export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
         return;
       }
 
-      const normalized = payloads.map((agent) => mergeAgentStatus(undefined, agent));
+      // Defensive: filter out payloads without id
+      const validPayloads = payloads.filter((p) => p.id);
+      if (validPayloads.length === 0) {
+        state.agents = [];
+        state.agentStatus = null;
+        return;
+      }
+
+      const normalized = validPayloads.map((agent) => mergeAgentStatus(undefined, agent));
       state.agents = normalized;
       state.agentStatus =
         normalized.find((agent) => agent.status === 'running' || agent.status === 'paused') ??
@@ -420,6 +428,12 @@ export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
 }
 
 function applyAgentStatusUpdate(payload: AgentStatusPayload) {
+  // Defensive: skip if no id provided
+  if (!payload.id) {
+    console.warn('[agentStore] applyAgentStatusUpdate called without id, skipping');
+    return;
+  }
+
   useAgentStore.setState(
     (state) => {
       const index = state.agents.findIndex((agent) => agent.id === payload.id);

@@ -262,7 +262,7 @@ impl SwarmOrchestrator {
                     aggregated.total_agent_time.as_millis() as f64
                         / aggregated.subtask_results.len() as f64
                 },
-                circuit_breaker_trips: 0, // TODO: Track from spawner
+                circuit_breaker_trips: self.spawner.get_stats().circuit_breaker_trips,
                 agent_restarts: self.spawner.get_stats().restart_count,
             },
         };

@@ -8,6 +8,12 @@ const setAgentStatus = vi.fn();
 const clearActionTrail = vi.fn();
 const clearBackgroundTasks = vi.fn();
 
+// Mock @tauri-apps/api/core
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+  isTauri: vi.fn(() => Promise.resolve(false)),
+}));
+
 vi.mock('../stores/chat/chatStore', () => ({
   useChatStore: {
     getState: () => ({
@@ -56,7 +62,7 @@ describe('resetInFlightChatState', () => {
     window.addEventListener('chat:new-conversation', eventSpy);
 
     const { resetInFlightChatState } = await import('../lib/newChatReset');
-    resetInFlightChatState();
+    await resetInFlightChatState();
 
     expect(eventSpy).toHaveBeenCalledTimes(1);
     expect(setIsLoading).toHaveBeenCalledWith(false);

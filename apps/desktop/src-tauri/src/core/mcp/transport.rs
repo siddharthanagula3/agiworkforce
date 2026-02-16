@@ -308,8 +308,14 @@ impl McpTransport for StdioTransport {
         method: String,
         params: Option<serde_json::Value>,
     ) -> McpResult<JsonRpcResponse> {
+        tracing::debug!("[MCP Transport] send_request called: method={}", method);
+
         // Check if transport is shutdown
         if self.is_shutdown.load(Ordering::SeqCst) {
+            tracing::error!(
+                "[MCP Transport] Transport is shutdown, rejecting request: {}",
+                method
+            );
             return Err(McpError::ConnectionError(
                 "Transport is shutdown".to_string(),
             ));

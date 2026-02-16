@@ -60,6 +60,8 @@ struct CircuitBreaker {
     last_failure: RwLock<Option<Instant>>,
     /// Whether circuit is currently open.
     is_open: AtomicBool,
+    /// Number of times the circuit has tripped (opened).
+    trips: AtomicU64,
     /// Threshold before opening circuit.
     threshold: u32,
     /// Duration to keep circuit open.
@@ -72,6 +74,7 @@ impl CircuitBreaker {
             failure_count: AtomicU32::new(0),
             last_failure: RwLock::new(None),
             is_open: AtomicBool::new(false),
+            trips: AtomicU64::new(0),
             threshold: constants::CIRCUIT_BREAKER_THRESHOLD,
             reset_timeout: constants::CIRCUIT_BREAKER_RESET_TIMEOUT,
         }
@@ -90,10 +93,16 @@ impl CircuitBreaker {
 
         if count >= self.threshold {
             self.is_open.store(true, Ordering::SeqCst);
+            self.trips.fetch_add(1, Ordering::SeqCst);
             true // Circuit opened
         } else {
             false
         }
+    }
+
+    /// Gets the number of times the circuit has tripped.
+    fn get_trips(&self) -> u64 {
+        self.trips.load(Ordering::SeqCst)
     }
 
     /// Checks if the circuit allows operations.
@@ -196,6 +205,11 @@ impl SpawnedAgent {
             *self.health.write() = AgentHealth::CircuitOpen;
         }
         *self.current_task.write() = None;
+    }
+
+    /// Gets the number of circuit breaker trips for this agent.
+    pub fn get_circuit_breaker_trips(&self) -> u64 {
+        self.circuit_breaker.get_trips()
     }
 }
 
@@ -582,6 +596,7 @@ impl AgentSpawner {
         let mut total_tasks_completed = 0;
         let mut total_tasks_failed = 0;
         let mut total_execution_time_ms = 0;
+        let mut total_circuit_breaker_trips = 0;
 
         for agent in agents.values() {
             match *agent.health.read() {
@@ -594,6 +609,7 @@ impl AgentSpawner {
             total_tasks_completed += agent.tasks_completed.load(Ordering::SeqCst);
             total_tasks_failed += agent.tasks_failed.load(Ordering::SeqCst);
             total_execution_time_ms += agent.total_execution_time_ms.load(Ordering::SeqCst);
+            total_circuit_breaker_trips += agent.get_circuit_breaker_trips();
         }
 
         AgentSpawnerStats {
@@ -608,6 +624,7 @@ impl AgentSpawner {
             total_tasks_failed,
             total_execution_time_ms,
             restart_count: self.restart_count.load(Ordering::SeqCst),
+            circuit_breaker_trips: total_circuit_breaker_trips,
         }
     }
 }
@@ -626,6 +643,7 @@ pub struct AgentSpawnerStats {
     pub total_tasks_failed: u64,
     pub total_execution_time_ms: u64,
     pub restart_count: u64,
+    pub circuit_breaker_trips: u64,
 }
 
 #[cfg(test)]

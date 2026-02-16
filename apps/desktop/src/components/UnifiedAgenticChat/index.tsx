@@ -38,6 +38,7 @@ import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import { getToolDisplayInfo } from '../../lib/toolDisplayNames';
 import { CanvasWorkspace } from '../Canvas';
 import { ChatErrorBoundary } from '../ErrorBoundary';
+import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
@@ -456,8 +457,6 @@ export const UnifiedAgenticChat: React.FC<{
         payloadMessageId?: string | number,
       ): string | null => {
         const state = useUnifiedChatStore.getState();
-        // AUDIT-STREAM-032 fix: Filter messages to only this conversation to prevent
-        // events from older conversations mutating artifacts in current chat
         const conversationMessages = state.messagesByConversation[conversationId] ?? [];
         const sessionMessageId = activeStreamSessionsRef.current.get(conversationId);
         const normalizedPayloadId =
@@ -470,30 +469,41 @@ export const UnifiedAgenticChat: React.FC<{
           return sessionMessageId;
         }
         // Priority 2: Explicit message ID from payload
-        if (normalizedPayloadId && conversationMessages.some((m) => m.id === normalizedPayloadId)) {
+        if (
+          normalizedPayloadId &&
+          conversationMessages.some((m) => String(m.id) === normalizedPayloadId)
+        ) {
           return normalizedPayloadId;
         }
         // Priority 3: Current streaming message (only if it belongs to this conversation)
         if (
           state.currentStreamingMessageId &&
-          conversationMessages.some((m) => m.id === state.currentStreamingMessageId)
+          conversationMessages.some((m) => String(m.id) === String(state.currentStreamingMessageId))
         ) {
           return state.currentStreamingMessageId;
         }
-        // AUDIT-STREAM-032 fix: Only allow fallback to last streaming assistant
-        // if we're actively streaming for THIS conversation (checked via sessionMessageId).
-        // Do NOT use global state.currentStreamingMessageId here as it can point to
-        // a different conversation and cause cross-conversation pollution.
-        if (sessionMessageId) {
-          const lastStreamingAssistant = [...conversationMessages]
+
+        // FALLBACK: Find ANY assistant message in this conversation (even if not streaming)
+        if (conversationMessages.length > 0) {
+          const streamingAssistant = conversationMessages.find(
+            (m) => m.role === 'assistant' && m.metadata?.streaming,
+          );
+          if (streamingAssistant) {
+            return streamingAssistant.id;
+          }
+          const lastAssistant = [...conversationMessages]
             .reverse()
-            .find((m) => m.role === 'assistant' && Boolean(m.metadata?.streaming));
-          if (lastStreamingAssistant) {
-            return lastStreamingAssistant.id;
+            .find((m) => m.role === 'assistant');
+          if (lastAssistant) {
+            return lastAssistant.id;
           }
         }
-        // AUDIT-STREAM-032 fix: Removed aggressive fallback to last assistant
-        // as it can cause cross-conversation pollution
+
+        // Last resort: use currentStreamingMessageId even if not in this conversation's messages
+        if (state.currentStreamingMessageId) {
+          return state.currentStreamingMessageId;
+        }
+
         return null;
       };
 
@@ -505,10 +515,16 @@ export const UnifiedAgenticChat: React.FC<{
       ) => {
         const state = useUnifiedChatStore.getState();
         const targetMessageId = resolveStreamTargetMessageId(conversationId, payloadMessageId);
-        if (!targetMessageId) return;
+        if (!targetMessageId) {
+          console.warn('[upsertToolArtifact] No target message found for toolCallId:', toolCallId);
+          return;
+        }
 
         const targetMessage = state.messages.find((msg) => msg.id === targetMessageId);
-        if (!targetMessage) return;
+        if (!targetMessage) {
+          console.warn('[upsertToolArtifact] Message not found for id:', targetMessageId);
+          return;
+        }
 
         const baseArtifacts = [
           ...(targetMessage.artifacts || []),
@@ -1164,8 +1180,16 @@ export const UnifiedAgenticChat: React.FC<{
           });
 
           // Clear any running agent status
+          // Note: agent:finished event may not fire in all cases, so we also clear on tool result
           const currentAgent = useUnifiedChatStore.getState().agentStatus;
-          if (currentAgent && (!payload.agent_id || currentAgent.id === payload.agent_id)) {
+          console.log(
+            '[UnifiedAgenticChat] agent:finished - agentStatus:',
+            JSON.stringify(currentAgent),
+            'success:',
+            payload.success,
+          );
+          if (currentAgent && currentAgent.status === 'running') {
+            console.log('[UnifiedAgenticChat] Clearing running agent status from agent:finished');
             useUnifiedChatStore.getState().setAgentStatus({
               ...currentAgent,
               status: payload.success ? 'completed' : 'failed',
@@ -1338,9 +1362,13 @@ export const UnifiedAgenticChat: React.FC<{
           result_data?: Record<string, unknown>;
         }>('chat:tool-result', ({ payload }) => {
           console.log(
-            '[UnifiedAgenticChat] Tool result:',
+            '[UnifiedAgenticChat] Tool result RECEIVED:',
             payload.tool_name,
             payload.success ? 'succeeded' : 'failed',
+            'tool_call_id:',
+            payload.tool_call_id,
+            'result length:',
+            payload.result?.length,
           );
           clearToolExecutionTimeout(payload.tool_call_id);
 
@@ -1357,6 +1385,7 @@ export const UnifiedAgenticChat: React.FC<{
           }
 
           const normalizedData = normalizeInlineToolData(payload.tool_name, parsedData);
+
           upsertToolArtifact(
             payload.conversation_id,
             payload.tool_call_id,
@@ -1397,6 +1426,51 @@ export const UnifiedAgenticChat: React.FC<{
             metadata: { tool_call_id: payload.tool_call_id, result_preview: payload.result },
             fadeAfter: 3000,
           });
+
+          // Remove the old "running" entry for this tool_call_id to prevent "Running..." from staying
+          const state = useUnifiedChatStore.getState();
+          const actionTrail = state.actionTrail;
+          console.log(
+            '[UnifiedAgenticChat] Action trail entries:',
+            actionTrail.map((e) => ({ type: e.type, message: e.message, metadata: e.metadata })),
+          );
+          const runningEntry = actionTrail.find(
+            (entry) =>
+              entry.type === 'running' &&
+              (entry.metadata as Record<string, unknown>)?.['tool_call_id'] ===
+                payload.tool_call_id,
+          );
+          console.log(
+            '[UnifiedAgenticChat] Looking for running entry with tool_call_id:',
+            payload.tool_call_id,
+            'found:',
+            runningEntry?.id,
+          );
+          if (runningEntry) {
+            console.log('[UnifiedAgenticChat] Removing running entry:', runningEntry.id);
+            state.removeActionTrailEntry(runningEntry.id);
+          }
+
+          // Clear any running agent status when tool result arrives
+          // This ensures the "Running..." indicator is cleared
+          const currentAgent = useUnifiedChatStore.getState().agentStatus;
+          console.log(
+            '[UnifiedAgenticChat] chat:tool-result - agentStatus:',
+            JSON.stringify(currentAgent),
+            'success:',
+            payload.success,
+          );
+          if (currentAgent && currentAgent.status === 'running') {
+            console.log('[UnifiedAgenticChat] Clearing running agent status from chat:tool-result');
+            useUnifiedChatStore.getState().setAgentStatus({
+              ...currentAgent,
+              status: payload.success ? 'completed' : 'failed',
+              completedAt: new Date(),
+            });
+            // Verify the update
+            const afterAgent = useUnifiedChatStore.getState().agentStatus;
+            console.log('[UnifiedAgenticChat] After setAgentStatus:', JSON.stringify(afterAgent));
+          }
         }),
       );
 
@@ -2345,14 +2419,38 @@ export const UnifiedAgenticChat: React.FC<{
                 />
               </div>
               <BudgetAlertsPanel />
-              <ChatStream
-                onOpenSidecar={openSidecar}
-                onSuggestionClick={(prompt) => {
-                  useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
-                }}
-              />
+              <SectionErrorBoundary
+                sectionName="ChatStream"
+                fallback={
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center">
+                      <p className="text-zinc-400 mb-4">Failed to load chat messages</p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600"
+                      >
+                        Reload
+                      </button>
+                    </div>
+                  </div>
+                }
+              >
+                <ChatStream
+                  onOpenSidecar={openSidecar}
+                  onSuggestionClick={(prompt) => {
+                    useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
+                  }}
+                />
+              </SectionErrorBoundary>
               {/* Real-time tool execution progress display */}
-              <ActiveToolStreamsDisplay />
+              <SectionErrorBoundary
+                sectionName="ActiveToolStreams"
+                fallback={
+                  <div className="p-2 text-xs text-zinc-500">Tool progress unavailable</div>
+                }
+              >
+                <ActiveToolStreamsDisplay />
+              </SectionErrorBoundary>
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
           ) : activeView === 'projects' ? (
