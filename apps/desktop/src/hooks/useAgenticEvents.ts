@@ -583,13 +583,17 @@ export function useAgenticEvents() {
         tool_name?: string;
         name?: string;
       }
-      const unlistenAgentAction = await listen<AgentActionPayload>('agent:action', (event) => {
-        if (!isMountedRef.current) return;
-        const payload = event.payload;
-        const actionType =
-          payload?.type || payload?.tool || payload?.tool_name || payload?.name || 'action';
-        focusSidecar(String(actionType));
-      });
+      // AUDIT-EVENT-057 fix: Listen to agent:action_update (matching backend emission)
+      const unlistenAgentAction = await listen<AgentActionPayload>(
+        'agent:action_update',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const payload = event.payload;
+          const actionType =
+            payload?.type || payload?.tool || payload?.tool_name || payload?.name || 'action';
+          focusSidecar(String(actionType));
+        },
+      );
       push(unlistenAgentAction);
 
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {
@@ -937,6 +941,7 @@ export function useAgenticEvents() {
             }
             // AUDIT-STREAM-053 fix: Reconcile message metadata before cleaning up tool stream
             // This ensures message artifacts reflect final status before stream is removed
+            // AUDIT-UI-053 fix: Also update top-level message metadata status so fallback works correctly
             const timeoutId = setTimeout(() => {
               if (isMountedRef.current) {
                 const state = useUnifiedChatStore.getState();
@@ -945,6 +950,9 @@ export function useAgenticEvents() {
                 // If there's a stream with a final status, find the message containing this tool's artifact
                 // and update it to reflect final status before removing the stream
                 if (stream) {
+                  // Determine the final status - default to completed if still running
+                  const finalStatus = stream.status === 'running' ? 'completed' : stream.status;
+
                   // Find message that has an artifact with this tool ID
                   for (const message of state.messages) {
                     const artifacts = message.artifacts || [];
@@ -960,14 +968,23 @@ export function useAgenticEvents() {
                             duration_ms: stream.duration_ms,
                             error: stream.error,
                             // Ensure status is not stuck in running
-                            status: stream.status === 'running' ? 'completed' : stream.status,
+                            status: finalStatus,
                           },
                         };
                         const updatedArtifacts = [...artifacts];
                         updatedArtifacts[artifactIndex] = updatedArtifact;
+
+                        // AUDIT-UI-053: Also update top-level message metadata status
+                        // so the fallback in MessageBubble.tsx (line 249) works correctly
+                        const currentMetadata = message.metadata || {};
                         state.updateMessage(message.id, {
                           artifacts: updatedArtifacts,
-                          metadata: { artifacts: updatedArtifacts },
+                          metadata: {
+                            ...currentMetadata,
+                            artifacts: updatedArtifacts,
+                            status: finalStatus, // Update top-level status for fallback
+                            state: finalStatus, // Also update state for other fallbacks
+                          },
                         });
                       }
                       break; // Found and updated the message, no need to continue
