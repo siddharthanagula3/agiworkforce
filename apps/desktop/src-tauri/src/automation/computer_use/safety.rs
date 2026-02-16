@@ -190,7 +190,8 @@ impl PromptInjectionDetector {
                 vec![
                     // Direct instruction injection
                     Regex::new(r"(?i)ignore\s+(all\s+)?previous\s+instructions?").unwrap(),
-                    Regex::new(r"(?i)disregard\s+(all\s+)?(everything|prior|previous|above)").unwrap(),
+                    Regex::new(r"(?i)disregard\s+(all\s+)?(everything|prior|previous|above)")
+                        .unwrap(),
                     Regex::new(r"(?i)forget\s+(everything|all|what)\s+(you|i)\s+(know|said|told)")
                         .unwrap(),
                     // Role manipulation
