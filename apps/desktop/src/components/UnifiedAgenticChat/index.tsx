@@ -1632,7 +1632,9 @@ export const UnifiedAgenticChat: React.FC<{
 
       // Clear stale stream session tracking
       activeStreamSessions.clear();
-      const timeouts = toolExecutionTimeoutsRef.current;
+      // Copy ref value to variable for cleanup to avoid stale closure issues
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const timeouts = new Map(toolExecutionTimeoutsRef.current);
       timeouts.forEach((timeoutEntry) => {
         clearTimeout(timeoutEntry.softTimeoutId);
         clearTimeout(timeoutEntry.hardTimeoutId);
