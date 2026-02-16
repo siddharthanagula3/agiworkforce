@@ -94,7 +94,10 @@ const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
 /// - `Ok(false)` if Ollama is not running or not accessible
 #[tauri::command]
 pub async fn ollama_check_status() -> Result<bool, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     match client
         .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
@@ -114,7 +117,10 @@ pub async fn ollama_check_status() -> Result<bool, String> {
 /// - `Err` if Ollama is not running or the request fails
 #[tauri::command]
 pub async fn ollama_list_models() -> Result<Vec<OllamaModel>, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
         .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
@@ -201,7 +207,10 @@ pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
         return Err("Model name cannot be empty".to_string());
     }
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
         .post(format!("{}/api/pull", OLLAMA_DEFAULT_BASE_URL))
@@ -236,7 +245,10 @@ pub async fn ollama_delete_model(model_name: String) -> Result<(), String> {
         return Err("Model name cannot be empty".to_string());
     }
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
         .delete(format!("{}/api/delete", OLLAMA_DEFAULT_BASE_URL))

@@ -120,21 +120,28 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       const exitEvent = `terminal-exit-${sessionId}`;
 
       // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
-      const outputUnlisten = await listen<string | { stream: string; data: string }>(outputEvent, (event) => {
-        let data: string;
-        if (typeof event.payload === 'string') {
-          data = event.payload;
-        } else if (event.payload && typeof event.payload === 'object' && 'data' in event.payload) {
-          data = event.payload.data;
-        } else {
-          data = String(event.payload);
-        }
-        onOutput?.({
-          sessionId,
-          data,
-          timestamp: Date.now(),
-        });
-      });
+      const outputUnlisten = await listen<string | { stream: string; data: string }>(
+        outputEvent,
+        (event) => {
+          let data: string;
+          if (typeof event.payload === 'string') {
+            data = event.payload;
+          } else if (
+            event.payload &&
+            typeof event.payload === 'object' &&
+            'data' in event.payload
+          ) {
+            data = event.payload.data;
+          } else {
+            data = String(event.payload);
+          }
+          onOutput?.({
+            sessionId,
+            data,
+            timestamp: Date.now(),
+          });
+        },
+      );
 
       const exitUnlisten = await listen(exitEvent, () => {
         // Cleanup listeners for this session
@@ -314,54 +321,69 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Clear command history - NOT IMPLEMENTED in backend
-  // Note: The backend does not support clearing command history
+  // Clear command history
   const clearHistory = useCallback(
-    async (_sessionId: string): Promise<void> => {
+    async (sessionId: string): Promise<void> => {
       setError(null);
-      console.warn('terminal_clear_history is not implemented in backend');
-      // Throwing error to make it clear this operation is not supported
-      throw new Error('clearHistory is not implemented: command history cannot be cleared');
+      try {
+        await invoke('terminal_clear_history', { session_id: sessionId });
+      } catch (err) {
+        throw handleError(err);
+      }
     },
-    [],
+    [handleError],
   );
 
-  // Set environment variable - NOT IMPLEMENTED in backend
-  // Note: The backend does not support setting env vars for PTY sessions
+  // Set environment variable
   const setEnv = useCallback(
-    async (_sessionId: string, _key: string, _value: string): Promise<void> => {
+    async (sessionId: string, key: string, value: string): Promise<void> => {
       setError(null);
-      console.warn('terminal_set_env is not implemented in backend');
-      throw new Error('setEnv is not implemented: cannot modify environment variables');
+      try {
+        await invoke('terminal_set_env', { session_id: sessionId, key, value });
+      } catch (err) {
+        throw handleError(err);
+      }
     },
-    [],
+    [handleError],
   );
 
-  // Get environment variable - NOT IMPLEMENTED in backend
+  // Get environment variable
   const getEnv = useCallback(
-    async (_sessionId: string, _key: string): Promise<string | null> => {
+    async (sessionId: string, key: string): Promise<string | null> => {
       setError(null);
-      console.warn('terminal_get_env is not implemented in backend');
-      throw new Error('getEnv is not implemented: cannot read environment variables');
+      try {
+        return await invoke<string | null>('terminal_get_env', { session_id: sessionId, key });
+      } catch (err) {
+        throw handleError(err);
+      }
     },
-    [],
+    [handleError],
   );
 
-  // List all environment variables - NOT IMPLEMENTED in backend
-  const listEnv = useCallback(async (_sessionId: string): Promise<EnvironmentVariable[]> => {
+  // List all environment variables
+  const listEnv = useCallback(async (sessionId: string): Promise<EnvironmentVariable[]> => {
     setError(null);
-    console.warn('terminal_list_env is not implemented in backend');
-    throw new Error('listEnv is not implemented: cannot list environment variables');
+    try {
+      const envVars = await invoke<[string, string][]>('terminal_list_env', {
+        session_id: sessionId,
+      });
+      return envVars.map(([key, value]) => ({ key, value }));
+    } catch (err) {
+      throw handleError(err);
+    }
   }, []);
 
-  // Unset environment variable - NOT IMPLEMENTED in backend
+  // Unset environment variable
   const unsetEnv = useCallback(
-    async (_sessionId: string, _key: string): Promise<void> => {
+    async (sessionId: string, key: string): Promise<void> => {
       setError(null);
-      console.warn('terminal_unset_env is not implemented in backend');
-      throw new Error('unsetEnv is not implemented: cannot unset environment variables');
+      try {
+        await invoke('terminal_unset_env', { session_id: sessionId, key });
+      } catch (err) {
+        throw handleError(err);
+      }
     },
-    [],
+    [handleError],
   );
 
   // Detect available shells
