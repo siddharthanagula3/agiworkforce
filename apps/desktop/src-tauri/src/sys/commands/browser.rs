@@ -615,8 +615,14 @@ pub async fn browser_execute_async_js(
 ) -> Result<Value, String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     // For async JS, we wrap it in a Promise and await it
-    let wrapped_script = format!("new Promise((resolve) => {{ {}; resolve(undefined); }})", script);
-    client.evaluate(&wrapped_script).await.map_err(|e| e.to_string())
+    let wrapped_script = format!(
+        "new Promise((resolve) => {{ {}; resolve(undefined); }})",
+        script
+    );
+    client
+        .evaluate(&wrapped_script)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -738,7 +744,14 @@ pub async fn browser_fill_form(
                     return {{ error: 'Field not found: {}' }};
                 }})()
                 "#,
-                selector, field_selector, field_selector, field_selector, field_selector, field_selector, value_str, field_selector
+                selector,
+                field_selector,
+                field_selector,
+                field_selector,
+                field_selector,
+                field_selector,
+                value_str,
+                field_selector
             );
             client.evaluate(&script).await.map_err(|e| e.to_string())?;
         }
@@ -847,7 +860,9 @@ pub async fn browser_get_cookies(
     tab_id: Option<String>,
 ) -> Result<Vec<Value>, String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
-    let cookies = AdvancedBrowserOps::get_cookies(client).await.map_err(|e| e.to_string())?;
+    let cookies = AdvancedBrowserOps::get_cookies(client)
+        .await
+        .map_err(|e| e.to_string())?;
     let result: Vec<Value> = cookies
         .into_iter()
         .map(|c| {

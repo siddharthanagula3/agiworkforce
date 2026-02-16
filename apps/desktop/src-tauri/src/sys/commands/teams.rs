@@ -1,9 +1,9 @@
+use crate::features::teams::team_manager::TeamSettings;
 use crate::features::teams::{
     ActivityType, BillingCycle, BillingPlan, ResourceType, Team, TeamActivity, TeamActivityManager,
     TeamBilling, TeamBillingManager, TeamInvitation, TeamManager, TeamMember, TeamResource,
     TeamResourceManager, TeamRole, TeamUpdates, UsageMetrics,
 };
-use crate::features::teams::team_manager::TeamSettings;
 use crate::sys::commands::AppDatabase;
 use serde_json::json;
 use tauri::State;
