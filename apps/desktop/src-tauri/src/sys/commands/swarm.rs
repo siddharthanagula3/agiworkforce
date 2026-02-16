@@ -13,6 +13,12 @@ pub struct SwarmState {
     pub orchestrator: Arc<TokioRwLock<Option<SwarmOrchestrator>>>,
 }
 
+impl Default for SwarmState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SwarmState {
     pub fn new() -> Self {
         Self {
@@ -42,10 +48,12 @@ pub async fn swarm_init(
     automation: State<'_, Option<Arc<AutomationService>>>,
     llm_router: State<'_, Arc<TokioRwLock<LLMRouter>>>,
 ) -> Result<(), String> {
-    let mut config = SwarmConfig::default();
-    config.max_agents = request.max_agents;
-    config.auto_spawn = request.auto_spawn;
-    config.optimize_critical_path = request.optimize_critical_path;
+    let config = SwarmConfig {
+        max_agents: request.max_agents,
+        auto_spawn: request.auto_spawn,
+        optimize_critical_path: request.optimize_critical_path,
+        ..Default::default()
+    };
 
     let automation_service = automation
         .inner()

@@ -99,9 +99,8 @@ impl RealtimeServer {
         let mut user_id_from_auth: Option<String> = None;
         let mut team_id_from_auth: Option<String> = None;
 
-        if let Some(Ok(msg)) = ws_stream.next().await {
-            if let Message::Text(text) = msg {
-                if let Ok(RealtimeEvent::Authenticate {
+        if let Some(Ok(Message::Text(text))) = ws_stream.next().await {
+            if let Ok(RealtimeEvent::Authenticate {
                     user_id,
                     team_id,
                     token: auth_token,
@@ -125,7 +124,6 @@ impl RealtimeServer {
                 } else {
                     tracing::warn!("Authentication failed: Invalid event format");
                 }
-            }
         }
 
         if !authenticated {
