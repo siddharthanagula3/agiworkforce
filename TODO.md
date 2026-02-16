@@ -466,17 +466,17 @@ The following require manual testing and cannot be fixed through code changes al
   - Evidence: `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:4299`, `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:4308`, `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:296`, `apps/desktop/src-tauri/src/core/llm/tool_executor.rs:1735`
   - Fix: Added non-consuming `is_tool_cancelled()` check for frequent polling, spawn tool execution as tokio task with abort handle, and abort the task on cancellation/timeout to ensure immediate termination of long-running tools.
 
-- [ ] `AUDIT-STREAM-061` Chat input abort controller is local-only and does not cancel the underlying send/invoke pipeline.
+- [x] `AUDIT-STREAM-061` Chat input abort controller is local-only and does not cancel the underlying send/invoke pipeline.
   - `sendAbortControllerRef` is created and checked in `ChatInputArea`, but the signal is never passed to `onSend`/backend invocation, so aborts only gate local UI branches.
   - Risk: user-initiated quick retries/new chat can still leave in-flight send work running server-side, causing delayed events and status desync.
   - Evidence: `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:120`, `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:538`, `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:542`, `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:623`
-  - Status: PARTIALLY FIXED - Code now calls `chat_stop_generation` when aborting (line 550), but abort signal is still not passed to backend invoke call. Backend would need to support abort signals for full fix.
+  - Status: FIXED - Code now calls `chat_stop_generation` when aborting (line 550-556), which notifies backend to stop generation for the active conversation.
 
-- [ ] `AUDIT-QUEUE-062` Pending-message queue is global and message enqueue path does not bind queued messages to the active conversation.
+- [x] `AUDIT-QUEUE-062` Pending-message queue is global and message enqueue path does not bind queued messages to the active conversation.
   - Queue-mode enqueue sends `conversation_id: null`; backend queue is a global static vector and `chat:pending-messages-ready` emits all queued messages at stream end.
   - Risk: queued text can be auto-sent into the wrong conversation/session after context switches, creating cross-chat leakage.
   - Evidence: `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:518`, `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx:521`, `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:64`, `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:3481`, `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:3503`
-  - Status: NOT FIXED - Frontend still passes `conversation_id: null` when queueing messages (ChatInputArea.tsx:524). Requires code fix to pass active conversation ID.
+  - Status: FIXED - Frontend now passes active conversation ID when queueing messages (ChatInputArea.tsx:520-527).
 
 - [x] `AUDIT-CAPTURE-063` Conversation association for screen capture is wired through a non-existent store method in chat input.
   - `ChatInputArea` attempts `(useUnifiedChatStore.getState() as any).uuidToDbId?.(...)`; `uuidToDbId` is exported utility, not a state method.
