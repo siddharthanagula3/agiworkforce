@@ -465,21 +465,33 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
   // Auto-load on mount
   useEffect(() => {
     if (autoLoad) {
-      loadAll();
+      try {
+        loadAll();
+      } catch (err) {
+        console.error('Error auto-loading memories:', err);
+      }
     }
   }, [autoLoad, loadAll]);
 
   // Load stats on mount if requested
   useEffect(() => {
     if (loadStats) {
-      getStats();
+      try {
+        getStats();
+      } catch (err) {
+        console.error('Error loading stats:', err);
+      }
     }
   }, [loadStats, getStats]);
 
   // Load categories on mount if requested
   useEffect(() => {
     if (loadCategories) {
-      listCategories();
+      try {
+        listCategories();
+      } catch (err) {
+        console.error('Error loading categories:', err);
+      }
     }
   }, [loadCategories, listCategories]);
 

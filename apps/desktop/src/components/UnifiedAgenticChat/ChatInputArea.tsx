@@ -517,11 +517,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     // Queue mode handling
     if (isQueueMode) {
+      // AUDIT-STREAM-062 fix: Pass active conversation ID when queueing
+      const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+      const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
       try {
         const pendingMsg = await invoke<PendingUserMessage>('chat_add_pending_message', {
           request: {
             content: messageContent,
-            conversation_id: null,
+            conversation_id: conversationDbId,
           },
         });
 
