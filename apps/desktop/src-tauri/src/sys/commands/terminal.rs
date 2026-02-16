@@ -164,12 +164,17 @@ pub async fn execute_terminal_command(
                 ShellType::Zsh => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
                 ShellType::Fish => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
                 ShellType::Sh => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
-                ShellType::Cmd => ("cmd.exe".to_string(), vec!["/C".to_string(), command.clone()]),
+                ShellType::Cmd => (
+                    "cmd.exe".to_string(),
+                    vec!["/C".to_string(), command.clone()],
+                ),
                 ShellType::Wsl => (
                     "wsl.exe".to_string(),
                     vec!["bash".to_string(), "-lc".to_string(), command.clone()],
                 ),
-                ShellType::GitBash => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+                ShellType::GitBash => {
+                    ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                }
             }
         }
     };
@@ -546,7 +551,11 @@ pub async fn terminal_set_env(
     value: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
-    tracing::info!("Setting environment variable {} in session {}", key, session_id);
+    tracing::info!(
+        "Setting environment variable {} in session {}",
+        key,
+        session_id
+    );
 
     state
         .set_env(&session_id, &key, &value)
@@ -563,7 +572,11 @@ pub async fn terminal_get_env(
     key: String,
     state: State<'_, SessionManager>,
 ) -> Result<Option<String>, String> {
-    tracing::debug!("Getting environment variable {} from session {}", key, session_id);
+    tracing::debug!(
+        "Getting environment variable {} from session {}",
+        key,
+        session_id
+    );
 
     state
         .get_env(&session_id, &key)
@@ -592,7 +605,11 @@ pub async fn terminal_unset_env(
     key: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
-    tracing::info!("Unsetting environment variable {} in session {}", key, session_id);
+    tracing::info!(
+        "Unsetting environment variable {} in session {}",
+        key,
+        session_id
+    );
 
     state
         .unset_env(&session_id, &key)
