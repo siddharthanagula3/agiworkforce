@@ -4641,10 +4641,7 @@ fn apply_migration_v54(conn: &Connection) -> Result<()> {
         .unwrap_or(false);
 
     if !column_exists {
-        conn.execute(
-            "ALTER TABLE command_history ADD COLUMN session_id TEXT",
-            [],
-        )?;
+        conn.execute("ALTER TABLE command_history ADD COLUMN session_id TEXT", [])?;
 
         // Create index for efficient session-scoped queries
         conn.execute(

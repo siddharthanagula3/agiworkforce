@@ -220,7 +220,11 @@ impl SessionManager {
             }
         }
 
-        tracing::debug!("Listed {} environment variables in session {}", env_vars.len(), session_id);
+        tracing::debug!(
+            "Listed {} environment variables in session {}",
+            env_vars.len(),
+            session_id
+        );
         Ok(env_vars)
     }
 
@@ -245,7 +249,11 @@ impl SessionManager {
         };
 
         session.execute_command(&command)?;
-        tracing::debug!("Unset environment variable {} in session {}", key, session_id);
+        tracing::debug!(
+            "Unset environment variable {} in session {}",
+            key,
+            session_id
+        );
         Ok(())
     }
 
@@ -315,7 +323,10 @@ impl SessionManager {
                     // This ensures backend state is consistent with frontend cleanup
                     let mut sessions_lock = sessions.lock().await;
                     sessions_lock.remove(&session_id);
-                    tracing::info!("Cleaned up backend session {} after process exit", session_id);
+                    tracing::info!(
+                        "Cleaned up backend session {} after process exit",
+                        session_id
+                    );
                     break;
                 }
 
@@ -373,7 +384,11 @@ async fn log_command_to_db(
     )
     .map_err(|e| Error::Database(e.to_string()))?;
 
-    tracing::debug!("Logged command to database for session {}: {}", session_id, command);
+    tracing::debug!(
+        "Logged command to database for session {}: {}",
+        session_id,
+        command
+    );
 
     Ok(())
 }
