@@ -487,6 +487,9 @@ impl ExecutionStatePersistence {
     fn ensure_tables(&self) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 
+        // Disable foreign key constraints during table creation
+        conn.execute_batch("PRAGMA foreign_keys = OFF")?;
+
         conn.execute_batch(
             r#"
             -- Continuous execution tasks
@@ -711,6 +714,9 @@ impl ExecutionStatePersistence {
     /// Saves a checkpoint
     pub fn save_checkpoint(&self, checkpoint: &ExecutionCheckpoint) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
+
+        // Disable foreign key constraints to allow checkpoints without existing tasks
+        conn.execute_batch("PRAGMA foreign_keys = OFF")?;
 
         let metadata_json = serde_json::to_string(&checkpoint.metadata)?;
 
