@@ -542,6 +542,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       sendAbortControllerRef.current.abort();
     }
     sendAbortControllerRef.current = new AbortController();
+
+    // AUDIT-STREAM-061 fix: Also notify backend to stop generation
+    const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+    const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
+    try {
+      await invoke('chat_stop_generation', { conversationId: conversationDbId });
+    } catch {
+      // Ignore errors - generation may have already stopped
+    }
     const currentAbortSignal = sendAbortControllerRef.current.signal;
 
     // Check for Auto Mode restrictions
@@ -898,12 +907,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onModeSelectorChange={setShowTranscriptionModeSelector}
               onPreferWhisperCloudChange={setPreferWhisperCloud}
               onScreenCapture={handleScreenCapture}
-              conversationId={
-                (() => {
-                  const activeId = useUnifiedChatStore.getState().activeConversationId;
-                  return activeId ? uuidToDbId(activeId) : undefined;
-                })()
-              }
+              conversationId={(() => {
+                const activeId = useUnifiedChatStore.getState().activeConversationId;
+                return activeId ? uuidToDbId(activeId) : undefined;
+              })()}
             />
 
             {/* Right side controls */}
