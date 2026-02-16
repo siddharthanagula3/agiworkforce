@@ -551,6 +551,11 @@ export function useAgenticEvents() {
       // AUDIT-EVENT-057 fix: Listen to agent:status:update (matching backend emission)
       const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status:update', (event) => {
         if (!isMountedRef.current) return;
+        // Defensive: check if agent exists in payload
+        if (!event.payload?.agent) {
+          console.warn('[useAgenticEvents] agent:status:update received without agent data');
+          return;
+        }
         const existingAgents = useUnifiedChatStore.getState().agents ?? [];
         const agentExists = existingAgents.some((a) => a.id === event.payload.agent.id);
 
@@ -576,25 +581,6 @@ export function useAgenticEvents() {
         });
       });
       push(unlistenAgentSpawned);
-
-      interface AgentActionPayload {
-        type?: string;
-        tool?: string;
-        tool_name?: string;
-        name?: string;
-      }
-      // AUDIT-EVENT-057 fix: Listen to agent:action_update (matching backend emission)
-      const unlistenAgentAction = await listen<AgentActionPayload>(
-        'agent:action_update',
-        (event) => {
-          if (!isMountedRef.current) return;
-          const payload = event.payload;
-          const actionType =
-            payload?.type || payload?.tool || payload?.tool_name || payload?.name || 'action';
-          focusSidecar(String(actionType));
-        },
-      );
-      push(unlistenAgentAction);
 
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {
         if (!isMountedRef.current) return;

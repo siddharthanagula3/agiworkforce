@@ -551,8 +551,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
     try {
       await invoke('chat_stop_generation', { conversationId: conversationDbId });
-    } catch {
-      // Ignore errors - generation may have already stopped
+    } catch (error) {
+      // Log but don't throw - generation may have already stopped
+      console.warn('[ChatInputArea] Failed to stop generation:', error);
     }
     const currentAbortSignal = sendAbortControllerRef.current.signal;
 

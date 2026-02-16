@@ -923,24 +923,13 @@ impl ToolExecutor {
     }
 
     pub fn with_app_handle(registry: Arc<ToolRegistry>, app_handle: tauri::AppHandle) -> Self {
-        // Try to get project folder from state
-        let project_folder = {
-            use tauri::Manager;
-            if let Some(state) =
-                app_handle.try_state::<crate::sys::commands::project_context::ProjectContextState>()
-            {
-                // Use block_on to get the folder synchronously during construction
-                tauri::async_runtime::block_on(async { state.get_folder().await })
-            } else {
-                None
-            }
-        };
-
+        // Return executor without getting project folder synchronously
+        // The project folder should be set via set_project_folder method after creation
         Self {
             registry,
             app_handle: Some(app_handle),
             conversation_mode: None,
-            project_folder,
+            project_folder: None,
         }
     }
 
@@ -2143,12 +2132,17 @@ impl ToolExecutor {
             timeout_ms
         );
 
-        match timeout(
+        // Debug: log the arguments
+        tracing::debug!("[ToolExecutor] MCP tool arguments: {:?}", args);
+
+        // Execute with timeout
+        let result = timeout(
             TokioDuration::from_millis(timeout_ms),
             mcp_state.registry.execute_tool(&tool_call.name, args),
         )
-        .await
-        {
+        .await;
+
+        match result {
             Ok(Ok(result_value)) => {
                 let normalized_result = Self::normalize_mcp_tool_result(
                     &tool_call.name,
