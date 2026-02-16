@@ -388,15 +388,22 @@ impl LlmExecutor {
     fn infer_provider_from_model(&self, model: &str) -> Provider {
         let model_lower = model.to_lowercase();
 
+        // Local models - these run via Ollama
         if model_lower.starts_with("llama")
             || model_lower.starts_with("mistral")
             || model_lower.starts_with("phi")
         {
-            Provider::Ollama
-        } else {
-            // Route all non-local models through ManagedCloud
-            Provider::ManagedCloud
+            return Provider::Ollama;
         }
+
+        // Anthropic models
+        if model_lower.contains("claude") || model_lower.contains("anthropic") {
+            return Provider::Anthropic;
+        }
+
+        // All other cloud models route through ManagedCloud
+        // This includes: gpt-*, gemini-*, grok-*, deepseek-*, qwen-*, kim-*, glm-*, sonar-*, etc.
+        Provider::ManagedCloud
     }
 }
 
