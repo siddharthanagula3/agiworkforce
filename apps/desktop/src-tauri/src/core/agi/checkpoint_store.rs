@@ -34,6 +34,10 @@ impl CheckpointStore {
             // Enable WAL mode for better concurrency
             conn.execute_batch("PRAGMA journal_mode = WAL")?;
 
+            // Disable foreign key constraints during table creation
+            // (tables may reference each other or other tables that don't exist yet)
+            conn.execute_batch("PRAGMA foreign_keys = OFF")?;
+
             // Create agi_task_checkpoints table
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS agi_task_checkpoints (
@@ -519,8 +523,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_store_init() {
-        let db_path = tempfile::tempdir().unwrap().path().join("test.db");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
         let store = CheckpointStore::new(&db_path).unwrap();
-        assert!(store.init().await.is_ok());
+        let result = store.init().await;
+        if let Err(e) = &result {
+            eprintln!("Init error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        drop(temp_dir); // Explicitly drop after test
     }
 }
