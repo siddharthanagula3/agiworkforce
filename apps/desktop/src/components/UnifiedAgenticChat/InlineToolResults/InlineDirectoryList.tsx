@@ -30,9 +30,37 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status:
   const [expanded, setExpanded] = useState(true);
 
   const data = result?.data as DirectoryListData | undefined;
-  if (!data) return null;
 
-  // Handle error state
+  // Hooks must be called unconditionally - call them before any conditional returns
+  // Get entries - wrap in useMemo to fix exhaustive-deps warning
+  const entries: DirectoryEntry[] = useMemo(() => data?.entries || [], [data]);
+
+  // Separate directories and files - useMemo always called at top level
+  const { directories, files }: { directories: DirectoryEntry[]; files: DirectoryEntry[] } =
+    useMemo(() => {
+      const dirs: DirectoryEntry[] = [];
+      const fls: DirectoryEntry[] = [];
+      entries.forEach((entry) => {
+        if (entry.type === 'directory') {
+          dirs.push(entry);
+        } else {
+          fls.push(entry);
+        }
+      });
+      // Sort: directories first, then files, both alphabetically
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      fls.sort((a, b) => a.name.localeCompare(b.name));
+      return { directories: dirs, files: fls };
+    }, [entries]);
+
+  const path = data?.path || '';
+
+  // Handle missing data case - after hooks are called
+  if (!data) {
+    return null;
+  }
+
+  // Handle error state - after hooks are called
   if (!data.success || data.error) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -45,26 +73,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status:
       </div>
     );
   }
-
-  const entries = data.entries || [];
-  const path = data.path || '';
-
-  // Separate directories and files
-  const { directories, files } = useMemo(() => {
-    const dirs: DirectoryEntry[] = [];
-    const fls: DirectoryEntry[] = [];
-    entries.forEach((entry) => {
-      if (entry.type === 'directory') {
-        dirs.push(entry);
-      } else {
-        fls.push(entry);
-      }
-    });
-    // Sort: directories first, then files, both alphabetically
-    dirs.sort((a, b) => a.name.localeCompare(b.name));
-    fls.sort((a, b) => a.name.localeCompare(b.name));
-    return { directories: dirs, files: fls };
-  }, [entries]);
 
   const formatSize = (bytes?: number): string => {
     if (!bytes) return '';
@@ -130,7 +138,20 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status:
           {files.map((file) => {
             // Determine icon based on extension
             const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '';
-            const isTextFile = ['txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx', 'py', 'rs', 'go', 'html', 'css'].includes(ext || '');
+            const isTextFile = [
+              'txt',
+              'md',
+              'json',
+              'js',
+              'ts',
+              'tsx',
+              'jsx',
+              'py',
+              'rs',
+              'go',
+              'html',
+              'css',
+            ].includes(ext || '');
 
             return (
               <div
