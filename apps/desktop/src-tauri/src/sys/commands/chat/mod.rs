@@ -60,8 +60,7 @@ const FAST_TOOL_TIMEOUT_SECS: u64 = 10;
 
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 // AUDIT-STREAM-038 fix: Track active conversation for scoped stop
-static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> =
-    Lazy::new(|| Mutex::new(None));
+static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> = Lazy::new(|| Mutex::new(None));
 
 // Pending messages queue for mid-task user input
 static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
@@ -265,7 +264,12 @@ async fn execute_chat_tool_with_timeout(
     let exec_abort_handle = exec_task.abort_handle();
 
     // Wrap in a pinned future to work with select!
-    let mut execute_future = std::pin::Pin::from(Box::new(exec_task) as Box<dyn std::future::Future<Output = Result<Result<String, anyhow::Error>, tokio::task::JoinError>> + Send>);
+    let mut execute_future = std::pin::Pin::from(Box::new(exec_task)
+        as Box<
+            dyn std::future::Future<
+                    Output = Result<Result<String, anyhow::Error>, tokio::task::JoinError>,
+                > + Send,
+        >);
 
     let timeout_future = tokio::time::sleep(timeout_duration);
     tokio::pin!(timeout_future);
@@ -3674,7 +3678,8 @@ Please confirm the tool permissions or try a different approach.",
                     };
 
                     // AUDIT-STREAM-062 fix: Check pending messages only for this conversation
-                    let pending_at_end = peek_pending_messages_for_conversation(conversation_id_clone);
+                    let pending_at_end =
+                        peek_pending_messages_for_conversation(conversation_id_clone);
 
                     info!(
                         target: "chat",
@@ -4142,14 +4147,15 @@ Please confirm the tool permissions or try a different approach.",
 
                     // Add assistant message with tool calls to conversation
                     // Convert normalized StreamingToolCall to ToolCall for the message
-                    let tool_calls_for_message: Vec<crate::core::llm::ToolCall> = normalized_tool_calls
-                        .iter()
-                        .map(|tc| crate::core::llm::ToolCall {
-                            id: tc.id.clone(),
-                            name: tc.name.clone(),
-                            arguments: tc.arguments.clone(),
-                        })
-                        .collect();
+                    let tool_calls_for_message: Vec<crate::core::llm::ToolCall> =
+                        normalized_tool_calls
+                            .iter()
+                            .map(|tc| crate::core::llm::ToolCall {
+                                id: tc.id.clone(),
+                                name: tc.name.clone(),
+                                arguments: tc.arguments.clone(),
+                            })
+                            .collect();
                     current_messages.push(crate::core::llm::ChatMessage {
                         role: "assistant".to_string(),
                         content: outcome.response.content.clone(),
@@ -4539,7 +4545,10 @@ pub fn chat_set_monthly_budget(
 
 #[tauri::command]
 pub async fn chat_stop_generation(conversation_id: Option<i64>) -> Result<(), String> {
-    info!("[Chat] Stopping generation - setting stop flag for conversation: {:?}", conversation_id);
+    info!(
+        "[Chat] Stopping generation - setting stop flag for conversation: {:?}",
+        conversation_id
+    );
     STOP_GENERATION.store(true, Ordering::SeqCst);
     // AUDIT-STREAM-038 fix: Track which conversation is being stopped
     if let Some(conv_id) = conversation_id {
@@ -4696,7 +4705,9 @@ pub async fn chat_pop_pending_message(
     // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided
     let msg = if let Some(conversation_id) = request.conversation_id {
         // Find the first message matching this conversation
-        let idx = queue.iter().position(|m| m.conversation_id == Some(conversation_id));
+        let idx = queue
+            .iter()
+            .position(|m| m.conversation_id == Some(conversation_id));
         if let Some(idx) = idx {
             queue.remove(idx)
         } else {
@@ -4758,7 +4769,12 @@ pub fn peek_pending_messages() -> Vec<PendingUserMessage> {
 pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<PendingUserMessage> {
     PENDING_MESSAGES
         .lock()
-        .map(|q| q.iter().filter(|m| m.conversation_id == Some(conversation_id)).cloned().collect())
+        .map(|q| {
+            q.iter()
+                .filter(|m| m.conversation_id == Some(conversation_id))
+                .cloned()
+                .collect()
+        })
         .unwrap_or_default()
 }
 

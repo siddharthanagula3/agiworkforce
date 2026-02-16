@@ -259,8 +259,8 @@ pub async fn timeout_get_recommended(task_type: String) -> Result<i64, String> {
         "code_generation" => 1800, // 30 minutes
         "code_refactor" => 900,    // 15 minutes
         "search" => 300,           // 5 minutes
-        "file_operation" => 600,    // 10 minutes
-        "browser" => 1200,          // 20 minutes
+        "file_operation" => 600,   // 10 minutes
+        "browser" => 1200,         // 20 minutes
         _ => 600,                  // Default 10 minutes
     };
     Ok(timeout)
