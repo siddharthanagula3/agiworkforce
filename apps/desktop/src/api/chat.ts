@@ -101,11 +101,12 @@ export async function handleStop(): Promise<boolean> {
 
 /**
  * Stop any ongoing chat generation
+ * @param conversationId - Optional conversation ID to scope the stop to (AUDIT-STREAM-038 fix)
  *
  * @deprecated Use handleStop() instead which also handles AGI operations
  */
-export async function stopGeneration(): Promise<void> {
-  return invoke<void>('chat_stop_generation');
+export async function stopGeneration(conversationId?: number): Promise<void> {
+  return invoke<void>('chat_stop_generation', { conversationId });
 }
 
 /**
@@ -160,10 +161,11 @@ export class ChatClient {
 
   /**
    * Stop generation (deprecated)
+   * @param conversationId - Optional conversation ID to scope the stop to
    * @deprecated Use handleStop() instead
    */
-  static async stopGeneration(): Promise<void> {
-    return stopGeneration();
+  static async stopGeneration(conversationId?: number): Promise<void> {
+    return stopGeneration(conversationId);
   }
 
   /**
