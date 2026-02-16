@@ -1527,6 +1527,9 @@ pub async fn chat_send_message(
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
+    // Generate correlation ID for request tracing
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+
     // Clear any stale stop flag from previous conversations/runs.
     // Without this, one stopped run can leak into future chats.
     reset_stop_flag();
@@ -1540,15 +1543,21 @@ pub async fn chat_send_message(
         if !attachments.is_empty() {
             let attachment_names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
             info!(
-                "[Chat] Received message with {} attachment(s): {:?}",
-                attachments.len(),
-                attachment_names
+                target: "chat",
+                correlation_id = %correlation_id,
+                attachment_count = attachments.len(),
+                attachments = ?attachment_names,
+                "Chat message with attachments received"
             );
         }
     }
+
     info!(
-        "[Chat] Received message for processing: {}",
-        request.content
+        target: "chat",
+        correlation_id = %correlation_id,
+        conversation_id = ?request.conversation_id,
+        content_length = request.content.len(),
+        "Chat send_message started"
     );
 
     #[cfg(feature = "billing")]
@@ -2213,8 +2222,15 @@ pub async fn chat_send_message(
             let provider_enum_clone = provider_enum;
             let router_clone = _llm_state.router.clone();
             let research_config = _research_state.config.read().await.clone();
+            let correlation_id_clone = correlation_id.clone();
 
             tauri::async_runtime::spawn(async move {
+                info!(
+                    target: "chat",
+                    correlation_id = %correlation_id_clone,
+                    "Deep research chat message processing started"
+                );
+
                 let _ = app_handle_clone.emit(
                     "chat:stream-chunk",
                     serde_json::json!({
@@ -2391,6 +2407,14 @@ pub async fn chat_send_message(
             });
         }
 
+        info!(
+            target: "chat",
+            correlation_id = %correlation_id,
+            agent_mode = agent_mode,
+            is_deep_research = is_deep_research,
+            "Starting chat message processing"
+        );
+
         if agent_mode {
             use crate::automation::AutomationService;
             use crate::core::agi::{AGIConfig, AgentOrchestrator};
@@ -2407,6 +2431,7 @@ pub async fn chat_send_message(
             let attachments_clone = request.attachments.clone();
             let agent_instruction_clone = agent_instruction.clone();
             let llm_messages_clone = llm_request.messages.clone();
+            let correlation_id_clone = correlation_id.clone();
 
             tauri::async_runtime::spawn(async move {
                 let start_time = std::time::Instant::now();
@@ -2565,8 +2590,10 @@ pub async fn chat_send_message(
                                     }
                                     Err(e) => {
                                         tracing::warn!(
-                                            "[Chat] Agent response synthesis failed: {}",
-                                            e
+                                            target: "chat",
+                                            correlation_id = %correlation_id_clone,
+                                            error = %e,
+                                            "Agent response synthesis failed"
                                         );
                                     }
                                 }
@@ -2719,6 +2746,7 @@ pub async fn chat_send_message(
         let user_id_clone = request.user_id.clone();
         let project_folder_clone = request.project_folder.clone();
         let conversation_mode_clone = request.conversation_mode.clone();
+        let correlation_id_clone = correlation_id.clone();
 
         // Spawn streaming task to avoid blocking the command response
         // Return immediately - events will handle the streaming updates
@@ -3645,8 +3673,20 @@ Please confirm the tool permissions or try a different approach.",
                         }
                     };
 
-                    // Check for pending messages at stream end
-                    let pending_at_end = peek_pending_messages();
+                    // AUDIT-STREAM-062 fix: Check pending messages only for this conversation
+                    let pending_at_end = peek_pending_messages_for_conversation(conversation_id_clone);
+
+                    info!(
+                        target: "chat",
+                        correlation_id = %correlation_id_clone,
+                        conversation_id = conversation_id_clone,
+                        message_id = %frontend_message_id_clone,
+                        backend_message_id = assistant_message.id,
+                        token_count = token_count,
+                        pending_messages = pending_at_end.len(),
+                        "Chat send_message completed successfully"
+                    );
+
                     let _ = app_handle_clone.emit(
                         "chat:stream-end",
                         serde_json::json!({
@@ -3664,8 +3704,10 @@ Please confirm the tool permissions or try a different approach.",
                     // If there are pending messages, emit them for processing
                     if !pending_at_end.is_empty() {
                         info!(
-                            "[Chat] Stream ended with {} pending message(s) to process",
-                            pending_at_end.len()
+                            target: "chat",
+                            correlation_id = %correlation_id_clone,
+                            pending_count = pending_at_end.len(),
+                            "Stream ended with pending messages to process"
                         );
                         let _ = app_handle_clone.emit(
                             "chat:pending-messages-ready",
@@ -3678,6 +3720,13 @@ Please confirm the tool permissions or try a different approach.",
                     }
                 }
                 Err(e) => {
+                    tracing::error!(
+                        target: "chat",
+                        correlation_id = %correlation_id_clone,
+                        conversation_id = conversation_id_clone,
+                        error = %e,
+                        "Chat send_message failed with streaming error"
+                    );
                     emit_stream_failure(
                         &app_handle_clone,
                         conversation_id_clone,
@@ -4626,9 +4675,15 @@ pub async fn chat_clear_pending_messages(app_handle: tauri::AppHandle) -> Result
     Ok(())
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PopPendingMessageRequest {
+    pub conversation_id: Option<i64>,
+}
+
 #[tauri::command]
 pub async fn chat_pop_pending_message(
     app_handle: tauri::AppHandle,
+    request: PopPendingMessageRequest,
 ) -> Result<Option<PendingUserMessage>, String> {
     let mut queue = PENDING_MESSAGES
         .lock()
@@ -4638,7 +4693,20 @@ pub async fn chat_pop_pending_message(
         return Ok(None);
     }
 
-    let msg = queue.remove(0);
+    // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided
+    let msg = if let Some(conversation_id) = request.conversation_id {
+        // Find the first message matching this conversation
+        let idx = queue.iter().position(|m| m.conversation_id == Some(conversation_id));
+        if let Some(idx) = idx {
+            queue.remove(idx)
+        } else {
+            return Ok(None);
+        }
+    } else {
+        // Fallback to global queue behavior for backward compatibility
+        queue.remove(0)
+    };
+
     info!(
         "[Chat] Popped pending message (remaining: {}): {}...",
         queue.len(),
