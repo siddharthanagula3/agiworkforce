@@ -230,7 +230,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&tool).unwrap();
-        assert!(json.contains("web_search_20250305"));
+        // snake_case conversion turns WebSearch20250305 into web_search20250305
+        assert!(json.contains("web_search20250305"));
         assert!(json.contains("max_uses"));
     }
 
