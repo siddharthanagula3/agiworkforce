@@ -481,10 +481,10 @@ export const UnifiedAgenticChat: React.FC<{
           return state.currentStreamingMessageId;
         }
         // AUDIT-STREAM-032 fix: Only allow fallback to last streaming assistant
-        // if we're actively streaming for THIS conversation
-        const isCurrentlyStreamingForThisConv =
-          sessionMessageId || state.currentStreamingMessageId;
-        if (isCurrentlyStreamingForThisConv) {
+        // if we're actively streaming for THIS conversation (checked via sessionMessageId).
+        // Do NOT use global state.currentStreamingMessageId here as it can point to
+        // a different conversation and cause cross-conversation pollution.
+        if (sessionMessageId) {
           const lastStreamingAssistant = [...conversationMessages]
             .reverse()
             .find((m) => m.role === 'assistant' && Boolean(m.metadata?.streaming));
@@ -663,17 +663,22 @@ export const UnifiedAgenticChat: React.FC<{
           console.warn(
             `[UnifiedAgenticChat] Tool execution timed out: ${toolName} (${toolCallId})`,
           );
-          upsertToolArtifact(conversationId, toolCallId, {
-            toolName,
-            type: toolNameToArtifactType(toolName),
-            title: toolNameToTitle(toolName),
-            status: 'failed',
-            success: false,
-            error:
-              'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-            content:
-              'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-          }, payloadMessageId);
+          upsertToolArtifact(
+            conversationId,
+            toolCallId,
+            {
+              toolName,
+              type: toolNameToArtifactType(toolName),
+              title: toolNameToTitle(toolName),
+              status: 'failed',
+              success: false,
+              error:
+                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+              content:
+                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+            },
+            payloadMessageId,
+          );
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: 'error',
             message: `${toolName} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
@@ -1239,16 +1244,16 @@ export const UnifiedAgenticChat: React.FC<{
               payload.conversation_id,
               tc.id,
               {
-              toolName: tc.name, // Use 'toolName' consistently with upsertToolArtifact logic
-              type: toolNameToArtifactType(tc.name),
-              title: toolNameToTitle(tc.name),
-              status: 'running',
-              content: '',
-              ...(parsedArguments['prompt'] ? { prompt: parsedArguments['prompt'] } : {}),
-              ...(parsedArguments['output_path']
-                ? { filePath: parsedArguments['output_path'] }
-                : {}),
-              ...(parsedArguments['file_path'] ? { filePath: parsedArguments['file_path'] } : {}),
+                toolName: tc.name, // Use 'toolName' consistently with upsertToolArtifact logic
+                type: toolNameToArtifactType(tc.name),
+                title: toolNameToTitle(tc.name),
+                status: 'running',
+                content: '',
+                ...(parsedArguments['prompt'] ? { prompt: parsedArguments['prompt'] } : {}),
+                ...(parsedArguments['output_path']
+                  ? { filePath: parsedArguments['output_path'] }
+                  : {}),
+                ...(parsedArguments['file_path'] ? { filePath: parsedArguments['file_path'] } : {}),
               },
               payload.message_id,
             );
@@ -1390,6 +1395,88 @@ export const UnifiedAgenticChat: React.FC<{
             metadata: { tool_call_id: payload.tool_call_id, result_preview: payload.result },
             fadeAfter: 3000,
           });
+        }),
+      );
+
+      // AUDIT-STREAM-022 fix: Listen for agi:tool_stream cancelled events
+      // This ensures cancellation is properly handled for both event channels:
+      // - agi:tool_stream (handled by useAgenticEvents.ts via activeToolStreams)
+      // - chat:tool-* (handled here for UI updates)
+      registerListener(
+        listen<{
+          event: {
+            type: 'cancelled';
+            tool_id: string;
+            reason?: string;
+            duration_ms: number;
+          };
+          timestamp: string;
+        }>('agi:tool_stream', (event) => {
+          if (!isMountedRef.current) return;
+          const { event: streamEvent, timestamp } = event.payload;
+
+          // Only handle cancelled events
+          if (streamEvent.type !== 'cancelled') return;
+
+          const cancelledEvent = streamEvent as {
+            type: 'cancelled';
+            tool_id: string;
+            reason?: string;
+            duration_ms: number;
+          };
+
+          console.log(
+            '[UnifiedAgenticChat] Tool cancelled via agi:tool_stream:',
+            cancelledEvent.tool_id,
+            cancelledEvent.reason,
+          );
+
+          // Clear any tool execution timeout that might be pending
+          clearToolExecutionTimeout(cancelledEvent.tool_id);
+
+          // Update action trail to reflect cancellation
+          useUnifiedChatStore.getState().addActionTrailEntry({
+            type: 'error',
+            message: `Tool cancelled: ${cancelledEvent.reason || 'Cancelled by user'}`,
+            metadata: { tool_call_id: cancelledEvent.tool_id },
+            fadeAfter: 3000,
+          });
+
+          // Update message metadata to reflect cancelled status
+          // We need to find the message that contains this tool's artifact
+          const state = useUnifiedChatStore.getState();
+          for (const message of state.messages) {
+            const artifacts = message.artifacts || [];
+            const artifactIndex = artifacts.findIndex((a) => a.id === cancelledEvent.tool_id);
+            if (artifactIndex >= 0) {
+              const existingArtifact = artifacts[artifactIndex];
+              if (existingArtifact) {
+                const updatedArtifact = {
+                  ...existingArtifact,
+                  metadata: {
+                    ...existingArtifact.metadata,
+                    status: 'cancelled',
+                    error: cancelledEvent.reason,
+                    completedAt: new Date(timestamp).toISOString(),
+                    duration_ms: cancelledEvent.duration_ms,
+                  },
+                };
+                const updatedArtifacts = [...artifacts];
+                updatedArtifacts[artifactIndex] = updatedArtifact;
+
+                state.updateMessage(message.id, {
+                  artifacts: updatedArtifacts,
+                  metadata: {
+                    ...message.metadata,
+                    artifacts: updatedArtifacts,
+                    status: 'cancelled',
+                    streaming: false,
+                  },
+                });
+              }
+              break;
+            }
+          }
         }),
       );
 
@@ -1543,11 +1630,12 @@ export const UnifiedAgenticChat: React.FC<{
 
       // Clear stale stream session tracking
       activeStreamSessions.clear();
-      toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+      const timeouts = toolExecutionTimeoutsRef.current;
+      timeouts.forEach((timeoutEntry) => {
         clearTimeout(timeoutEntry.softTimeoutId);
         clearTimeout(timeoutEntry.hardTimeoutId);
       });
-      toolExecutionTimeoutsRef.current.clear();
+      timeouts.clear();
 
       // Clean up all registered listeners - handle both sync and async unlisten functions
       // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections
@@ -2111,10 +2199,9 @@ export const UnifiedAgenticChat: React.FC<{
       // Clean up loading state on error - for successful streaming, chat:stream-end handles this
       setIsLoading(false);
       setStreamingMessage(null);
-    }
-    // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
-    // The watchdog ensures we don't get stuck if stream-end never arrives
-    finally {
+    } finally {
+      // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
+      // The watchdog ensures we don't get stuck if stream-end never arrives
       // Set a watchdog timeout - if stream-end doesn't arrive within 5 minutes, force cleanup
       const WATCHDOG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
       if (streamWatchdogTimeoutRef.current) {
@@ -2165,9 +2252,13 @@ export const UnifiedAgenticChat: React.FC<{
       abortControllerRef.current = null;
     }
 
+    // AUDIT-STREAM-038 fix: Pass conversation ID for scoped stop
+    const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+    const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
+
     if (isTauri) {
       try {
-        await ipcInvoke('chat_stop_generation');
+        await ipcInvoke('chat_stop_generation', { conversationId: conversationDbId });
       } catch (error) {
         console.warn('[UnifiedAgenticChat] Failed to stop generation:', error);
       }
