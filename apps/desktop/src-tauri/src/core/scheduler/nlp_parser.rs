@@ -267,7 +267,7 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
         let month = parse_month(caps.get(1).map(|m| m.as_str()).unwrap_or(""))?;
         let day: u32 = caps
             .get(2)
-            .unwrap()
+            .ok_or_else(|| ParseError::InvalidDate("Invalid day".to_string()))?
             .as_str()
             .parse()
             .map_err(|_| ParseError::InvalidDate("Invalid day".to_string()))?;
@@ -317,7 +317,7 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     if let Some(caps) = interval_re.captures(input) {
         let amount: i64 = caps
             .get(1)
-            .unwrap()
+            .ok_or_else(|| ParseError::InvalidInterval("Invalid number".to_string()))?
             .as_str()
             .parse()
             .map_err(|_| ParseError::InvalidInterval("Invalid number".to_string()))?;

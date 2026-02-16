@@ -24,14 +24,16 @@ impl WorkflowScheduler {
 
         tokio::spawn(async move {
             let scheduler = WorkflowScheduler::new(engine, executor);
-            scheduler.run_scheduler_loop().await;
+            if let Err(e) = scheduler.run_scheduler_loop().await {
+                tracing::error!("Workflow scheduler loop failed: {}", e);
+            }
         });
     }
 
-    async fn run_scheduler_loop(&self) {
+    async fn run_scheduler_loop(&self) -> Result<(), String> {
         loop {
             if let Err(e) = self.check_scheduled_workflows().await {
-                eprintln!("Error checking scheduled workflows: {}", e);
+                tracing::warn!("Error checking scheduled workflows: {}", e);
             }
 
             sleep(Duration::from_secs(60)).await;

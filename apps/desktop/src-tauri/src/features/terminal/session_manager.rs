@@ -140,6 +140,141 @@ impl SessionManager {
         })
     }
 
+    /// Set an environment variable in the terminal session
+    pub async fn set_env(&self, session_id: &str, key: &str, value: &str) -> Result<()> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let mut session = session_arc.lock().await;
+
+        // Build the command based on shell type
+        let command = match session.shell_type {
+            ShellType::PowerShell => format!("$env:{}='{}'", key, value.replace("'", "''")),
+            ShellType::Cmd => format!("set {}={}", key, value),
+            _ => format!("export {}='{}'", key, value.replace("'", "\\'")),
+        };
+
+        session.execute_command(&command)?;
+        tracing::debug!("Set environment variable {} in session {}", key, session_id);
+        Ok(())
+    }
+
+    /// Get an environment variable from the terminal session
+    pub async fn get_env(&self, session_id: &str, key: &str) -> Result<Option<String>> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let mut session = session_arc.lock().await;
+
+        // Build the command based on shell type
+        let command = match session.shell_type {
+            ShellType::PowerShell => format!("echo $env:{}", key),
+            ShellType::Cmd => format!("echo %{}%", key),
+            _ => format!("echo ${}", key),
+        };
+
+        let output = session.execute_command(&command)?;
+
+        // If output is empty, the variable is not set
+        if output.trim().is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(output.trim().to_string()))
+    }
+
+    /// List all environment variables in the terminal session
+    pub async fn list_env(&self, session_id: &str) -> Result<Vec<(String, String)>> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let mut session = session_arc.lock().await;
+
+        // Use 'env' command to list all environment variables
+        let output = session.execute_command("env")?;
+
+        let mut env_vars = Vec::new();
+        for line in output.lines() {
+            if let Some((key, value)) = line.split_once('=') {
+                if !key.is_empty() {
+                    env_vars.push((key.to_string(), value.to_string()));
+                }
+            }
+        }
+
+        tracing::debug!("Listed {} environment variables in session {}", env_vars.len(), session_id);
+        Ok(env_vars)
+    }
+
+    /// Unset an environment variable in the terminal session
+    pub async fn unset_env(&self, session_id: &str, key: &str) -> Result<()> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let mut session = session_arc.lock().await;
+
+        // Build the command based on shell type
+        let command = match session.shell_type {
+            ShellType::PowerShell => format!("Remove-Item Env:{}", key),
+            ShellType::Cmd => format!("set {}=", key),
+            _ => format!("unset {}", key),
+        };
+
+        session.execute_command(&command)?;
+        tracing::debug!("Unset environment variable {} in session {}", key, session_id);
+        Ok(())
+    }
+
+    /// Clear command history in the terminal session
+    pub async fn clear_history(&self, session_id: &str) -> Result<()> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let mut session = session_arc.lock().await;
+
+        // Clear bash/zsh history
+        let command = match session.shell_type {
+            ShellType::PowerShell => "Clear-History".to_string(),
+            ShellType::Cmd => "doskey /HISTORY=".to_string(),
+            ShellType::Fish => "history --clear".to_string(),
+            _ => "history -c".to_string(), // bash, zsh, sh
+        };
+
+        session.execute_command(&command)?;
+        tracing::debug!("Cleared command history in session {}", session_id);
+        Ok(())
+    }
+
     async fn start_output_stream(&self, session_id: String, session_arc: Arc<Mutex<PtySession>>) {
         let app_handle = self.app_handle.clone();
         let sessions = self.sessions.clone();

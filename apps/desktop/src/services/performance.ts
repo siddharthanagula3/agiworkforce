@@ -34,6 +34,7 @@ class PerformanceMonitoringService {
   private appStartTime: number;
   private observers: PerformanceObserver[] = [];
   private eventListeners: Array<{ event: string; handler: () => void }> = [];
+  private memoryMonitorInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.appStartTime = Date.now();
@@ -50,6 +51,18 @@ class PerformanceMonitoringService {
         window.removeEventListener(event, handler);
       });
       this.eventListeners = [];
+    }
+
+    this.stopMemoryMonitoring();
+  }
+
+  /**
+   * Stop memory monitoring interval.
+   */
+  private stopMemoryMonitoring(): void {
+    if (this.memoryMonitorInterval) {
+      clearInterval(this.memoryMonitorInterval);
+      this.memoryMonitorInterval = null;
     }
   }
 
@@ -295,7 +308,10 @@ class PerformanceMonitoringService {
   }
 
   public monitorMemory(interval: number = 5000): ReturnType<typeof setInterval> {
-    return setInterval(async () => {
+    // Stop any existing monitoring interval before starting a new one
+    this.stopMemoryMonitoring();
+
+    this.memoryMonitorInterval = setInterval(async () => {
       try {
         const metrics = await this.getSystemMetrics();
         const memoryUsagePercent = (metrics.memory_used_mb / metrics.memory_total_mb) * 100;
@@ -312,6 +328,8 @@ class PerformanceMonitoringService {
         console.error('Failed to monitor memory:', error);
       }
     }, interval);
+
+    return this.memoryMonitorInterval;
   }
 
   public getPerformanceSummary() {
