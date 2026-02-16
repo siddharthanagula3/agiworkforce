@@ -216,7 +216,8 @@ pub async fn extension_analyze_forms(
 #[tauri::command]
 pub async fn extension_task_result(
     result: TaskResult,
-    _state: State<'_, crate::data::app_state::AppState>,
+    state: State<'_, crate::data::app_state::AppState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<TaskResultResponse, String> {
     tracing::info!(
         "Received task result from extension (task_id: {}, success: {})",
@@ -234,16 +235,97 @@ pub async fn extension_task_result(
         );
     }
 
-    // TODO: Update conversation with task results
-    // TODO: Store screenshots if provided
-    // TODO: Continue with next step if needed
+    // 1. Store screenshots if provided
+    let screenshot_path = if let Some(screenshot_data) = &result.screenshot {
+        match save_extension_screenshot(&app_handle, &result.task_id, screenshot_data).await {
+            Ok(path) => {
+                tracing::info!("Saved extension screenshot to: {}", path);
+                Some(path)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to save screenshot: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
-    // For now, return success without continuation
+    // 2. Emit event with task results for conversation update
+    let task_event = serde_json::json!({
+        "task_id": result.task_id,
+        "success": result.success,
+        "screenshot_path": screenshot_path,
+        "result": result.result,
+        "error": result.error,
+        "actions_performed": result.actions_performed,
+        "duration": result.duration,
+    });
+
+    if let Err(e) = app_handle.emit("extension:task-result", &task_event) {
+        tracing::warn!("Failed to emit task result event: {}", e);
+    } else {
+        tracing::debug!("Emitted extension:task-result event");
+    }
+
+    // 3. Determine if we should continue with next step
+    // For now, we check if there's a result that indicates more work is needed
+    let should_continue = result.success && result.actions_performed > 0;
+    let next_action = if should_continue {
+        Some(serde_json::json!({
+            "type": "extension_task_complete",
+            "task_id": result.task_id,
+        }))
+    } else {
+        None
+    };
+
     Ok(TaskResultResponse {
         success: true,
-        next_action: None,
-        should_continue: false,
+        next_action,
+        should_continue,
     })
+}
+
+/// Save extension screenshot to disk
+async fn save_extension_screenshot(
+    app_handle: &tauri::AppHandle,
+    task_id: &str,
+    screenshot_data: &str,
+) -> Result<String, String> {
+    use base64::Engine;
+    use std::io::Write;
+
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get data dir: {}", e))?;
+
+    let captures_dir = data_dir.join("extension_captures");
+    tokio::fs::create_dir_all(&captures_dir)
+        .await
+        .map_err(|e| format!("Failed to create captures directory: {}", e))?;
+
+    let file_name = format!("extension_{}_{}.png", task_id, chrono::Utc::now().timestamp());
+    let file_path = captures_dir.join(&file_name);
+
+    // Decode base64 image data
+    let image_data = screenshot_data
+        .strip_prefix("data:image/png;base64,")
+        .or_else(|| screenshot_data.strip_prefix("data:image/jpeg;base64,"))
+        .unwrap_or(screenshot_data);
+
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    let mut file = std::fs::File::create(&file_path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    file.write_all(&decoded)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(file_path.to_string_lossy().into_owned())
 }
 
 /// Get current extension status
