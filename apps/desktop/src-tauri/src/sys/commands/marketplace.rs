@@ -1,9 +1,10 @@
 use crate::core::orchestration::workflow_engine::WorkflowDefinition;
 use crate::features::workflows::{
     get_all_templates, PublishedWorkflow, SharePlatform, SortOption, WorkflowCategory,
-    WorkflowComment, WorkflowFilters, WorkflowMarketplace, WorkflowPublisher, WorkflowSocial,
-    WorkflowStats, WorkflowTemplate,
+    WorkflowComment, WorkflowFilters, WorkflowMarketplace, WorkflowPublisher, WorkflowRating,
+    WorkflowSocial, WorkflowStats, WorkflowTemplate,
 };
+use chrono::Utc;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -120,6 +121,7 @@ pub async fn search_marketplace_workflows(
     min_rating: Option<f64>,
     tags: Vec<String>,
     verified_only: bool,
+    featured_only: bool,
     sort_by: String,
     limit: usize,
     offset: usize,
@@ -141,6 +143,7 @@ pub async fn search_marketplace_workflows(
         min_rating,
         tags,
         verified_only,
+        featured_only,
         sort_by: sort_option,
         search_query,
     };
@@ -219,6 +222,7 @@ pub async fn clone_marketplace_workflow(
     workflow_id: String,
     user_id: String,
     user_name: String,
+    _customize_title: Option<String>,
     state: State<'_, MarketplaceState>,
 ) -> Result<String, String> {
     let publisher = WorkflowPublisher::new(state.db.clone());
@@ -453,4 +457,264 @@ pub async fn search_workflow_templates(query: String) -> Result<Vec<WorkflowTemp
                     .any(|tag| tag.to_lowercase().contains(&query_lower))
         })
         .collect())
+}
+
+// Alias for search_marketplace_workflows to match frontend expectations
+#[tauri::command]
+pub async fn get_published_workflows(
+    category: Option<String>,
+    sort_by: String,
+    limit: usize,
+    offset: usize,
+    state: State<'_, MarketplaceState>,
+) -> Result<Vec<PublishedWorkflow>, String> {
+    search_marketplace_workflows(
+        None,
+        category,
+        None,
+        vec![],
+        false,
+        false,
+        sort_by,
+        limit,
+        offset,
+        state,
+    )
+    .await
+}
+
+// Get workflow by ID - wraps WorkflowMarketplace::get_workflow_by_id
+#[tauri::command]
+pub async fn get_workflow_by_id(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<PublishedWorkflow, String> {
+    let marketplace = WorkflowMarketplace::new(state.db.clone());
+    marketplace.get_workflow_by_id(&workflow_id)
+}
+
+// Get workflow reviews (ratings with comments)
+#[tauri::command]
+pub async fn get_workflow_reviews(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<Vec<WorkflowRating>, String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+    let mut stmt = db
+        .prepare(
+            "SELECT workflow_id, user_id, rating, comment, created_at
+             FROM workflow_ratings
+             WHERE workflow_id = ?1
+             ORDER BY created_at DESC",
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let reviews = stmt
+        .query_map(rusqlite::params![&workflow_id], |row| {
+            Ok(WorkflowRating {
+                workflow_id: row.get(0)?,
+                user_id: row.get(1)?,
+                rating: row.get(2)?,
+                comment: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query reviews: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect results: {}", e))?;
+
+    Ok(reviews)
+}
+
+// Workflow analytics structure
+#[derive(serde::Serialize)]
+pub struct WorkflowAnalytics {
+    pub workflow_id: String,
+    pub total_views: i64,
+    pub total_clones: i64,
+    pub total_favorites: i64,
+    pub views_last_7_days: i64,
+    pub clones_last_7_days: i64,
+    pub conversion_rate: f64,
+    pub avg_rating: f64,
+    pub total_reviews: i64,
+    pub trending_score: f64,
+}
+
+// Get workflow analytics
+#[tauri::command]
+pub async fn get_workflow_analytics(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<WorkflowAnalytics, String> {
+    let social = WorkflowSocial::new(state.db.clone());
+    let stats = social.get_workflow_stats(&workflow_id)?;
+
+    // Calculate additional analytics
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+    // Get views in last 7 days
+    let views_last_7_days: i64 = db
+        .query_row(
+            "SELECT COALESCE(SUM(view_count), 0) FROM workflow_views
+             WHERE workflow_id = ?1 AND viewed_at > ?2",
+            rusqlite::params![&workflow_id, Utc::now().timestamp() - 7 * 24 * 60 * 60],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Get clones in last 7 days
+    let clones_last_7_days: i64 = db
+        .query_row(
+            "SELECT COALESCE(COUNT(*), 0) FROM workflow_clones
+             WHERE workflow_id = ?1 AND cloned_at > ?2",
+            rusqlite::params![&workflow_id, Utc::now().timestamp() - 7 * 24 * 60 * 60],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Get average rating and review count
+    let (avg_rating, total_reviews): (f64, i64) = db
+        .query_row(
+            "SELECT COALESCE(AVG(rating), 0), COUNT(*) FROM workflow_ratings WHERE workflow_id = ?1",
+            rusqlite::params![&workflow_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0.0, 0));
+
+    // Calculate conversion rate
+    let conversion_rate = if stats.view_count > 0 {
+        (stats.clone_count as f64 / stats.view_count as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    // Calculate trending score
+    let trending_score = (stats.clone_count as f64 * 2.0
+        + views_last_7_days as f64
+        + clones_last_7_days as f64 * 3.0
+        + avg_rating * 10.0)
+        / 10.0;
+
+    Ok(WorkflowAnalytics {
+        workflow_id,
+        total_views: stats.view_count as i64,
+        total_clones: stats.clone_count as i64,
+        total_favorites: stats.favorite_count as i64,
+        views_last_7_days,
+        clones_last_7_days,
+        conversion_rate,
+        avg_rating,
+        total_reviews,
+        trending_score,
+    })
+}
+
+// Alias for publish_workflow_to_marketplace to match frontend expectations
+#[tauri::command]
+pub async fn publish_workflow(
+    workflow_id: String,
+    _title: String,
+    _description: String,
+    category: String,
+    tags: Vec<String>,
+    thumbnail_url: Option<String>,
+    estimated_time_saved: u64,
+    estimated_cost_saved: f64,
+    _license: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<PublishedWorkflow, String> {
+    // Get user info from workflow - use block to ensure lock is released before await
+    let (user_id, user_name) = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+        db.query_row(
+            "SELECT user_id, name FROM workflow_definitions WHERE id = ?1",
+            rusqlite::params![&workflow_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Workflow not found: {}", e))?
+    };
+
+    publish_workflow_to_marketplace(
+        workflow_id,
+        category,
+        tags,
+        estimated_time_saved,
+        estimated_cost_saved,
+        thumbnail_url,
+        user_id,
+        user_name,
+        state,
+    )
+    .await
+}
+
+// Get workflow share URL
+#[tauri::command]
+pub async fn get_workflow_share_url(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<String, String> {
+    let marketplace = WorkflowMarketplace::new(state.db.clone());
+    let workflow = marketplace.get_workflow_by_id(&workflow_id)?;
+
+    // Return the share_url directly from the workflow
+    Ok(workflow.share_url)
+}
+
+// Get workflow embed code
+#[tauri::command]
+pub async fn get_workflow_embed_code(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<String, String> {
+    let marketplace = WorkflowMarketplace::new(state.db.clone());
+    let workflow = marketplace.get_workflow_by_id(&workflow_id)?;
+
+    let embed_code = format!(
+        r#"<iframe src="{}" width="100%" height="600" frameborder="0"></iframe>"#,
+        workflow.share_url
+    );
+
+    Ok(embed_code)
+}
+
+// Track workflow view
+#[tauri::command]
+pub async fn increment_workflow_view_count(
+    workflow_id: String,
+    state: State<'_, MarketplaceState>,
+) -> Result<(), String> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+    let now = Utc::now().timestamp();
+
+    db.execute(
+        "INSERT INTO workflow_views (workflow_id, viewed_at) VALUES (?1, ?2)",
+        rusqlite::params![&workflow_id, now],
+    )
+    .map_err(|e| format!("Failed to track view: {}", e))?;
+
+    // Also increment the view count in published_workflows
+    db.execute(
+        "UPDATE published_workflows SET view_count = view_count + 1 WHERE id = ?1",
+        rusqlite::params![&workflow_id],
+    )
+    .map_err(|e| format!("Failed to update view count: {}", e))?;
+
+    Ok(())
 }

@@ -76,7 +76,8 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
           // For Tauri file paths, we need to read the file first
           const { invoke } = await import('@/lib/tauri-mock');
           try {
-            const content = await invoke<string>('file_read_binary_base64', { filePath });
+            // AUDIT-COMMAND-076 fix: Use file_read_binary instead of file_read_binary_base64
+            const content = await invoke<string>('file_read_binary', { filePath });
             const binaryData = atob(content);
             const bytes = new Uint8Array(binaryData.length);
             for (let i = 0; i < binaryData.length; i++) {

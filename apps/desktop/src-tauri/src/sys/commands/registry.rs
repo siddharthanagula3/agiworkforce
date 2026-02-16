@@ -620,6 +620,7 @@ macro_rules! integration_command_handlers {
             $crate::sys::commands::email_fetch_inbox,
             $crate::sys::commands::email_mark_read,
             $crate::sys::commands::email_delete,
+            $crate::sys::commands::email_move_message,
             $crate::sys::commands::email_download_attachment,
             $crate::sys::commands::email_send,
             $crate::sys::commands::contact_create,

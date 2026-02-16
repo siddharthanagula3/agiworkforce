@@ -17,7 +17,14 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
     return FAST_METADATA_TOOL_TIMEOUT_MS;
   }
 
-  if (normalized === 'terminal_execute' || normalized.startsWith('document_create_')) {
+  if (
+    normalized === 'terminal_execute' ||
+    normalized.startsWith('document_create_') ||
+    normalized === 'video_generate' ||
+    normalized === 'media_generate_video' ||
+    normalized === 'image_generate' ||
+    normalized === 'media_generate_image'
+  ) {
     return LONG_RUNNING_TOOL_TIMEOUT_MS;
   }
 

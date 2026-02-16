@@ -329,6 +329,9 @@ pub fn run() {
                 }
             }
 
+            // Knowledge base state
+            app.manage(crate::sys::commands::knowledge::KnowledgeState::new());
+
             // Project-scoped memory state for project-specific long-term memories
             match ProjectMemoryState::new(&db_path.to_string_lossy()) {
                 Ok(project_memory_state) => {
@@ -708,10 +711,19 @@ pub fn run() {
             crate::sys::commands::resume_background_task,
             crate::sys::commands::list_background_tasks,
 
+            // Timeout config commands
+            crate::sys::commands::timeout_get_config,
+            crate::sys::commands::timeout_set_config,
+            crate::sys::commands::timeout_get_recommended,
+
 
             crate::sys::commands::query_knowledge,
             crate::sys::commands::get_recent_knowledge,
             crate::sys::commands::get_knowledge_by_category,
+
+            // Knowledge base commands
+            crate::sys::commands::knowledge_add,
+            crate::sys::commands::knowledge_query,
 
 
             crate::sys::commands::ai_analyze_project,
@@ -908,6 +920,7 @@ pub fn run() {
             crate::sys::commands::browser_launch,
             crate::sys::commands::browser_open_tab,
             crate::sys::commands::browser_close_tab,
+            crate::sys::commands::browser_switch_tab,
             crate::sys::commands::browser_list_tabs,
             crate::sys::commands::browser_navigate,
             crate::sys::commands::browser_go_back,
@@ -946,6 +959,7 @@ pub fn run() {
             crate::sys::commands::browser_enable_request_interception,
             crate::sys::commands::browser_get_screenshot_stream,
             crate::sys::commands::browser_highlight_element,
+            crate::sys::commands::browser_get_content,
             crate::sys::commands::browser_get_dom_snapshot,
             crate::sys::commands::browser_get_console_logs,
             crate::sys::commands::browser_get_network_activity,
@@ -1116,6 +1130,7 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
+            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1321,6 +1336,7 @@ pub fn run() {
             crate::sys::commands::memory_store,
             crate::sys::commands::memory_delete,
             crate::sys::commands::memory_list_all,
+            crate::sys::commands::memory_list_categories,
             // Memory decay commands
             crate::sys::commands::memory_run_decay,
             crate::sys::commands::memory_get_decay_config,
@@ -1712,10 +1728,13 @@ pub fn run() {
 
 
             crate::sys::commands::publish_workflow_to_marketplace,
+            crate::sys::commands::publish_workflow,
             crate::sys::commands::unpublish_workflow,
             crate::sys::commands::get_featured_workflows,
             crate::sys::commands::get_trending_workflows,
             crate::sys::commands::search_marketplace_workflows,
+            crate::sys::commands::get_published_workflows,
+            crate::sys::commands::get_workflow_by_id,
             crate::sys::commands::get_workflow_by_share_url,
             crate::sys::commands::get_creator_workflows,
             crate::sys::commands::get_my_published_workflows,
@@ -1725,6 +1744,7 @@ pub fn run() {
             crate::sys::commands::clone_marketplace_workflow,
             crate::sys::commands::fork_marketplace_workflow,
             crate::sys::commands::rate_workflow,
+            crate::sys::commands::get_workflow_reviews,
             crate::sys::commands::get_user_workflow_rating,
             crate::sys::commands::comment_on_workflow,
             crate::sys::commands::get_workflow_comments,
@@ -1736,6 +1756,10 @@ pub fn run() {
             crate::sys::commands::get_user_clones,
             crate::sys::commands::share_workflow,
             crate::sys::commands::get_workflow_stats,
+            crate::sys::commands::get_workflow_analytics,
+            crate::sys::commands::get_workflow_share_url,
+            crate::sys::commands::get_workflow_embed_code,
+            crate::sys::commands::increment_workflow_view_count,
             crate::sys::commands::get_workflow_templates,
             crate::sys::commands::get_workflow_templates_by_category,
             crate::sys::commands::search_workflow_templates,
@@ -1744,6 +1768,7 @@ pub fn run() {
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
             crate::sys::commands::update_team,
+            crate::sys::commands::update_team_settings,
             crate::sys::commands::delete_team,
             crate::sys::commands::get_user_teams,
             crate::sys::commands::invite_member,
@@ -1804,6 +1829,8 @@ pub fn run() {
             crate::sys::commands::analytics_get_user_metrics,
             crate::sys::commands::analytics_get_tool_metrics,
             crate::sys::commands::analytics_get_metric_trends,
+            crate::sys::commands::analytics_get_time_saved_trend,
+            crate::sys::commands::analytics_get_cost_saved_trend,
             crate::sys::commands::analytics_export_report,
             crate::sys::commands::analytics_generate_weekly_report,
             crate::sys::commands::analytics_generate_monthly_report,
@@ -1832,6 +1859,17 @@ pub fn run() {
             crate::sys::commands::share_milestone,
             crate::sys::commands::track_workflow_view,
             crate::sys::commands::acknowledge_milestone,
+
+            // ROI Dashboard command aliases
+            crate::sys::commands::get_today_stats,
+            crate::sys::commands::get_week_stats,
+            crate::sys::commands::get_month_stats,
+            crate::sys::commands::get_all_time_stats,
+            crate::sys::commands::get_manual_vs_automated_comparison,
+            crate::sys::commands::get_period_comparison,
+            crate::sys::commands::get_benchmark_comparison,
+            crate::sys::commands::get_recent_activity,
+            crate::sys::commands::export_roi_report,
 
 
             crate::sys::commands::bg_submit_task,
@@ -1949,6 +1987,7 @@ pub fn run() {
             crate::sys::commands::tutorials::has_sample_data,
             crate::sys::commands::tutorials::clear_sample_data,
             crate::sys::commands::tutorials::submit_tutorial_feedback,
+            crate::sys::commands::tutorials::record_help_session,
 
 
             crate::sys::commands::messaging::connect_slack,
@@ -2072,6 +2111,19 @@ pub fn run() {
 
             // Vision Commands (Phase 7 Wiring)
             crate::sys::commands::vision::vision_send_message,
+
+            // Google Batch Commands (not yet implemented - requires Google AI API integration)
+            crate::sys::commands::google_batch::google_batch_create,
+            crate::sys::commands::google_batch::google_batch_get,
+            crate::sys::commands::google_batch::google_batch_list,
+            crate::sys::commands::google_batch::google_batch_cancel,
+            crate::sys::commands::google_batch::google_batch_delete,
+            crate::sys::commands::google_batch::google_batch_get_results,
+            crate::sys::commands::google_batch::google_batch_create_embeddings,
+            crate::sys::commands::google_batch::google_batch_get_embeddings,
+            crate::sys::commands::google_batch::google_batch_create_images,
+            crate::sys::commands::google_batch::google_batch_calculate_cost,
+            crate::sys::commands::google_batch::google_batch_create_jsonl,
         ])
         .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())

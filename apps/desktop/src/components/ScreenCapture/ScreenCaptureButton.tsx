@@ -45,10 +45,8 @@ export function ScreenCaptureButton({
     typeof navigator !== 'undefined' &&
     (/Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
       /Mac OS X|Darwin/i.test(navigator.userAgent || ''));
-  const hasTauriInternals =
-    typeof window !== 'undefined' &&
-    ('__TAURI_INTERNALS__' in window || '__TAURI__' in (window as object));
-  const useNativeDesktopPicker = isMacOS && (isTauri || hasTauriInternals);
+  // AUDIT-ENV-064 fix: Use centralized isTauri detection (now includes __TAURI__ check)
+  const useNativeDesktopPicker = isMacOS && isTauri;
 
   const handleFullScreen = async () => {
     try {
@@ -66,18 +64,9 @@ export function ScreenCaptureButton({
 
   const handleRegionCapture = async () => {
     if (useNativeDesktopPicker) {
-      try {
-        // macOS uses native interactive region picker across the entire desktop.
-        const result = await captureRegion({ x: 0, y: 0, width: 1, height: 1 }, conversationId);
-        if (!suppressToasts) {
-          toast.success('Region captured successfully');
-        }
-        onCaptureComplete?.(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to capture region';
-        toast.error(message);
-        console.error('Capture error:', error);
-      }
+      // AUDIT-CAPTURE-089 fix: Use frontend region selector on macOS instead of native picker
+      // The native macOS picker ignores region arguments, so we use our custom selector
+      setShowRegionSelector(true);
       return;
     }
     setShowRegionSelector(true);
@@ -85,17 +74,18 @@ export function ScreenCaptureButton({
 
   const handleWindowCapture = async () => {
     if (useNativeDesktopPicker) {
+      // AUDIT-CAPTURE-089 fix: Use frontend window selector on macOS instead of native picker
+      // The native macOS picker ignores window handle arguments, so we use our custom selector
       try {
-        // macOS uses native interactive window picker across all visible apps.
-        const result = await captureWindow('0', conversationId);
-        if (!suppressToasts) {
-          toast.success('Window captured successfully');
+        const windows = await getAvailableWindows();
+        if (windows.length === 0) {
+          toast.error('No windows available for capture');
+          return;
         }
-        onCaptureComplete?.(result);
+        setShowWindowSelector(true);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to capture window';
-        toast.error(message);
-        console.error('Window capture error:', error);
+        toast.error('Failed to get available windows');
+        console.error('Window list error:', error);
       }
       return;
     }

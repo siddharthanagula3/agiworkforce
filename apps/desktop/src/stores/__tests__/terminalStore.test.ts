@@ -35,8 +35,8 @@ describe('useTerminalStore setupOutputListener', () => {
       sessions: [
         {
           id: sessionId,
-          shellType: 'PowerShell',
-          title: 'PowerShell',
+          shellType: 'powershell',
+          title: 'powershell',
           active: true,
           createdAt: Date.now(),
         },

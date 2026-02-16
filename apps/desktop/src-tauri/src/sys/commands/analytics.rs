@@ -374,6 +374,23 @@ pub async fn analytics_get_metric_trends(
         .map_err(|e| format!("Failed to calculate trends: {}", e))
 }
 
+// AUDIT-ANALYTICS-087 fix: Aliases for specific trend commands
+#[tauri::command]
+pub async fn analytics_get_time_saved_trend(
+    days: usize,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<TrendPoint>, String> {
+    analytics_get_metric_trends("time_saved".to_string(), days, state).await
+}
+
+#[tauri::command]
+pub async fn analytics_get_cost_saved_trend(
+    days: usize,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<TrendPoint>, String> {
+    analytics_get_metric_trends("cost_saved".to_string(), days, state).await
+}
+
 #[tauri::command]
 pub async fn analytics_export_report(
     format: String,

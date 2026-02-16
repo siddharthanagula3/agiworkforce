@@ -21,16 +21,16 @@ export interface VoiceInputButtonProps {
   isTranscribing: boolean;
   /** Whether in simple mode (no advanced features) */
   isSimpleMode?: boolean;
-  /** Whether to prefer local Whisper transcription */
-  preferLocalWhisper: boolean;
+  /** Whether to prefer Whisper Cloud (remote) over Web Speech (local) */
+  preferWhisperCloud: boolean;
   /** Available local Whisper implementations */
   availableLocalWhisper: string[];
   /** Whether the mode selector is open */
   showModeSelector: boolean;
   /** Toggle the mode selector */
   onModeSelectorChange: (open: boolean) => void;
-  /** Set prefer local Whisper */
-  onPreferLocalWhisperChange: (prefer: boolean) => void;
+  /** Set prefer Whisper Cloud mode */
+  onPreferWhisperCloudChange: (prefer: boolean) => void;
   /** Toggle recording */
   onToggleRecording: () => void;
 }
@@ -41,11 +41,11 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   isRecording,
   isTranscribing,
   isSimpleMode = false,
-  preferLocalWhisper,
+  preferWhisperCloud,
   availableLocalWhisper,
   showModeSelector,
   onModeSelectorChange,
-  onPreferLocalWhisperChange,
+  onPreferWhisperCloudChange,
   onToggleRecording,
 }) => {
   // Simple mode: just a basic mic button
@@ -107,14 +107,14 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
                 ? 'Stop recording'
                 : isTranscribing
                   ? 'Transcribing...'
-                  : `Voice input (${preferLocalWhisper ? 'Whisper (Cloud)' : 'Live'})`
+                  : `Voice input (${preferWhisperCloud ? 'Whisper (Cloud)' : 'Live (Web Speech)'})`
             }
             aria-label={
               isTranscribing
                 ? 'Transcribing your voice...'
                 : isRecording
                   ? 'Stop voice recording'
-                  : `Start voice input using ${preferLocalWhisper ? 'Whisper (Cloud)' : 'Live'} mode`
+                  : `Start voice input using ${preferWhisperCloud ? 'Whisper (Cloud)' : 'Live (Web Speech)'} mode`
             }
           >
             {isTranscribing ? (
@@ -152,12 +152,12 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
             <button
               type="button"
               onClick={() => {
-                onPreferLocalWhisperChange(false);
+                onPreferWhisperCloudChange(false);
                 onModeSelectorChange(false);
               }}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                !preferLocalWhisper
+                !preferWhisperCloud
                   ? 'bg-primary/10 text-primary'
                   : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
               )}
@@ -173,12 +173,12 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
             <button
               type="button"
               onClick={() => {
-                onPreferLocalWhisperChange(true);
+                onPreferWhisperCloudChange(true);
                 onModeSelectorChange(false);
               }}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                preferLocalWhisper
+                preferWhisperCloud
                   ? 'bg-primary/10 text-primary'
                   : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
               )}

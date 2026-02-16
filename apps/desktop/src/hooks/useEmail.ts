@@ -288,7 +288,7 @@ export function useEmail(): UseEmailReturn {
       setError(null);
 
       try {
-        await invoke('email_delete_message', {
+        await invoke('email_delete', {
           account_id: accountId,
           uid,
         });

@@ -249,6 +249,73 @@ impl ImapClient {
         Ok(())
     }
 
+    /// Move an email message from one folder to another.
+    ///
+    /// Uses the IMAP MOVE command if available (RFC 6851), otherwise falls back
+    /// to copying the message and deleting the original.
+    pub async fn move_email(&mut self, uid: u32, from_folder: &str, to_folder: &str) -> Result<()> {
+        // First select the source folder
+        self.select_folder(from_folder).await?;
+
+        let sequence = uid.to_string();
+
+        // Try using MOVE command first (RFC 6851)
+        // The async_imap library supports move via the session (uid_mv method)
+        let move_result = self
+            .session
+            .uid_mv(&sequence, to_folder)
+            .await;
+
+        if move_result.is_ok() {
+            debug!("Moved message UID {} from {} to {}", uid, from_folder, to_folder);
+            return Ok(());
+        }
+
+        // Fallback: COPY + DELETE if MOVE not supported
+        debug!(
+            "MOVE not supported, falling back to COPY+DELETE for UID {}",
+            uid
+        );
+
+        // Copy the message to the destination folder
+        self.session
+            .uid_copy(&sequence, to_folder)
+            .await
+            .map_err(map_imap_error)?;
+
+        // Delete from source folder - use a scoped block to release borrow
+        {
+            let delete_responses = self
+                .session
+                .uid_store(&sequence, "+FLAGS (\\Deleted)")
+                .await
+                .map_err(map_imap_error)?;
+
+            // Consume all responses to release the borrow
+            pin_mut!(delete_responses);
+            while let Some(response) = delete_responses.next().await {
+                response.map_err(map_imap_error)?;
+            }
+        }
+
+        // Now we can use session again - Expunge to permanently delete
+        let expunge_stream = self.session.expunge().await.map_err(map_imap_error)?;
+
+        // Consume all responses to release the borrow
+        pin_mut!(expunge_stream);
+        while let Some(response) = expunge_stream.next().await {
+            response.map_err(map_imap_error)?;
+        }
+
+        debug!(
+            "Moved message UID {} from {} to {} via COPY+DELETE",
+            uid,
+            from_folder,
+            to_folder
+        );
+        Ok(())
+    }
+
     pub async fn fetch_raw_selected(&mut self, uid: u32) -> Result<Vec<u8>> {
         let mut fetch_stream = self
             .session

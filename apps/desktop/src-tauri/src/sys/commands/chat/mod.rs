@@ -121,7 +121,13 @@ fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
         return FAST_TOOL_TIMEOUT_SECS;
     }
 
-    if normalized == "terminal_execute" || normalized.starts_with("document_create_") {
+    if normalized == "terminal_execute"
+        || normalized.starts_with("document_create_")
+        || normalized == "video_generate"
+        || normalized == "media_generate_video"
+        || normalized == "image_generate"
+        || normalized == "media_generate_image"
+    {
         return LONG_RUNNING_TOOL_TIMEOUT_SECS;
     }
 
@@ -286,7 +292,9 @@ async fn execute_chat_tool_with_timeout(
                 return Err(message);
             }
             _ = cancel_interval.tick(), if normalized_tool_call_id.is_some() => {
+                // AUDIT-STREAM-021 fix: Check both per-tool cancellation AND global stop flag
                 if let Some(tool_id) = normalized_tool_call_id {
+                    // First check per-tool cancellation
                     if take_tool_cancelled(tool_id) {
                         let elapsed_ms = started_at.elapsed().as_millis() as u64;
                         crate::ui::events::tool_stream::emit_tool_cancelled(
@@ -303,6 +311,25 @@ async fn execute_chat_tool_with_timeout(
                         );
                         return Err(format!("Tool '{}' cancelled by user", tool_name));
                     }
+                }
+                // Also check global stop generation flag
+                if should_stop_generation() {
+                    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+                    if let Some(tool_id) = normalized_tool_call_id {
+                        crate::ui::events::tool_stream::emit_tool_cancelled(
+                            app_handle,
+                            tool_id,
+                            Some("Generation stopped by user"),
+                            elapsed_ms,
+                        );
+                    }
+                    tracing::info!(
+                        "[Chat] Tool invoke stopped by global flag id={} tool={} elapsed_ms={}",
+                        normalized_tool_call_id.unwrap_or("n/a"),
+                        tool_name,
+                        elapsed_ms
+                    );
+                    return Err(format!("Tool '{}' stopped by user", tool_name));
                 }
             }
         }
@@ -2817,6 +2844,7 @@ pub async fn chat_send_message(
                             "chat:tool-calls",
                             serde_json::json!({
                                 "conversation_id": conversation_id_clone,
+                                "message_id": frontend_message_id_clone,
                                 "tool_calls": tool_calls,
                                 "streaming": true
                             }),
@@ -2833,6 +2861,22 @@ pub async fn chat_send_message(
                                     "[Chat] Skipping server-side tool: {} (id: {})",
                                     tc.name, tc.id
                                 );
+                                let _ = app_handle_clone.emit(
+                                    "chat:tool-result",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "tool_call_id": tc.id,
+                                        "tool_name": tc.name,
+                                        "success": true,
+                                        "result": "Tool executed server-side by provider; no local output.",
+                                        "result_data": {
+                                            "success": true,
+                                            "server_side": true,
+                                            "status": "completed"
+                                        }
+                                    }),
+                                );
                                 continue;
                             }
 
@@ -2846,6 +2890,7 @@ pub async fn chat_send_message(
                                 "chat:tool-executing",
                                 serde_json::json!({
                                     "conversation_id": conversation_id_clone,
+                                    "message_id": frontend_message_id_clone,
                                     "tool_call_id": tc.id,
                                     "tool_name": tc.name,
                                     "arguments": tc.arguments
@@ -2883,15 +2928,17 @@ pub async fn chat_send_message(
                             let result_data =
                                 serde_json::from_str::<serde_json::Value>(&result_content).ok();
 
-                            // Emit tool result event (2000 chars for richer UI display)
+                            // Emit tool result event (full result for richer UI display)
+                            // result_data contains the full parsed JSON for UI rendering
                             let _ = app_handle_clone.emit(
                                 "chat:tool-result",
                                 serde_json::json!({
                                     "conversation_id": conversation_id_clone,
+                                    "message_id": frontend_message_id_clone,
                                     "tool_call_id": tc.id,
                                     "tool_name": tc.name,
                                     "success": success,
-                                    "result": result_content.chars().take(2000).collect::<String>(),
+                                    "result": result_content.chars().take(50000).collect::<String>(),
                                     "result_data": result_data
                                 }),
                             );
@@ -3142,12 +3189,40 @@ pub async fn chat_send_message(
                                                     streaming_tool_iteration
                                                 );
 
-                                                // Emit tool calls event
+                                                // AUDIT-STREAM-072 fix: Normalize tool call IDs to prevent blank IDs
+                                                // from causing artifact/status update collisions
+                                                let normalized_tool_calls: Vec<_> = new_tool_calls
+                                                    .iter()
+                                                    .enumerate()
+                                                    .map(|(idx, tc)| {
+                                                        let mut normalized_id = tc.id.clone();
+                                                        if normalized_id.trim().is_empty() {
+                                                            normalized_id = format!(
+                                                                "followup_tool_call_{}_{}",
+                                                                streaming_tool_iteration,
+                                                                idx
+                                                            );
+                                                        }
+                                                        crate::core::llm::sse_parser::StreamingToolCall {
+                                                            index: idx,
+                                                            id: normalized_id,
+                                                            name: if tc.name.trim().is_empty() {
+                                                                "unknown_tool".to_string()
+                                                            } else {
+                                                                tc.name.clone()
+                                                            },
+                                                            arguments: tc.arguments.clone(),
+                                                        }
+                                                    })
+                                                    .collect();
+
+                                                // Emit tool calls event with normalized IDs
                                                 let _ = app_handle_clone.emit(
                                                     "chat:tool-calls",
                                                     serde_json::json!({
                                                         "conversation_id": conversation_id_clone,
-                                                        "tool_calls": new_tool_calls,
+                                                        "message_id": frontend_message_id_clone,
+                                                        "tool_calls": normalized_tool_calls,
                                                         "streaming": true,
                                                         "iteration": streaming_tool_iteration
                                                     }),
@@ -3157,7 +3232,7 @@ pub async fn chat_send_message(
                                                 let mut new_results = Vec::new();
                                                 let mut new_streaming_tcs = Vec::new();
 
-                                                for tc in new_tool_calls {
+                                                for tc in &normalized_tool_calls {
                                                     // Skip server-side tool calls (prefixed with __server__)
                                                     // These are executed by Anthropic, not locally.
                                                     if tc.name.starts_with("__server__") {
@@ -3165,6 +3240,22 @@ pub async fn chat_send_message(
                                                         "[Chat] Skipping server-side tool: {} (id: {})",
                                                         tc.name, tc.id
                                                     );
+                                                        let _ = app_handle_clone.emit(
+                                                            "chat:tool-result",
+                                                            serde_json::json!({
+                                                                "conversation_id": conversation_id_clone,
+                                                                "message_id": frontend_message_id_clone,
+                                                                "tool_call_id": tc.id,
+                                                                "tool_name": tc.name,
+                                                                "success": true,
+                                                                "result": "Tool executed server-side by provider; no local output.",
+                                                                "result_data": {
+                                                                    "success": true,
+                                                                    "server_side": true,
+                                                                    "status": "completed"
+                                                                }
+                                                            }),
+                                                        );
                                                         continue;
                                                     }
 
@@ -3177,6 +3268,7 @@ pub async fn chat_send_message(
                                                     "chat:tool-executing",
                                                     serde_json::json!({
                                                         "conversation_id": conversation_id_clone,
+                                                        "message_id": frontend_message_id_clone,
                                                         "tool_call_id": tc.id,
                                                         "tool_name": tc.name,
                                                         "arguments": tc.arguments
@@ -3231,10 +3323,11 @@ pub async fn chat_send_message(
                                                         "chat:tool-result",
                                                         serde_json::json!({
                                                             "conversation_id": conversation_id_clone,
+                                                            "message_id": frontend_message_id_clone,
                                                             "tool_call_id": tc.id,
                                                             "tool_name": tc.name,
                                                             "success": success,
-                                                            "result": result_content.chars().take(2000).collect::<String>(),
+                                                            "result": result_content.chars().take(50000).collect::<String>(),
                                                             "result_data": result_data
                                                         }),
                                                     );
@@ -3833,6 +3926,29 @@ Please confirm the tool permissions or try a different approach.",
                         tool_iteration
                     );
 
+                    // AUDIT-STREAM-072 fix: Normalize tool call IDs to prevent blank IDs
+                    // from causing artifact/status update collisions
+                    let normalized_tool_calls: Vec<_> = tool_calls
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, tc)| {
+                            let mut normalized_id = tc.id.clone();
+                            if normalized_id.trim().is_empty() {
+                                normalized_id = format!("tool_call_{}_{}", tool_iteration, idx);
+                            }
+                            crate::core::llm::sse_parser::StreamingToolCall {
+                                index: idx,
+                                id: normalized_id,
+                                name: if tc.name.trim().is_empty() {
+                                    "unknown_tool".to_string()
+                                } else {
+                                    tc.name.clone()
+                                },
+                                arguments: tc.arguments.clone(),
+                            }
+                        })
+                        .collect();
+
                     // Emit agent progress event
                     let _ = app_handle.emit(
                         "chat:agent-progress",
@@ -3845,34 +3961,60 @@ Please confirm the tool permissions or try a different approach.",
                         }),
                     );
 
-                    // Emit tool calls event for UI feedback
+                    // Emit tool calls event for UI feedback with normalized IDs
                     let _ = app_handle.emit(
                         "chat:tool-calls",
                         serde_json::json!({
                             "conversation_id": conversation.id,
-                            "tool_calls": tool_calls,
+                            "message_id": request.frontend_message_id.clone(),
+                            "tool_calls": normalized_tool_calls,
                             "iteration": tool_iteration
                         }),
                     );
 
                     // Add assistant message with tool calls to conversation
+                    // Convert normalized StreamingToolCall to ToolCall for the message
+                    let tool_calls_for_message: Vec<crate::core::llm::ToolCall> = normalized_tool_calls
+                        .iter()
+                        .map(|tc| crate::core::llm::ToolCall {
+                            id: tc.id.clone(),
+                            name: tc.name.clone(),
+                            arguments: tc.arguments.clone(),
+                        })
+                        .collect();
                     current_messages.push(crate::core::llm::ChatMessage {
                         role: "assistant".to_string(),
                         content: outcome.response.content.clone(),
-                        tool_calls: Some(tool_calls.clone()),
+                        tool_calls: Some(tool_calls_for_message),
                         tool_call_id: None,
                         multimodal_content: None,
                     });
 
                     // Execute each tool and collect results
                     let mut tool_results = Vec::new();
-                    for tool_call in tool_calls {
+                    for tool_call in &normalized_tool_calls {
                         // Skip server-side tool calls (prefixed with __server__).
                         // These are executed by Anthropic's API, not locally.
                         if tool_call.name.starts_with("__server__") {
                             info!(
                                 "[Chat] Skipping server-side tool: {} (id: {})",
                                 tool_call.name, tool_call.id
+                            );
+                            let _ = app_handle.emit(
+                                "chat:tool-result",
+                                serde_json::json!({
+                                    "conversation_id": conversation.id,
+                                    "message_id": request.frontend_message_id.clone(),
+                                    "tool_call_id": tool_call.id,
+                                    "tool_name": tool_call.name,
+                                    "success": true,
+                                    "result": "Tool executed server-side by provider; no local output.",
+                                    "result_data": {
+                                        "success": true,
+                                        "server_side": true,
+                                        "status": "completed"
+                                    }
+                                }),
                             );
                             continue;
                         }
@@ -3887,6 +4029,7 @@ Please confirm the tool permissions or try a different approach.",
                             "chat:tool-executing",
                             serde_json::json!({
                                 "conversation_id": conversation.id,
+                                "message_id": request.frontend_message_id.clone(),
                                 "tool_call_id": tool_call.id,
                                 "tool_name": tool_call.name,
                                 "arguments": tool_call.arguments
@@ -3923,10 +4066,11 @@ Please confirm the tool permissions or try a different approach.",
                             "chat:tool-result",
                             serde_json::json!({
                                 "conversation_id": conversation.id,
+                                "message_id": request.frontend_message_id.clone(),
                                 "tool_call_id": tool_call.id,
                                 "tool_name": tool_call.name,
                                 "success": success,
-                                "result": result_content.chars().take(2000).collect::<String>(),
+                                "result": result_content.chars().take(50000).collect::<String>(),
                                 "result_data": result_data
                             }),
                         );
@@ -4666,6 +4810,22 @@ mod tests {
         );
         assert_eq!(
             resolve_tool_execution_timeout_secs("document_create_pdf"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("video_generate"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("media_generate_video"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("image_generate"),
+            LONG_RUNNING_TOOL_TIMEOUT_SECS
+        );
+        assert_eq!(
+            resolve_tool_execution_timeout_secs("media_generate_image"),
             LONG_RUNNING_TOOL_TIMEOUT_SECS
         );
         assert_eq!(

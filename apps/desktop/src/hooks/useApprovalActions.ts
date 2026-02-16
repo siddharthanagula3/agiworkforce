@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { invoke } from '../lib/tauri-mock';
 import type { ApprovalRequest } from '../stores/unifiedChatStore';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
+import { respondToolConfirmation } from '../api/toolConfirmation';
 
 interface ResolveOptions {
   trust?: boolean;
@@ -15,6 +16,28 @@ export function useApprovalActions() {
 
   const resolveApproval = useCallback(
     async (approval: ApprovalRequest, decision: 'approve' | 'reject', options?: ResolveOptions) => {
+      // AUDIT-APPROVAL-046 fix: Use respond_tool_confirmation for MCP/tool confirmations
+      // instead of agent_resolve_approval. The approval.type === 'mcp_tool' indicates
+      // this came from tool:confirmation_required event which requires the tool confirmation
+      // response channel, not the agent approval channel.
+      if (approval.type === 'mcp_tool') {
+        // For MCP/tool confirmations, use the tool confirmation response command
+        await respondToolConfirmation(
+          approval.id,
+          decision === 'approve',
+          options?.trust ?? false,
+          options?.reason,
+        );
+
+        if (decision === 'approve') {
+          approveOperation(approval.id);
+        } else {
+          rejectOperation(approval.id, options?.reason);
+        }
+        return;
+      }
+
+      // For agent-level approvals (non-MCP tools), use agent_resolve_approval
       await invoke('agent_resolve_approval', {
         approval_id: approval.id,
         decision,
