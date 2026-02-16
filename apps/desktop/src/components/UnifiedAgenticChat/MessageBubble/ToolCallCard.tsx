@@ -8,7 +8,8 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
-import { emit, isTauri } from '../../../lib/tauri-mock';
+import { invoke, isTauri } from '../../../lib/tauri-mock';
+import { respondToolConfirmation } from '../../../api/toolConfirmation';
 import { SidecarMode } from '../../../stores/unifiedChatStore';
 import { useSimpleModeStore } from '../../../stores/ui';
 import { ToolCallCard as SharedToolCallCard } from '../../ToolCalling/ToolCallCard';
@@ -21,6 +22,7 @@ export interface ToolCallCardProps {
   toolCommand?: string;
   requiresApproval: boolean;
   actionId?: string;
+  confirmationRequestId?: string; // AUDIT-UI-052: ID for tool confirmation requests
   onToggleSidecar?: (tab: SidecarMode) => void;
 }
 
@@ -31,6 +33,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   toolCommand,
   requiresApproval,
   actionId,
+  confirmationRequestId,
   onToggleSidecar,
 }) => {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
@@ -49,32 +52,73 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
             : 'terminal';
   }, [toolName]);
 
-  const emitAction = useCallback(
-    async (eventName: string) => {
+  // AUDIT-UI-052 fix: Use proper tool confirmation response command
+  const handleApprove = useCallback(async () => {
+    // If we have a confirmation request ID, use the tool confirmation response
+    if (confirmationRequestId) {
       if (!isTauri) {
-        console.log(`[ToolCallCard] Emit ${eventName}`, {
-          actionId,
-          toolName,
-          messageId,
-        });
+        console.log('[ToolCallCard] Mock approve confirmation:', confirmationRequestId);
         return;
       }
-      await emit(eventName, { actionId, tool: toolName, messageId });
-    },
-    [actionId, toolName, messageId],
-  );
-
-  const handleApprove = useCallback(async () => {
-    await emitAction('resume_agent');
-  }, [emitAction]);
+      try {
+        await respondToolConfirmation(confirmationRequestId, true);
+        console.log(`[ToolCallCard] Approved confirmation ${confirmationRequestId}`);
+      } catch (error) {
+        console.error('[ToolCallCard] Failed to approve confirmation:', error);
+      }
+    } else {
+      // Fallback: Try to cancel the tool execution (for non-confirmation cases)
+      const toolCallId = actionId || messageId;
+      if (isTauri) {
+        try {
+          await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
+        } catch (error) {
+          console.error('[ToolCallCard] Failed to resume tool:', error);
+        }
+      }
+    }
+  }, [confirmationRequestId, actionId, messageId]);
 
   const handleDeny = useCallback(async () => {
-    await emitAction('cancel_action');
-  }, [emitAction]);
+    // If we have a confirmation request ID, use the tool confirmation response
+    if (confirmationRequestId) {
+      if (!isTauri) {
+        console.log('[ToolCallCard] Mock deny confirmation:', confirmationRequestId);
+        return;
+      }
+      try {
+        await respondToolConfirmation(confirmationRequestId, false);
+        console.log(`[ToolCallCard] Denied confirmation ${confirmationRequestId}`);
+      } catch (error) {
+        console.error('[ToolCallCard] Failed to deny confirmation:', error);
+      }
+    } else {
+      // Fallback: Try to cancel the tool execution (for non-confirmation cases)
+      const toolCallId = actionId || messageId;
+      if (isTauri) {
+        try {
+          await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
+        } catch (error) {
+          console.error('[ToolCallCard] Failed to cancel tool:', error);
+        }
+      }
+    }
+  }, [confirmationRequestId, actionId, messageId]);
 
   const handleCancel = useCallback(async () => {
-    await emitAction('cancel_action');
-  }, [emitAction]);
+    // Cancel tool execution
+    const toolCallId = actionId || messageId;
+    if (!isTauri) {
+      console.log('[ToolCallCard] Mock cancel tool:', toolCallId);
+      return;
+    }
+    try {
+      await invoke('cancel_tool_execution', { tool_call_id: toolCallId });
+      console.log(`[ToolCallCard] Cancelled tool ${toolCallId}`);
+    } catch (error) {
+      console.error('[ToolCallCard] Failed to cancel tool:', error);
+    }
+  }, [actionId, messageId]);
 
   // Construct ToolCallUI object from props
   const toolCall: ToolCallUI = useMemo(() => {

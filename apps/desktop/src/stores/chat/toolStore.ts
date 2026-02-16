@@ -141,7 +141,7 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'timeout';
 
 export interface ApprovalRequest {
   id: string;
-  type: 'file_delete' | 'terminal_command' | 'api_call' | 'data_modification' | 'mcp_tool';
+  type: 'file_delete' | 'terminal_command' | 'api_call' | 'data_modification' | 'mcp_tool' | 'tool_execution';
   description: string;
   riskLevel: ApprovalRiskLevel;
   details: Record<string, unknown>;

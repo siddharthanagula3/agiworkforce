@@ -2565,6 +2565,52 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // AUDIT-TOOLS-067: Register file_list tool in production registry
+        // Previously missing from production registry, causing "Tool not found" errors
+        // when the model calls file_list despite chat tool definitions including it.
+        self.register_tool(Tool {
+            id: "file_list".to_string(),
+            name: "List Files".to_string(),
+            description: "List files and directories in a folder. Use this when the user asks what's in a folder or to list files.".to_string(),
+            capabilities: vec![ToolCapability::FileRead],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "The path to the directory to list (defaults to project folder or current working directory)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum entries to return (default 500, max 2000)".to_string(),
+                    default: Some(serde_json::json!(500)),
+                },
+                ToolParameter {
+                    name: "offset".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Pagination offset for large directories (default 0)".to_string(),
+                    default: Some(serde_json::json!(0)),
+                },
+                ToolParameter {
+                    name: "exclude".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "Optional exact-name exclude patterns (e.g. [\"node_modules\", \".git\"])".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         Ok(())
     }
 

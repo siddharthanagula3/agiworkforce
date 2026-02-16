@@ -9,7 +9,8 @@
  * - Approval workflows
  * - Layout management (sidebar, main content, sidecar)
  */
-import { invoke, listen } from '../../lib/tauri-mock';
+import { listen, isTauri } from '../../lib/tauri-mock';
+import { invoke as ipcInvoke } from '../../utils/ipc';
 import React, { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -45,7 +46,6 @@ import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
-import { respondToolConfirmation } from '../../api/toolConfirmation';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import { resolveToolHardTimeoutMs, shouldAbortGenerationOnToolTimeout } from './toolTimeoutPolicy';
 import {
@@ -55,7 +55,7 @@ import {
   executeDatabaseCommand,
   executeUndoCommand,
 } from '../../handlers/slashCommandHandlers';
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
 
 const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
@@ -255,6 +255,26 @@ const normalizeInlineToolData = (
       (data['downloadUrl'] as string | undefined) ?? (data['download_url'] as string | undefined);
   }
 
+  // AUDIT-UI-023: Normalize file_read tool data to match InlineCodeDiff expectations
+  // file_read returns { path, content } but InlineCodeDiff expects { filePath, before, after, operation }
+  if (
+    normalizedTool === 'file_read' ||
+    normalizedTool.endsWith('read_text_file') ||
+    normalizedTool.includes('file_read')
+  ) {
+    const path = (data['path'] as string | undefined) ?? (data['filePath'] as string | undefined);
+    const content = (data['content'] as string | undefined) ?? (data['text'] as string | undefined);
+
+    if (path && content !== undefined) {
+      // Transform into diff/read shape that InlineCodeDiff expects
+      data['filePath'] = path;
+      data['operation'] = 'read';
+      data['before'] = '';
+      data['after'] = content;
+      data['success'] = data['success'] !== false;
+    }
+  }
+
   normalizeMcpFilesystemInlineData(normalizedTool, data);
 
   return data;
@@ -392,6 +412,9 @@ export const UnifiedAgenticChat: React.FC<{
   // Maps conversation_id to the message_id being streamed for that conversation
   const activeStreamSessionsRef = useRef<Map<number, string>>(new Map());
 
+  // AUDIT-STREAM-059 fix: Track stream watchdog timeout to clear it on stream-end/error
+  const streamWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // CHT-003 fix: Custom confirmation dialog to replace window.confirm()
   const {
     state: riskConfirmState,
@@ -433,34 +456,44 @@ export const UnifiedAgenticChat: React.FC<{
         payloadMessageId?: string | number,
       ): string | null => {
         const state = useUnifiedChatStore.getState();
+        // AUDIT-STREAM-032 fix: Filter messages to only this conversation to prevent
+        // events from older conversations mutating artifacts in current chat
+        const conversationMessages = state.messagesByConversation[conversationId] ?? [];
         const sessionMessageId = activeStreamSessionsRef.current.get(conversationId);
         const normalizedPayloadId =
           payloadMessageId === undefined || payloadMessageId === null
             ? null
             : String(payloadMessageId);
 
-        if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
+        // Priority 1: Session-tracked message for this conversation
+        if (sessionMessageId && conversationMessages.some((m) => m.id === sessionMessageId)) {
           return sessionMessageId;
         }
-        if (normalizedPayloadId && state.messages.some((m) => m.id === normalizedPayloadId)) {
+        // Priority 2: Explicit message ID from payload
+        if (normalizedPayloadId && conversationMessages.some((m) => m.id === normalizedPayloadId)) {
           return normalizedPayloadId;
         }
+        // Priority 3: Current streaming message (only if it belongs to this conversation)
         if (
           state.currentStreamingMessageId &&
-          state.messages.some((m) => m.id === state.currentStreamingMessageId)
+          conversationMessages.some((m) => m.id === state.currentStreamingMessageId)
         ) {
           return state.currentStreamingMessageId;
         }
-        const lastStreamingAssistant = [...state.messages]
-          .reverse()
-          .find((m) => m.role === 'assistant' && Boolean(m.metadata?.streaming));
-        if (lastStreamingAssistant) {
-          return lastStreamingAssistant.id;
+        // AUDIT-STREAM-032 fix: Only allow fallback to last streaming assistant
+        // if we're actively streaming for THIS conversation
+        const isCurrentlyStreamingForThisConv =
+          sessionMessageId || state.currentStreamingMessageId;
+        if (isCurrentlyStreamingForThisConv) {
+          const lastStreamingAssistant = [...conversationMessages]
+            .reverse()
+            .find((m) => m.role === 'assistant' && Boolean(m.metadata?.streaming));
+          if (lastStreamingAssistant) {
+            return lastStreamingAssistant.id;
+          }
         }
-        const lastAssistant = [...state.messages].reverse().find((m) => m.role === 'assistant');
-        if (lastAssistant) {
-          return lastAssistant.id;
-        }
+        // AUDIT-STREAM-032 fix: Removed aggressive fallback to last assistant
+        // as it can cause cross-conversation pollution
         return null;
       };
 
@@ -468,9 +501,10 @@ export const UnifiedAgenticChat: React.FC<{
         conversationId: number,
         toolCallId: string,
         patch: Record<string, unknown>,
+        payloadMessageId?: string | number,
       ) => {
         const state = useUnifiedChatStore.getState();
-        const targetMessageId = resolveStreamTargetMessageId(conversationId);
+        const targetMessageId = resolveStreamTargetMessageId(conversationId, payloadMessageId);
         if (!targetMessageId) return;
 
         const targetMessage = state.messages.find((msg) => msg.id === targetMessageId);
@@ -598,6 +632,7 @@ export const UnifiedAgenticChat: React.FC<{
         toolName: string,
         conversationId: number,
         resetExisting: boolean,
+        payloadMessageId?: string | number,
       ) => {
         if (resetExisting) {
           clearToolExecutionTimeout(toolCallId);
@@ -638,7 +673,7 @@ export const UnifiedAgenticChat: React.FC<{
               'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
             content:
               'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-          });
+          }, payloadMessageId);
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: 'error',
             message: `${toolName} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
@@ -659,7 +694,7 @@ export const UnifiedAgenticChat: React.FC<{
               });
             }
             if (isTauri) {
-              void invoke('chat_stop_generation').catch((error) => {
+              void ipcInvoke('chat_stop_generation').catch((error: unknown) => {
                 console.warn(
                   '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
                   error,
@@ -815,7 +850,12 @@ export const UnifiedAgenticChat: React.FC<{
             targetId = currentStreamingId;
           }
 
-          if (targetId) {
+          // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
+          // This prevents stale stream-end events from one conversation clearing
+          // active loading state for a different in-flight chat
+          const hasValidTarget = targetId !== null;
+
+          if (hasValidTarget && targetId) {
             state.updateMessage(targetId, {
               metadata: {
                 streaming: false,
@@ -836,22 +876,37 @@ export const UnifiedAgenticChat: React.FC<{
             `[UnifiedAgenticChat] CHT-005: Cleaned up stream session for conv=${payload.conversation_id}`,
           );
 
+          // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-end
+          if (streamWatchdogTimeoutRef.current) {
+            clearTimeout(streamWatchdogTimeoutRef.current);
+            streamWatchdogTimeoutRef.current = null;
+          }
+
           // Update billing store with new credit info
           if (payload.credits) {
             useBillingStore.getState().updateCredits(payload.credits);
             console.log('[UnifiedAgenticChat] Updated credits from stream-end:', payload.credits);
           }
 
-          // Clear the abort controller since streaming completed
-          abortControllerRef.current = null;
+          // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
+          // This prevents stale stream-end events from clearing active loading state
+          if (hasValidTarget) {
+            // Clear the abort controller since streaming completed
+            abortControllerRef.current = null;
 
-          state.setIsLoading(false);
-          state.setStreamingMessage(null);
-          toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-            clearTimeout(timeoutEntry.softTimeoutId);
-            clearTimeout(timeoutEntry.hardTimeoutId);
-          });
-          toolExecutionTimeoutsRef.current.clear();
+            state.setIsLoading(false);
+            state.setStreamingMessage(null);
+            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+              clearTimeout(timeoutEntry.softTimeoutId);
+              clearTimeout(timeoutEntry.hardTimeoutId);
+            });
+            toolExecutionTimeoutsRef.current.clear();
+          } else {
+            console.warn(
+              '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-end received without valid target, not clearing global state',
+              { payloadMessageId: messageId, sessionMessageId, currentStreamingId },
+            );
+          }
         }),
       );
 
@@ -880,7 +935,10 @@ export const UnifiedAgenticChat: React.FC<{
               targetId = currentStreamingId;
             }
 
-            if (targetId) {
+            // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
+            const hasValidTarget = targetId !== null;
+
+            if (hasValidTarget && targetId) {
               // Use friendly error messages in simple mode
               const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
               const displayError = isSimpleMode
@@ -905,16 +963,30 @@ export const UnifiedAgenticChat: React.FC<{
               `[UnifiedAgenticChat] CHT-005: Cleaned up stream session on error for conv=${payload.conversation_id}`,
             );
 
-            // Clear the abort controller since streaming errored
-            abortControllerRef.current = null;
+            // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-error
+            if (streamWatchdogTimeoutRef.current) {
+              clearTimeout(streamWatchdogTimeoutRef.current);
+              streamWatchdogTimeoutRef.current = null;
+            }
 
-            state.setIsLoading(false);
-            state.setStreamingMessage(null);
-            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-              clearTimeout(timeoutEntry.softTimeoutId);
-              clearTimeout(timeoutEntry.hardTimeoutId);
-            });
-            toolExecutionTimeoutsRef.current.clear();
+            // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
+            if (hasValidTarget) {
+              // Clear the abort controller since streaming errored
+              abortControllerRef.current = null;
+
+              state.setIsLoading(false);
+              state.setStreamingMessage(null);
+              toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+                clearTimeout(timeoutEntry.softTimeoutId);
+                clearTimeout(timeoutEntry.hardTimeoutId);
+              });
+              toolExecutionTimeoutsRef.current.clear();
+            } else {
+              console.warn(
+                '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-error received without valid target, not clearing global state',
+                { payloadMessageId: messageId, sessionMessageId, currentStreamingId },
+              );
+            }
           },
         ),
       );
@@ -1002,7 +1074,7 @@ export const UnifiedAgenticChat: React.FC<{
 
             // Clear from backend queue
             try {
-              await invoke('chat_pop_pending_message');
+              await ipcInvoke('chat_pop_pending_message');
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
               // CHT-002 fix: Show user-visible error for pending message processing failure
@@ -1097,40 +1169,18 @@ export const UnifiedAgenticChat: React.FC<{
         }),
       );
 
-      // Tool Confirmation Request Listener
-      registerListener(
-        listen<{
-          request_id: string;
-          tool_name: string;
-          risk_level: string;
-          message: string;
-          safety_tier: string;
-        }>('tool-confirmation-request', async ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Tool confirmation requested:', payload);
-
-          const riskLevel =
-            payload.risk_level === 'High' || payload.risk_level === 'Critical' ? 'high' : 'medium';
-          const displayMessage = `Tool: ${payload.tool_name}\nSafety Tier: ${payload.safety_tier}\n\n${payload.message}`;
-
-          try {
-            const approved = await confirmRisk(riskLevel, displayMessage);
-
-            console.log(
-              `[UnifiedAgenticChat] Tool confirmation result: ${approved ? 'Approved' : 'Denied'}`,
-            );
-            await respondToolConfirmation(payload.request_id, approved);
-          } catch (error) {
-            console.error('[UnifiedAgenticChat] Error in tool confirmation:', error);
-            // Default to deny on error
-            await respondToolConfirmation(payload.request_id, false);
-          }
-        }),
-      );
+      // AUDIT-APPROVAL-047 fix: Removed duplicate tool:confirmation_required handler.
+      // The tool confirmation flow is now handled exclusively by useAgenticEvents which
+      // adds approvals to pendingApprovals store. The ApprovalModal then handles
+      // user responses via useApprovalActions, which correctly routes to either
+      // respond_tool_confirmation (for MCP/tool confirmations) or agent_resolve_approval
+      // (for agent-level approvals).
 
       // Tool execution event listeners - display tool calls in the UI
       registerListener(
         listen<{
           conversation_id: number;
+          message_id?: string | number;
           tool_calls: Array<{
             index: number;
             id: string;
@@ -1144,19 +1194,12 @@ export const UnifiedAgenticChat: React.FC<{
           // CHT-009 fix: Update message metadata so MessageBubble renders the ToolCallCard
           // Find the target message
           const state = useUnifiedChatStore.getState();
-          // Try session map first, then payload message_id if available (though tool-calls payload doesn't have message_id?)
-          // Wait, payload doesn't have message_id! It has conversation_id.
-          // We must rely on activeStreamSessionsRef or finding the last assistant message.
+          // Resolve deterministically: stream session map first, then explicit payload.message_id.
 
-          let targetMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
-
-          if (!targetMessageId) {
-            // Fallback: find the last streaming assistant message
-            const lastStreaming = state.messages
-              .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
-              .pop();
-            if (lastStreaming) targetMessageId = lastStreaming.id;
-          }
+          const targetMessageId = resolveStreamTargetMessageId(
+            payload.conversation_id,
+            payload.message_id,
+          );
 
           // If we found a target message, update its metadata
           if (targetMessageId) {
@@ -1171,6 +1214,7 @@ export const UnifiedAgenticChat: React.FC<{
                   // key fields for MessageBubble to detect tool call
                   tool: firstTool.name,
                   tool_call: firstTool.id,
+                  actionId: firstTool.id, // AUDIT-UI-035: Add actionId for MessageBubble store linkage
                   name: firstTool.name,
                   status: 'running',
                   // also keep streaming true so it shows as active
@@ -1191,7 +1235,10 @@ export const UnifiedAgenticChat: React.FC<{
               // Keep fallback empty object if arguments are partial/non-JSON.
             }
 
-            upsertToolArtifact(payload.conversation_id, tc.id, {
+            upsertToolArtifact(
+              payload.conversation_id,
+              tc.id,
+              {
               toolName: tc.name, // Use 'toolName' consistently with upsertToolArtifact logic
               type: toolNameToArtifactType(tc.name),
               title: toolNameToTitle(tc.name),
@@ -1202,7 +1249,9 @@ export const UnifiedAgenticChat: React.FC<{
                 ? { filePath: parsedArguments['output_path'] }
                 : {}),
               ...(parsedArguments['file_path'] ? { filePath: parsedArguments['file_path'] } : {}),
-            });
+              },
+              payload.message_id,
+            );
 
             useUnifiedChatStore.getState().addActionTrailEntry({
               type: 'running',
@@ -1212,7 +1261,13 @@ export const UnifiedAgenticChat: React.FC<{
 
             // Guard against dropped/missed `chat:tool-executing` events.
             // We start a timeout here as a fallback so every running tool resolves.
-            scheduleToolExecutionTimeout(tc.id, tc.name, payload.conversation_id, false);
+            scheduleToolExecutionTimeout(
+              tc.id,
+              tc.name,
+              payload.conversation_id,
+              false,
+              payload.message_id,
+            );
           }
         }),
       );
@@ -1220,6 +1275,7 @@ export const UnifiedAgenticChat: React.FC<{
       registerListener(
         listen<{
           conversation_id: number;
+          message_id?: string | number;
           tool_call_id: string;
           tool_name: string;
           arguments: string;
@@ -1230,6 +1286,7 @@ export const UnifiedAgenticChat: React.FC<{
             payload.tool_name,
             payload.conversation_id,
             true,
+            payload.message_id,
           );
 
           // Update action trail with executing status
@@ -1266,6 +1323,7 @@ export const UnifiedAgenticChat: React.FC<{
       registerListener(
         listen<{
           conversation_id: number;
+          message_id?: string | number;
           tool_call_id: string;
           tool_name: string;
           success: boolean;
@@ -1292,16 +1350,36 @@ export const UnifiedAgenticChat: React.FC<{
           }
 
           const normalizedData = normalizeInlineToolData(payload.tool_name, parsedData);
-          upsertToolArtifact(payload.conversation_id, payload.tool_call_id, {
-            toolName: payload.tool_name,
-            type: toolNameToArtifactType(payload.tool_name),
-            title: toolNameToTitle(payload.tool_name),
-            status: payload.success ? 'completed' : 'failed',
-            success: payload.success,
-            error: payload.success ? undefined : payload.result,
-            content: payload.result || '',
-            ...normalizedData,
-          });
+          upsertToolArtifact(
+            payload.conversation_id,
+            payload.tool_call_id,
+            {
+              toolName: payload.tool_name,
+              type: toolNameToArtifactType(payload.tool_name),
+              title: toolNameToTitle(payload.tool_name),
+              status: payload.success ? 'completed' : 'failed',
+              success: payload.success,
+              error: payload.success ? undefined : payload.result,
+              content: payload.result || '',
+              ...normalizedData,
+            },
+            payload.message_id,
+          );
+
+          // AUDIT-UI-034: Update message metadata status when tool result arrives
+          // This ensures the tool card transitions from "running" to "completed/failed"
+          const targetMessageId = resolveStreamTargetMessageId(
+            payload.conversation_id,
+            payload.message_id,
+          );
+          if (targetMessageId) {
+            useUnifiedChatStore.getState().updateMessage(targetMessageId, {
+              metadata: {
+                status: payload.success ? 'completed' : 'failed',
+                streaming: false, // Stop streaming indicator
+              },
+            });
+          }
 
           // Update action trail with result
           useUnifiedChatStore.getState().addActionTrailEntry({
@@ -1777,7 +1855,7 @@ export const UnifiedAgenticChat: React.FC<{
     });
     if (isTauri) {
       try {
-        await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+        await ipcInvoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
       } catch (error) {
         console.error('[UnifiedAgenticChat] Failed to set workflow hash', error);
       }
@@ -1916,7 +1994,7 @@ export const UnifiedAgenticChat: React.FC<{
             daily_reset_at?: string;
           };
         }
-        const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
+        const response = await ipcInvoke<ChatSendMessageResponse>('chat_send_message', {
           request: {
             content,
             userId,
@@ -2034,7 +2112,37 @@ export const UnifiedAgenticChat: React.FC<{
       setIsLoading(false);
       setStreamingMessage(null);
     }
-    // Note: No finally block - for streaming mode, cleanup is handled by chat:stream-end event handler
+    // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
+    // The watchdog ensures we don't get stuck if stream-end never arrives
+    finally {
+      // Set a watchdog timeout - if stream-end doesn't arrive within 5 minutes, force cleanup
+      const WATCHDOG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+      if (streamWatchdogTimeoutRef.current) {
+        clearTimeout(streamWatchdogTimeoutRef.current);
+      }
+      streamWatchdogTimeoutRef.current = setTimeout(() => {
+        const state = useUnifiedChatStore.getState();
+        if (state.isLoading || state.currentStreamingMessageId) {
+          console.warn(
+            '[UnifiedAgenticChat] AUDIT-STREAM-059: Watchdog triggered - forcing cleanup of stuck loading state',
+          );
+          state.setIsLoading(false);
+          state.setStreamingMessage(null);
+          toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+            clearTimeout(timeoutEntry.softTimeoutId);
+            clearTimeout(timeoutEntry.hardTimeoutId);
+          });
+          toolExecutionTimeoutsRef.current.clear();
+          // Update message to show error state
+          updateMessage(assistantMessageId, {
+            content: 'Response timed out. Please try again.',
+            metadata: { streaming: false },
+            error: 'stream_watchdog_timeout',
+          });
+        }
+        streamWatchdogTimeoutRef.current = null;
+      }, WATCHDOG_TIMEOUT_MS);
+    }
   };
 
   const layoutClasses = {
@@ -2046,6 +2154,12 @@ export const UnifiedAgenticChat: React.FC<{
   const handleStopGeneration = async () => {
     console.log('[UnifiedAgenticChat] Stopping generation...');
 
+    // AUDIT-STREAM-059 fix: Clear the stream watchdog when user stops generation
+    if (streamWatchdogTimeoutRef.current) {
+      clearTimeout(streamWatchdogTimeoutRef.current);
+      streamWatchdogTimeoutRef.current = null;
+    }
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -2053,7 +2167,7 @@ export const UnifiedAgenticChat: React.FC<{
 
     if (isTauri) {
       try {
-        await invoke('chat_stop_generation');
+        await ipcInvoke('chat_stop_generation');
       } catch (error) {
         console.warn('[UnifiedAgenticChat] Failed to stop generation:', error);
       }
@@ -2065,6 +2179,13 @@ export const UnifiedAgenticChat: React.FC<{
         metadata: { streaming: false },
       });
     }
+
+    // AUDIT-STREAM-037 fix: Clear per-tool timeout callbacks to prevent stale timeout errors
+    toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+      clearTimeout(timeoutEntry.softTimeoutId);
+      clearTimeout(timeoutEntry.hardTimeoutId);
+    });
+    toolExecutionTimeoutsRef.current.clear();
 
     setIsLoading(false);
     setStreamingMessage(null);
@@ -2085,7 +2206,7 @@ export const UnifiedAgenticChat: React.FC<{
       toolExecutionTimeoutsRef.current.clear();
 
       if (isTauri) {
-        void invoke('chat_stop_generation').catch((error) => {
+        void ipcInvoke('chat_stop_generation').catch((error: unknown) => {
           console.warn('[UnifiedAgenticChat] Failed to stop generation on new chat:', error);
         });
       }

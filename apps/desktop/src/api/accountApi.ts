@@ -5,9 +5,7 @@ import {
   TokenResponse,
   UserProfile,
 } from '../types/account';
-
-// Check if running in Tauri environment
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+import { isTauri } from '../lib/tauri-mock';
 
 // Default timeout for API requests (30 seconds)
 const DEFAULT_TIMEOUT_MS = 30_000;

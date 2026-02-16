@@ -15,8 +15,8 @@ export interface VoiceRecordingStatusProps {
   isTranscribing: boolean;
   /** Interim transcript text */
   interimTranscript: string;
-  /** Whether using local Whisper */
-  preferLocalWhisper?: boolean;
+  /** Whether using Whisper Cloud (remote) */
+  preferWhisperCloud?: boolean;
   /** Voice error message */
   voiceError?: string | null;
 }
@@ -25,7 +25,7 @@ export const VoiceRecordingStatus: React.FC<VoiceRecordingStatusProps> = ({
   isRecording,
   isTranscribing,
   interimTranscript,
-  preferLocalWhisper = false,
+  preferWhisperCloud = false,
   voiceError,
 }) => {
   const showStatus = isRecording || isTranscribing || interimTranscript;
@@ -70,7 +70,7 @@ export const VoiceRecordingStatus: React.FC<VoiceRecordingStatusProps> = ({
                 >
                   {isTranscribing ? 'Transcribing...' : 'Recording'}
                 </span>
-                {preferLocalWhisper && !isTranscribing && (
+                {preferWhisperCloud && !isTranscribing && (
                   <span className="text-xs text-gray-600 dark:text-gray-300">(Whisper)</span>
                 )}
               </div>

@@ -48,8 +48,8 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleNewChat = useCallback(() => {
-    resetInFlightChatState();
+  const handleNewChat = useCallback(async () => {
+    await resetInFlightChatState();
     createConversation('New chat');
   }, [createConversation]);
 

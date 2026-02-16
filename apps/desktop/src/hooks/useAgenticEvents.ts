@@ -190,6 +190,15 @@ export function useAgenticEvents() {
     return 'pending';
   };
 
+  // AUDIT-APPROVAL-049 fix: Consistent risk level normalization across all event handlers
+  const normalizeRiskLevel = (risk?: string): 'low' | 'medium' | 'high' => {
+    if (!risk) return 'high';
+    const normalized = risk.toLowerCase();
+    if (normalized === 'critical' || normalized === 'high') return 'high';
+    if (normalized === 'medium') return 'medium';
+    return 'low';
+  };
+
   const mapActionType = (type?: string): ActionLogEntryType => {
     switch ((type ?? '').toLowerCase()) {
       case 'filesystem':
@@ -499,7 +508,7 @@ export function useAgenticEvents() {
             id: payload.actionId,
             type: (payload.type as ApprovalRequest['type']) ?? 'terminal_command',
             description: payload.reason ?? 'Action requires approval',
-            riskLevel: payload.riskLevel ?? payload.scope.risk ?? 'high',
+            riskLevel: normalizeRiskLevel(payload.riskLevel ?? payload.scope.risk),
             details: {
               scope: payload.scope,
             },
@@ -539,7 +548,8 @@ export function useAgenticEvents() {
       });
       push(unlistenMetrics);
 
-      const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status_update', (event) => {
+      // AUDIT-EVENT-057 fix: Listen to agent:status:update (matching backend emission)
+      const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status:update', (event) => {
         if (!isMountedRef.current) return;
         const existingAgents = useUnifiedChatStore.getState().agents ?? [];
         const agentExists = existingAgents.some((a) => a.id === event.payload.agent.id);
@@ -639,7 +649,7 @@ export function useAgenticEvents() {
             id: payload.request_id,
             type: 'mcp_tool',
             description: payload.description,
-            riskLevel: (payload.risk_level.toLowerCase() as 'low' | 'medium' | 'high') || 'high',
+            riskLevel: normalizeRiskLevel(payload.risk_level),
             details: {
               tool: payload.tool_display_name,
               toolName: payload.tool_name,
@@ -670,7 +680,7 @@ export function useAgenticEvents() {
         id: string;
         type?: string;
         description?: string;
-        riskLevel?: 'low' | 'medium' | 'high';
+        riskLevel?: string;
         details?: Record<string, unknown>;
         impact?: string;
       }
@@ -680,11 +690,12 @@ export function useAgenticEvents() {
           if (!isMountedRef.current) return;
           const approvalType = (event.payload.type ||
             'terminal_command') as ApprovalRequest['type'];
+          // AUDIT-APPROVAL-049 fix: Use consistent risk level normalization
           const approval: Omit<ApprovalRequest, 'status' | 'createdAt'> = {
             id: event.payload.id,
             type: approvalType,
             description: event.payload.description || 'Agent operation requires approval',
-            riskLevel: (event.payload.riskLevel || 'high') as 'low' | 'medium' | 'high',
+            riskLevel: normalizeRiskLevel(event.payload.riskLevel),
             details: event.payload.details || {},
             impact: event.payload.impact,
           };
@@ -924,8 +935,46 @@ export function useAgenticEvents() {
             if (existingTimeout) {
               clearTimeout(existingTimeout);
             }
+            // AUDIT-STREAM-053 fix: Reconcile message metadata before cleaning up tool stream
+            // This ensures message artifacts reflect final status before stream is removed
             const timeoutId = setTimeout(() => {
               if (isMountedRef.current) {
+                const state = useUnifiedChatStore.getState();
+                const stream = state.activeToolStreams.get(toolId);
+
+                // If there's a stream with a final status, find the message containing this tool's artifact
+                // and update it to reflect final status before removing the stream
+                if (stream) {
+                  // Find message that has an artifact with this tool ID
+                  for (const message of state.messages) {
+                    const artifacts = message.artifacts || [];
+                    const artifactIndex = artifacts.findIndex((a) => a.id === toolId);
+                    if (artifactIndex >= 0) {
+                      const existingArtifact = artifacts[artifactIndex];
+                      if (existingArtifact) {
+                        const updatedArtifact = {
+                          ...existingArtifact,
+                          metadata: {
+                            ...existingArtifact.metadata,
+                            completedAt: stream.completedAt?.toISOString(),
+                            duration_ms: stream.duration_ms,
+                            error: stream.error,
+                            // Ensure status is not stuck in running
+                            status: stream.status === 'running' ? 'completed' : stream.status,
+                          },
+                        };
+                        const updatedArtifacts = [...artifacts];
+                        updatedArtifacts[artifactIndex] = updatedArtifact;
+                        state.updateMessage(message.id, {
+                          artifacts: updatedArtifacts,
+                          metadata: { artifacts: updatedArtifacts },
+                        });
+                      }
+                      break; // Found and updated the message, no need to continue
+                    }
+                  }
+                }
+
                 handlersRef.current.removeToolStream(toolId);
               }
               toolStreamCleanupTimeoutsRef.current.delete(toolId);

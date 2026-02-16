@@ -891,6 +891,16 @@ struct LlmOllamaTagsResponse {
 
 #[tauri::command]
 pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
+    list_ollama_models_internal().await
+}
+
+/// AUDIT-COMMAND-075 fix: Alias for llm_list_ollama_models for frontend compatibility
+#[tauri::command]
+pub async fn llm_get_ollama_models() -> Result<Vec<ModelInfo>, String> {
+    list_ollama_models_internal().await
+}
+
+async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
     let client = reqwest::Client::new();
     let response = client
         .get(format!("{}/api/tags", OLLAMA_BASE_URL))

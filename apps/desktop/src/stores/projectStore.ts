@@ -14,7 +14,7 @@
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
-import { invoke } from '../lib/tauri-mock';
+import { invoke, isTauri } from '../lib/tauri-mock';
 
 export interface ProjectFile {
   id: string;
@@ -99,8 +99,6 @@ interface ProjectState {
   // Utilities
   clearError: () => void;
 }
-
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 // Storage fallback for SSR/non-browser environments
 const storageFallback: Storage = {

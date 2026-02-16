@@ -516,6 +516,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         run_migration_in_transaction(conn, 53, apply_migration_v53)?;
     }
 
+    if current_version < 54 {
+        run_migration_in_transaction(conn, 54, apply_migration_v54)?;
+    }
+
     Ok(())
 }
 
@@ -4617,6 +4621,42 @@ fn apply_migration_v53(conn: &Connection) -> Result<()> {
     tracing::info!(
         "Applied migration v53: Created AGI task checkpoint tables for session persistence"
     );
+
+    Ok(())
+}
+
+/// Migration v54: Add session_id column to command_history for session-scoped history
+/// This enables terminal command history to be scoped to specific sessions
+/// instead of being global across all sessions.
+fn apply_migration_v54(conn: &Connection) -> Result<()> {
+    // Check if the column already exists (idempotent migration)
+    let column_exists: bool = conn
+        .prepare("PRAGMA table_info(command_history)")?
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            Ok(name == "session_id")
+        })?
+        .filter_map(|r| r.ok())
+        .next()
+        .unwrap_or(false);
+
+    if !column_exists {
+        conn.execute(
+            "ALTER TABLE command_history ADD COLUMN session_id TEXT",
+            [],
+        )?;
+
+        // Create index for efficient session-scoped queries
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_command_history_session_id
+             ON command_history(session_id)",
+            [],
+        )?;
+
+        tracing::info!(
+            "Applied migration v54: Added session_id column to command_history for session-scoped history"
+        );
+    }
 
     Ok(())
 }
