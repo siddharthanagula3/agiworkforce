@@ -234,11 +234,14 @@ impl Default for McpOAuthState {
                 "Failed to create configured HTTP client, using default: {}",
                 e
             );
-            // Fallback to a default client without custom configuration.
-            // reqwest::Client::new() cannot fail and provides sensible defaults.
+            // Fallback to a default client with timeout configuration.
+            let http_client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Failed to create fallback HTTP client with timeout");
             Self {
                 pending_flows: Arc::new(RwLock::new(HashMap::new())),
-                http_client: reqwest::Client::new(),
+                http_client,
             }
         })
     }

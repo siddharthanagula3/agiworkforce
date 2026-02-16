@@ -134,6 +134,9 @@ const DesktopShell = () => {
       errorReportingService.trackAction(action);
     };
 
+    // Ref to store cleanup functions from async initialization
+    const cleanupFns: Array<() => void | Promise<void>> = [];
+
     trackAction('app_loaded');
 
     void initializeAgentStatusListener();
@@ -174,7 +177,8 @@ const DesktopShell = () => {
       // Initialize Ollama health service for graceful degradation of local models
       if (isTauri) {
         const { initializeOllamaHealthService } = await import('./services/ollamaHealthService');
-        initializeOllamaHealthService();
+        const cleanup = initializeOllamaHealthService();
+        cleanupFns.push(cleanup);
       }
 
       // Load custom instructions from backend (syncs with stored data)
@@ -215,6 +219,14 @@ const DesktopShell = () => {
 
     return () => {
       void errorReportingService.flush();
+      // Call all cleanup functions from async initialization
+      cleanupFns.forEach((cleanup) => {
+        try {
+          cleanup();
+        } catch (error) {
+          console.warn('[App] Cleanup function failed:', error);
+        }
+      });
     };
   }, []);
 

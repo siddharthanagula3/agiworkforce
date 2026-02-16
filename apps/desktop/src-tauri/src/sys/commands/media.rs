@@ -122,7 +122,11 @@ pub async fn media_generate_image(
     });
 
     let started = Instant::now();
-    let response = reqwest::Client::new()
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let response = client
         .post(url)
         .bearer_auth(token)
         .json(&payload)
@@ -221,7 +225,11 @@ pub async fn media_generate_video(
     });
 
     let started = Instant::now();
-    let response = reqwest::Client::new()
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let response = client
         .post(generate_url)
         .bearer_auth(&token)
         .json(&payload)
@@ -256,10 +264,14 @@ pub async fn media_generate_video(
     let mut final_status = "processing".to_string();
     let mut attempts = 0u32;
     let max_attempts = 100; // ~5 minutes at 3s interval
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     while attempts < max_attempts {
         attempts += 1;
-        let status_response = reqwest::Client::new()
+        let status_response = client
             .get(&status_url)
             .bearer_auth(&token)
             .send()

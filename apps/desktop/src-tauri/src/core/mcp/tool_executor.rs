@@ -82,8 +82,8 @@ impl McpToolExecutor {
         let duration = start_time.elapsed();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
 
         let execution_result = match result_value {
             Ok(result) => ToolExecutionResult {

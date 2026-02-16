@@ -43,6 +43,14 @@ class FeatureFlagsService {
     this.initializeService();
   }
 
+  /**
+   * Cleanup the service - stops periodic updates.
+   * Call this when the service is no longer needed.
+   */
+  public cleanup(): void {
+    this.stopPeriodicUpdates();
+  }
+
   private async initializeService() {
     try {
       await this.loadConfig();

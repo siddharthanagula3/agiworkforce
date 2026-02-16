@@ -20,8 +20,8 @@ static EMBEDDINGS_JOBS: Lazy<Mutex<HashMap<String, EmbeddingsBatchJob>>> =
 fn generate_job_name(prefix: &str) -> String {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
     format!("{}_{}", prefix, timestamp)
 }
 

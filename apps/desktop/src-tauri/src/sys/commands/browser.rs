@@ -198,7 +198,10 @@ pub async fn browser_open_tab(
     // TODO: Get actual port from config/state if possible, but 9222 is hardcoded in PlaywrightBridge for now.
     let create_url = format!("http://127.0.0.1:9222/json/new?{}", target_url);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     // Use PUT to create new target
     let resp = client.put(&create_url).send().await;
 

@@ -180,9 +180,8 @@ pub async fn analytics_get_usage_stats(
     let today_start = chrono::Utc::now()
         .date_naive()
         .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_utc()
-        .timestamp();
+        .map(|t| t.and_utc().timestamp())
+        .unwrap_or(0);
     let events_today: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM automation_history WHERE created_at >= ?1",

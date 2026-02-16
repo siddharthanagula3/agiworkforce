@@ -229,8 +229,8 @@ pub async fn automation_save_recording_as_script(
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
 
     let script_actions: Vec<crate::automation::executor::ScriptAction> = recording
         .actions

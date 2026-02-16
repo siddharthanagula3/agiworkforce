@@ -52,6 +52,24 @@ class ErrorReportingService {
     this.initializeSystemInfoSync();
   }
 
+  /**
+   * Cleanup the service - stops the batch timer.
+   * Call this when the service is no longer needed.
+   */
+  public cleanup(): void {
+    this.stopBatchTimer();
+  }
+
+  /**
+   * Stop the batch timer.
+   */
+  private stopBatchTimer(): void {
+    if (this.batchTimer !== null) {
+      window.clearInterval(this.batchTimer);
+      this.batchTimer = null;
+    }
+  }
+
   private initializeSystemInfoSync(): void {
     try {
       if (typeof navigator !== 'undefined') {
@@ -205,10 +223,7 @@ class ErrorReportingService {
   async flush(): Promise<void> {
     await this.sendBatch();
 
-    if (this.batchTimer !== null) {
-      window.clearInterval(this.batchTimer);
-      this.batchTimer = null;
-    }
+    this.stopBatchTimer();
   }
 
   clearQueue(): void {
