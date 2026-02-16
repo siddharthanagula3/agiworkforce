@@ -291,7 +291,7 @@ impl BackgroundManager {
                 // Send webhook asynchronously (don't wait for completion)
                 let client = self.webhook_client.clone();
                 tokio::spawn(async move {
-                    let _ = Self::send_webhook_notification(
+                    if let Err(e) = Self::send_webhook_notification(
                         &client,
                         &webhook_url,
                         webhook_secret.as_deref(),
@@ -305,7 +305,14 @@ impl BackgroundManager {
                             metadata,
                         },
                     )
-                    .await;
+                    .await
+                    {
+                        tracing::warn!(
+                            "Failed to send webhook notification for background request {}: {}",
+                            response_id,
+                            e
+                        );
+                    }
                 });
             }
 
@@ -342,7 +349,7 @@ impl BackgroundManager {
                 // Send webhook asynchronously (don't wait for completion)
                 let client = self.webhook_client.clone();
                 tokio::spawn(async move {
-                    let _ = Self::send_webhook_notification(
+                    if let Err(e) = Self::send_webhook_notification(
                         &client,
                         &webhook_url,
                         webhook_secret.as_deref(),
@@ -356,7 +363,14 @@ impl BackgroundManager {
                             metadata,
                         },
                     )
-                    .await;
+                    .await
+                    {
+                        tracing::warn!(
+                            "Failed to send webhook notification for background request {}: {}",
+                            response_id,
+                            e
+                        );
+                    }
                 });
             }
 

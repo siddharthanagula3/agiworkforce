@@ -439,8 +439,8 @@ pub async fn coord_get_pending_approvals(
 fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

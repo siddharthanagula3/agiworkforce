@@ -11,6 +11,7 @@ import {
   CheckpointListResponse,
   CheckpointReason,
   CheckpointSummary,
+  SaveCheckpointRequest,
   TaskId,
   getLatestCheckpoint,
   getRestoreHistory,
@@ -31,7 +32,7 @@ export interface UseCheckpointsState {
 }
 
 export interface UseCheckpointsActions {
-  saveCheckpoint: (request: any) => Promise<Checkpoint>;
+  saveCheckpoint: (request: SaveCheckpointRequest) => Promise<Checkpoint>;
   loadLatestCheckpoint: () => Promise<Checkpoint | null>;
   listCheckpoints: () => Promise<CheckpointListResponse>;
   deleteCheckpoint: (id: string) => Promise<void>;
@@ -113,7 +114,7 @@ export function useCheckpoints(options: UseCheckpointsOptions): {
 
   // Action: Save checkpoint
   const handleSaveCheckpoint = useCallback(
-    async (request: any) => {
+    async (request: SaveCheckpointRequest) => {
       try {
         setIsSaving(true);
         setError(null);

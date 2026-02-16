@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 
 interface ResizeHandleProps {
@@ -21,6 +21,7 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   isResizing,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const handlersRef = useRef<{ move?: (e: MouseEvent) => void; up?: () => void }>({});
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -33,6 +34,16 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
       const startX = e.clientX;
       const startWidth = width;
 
+      const handleMouseUp = () => {
+        setIsDragging(false);
+        isResizing?.(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', handlersRef.current.move!);
+        document.removeEventListener('mouseup', handlersRef.current.up!);
+        handlersRef.current = {};
+      };
+
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const deltaX = moveEvent.clientX - startX;
 
@@ -42,20 +53,25 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
         onResize(newWidth);
       };
 
-      const handleMouseUp = () => {
-        setIsDragging(false);
-        isResizing?.(false);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
+      handlersRef.current = { move: handleMouseMove, up: handleMouseUp };
 
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
     [width, minWidth, maxWidth, direction, onResize, isResizing],
   );
+
+  // Cleanup effect to ensure event listeners are removed on unmount
+  useEffect(() => {
+    return () => {
+      if (handlersRef.current.move) {
+        document.removeEventListener('mousemove', handlersRef.current.move);
+      }
+      if (handlersRef.current.up) {
+        document.removeEventListener('mouseup', handlersRef.current.up);
+      }
+    };
+  }, []);
 
   return (
     <div

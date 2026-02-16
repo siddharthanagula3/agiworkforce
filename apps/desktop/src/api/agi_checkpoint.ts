@@ -43,6 +43,23 @@ export interface CheckpointContextEntry {
   data?: Record<string, any>;
 }
 
+/// Constraint definition for task goals
+export interface GoalConstraint {
+  type: string;
+  value: string | number | boolean;
+  description?: string;
+}
+
+/// Tool call result entry
+export interface ToolResultEntry {
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  result: unknown;
+  timestamp_ms: number;
+  success: boolean;
+  error?: string;
+}
+
 /// Complete checkpoint snapshot
 export interface Checkpoint {
   id: CheckpointId;
@@ -52,13 +69,13 @@ export interface Checkpoint {
     description: string;
     priority: string;
     deadline?: number;
-    constraints: any[];
+    constraints: GoalConstraint[];
     success_criteria: string[];
   };
   current_step: number;
   completed_steps: number[];
-  current_state: Record<string, any>;
-  tool_results: any[];
+  current_state: Record<string, unknown>;
+  tool_results: ToolResultEntry[];
   available_resources: {
     cpu_usage_percent: number;
     memory_usage_mb: number;

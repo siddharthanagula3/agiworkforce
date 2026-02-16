@@ -70,7 +70,9 @@ pub async fn screen_watcher_start(
         let mut rx = screen_watcher::subscribe().await;
         while let Some(capture) = rx.recv().await {
             // Emit screenshot event to frontend
-            let _ = app_handle.emit("screen-watcher:capture", &capture);
+            if let Err(e) = app_handle.emit("screen-watcher:capture", &capture) {
+                tracing::warn!("Failed to emit screen-watcher capture event: {}", e);
+            }
         }
     });
 

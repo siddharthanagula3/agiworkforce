@@ -44,6 +44,30 @@ class AnalyticsService {
     this.initializeService();
   }
 
+  /**
+   * Cleanup all event listeners and timers.
+   * Call this when the analytics service is no longer needed.
+   */
+  public cleanup(): void {
+    this.stopFlushTimer();
+    window.removeEventListener('online', this._handleOnline);
+    window.removeEventListener('offline', this._handleOffline);
+    window.removeEventListener('beforeunload', this._handleBeforeUnload);
+  }
+
+  private _handleOnline = () => {
+    this.isOnline = true;
+    this.flushQueue();
+  };
+
+  private _handleOffline = () => {
+    this.isOnline = false;
+  };
+
+  private _handleBeforeUnload = () => {
+    this.endSession();
+  };
+
   private async initializeService() {
     try {
       await this.loadConfig();
@@ -57,14 +81,9 @@ class AnalyticsService {
         this.sessionId = backendSessionId;
       }
 
-      window.addEventListener('online', () => {
-        this.isOnline = true;
-        this.flushQueue();
-      });
+      window.addEventListener('online', this._handleOnline);
 
-      window.addEventListener('offline', () => {
-        this.isOnline = false;
-      });
+      window.addEventListener('offline', this._handleOffline);
 
       this.startFlushTimer();
 
@@ -75,9 +94,7 @@ class AnalyticsService {
         });
       }
 
-      window.addEventListener('beforeunload', () => {
-        this.endSession();
-      });
+      window.addEventListener('beforeunload', this._handleBeforeUnload);
     } catch (error) {
       console.error('Failed to initialize analytics:', error);
     }
