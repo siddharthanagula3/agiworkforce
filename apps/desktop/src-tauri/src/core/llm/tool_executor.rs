@@ -97,7 +97,10 @@ impl ToolExecutor {
                 .get("tab_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            browser_state.get_client_for_tab(tab_id).await.map_err(anyhow::Error::msg)
+            browser_state
+                .get_client_for_tab(tab_id)
+                .await
+                .map_err(anyhow::Error::msg)
         };
 
         match tool_id {
@@ -231,11 +234,17 @@ impl ToolExecutor {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
                 let wrapped_script = if await_promise {
-                    format!("new Promise((resolve) => {{ {}; resolve(undefined); }})", script)
+                    format!(
+                        "new Promise((resolve) => {{ {}; resolve(undefined); }})",
+                        script
+                    )
                 } else {
                     script.to_string()
                 };
-                let result = client.evaluate(&wrapped_script).await.map_err(anyhow::Error::msg)?;
+                let result = client
+                    .evaluate(&wrapped_script)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "result": result, "tab_id": tab_id }),
@@ -1699,8 +1708,8 @@ impl ToolExecutor {
         &self,
         args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
-        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
         use crate::features::terminal::{get_default_shell, ShellType};
+        use crate::sys::security::command_validator::{validate_command, ValidationConfig};
 
         // Generate a unique tool ID for streaming events
         let tool_id = format!("terminal-{}", Uuid::new_v4());
@@ -1843,9 +1852,13 @@ impl ToolExecutor {
                             )
                         }
                     }
-                    ShellType::Bash => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+                    ShellType::Bash => {
+                        ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                    }
                     ShellType::Zsh => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
-                    ShellType::Fish => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
+                    ShellType::Fish => {
+                        ("fish".to_string(), vec!["-c".to_string(), command.clone()])
+                    }
                     ShellType::Sh => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
                     ShellType::Cmd => (
                         "cmd.exe".to_string(),
@@ -1855,10 +1868,9 @@ impl ToolExecutor {
                         "wsl.exe".to_string(),
                         vec!["bash".to_string(), "-lc".to_string(), command.clone()],
                     ),
-                    ShellType::GitBash => (
-                        "bash".to_string(),
-                        vec!["-lc".to_string(), command.clone()],
-                    ),
+                    ShellType::GitBash => {
+                        ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+                    }
                 }
             }
         };

@@ -261,13 +261,13 @@ impl ImapClient {
 
         // Try using MOVE command first (RFC 6851)
         // The async_imap library supports move via the session (uid_mv method)
-        let move_result = self
-            .session
-            .uid_mv(&sequence, to_folder)
-            .await;
+        let move_result = self.session.uid_mv(&sequence, to_folder).await;
 
         if move_result.is_ok() {
-            debug!("Moved message UID {} from {} to {}", uid, from_folder, to_folder);
+            debug!(
+                "Moved message UID {} from {} to {}",
+                uid, from_folder, to_folder
+            );
             return Ok(());
         }
 
@@ -309,9 +309,7 @@ impl ImapClient {
 
         debug!(
             "Moved message UID {} from {} to {} via COPY+DELETE",
-            uid,
-            from_folder,
-            to_folder
+            uid, from_folder, to_folder
         );
         Ok(())
     }

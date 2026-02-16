@@ -88,7 +88,11 @@ impl McpState {
         let server_config = self.config.lock().mcp_servers.get("filesystem").cloned();
 
         // Disconnect existing session if any
-        if self.client.list_servers().contains(&"filesystem".to_string()) {
+        if self
+            .client
+            .list_servers()
+            .contains(&"filesystem".to_string())
+        {
             if let Err(e) = self.client.disconnect_server("filesystem").await {
                 tracing::warn!("[MCP] Failed to disconnect filesystem server: {}", e);
             }
@@ -98,9 +102,16 @@ impl McpState {
         if let Some(config) = server_config {
             // Only restart if the server is enabled
             if config.enabled {
-                match self.client.connect_server("filesystem".to_string(), config).await {
+                match self
+                    .client
+                    .connect_server("filesystem".to_string(), config)
+                    .await
+                {
                     Ok(_) => {
-                        tracing::info!("[MCP] Filesystem server restarted with new root: {}", new_root);
+                        tracing::info!(
+                            "[MCP] Filesystem server restarted with new root: {}",
+                            new_root
+                        );
                         Ok(true)
                     }
                     Err(e) => {
@@ -109,7 +120,9 @@ impl McpState {
                     }
                 }
             } else {
-                tracing::info!("[MCP] Filesystem server not enabled, config updated but not started");
+                tracing::info!(
+                    "[MCP] Filesystem server not enabled, config updated but not started"
+                );
                 Ok(true)
             }
         } else {

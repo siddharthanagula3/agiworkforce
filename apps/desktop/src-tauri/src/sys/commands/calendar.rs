@@ -601,17 +601,25 @@ pub async fn calendar_get_event(
     // Get events from the calendar and find the specific event
     let now = Utc::now();
     let end_time = now + chrono::Duration::days(30);
-    
-    let response = state.manager.list_events(&account_id, &ListEventsRequest {
-        calendar_id: calendar_id.clone(),
-        start_time: now,
-        end_time,
-        max_results: Some(100),
-        show_deleted: Some(false),
-    }).await?;
-    
+
+    let response = state
+        .manager
+        .list_events(
+            &account_id,
+            &ListEventsRequest {
+                calendar_id: calendar_id.clone(),
+                start_time: now,
+                end_time,
+                max_results: Some(100),
+                show_deleted: Some(false),
+            },
+        )
+        .await?;
+
     // Find the event by ID
-    response.events.into_iter()
+    response
+        .events
+        .into_iter()
         .find(|e| e.id == event_id)
         .ok_or_else(|| Error::Generic("Event not found".to_string()))
 }
@@ -638,13 +646,20 @@ pub async fn calendar_sync(
     let end_time = now + chrono::Duration::days(30);
 
     for calendar in &calendars {
-        match state.manager.list_events(&account_id, &ListEventsRequest {
-            calendar_id: calendar.id.clone(),
-            start_time: now,
-            end_time,
-            max_results: Some(100),
-            show_deleted: Some(false),
-        }).await {
+        match state
+            .manager
+            .list_events(
+                &account_id,
+                &ListEventsRequest {
+                    calendar_id: calendar.id.clone(),
+                    start_time: now,
+                    end_time,
+                    max_results: Some(100),
+                    show_deleted: Some(false),
+                },
+            )
+            .await
+        {
             Ok(response) => events_synced += response.events.len(),
             Err(e) => errors.push(format!("Failed to sync calendar {}: {}", calendar.id, e)),
         }

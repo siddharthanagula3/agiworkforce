@@ -39,7 +39,7 @@ fn get_model_pricing(model: &str) -> (f64, f64, f64) {
         "gemini-1.5-flash" => (0.075, 0.3, 0.01875),
         "gemini-1.5-pro" => (1.25, 5.0, 0.3125),
         "gemini-embedding-001" => (0.15, 0.15, 0.0), // Embeddings priced differently
-        _ => (0.5, 2.0, 0.125), // Default pricing
+        _ => (0.5, 2.0, 0.125),                      // Default pricing
     }
 }
 
@@ -409,8 +409,7 @@ pub async fn google_batch_create_jsonl(
     for request in requests {
         let json_str = serde_json::to_string(&request)
             .map_err(|e| format!("Failed to serialize request: {}", e))?;
-        writeln!(writer, "{}", json_str)
-            .map_err(|e| format!("Failed to write to file: {}", e))?;
+        writeln!(writer, "{}", json_str).map_err(|e| format!("Failed to write to file: {}", e))?;
     }
 
     writer

@@ -163,7 +163,12 @@ impl PtySession {
 
                     // Check if we got a prompt back (indicates command completed)
                     // This is a heuristic - we look for common prompt patterns
-                    if output.lines().last().map(|l| l.ends_with('$') || l.ends_with('#') || l.ends_with('>')).unwrap_or(false) {
+                    if output
+                        .lines()
+                        .last()
+                        .map(|l| l.ends_with('$') || l.ends_with('#') || l.ends_with('>'))
+                        .unwrap_or(false)
+                    {
                         break;
                     }
                 }

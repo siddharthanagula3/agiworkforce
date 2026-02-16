@@ -727,7 +727,10 @@ pub async fn email_list_messages(
 
 // AUDIT-EMAIL-077 fix: Alias for email_send for frontend compatibility
 #[command]
-pub async fn email_send_message(app_handle: AppHandle, request: SendEmailRequest) -> Result<String> {
+pub async fn email_send_message(
+    app_handle: AppHandle,
+    request: SendEmailRequest,
+) -> Result<String> {
     email_send(app_handle, request).await
 }
 
@@ -756,7 +759,8 @@ pub async fn email_get_message(
     let emails = imap.fetch_emails(account_id, &folder, 100, None).await?;
     imap.logout().await?;
 
-    emails.into_iter()
+    emails
+        .into_iter()
         .find(|e| e.uid == uid)
         .ok_or_else(|| Error::Generic("Message not found".to_string()))
 }
@@ -791,8 +795,10 @@ pub async fn email_search(
         subject_contains: Some(query.clone()),
         ..Default::default()
     };
-    
-    let emails = imap.fetch_emails(account_id, &folder_name, max_messages, Some(filter)).await?;
+
+    let emails = imap
+        .fetch_emails(account_id, &folder_name, max_messages, Some(filter))
+        .await?;
     let total = emails.len();
     imap.logout().await?;
 
