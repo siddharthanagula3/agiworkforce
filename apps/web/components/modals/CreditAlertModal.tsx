@@ -29,8 +29,8 @@ export function CreditAlertModal({
 
   if (!isOpen) return null;
 
-  const remainingDollars = (remainingCents / 100).toFixed(2);
-  const allocatedDollars = (allocatedCents / 100).toFixed(2);
+  const remainingCentsStr = remainingCents.toString();
+  const allocatedCentsStr = allocatedCents.toString();
 
   const handleUpgrade = () => {
     router.push('/pricing');
@@ -114,14 +114,14 @@ export function CreditAlertModal({
           </div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-zinc-400">Monthly Allocation</span>
-            <span className="font-semibold text-white">${allocatedDollars}</span>
+            <span className="font-semibold text-white">{allocatedCentsStr}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-zinc-400">Remaining Credits</span>
             <span
               className={`font-semibold ${remainingCents > 0 ? 'text-emerald-400' : 'text-red-400'}`}
             >
-              ${remainingDollars}
+              {remainingCentsStr}
             </span>
           </div>
 
@@ -157,7 +157,7 @@ export function CreditAlertModal({
                     <span className="font-medium text-purple-300">Purchase Additional Credits</span>
                   </div>
                   <p className="text-xs text-zinc-400">
-                    Get a one-time $100 credit top-up to continue your AI workflows without
+                    Get a one-time 10000 credit top-up to continue your AI workflows without
                     interruption.
                   </p>
                 </div>
@@ -211,7 +211,7 @@ export function CreditAlertModal({
                 disabled={loading}
                 className="flex-1 bg-purple-600 hover:bg-purple-700"
               >
-                {loading ? 'Processing...' : 'Buy $100 Credits'}
+                {loading ? 'Processing...' : 'Buy 10000 Credits'}
               </Button>
             </>
           ) : (
