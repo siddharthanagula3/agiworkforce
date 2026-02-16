@@ -538,6 +538,86 @@ pub async fn terminal_ai_suggest_improvements(
     Ok(suggestions)
 }
 
+/// Set an environment variable in a terminal session
+#[tauri::command]
+pub async fn terminal_set_env(
+    session_id: String,
+    key: String,
+    value: String,
+    state: State<'_, SessionManager>,
+) -> Result<(), String> {
+    tracing::info!("Setting environment variable {} in session {}", key, session_id);
+
+    state
+        .set_env(&session_id, &key, &value)
+        .await
+        .map_err(|e| format!("Failed to set environment variable: {}", e))?;
+
+    Ok(())
+}
+
+/// Get an environment variable from a terminal session
+#[tauri::command]
+pub async fn terminal_get_env(
+    session_id: String,
+    key: String,
+    state: State<'_, SessionManager>,
+) -> Result<Option<String>, String> {
+    tracing::debug!("Getting environment variable {} from session {}", key, session_id);
+
+    state
+        .get_env(&session_id, &key)
+        .await
+        .map_err(|e| format!("Failed to get environment variable: {}", e))
+}
+
+/// List all environment variables in a terminal session
+#[tauri::command]
+pub async fn terminal_list_env(
+    session_id: String,
+    state: State<'_, SessionManager>,
+) -> Result<Vec<(String, String)>, String> {
+    tracing::debug!("Listing environment variables in session {}", session_id);
+
+    state
+        .list_env(&session_id)
+        .await
+        .map_err(|e| format!("Failed to list environment variables: {}", e))
+}
+
+/// Unset an environment variable in a terminal session
+#[tauri::command]
+pub async fn terminal_unset_env(
+    session_id: String,
+    key: String,
+    state: State<'_, SessionManager>,
+) -> Result<(), String> {
+    tracing::info!("Unsetting environment variable {} in session {}", key, session_id);
+
+    state
+        .unset_env(&session_id, &key)
+        .await
+        .map_err(|e| format!("Failed to unset environment variable: {}", e))?;
+
+    Ok(())
+}
+
+/// Clear command history in a terminal session
+#[tauri::command]
+pub async fn terminal_clear_history(
+    session_id: String,
+    state: State<'_, SessionManager>,
+) -> Result<(), String> {
+    tracing::info!("Clearing command history in session {}", session_id);
+
+    state
+        .clear_history(&session_id)
+        .await
+        .map_err(|e| format!("Failed to clear history: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

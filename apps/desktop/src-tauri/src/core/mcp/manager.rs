@@ -40,9 +40,9 @@ impl ManagedServer {
         self.started_at.map(|start| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                - start
+                .ok()
+                .map(|d| d.as_secs().saturating_sub(start))
+                .unwrap_or(0)
         })
     }
 
@@ -100,12 +100,10 @@ impl McpServerManager {
                 let mut servers = self.servers.write();
                 if let Some(server) = servers.get_mut(name) {
                     server.status = ServerStatus::Running;
-                    server.started_at = Some(
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs(),
-                    );
+                    server.started_at = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .ok()
+                        .map(|d| d.as_secs());
                     server.add_log("Server started successfully".to_string());
                     tracing::info!("MCP server '{}' started successfully", name);
                 }

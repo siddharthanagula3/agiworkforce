@@ -32,13 +32,13 @@ export interface BatchJobStats {
 export interface BatchJobError {
   code: number;
   message: string;
-  details?: any[];
+  details?: GoogleApiErrorDetail[];
 }
 
 export interface BatchResult {
   customId?: string;
   index: number;
-  response?: any;
+  response?: BatchResponse;
   error?: BatchJobError;
 }
 
@@ -54,7 +54,7 @@ export interface BatchJob {
   error?: BatchJobError;
   results?: BatchResult[];
   outputFileUri?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ListBatchJobsResponse {
@@ -79,12 +79,54 @@ export interface EmbeddingsBatchJob {
   outputFileUri?: string;
 }
 
+/// Request payload for batch job
+export interface BatchRequest {
+  customId?: string;
+  model: string;
+  messages?: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }>;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+}
+
+/// Response from batch job result
+export interface BatchResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices?: Array<{
+    index: number;
+    message: {
+      role: 'assistant';
+      content: string;
+    };
+    finishReason: string;
+  }>;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+/// Error detail from Google API
+export interface GoogleApiErrorDetail {
+  '@type': string;
+  reason?: string;
+  domain?: string;
+  metadata?: Record<string, string>;
+}
+
 // ========================================
 // Batch Job Management
 // ========================================
 
 export interface CreateBatchJobOptions {
-  requests?: any[];
+  requests?: BatchRequest[];
   inputFilePath?: string;
   model: string;
   displayName?: string;
@@ -333,7 +375,7 @@ export async function calculateBatchCost(
  * @param requests - Request objects
  * @param outputPath - File path
  */
-export async function createJsonlFile(requests: any[], outputPath: string): Promise<void> {
+export async function createJsonlFile(requests: BatchRequest[], outputPath: string): Promise<void> {
   return invoke('google_batch_create_jsonl', {
     requests,
     outputPath,
@@ -404,12 +446,14 @@ export function getBatchSuccessRate(job: BatchJob): number {
  * @param job - Batch job
  * @returns Array of successful results
  */
-export function getSuccessfulResults(job: BatchJob): any[] {
+export function getSuccessfulResults(job: BatchJob): BatchResponse[] {
   if (!job.results) {
     return [];
   }
 
-  return job.results.filter((result) => !result.error).map((result) => result.response);
+  return job.results
+    .filter((result): result is BatchResult => !result.error && result.response !== undefined)
+    .map((result) => result.response as BatchResponse);
 }
 
 /**
@@ -532,13 +576,13 @@ export async function createBatchJobWithRetry(
  * @param model - Model to use
  * @returns Array of all results
  */
-export async function processBatched<T, R>(
+export async function processBatched<T>(
   items: T[],
-  processFn: (item: T) => any,
+  processFn: (item: T) => BatchRequest,
   batchSize: number,
   model: string,
-): Promise<R[]> {
-  const results: R[] = [];
+): Promise<BatchResponse[]> {
+  const results: BatchResponse[] = [];
   const batches = Math.ceil(items.length / batchSize);
 
   for (let i = 0; i < batches; i++) {

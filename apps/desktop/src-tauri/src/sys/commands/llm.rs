@@ -736,7 +736,10 @@ pub async fn llm_check_provider_status(
 
     let mut ollama_running = None;
     if provider == "ollama" {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
         match client
             .get(format!("{}/api/tags", OLLAMA_BASE_URL))
             .timeout(std::time::Duration::from_secs(2))
@@ -901,7 +904,10 @@ pub async fn llm_get_ollama_models() -> Result<Vec<ModelInfo>, String> {
 }
 
 async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
         .get(format!("{}/api/tags", OLLAMA_BASE_URL))
         .timeout(Duration::from_secs(5))

@@ -35,7 +35,10 @@ pub async fn submit_feedback(
         return Err("Missing Supabase configuration".to_string());
     }
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let url = format!("{}/rest/v1/feedback", supabase_url);
 
     let payload = FeedbackPayload {
