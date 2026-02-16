@@ -220,18 +220,8 @@ async fn execute_create_task(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("Missing 'title' parameter"))?;
 
-    let Some(ref app) = context.app_handle else {
-        return Err(anyhow!(
-            "App handle not available for productivity task creation"
-        ));
-    };
-
+    // Validate provider BEFORE requiring app_handle
     use crate::features::productivity::{Provider, Task, TaskStatus};
-    use crate::sys::commands::ProductivityState;
-    use tauri::Manager;
-
-    let productivity_state = app.state::<ProductivityState>();
-
     let provider = match provider_str.to_lowercase().as_str() {
         "notion" => Provider::Notion,
         "trello" => Provider::Trello,
@@ -243,6 +233,18 @@ async fn execute_create_task(
             ))
         }
     };
+
+    // App handle is required for actual task creation
+    let Some(ref app) = context.app_handle else {
+        return Err(anyhow!(
+            "App handle not available for productivity task creation"
+        ));
+    };
+
+    use crate::sys::commands::ProductivityState;
+    use tauri::Manager;
+
+    let productivity_state = app.state::<ProductivityState>();
 
     // Build the task with all optional fields
     let mut task = Task::new(String::new(), title.to_string());

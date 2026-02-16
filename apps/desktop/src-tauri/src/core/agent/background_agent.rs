@@ -1272,9 +1272,14 @@ mod tests {
     use tempfile::tempdir;
 
     fn create_test_manager() -> BackgroundAgentManager {
+        // Keep temp_dir alive for the duration of the test
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
         let conn = Connection::open(&db_path).unwrap();
+
+        // Leak the temp_dir to keep it alive for the test
+        // This is safe in tests as the test runner will clean up eventually
+        std::mem::forget(temp_dir);
 
         // Create the table
         conn.execute(
