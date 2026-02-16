@@ -111,15 +111,10 @@ export default async function DashboardPage() {
             {creditBalance ? (
               <>
                 <div className="text-2xl font-bold text-white">
-                  $
-                  {(
-                    (creditBalance.credits_allocated_cents -
-                      creditBalance.credits_remaining_cents) /
-                    100
-                  ).toFixed(2)}
+                  {creditBalance.credits_allocated_cents - creditBalance.credits_remaining_cents}
                 </div>
                 <p className="text-xs text-zinc-500 mb-2">
-                  of ${(creditBalance.credits_allocated_cents / 100).toFixed(2)} used
+                  of {creditBalance.credits_allocated_cents} used
                 </p>
                 <div className="w-full bg-zinc-700 rounded-full h-2 overflow-hidden">
                   <div
