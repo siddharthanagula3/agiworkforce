@@ -622,6 +622,9 @@ pub async fn mcp_call_tool(
     tool_id: String,
     arguments: HashMap<String, Value>,
 ) -> Result<Value, String> {
+    // Generate correlation ID for request tracing
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+
     // Extract server name from tool_id (format: mcp__servername__toolname__)
     // Use double underscore delimiter to match registry format
     let server_name = tool_id
@@ -630,9 +633,17 @@ pub async fn mcp_call_tool(
         .unwrap_or("unknown")
         .to_string();
 
+    tracing::info!(
+        target: "mcp",
+        correlation_id = %correlation_id,
+        tool_id = %tool_id,
+        server = %server_name,
+        "MCP tool call started"
+    );
+
     // 1. Enforce Tool Confirmation
     let confirmation = ToolConfirmationRequest {
-        request_id: uuid::Uuid::new_v4().to_string(),
+        request_id: correlation_id.clone(),
         tool_name: tool_id.clone(),
         tool_description: format!("Execute MCP tool '{}' on server '{}'", tool_id, server_name),
         parameters: serde_json::to_value(&arguments).unwrap_or(serde_json::json!({})),
@@ -643,11 +654,30 @@ pub async fn mcp_call_tool(
         undo_description: None,
     };
 
+    tracing::debug!(
+        target: "mcp",
+        correlation_id = %correlation_id,
+        "Requesting tool confirmation"
+    );
+
     let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            tracing::warn!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                error = %e,
+                "Tool confirmation failed"
+            );
+            e.to_string()
+        })?;
 
     if !approved {
+        tracing::info!(
+            target: "mcp",
+            correlation_id = %correlation_id,
+            "Tool execution cancelled by user"
+        );
         return Err("Tool execution cancelled by user".to_string());
     }
 
@@ -662,6 +692,13 @@ pub async fn mcp_call_tool(
 
     let start_time = std::time::Instant::now();
 
+    tracing::debug!(
+        target: "mcp",
+        correlation_id = %correlation_id,
+        tool_id = %tool_id,
+        "Executing MCP tool"
+    );
+
     // AUDIT-MCP-026: Wrap tool execution with explicit timeout (5 minutes)
     const TOOL_EXECUTION_TIMEOUT_SECS: u64 = 300;
     let result = timeout(
@@ -674,10 +711,36 @@ pub async fn mcp_call_tool(
 
     // Handle timeout vs actual result
     let (success, final_result) = match result {
-        Ok(Ok(value)) => (true, Ok(value)),
-        Ok(Err(e)) => (false, Err(format!("Tool execution failed: {}", e))),
+        Ok(Ok(value)) => {
+            tracing::info!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                tool_id = %tool_id,
+                duration_ms = duration_ms,
+                "MCP tool call completed successfully"
+            );
+            (true, Ok(value))
+        }
+        Ok(Err(e)) => {
+            tracing::error!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                tool_id = %tool_id,
+                error = %e,
+                duration_ms = duration_ms,
+                "MCP tool call failed"
+            );
+            (false, Err(format!("Tool execution failed: {}", e)))
+        }
         Err(_) => {
             // Timeout elapsed
+            tracing::warn!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                tool_id = %tool_id,
+                timeout_secs = TOOL_EXECUTION_TIMEOUT_SECS,
+                "MCP tool call timed out"
+            );
             (
                 false,
                 Err(format!(

@@ -108,7 +108,7 @@ New findings must be appended here immediately.
   - Risk: Silent failures, no user feedback, difficult debugging
   - Recommendation: Add proper error state handling or user-facing error messages
 
-- [ ] **AUDIT-NEW-013**: Silent failures in useEffect auto-load
+- [x] **AUDIT-NEW-013**: Silent failures in useEffect auto-load
   - Location: Multiple hook files with auto-loading data
   - Issue: Errors in useEffect auto-load are silently swallowed
   - Risk: Users unaware of failed data loads, stale UI state
@@ -370,7 +370,7 @@ The following require manual testing and cannot be fixed through code changes al
   - Risk: configuration confusion, incorrect debugging assumptions, and potential mis-wiring in future refactors.
   - Evidence: `apps/desktop/src/hooks/useVoiceTranscription.ts:336`, `apps/desktop/src/components/UnifiedAgenticChat/VoiceInputButton.tsx:110`, `apps/desktop/src/components/UnifiedAgenticChat/VoiceInputButton.tsx:188`
 
-- [ ] `AUDIT-OBS-044` Runtime log sink currently provides insufficient chat/tool evidence for hang triage in active sessions.
+- [x] `AUDIT-OBS-044` Runtime log sink currently provides insufficient chat/tool evidence for hang triage in active sessions.
   - Observation: grep on `~/Library/Application Support/agiworkforce/logs/agiworkforce.log.2026-02-14` yielded no `file_list` / `chat:tool-*` traces during reproduced stuck states.
   - Risk: production hangs cannot be root-caused quickly from standard logs.
   - Status: DEFERRED/ACKNOWLEDGED - Requires implementation of correlation IDs and enhanced tracing. Existing tracing provides some coverage (tracing::info! calls in chat/mod.rs:236, 295, 306, etc.) but no correlation ID tracking for request-to-completion flow.
