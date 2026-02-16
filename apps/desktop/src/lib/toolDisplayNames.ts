@@ -210,6 +210,13 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     description: 'Generate a new image',
     category: 'media',
   },
+  media_generate_image: {
+    displayName: 'Create image',
+    activeForm: 'Creating image...',
+    completedForm: 'Image created',
+    description: 'Generate a new image',
+    category: 'media',
+  },
   image_edit: {
     displayName: 'Edit image',
     activeForm: 'Editing image...',
@@ -218,6 +225,13 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'media',
   },
   video_generate: {
+    displayName: 'Create video',
+    activeForm: 'Creating video...',
+    completedForm: 'Video created',
+    description: 'Generate a new video',
+    category: 'media',
+  },
+  media_generate_video: {
     displayName: 'Create video',
     activeForm: 'Creating video...',
     completedForm: 'Video created',

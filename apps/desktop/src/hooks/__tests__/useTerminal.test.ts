@@ -32,12 +32,12 @@ describe('useTerminal', () => {
 
       let sessionId: string | undefined;
       await act(async () => {
-        sessionId = await result.current.createSession('PowerShell');
+        sessionId = await result.current.createSession('powershell');
       });
 
       expect(sessionId).toBe(mockSessionId);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-        shellType: 'PowerShell',
+        shell_type: 'powershell',
         cwd: undefined,
       });
     });
@@ -49,11 +49,11 @@ describe('useTerminal', () => {
       const { result } = renderHook(() => useTerminal({ autoConnect: false }));
 
       await act(async () => {
-        await result.current.createSession('GitBash', '/home/user');
+        await result.current.createSession('gitbash', '/home/user');
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_create_session', {
-        shellType: 'GitBash',
+        shell_type: 'gitbash',
         cwd: '/home/user',
       });
     });
@@ -65,7 +65,7 @@ describe('useTerminal', () => {
       const { result } = renderHook(() => useTerminal({ autoConnect: true }));
 
       await act(async () => {
-        await result.current.createSession('PowerShell');
+        await result.current.createSession('powershell');
       });
 
       expect(mockListen).toHaveBeenCalledTimes(2); // output and exit events
@@ -82,8 +82,8 @@ describe('useTerminal', () => {
         await result.current.closeSession('session-to-close');
       });
 
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_close_session', {
-        sessionId: 'session-to-close',
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_kill', {
+        session_id: 'session-to-close',
       });
     });
   });
@@ -99,7 +99,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_send_input', {
-        sessionId: 'session-123',
+        session_id: 'session-123',
         data: 'ls -la\n',
       });
     });
@@ -107,7 +107,7 @@ describe('useTerminal', () => {
 
   describe('getOutput', () => {
     it('should get terminal output', async () => {
-      const mockOutput = 'Command output here';
+      const mockOutput = ['Command output here'];
       mockInvoke.mockResolvedValueOnce(mockOutput);
 
       const { result } = renderHook(() => useTerminal());
@@ -117,9 +117,10 @@ describe('useTerminal', () => {
         output = await result.current.getOutput('session-123');
       });
 
-      expect(output).toBe(mockOutput);
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_get_output', {
-        sessionId: 'session-123',
+      expect(output).toBe('Command output here');
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
+        session_id: 'session-123',
+        limit: 1,
       });
     });
   });
@@ -135,7 +136,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_resize', {
-        sessionId: 'session-123',
+        session_id: 'session-123',
         cols: 80,
         rows: 24,
       });
@@ -156,7 +157,7 @@ describe('useTerminal', () => {
 
       expect(history).toEqual(mockHistory);
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        sessionId: 'session-123',
+        session_id: 'session-123',
         limit: 100,
       });
     });
@@ -171,7 +172,7 @@ describe('useTerminal', () => {
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
-        sessionId: 'session-123',
+        session_id: 'session-123',
         limit: 50,
       });
     });
@@ -179,7 +180,7 @@ describe('useTerminal', () => {
 
   describe('searchHistory', () => {
     it('should search command history', async () => {
-      const mockResults = ['git commit', 'git push'];
+      const mockResults = ['ls', 'git commit', 'git push'];
       mockInvoke.mockResolvedValueOnce(mockResults);
 
       const { result } = renderHook(() => useTerminal());
@@ -189,18 +190,17 @@ describe('useTerminal', () => {
         results = await result.current.searchHistory('session-123', 'git');
       });
 
-      expect(results).toEqual(mockResults);
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_search_history', {
-        sessionId: 'session-123',
-        query: 'git',
-        limit: 50,
+      expect(results).toEqual(['git commit', 'git push']);
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_get_history', {
+        session_id: 'session-123',
+        limit: 100,
       });
     });
   });
 
   describe('environment variables', () => {
     it('should set environment variable', async () => {
-      mockInvoke.mockResolvedValueOnce(undefined);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { result } = renderHook(() => useTerminal());
 
@@ -208,15 +208,13 @@ describe('useTerminal', () => {
         await result.current.setEnv('session-123', 'MY_VAR', 'my_value');
       });
 
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_set_env', {
-        sessionId: 'session-123',
-        key: 'MY_VAR',
-        value: 'my_value',
-      });
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it('should get environment variable', async () => {
-      mockInvoke.mockResolvedValueOnce('test_value');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { result } = renderHook(() => useTerminal());
 
@@ -225,19 +223,14 @@ describe('useTerminal', () => {
         value = await result.current.getEnv('session-123', 'PATH');
       });
 
-      expect(value).toBe('test_value');
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_get_env', {
-        sessionId: 'session-123',
-        key: 'PATH',
-      });
+      expect(value).toBeNull();
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it('should list environment variables', async () => {
-      const mockVars = [
-        { key: 'PATH', value: '/usr/bin' },
-        { key: 'HOME', value: '/home/user' },
-      ];
-      mockInvoke.mockResolvedValueOnce(mockVars);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { result } = renderHook(() => useTerminal());
 
@@ -246,11 +239,14 @@ describe('useTerminal', () => {
         vars = await result.current.listEnv('session-123');
       });
 
-      expect(vars).toEqual(mockVars);
+      expect(vars).toEqual([]);
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it('should unset environment variable', async () => {
-      mockInvoke.mockResolvedValueOnce(undefined);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { result } = renderHook(() => useTerminal());
 
@@ -258,18 +254,17 @@ describe('useTerminal', () => {
         await result.current.unsetEnv('session-123', 'MY_VAR');
       });
 
-      expect(mockInvoke).toHaveBeenCalledWith('terminal_unset_env', {
-        sessionId: 'session-123',
-        key: 'MY_VAR',
-      });
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 
   describe('detectShells', () => {
     it('should detect available shells', async () => {
       const mockShells = [
-        { name: 'PowerShell', path: '/usr/bin/pwsh', available: true, shell_type: 'PowerShell' },
-        { name: 'Bash', path: '/bin/bash', available: true, shell_type: 'GitBash' },
+        { name: 'PowerShell', path: '/usr/bin/pwsh', available: true, shell_type: 'powershell' },
+        { name: 'Bash', path: '/bin/bash', available: true, shell_type: 'bash' },
       ];
       mockInvoke.mockResolvedValueOnce(mockShells);
 
@@ -314,7 +309,7 @@ describe('useTerminal', () => {
 
       try {
         await act(async () => {
-          await result.current.createSession('PowerShell');
+          await result.current.createSession('powershell');
         });
       } catch {
         // Expected to throw

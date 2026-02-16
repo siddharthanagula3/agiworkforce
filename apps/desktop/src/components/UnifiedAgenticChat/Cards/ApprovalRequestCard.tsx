@@ -32,6 +32,7 @@ const TYPE_ICONS = {
   api_call: Globe,
   data_modification: Database,
   mcp_tool: Box,
+  tool_execution: Terminal, // tool_execution uses terminal icon as fallback
 };
 
 const RISK_LEVEL_CONFIG = {

@@ -17,7 +17,8 @@ import {
   X,
   Activity,
 } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../types/chat';
@@ -27,6 +28,7 @@ import { TerminalPanel } from '../Execution/TerminalPanel';
 import { MediaGallery } from '../Media/MediaGallery';
 import { BackgroundTasksPanel } from '../BackgroundTasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
+import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 export type DynamicPanelType =
   | 'terminal'
@@ -237,7 +239,55 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         );
 
       case 'preview': {
-        const artifact = payload?.['artifact'] as Artifact | undefined;
+        // AUDIT-SIDECAR-082 fix: Subscribe to store for live artifact updates instead of using static payload
+        // This ensures the preview updates when new tool results arrive
+
+        // Subscribe to store for live updates
+        const { messages } = useUnifiedChatStore(
+          useShallow((state) => ({
+            messages: state.messages,
+          })),
+        );
+
+        // Get IDs from payload - these are now passed instead of the full artifact object
+        const artifactId = payload?.['artifactId'] as string | undefined;
+        const messageId = payload?.['messageId'] as string | undefined;
+
+        // Find the live artifact from the store by resolving IDs
+        const liveArtifact = useMemo(() => {
+          // First try to find by specific artifactId if provided
+          if (artifactId) {
+            for (const msg of messages) {
+              const artifacts = msg.artifacts || [];
+              const metadataArtifacts = (msg.metadata?.artifacts as Artifact[] | undefined) || [];
+              const allArtifacts = [...artifacts, ...metadataArtifacts];
+              const found = allArtifacts.find((a) => a.id === artifactId);
+              if (found) return found;
+            }
+          }
+
+          // Fall back to finding by messageId and getting the latest artifact
+          if (messageId) {
+            const message = messages.find((m) => m.id === messageId);
+            if (message) {
+              const artifacts = message.artifacts || [];
+              const metadataArtifacts = (message.metadata?.artifacts as Artifact[] | undefined) || [];
+
+              // Return the latest artifact (most recently updated)
+              const allArtifacts = [...artifacts, ...metadataArtifacts];
+              if (allArtifacts.length > 0) {
+                return allArtifacts[allArtifacts.length - 1];
+              }
+            }
+          }
+
+          return null;
+        }, [artifactId, messageId, messages]);
+
+        // Prefer live artifact from store, fall back to legacy static payload (for backward compatibility)
+        const legacyArtifact = payload?.['artifact'] as Artifact | undefined;
+        const artifact = liveArtifact || legacyArtifact;
+
         if (artifact) {
           return (
             <div className="h-full overflow-y-auto">
@@ -246,6 +296,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           );
         }
 
+        // Fall back to content-based rendering
         if (typeof payload?.['content'] === 'string') {
           return (
             <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">

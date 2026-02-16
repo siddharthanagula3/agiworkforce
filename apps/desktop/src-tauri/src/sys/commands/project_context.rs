@@ -6,11 +6,12 @@
 //! - Scope file operations and terminal commands to the project directory
 //! - Enable folder-aware tool execution
 
+use crate::sys::commands::mcp::McpState;
 use crate::sys::commands::settings::SettingsState;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -115,9 +116,11 @@ pub async fn project_context_set_folder(
     path: Option<String>,
     state: State<'_, ProjectContextState>,
     settings_state: State<'_, SettingsState>,
+    mcp_state: State<'_, McpState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<ProjectContext, String> {
     if let Some(ref p) = path {
-        // Validate path exists and is a directory
+        // Validate path exists is a directory
         let path_buf = PathBuf::from(p);
 
         if !path_buf.exists() {
@@ -164,12 +167,44 @@ pub async fn project_context_set_folder(
             .allowed_directories
             .iter()
             .any(|dir| normalize_path_for_compare(dir) == normalized_project);
+        let mut needs_persist = false;
         if !exists {
             settings.allowed_directories.push(p.clone());
+            needs_persist = true;
             debug!(
                 "[ProjectContext] Added selected folder to allowed_directories: {}",
                 p
             );
+        }
+
+        // AUDIT-CONFIG-051: Persist settings after adding allowed directory
+        // Previously the permission widening was memory-only and lost on restart
+        if needs_persist {
+            let settings_clone = settings.clone();
+            drop(settings); // Release lock before async operation
+            let app_data_dir = app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+            let settings_path = app_data_dir.join("settings.json");
+            if let Err(e) = tokio::fs::create_dir_all(&app_data_dir).await {
+                warn!("[ProjectContext] Failed to create app data directory: {}", e);
+            } else {
+                let json = serde_json::to_string_pretty(&settings_clone)
+                    .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+                if let Err(e) = tokio::fs::write(&settings_path, json).await {
+                    warn!("[ProjectContext] Failed to persist settings: {}", e);
+                } else {
+                    info!("[ProjectContext] Persisted allowed_directories to {:?}", settings_path);
+                }
+            }
+        }
+
+        // AUDIT-MCP-050: Update MCP filesystem server root to match project folder
+        // This couples folder selection with MCP filesystem server scope
+        if let Err(e) = mcp_state.update_filesystem_root(p).await {
+            // Log warning but don't fail the operation - folder is still set
+            warn!("[ProjectContext] Failed to update MCP filesystem root: {}", e);
         }
 
         let mut ctx = state.context.write().await;

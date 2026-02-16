@@ -26,6 +26,7 @@ import {
   Attachment,
   ContextItem,
   PendingUserMessage,
+  uuidToDbId,
 } from '../../stores/unifiedChatStore';
 import { SubscriptionGateResult, type SubscriptionStatus } from '../../utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../Subscription';
@@ -110,7 +111,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [inlineSuggestion, setInlineSuggestion] = useState<string>('');
 
   // Voice transcription state
-  const [preferLocalWhisper, setPreferLocalWhisper] = useState(false);
+  // AUDIT-VOICE-043 fix: Renamed to preferWhisperCloud for clarity (true = Whisper Cloud, false = Web Speech)
+  const [preferWhisperCloud, setPreferWhisperCloud] = useState(false);
   const [showTranscriptionModeSelector, setShowTranscriptionModeSelector] = useState(false);
 
   // Refs
@@ -207,7 +209,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     availableLocalWhisper,
     toggleRecording,
   } = useVoiceTranscription({
-    preferLocal: preferLocalWhisper,
+    preferWhisperCloud: preferWhisperCloud,
     language: 'en',
     onResult: useCallback(
       (transcript: string) => {
@@ -478,9 +480,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         try {
           // Auto-capture full screen
           await import('../../hooks/useScreenCapture'); // Keep import for side effects if needed, or remove if purely for unused function
+          // AUDIT-CAPTURE-063 fix: Use imported uuidToDbId directly instead of store method
           const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
           const conversationDbId = activeConversationId
-            ? (useUnifiedChatStore.getState() as any).uuidToDbId?.(activeConversationId)
+            ? uuidToDbId(activeConversationId)
             : undefined;
 
           // Use the hook's capture function directly
@@ -887,20 +890,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               isVoiceSupported={isVoiceSupported}
               isRecording={isListening}
               isTranscribing={isTranscribing}
-              preferLocalWhisper={preferLocalWhisper}
+              preferWhisperCloud={preferWhisperCloud}
               availableLocalWhisper={availableLocalWhisper}
               showTranscriptionModeSelector={showTranscriptionModeSelector}
               onAttachClick={() => fileInputRef.current?.click()}
               onToggleRecording={toggleListening}
               onModeSelectorChange={setShowTranscriptionModeSelector}
-              onPreferLocalWhisperChange={setPreferLocalWhisper}
+              onPreferWhisperCloudChange={setPreferWhisperCloud}
               onScreenCapture={handleScreenCapture}
               conversationId={
-                useUnifiedChatStore.getState().activeConversationId
-                  ? (useUnifiedChatStore.getState() as any).uuidToDbId?.(
-                      useUnifiedChatStore.getState().activeConversationId!,
-                    )
-                  : undefined
+                (() => {
+                  const activeId = useUnifiedChatStore.getState().activeConversationId;
+                  return activeId ? uuidToDbId(activeId) : undefined;
+                })()
               }
             />
 
@@ -946,7 +948,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             isRecording={isListening}
             isTranscribing={isTranscribing}
             interimTranscript={interimTranscript}
-            preferLocalWhisper={preferLocalWhisper}
+            preferWhisperCloud={preferWhisperCloud}
             voiceError={voiceError}
           />
 

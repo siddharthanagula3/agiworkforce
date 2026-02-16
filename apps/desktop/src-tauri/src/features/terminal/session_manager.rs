@@ -175,14 +175,27 @@ impl SessionManager {
 
                 if !is_alive {
                     let _ = app_handle.emit(&format!("terminal-exit-{}", session_id), ());
+
+                    // AUDIT-TERMINAL-032 fix: Remove session from backend when process exits
+                    // This ensures backend state is consistent with frontend cleanup
+                    let mut sessions_lock = sessions.lock().await;
+                    sessions_lock.remove(&session_id);
+                    tracing::info!("Cleaned up backend session {} after process exit", session_id);
                     break;
                 }
 
                 if bytes_read > 0 {
                     let output = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
 
+                    // AUDIT-TERMINAL-031 fix: Emit object format for consistent payload shape
+                    // This matches the one-shot terminal command output format
+                    let payload = serde_json::json!({
+                        "stream": "stdout",
+                        "data": output
+                    });
+
                     if let Err(e) =
-                        app_handle.emit(&format!("terminal-output-{}", session_id), &output)
+                        app_handle.emit(&format!("terminal-output-{}", session_id), &payload)
                     {
                         tracing::error!("Failed to emit terminal output: {}", e);
                         break;
@@ -199,7 +212,7 @@ impl SessionManager {
 
 async fn log_command_to_db(
     app_handle: &tauri::AppHandle,
-    _session_id: &str,
+    session_id: &str,
     command: &str,
 ) -> Result<()> {
     use crate::sys::commands::AppDatabase;
@@ -218,20 +231,21 @@ async fn log_command_to_db(
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
+    // AUDIT-TERMINAL-029 fix: Include session_id to make history session-scoped
     conn.execute(
-        "INSERT INTO command_history (command, working_dir, created_at) VALUES (?1, ?2, ?3)",
-        params![command, working_dir, timestamp],
+        "INSERT INTO command_history (command, working_dir, created_at, session_id) VALUES (?1, ?2, ?3, ?4)",
+        params![command, working_dir, timestamp, session_id],
     )
     .map_err(|e| Error::Database(e.to_string()))?;
 
-    tracing::debug!("Logged command to database: {}", command);
+    tracing::debug!("Logged command to database for session {}: {}", session_id, command);
 
     Ok(())
 }
 
 pub async fn get_command_history(
     app_handle: &tauri::AppHandle,
-    _session_id: &str,
+    session_id: &str,
     limit: usize,
 ) -> Result<Vec<String>> {
     use crate::sys::commands::AppDatabase;
@@ -244,12 +258,13 @@ pub async fn get_command_history(
         .lock()
         .map_err(|e| Error::Generic(format!("Database lock error: {}", e)))?;
 
+    // AUDIT-TERMINAL-029 fix: Filter by session_id to make history session-scoped
     let mut stmt = conn
-        .prepare("SELECT command FROM command_history ORDER BY created_at DESC LIMIT ?1")
+        .prepare("SELECT command FROM command_history WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2")
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let commands = stmt
-        .query_map(params![limit], |row| row.get(0))
+        .query_map(params![session_id, limit], |row| row.get(0))
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<std::result::Result<Vec<String>, _>>()
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;

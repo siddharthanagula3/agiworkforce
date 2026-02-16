@@ -27,20 +27,7 @@ import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/supabase';
 import { accountApi } from '../api/accountApi';
 import { API_BASE_URL } from '../api/client';
-
-/**
- * Type guard for checking if running in Tauri environment.
- * AUDIT-P3-TYPE: Proper type narrowing instead of unsafe cast.
- */
-function checkIsTauri(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    '__TAURI_INTERNALS__' in window &&
-    window.__TAURI_INTERNALS__ !== undefined
-  );
-}
-
-const isTauri = checkIsTauri();
+import { isTauri } from '../lib/tauri-mock';
 
 // Singleton guard - ensures only one orchestrator instance exists
 let orchestratorInitialized = false;

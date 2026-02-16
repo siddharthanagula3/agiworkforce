@@ -1,5 +1,5 @@
 use crate::features::terminal::{
-    detect_available_shells, SessionManager, ShellInfo, ShellType, TerminalAI,
+    detect_available_shells, get_default_shell, SessionManager, ShellInfo, ShellType, TerminalAI,
 };
 use crate::sys::security::command_validator::{
     validate_command, validate_interactive_input, ValidationConfig,
@@ -17,6 +17,25 @@ pub struct ExecuteResult {
     stream_id: Option<String>,
 }
 
+fn parse_shell_type(input: &str) -> Result<ShellType, String> {
+    let normalized = input.trim().to_lowercase();
+    match normalized.as_str() {
+        "" | "default" | "auto" => Ok(get_default_shell()),
+        "powershell" | "pwsh" => Ok(ShellType::PowerShell),
+        "cmd" | "commandprompt" => Ok(ShellType::Cmd),
+        "wsl" => Ok(ShellType::Wsl),
+        "gitbash" | "git-bash" => Ok(ShellType::GitBash),
+        "zsh" => Ok(ShellType::Zsh),
+        "bash" => Ok(ShellType::Bash),
+        "fish" => Ok(ShellType::Fish),
+        "sh" => Ok(ShellType::Sh),
+        _ => Err(format!(
+            "Invalid shell type: {}. Allowed values: default, zsh, bash, fish, sh, powershell, cmd, wsl, gitbash",
+            input
+        )),
+    }
+}
+
 #[tauri::command]
 pub async fn execute_terminal_command(
     app: AppHandle,
@@ -25,6 +44,8 @@ pub async fn execute_terminal_command(
     shell: Option<String>,
     stream_id: Option<String>,
     emit_events: Option<bool>,
+    // AUDIT-TERMINAL-066 fix: Add timeout_ms parameter instead of hardcoded 60s
+    timeout_ms: Option<u64>,
 ) -> Result<ExecuteResult, String> {
     use std::path::Path;
     use std::process::Stdio;
@@ -74,26 +95,40 @@ pub async fn execute_terminal_command(
         }
     }
 
-    let shell = shell.unwrap_or_else(|| {
-        if cfg!(target_os = "windows") {
-            "powershell".to_string()
-        } else {
-            "bash".to_string()
-        }
+    // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded powershell/bash
+    let shell = shell.unwrap_or_else(|| match get_default_shell() {
+        ShellType::PowerShell => "powershell".to_string(),
+        ShellType::Cmd => "cmd".to_string(),
+        ShellType::Zsh => "zsh".to_string(),
+        ShellType::Bash => "bash".to_string(),
+        ShellType::Fish => "fish".to_string(),
+        ShellType::Sh => "sh".to_string(),
+        ShellType::Wsl => "wsl".to_string(),
+        ShellType::GitBash => "gitbash".to_string(),
     });
 
+    // AUDIT-TERMINAL-065/068 fix: Proper shell routing that honors requested shell
+    // and doesn't select powershell.exe on non-Windows for unknown shells
     let (program, args): (String, Vec<String>) = match shell.to_lowercase().as_str() {
         "cmd" => (
             "cmd.exe".to_string(),
             vec!["/C".to_string(), command.clone()],
         ),
-        "bash" | "sh" | "zsh" => {
-            let shell_path = if cfg!(target_os = "macos") {
-                "/bin/zsh".to_string()
+        "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+        "zsh" => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
+        "fish" => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
+        "sh" => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
+        "wsl" => (
+            "wsl.exe".to_string(),
+            vec!["bash".to_string(), "-lc".to_string(), command.clone()],
+        ),
+        "gitbash" => {
+            if cfg!(target_os = "windows") {
+                ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
             } else {
-                "/bin/bash".to_string()
-            };
-            (shell_path, vec!["-lc".to_string(), command.clone()])
+                // Git Bash is Windows-specific; fall back to bash on non-Windows
+                ("bash".to_string(), vec!["-lc".to_string(), command.clone()])
+            }
         }
         "powershell" | "pwsh" => (
             if cfg!(target_os = "windows") {
@@ -109,16 +144,32 @@ pub async fn execute_terminal_command(
             ],
         ),
         _ => {
-            if cfg!(target_os = "windows") {
-                (
-                    "powershell.exe".to_string(),
-                    vec!["-Command".to_string(), command.clone()],
-                )
-            } else {
-                (
-                    "/bin/sh".to_string(),
-                    vec!["-c".to_string(), command.clone()],
-                )
+            // AUDIT-TERMINAL-068 fix: Don't silently fall back to powershell.exe on non-Windows
+            // Use system default shell for unknown shells instead
+            match get_default_shell() {
+                ShellType::PowerShell => (
+                    if cfg!(target_os = "windows") {
+                        "powershell.exe".to_string()
+                    } else {
+                        "pwsh".to_string()
+                    },
+                    vec![
+                        "-NoLogo".to_string(),
+                        "-NoProfile".to_string(),
+                        "-Command".to_string(),
+                        command.clone(),
+                    ],
+                ),
+                ShellType::Bash => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+                ShellType::Zsh => ("zsh".to_string(), vec!["-lc".to_string(), command.clone()]),
+                ShellType::Fish => ("fish".to_string(), vec!["-c".to_string(), command.clone()]),
+                ShellType::Sh => ("sh".to_string(), vec!["-c".to_string(), command.clone()]),
+                ShellType::Cmd => ("cmd.exe".to_string(), vec!["/C".to_string(), command.clone()]),
+                ShellType::Wsl => (
+                    "wsl.exe".to_string(),
+                    vec!["bash".to_string(), "-lc".to_string(), command.clone()],
+                ),
+                ShellType::GitBash => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
             }
         }
     };
@@ -205,12 +256,14 @@ pub async fn execute_terminal_command(
         buffer
     });
 
-    let timeout_duration = tokio::time::Duration::from_secs(60);
+    // AUDIT-TERMINAL-066 fix: Use configurable timeout instead of hardcoded 60s
+    let timeout_ms = timeout_ms.unwrap_or(60_000);
+    let timeout_duration = tokio::time::Duration::from_millis(timeout_ms);
     let status = match tokio::time::timeout(timeout_duration, child.wait()).await {
         Ok(result) => result.map_err(|e| format!("Command failed: {}", e))?,
         Err(_) => {
             let _ = child.kill().await;
-            return Err("Command timed out after 60 seconds".to_string());
+            return Err(format!("Command timed out after {} ms", timeout_ms));
         }
     };
 
@@ -250,13 +303,7 @@ pub async fn terminal_create_session(
 ) -> Result<String, String> {
     tracing::info!("Creating terminal session with shell: {}", shell_type);
 
-    let shell_type = match shell_type.to_lowercase().as_str() {
-        "powershell" => ShellType::PowerShell,
-        "cmd" => ShellType::Cmd,
-        "wsl" => ShellType::Wsl,
-        "gitbash" => ShellType::GitBash,
-        _ => return Err(format!("Invalid shell type: {}", shell_type)),
-    };
+    let shell_type = parse_shell_type(&shell_type)?;
 
     let session_id = state
         .create_session(shell_type, cwd)
@@ -489,4 +536,39 @@ pub async fn terminal_ai_suggest_improvements(
         .map_err(|e| format!("Failed to analyze command: {}", e))?;
 
     Ok(suggestions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_shell_type_supports_unix_shells() {
+        assert!(matches!(parse_shell_type("zsh"), Ok(ShellType::Zsh)));
+        assert!(matches!(parse_shell_type("bash"), Ok(ShellType::Bash)));
+        assert!(matches!(parse_shell_type("fish"), Ok(ShellType::Fish)));
+        assert!(matches!(parse_shell_type("sh"), Ok(ShellType::Sh)));
+    }
+
+    #[test]
+    fn parse_shell_type_supports_windows_aliases() {
+        assert!(matches!(
+            parse_shell_type("powershell"),
+            Ok(ShellType::PowerShell)
+        ));
+        assert!(matches!(
+            parse_shell_type("pwsh"),
+            Ok(ShellType::PowerShell)
+        ));
+        assert!(matches!(parse_shell_type("cmd"), Ok(ShellType::Cmd)));
+        assert!(matches!(
+            parse_shell_type("git-bash"),
+            Ok(ShellType::GitBash)
+        ));
+    }
+
+    #[test]
+    fn parse_shell_type_rejects_invalid_values() {
+        assert!(parse_shell_type("totally-invalid-shell").is_err());
+    }
 }
