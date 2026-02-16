@@ -101,29 +101,29 @@ impl RealtimeServer {
 
         if let Some(Ok(Message::Text(text))) = ws_stream.next().await {
             if let Ok(RealtimeEvent::Authenticate {
-                    user_id,
-                    team_id,
-                    token: auth_token,
-                }) = serde_json::from_str::<RealtimeEvent>(&text)
-                {
-                    if let Some(sent_token) = auth_token {
-                        if sent_token == token {
-                            authenticated = true;
-                            user_id_from_auth = Some(user_id);
-                            team_id_from_auth = team_id;
-                            tracing::info!(
-                                "Authentication successful for user: {:?}",
-                                user_id_from_auth
-                            );
-                        } else {
-                            tracing::warn!("Authentication failed: Invalid token");
-                        }
+                user_id,
+                team_id,
+                token: auth_token,
+            }) = serde_json::from_str::<RealtimeEvent>(&text)
+            {
+                if let Some(sent_token) = auth_token {
+                    if sent_token == token {
+                        authenticated = true;
+                        user_id_from_auth = Some(user_id);
+                        team_id_from_auth = team_id;
+                        tracing::info!(
+                            "Authentication successful for user: {:?}",
+                            user_id_from_auth
+                        );
                     } else {
-                        tracing::warn!("Authentication failed: Missing token");
+                        tracing::warn!("Authentication failed: Invalid token");
                     }
                 } else {
-                    tracing::warn!("Authentication failed: Invalid event format");
+                    tracing::warn!("Authentication failed: Missing token");
                 }
+            } else {
+                tracing::warn!("Authentication failed: Invalid event format");
+            }
         }
 
         if !authenticated {
