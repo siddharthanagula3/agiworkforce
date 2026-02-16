@@ -5277,7 +5277,7 @@ impl ToolExecutor {
                         if matched <= offset {
                             continue;
                         }
-                        if items.len() >= limit + 1 {
+                        if items.len() > limit {
                             break;
                         }
 
