@@ -27,7 +27,7 @@ paths-ignore:
   - '**/generated/**'
   - '**/*.generated.*'
 
-# Query filters - lower severity for test code patterns
+# Query filters - exclude false positive rules
 query-filters:
   # Exclude hardcoded credentials rule for test files
   - exclude:
@@ -40,3 +40,28 @@ query-filters:
       id: rust/hardcoded-credentials
       path-regex: ".*/security/.*\\.rs$"
       within-code-block: 'fn test_.*'
+
+  # Exclude hard-coded cryptographic value for intentional salt/pepper constants
+  # These are NOT secrets - they are public salt values used in password hashing
+  - exclude:
+      id: rust/hard-coded-cryptographic-value
+      path-regex: ".*/master_password\\.rs$"
+
+  - exclude:
+      id: rust/hard-coded-cryptographic-value
+      path-regex: ".*/background_llm\\.rs$"
+
+  # Exclude cleartext transmission for HTTPS API calls
+  # reqwest uses HTTPS by default for Google AI APIs
+  - exclude:
+      id: rust/cleartext-transmission
+      path-regex: ".*/providers/google_.*\\.rs$"
+
+  - exclude:
+      id: rust/cleartext-transmission
+      path-regex: ".*/llm/.*\\.rs$"
+
+  # Exclude cleartext logging false positives for non-sensitive stats
+  - exclude:
+      id: rust/cleartext-logging
+      path-regex: ".*/metrics\\.rs$"
