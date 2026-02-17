@@ -26,6 +26,15 @@ export interface Attachment {
   url?: string;
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  arguments: Record<string, unknown>;
+  startedAt?: string;
+  completedAt?: string;
+}
+
 export interface Conversation {
   id: string;
   title: string;
