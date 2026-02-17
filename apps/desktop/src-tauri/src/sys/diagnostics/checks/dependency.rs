@@ -232,6 +232,7 @@ fn check_xcode_cli_tools() -> DependencyStatus {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 fn check_xcode_cli_tools() -> DependencyStatus {
     DependencyStatus {
         name: "Xcode CLI Tools".to_string(),
