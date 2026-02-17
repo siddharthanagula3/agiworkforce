@@ -13,7 +13,7 @@
  * - Health checks: Moderate limits (100/min) for monitoring
  */
 
-import rateLimit, { type Options, ipKeyGenerator } from 'express-rate-limit';
+import rateLimit, { type Options } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
 import { logger } from '../lib/logger';
 
@@ -89,8 +89,8 @@ function keyGenerator(req: Request): string {
   }
 
   // Fall back to IP address for unauthenticated requests
-  // Use ipKeyGenerator for proper IPv6 handling
-  return `ip:${ipKeyGenerator(req)}`;
+  // Use req.ip for IPv4/IPv6 handling
+  return `ip:${req.ip || 'unknown'}`;
 }
 
 /**
@@ -123,8 +123,7 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
     },
     handler: (req, res, _next, _optionsUsed) => {
       const userId = req.user?.userId ?? null;
-      const limitInfo = req.rateLimit;
-      const ip = ipKeyGenerator(req);
+      const ip = req.ip || 'unknown';
 
       logger.warn(
         {
@@ -135,10 +134,6 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
           userId,
           ip,
           correlationId: req.headers['x-correlation-id'],
-          limit: limitInfo?.limit,
-          used: limitInfo?.used,
-          remaining: limitInfo?.remaining,
-          resetTime: limitInfo?.resetTime?.toISOString?.(),
           retryAfterSeconds: Math.ceil(config.windowMs / 1000),
         },
         'Rate limit exceeded',
