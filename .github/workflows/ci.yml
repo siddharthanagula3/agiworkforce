@@ -73,7 +73,7 @@ jobs:
         run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip automation::integration --skip enigo --skip ComputerUse
 
       - name: Clippy (Rust workspace, default features)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --lib -- -D warnings
 
   desktop-e2e:
     name: Desktop E2E (deterministic mocks)
