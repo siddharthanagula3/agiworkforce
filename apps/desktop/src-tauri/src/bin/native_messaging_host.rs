@@ -6,16 +6,15 @@ use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 
 // Helper to find app data dir matching Tauri's logic
+#[cfg(target_os = "macos")]
 fn get_app_data_dir() -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
-    #[cfg(target_os = "macos")]
-    return Some(home.join("Library/Application Support/com.agiworkforce.desktop"));
-    #[cfg(target_os = "windows")]
-    return Some(dirs::data_local_dir()?.join("com.agiworkforce.desktop"));
-    #[cfg(target_os = "linux")]
-    return Some(dirs::data_local_dir()?.join("com.agiworkforce.desktop"));
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    return None;
+    Some(home.join("Library/Application Support/com.agiworkforce.desktop"))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_app_data_dir() -> Option<std::path::PathBuf> {
+    dirs::data_local_dir().map(|p| p.join("com.agiworkforce.desktop"))
 }
 
 #[tokio::main]
