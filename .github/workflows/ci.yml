@@ -38,6 +38,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Setup test environment
+        run: |
+          echo "VITE_SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
+          echo "VITE_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
+
       - name: Lint
         run: pnpm lint
 
