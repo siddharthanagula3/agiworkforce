@@ -318,7 +318,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
+        run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -387,7 +387,8 @@ jobs:
             libjpeg-dev \
             libtiff-dev \
             zlib1g-dev \
-            libwebp-dev
+            libwebp-dev \
+            libasound2-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -399,7 +400,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
+        run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
