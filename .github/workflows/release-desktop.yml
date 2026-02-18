@@ -226,7 +226,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: pnpm --filter @agiworkforce/desktop run build:web
+        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Import signing certificate
         if: env.APPLE_CERTIFICATE != ''
@@ -318,7 +318,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: pnpm --filter @agiworkforce/desktop run build:web
+        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -399,7 +399,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: pnpm --filter @agiworkforce/desktop run build:web
+        run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
