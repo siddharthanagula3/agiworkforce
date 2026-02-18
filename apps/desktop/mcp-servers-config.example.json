@@ -2,9 +2,10 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/siddhartha/Desktop"],
       "env": {},
-      "enabled": true
+      "enabled": true,
+      "description": "Access to local filesystem for file operations"
     },
     "github": {
       "command": "npx",
@@ -12,13 +13,54 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_credential_manager>"
       },
-      "enabled": false
+      "enabled": false,
+      "description": "GitHub integration for issues, PRs, and code search"
     },
-    "google-drive": {
+    "postgresql": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/dbname"
+      },
+      "enabled": false,
+      "description": "PostgreSQL database access"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite"],
+      "env": {
+        "SQLITE_DATABASE_PATH": "./data.db"
+      },
+      "enabled": false,
+      "description": "SQLite database for local data"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "env": {},
-      "enabled": false
+      "enabled": true,
+      "description": "Enhanced reasoning through structured thinking steps"
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-puppeteer"],
+      "env": {},
+      "enabled": false,
+      "description": "Browser automation for web scraping and testing"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "env": {},
+      "enabled": true,
+      "description": "Web content fetching for documentation and research"
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {},
+      "enabled": false,
+      "description": "Persistent knowledge graph for project context"
     },
     "slack": {
       "command": "npx",
@@ -26,15 +68,15 @@
       "env": {
         "SLACK_BOT_TOKEN": "<from_credential_manager>"
       },
-      "enabled": false
+      "enabled": false,
+      "description": "Team communication automation"
     },
-    "stripe": {
+    "google-drive": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-stripe"],
-      "env": {
-        "STRIPE_SECRET_KEY": "<from_credential_manager>"
-      },
-      "enabled": false
+      "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+      "env": {},
+      "enabled": false,
+      "description": "Google Drive file access"
     }
   }
 }
