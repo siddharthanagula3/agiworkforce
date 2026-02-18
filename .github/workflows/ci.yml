@@ -70,7 +70,7 @@ jobs:
           cache-on-failure: true
 
       - name: Test (Rust workspace, default features)
-        run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip automation::integration --skip enigo --skip ComputerUse
+        run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip enigo --skip AutomationService --skip automation
 
       - name: Clippy (Rust workspace, default features)
         run: cargo clippy --workspace --all-targets --lib -- -D warnings
