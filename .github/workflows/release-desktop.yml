@@ -31,7 +31,7 @@ permissions:
 env:
   RUST_VERSION: '1.90.0'
   NODE_VERSION: '22'
-  PNPM_VERSION: '10.11.0'
+  PNPM_VERSION: '9.15.3'
 
 jobs:
   # ==========================================================================
