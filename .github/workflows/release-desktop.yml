@@ -225,6 +225,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build web frontend
+        run: pnpm --filter @agiworkforce/desktop run build:web
+
       - name: Import signing certificate
         if: env.APPLE_CERTIFICATE != ''
         env:
@@ -262,6 +265,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI: 'true'
         with:
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
           args: --target ${{ matrix.target }}
@@ -313,12 +317,16 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build web frontend
+        run: pnpm --filter @agiworkforce/desktop run build:web
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CI: 'true'
         with:
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
 
@@ -390,12 +398,16 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build web frontend
+        run: pnpm --filter @agiworkforce/desktop run build:web
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CI: 'true'
         with:
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
 
