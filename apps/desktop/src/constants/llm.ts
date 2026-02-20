@@ -395,16 +395,16 @@ export interface ModelMetadata {
   name: string;
   provider: Provider;
   modelType:
-    | 'chat'
-    | 'code'
-    | 'reasoning'
-    | 'multimodal'
-    | 'image'
-    | 'video'
-    | 'search'
-    | 'tts'
-    | 'stt'
-    | 'music';
+  | 'chat'
+  | 'code'
+  | 'reasoning'
+  | 'multimodal'
+  | 'image'
+  | 'video'
+  | 'search'
+  | 'tts'
+  | 'stt'
+  | 'music';
   contextWindow: number;
   inputCost: number;
   outputCost: number;

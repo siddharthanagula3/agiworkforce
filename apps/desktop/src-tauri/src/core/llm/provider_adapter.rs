@@ -1,11 +1,11 @@
-// NOTE: This module is currently NOT included in the module tree (not declared in mod.rs).
-// It contains adapter patterns for each LLM provider but has compile errors that must be
-// fixed before it can be activated:
-// - ToolDefinition is a struct in mod.rs but this file uses it as an enum (Flat/Nested)
-// - ContentPart::ToolUse/ToolResult destructuring uses wrong field names
-//
-// The actual provider request/response formatting is currently handled inline in
-// managed_cloud_provider.rs, ollama.rs, and the chat command handler.
+// Provider adapter module — now integrated into the module tree.
+// All compile errors have been fixed:
+// - ToolDefinition enum patterns → struct field access (tool.name, tool.description, tool.parameters)
+// - ContentPart::ToolUse/ToolResult → correct nested field destructuring (tool_use / tool_result)
+// - AudioInput.data → AudioData enum (Base64/Bytes/Uri)
+// - AudioFormat::extension(), AudioFormat::mime_type() added to mod.rs
+// - ImageFormat::mime_type(), VideoFormat::mime_type() added to mod.rs
+// - Missing LLMResponse fields (cache_creation_input_tokens, audio_data/format/transcript) added
 
 //! Provider adapters for translating between AGI Workforce's unified format and provider-specific formats.
 //!
@@ -17,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 
-// #[cfg(test)]
-// mod provider_adapter_tests; // Module file not created yet
+#[cfg(test)]
+#[path = "provider_adapter_tests.rs"]
+mod provider_adapter_tests;
 
 /// OpenAI server-side built-in tool types.
 /// These tools are executed server-side by OpenAI's API.
@@ -36,9 +37,11 @@ pub enum OpenAIServerTool {
     /// Image generation tool (DALL-E)
     ImageGeneration,
     /// Computer use for desktop automation
-    ComputerUse,
-    /// Shell command execution
+    ComputerUsePreview,
+    /// Shell command execution (current)
     Shell,
+    /// Local shell command execution (legacy/codex-mini)
+    LocalShell,
     /// Apply patch for code modifications
     ApplyPatch,
 }
@@ -52,8 +55,9 @@ impl OpenAIServerTool {
             Self::FileSearch => "file_search",
             Self::Mcp => "mcp",
             Self::ImageGeneration => "image_generation",
-            Self::ComputerUse => "computer_use",
+            Self::ComputerUsePreview => "computer_use_preview",
             Self::Shell => "shell",
+            Self::LocalShell => "local_shell",
             Self::ApplyPatch => "apply_patch",
         }
     }
@@ -66,8 +70,12 @@ impl OpenAIServerTool {
             "file_search" => Some(Self::FileSearch),
             "mcp" => Some(Self::Mcp),
             "image_generation" => Some(Self::ImageGeneration),
-            "computer_use" => Some(Self::ComputerUse),
+            // Canonical current names
+            "computer_use_preview" => Some(Self::ComputerUsePreview),
             "shell" => Some(Self::Shell),
+            "local_shell" => Some(Self::LocalShell),
+            // Backward-compatible aliases
+            "computer_use" => Some(Self::ComputerUsePreview),
             "apply_patch" => Some(Self::ApplyPatch),
             _ => None,
         }
@@ -129,8 +137,17 @@ pub enum OpenAIToolParams {
     },
     /// Computer use configuration
     ComputerUse {
-        display_width_px: u32,
-        display_height_px: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_width: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_height: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        environment: Option<String>,
+        // Legacy aliases
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_width_px: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_height_px: Option<u32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         display_number: Option<u32>,
     },
@@ -347,9 +364,7 @@ impl OpenAIAdapter {
     }
 
     fn canonicalize_model(model: &str) -> String {
-        if model == "gpt-5.2-codex"
-            || model.starts_with("gpt-5.2-codex-")
-            || model == "gpt-5-codex"
+        if model == "gpt-5.2-codex" || model.starts_with("gpt-5.2-codex-") || model == "gpt-5-codex"
         {
             "gpt-5-codex".to_string()
         } else {
@@ -455,28 +470,24 @@ impl OpenAIAdapter {
                         }
                     }));
                 }
-                super::ContentPart::ToolUse { id, name, input } => {
+                super::ContentPart::ToolUse { tool_use } => {
                     processed_parts.push(serde_json::json!({
                         "type": "function_call",
-                        "id": id,
-                        "name": name,
-                        "arguments": serde_json::to_string(input)?
+                        "id": tool_use.id,
+                        "name": tool_use.name,
+                        "arguments": serde_json::to_string(&tool_use.input)?
                     }));
                 }
-                super::ContentPart::ToolResult {
-                    tool_use_id,
-                    content,
-                    is_error,
-                } => {
-                    let mut tool_result = serde_json::json!({
+                super::ContentPart::ToolResult { tool_result } => {
+                    let mut tool_result_json = serde_json::json!({
                         "type": "function_result",
-                        "call_id": tool_use_id,
-                        "output": content
+                        "call_id": tool_result.tool_use_id,
+                        "output": tool_result.content
                     });
-                    if let Some(true) = is_error {
-                        tool_result["is_error"] = serde_json::json!(true);
+                    if tool_result.is_error {
+                        tool_result_json["is_error"] = serde_json::json!(true);
                     }
-                    processed_parts.push(tool_result);
+                    processed_parts.push(tool_result_json);
                 }
                 _ => {
                     tracing::warn!("Unsupported content type in Responses API multimodal content");
@@ -640,6 +651,14 @@ impl OpenAIAdapter {
                     ThinkingParameter::Enabled(false) => {
                         // Don't add reasoning parameter if disabled
                     }
+                    ThinkingParameter::Adaptive { .. } => {
+                        // OpenAI Responses API doesn't expose an "adaptive" reasoning mode.
+                        // Use a balanced default unless explicitly overridden.
+                        let chosen_effort = codex_effort_override.unwrap_or("medium");
+                        api_request["reasoning"] = serde_json::json!({
+                            "effort": chosen_effort
+                        });
+                    }
                 }
             } else if let Some(effort) = codex_effort_override {
                 api_request["reasoning"] = serde_json::json!({
@@ -795,8 +814,6 @@ impl OpenAIAdapter {
         &self,
         tools: &[super::ToolDefinition],
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        use super::ToolDefinition;
-
         let nested_tools: Vec<Value> = tools
             .iter()
             .map(|tool| {
@@ -807,34 +824,15 @@ impl OpenAIAdapter {
                     // Handle built-in tool with configuration
                     self.create_builtin_tool_definition(server_tool, tool)
                 } else {
-                    // Handle regular function tool
-                    match tool {
-                        ToolDefinition::Flat {
-                            name,
-                            description,
-                            parameters,
-                        } => {
-                            // Convert flat to nested
-                            serde_json::json!({
-                                "type": "function",
-                                "function": {
-                                    "name": name,
-                                    "description": description,
-                                    "parameters": parameters
-                                }
-                            })
+                    // Handle regular function tool (ToolDefinition is a struct)
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
                         }
-                        ToolDefinition::Nested {
-                            tool_type,
-                            function,
-                        } => {
-                            // Already nested
-                            serde_json::json!({
-                                "type": tool_type,
-                                "function": function
-                            })
-                        }
-                    }
+                    })
                 }
             })
             .collect();
@@ -859,22 +857,8 @@ impl OpenAIAdapter {
 
         // Add tool-specific configuration based on parameters
         match server_tool {
-            OpenAIServerTool::WebSearch => {
-                if let Some(max_results) = params.get("max_results") {
-                    tool_def["max_results"] = max_results.clone();
-                }
-                if let Some(search_depth) = params.get("search_depth") {
-                    tool_def["search_depth"] = search_depth.clone();
-                }
-            }
-            OpenAIServerTool::CodeInterpreter => {
-                if let Some(timeout) = params.get("timeout_seconds") {
-                    tool_def["timeout_seconds"] = timeout.clone();
-                }
-                if let Some(packages) = params.get("packages") {
-                    tool_def["packages"] = packages.clone();
-                }
-            }
+            OpenAIServerTool::WebSearch => {}
+            OpenAIServerTool::CodeInterpreter => {}
             OpenAIServerTool::FileSearch => {
                 if let Some(max_results) = params.get("max_num_results") {
                     tool_def["max_num_results"] = max_results.clone();
@@ -884,12 +868,7 @@ impl OpenAIAdapter {
                 }
             }
             OpenAIServerTool::Mcp => {
-                if let Some(server_url) = params.get("server_url") {
-                    tool_def["server_url"] = server_url.clone();
-                }
-                if let Some(credentials) = params.get("credentials") {
-                    tool_def["credentials"] = credentials.clone();
-                }
+                // Forward MCP fields transparently to avoid tight coupling to evolving API fields.
             }
             OpenAIServerTool::ImageGeneration => {
                 if let Some(model) = params.get("model") {
@@ -902,32 +881,46 @@ impl OpenAIAdapter {
                     tool_def["size"] = size.clone();
                 }
             }
-            OpenAIServerTool::ComputerUse => {
-                // Computer use requires display dimensions
+            OpenAIServerTool::ComputerUsePreview => {
+                // Computer use requires display dimensions. Prefer modern keys and support legacy aliases.
                 let width = params
-                    .get("display_width_px")
+                    .get("display_width")
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(1920) as u32;
+                    .or_else(|| params.get("display_width_px").and_then(|v| v.as_u64()))
+                    .unwrap_or(1024) as u32;
                 let height = params
-                    .get("display_height_px")
+                    .get("display_height")
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(1080) as u32;
+                    .or_else(|| params.get("display_height_px").and_then(|v| v.as_u64()))
+                    .unwrap_or(768) as u32;
 
-                tool_def["display_width_px"] = serde_json::json!(width);
-                tool_def["display_height_px"] = serde_json::json!(height);
+                tool_def["display_width"] = serde_json::json!(width);
+                tool_def["display_height"] = serde_json::json!(height);
+                tool_def["environment"] = params
+                    .get("environment")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!("browser"));
 
                 if let Some(display_num) = params.get("display_number") {
                     tool_def["display_number"] = display_num.clone();
                 }
             }
-            OpenAIServerTool::Shell => {
+            OpenAIServerTool::Shell | OpenAIServerTool::LocalShell => {
                 if let Some(allowed) = params.get("allowed_commands") {
                     tool_def["allowed_commands"] = allowed.clone();
                 }
             }
-            OpenAIServerTool::ApplyPatch => {
-                if let Some(validate) = params.get("validate_before_apply") {
-                    tool_def["validate_before_apply"] = validate.clone();
+            OpenAIServerTool::ApplyPatch => {}
+        }
+
+        // Forward all declared parameters (except "type") so newly introduced provider
+        // fields keep working without requiring immediate adapter code changes.
+        if let Some(obj) = params.as_object() {
+            for (key, value) in obj {
+                // `validate_before_apply` is non-standard and causes compatibility
+                // issues on some OpenAI-compatible endpoints; keep it client-side only.
+                if key != "type" && key != "validate_before_apply" {
+                    tool_def[key] = value.clone();
                 }
             }
         }
@@ -959,7 +952,9 @@ impl OpenAIAdapter {
         let format = match audio_output.format {
             AudioFormat::Mp3 => "mp3",
             AudioFormat::Opus => "opus",
+            AudioFormat::Ogg => "ogg",
             AudioFormat::M4a => "m4a",
+            AudioFormat::Aac => "aac",
             AudioFormat::Flac => "flac",
             AudioFormat::Wav => "wav",
             AudioFormat::Webm => "webm",
@@ -983,7 +978,7 @@ impl OpenAIAdapter {
         &self,
         content_parts: &[super::ContentPart],
     ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
-        use super::{AudioData, ContentPart};
+        use super::ContentPart;
         use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let mut processed_parts = Vec::new();
@@ -999,7 +994,7 @@ impl OpenAIAdapter {
                 ContentPart::Audio { audio } => {
                     // Convert audio to OpenAI format
                     let audio_part = match &audio.data {
-                        AudioData::Base64(base64_str) => {
+                        super::AudioData::Base64(base64_str) => {
                             serde_json::json!({
                                 "type": "input_audio",
                                 "input_audio": {
@@ -1008,7 +1003,7 @@ impl OpenAIAdapter {
                                 }
                             })
                         }
-                        AudioData::Bytes(bytes) => {
+                        super::AudioData::Bytes(bytes) => {
                             let base64_str = STANDARD.encode(bytes);
                             serde_json::json!({
                                 "type": "input_audio",
@@ -1018,7 +1013,7 @@ impl OpenAIAdapter {
                                 }
                             })
                         }
-                        AudioData::Uri(uri) => {
+                        super::AudioData::Uri(uri) => {
                             serde_json::json!({
                                 "type": "input_audio",
                                 "input_audio": {
@@ -1068,30 +1063,131 @@ impl OpenAIAdapter {
                         "document": document
                     }));
                 }
-                ContentPart::ToolUse { id, name, input } => {
+                ContentPart::ToolUse { tool_use } => {
                     processed_parts.push(serde_json::json!({
                         "type": "tool_use",
-                        "id": id,
-                        "name": name,
-                        "input": input
+                        "id": tool_use.id,
+                        "name": tool_use.name,
+                        "input": tool_use.input
                     }));
                 }
-                ContentPart::ToolResult {
-                    tool_use_id,
-                    content,
-                    is_error,
-                } => {
+                ContentPart::ToolResult { tool_result } => {
                     processed_parts.push(serde_json::json!({
                         "type": "tool_result",
-                        "tool_use_id": tool_use_id,
-                        "content": content,
-                        "is_error": is_error.unwrap_or(false)
+                        "tool_use_id": tool_result.tool_use_id,
+                        "content": tool_result.content,
+                        "is_error": tool_result.is_error
                     }));
                 }
             }
         }
 
         Ok(processed_parts)
+    }
+
+    fn append_output_text(content: &mut String, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if !content.is_empty() {
+            content.push('\n');
+        }
+        content.push_str(text);
+    }
+
+    fn responses_server_tool_name_from_output_type(output_type: &str) -> Option<String> {
+        let canonical = match output_type {
+            // Known Responses API output item types for built-in tools
+            "local_shell_call" => "local_shell",
+            "shell_call" => "shell",
+            "web_search_call" => "web_search",
+            "code_interpreter_call" => "code_interpreter",
+            "file_search_call" => "file_search",
+            "image_generation_call" => "image_generation",
+            "mcp_call" => "mcp",
+            "apply_patch_call" => "apply_patch",
+            // Computer-use call item can surface as "computer_call" in output.
+            "computer_call" | "computer_use_call" => "computer_use_preview",
+            other => {
+                if let Some(stripped) = other.strip_suffix("_call") {
+                    if stripped == "computer" {
+                        "computer_use_preview"
+                    } else if OpenAIServerTool::from_str(stripped).is_some() {
+                        stripped
+                    } else {
+                        return None;
+                    }
+                } else if OpenAIServerTool::from_str(other).is_some() {
+                    other
+                } else {
+                    return None;
+                }
+            }
+        };
+        Some(canonical.to_string())
+    }
+
+    fn parse_responses_output_tool_call(&self, value: &Value) -> Option<ToolCall> {
+        let output_type = value.get("type").and_then(Value::as_str)?;
+
+        if output_type == "function_call" {
+            let id = value
+                .get("id")
+                .and_then(Value::as_str)
+                .or_else(|| value.get("call_id").and_then(Value::as_str))
+                .map(ToString::to_string)
+                .unwrap_or_else(|| format!("call_{}", uuid::Uuid::new_v4()));
+            let name = value.get("name").and_then(Value::as_str)?.to_string();
+            let arguments = value
+                .get("arguments")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(ToString::to_string)
+                .or_else(|| {
+                    value.get("input").map(|input| {
+                        serde_json::to_string(input).unwrap_or_else(|_| "{}".to_string())
+                    })
+                })
+                .unwrap_or_else(|| "{}".to_string());
+
+            return Some(ToolCall {
+                id,
+                name,
+                arguments,
+            });
+        }
+
+        let server_tool = Self::responses_server_tool_name_from_output_type(output_type)?;
+        let id = value
+            .get("id")
+            .and_then(Value::as_str)
+            .or_else(|| value.get("call_id").and_then(Value::as_str))
+            .or_else(|| value.get("tool_call_id").and_then(Value::as_str))
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("call_{}", uuid::Uuid::new_v4()));
+
+        // Built-in tools are executed server-side by the provider.
+        // Prefix them so the chat loop skips local execution.
+        let arguments = value
+            .get("arguments")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string)
+            .or_else(|| {
+                value
+                    .get("input")
+                    .or_else(|| value.get("output"))
+                    .map(|payload| {
+                        serde_json::to_string(payload).unwrap_or_else(|_| "{}".to_string())
+                    })
+            })
+            .unwrap_or_else(|| "{}".to_string());
+
+        Some(ToolCall {
+            id,
+            name: format!("__server__{}", server_tool),
+            arguments,
+        })
     }
 
     /// Adapt response from Responses API format
@@ -1105,30 +1201,39 @@ impl OpenAIAdapter {
 
         if let Some(output) = response["output"].as_array() {
             for item in output {
-                // Extract text from output_text fields
+                // Top-level output items can carry tool calls directly (Responses API)
+                if let Some(tool_call) = self.parse_responses_output_tool_call(item) {
+                    tool_calls.push(tool_call);
+                }
+
+                if let Some(item_type) = item.get("type").and_then(Value::as_str) {
+                    if item_type == "output_text" {
+                        if let Some(text) = item.get("text").and_then(Value::as_str) {
+                            Self::append_output_text(&mut content, text);
+                        }
+                    } else if item_type == "message" {
+                        // Message text is usually nested in content blocks.
+                        if let Some(text) = item.get("text").and_then(Value::as_str) {
+                            Self::append_output_text(&mut content, text);
+                        }
+                    }
+                }
+
+                // Content blocks within message items
                 if let Some(output_content) = item["content"].as_array() {
                     for part in output_content {
-                        if part["type"] == "output_text" {
-                            if let Some(text) = part["text"].as_str() {
-                                if !content.is_empty() {
-                                    content.push('\n');
+                        if let Some(part_type) = part.get("type").and_then(Value::as_str) {
+                            if (part_type == "output_text" || part_type == "text")
+                                && part.get("text").and_then(Value::as_str).is_some()
+                            {
+                                if let Some(text) = part.get("text").and_then(Value::as_str) {
+                                    Self::append_output_text(&mut content, text);
                                 }
-                                content.push_str(text);
                             }
                         }
-                        // Extract tool calls
-                        if part["type"] == "function_call" {
-                            if let (Some(id), Some(name), Some(args)) = (
-                                part["id"].as_str(),
-                                part["name"].as_str(),
-                                part["arguments"].as_str(),
-                            ) {
-                                tool_calls.push(ToolCall {
-                                    id: id.to_string(),
-                                    name: name.to_string(),
-                                    arguments: args.to_string(),
-                                });
-                            }
+
+                        if let Some(tool_call) = self.parse_responses_output_tool_call(part) {
+                            tool_calls.push(tool_call);
                         }
                     }
                 }
@@ -1236,22 +1341,26 @@ impl OpenAIAdapter {
         let call_type = call["type"].as_str().unwrap_or("function");
 
         // Check if this is a built-in tool
-        if let Some(_server_tool) = OpenAIServerTool::from_str(call_type) {
+        if let Some(server_tool) = OpenAIServerTool::from_str(call_type) {
             // Built-in tool result
-            let output = call
-                .get("output")
+            let payload = call
+                .get("input")
+                .or_else(|| call.get("output"))
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({}));
+            let canonical_name = server_tool.as_str();
+            // Built-in tools are server-side; prefix to prevent local re-execution.
             Some(ToolCall {
                 id,
-                name: call_type.to_string(),
-                arguments: serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
+                name: format!("__server__{}", canonical_name),
+                arguments: serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string()),
             })
         } else {
             // Regular function call
             let name = call["function"]["name"].as_str()?.to_string();
             let arguments = call["function"]["arguments"]
                 .as_str()
+                .filter(|s| !s.is_empty()) // Filter empty strings
                 .unwrap_or("{}")
                 .to_string();
             Some(ToolCall {
@@ -1286,7 +1395,9 @@ impl OpenAIAdapter {
                         "wav" => Some(super::AudioFormat::Wav),
                         "mp3" => Some(super::AudioFormat::Mp3),
                         "opus" => Some(super::AudioFormat::Opus),
+                        "ogg" => Some(super::AudioFormat::Ogg),
                         "m4a" => Some(super::AudioFormat::M4a),
+                        "aac" => Some(super::AudioFormat::Aac),
                         "flac" => Some(super::AudioFormat::Flac),
                         "webm" => Some(super::AudioFormat::Webm),
                         _ => None,
@@ -1785,8 +1896,7 @@ impl ProviderAdapter for OllamaAdapter {
                             if let Some(args_str) = call["function"]["arguments"].as_str() {
                                 args_str.to_string()
                             } else if let Some(args_val) = call["function"].get("arguments") {
-                                serde_json::to_string(args_val)
-                                    .unwrap_or_else(|_| "{}".to_string())
+                                serde_json::to_string(args_val).unwrap_or_else(|_| "{}".to_string())
                             } else {
                                 "{}".to_string()
                             };

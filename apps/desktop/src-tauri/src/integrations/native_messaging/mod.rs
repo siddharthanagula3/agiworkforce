@@ -118,6 +118,23 @@ pub enum NativeMessage {
     GetPageContent {
         tab_id: Option<i32>,
     },
+    PageContext {
+        url: String,
+        title: String,
+        html: String,
+        selected_text: Option<String>,
+        tab_id: i32,
+        timestamp: u64,
+    },
+    TaskResult {
+        task_id: String,
+        success: bool,
+        screenshot: Option<String>,
+        result: Option<serde_json::Value>,
+        error: Option<String>,
+        actions_performed: u32,
+        duration: u64,
+    },
 
     // Script execution (controlled)
     ExecuteScript {

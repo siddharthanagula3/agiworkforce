@@ -147,8 +147,13 @@ impl McpClient {
 
         let args_map: HashMap<String, Value> = if arguments.is_object() {
             serde_json::from_value(arguments)?
-        } else {
+        } else if arguments.is_null() {
             HashMap::new()
+        } else {
+            let mut wrapped = HashMap::new();
+            // Preserve non-object payloads instead of silently dropping them.
+            wrapped.insert("input".to_string(), arguments);
+            wrapped
         };
 
         let result = session_arc.call_tool(tool_name, args_map).await?;

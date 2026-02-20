@@ -145,7 +145,7 @@ fn test_text_input_workflow() {
     // Just verify the keyboard simulator can be created
     // Actual typing would require a focused text field
     drop(keyboard); // Explicitly drop to show it was created
-    // Keyboard simulator created successfully - test passes
+                    // Keyboard simulator created successfully - test passes
 }
 
 /// Test mouse drag and drop automation.

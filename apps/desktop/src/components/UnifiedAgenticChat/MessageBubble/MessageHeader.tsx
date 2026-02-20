@@ -9,6 +9,7 @@ import React, { memo, useMemo } from 'react';
 import { Loader2, Pencil } from 'lucide-react';
 import { EnhancedMessage } from '../../../stores/unifiedChatStore';
 import { useSimpleModeStore } from '../../../stores/ui';
+import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 
 export interface MessageHeaderProps {
   message: EnhancedMessage;
@@ -28,6 +29,10 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
   formattedTime,
 }) => {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
+
+  // Get live status from action trail for streaming messages
+  const actionTrail = useUnifiedChatStore((state) => state.actionTrail);
+  const lastActionTrailEntry = actionTrail.length > 0 ? actionTrail[actionTrail.length - 1] : null;
 
   const roleName = useMemo(() => {
     if (isUser) return 'You';
@@ -77,7 +82,7 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
         </span>
       )}
 
-      {/* Streaming indicator */}
+      {/* Streaming indicator with live status */}
       {message.metadata?.streaming && !message.pending && (
         <span className="inline-flex items-center gap-1.5 message-meta text-amber-500 dark:text-amber-400">
           <span className="flex gap-0.5">
@@ -89,7 +94,9 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
               />
             ))}
           </span>
-          <span className="text-xs">{isSimpleMode ? 'Writing response...' : 'Generating'}</span>
+          <span className="text-xs">
+            {lastActionTrailEntry?.message || (isSimpleMode ? 'Writing response...' : 'Generating')}
+          </span>
         </span>
       )}
     </div>

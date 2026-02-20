@@ -2,11 +2,11 @@
  * Extension integration commands for AGI Workforce desktop app
  * Handles communication with the browser extension
  */
-
-use crate::core::agent::Agent;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tauri::Emitter;
+use tauri::Manager;
 use tauri::State;
 use uuid::Uuid;
 
@@ -106,14 +106,10 @@ pub struct TaskResultResponse {
     pub should_continue: bool,
 }
 
-/// Process page context from extension
-///
-/// This command receives page information from the browser extension
-/// and initiates an AGI task to interact with the page.
-#[tauri::command]
-pub async fn extension_page_context(
+/// Shared page-context processing used by both Tauri command and native transport paths.
+pub(crate) async fn process_page_context_event(
     context: PageContext,
-    _state: State<'_, crate::data::app_state::AppState>,
+    app_handle: &tauri::AppHandle,
 ) -> Result<PageContextResponse, String> {
     tracing::info!(
         "Received page context from extension: {} (tab: {})",
@@ -131,28 +127,127 @@ pub async fn extension_page_context(
         });
     }
 
-    // Limit HTML size for storage
-    if context.html.len() > 100 * 1024 {
-        tracing::warn!("HTML from extension exceeds 100KB limit, truncating");
-    }
+    // Limit HTML size for in-memory analysis/event payloads
+    let html_for_analysis = if context.html.len() > 100 * 1024 {
+        tracing::warn!("HTML from extension exceeds 100KB limit, truncating for analysis");
+        context.html.chars().take(100 * 1024).collect::<String>()
+    } else {
+        context.html.clone()
+    };
 
     // Create a task ID for tracking
     let task_id = Uuid::new_v4().to_string();
-
-    // TODO: Send to AGI engine for processing
-    // This would integrate with the Agent/AGI system to analyze the page
-    // and determine what actions to take
+    let actions = plan_page_actions(&context, &html_for_analysis);
 
     tracing::debug!("Created task {} for page context", task_id);
 
-    // For now, return success with task ID
-    // The AGI engine will analyze the page and provide actions
+    let event_payload = json!({
+        "task_id": task_id,
+        "url": context.url,
+        "title": context.title,
+        "tab_id": context.tab_id,
+        "timestamp": context.timestamp,
+        "selected_text": context.selected_text,
+        "actions": actions.clone(),
+    });
+    if let Err(e) = app_handle.emit("extension:page-context", &event_payload) {
+        tracing::warn!("Failed to emit extension:page-context event: {}", e);
+    }
+
     Ok(PageContextResponse {
         success: true,
         task_id: Some(task_id),
-        actions: None,
+        actions: Some(actions),
         error: None,
     })
+}
+
+/// Shared task-result processing used by both Tauri command and native transport paths.
+pub(crate) async fn process_task_result_event(
+    result: TaskResult,
+    app_handle: &tauri::AppHandle,
+) -> Result<TaskResultResponse, String> {
+    tracing::info!(
+        "Received task result from extension (task_id: {}, success: {})",
+        result.task_id,
+        result.success
+    );
+
+    if !result.success {
+        tracing::warn!(
+            "Task failed: {}",
+            result.error.as_deref().unwrap_or("unknown")
+        );
+    } else {
+        tracing::info!(
+            "Task completed successfully with {} actions in {}ms",
+            result.actions_performed,
+            result.duration
+        );
+    }
+
+    // 1. Store screenshots if provided
+    let screenshot_path = if let Some(screenshot_data) = &result.screenshot {
+        match save_extension_screenshot(app_handle, &result.task_id, screenshot_data).await {
+            Ok(path) => {
+                tracing::info!("Saved extension screenshot to: {}", path);
+                Some(path)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to save screenshot: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // 2. Emit event with task results for conversation update
+    let task_event = serde_json::json!({
+        "task_id": result.task_id,
+        "success": result.success,
+        "screenshot_path": screenshot_path,
+        "result": result.result,
+        "error": result.error,
+        "actions_performed": result.actions_performed,
+        "duration": result.duration,
+    });
+
+    if let Err(e) = app_handle.emit("extension:task-result", &task_event) {
+        tracing::warn!("Failed to emit task result event: {}", e);
+    } else {
+        tracing::debug!("Emitted extension:task-result event");
+    }
+
+    // 3. Determine if we should continue with next step
+    let should_continue = result.success && result.actions_performed > 0;
+    let next_action = if should_continue {
+        Some(serde_json::json!({
+            "type": "extension_task_complete",
+            "task_id": result.task_id,
+        }))
+    } else {
+        None
+    };
+
+    Ok(TaskResultResponse {
+        success: true,
+        next_action,
+        should_continue,
+    })
+}
+
+/// Process page context from extension
+///
+/// This command receives page information from the browser extension
+/// and initiates an AGI task to interact with the page.
+#[tauri::command]
+pub async fn extension_page_context(
+    context: PageContext,
+    _state: State<'_, crate::AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<PageContextResponse, String> {
+    process_page_context_event(context, &app_handle).await
 }
 
 /// Analyze forms detected by the extension
@@ -160,9 +255,7 @@ pub async fn extension_page_context(
 /// This command receives form data from the browser extension
 /// and provides analysis and recommendations.
 #[tauri::command]
-pub async fn extension_analyze_forms(
-    data: FormData,
-) -> Result<FormAnalysisResponse, String> {
+pub async fn extension_analyze_forms(data: FormData) -> Result<FormAnalysisResponse, String> {
     tracing::info!(
         "Analyzing {} forms from extension (tab: {})",
         data.forms.len(),
@@ -216,75 +309,10 @@ pub async fn extension_analyze_forms(
 #[tauri::command]
 pub async fn extension_task_result(
     result: TaskResult,
-    state: State<'_, crate::data::app_state::AppState>,
+    _state: State<'_, crate::AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<TaskResultResponse, String> {
-    tracing::info!(
-        "Received task result from extension (task_id: {}, success: {})",
-        result.task_id,
-        result.success
-    );
-
-    if !result.success {
-        tracing::warn!("Task failed: {}", result.error.as_deref().unwrap_or("unknown"));
-    } else {
-        tracing::info!(
-            "Task completed successfully with {} actions in {}ms",
-            result.actions_performed,
-            result.duration
-        );
-    }
-
-    // 1. Store screenshots if provided
-    let screenshot_path = if let Some(screenshot_data) = &result.screenshot {
-        match save_extension_screenshot(&app_handle, &result.task_id, screenshot_data).await {
-            Ok(path) => {
-                tracing::info!("Saved extension screenshot to: {}", path);
-                Some(path)
-            }
-            Err(e) => {
-                tracing::warn!("Failed to save screenshot: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    // 2. Emit event with task results for conversation update
-    let task_event = serde_json::json!({
-        "task_id": result.task_id,
-        "success": result.success,
-        "screenshot_path": screenshot_path,
-        "result": result.result,
-        "error": result.error,
-        "actions_performed": result.actions_performed,
-        "duration": result.duration,
-    });
-
-    if let Err(e) = app_handle.emit("extension:task-result", &task_event) {
-        tracing::warn!("Failed to emit task result event: {}", e);
-    } else {
-        tracing::debug!("Emitted extension:task-result event");
-    }
-
-    // 3. Determine if we should continue with next step
-    // For now, we check if there's a result that indicates more work is needed
-    let should_continue = result.success && result.actions_performed > 0;
-    let next_action = if should_continue {
-        Some(serde_json::json!({
-            "type": "extension_task_complete",
-            "task_id": result.task_id,
-        }))
-    } else {
-        None
-    };
-
-    Ok(TaskResultResponse {
-        success: true,
-        next_action,
-        should_continue,
-    })
+    process_task_result_event(result, &app_handle).await
 }
 
 /// Save extension screenshot to disk
@@ -306,7 +334,11 @@ async fn save_extension_screenshot(
         .await
         .map_err(|e| format!("Failed to create captures directory: {}", e))?;
 
-    let file_name = format!("extension_{}_{}.png", task_id, chrono::Utc::now().timestamp());
+    let file_name = format!(
+        "extension_{}_{}.png",
+        task_id,
+        chrono::Utc::now().timestamp()
+    );
     let file_path = captures_dir.join(&file_name);
 
     // Decode base64 image data
@@ -319,8 +351,8 @@ async fn save_extension_screenshot(
         .decode(image_data)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
 
-    let mut file = std::fs::File::create(&file_path)
-        .map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut file =
+        std::fs::File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
 
     file.write_all(&decoded)
         .map_err(|e| format!("Failed to write file: {}", e))?;
@@ -330,18 +362,136 @@ async fn save_extension_screenshot(
 
 /// Get current extension status
 #[tauri::command]
-pub async fn extension_status() -> Result<serde_json::Value, String> {
+pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let (token_path, token_exists, token_valid, token_error) =
+        match app_handle.path().app_data_dir() {
+            Ok(app_data_dir) => {
+                let path = app_data_dir.join(".ipc_token");
+                match std::fs::read_to_string(&path) {
+                    Ok(contents) => {
+                        let trimmed = contents.trim();
+                        (
+                            path.to_string_lossy().to_string(),
+                            true,
+                            !trimmed.is_empty(),
+                            if trimmed.is_empty() {
+                                Some("Realtime auth token is empty".to_string())
+                            } else {
+                                None
+                            },
+                        )
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+                        path.to_string_lossy().to_string(),
+                        false,
+                        false,
+                        Some("Realtime auth token file not found".to_string()),
+                    ),
+                    Err(e) => (
+                        path.to_string_lossy().to_string(),
+                        false,
+                        false,
+                        Some(format!("Failed to read realtime auth token: {}", e)),
+                    ),
+                }
+            }
+            Err(e) => (
+                String::new(),
+                false,
+                false,
+                Some(format!("Failed to resolve app data directory: {}", e)),
+            ),
+        };
+
+    let (connection_state, extension_id) = if let Some(native_state) =
+        app_handle.try_state::<crate::sys::commands::NativeMessagingStateWrapper>()
+    {
+        let state = native_state.state.read().await;
+        let connection_state = match &state.connection_state {
+            crate::integrations::native_messaging::ConnectionState::Disconnected => {
+                "disconnected".to_string()
+            }
+            crate::integrations::native_messaging::ConnectionState::Connecting => {
+                "connecting".to_string()
+            }
+            crate::integrations::native_messaging::ConnectionState::Connected => {
+                "connected".to_string()
+            }
+            crate::integrations::native_messaging::ConnectionState::Error(error) => {
+                format!("error: {}", error)
+            }
+        };
+        (
+            connection_state,
+            native_state.extension_id.read().await.clone(),
+        )
+    } else {
+        ("state_unavailable".to_string(), Option::<String>::None)
+    };
+
+    let mut recommendations: Vec<String> = Vec::new();
+    if !token_exists {
+        recommendations.push(
+            "Start or restart the desktop app to generate the realtime auth token.".to_string(),
+        );
+    } else if !token_valid {
+        recommendations.push(
+            "Realtime auth token is invalid. Restart the desktop app to regenerate .ipc_token."
+                .to_string(),
+        );
+    }
+
+    if connection_state == "disconnected" {
+        recommendations.push(
+            "Reconnect the browser extension or reload the extension service worker.".to_string(),
+        );
+    } else if connection_state == "connecting" {
+        recommendations.push(
+            "Extension connection is still initializing. Retry the tool once connection becomes connected."
+                .to_string(),
+        );
+    } else if connection_state == "state_unavailable" {
+        recommendations.push(
+            "Native messaging state is unavailable. Restart the desktop app to restore extension transport state."
+                .to_string(),
+        );
+    } else if connection_state.starts_with("error:") {
+        recommendations.push(
+            "Check native messaging installation and extension ID configuration.".to_string(),
+        );
+    }
+
+    let transport_ready = token_valid && connection_state == "connected";
+    let status = if transport_ready { "ok" } else { "degraded" };
+
     Ok(json!({
-        "status": "ok",
+        "status": status,
         "version": env!("CARGO_PKG_VERSION"),
         "timestamp": Utc::now().to_rfc3339(),
         "extension_support": true,
-        "health_check_endpoint": "/health",
-        "api_endpoints": [
-            "/api/extension/page-context",
-            "/api/extension/analyze-forms",
-            "/api/extension/task-result",
-            "/api/extension/status"
+        "transport": {
+            "native_messaging": true,
+            "websocket_port": 8787
+        },
+        "diagnostics": {
+            "realtime_token": {
+                "path": token_path,
+                "exists": token_exists,
+                "valid": token_valid,
+                "error": token_error,
+            },
+            "native_connection": {
+                "state": connection_state,
+                "extension_id": extension_id,
+                "ready": transport_ready,
+            },
+            "recommendations": recommendations,
+        },
+        "commands": [
+            "extension_page_context",
+            "extension_analyze_forms",
+            "extension_task_result",
+            "extension_status"
         ]
     }))
 }
@@ -351,7 +501,8 @@ fn detect_form_type(fields: &[FormField]) -> String {
     let field_names: Vec<String> = fields.iter().map(|f| f.name.to_lowercase()).collect();
 
     // Check for common form patterns
-    if field_names.contains(&"username".to_string()) && field_names.contains(&"password".to_string())
+    if field_names.contains(&"username".to_string())
+        && field_names.contains(&"password".to_string())
     {
         return "login".to_string();
     }
@@ -364,19 +515,76 @@ fn detect_form_type(fields: &[FormField]) -> String {
         return "registration".to_string();
     }
 
-    if field_names.iter().any(|name| {
-        name.contains("search") || name == "q" || name == "query"
-    }) {
+    if field_names
+        .iter()
+        .any(|name| name.contains("search") || name == "q" || name == "query")
+    {
         return "search".to_string();
     }
 
-    if field_names.iter().any(|name| {
-        name.contains("email") || name.contains("phone")
-    }) {
+    if field_names
+        .iter()
+        .any(|name| name.contains("email") || name.contains("phone"))
+    {
         return "contact".to_string();
     }
 
     "unknown".to_string()
+}
+
+fn plan_page_actions(context: &PageContext, html: &str) -> Vec<PageAction> {
+    let mut actions = Vec::new();
+    let lower_html = html.to_lowercase();
+    let has_form = lower_html.contains("<form");
+    let has_password = lower_html.contains("type=\"password\"")
+        || lower_html.contains("type='password'")
+        || lower_html.contains("name=\"password\"")
+        || lower_html.contains("name='password'");
+    let selected_text = context
+        .selected_text
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    actions.push(PageAction {
+        id: Uuid::new_v4().to_string(),
+        action_type: "get_page_info".to_string(),
+        selector: None,
+        value: None,
+        delay: None,
+    });
+
+    if has_form {
+        actions.push(PageAction {
+            id: Uuid::new_v4().to_string(),
+            action_type: "get_forms".to_string(),
+            selector: None,
+            value: None,
+            delay: None,
+        });
+    }
+
+    if let Some(selection) = selected_text {
+        actions.push(PageAction {
+            id: Uuid::new_v4().to_string(),
+            action_type: "analyze_selection".to_string(),
+            selector: None,
+            value: Some(selection.chars().take(1000).collect()),
+            delay: None,
+        });
+    }
+
+    if has_password {
+        actions.push(PageAction {
+            id: Uuid::new_v4().to_string(),
+            action_type: "wait_for_selector".to_string(),
+            selector: Some("input[type='password']".to_string()),
+            value: None,
+            delay: Some(300),
+        });
+    }
+
+    actions
 }
 
 #[cfg(test)]
@@ -442,5 +650,28 @@ mod tests {
         };
 
         assert!(invalid_context.url.is_empty());
+    }
+
+    #[test]
+    fn test_plan_page_actions_includes_forms_and_selection() {
+        let context = PageContext {
+            url: "https://example.com/login".to_string(),
+            title: "Login".to_string(),
+            html: "<form><input type='password' name='password' /></form>".to_string(),
+            selected_text: Some("Remember this page".to_string()),
+            tab_id: 7,
+            timestamp: 0,
+        };
+
+        let actions = plan_page_actions(&context, &context.html);
+        let action_types = actions
+            .iter()
+            .map(|action| action.action_type.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(action_types.contains(&"get_page_info"));
+        assert!(action_types.contains(&"get_forms"));
+        assert!(action_types.contains(&"analyze_selection"));
+        assert!(action_types.contains(&"wait_for_selector"));
     }
 }

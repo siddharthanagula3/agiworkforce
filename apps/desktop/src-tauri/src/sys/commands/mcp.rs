@@ -4,6 +4,7 @@ use crate::core::mcp::{
 };
 use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
+use base64::Engine as _;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -49,30 +50,55 @@ impl McpState {
     /// This couples folder selection with MCP filesystem server scope (AUDIT-MCP-050).
     /// Returns Ok(true) if the server was restarted, Ok(false) if no change needed.
     pub async fn update_filesystem_root(&self, new_root: &str) -> Result<bool, String> {
-        let root_path = std::path::Path::new(new_root);
-        if !root_path.exists() {
-            return Err(format!("Path does not exist: {}", new_root));
+        self.update_filesystem_roots(&[new_root.to_string()]).await
+    }
+
+    /// Update the filesystem MCP server with multiple root directories.
+    /// This allows the MCP filesystem server to access multiple directories.
+    /// Returns Ok(true) if the server was restarted, Ok(false) if no change needed.
+    pub async fn update_filesystem_roots(&self, new_roots: &[String]) -> Result<bool, String> {
+        // Validate all paths first
+        for new_root in new_roots {
+            let root_path = std::path::Path::new(new_root);
+            if !root_path.exists() {
+                return Err(format!("Path does not exist: {}", new_root));
+            }
+            if !root_path.is_dir() {
+                return Err(format!("Path is not a directory: {}", new_root));
+            }
         }
-        if !root_path.is_dir() {
-            return Err(format!("Path is not a directory: {}", new_root));
+
+        if new_roots.is_empty() {
+            return Err("At least one directory must be provided".to_string());
         }
 
         // Update config
         let needs_restart = {
             let mut config = self.config.lock();
             if let Some(server_config) = config.mcp_servers.get_mut("filesystem") {
-                // Check current root (it's the last arg for filesystem server)
-                let current_root = server_config.args.last().cloned().unwrap_or_default();
-                if current_root == new_root {
-                    return Ok(false); // No change needed
+                // Get current roots (all args after the package name)
+                let package_name = "@modelcontextprotocol/server-filesystem";
+                let current_args: Vec<String> = server_config.args.clone();
+                let current_roots: Vec<String> = current_args
+                    .into_iter()
+                    .skip_while(|arg| arg != package_name)
+                    .skip(1)
+                    .collect();
+
+                // Check if roots have changed
+                if current_roots == new_roots {
+                    tracing::info!("[MCP] Filesystem roots unchanged, skipping update");
+                    return Ok(false);
                 }
-                // Update the args to use new root directory
-                server_config.args.pop(); // Remove old root
-                server_config.args.push(new_root.to_string()); // Add new root
+
+                // Rebuild args: keep command and package, replace roots
+                server_config.args = vec!["-y".to_string(), package_name.to_string()];
+                server_config.args.extend(new_roots.iter().cloned());
+
                 tracing::info!(
-                    "[MCP] Updated filesystem server root from '{}' to '{}'",
-                    current_root,
-                    new_root
+                    "[MCP] Updated filesystem server roots from {:?} to {:?}",
+                    current_roots,
+                    new_roots
                 );
                 true
             } else {
@@ -109,8 +135,8 @@ impl McpState {
                 {
                     Ok(_) => {
                         tracing::info!(
-                            "[MCP] Filesystem server restarted with new root: {}",
-                            new_root
+                            "[MCP] Filesystem server restarted with new roots: {:?}",
+                            new_roots
                         );
                         Ok(true)
                     }
@@ -183,16 +209,23 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
         (
             "filesystem",
             "Filesystem",
-            "0.2.0",
+            "0.6.2",
             "Secure read/write access to local filesystem",
             "@modelcontextprotocol/server-filesystem",
             vec![
-                "read_file",
+                "read_text_file",
+                "read_media_file",
+                "read_multiple_files",
                 "write_file",
-                "list_directory",
+                "edit_file",
                 "create_directory",
+                "list_directory",
+                "list_directory_with_sizes",
                 "move_file",
                 "search_files",
+                "directory_tree",
+                "get_file_info",
+                "list_allowed_directories",
             ],
             "automation",
             4.9,
@@ -201,19 +234,26 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
         (
             "git",
             "Git",
-            "0.1.0",
+            "0.6.2",
             "Git repository operations and version control",
-            "@modelcontextprotocol/server-git",
+            "mcp-server-git",
             vec![
                 "git_status",
-                "git_commit",
-                "git_log",
+                "git_diff_unstaged",
+                "git_diff_staged",
                 "git_diff",
+                "git_commit",
+                "git_add",
+                "git_reset",
+                "git_log",
+                "git_create_branch",
+                "git_checkout",
+                "git_show",
                 "git_branch",
             ],
             "development",
             4.8,
-            32000,
+            142000,
         ),
         (
             "github",
@@ -583,8 +623,12 @@ pub async fn mcp_list_tools(state: State<'_, McpState>) -> Result<Vec<McpToolInf
                 .unwrap_or_default();
 
             McpToolInfo {
-                // Use double underscore format to match registry's expected format
-                id: format!("mcp__{}__{}", server_name, tool.name),
+                // Use reversible encoding to preserve original server/tool names.
+                id: format!(
+                    "mcp__hex:{}__hex:{}",
+                    hex::encode(&server_name),
+                    hex::encode(&tool.name)
+                ),
                 name: tool.name.clone(),
                 description: tool.description.unwrap_or_default(),
                 server: server_name,
@@ -638,13 +682,30 @@ pub async fn mcp_call_tool(
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
+    let decode_component = |value: &str| -> String {
+        if let Some(encoded) = value.strip_prefix("hex:") {
+            if let Ok(bytes) = hex::decode(encoded) {
+                if let Ok(decoded) = String::from_utf8(bytes) {
+                    return decoded;
+                }
+            }
+        } else if let Some(encoded) = value.strip_prefix("b64:") {
+            if let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded) {
+                if let Ok(decoded) = String::from_utf8(bytes) {
+                    return decoded;
+                }
+            }
+        }
+        value.to_string()
+    };
+
     // Extract server name from tool_id (format: mcp__servername__toolname__)
     // Use double underscore delimiter to match registry format
     let server_name = tool_id
         .strip_prefix("mcp__")
-        .and_then(|s| s.split("__").next())
-        .unwrap_or("unknown")
-        .to_string();
+        .and_then(|s| s.splitn(2, "__").next())
+        .map(decode_component)
+        .unwrap_or_else(|| "unknown".to_string());
 
     tracing::info!(
         target: "mcp",
@@ -1220,4 +1281,34 @@ pub async fn mcp_install_server(
         "Server '{}' installed successfully. Enable it in settings to start using it.",
         server_name
     ))
+}
+
+/// Update the filesystem MCP server allowed directories.
+///
+/// This command updates the MCP filesystem server to use the specified directories
+/// as allowed roots. It restarts the server if it's currently enabled.
+///
+/// This should be called when the user changes allowed directories in settings.
+#[tauri::command]
+pub async fn mcp_update_filesystem_directories(
+    state: State<'_, McpState>,
+    directories: Vec<String>,
+) -> Result<String, String> {
+    if directories.is_empty() {
+        return Err("At least one directory must be provided".to_string());
+    }
+
+    tracing::info!(
+        "[MCP] Updating filesystem server with directories: {:?}",
+        directories
+    );
+
+    match state.update_filesystem_roots(&directories).await {
+        Ok(true) => Ok(format!(
+            "Filesystem server updated with {} directory(ies)",
+            directories.len()
+        )),
+        Ok(false) => Ok("Filesystem server already configured with these directories".to_string()),
+        Err(e) => Err(e),
+    }
 }
