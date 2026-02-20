@@ -31,7 +31,7 @@ const COMMAND_TIMEOUTS: Record<string, number> = {
   auth_refresh_token: 30000,
 
   read_file: 60000,
-  write_file: 60000,
+  file_write: 60000,
 
   execute_command: 120000,
 
@@ -268,7 +268,7 @@ async function rateLimit(key: string): Promise<void> {
  *
  * @example
  * const settings = await invoke<Settings>('get_settings');
- * await invoke('write_file', { path: '/tmp/test.txt', content: 'Hello' });
+ * await invoke('file_write', { path: '/tmp/test.txt', content: 'Hello' });
  */
 export async function invoke<T = unknown>(command: string, args?: Json): Promise<T> {
   if (!command || typeof command !== 'string' || command.trim().length === 0) {

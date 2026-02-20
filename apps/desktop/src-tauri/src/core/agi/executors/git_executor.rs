@@ -1058,7 +1058,7 @@ impl PrCreationWorkflow {
         // Extract PR number from URL
         let pr_number = pr_url
             .split('/')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
 
@@ -1278,7 +1278,7 @@ impl PrCreationWorkflow {
         // Extract PR number from URL
         let pr_number = pr_url
             .split('/')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
 

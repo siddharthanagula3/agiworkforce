@@ -10,6 +10,14 @@ pub enum RealtimeEvent {
         token: Option<String>,
     },
 
+    Authenticated {
+        user_id: String,
+    },
+
+    AuthenticationFailed {
+        reason: String,
+    },
+
     UserPresenceChanged {
         user_id: String,
         status: PresenceStatus,

@@ -41,6 +41,7 @@ use crate::core::agi::ExecutionContext;
 use crate::core::mcp::{McpClient, McpError, McpResult, McpToolRegistry};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -129,6 +130,26 @@ pub struct McpExecutor {
 }
 
 impl McpExecutor {
+    fn decode_component(value: &str) -> McpResult<String> {
+        if let Some(encoded) = value.strip_prefix("hex:") {
+            let bytes = hex::decode(encoded).map_err(|_| {
+                McpError::ToolNotFound(format!("Invalid encoded MCP tool ID component: {}", value))
+            })?;
+            String::from_utf8(bytes).map_err(|_| {
+                McpError::ToolNotFound(format!("Invalid UTF-8 in MCP tool ID component: {}", value))
+            })
+        } else if let Some(encoded) = value.strip_prefix("b64:") {
+            let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
+                McpError::ToolNotFound(format!("Invalid encoded MCP tool ID component: {}", value))
+            })?;
+            String::from_utf8(bytes).map_err(|_| {
+                McpError::ToolNotFound(format!("Invalid UTF-8 in MCP tool ID component: {}", value))
+            })
+        } else {
+            Ok(value.to_string())
+        }
+    }
+
     /// Creates a new MCP executor with the given client.
     ///
     /// # Arguments
@@ -181,7 +202,7 @@ impl McpExecutor {
     /// assert_eq!(tool, "read_file");
     /// ```
     pub fn parse_tool_id(tool_id: &str) -> McpResult<(String, String)> {
-        let parts: Vec<&str> = tool_id.split(TOOL_ID_DELIMITER).collect();
+        let parts: Vec<&str> = tool_id.splitn(3, TOOL_ID_DELIMITER).collect();
 
         if parts.len() != 3 {
             return Err(McpError::ToolNotFound(format!(
@@ -197,8 +218,8 @@ impl McpExecutor {
             )));
         }
 
-        let server_name = parts[1];
-        let tool_name = parts[2];
+        let server_name = Self::decode_component(parts[1])?;
+        let tool_name = Self::decode_component(parts[2])?;
 
         if server_name.is_empty() {
             return Err(McpError::ToolNotFound(format!(
@@ -214,7 +235,7 @@ impl McpExecutor {
             )));
         }
 
-        Ok((server_name.to_string(), tool_name.to_string()))
+        Ok((server_name, tool_name))
     }
 
     /// Creates a tool ID from server and tool names.
@@ -226,9 +247,9 @@ impl McpExecutor {
     /// * `server_name` - The MCP server name
     /// * `tool_name` - The tool name on the server
     pub fn create_tool_id(server_name: &str, tool_name: &str) -> String {
-        // Sanitize names to prevent delimiter injection
-        let safe_server = server_name.replace(TOOL_ID_DELIMITER, "_");
-        let safe_tool = tool_name.replace(TOOL_ID_DELIMITER, "_");
+        // Reversible encoding to preserve original names (including delimiters).
+        let safe_server = format!("hex:{}", hex::encode(server_name));
+        let safe_tool = format!("hex:{}", hex::encode(tool_name));
 
         format!(
             "{}{}{}{}{}",

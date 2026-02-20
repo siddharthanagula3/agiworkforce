@@ -19,6 +19,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Wand2,
   X,
   Zap,
 } from 'lucide-react';
@@ -66,6 +67,9 @@ interface SidebarProps {
   onOpenSettings?: () => void;
   onOpenFeedback?: () => void;
   onOpenCustomInstructions?: (conversationId: string) => void;
+  onToggleArtifactPanel?: () => void;
+  onToggleMediaLab?: () => void;
+  canAccessMediaLab?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isMobile?: boolean;
@@ -303,6 +307,9 @@ export function Sidebar({
   onOpenSettings,
   onOpenFeedback,
   onOpenCustomInstructions,
+  onToggleArtifactPanel,
+  onToggleMediaLab,
+  canAccessMediaLab = false,
   collapsed = false,
   onToggleCollapse,
   isMobile = false,
@@ -1055,6 +1062,46 @@ export function Sidebar({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Artifact Panel Toggle */}
+        {!collapsed && (
+          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+            <button
+              onClick={onToggleArtifactPanel}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                <span>Artifacts</span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* MediaLab Toggle */}
+        {!collapsed && (
+          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+            <button
+              onClick={onToggleMediaLab}
+              className={cn(
+                'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
+                canAccessMediaLab
+                  ? 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                  : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4" />
+                <span>Media Lab</span>
+              </div>
+              {!canAccessMediaLab && (
+                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300">
+                  Pro+
+                </span>
+              )}
+            </button>
           </div>
         )}
 

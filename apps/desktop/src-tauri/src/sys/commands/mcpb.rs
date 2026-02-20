@@ -301,76 +301,103 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             documentation_url: Some("https://modelcontextprotocol.io/docs/servers/filesystem".to_string()),
             tools: vec![
                 BundleTool {
-                    name: "read_file".to_string(),
-                    description: "Read the contents of a file".to_string(),
+                    name: "read_text_file".to_string(),
+                    description: "Read complete contents of a file as UTF-8 text, with optional head/tail line limits".to_string(),
                     parameters: vec![
-                        BundleToolParameter {
-                            name: "path".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Path to the file to read".to_string(),
-                        },
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Path to the file to read".to_string() },
+                        BundleToolParameter { name: "head".to_string(), param_type: "number".to_string(), required: false, description: "Read only the first N lines".to_string() },
+                        BundleToolParameter { name: "tail".to_string(), param_type: "number".to_string(), required: false, description: "Read only the last N lines".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "read_media_file".to_string(),
+                    description: "Read an image or audio file and return base64 data with MIME type".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Path to the media file".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "read_multiple_files".to_string(),
+                    description: "Read multiple files simultaneously; failed reads don't stop the operation".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "paths".to_string(), param_type: "array".to_string(), required: true, description: "Array of file paths to read".to_string() },
                     ],
                 },
                 BundleTool {
                     name: "write_file".to_string(),
-                    description: "Write content to a file".to_string(),
+                    description: "Create new file or overwrite existing with content".to_string(),
                     parameters: vec![
-                        BundleToolParameter {
-                            name: "path".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Path to the file to write".to_string(),
-                        },
-                        BundleToolParameter {
-                            name: "content".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Content to write to the file".to_string(),
-                        },
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File path".to_string() },
+                        BundleToolParameter { name: "content".to_string(), param_type: "string".to_string(), required: true, description: "Content to write".to_string() },
                     ],
                 },
                 BundleTool {
-                    name: "list_directory".to_string(),
-                    description: "List contents of a directory".to_string(),
+                    name: "edit_file".to_string(),
+                    description: "Make selective edits using pattern matching with whitespace normalization and git-style diff output".to_string(),
                     parameters: vec![
-                        BundleToolParameter {
-                            name: "path".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Path to the directory".to_string(),
-                        },
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File to edit".to_string() },
+                        BundleToolParameter { name: "edits".to_string(), param_type: "array".to_string(), required: true, description: "List of {oldText, newText} edit operations".to_string() },
+                        BundleToolParameter { name: "dryRun".to_string(), param_type: "boolean".to_string(), required: false, description: "Preview changes without applying".to_string() },
                     ],
                 },
                 BundleTool {
                     name: "create_directory".to_string(),
-                    description: "Create a new directory".to_string(),
+                    description: "Create new directory (including parent directories if needed)".to_string(),
                     parameters: vec![
-                        BundleToolParameter {
-                            name: "path".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Path of the directory to create".to_string(),
-                        },
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Directory path to create".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "list_directory".to_string(),
+                    description: "List directory contents with [FILE] or [DIR] prefixes".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Directory path".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "list_directory_with_sizes".to_string(),
+                    description: "List directory contents with file sizes and summary statistics".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Directory path".to_string() },
+                        BundleToolParameter { name: "sortBy".to_string(), param_type: "string".to_string(), required: false, description: "Sort by 'name' or 'size' (default: name)".to_string() },
                     ],
                 },
                 BundleTool {
                     name: "move_file".to_string(),
-                    description: "Move or rename a file".to_string(),
+                    description: "Move or rename files and directories".to_string(),
                     parameters: vec![
-                        BundleToolParameter {
-                            name: "source".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Source path".to_string(),
-                        },
-                        BundleToolParameter {
-                            name: "destination".to_string(),
-                            param_type: "string".to_string(),
-                            required: true,
-                            description: "Destination path".to_string(),
-                        },
+                        BundleToolParameter { name: "source".to_string(), param_type: "string".to_string(), required: true, description: "Source path".to_string() },
+                        BundleToolParameter { name: "destination".to_string(), param_type: "string".to_string(), required: true, description: "Destination path".to_string() },
                     ],
+                },
+                BundleTool {
+                    name: "search_files".to_string(),
+                    description: "Recursively search for files/directories matching glob patterns".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Starting directory".to_string() },
+                        BundleToolParameter { name: "pattern".to_string(), param_type: "string".to_string(), required: true, description: "Search pattern (glob)".to_string() },
+                        BundleToolParameter { name: "excludePatterns".to_string(), param_type: "array".to_string(), required: false, description: "Patterns to exclude".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "directory_tree".to_string(),
+                    description: "Get recursive JSON tree structure of directory contents".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "Starting directory".to_string() },
+                        BundleToolParameter { name: "excludePatterns".to_string(), param_type: "array".to_string(), required: false, description: "Patterns to exclude (glob)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "get_file_info".to_string(),
+                    description: "Get detailed file/directory metadata (size, timestamps, permissions)".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File or directory path".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "list_allowed_directories".to_string(),
+                    description: "List all directories the server is allowed to access".to_string(),
+                    parameters: vec![],
                 },
             ],
             config_template: McpConfigTemplate {
@@ -389,6 +416,136 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             update_available: false,
         },
 
+        // Git - Local repository operations
+        McpBundle {
+            id: "mcp-git".to_string(),
+            name: "Git".to_string(),
+            version: "0.6.2".to_string(),
+            description: "Git repository operations — status, diff, commit, branch, log, and more. Read, search, and manipulate local Git repositories.".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "development".to_string(),
+            icon_url: Some("https://git-scm.com/images/logos/downloads/Git-Icon-1788C.png".to_string()),
+            npm_package: None,
+            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/git".to_string()),
+            documentation_url: Some("https://modelcontextprotocol.io/docs/servers/git".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "git_status".to_string(),
+                    description: "Shows the working tree status".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_diff_unstaged".to_string(),
+                    description: "Shows changes in working directory not yet staged".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "context_lines".to_string(), param_type: "number".to_string(), required: false, description: "Number of context lines (default: 3)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_diff_staged".to_string(),
+                    description: "Shows changes that are staged for commit".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "context_lines".to_string(), param_type: "number".to_string(), required: false, description: "Number of context lines (default: 3)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_diff".to_string(),
+                    description: "Shows differences between branches or commits".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "target".to_string(), param_type: "string".to_string(), required: true, description: "Target branch or commit to compare with".to_string() },
+                        BundleToolParameter { name: "context_lines".to_string(), param_type: "number".to_string(), required: false, description: "Number of context lines (default: 3)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_commit".to_string(),
+                    description: "Records changes to the repository".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "message".to_string(), param_type: "string".to_string(), required: true, description: "Commit message".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_add".to_string(),
+                    description: "Adds file contents to the staging area".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "files".to_string(), param_type: "array".to_string(), required: true, description: "Array of file paths to stage".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_reset".to_string(),
+                    description: "Unstages all staged changes".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_log".to_string(),
+                    description: "Shows commit logs with optional date filtering".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "max_count".to_string(), param_type: "number".to_string(), required: false, description: "Maximum commits to show (default: 10)".to_string() },
+                        BundleToolParameter { name: "start_timestamp".to_string(), param_type: "string".to_string(), required: false, description: "Start date filter (ISO 8601 or relative)".to_string() },
+                        BundleToolParameter { name: "end_timestamp".to_string(), param_type: "string".to_string(), required: false, description: "End date filter (ISO 8601 or relative)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_create_branch".to_string(),
+                    description: "Creates a new branch".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "branch_name".to_string(), param_type: "string".to_string(), required: true, description: "Name of the new branch".to_string() },
+                        BundleToolParameter { name: "base_branch".to_string(), param_type: "string".to_string(), required: false, description: "Base branch (defaults to current)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_checkout".to_string(),
+                    description: "Switches branches".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "branch_name".to_string(), param_type: "string".to_string(), required: true, description: "Branch to checkout".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_show".to_string(),
+                    description: "Shows the contents of a commit".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "revision".to_string(), param_type: "string".to_string(), required: true, description: "Revision (commit hash, branch, tag)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "git_branch".to_string(),
+                    description: "List Git branches (local, remote, or all)".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "repo_path".to_string(), param_type: "string".to_string(), required: true, description: "Path to Git repository".to_string() },
+                        BundleToolParameter { name: "branch_type".to_string(), param_type: "string".to_string(), required: true, description: "local, remote, or all".to_string() },
+                        BundleToolParameter { name: "contains".to_string(), param_type: "string".to_string(), required: false, description: "Filter branches containing this commit SHA".to_string() },
+                        BundleToolParameter { name: "not_contains".to_string(), param_type: "string".to_string(), required: false, description: "Filter branches NOT containing this commit SHA".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "uvx".to_string(),
+                args: vec!["mcp-server-git".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.8,
+            downloads: 142000,
+            verified: true,
+            featured: true,
+            tags: vec!["git".to_string(), "version-control".to_string(), "development".to_string(), "diff".to_string(), "commit".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
         // GitHub
         McpBundle {
             id: "mcp-github".to_string(),
@@ -399,8 +556,8 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             category: "development".to_string(),
             icon_url: Some("https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png".to_string()),
             npm_package: Some("@modelcontextprotocol/server-github".to_string()),
-            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/github".to_string()),
-            documentation_url: Some("https://modelcontextprotocol.io/docs/servers/github".to_string()),
+            github_url: Some("https://github.com/github/github-mcp-server".to_string()),
+            documentation_url: Some("https://github.com/github/github-mcp-server#readme".to_string()),
             tools: vec![
                 BundleTool {
                     name: "create_or_update_file".to_string(),
@@ -410,6 +567,19 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                         BundleToolParameter { name: "repo".to_string(), param_type: "string".to_string(), required: true, description: "Repository name".to_string() },
                         BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File path".to_string() },
                         BundleToolParameter { name: "content".to_string(), param_type: "string".to_string(), required: true, description: "File content".to_string() },
+                        BundleToolParameter { name: "message".to_string(), param_type: "string".to_string(), required: true, description: "Commit message".to_string() },
+                        BundleToolParameter { name: "branch".to_string(), param_type: "string".to_string(), required: true, description: "Branch to commit to".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "push_files".to_string(),
+                    description: "Push multiple files in a single commit".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "owner".to_string(), param_type: "string".to_string(), required: true, description: "Repository owner".to_string() },
+                        BundleToolParameter { name: "repo".to_string(), param_type: "string".to_string(), required: true, description: "Repository name".to_string() },
+                        BundleToolParameter { name: "branch".to_string(), param_type: "string".to_string(), required: true, description: "Branch to push to".to_string() },
+                        BundleToolParameter { name: "files".to_string(), param_type: "array".to_string(), required: true, description: "Array of {path, content} objects".to_string() },
+                        BundleToolParameter { name: "message".to_string(), param_type: "string".to_string(), required: true, description: "Commit message".to_string() },
                     ],
                 },
                 BundleTool {
@@ -426,6 +596,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                         BundleToolParameter { name: "owner".to_string(), param_type: "string".to_string(), required: true, description: "Repository owner".to_string() },
                         BundleToolParameter { name: "repo".to_string(), param_type: "string".to_string(), required: true, description: "Repository name".to_string() },
                         BundleToolParameter { name: "title".to_string(), param_type: "string".to_string(), required: true, description: "Issue title".to_string() },
+                        BundleToolParameter { name: "body".to_string(), param_type: "string".to_string(), required: false, description: "Issue body".to_string() },
                     ],
                 },
                 BundleTool {
@@ -437,12 +608,30 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                         BundleToolParameter { name: "title".to_string(), param_type: "string".to_string(), required: true, description: "PR title".to_string() },
                         BundleToolParameter { name: "head".to_string(), param_type: "string".to_string(), required: true, description: "Head branch".to_string() },
                         BundleToolParameter { name: "base".to_string(), param_type: "string".to_string(), required: true, description: "Base branch".to_string() },
+                        BundleToolParameter { name: "body".to_string(), param_type: "string".to_string(), required: false, description: "PR body/description".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "search_code".to_string(),
+                    description: "Search for code across GitHub".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "query".to_string(), param_type: "string".to_string(), required: true, description: "Code search query".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "get_file_contents".to_string(),
+                    description: "Retrieve the contents of a file or directory from a repository".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "owner".to_string(), param_type: "string".to_string(), required: true, description: "Repository owner".to_string() },
+                        BundleToolParameter { name: "repo".to_string(), param_type: "string".to_string(), required: true, description: "Repository name".to_string() },
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File path".to_string() },
+                        BundleToolParameter { name: "branch".to_string(), param_type: "string".to_string(), required: false, description: "Branch (optional)".to_string() },
                     ],
                 },
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@modelcontextprotocol/server-github".to_string()],
+                args: vec!["-y".to_string(), "@github/github-mcp-server".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("GITHUB_PERSONAL_ACCESS_TOKEN".to_string(), "<from_credential_manager>".to_string());
@@ -478,27 +667,66 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             category: "productivity".to_string(),
             icon_url: Some("https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png".to_string()),
             npm_package: Some("@modelcontextprotocol/server-slack".to_string()),
-            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/slack".to_string()),
-            documentation_url: Some("https://modelcontextprotocol.io/docs/servers/slack".to_string()),
+            github_url: Some("https://github.com/modelcontextprotocol/server-slack".to_string()),
+            documentation_url: Some("https://github.com/modelcontextprotocol/server-slack#readme".to_string()),
             tools: vec![
-                BundleTool {
-                    name: "slack_post_message".to_string(),
-                    description: "Post a message to a Slack channel".to_string(),
-                    parameters: vec![
-                        BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID or name".to_string() },
-                        BundleToolParameter { name: "text".to_string(), param_type: "string".to_string(), required: true, description: "Message text".to_string() },
-                    ],
-                },
                 BundleTool {
                     name: "slack_list_channels".to_string(),
                     description: "List available Slack channels".to_string(),
                     parameters: vec![],
                 },
                 BundleTool {
-                    name: "slack_get_channel_history".to_string(),
-                    description: "Get message history from a channel".to_string(),
+                    name: "slack_post_message".to_string(),
+                    description: "Post a new message to a Slack channel".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID or name".to_string() },
+                        BundleToolParameter { name: "text".to_string(), param_type: "string".to_string(), required: true, description: "Message text".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "slack_reply_to_thread".to_string(),
+                    description: "Reply to a specific message thread".to_string(),
                     parameters: vec![
                         BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID".to_string() },
+                        BundleToolParameter { name: "thread_ts".to_string(), param_type: "string".to_string(), required: true, description: "Thread timestamp".to_string() },
+                        BundleToolParameter { name: "text".to_string(), param_type: "string".to_string(), required: true, description: "Reply text".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "slack_add_reaction".to_string(),
+                    description: "Add an emoji reaction to a message".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID".to_string() },
+                        BundleToolParameter { name: "timestamp".to_string(), param_type: "string".to_string(), required: true, description: "Message timestamp".to_string() },
+                        BundleToolParameter { name: "name".to_string(), param_type: "string".to_string(), required: true, description: "Emoji name (without colons)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "slack_get_channel_history".to_string(),
+                    description: "Get recent messages from a channel".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID".to_string() },
+                        BundleToolParameter { name: "limit".to_string(), param_type: "number".to_string(), required: false, description: "Number of messages to retrieve".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "slack_get_thread_replies".to_string(),
+                    description: "Get all replies in a message thread".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "channel".to_string(), param_type: "string".to_string(), required: true, description: "Channel ID".to_string() },
+                        BundleToolParameter { name: "thread_ts".to_string(), param_type: "string".to_string(), required: true, description: "Thread timestamp".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "slack_get_users".to_string(),
+                    description: "Get a list of workspace users".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "slack_get_user_profile".to_string(),
+                    description: "Get detailed profile information for a user".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "user".to_string(), param_type: "string".to_string(), required: true, description: "User ID".to_string() },
                     ],
                 },
             ],
@@ -548,7 +776,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             category: "data".to_string(),
             icon_url: Some("https://www.postgresql.org/media/img/about/press/elephant.png".to_string()),
             npm_package: Some("@modelcontextprotocol/server-postgres".to_string()),
-            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/postgres".to_string()),
+            github_url: Some("https://github.com/modelcontextprotocol/server-postgres".to_string()),
             documentation_url: Some("https://modelcontextprotocol.io/docs/servers/postgres".to_string()),
             tools: vec![
                 BundleTool {
@@ -602,23 +830,63 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             tools: vec![
                 BundleTool {
                     name: "create_entities".to_string(),
-                    description: "Create new entities in the knowledge graph".to_string(),
+                    description: "Create multiple new entities in the knowledge graph".to_string(),
                     parameters: vec![
-                        BundleToolParameter { name: "entities".to_string(), param_type: "array".to_string(), required: true, description: "Array of entities to create".to_string() },
+                        BundleToolParameter { name: "entities".to_string(), param_type: "array".to_string(), required: true, description: "Array of {name, entityType, observations} objects".to_string() },
                     ],
                 },
                 BundleTool {
                     name: "create_relations".to_string(),
-                    description: "Create relations between entities".to_string(),
+                    description: "Create multiple new relations between entities".to_string(),
                     parameters: vec![
-                        BundleToolParameter { name: "relations".to_string(), param_type: "array".to_string(), required: true, description: "Array of relations".to_string() },
+                        BundleToolParameter { name: "relations".to_string(), param_type: "array".to_string(), required: true, description: "Array of {from, to, relationType} objects".to_string() },
                     ],
                 },
                 BundleTool {
+                    name: "add_observations".to_string(),
+                    description: "Add new observations to existing entities".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "observations".to_string(), param_type: "array".to_string(), required: true, description: "Array of {entityName, contents} objects".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "delete_entities".to_string(),
+                    description: "Remove entities and their associated relations".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "entityNames".to_string(), param_type: "array".to_string(), required: true, description: "Array of entity names to delete".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "delete_observations".to_string(),
+                    description: "Remove specific observations from entities".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "deletions".to_string(), param_type: "array".to_string(), required: true, description: "Array of {entityName, observations} objects".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "delete_relations".to_string(),
+                    description: "Remove specific relations from the graph".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "relations".to_string(), param_type: "array".to_string(), required: true, description: "Array of {from, to, relationType} objects".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "read_graph".to_string(),
+                    description: "Read the entire knowledge graph".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
                     name: "search_nodes".to_string(),
-                    description: "Search for entities in the knowledge graph".to_string(),
+                    description: "Search for nodes by name, type, or observation content".to_string(),
                     parameters: vec![
                         BundleToolParameter { name: "query".to_string(), param_type: "string".to_string(), required: true, description: "Search query".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "open_nodes".to_string(),
+                    description: "Retrieve specific nodes by name with their relations".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "names".to_string(), param_type: "array".to_string(), required: true, description: "Array of entity names to retrieve".to_string() },
                     ],
                 },
             ],
@@ -673,11 +941,33 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     ],
                 },
                 BundleTool {
+                    name: "puppeteer_hover".to_string(),
+                    description: "Hover over an element on the page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "selector".to_string(), param_type: "string".to_string(), required: true, description: "CSS selector".to_string() },
+                    ],
+                },
+                BundleTool {
                     name: "puppeteer_fill".to_string(),
                     description: "Fill an input field".to_string(),
                     parameters: vec![
                         BundleToolParameter { name: "selector".to_string(), param_type: "string".to_string(), required: true, description: "CSS selector".to_string() },
                         BundleToolParameter { name: "value".to_string(), param_type: "string".to_string(), required: true, description: "Value to fill".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "puppeteer_select".to_string(),
+                    description: "Select an option from a dropdown".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "selector".to_string(), param_type: "string".to_string(), required: true, description: "CSS selector".to_string() },
+                        BundleToolParameter { name: "value".to_string(), param_type: "string".to_string(), required: true, description: "Value to select".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "puppeteer_evaluate".to_string(),
+                    description: "Evaluate JavaScript on the page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "script".to_string(), param_type: "string".to_string(), required: true, description: "JavaScript code to evaluate".to_string() },
                     ],
                 },
             ],
@@ -712,10 +1002,12 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             tools: vec![
                 BundleTool {
                     name: "fetch".to_string(),
-                    description: "Fetch a URL and return content as markdown".to_string(),
+                    description: "Fetch a URL and extract its contents as markdown".to_string(),
                     parameters: vec![
                         BundleToolParameter { name: "url".to_string(), param_type: "string".to_string(), required: true, description: "URL to fetch".to_string() },
-                        BundleToolParameter { name: "max_length".to_string(), param_type: "number".to_string(), required: false, description: "Maximum content length".to_string() },
+                        BundleToolParameter { name: "max_length".to_string(), param_type: "number".to_string(), required: false, description: "Maximum number of characters to return (default: 5000)".to_string() },
+                        BundleToolParameter { name: "start_index".to_string(), param_type: "number".to_string(), required: false, description: "Start content from this character index (default: 0)".to_string() },
+                        BundleToolParameter { name: "raw".to_string(), param_type: "boolean".to_string(), required: false, description: "Get raw content without markdown conversion (default: false)".to_string() },
                     ],
                 },
             ],
@@ -749,12 +1041,18 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             documentation_url: Some("https://modelcontextprotocol.io/docs/servers/sequential-thinking".to_string()),
             tools: vec![
                 BundleTool {
-                    name: "create_thought".to_string(),
-                    description: "Add a thought to the reasoning chain".to_string(),
+                    name: "sequential_thinking".to_string(),
+                    description: "Facilitate step-by-step thinking for problem-solving and analysis".to_string(),
                     parameters: vec![
-                        BundleToolParameter { name: "thought".to_string(), param_type: "string".to_string(), required: true, description: "The thought content".to_string() },
-                        BundleToolParameter { name: "thought_number".to_string(), param_type: "number".to_string(), required: true, description: "Sequence number".to_string() },
-                        BundleToolParameter { name: "total_thoughts".to_string(), param_type: "number".to_string(), required: true, description: "Estimated total thoughts".to_string() },
+                        BundleToolParameter { name: "thought".to_string(), param_type: "string".to_string(), required: true, description: "The current thinking step".to_string() },
+                        BundleToolParameter { name: "nextThoughtNeeded".to_string(), param_type: "boolean".to_string(), required: true, description: "Whether another thought step is needed".to_string() },
+                        BundleToolParameter { name: "thoughtNumber".to_string(), param_type: "number".to_string(), required: true, description: "Current thought number".to_string() },
+                        BundleToolParameter { name: "totalThoughts".to_string(), param_type: "number".to_string(), required: true, description: "Estimated total thoughts needed".to_string() },
+                        BundleToolParameter { name: "isRevision".to_string(), param_type: "boolean".to_string(), required: false, description: "Whether this revises previous thinking".to_string() },
+                        BundleToolParameter { name: "revisesThought".to_string(), param_type: "number".to_string(), required: false, description: "Which thought is being reconsidered".to_string() },
+                        BundleToolParameter { name: "branchFromThought".to_string(), param_type: "number".to_string(), required: false, description: "Branching point thought number".to_string() },
+                        BundleToolParameter { name: "branchId".to_string(), param_type: "string".to_string(), required: false, description: "Branch identifier".to_string() },
+                        BundleToolParameter { name: "needsMoreThoughts".to_string(), param_type: "boolean".to_string(), required: false, description: "If more thoughts are needed beyond estimate".to_string() },
                     ],
                 },
             ],
@@ -842,7 +1140,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             author: "Community".to_string(),
             category: "productivity".to_string(),
             icon_url: Some("https://upload.wikimedia.org/wikipedia/commons/e/e9/Notion-logo.svg".to_string()),
-            npm_package: Some("@notionhq/mcp-server".to_string()),
+            npm_package: Some("@notionhq/notion-mcp-server".to_string()),
             github_url: Some("https://github.com/makenotion/notion-mcp-server".to_string()),
             documentation_url: Some("https://developers.notion.com/".to_string()),
             tools: vec![
@@ -871,7 +1169,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@notionhq/mcp-server".to_string()],
+                args: vec!["-y".to_string(), "@notionhq/notion-mcp-server".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("NOTION_API_KEY".to_string(), "<from_credential_manager>".to_string());
@@ -906,9 +1204,9 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             author: "Community".to_string(),
             category: "development".to_string(),
             icon_url: Some("https://linear.app/static/apple-touch-icon.png".to_string()),
-            npm_package: Some("@linear/mcp-server".to_string()),
-            github_url: Some("https://github.com/linear/linear-mcp-server".to_string()),
-            documentation_url: Some("https://developers.linear.app/".to_string()),
+            npm_package: Some("@larryhudson/linear-mcp-server".to_string()),
+            github_url: Some("https://github.com/larryhudson/linear-mcp-server".to_string()),
+            documentation_url: Some("https://github.com/larryhudson/linear-mcp-server#readme".to_string()),
             tools: vec![
                 BundleTool {
                     name: "linear_create_issue".to_string(),
@@ -925,10 +1223,17 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                         BundleToolParameter { name: "query".to_string(), param_type: "string".to_string(), required: true, description: "Search query".to_string() },
                     ],
                 },
+                BundleTool {
+                    name: "linear_get_issue".to_string(),
+                    description: "Get details of a specific issue".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "issue_id".to_string(), param_type: "string".to_string(), required: true, description: "Issue ID".to_string() },
+                    ],
+                },
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@linear/mcp-server".to_string()],
+                args: vec!["-y".to_string(), "@larryhudson/linear-mcp-server".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("LINEAR_API_KEY".to_string(), "<from_credential_manager>".to_string());
@@ -1088,8 +1393,8 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             author: "Community".to_string(),
             category: "infrastructure".to_string(),
             icon_url: Some("https://www.cloudflare.com/img/logo-cloudflare-dark.svg".to_string()),
-            npm_package: Some("@cloudflare/mcp-server".to_string()),
-            github_url: Some("https://github.com/cloudflare/mcp-server".to_string()),
+            npm_package: Some("@cloudflare/mcp-server-cloudflare".to_string()),
+            github_url: Some("https://github.com/cloudflare/mcp-server-cloudflare".to_string()),
             documentation_url: Some("https://developers.cloudflare.com/".to_string()),
             tools: vec![
                 BundleTool {
@@ -1116,7 +1421,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@cloudflare/mcp-server".to_string()],
+                args: vec!["-y".to_string(), "@cloudflare/mcp-server-cloudflare".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("CLOUDFLARE_API_TOKEN".to_string(), "<from_credential_manager>".to_string());
@@ -1145,6 +1450,701 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             verified: false,
             featured: false,
             tags: vec!["cloudflare".to_string(), "workers".to_string(), "kv".to_string(), "r2".to_string(), "d1".to_string(), "edge".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Desktop Commander
+        McpBundle {
+            id: "mcp-desktop-commander".to_string(),
+            name: "Desktop Commander".to_string(),
+            version: "0.2.0".to_string(),
+            description: "Terminal control, file system operations, process management, and diff-based code editing. Supports interactive sessions (SSH, REPL), PDF/Excel read/write, and ripgrep-powered search.".to_string(),
+            author: "wonderwhy-er".to_string(),
+            category: "automation".to_string(),
+            icon_url: Some("https://raw.githubusercontent.com/wonderwhy-er/DesktopCommanderMCP/main/assets/icon.png".to_string()),
+            npm_package: Some("desktop-commander".to_string()),
+            github_url: Some("https://github.com/wonderwhy-er/DesktopCommanderMCP".to_string()),
+            documentation_url: Some("https://github.com/wonderwhy-er/DesktopCommanderMCP#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "start_process".to_string(),
+                    description: "Start a terminal process with interactive session support".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "command".to_string(), param_type: "string".to_string(), required: true, description: "Command to execute".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "read_file".to_string(),
+                    description: "Read file contents with offset and length support".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File path to read".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "write_file".to_string(),
+                    description: "Write content to a file".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "path".to_string(), param_type: "string".to_string(), required: true, description: "File path".to_string() },
+                        BundleToolParameter { name: "content".to_string(), param_type: "string".to_string(), required: true, description: "Content to write".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "edit_block".to_string(),
+                    description: "Surgical search/replace with fuzzy matching and diff output".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "file_path".to_string(), param_type: "string".to_string(), required: true, description: "File to edit".to_string() },
+                        BundleToolParameter { name: "search".to_string(), param_type: "string".to_string(), required: true, description: "Text to find".to_string() },
+                        BundleToolParameter { name: "replace".to_string(), param_type: "string".to_string(), required: true, description: "Replacement text".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "list_processes".to_string(),
+                    description: "List running system processes".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "kill_process".to_string(),
+                    description: "Kill a system process by PID".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "pid".to_string(), param_type: "number".to_string(), required: true, description: "Process ID".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "desktop-commander".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.8,
+            downloads: 156000,
+            verified: false,
+            featured: true,
+            tags: vec!["terminal".to_string(), "process".to_string(), "file-system".to_string(), "code-editing".to_string(), "automation".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Time
+        McpBundle {
+            id: "mcp-time".to_string(),
+            name: "Time".to_string(),
+            version: "0.6.2".to_string(),
+            description: "Get current time, convert between timezones, and perform date/time calculations.".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "productivity".to_string(),
+            icon_url: Some("https://raw.githubusercontent.com/modelcontextprotocol/servers/main/assets/time.svg".to_string()),
+            npm_package: Some("@modelcontextprotocol/server-time".to_string()),
+            github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/time".to_string()),
+            documentation_url: Some("https://modelcontextprotocol.io/docs/servers/time".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "get_current_time".to_string(),
+                    description: "Get the current time in a specific timezone".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "timezone".to_string(), param_type: "string".to_string(), required: true, description: "IANA timezone name (e.g. America/New_York)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "convert_time".to_string(),
+                    description: "Convert time between timezones".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "source_timezone".to_string(), param_type: "string".to_string(), required: true, description: "Source IANA timezone name".to_string() },
+                        BundleToolParameter { name: "time".to_string(), param_type: "string".to_string(), required: true, description: "Time in 24-hour format (HH:MM)".to_string() },
+                        BundleToolParameter { name: "target_timezone".to_string(), param_type: "string".to_string(), required: true, description: "Target IANA timezone name".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@modelcontextprotocol/server-time".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.1,
+            downloads: 18000,
+            verified: true,
+            featured: false,
+            tags: vec!["time".to_string(), "timezone".to_string(), "date".to_string(), "utility".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Apidog - API Specification Integration
+        McpBundle {
+            id: "mcp-apidog".to_string(),
+            name: "Apidog".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Connect AI to your API specifications. Generate DTOs, controllers, and client code from OpenAPI/Swagger docs. Supports Apidog projects, online docs, and local spec files.".to_string(),
+            author: "Apidog".to_string(),
+            category: "development".to_string(),
+            icon_url: Some("https://assets.apidog.com/app/project-icon/custom/20230512/24e0cf63-bf05-4e3e-ae1c-e43deb490b49.png".to_string()),
+            npm_package: Some("apidog-mcp-server".to_string()),
+            github_url: Some("https://github.com/nicepkg/apidog-mcp-server".to_string()),
+            documentation_url: Some("https://docs.apidog.com/mcp".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "list_api_endpoints".to_string(),
+                    description: "List all API endpoints from the specification".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "get_api_endpoint".to_string(),
+                    description: "Get details of a specific API endpoint".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "endpoint".to_string(), param_type: "string".to_string(), required: true, description: "Endpoint path (e.g. /api/users)".to_string() },
+                        BundleToolParameter { name: "method".to_string(), param_type: "string".to_string(), required: false, description: "HTTP method (GET, POST, etc.)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "search_api".to_string(),
+                    description: "Search API specifications by keyword".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "query".to_string(), param_type: "string".to_string(), required: true, description: "Search query".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "apidog-mcp-server@latest".to_string(), "--oas=<spec-path-or-url>".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.6,
+            downloads: 89000,
+            verified: false,
+            featured: true,
+            tags: vec!["api".to_string(), "openapi".to_string(), "swagger".to_string(), "code-generation".to_string(), "development".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Figma - Design to Code
+        McpBundle {
+            id: "mcp-figma".to_string(),
+            name: "Figma".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Bridge design and code. Convert Figma layouts to UI components, inspect design tokens, and align development with design specs.".to_string(),
+            author: "Community".to_string(),
+            category: "design".to_string(),
+            icon_url: Some("https://cdn.sanity.io/images/599r6htc/regionalized/f07b8be25c5e19990cb1cfbdeb3ebe6ee93bb3f5-1080x1080.svg".to_string()),
+            npm_package: Some("@sethdouglasford/mcp-figma".to_string()),
+            github_url: Some("https://github.com/sethdouglasford/mcp-figma".to_string()),
+            documentation_url: Some("https://github.com/sethdouglasford/mcp-figma#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "figma_get_file".to_string(),
+                    description: "Get a Figma file's structure and contents".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "file_key".to_string(), param_type: "string".to_string(), required: true, description: "Figma file key from URL".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "figma_get_node".to_string(),
+                    description: "Get a specific node's properties and children".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "file_key".to_string(), param_type: "string".to_string(), required: true, description: "Figma file key".to_string() },
+                        BundleToolParameter { name: "node_id".to_string(), param_type: "string".to_string(), required: true, description: "Node ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "figma_get_styles".to_string(),
+                    description: "Get design tokens (colors, typography, spacing) from a file".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "file_key".to_string(), param_type: "string".to_string(), required: true, description: "Figma file key".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@anthropic/mcp-server-figma".to_string()],
+                env: {
+                    let mut env = HashMap::new();
+                    env.insert("FIGMA_ACCESS_TOKEN".to_string(), "<from_credential_manager>".to_string());
+                    env
+                },
+            },
+            required_credentials: vec![
+                RequiredCredential {
+                    env_var: "FIGMA_ACCESS_TOKEN".to_string(),
+                    display_name: "Figma Access Token".to_string(),
+                    description: "Personal access token from Figma settings.".to_string(),
+                    help_url: Some("https://www.figma.com/developers/api#access-tokens".to_string()),
+                    required: true,
+                },
+            ],
+            rating: 4.5,
+            downloads: 42000,
+            verified: false,
+            featured: true,
+            tags: vec!["figma".to_string(), "design".to_string(), "ui".to_string(), "components".to_string(), "prototyping".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Zapier - Cross-App Automation
+        McpBundle {
+            id: "mcp-zapier".to_string(),
+            name: "Zapier".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Cross-app automation via Zapier. Trigger actions in Slack, Gmail, Trello, and hundreds of other services from AI prompts.".to_string(),
+            author: "Composio".to_string(),
+            category: "automation".to_string(),
+            icon_url: Some("https://cdn.zapier.com/ssr/15fde625cfb111391887504ad54e7de0/favicon.ico".to_string()),
+            npm_package: Some("@composio/mcp".to_string()),
+            github_url: Some("https://github.com/composiohq/composio".to_string()),
+            documentation_url: Some("https://docs.composio.dev/".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "zapier_trigger".to_string(),
+                    description: "Trigger a Zapier action or workflow".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "action".to_string(), param_type: "string".to_string(), required: true, description: "Action to trigger".to_string() },
+                        BundleToolParameter { name: "params".to_string(), param_type: "object".to_string(), required: false, description: "Action parameters".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "zapier_list_actions".to_string(),
+                    description: "List available Zapier actions and integrations".to_string(),
+                    parameters: vec![],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@composio/mcp@latest".to_string(), "setup".to_string(), "zapier".to_string()],
+                env: {
+                    let mut env = HashMap::new();
+                    env.insert("COMPOSIO_API_KEY".to_string(), "<from_credential_manager>".to_string());
+                    env
+                },
+            },
+            required_credentials: vec![
+                RequiredCredential {
+                    env_var: "COMPOSIO_API_KEY".to_string(),
+                    display_name: "Composio API Key".to_string(),
+                    description: "API key from Composio dashboard for Zapier integration.".to_string(),
+                    help_url: Some("https://app.composio.dev/settings".to_string()),
+                    required: true,
+                },
+            ],
+            rating: 4.4,
+            downloads: 31000,
+            verified: false,
+            featured: false,
+            tags: vec!["zapier".to_string(), "automation".to_string(), "workflow".to_string(), "integration".to_string(), "no-code".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Playwright - Browser automation by Microsoft
+        McpBundle {
+            id: "mcp-playwright".to_string(),
+            name: "Playwright".to_string(),
+            version: "0.0.22".to_string(),
+            description: "Browser automation using Playwright by Microsoft. Interact with web pages through structured accessibility snapshots — click, type, navigate, screenshot, and run Playwright code.".to_string(),
+            author: "Microsoft".to_string(),
+            category: "automation".to_string(),
+            icon_url: Some("https://playwright.dev/img/playwright-logo.svg".to_string()),
+            npm_package: Some("@playwright/mcp".to_string()),
+            github_url: Some("https://github.com/microsoft/playwright-mcp".to_string()),
+            documentation_url: Some("https://github.com/microsoft/playwright-mcp#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "browser_navigate".to_string(),
+                    description: "Navigate to a URL".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "url".to_string(), param_type: "string".to_string(), required: true, description: "The URL to navigate to".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_navigate_back".to_string(),
+                    description: "Go back to the previous page in history".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "browser_snapshot".to_string(),
+                    description: "Capture accessibility snapshot of the current page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "filename".to_string(), param_type: "string".to_string(), required: false, description: "Save snapshot to file".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_click".to_string(),
+                    description: "Perform click on a web page element".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "element".to_string(), param_type: "string".to_string(), required: false, description: "Human-readable element description".to_string() },
+                        BundleToolParameter { name: "ref".to_string(), param_type: "string".to_string(), required: true, description: "Target element reference from page snapshot".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_type".to_string(),
+                    description: "Type text into editable element".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "ref".to_string(), param_type: "string".to_string(), required: true, description: "Target element reference".to_string() },
+                        BundleToolParameter { name: "text".to_string(), param_type: "string".to_string(), required: true, description: "Text to type".to_string() },
+                        BundleToolParameter { name: "submit".to_string(), param_type: "boolean".to_string(), required: false, description: "Press Enter after typing".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_fill_form".to_string(),
+                    description: "Fill multiple form fields at once".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "fields".to_string(), param_type: "array".to_string(), required: true, description: "Fields to fill in".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_select_option".to_string(),
+                    description: "Select an option in a dropdown".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "ref".to_string(), param_type: "string".to_string(), required: true, description: "Target element reference".to_string() },
+                        BundleToolParameter { name: "values".to_string(), param_type: "array".to_string(), required: true, description: "Values to select".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_hover".to_string(),
+                    description: "Hover over element on page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "ref".to_string(), param_type: "string".to_string(), required: true, description: "Target element reference".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_drag".to_string(),
+                    description: "Drag and drop between two elements".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "startRef".to_string(), param_type: "string".to_string(), required: true, description: "Source element reference".to_string() },
+                        BundleToolParameter { name: "endRef".to_string(), param_type: "string".to_string(), required: true, description: "Target element reference".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_press_key".to_string(),
+                    description: "Press a key on the keyboard".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "key".to_string(), param_type: "string".to_string(), required: true, description: "Key name (e.g. ArrowLeft, Enter)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_take_screenshot".to_string(),
+                    description: "Take a screenshot of the current page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "filename".to_string(), param_type: "string".to_string(), required: false, description: "File to save screenshot to".to_string() },
+                        BundleToolParameter { name: "fullPage".to_string(), param_type: "boolean".to_string(), required: false, description: "Capture full scrollable page".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_evaluate".to_string(),
+                    description: "Evaluate JavaScript expression on page".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "function".to_string(), param_type: "string".to_string(), required: true, description: "JavaScript function to execute".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_run_code".to_string(),
+                    description: "Run a Playwright code snippet".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "code".to_string(), param_type: "string".to_string(), required: true, description: "Playwright code function to execute".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_file_upload".to_string(),
+                    description: "Upload one or multiple files".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "paths".to_string(), param_type: "array".to_string(), required: false, description: "Absolute paths to files to upload".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_handle_dialog".to_string(),
+                    description: "Handle a browser dialog (alert, confirm, prompt)".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "accept".to_string(), param_type: "boolean".to_string(), required: true, description: "Whether to accept the dialog".to_string() },
+                        BundleToolParameter { name: "promptText".to_string(), param_type: "string".to_string(), required: false, description: "Text for prompt dialogs".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_console_messages".to_string(),
+                    description: "Returns all console messages".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "level".to_string(), param_type: "string".to_string(), required: false, description: "Console level filter (info, warn, error)".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_network_requests".to_string(),
+                    description: "Returns all network requests since page load".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "includeStatic".to_string(), param_type: "boolean".to_string(), required: false, description: "Include static resources".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_resize".to_string(),
+                    description: "Resize the browser window".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "width".to_string(), param_type: "number".to_string(), required: true, description: "Window width".to_string() },
+                        BundleToolParameter { name: "height".to_string(), param_type: "number".to_string(), required: true, description: "Window height".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "browser_close".to_string(),
+                    description: "Close the browser page".to_string(),
+                    parameters: vec![],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@playwright/mcp@latest".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.9,
+            downloads: 280000,
+            verified: true,
+            featured: true,
+            tags: vec!["browser".to_string(), "playwright".to_string(), "testing".to_string(), "automation".to_string(), "microsoft".to_string(), "e2e".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Vercel - Deployment Management
+        McpBundle {
+            id: "mcp-vercel".to_string(),
+            name: "Vercel".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Manage Vercel deployments, projects, environments, and teams. Monitor deployments, configure environment variables, and deploy from Git.".to_string(),
+            author: "nganiet".to_string(),
+            category: "deployment".to_string(),
+            icon_url: Some("https://vercel.com/favicon.ico".to_string()),
+            npm_package: Some("mcp-vercel".to_string()),
+            github_url: Some("https://github.com/nganiet/mcp-vercel".to_string()),
+            documentation_url: Some("https://github.com/nganiet/mcp-vercel#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "vercel-list-all-deployments".to_string(),
+                    description: "List deployments with filtering".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "projectId".to_string(), param_type: "string".to_string(), required: false, description: "Filter by project ID".to_string() },
+                        BundleToolParameter { name: "limit".to_string(), param_type: "number".to_string(), required: false, description: "Max results".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-get-deployment".to_string(),
+                    description: "Retrieve specific deployment details".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "deploymentId".to_string(), param_type: "string".to_string(), required: true, description: "Deployment ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-list-deployment-files".to_string(),
+                    description: "List files in a deployment".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "deploymentId".to_string(), param_type: "string".to_string(), required: true, description: "Deployment ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-create-deployment".to_string(),
+                    description: "Create a new deployment".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "name".to_string(), param_type: "string".to_string(), required: true, description: "Project name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-create-project".to_string(),
+                    description: "Create a new Vercel project".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "name".to_string(), param_type: "string".to_string(), required: true, description: "Project name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-list-projects".to_string(),
+                    description: "List all projects with pagination".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "limit".to_string(), param_type: "number".to_string(), required: false, description: "Max results".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-find-project".to_string(),
+                    description: "Find a specific project by ID or name".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "idOrName".to_string(), param_type: "string".to_string(), required: true, description: "Project ID or name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-create-environment-variables".to_string(),
+                    description: "Create environment variables for a project".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "projectId".to_string(), param_type: "string".to_string(), required: true, description: "Project ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-get-project-domain".to_string(),
+                    description: "Get domain info for a project".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "projectId".to_string(), param_type: "string".to_string(), required: true, description: "Project ID".to_string() },
+                        BundleToolParameter { name: "domain".to_string(), param_type: "string".to_string(), required: true, description: "Domain name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-get-environments".to_string(),
+                    description: "Access project environment variables".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "projectId".to_string(), param_type: "string".to_string(), required: true, description: "Project ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-create-custom-environment".to_string(),
+                    description: "Create custom environments for projects".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "projectId".to_string(), param_type: "string".to_string(), required: true, description: "Project ID".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "vercel-list-all-teams".to_string(),
+                    description: "List all accessible teams".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "vercel-create-team".to_string(),
+                    description: "Create a new team".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "slug".to_string(), param_type: "string".to_string(), required: true, description: "Team slug".to_string() },
+                        BundleToolParameter { name: "name".to_string(), param_type: "string".to_string(), required: false, description: "Team display name".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "mcp-vercel".to_string()],
+                env: {
+                    let mut env = HashMap::new();
+                    env.insert("VERCEL_API_TOKEN".to_string(), "<from_credential_manager>".to_string());
+                    env
+                },
+            },
+            required_credentials: vec![
+                RequiredCredential {
+                    env_var: "VERCEL_API_TOKEN".to_string(),
+                    display_name: "Vercel API Token".to_string(),
+                    description: "API token from Vercel dashboard for deployment management.".to_string(),
+                    help_url: Some("https://vercel.com/account/tokens".to_string()),
+                    required: true,
+                },
+            ],
+            rating: 4.5,
+            downloads: 18000,
+            verified: false,
+            featured: false,
+            tags: vec!["vercel".to_string(), "deployment".to_string(), "hosting".to_string(), "devops".to_string(), "ci-cd".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // Shadcn UI - Component Library
+        McpBundle {
+            id: "mcp-shadcn-ui".to_string(),
+            name: "Shadcn UI".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Access and manage shadcn/ui components. List, inspect documentation, and install components and blocks with support for npm, pnpm, yarn, and bun.".to_string(),
+            author: "heilgar".to_string(),
+            category: "design".to_string(),
+            icon_url: Some("https://ui.shadcn.com/favicon.ico".to_string()),
+            npm_package: Some("@heilgar/shadcn-ui-mcp-server".to_string()),
+            github_url: Some("https://github.com/heilgar/shadcn-ui-mcp-server".to_string()),
+            documentation_url: Some("https://github.com/heilgar/shadcn-ui-mcp-server#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "list-components".to_string(),
+                    description: "Get the list of available shadcn/ui components".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "get-component-docs".to_string(),
+                    description: "Get documentation for a specific component".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "component".to_string(), param_type: "string".to_string(), required: true, description: "Component name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "install-component".to_string(),
+                    description: "Install a shadcn/ui component".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "component".to_string(), param_type: "string".to_string(), required: true, description: "Component name to install".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "list-blocks".to_string(),
+                    description: "Get the list of available shadcn/ui blocks".to_string(),
+                    parameters: vec![],
+                },
+                BundleTool {
+                    name: "get-block-docs".to_string(),
+                    description: "Get documentation for a specific block".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "block".to_string(), param_type: "string".to_string(), required: true, description: "Block name".to_string() },
+                    ],
+                },
+                BundleTool {
+                    name: "install-blocks".to_string(),
+                    description: "Install a shadcn/ui block".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "block".to_string(), param_type: "string".to_string(), required: true, description: "Block name to install".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@heilgar/shadcn-ui-mcp-server".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.6,
+            downloads: 42000,
+            verified: false,
+            featured: false,
+            tags: vec!["shadcn".to_string(), "ui".to_string(), "components".to_string(), "design-system".to_string(), "react".to_string()],
+            installed: false,
+            installed_version: None,
+            update_available: false,
+        },
+
+        // CodeMCP - Pair Programming
+        McpBundle {
+            id: "mcp-codemcp".to_string(),
+            name: "CodeMCP".to_string(),
+            version: "0.1.0".to_string(),
+            description: "Deep pair-programming assistant. Directly edit files, fix bugs, refactor code, and run tests on your local codebase with Git-versioned edits and restricted shell access.".to_string(),
+            author: "ezyang".to_string(),
+            category: "development".to_string(),
+            icon_url: None,
+            npm_package: None,
+            github_url: Some("https://github.com/ezyang/codemcp".to_string()),
+            documentation_url: Some("https://github.com/ezyang/codemcp#readme".to_string()),
+            tools: vec![
+                BundleTool {
+                    name: "codemcp".to_string(),
+                    description: "Initialize a coding session — edit files, run tests, and apply refactors with Git-versioned changes".to_string(),
+                    parameters: vec![
+                        BundleToolParameter { name: "chat_id".to_string(), param_type: "string".to_string(), required: true, description: "Session identifier".to_string() },
+                        BundleToolParameter { name: "subcmd".to_string(), param_type: "string".to_string(), required: true, description: "Subcommand: InitProject, ReadFile, WriteFile, EditFile, RunCommand".to_string() },
+                    ],
+                },
+            ],
+            config_template: McpConfigTemplate {
+                command: "uvx".to_string(),
+                args: vec!["codemcp".to_string()],
+                env: HashMap::new(),
+            },
+            required_credentials: vec![],
+            rating: 4.5,
+            downloads: 28000,
+            verified: false,
+            featured: false,
+            tags: vec!["coding".to_string(), "pair-programming".to_string(), "refactoring".to_string(), "git".to_string(), "testing".to_string()],
             installed: false,
             installed_version: None,
             update_available: false,

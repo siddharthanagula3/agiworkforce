@@ -1,5 +1,6 @@
-import { GitPullRequest, AlertCircle, GitCommit, MessageSquare } from 'lucide-react';
+import { GitPullRequest, AlertCircle, GitCommit, MessageSquare, Loader2 } from 'lucide-react';
 import type { ToolResultProps } from './index';
+import { cn } from '@/lib/utils';
 
 export interface GitHubPR {
   number: number;
@@ -58,8 +59,36 @@ export interface GitHubCommit {
   };
 }
 
-export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result }) => {
+export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubPR | undefined;
+
+  // Show running state
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+        <span className="text-sm text-muted-foreground">Fetching pull request...</span>
+      </div>
+    );
+  }
+
+  // Show error state if status indicates failure, even if data is null
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
+            {result?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const { title, number, state, html_url, base, head, additions = 0, deletions = 0, user } = data;
@@ -105,8 +134,36 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result }) => {
   );
 };
 
-export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result }) => {
+export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubIssue | undefined;
+
+  // Show running state
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+        <span className="text-sm text-muted-foreground">Fetching issue...</span>
+      </div>
+    );
+  }
+
+  // Show error state if status indicates failure, even if data is null
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
+            {result?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const { title, number, state, html_url, labels = [], comments = 0, user } = data;
@@ -162,8 +219,36 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result }) => {
   );
 };
 
-export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result }) => {
+export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubCommit | undefined;
+
+  // Show running state
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+        <span className="text-sm text-muted-foreground">Fetching commit...</span>
+      </div>
+    );
+  }
+
+  // Show error state if status indicates failure, even if data is null
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
+            {result?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const { message, sha, html_url, author } = data;
@@ -191,7 +276,3 @@ export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result }) => {
     </a>
   );
 };
-
-function cn(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(' ');
-}

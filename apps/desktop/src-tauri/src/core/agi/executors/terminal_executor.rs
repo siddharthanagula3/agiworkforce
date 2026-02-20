@@ -38,8 +38,8 @@ const MAX_STDOUT_BYTES: usize = 10 * 1024 * 1024;
 /// Maximum stderr output in bytes (1MB).
 const MAX_STDERR_BYTES: usize = 1024 * 1024;
 
-/// Default command timeout in milliseconds (60 seconds).
-const DEFAULT_TIMEOUT_MS: u64 = 60_000;
+/// Default command timeout in milliseconds (120 seconds).
+const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 /// Maximum command timeout in milliseconds (5 minutes).
 const MAX_TIMEOUT_MS: u64 = 300_000;
@@ -49,6 +49,17 @@ const MAX_TIMEOUT_MS: u64 = 300_000;
 /// Executes shell commands with security controls, timeout handling,
 /// and streaming output support.
 pub struct TerminalExecutor;
+
+/// Security mode for command execution.
+///
+/// - `Blocklist`: Only blocks dangerous commands (default, backward compatible)
+/// - `Allowlist`: Only allows specific safe commands
+/// - `BlocklistAndAllowlist`: Requires command to match allowlist AND not match blocklist
+pub enum SecurityMode {
+    Blocklist,
+    Allowlist,
+    BlocklistAndAllowlist,
+}
 
 impl TerminalExecutor {
     /// Create a new terminal executor.
@@ -159,19 +170,155 @@ impl TerminalExecutor {
     /// Additional blocked command prefixes for extra safety.
     const BLOCKED_PREFIXES: &'static [&'static str] = &["sudo dd ", "sudo mkfs", "sudo rm -rf /"];
 
-    /// Validate a command against the security blocklist.
+    /// Default allowlist: safe commands that are always allowed.
+    ///
+    /// Only used when security mode is Allowlist or BlocklistAndAllowlist.
+    /// Commands can use wildcards: "*" matches any characters.
+    const DEFAULT_ALLOWLIST: &'static [&'static str] = &[
+        // File listing and navigation
+        "ls",
+        "ls *",
+        "ls -*",
+        "cd",
+        "pwd",
+        "tree",
+        "find",
+        // File reading
+        "cat",
+        "head",
+        "tail",
+        "less",
+        "more",
+        "grep",
+        "rg",
+        "fd",
+        // Git commands
+        "git status",
+        "git log",
+        "git diff",
+        "git show",
+        "git branch",
+        "git checkout *",
+        "git fetch",
+        "git pull",
+        "git clone",
+        "git init",
+        "git add",
+        "git commit",
+        "git push",
+        "git remote *",
+        "git stash",
+        "git stash *",
+        "git reset *",
+        "git merge *",
+        "git rebase *",
+        // Package managers
+        "npm *",
+        "pnpm *",
+        "yarn *",
+        "cargo *",
+        "pip *",
+        "pip3 *",
+        "python *",
+        "python3 *",
+        "go *",
+        "make *",
+        "cmake *",
+        // Build tools
+        "npm install",
+        "pnpm install",
+        "yarn install",
+        "npm run *",
+        "pnpm run *",
+        "yarn run *",
+        "npm test",
+        "pnpm test",
+        "yarn test",
+        "npm build",
+        "pnpm build",
+        "yarn build",
+        // Development tools
+        "node *",
+        "npx *",
+        "bun *",
+        "deno *",
+        "rustc *",
+        "rustup *",
+        // Text editors (non-interactive)
+        "vim -c *",
+        "nano *",
+        "emacs *",
+        // Utilities
+        "curl *",
+        "wget *",
+        "tar *",
+        "zip *",
+        "unzip *",
+        "gzip *",
+        "gunzip *",
+        "chmod *",
+        "chown *",
+        "cp *",
+        "mv *",
+        "mkdir *",
+        "rmdir *",
+        "touch *",
+        "echo *",
+        "printf *",
+        "date *",
+        "whoami",
+        "hostname",
+        "uname *",
+        "top *",
+        "htop *",
+        "ps *",
+        "kill *",
+        "killall *",
+        "df *",
+        "du *",
+        "free *",
+        "ping *",
+        "nc *",
+        "netstat *",
+        "ssh *",
+        "scp *",
+        "rsync *",
+        // Docker
+        "docker *",
+        "docker-compose *",
+        // Kubernetes
+        "kubectl *",
+        // Cloud CLIs
+        "aws *",
+        "gcloud *",
+        "az *",
+        // Misc
+        "which",
+        "type",
+        "command -v",
+        "env",
+        "printenv",
+        "export *",
+        "source *",
+        "alias *",
+        "history *",
+    ];
+
+    /// Validate a command against the security blocklist and/or allowlist.
     ///
     /// # Arguments
     ///
     /// * `command` - The command string to validate
+    /// * `security_mode` - The security mode to use (blocklist, allowlist, or both)
     ///
     /// # Returns
     ///
     /// `Ok(())` if the command is safe, or an error if blocked.
-    fn validate_command(&self, command: &str) -> Result<()> {
+    fn validate_command(&self, command: &str, security_mode: &SecurityMode) -> Result<()> {
         let cmd_lower = command.to_lowercase();
         let cmd_normalized = cmd_lower.replace(['\t', '\n', '\r'], " ");
 
+        // Check blocklist first (always checked regardless of mode)
         for pattern in Self::BLOCKED_PATTERNS {
             if cmd_normalized.contains(&pattern.to_lowercase()) {
                 tracing::error!(
@@ -198,7 +345,52 @@ impl TerminalExecutor {
             }
         }
 
+        // Check allowlist based on security mode
+        match security_mode {
+            SecurityMode::Allowlist | SecurityMode::BlocklistAndAllowlist => {
+                let allowed = Self::DEFAULT_ALLOWLIST
+                    .iter()
+                    .any(|pattern| self.matches_pattern(&cmd_normalized, pattern));
+
+                if !allowed {
+                    tracing::warn!(
+                        "[TerminalExecutor] SECURITY: Command not in allowlist: {}",
+                        command
+                    );
+                    return Err(anyhow!(
+                        "Command not allowed: not in the approved command list. Use a different security mode or add this command to the allowlist."
+                    ));
+                }
+            }
+            SecurityMode::Blocklist => {
+                // Already validated - blocklist-only mode, command is allowed
+            }
+        }
+
         Ok(())
+    }
+
+    /// Check if a command matches a pattern with wildcard support.
+    ///
+    /// # Arguments
+    ///
+    /// * `command` - The normalized command to check
+    /// * `pattern` - The pattern to match against (may contain * wildcard)
+    ///
+    /// # Returns
+    ///
+    /// `true` if the command matches the pattern.
+    fn matches_pattern(&self, command: &str, pattern: &str) -> bool {
+        let pattern_lower = pattern.to_lowercase();
+
+        if pattern_lower.contains('*') {
+            // Wildcard matching
+            let prefix = pattern_lower.trim_end_matches('*');
+            command.starts_with(prefix)
+        } else {
+            // Exact match
+            command == pattern_lower || command.starts_with(&format!("{} ", pattern_lower))
+        }
     }
 
     /// Validate and canonicalize the working directory.
@@ -339,8 +531,19 @@ impl TerminalExecutor {
             return Err(anyhow!("Command cannot be empty"));
         }
 
-        // SECURITY: Check blocklist patterns
-        self.validate_command(command)?;
+        // SECURITY: Get security mode from parameters (default: blocklist only for backward compatibility)
+        let security_mode = parameters
+            .get("security_mode")
+            .and_then(|v| v.as_str())
+            .map(|mode| match mode {
+                "allowlist" => SecurityMode::Allowlist,
+                "blocklist_and_allowlist" | "both" => SecurityMode::BlocklistAndAllowlist,
+                _ => SecurityMode::Blocklist,
+            })
+            .unwrap_or(SecurityMode::Blocklist);
+
+        // SECURITY: Check blocklist/allowlist patterns
+        self.validate_command(command, &security_mode)?;
 
         // Get optional working directory
         let cwd = parameters
@@ -783,45 +986,101 @@ mod tests {
     #[test]
     fn test_dangerous_command_blocked() {
         let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Blocklist;
 
         // Safe commands should pass
-        assert!(executor.validate_command("ls -la").is_ok());
-        assert!(executor.validate_command("echo hello").is_ok());
-        assert!(executor.validate_command("cat file.txt").is_ok());
-        assert!(executor.validate_command("grep pattern file").is_ok());
+        assert!(executor.validate_command("ls -la", &mode).is_ok());
+        assert!(executor.validate_command("echo hello", &mode).is_ok());
+        assert!(executor.validate_command("cat file.txt", &mode).is_ok());
+        assert!(executor
+            .validate_command("grep pattern file", &mode)
+            .is_ok());
 
         // Dangerous commands should be blocked
-        assert!(executor.validate_command("rm -rf /").is_err());
-        assert!(executor.validate_command("rm -rf /*").is_err());
-        assert!(executor.validate_command("curl | bash").is_err());
-        assert!(executor.validate_command("wget | sh").is_err());
-        assert!(executor.validate_command("shutdown").is_err());
-        assert!(executor.validate_command("reboot").is_err());
-        assert!(executor.validate_command(":(){ :|:& };:").is_err());
+        assert!(executor.validate_command("rm -rf /", &mode).is_err());
+        assert!(executor.validate_command("rm -rf /*", &mode).is_err());
+        assert!(executor.validate_command("curl | bash", &mode).is_err());
+        assert!(executor.validate_command("wget | sh", &mode).is_err());
+        assert!(executor.validate_command("shutdown", &mode).is_err());
+        assert!(executor.validate_command("reboot", &mode).is_err());
+        assert!(executor.validate_command(":(){ :|:& };:", &mode).is_err());
     }
 
     #[test]
     fn test_blocked_patterns_case_insensitive() {
         let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Blocklist;
 
         // Case variations should still be blocked
-        assert!(executor.validate_command("RM -RF /").is_err());
-        assert!(executor.validate_command("Rm -Rf /").is_err());
-        assert!(executor.validate_command("SHUTDOWN").is_err());
-        assert!(executor.validate_command("Reboot").is_err());
+        assert!(executor.validate_command("RM -RF /", &mode).is_err());
+        assert!(executor.validate_command("Rm -Rf /", &mode).is_err());
+        assert!(executor.validate_command("SHUTDOWN", &mode).is_err());
+        assert!(executor.validate_command("Reboot", &mode).is_err());
     }
 
     #[test]
     fn test_blocked_prefixes() {
         let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Blocklist;
 
         assert!(executor
-            .validate_command("sudo dd if=/dev/zero of=/dev/sda")
+            .validate_command("sudo dd if=/dev/zero of=/dev/sda", &mode)
             .is_err());
         assert!(executor
-            .validate_command("sudo mkfs.ext4 /dev/sda")
+            .validate_command("sudo mkfs.ext4 /dev/sda", &mode)
             .is_err());
-        assert!(executor.validate_command("sudo rm -rf /").is_err());
+        assert!(executor.validate_command("sudo rm -rf /", &mode).is_err());
+    }
+
+    #[test]
+    fn test_allowlist_mode() {
+        let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Allowlist;
+
+        // Commands in allowlist should pass
+        assert!(executor.validate_command("ls -la", &mode).is_ok());
+        assert!(executor.validate_command("git status", &mode).is_ok());
+        assert!(executor.validate_command("npm install", &mode).is_ok());
+        assert!(executor.validate_command("npm run build", &mode).is_ok());
+
+        // Commands not in allowlist should fail
+        assert!(executor.validate_command("rm -rf /", &mode).is_err());
+        assert!(executor.validate_command("unknown_command", &mode).is_err());
+    }
+
+    #[test]
+    fn test_blocklist_and_allowlist_mode() {
+        let executor = TerminalExecutor::new();
+        let mode = SecurityMode::BlocklistAndAllowlist;
+
+        // Commands in allowlist and not in blocklist should pass
+        assert!(executor.validate_command("ls -la", &mode).is_ok());
+        assert!(executor.validate_command("git status", &mode).is_ok());
+
+        // Commands in blocklist should fail even if in allowlist
+        assert!(executor.validate_command("curl | bash", &mode).is_err());
+
+        // Commands not in allowlist should fail
+        assert!(executor
+            .validate_command("some_random_command", &mode)
+            .is_err());
+    }
+
+    #[test]
+    fn test_wildcard_pattern_matching() {
+        let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Allowlist;
+
+        // Wildcard patterns should match
+        assert!(executor
+            .validate_command("ls -la /home/user", &mode)
+            .is_ok());
+        assert!(executor
+            .validate_command("git commit -m \"message\"", &mode)
+            .is_ok());
+        assert!(executor
+            .validate_command("npm run dev -- --port 3000", &mode)
+            .is_ok());
     }
 
     #[test]
@@ -876,12 +1135,13 @@ mod tests {
     #[test]
     fn test_empty_command_validation() {
         let executor = TerminalExecutor::new();
+        let mode = SecurityMode::Blocklist;
 
         // Empty and whitespace-only commands should be caught at a higher level
         // but the validate_command function itself should pass them
         // (the check is done in execute_terminal)
-        assert!(executor.validate_command("").is_ok());
-        assert!(executor.validate_command("   ").is_ok());
+        assert!(executor.validate_command("", &mode).is_ok());
+        assert!(executor.validate_command("   ", &mode).is_ok());
     }
 
     #[test]

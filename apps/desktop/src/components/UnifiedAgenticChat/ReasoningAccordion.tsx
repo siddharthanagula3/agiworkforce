@@ -143,6 +143,8 @@ export function ReasoningAccordion({
         className,
       )}
     >
+      {/* Inject scrollbar styles */}
+      <style dangerouslySetInnerHTML={{ __html: reasoningScrollbarStyles }} />
       {/* Header */}
       <button
         onClick={handleToggle}
@@ -237,20 +239,22 @@ export function ReasoningAccordion({
           >
             <div className="border-t border-zinc-800">
               <div ref={contentRef} className="max-h-96 overflow-y-auto custom-scrollbar">
-                <div className="relative">
+                <div className="relative p-4 text-xs font-mono leading-relaxed">
                   <SyntaxHighlighter
                     language="markdown"
                     style={vscDarkPlus}
                     customStyle={{
                       margin: 0,
-                      padding: '1rem',
+                      padding: 0,
                       background: 'transparent',
-                      fontSize: '0.75rem',
-                      lineHeight: '1.6',
+                      fontSize: 'inherit',
+                      lineHeight: 'inherit',
+                      display: 'inline',
                     }}
                     codeTagProps={{
                       style: {
                         fontFamily: 'Söhne Mono, Monaco, Cascadia Code, Consolas, monospace',
+                        display: 'inline',
                       },
                     }}
                   >
@@ -258,7 +262,7 @@ export function ReasoningAccordion({
                   </SyntaxHighlighter>
                   {/* Blinking cursor at end of streaming content */}
                   {isStreaming && (
-                    <span className="inline-block w-2 h-4 bg-agent-thinking ml-1 animate-pulse absolute bottom-4 right-4" />
+                    <span className="inline-block w-1.5 h-3.5 bg-agent-thinking ml-1 animate-pulse align-middle" />
                   )}
                 </div>
               </div>
