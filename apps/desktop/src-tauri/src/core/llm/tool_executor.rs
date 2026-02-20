@@ -33,14 +33,105 @@ use uuid::Uuid;
 /// Default timeout for tool confirmation dialogs (in seconds)
 #[allow(dead_code)]
 const TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
-const MCP_TOOL_TIMEOUT_MS: u64 = 10_000;
-const FILE_LIST_TIMEOUT_MS: u64 = 10_000;
+const MCP_TOOL_TIMEOUT_MS: u64 = 120_000; // 120s: MCP tool calls may involve remote APIs, I/O, and browser/runtime startup
+const FILE_LIST_TIMEOUT_MS: u64 = 30_000; // Increased from 10s: large dirs and network filesystems
 const FILE_LIST_MAX_LIMIT: usize = 2_000;
 const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 const FILE_LIST_MAX_OFFSET: usize = 100_000;
 const FILE_READ_MAX_CHARS: usize = 200_000;
 const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
+
+/// Per-tool timeout configuration in milliseconds
+/// Different tool types have different timeout requirements:
+/// - Fast tools (search, web): 10-30 seconds
+/// - Medium tools (file ops, git): 30-60 seconds
+/// - Slow tools (browser, media, code): 60-300 seconds
+pub struct ToolTimeoutConfig {
+    /// Default timeout for all tools (ms)
+    pub default: u64,
+    /// Fast tools: search, web fetch, API calls (ms)
+    pub fast: u64,
+    /// Medium tools: file operations, git, database (ms)
+    pub medium: u64,
+    /// Slow tools: browser automation, media generation, code execution (ms)
+    pub slow: u64,
+    /// Very slow tools: video generation, large downloads (ms)
+    pub very_slow: u64,
+}
+
+impl Default for ToolTimeoutConfig {
+    fn default() -> Self {
+        Self {
+            default: 60_000,    // 60 seconds
+            fast: 15_000,       // 15 seconds - search, web, API
+            medium: 60_000,     // 60 seconds - file ops, git, db
+            slow: 180_000,      // 3 minutes - browser, media, code
+            very_slow: 300_000, // 5 minutes - video, large uploads
+        }
+    }
+}
+
+impl ToolTimeoutConfig {
+    /// Get timeout for a specific tool
+    pub fn get_timeout(&self, tool_id: &str) -> u64 {
+        match tool_id {
+            // Fast tools (15s)
+            "search_web" | "api_call" | "web_fetch" | "llm_reason" => self.fast,
+
+            // Medium tools (60s)
+            "file_read"
+            | "file_write"
+            | "file_delete"
+            | "file_list"
+            | "git_status"
+            | "git_init"
+            | "git_add"
+            | "git_commit"
+            | "git_clone"
+            | "db_query"
+            | "db_execute"
+            | "db_transaction_begin"
+            | "db_transaction_commit"
+            | "db_transaction_rollback" => self.medium,
+
+            // Slow tools (180s)
+            "terminal_execute"
+            | "code_execute"
+            | "browser_navigate"
+            | "browser_click"
+            | "browser_type"
+            | "browser_screenshot"
+            | "browser_extract"
+            | "image_generate"
+            | "image_ocr"
+            | "image_analyze"
+            | "media_generate_image"
+            | "git_push"
+            | "github_create_repo"
+            | "email_send"
+            | "email_fetch"
+            | "calendar_create_event"
+            | "calendar_list_events"
+            | "cloud_upload"
+            | "cloud_download"
+            | "productivity_create_task"
+            | "document_read"
+            | "document_search"
+            | "document_create_word"
+            | "document_create_excel"
+            | "document_create_pdf" => self.slow,
+
+            // Very slow tools (300s)
+            "video_generate" | "media_generate_video" | "api_upload" | "api_download" => {
+                self.very_slow
+            }
+
+            // Default
+            _ => self.default,
+        }
+    }
+}
 
 const DANGEROUS_TOOLS: &[&str] = &[
     "file_write",
@@ -70,9 +161,168 @@ pub struct ToolExecutor {
     conversation_mode: Option<String>,
     /// Optional project folder path to use as default working directory
     project_folder: Option<String>,
+    /// Per-tool timeout configuration
+    timeout_config: ToolTimeoutConfig,
 }
 
 impl ToolExecutor {
+    fn infer_retryable_error(message: &str) -> bool {
+        let normalized = message.to_lowercase();
+        let non_retryable_markers = [
+            "missing required parameter",
+            "tool not found",
+            "invalid tool arguments",
+            "invalid parameter",
+            "validation failed",
+            "access denied",
+            "permission denied",
+            "approval required",
+            "confirmation denied",
+            "security validation failed",
+            "not in allowed directories",
+            "path traversal",
+            "unauthorized",
+            "forbidden",
+            "not configured",
+            "missing api key",
+        ];
+
+        !non_retryable_markers
+            .iter()
+            .any(|marker| normalized.contains(marker))
+    }
+
+    fn value_is_present(value: &Value) -> bool {
+        match value {
+            Value::Null => false,
+            Value::String(text) => !text.trim().is_empty(),
+            Value::Array(items) => !items.is_empty(),
+            Value::Object(entries) => !entries.is_empty(),
+            _ => true,
+        }
+    }
+
+    fn has_present_arg(args: &HashMap<String, Value>, key: &str) -> bool {
+        args.get(key).map(Self::value_is_present).unwrap_or(false)
+    }
+
+    fn promote_alias_arg(args: &mut HashMap<String, Value>, canonical: &str, aliases: &[&str]) {
+        if Self::has_present_arg(args, canonical) {
+            return;
+        }
+
+        for alias in aliases {
+            if let Some(candidate) = args.get(*alias).cloned() {
+                if Self::value_is_present(&candidate) {
+                    args.insert(canonical.to_string(), candidate);
+                    return;
+                }
+            }
+        }
+    }
+
+    fn normalize_tool_arguments(tool_name: &str, args: &mut HashMap<String, Value>) {
+        let normalized = tool_name.to_lowercase();
+
+        if normalized == "terminal_execute" {
+            Self::promote_alias_arg(args, "command", &["cmd", "script", "instruction"]);
+            Self::promote_alias_arg(
+                args,
+                "cwd",
+                &["workdir", "working_directory", "directory", "path"],
+            );
+            Self::promote_alias_arg(args, "timeout_ms", &["timeout", "max_time_ms"]);
+            Self::promote_alias_arg(args, "shell", &["shell_type"]);
+        }
+
+        if normalized.starts_with("file_") {
+            Self::promote_alias_arg(
+                args,
+                "path",
+                &[
+                    "file_path",
+                    "filepath",
+                    "target_path",
+                    "directory",
+                    "dir",
+                    "location",
+                ],
+            );
+        }
+
+        if normalized == "file_write" {
+            Self::promote_alias_arg(args, "content", &["text", "data", "body"]);
+        }
+
+        if normalized == "search_web" {
+            Self::promote_alias_arg(args, "query", &["q", "search_query", "prompt", "question"]);
+            Self::promote_alias_arg(args, "num_results", &["limit", "max_results"]);
+        }
+
+        if normalized == "browser_navigate" {
+            Self::promote_alias_arg(args, "url", &["uri", "href", "link"]);
+        }
+
+        if normalized.starts_with("browser_") {
+            Self::promote_alias_arg(
+                args,
+                "selector",
+                &["element", "css_selector", "target", "locator"],
+            );
+            Self::promote_alias_arg(args, "tab_id", &["tabId"]);
+        }
+
+        if normalized == "browser_type" {
+            Self::promote_alias_arg(args, "text", &["value", "input", "content"]);
+        }
+
+        if normalized == "browser_wait_for_selector" {
+            Self::promote_alias_arg(args, "timeout", &["timeout_ms", "max_wait_ms"]);
+        }
+
+        if normalized == "browser_select_option" {
+            Self::promote_alias_arg(args, "value", &["option", "text", "selected"]);
+        }
+
+        if normalized == "image_generate" || normalized == "media_generate_image" {
+            Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
+        }
+
+        if normalized == "video_generate" || normalized == "media_generate_video" {
+            Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
+        }
+
+        if normalized.starts_with("document_create_") {
+            Self::promote_alias_arg(args, "output_path", &["path", "file_path", "destination"]);
+        }
+
+        if normalized == "api_download" {
+            Self::promote_alias_arg(args, "save_path", &["output_path", "destination", "path"]);
+        }
+
+        if normalized == "api_upload" {
+            Self::promote_alias_arg(args, "file_path", &["path", "local_path"]);
+        }
+
+        if normalized == "cloud_upload" {
+            Self::promote_alias_arg(args, "local_path", &["file_path", "path", "source"]);
+            Self::promote_alias_arg(
+                args,
+                "remote_path",
+                &["destination", "target_path", "cloud_path"],
+            );
+        }
+
+        if normalized == "cloud_download" {
+            Self::promote_alias_arg(args, "remote_path", &["path", "source", "cloud_path"]);
+            Self::promote_alias_arg(
+                args,
+                "local_path",
+                &["destination", "file_path", "target_path"],
+            );
+        }
+    }
+
     async fn execute_browser_tool(
         &self,
         tool_id: &str,
@@ -409,7 +659,7 @@ impl ToolExecutor {
                 let timeout_ms = args
                     .get("timeout")
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(30_000);
+                    .unwrap_or(120_000);
                 let (client, tab_id) = get_client().await?;
                 DomOperations::wait_for_selector(&client, selector, timeout_ms)
                     .await
@@ -621,20 +871,35 @@ impl ToolExecutor {
                 let tab_manager = browser_state
                     .get_tab_manager()
                     .map_err(anyhow::Error::msg)?;
-                let tab_manager = tab_manager.lock().await;
-                let tabs = tab_manager.list_tabs().await.map_err(anyhow::Error::msg)?;
+
+                // NOTE: We must NOT hold the outer tab_manager lock while calling
+                // TabManager methods that acquire internal locks. This would cause a deadlock
+                // because tokio::sync::Mutex is not reentrant.
+                // Instead, we drop the guard and re-acquire for each operation.
+
+                // First, list existing tabs
+                let tabs = {
+                    let guard = tab_manager.lock().await;
+                    guard.list_tabs().await.map_err(anyhow::Error::msg)?
+                };
+
                 let tab_id = if tabs.is_empty() {
-                    tab_manager
-                        .open_tab(url)
-                        .await
-                        .map_err(anyhow::Error::msg)?
+                    // Open a new tab - release outer lock first
+                    let guard = tab_manager.lock().await;
+                    guard.open_tab(url).await.map_err(anyhow::Error::msg)?
                 } else {
                     tabs[0].id.clone()
                 };
-                tab_manager
-                    .navigate(&tab_id, url, NavigationOptions::default())
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+
+                // Navigate - release outer lock first
+                {
+                    let guard = tab_manager.lock().await;
+                    guard
+                        .navigate(&tab_id, url, NavigationOptions::default())
+                        .await
+                        .map_err(anyhow::Error::msg)?;
+                }
+
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "success": true, "url": url, "tab_id": tab_id }),
@@ -919,6 +1184,7 @@ impl ToolExecutor {
             app_handle: None,
             conversation_mode: None,
             project_folder: None,
+            timeout_config: ToolTimeoutConfig::default(),
         }
     }
 
@@ -930,7 +1196,18 @@ impl ToolExecutor {
             app_handle: Some(app_handle),
             conversation_mode: None,
             project_folder: None,
+            timeout_config: ToolTimeoutConfig::default(),
         }
+    }
+
+    /// Set custom timeout configuration
+    pub fn set_timeout_config(&mut self, config: ToolTimeoutConfig) {
+        self.timeout_config = config;
+    }
+
+    /// Get the timeout for a specific tool
+    pub fn get_tool_timeout(&self, tool_id: &str) -> u64 {
+        self.timeout_config.get_timeout(tool_id)
     }
 
     pub fn set_conversation_mode(&mut self, mode: Option<String>) {
@@ -979,10 +1256,18 @@ impl ToolExecutor {
         let mut required = Vec::new();
 
         for param in &tool.parameters {
-            properties[&param.name] = json!({
+            let mut prop = json!({
                 "type": self.get_json_schema_type(&param.parameter_type),
                 "description": param.description,
             });
+
+            // BUG 2 FIX: Include default values in schema so the LLM knows
+            // about optional parameter defaults and can use them correctly
+            if let Some(default) = &param.default {
+                prop["default"] = default.clone();
+            }
+
+            properties[&param.name] = prop;
 
             if param.required {
                 required.push(param.name.clone());
@@ -1174,9 +1459,54 @@ impl ToolExecutor {
             }
         }
 
-        let mut args: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&tool_call.arguments)
-                .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
+        let args_json = if tool_call.arguments.trim().is_empty() {
+            "{}".to_string()
+        } else {
+            tool_call.arguments.clone()
+        };
+
+        let start_time = Instant::now();
+        let mut args: HashMap<String, serde_json::Value> = match serde_json::from_str(&args_json) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                let message = format!("Invalid tool arguments: {}", e);
+                let raw_metadata = json!({ "raw_arguments": args_json });
+                self.emit_tool_action(
+                    &action_id,
+                    &tool_call.name,
+                    "failed",
+                    &raw_metadata,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    &action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &message,
+                        start_time.elapsed().as_millis() as u64,
+                        Self::infer_retryable_error(&message),
+                    );
+                }
+
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "success": false,
+                        "error": message,
+                    }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+                });
+            }
+        };
+
+        Self::normalize_tool_arguments(&tool_call.name, &mut args);
 
         // file_list is frequently invoked from natural prompts like "this folder"
         // without an explicit path argument. Default to project folder/cwd so it
@@ -1204,7 +1534,6 @@ impl ToolExecutor {
         }
 
         let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
-        let start_time = Instant::now();
 
         self.emit_tool_action(
             &action_id,
@@ -1278,13 +1607,13 @@ impl ToolExecutor {
             {
                 Some(path) if !path.trim().is_empty() => path.to_string(),
                 _ => {
+                    let err_msg =
+                        "Missing required 'path' parameter for mcp__filesystem__read_text_file"
+                            .to_string();
                     let result = ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some(
-                            "Missing required 'path' parameter for mcp__filesystem__read_text_file"
-                                .to_string(),
-                        ),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
                     };
                     return self.finalize_tool_result(
@@ -1302,7 +1631,7 @@ impl ToolExecutor {
                 .get("timeout_ms")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(MCP_TOOL_TIMEOUT_MS)
-                .min(30_000);
+                .min(300_000);
 
             if let Err(e) = self.validate_path(&path).await {
                 let result = ToolResult {
@@ -1356,20 +1685,126 @@ impl ToolExecutor {
                     }
                 }
                 Ok(Err(e)) => {
-                    if let Some(app_handle) = &self.app_handle {
-                        let file_op =
-                            create_file_read_event(&path, "", false, Some(e.to_string()), None);
-                        emit_file_operation(app_handle, file_op);
-                    }
+                    // PDF fallback: if file is binary (InvalidData) and has .pdf extension,
+                    // try pdf_extract instead of returning a generic error.
+                    // This mirrors the fallback in the `file_read` tool handler.
+                    if e.kind() == std::io::ErrorKind::InvalidData {
+                        let is_pdf = Path::new(&path)
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
 
-                    ToolResult {
-                        success: false,
-                        data: json!({ "path": path }),
-                        error: Some(format!("Failed to read file: {}", e)),
-                        metadata: HashMap::from([
-                            ("tool_name".to_string(), json!(tool_call.name)),
-                            ("path".to_string(), json!(path)),
-                        ]),
+                        if is_pdf {
+                            tracing::info!(
+                                "[ToolExecutor] MCP read_text_file: binary file detected, attempting PDF extraction for '{}'",
+                                path
+                            );
+                            let path_clone = path.clone();
+                            let pdf_result = tokio::task::spawn_blocking(move || {
+                                pdf_extract::extract_text(Path::new(&path_clone))
+                            })
+                            .await
+                            .map_err(|join_err| join_err.to_string())
+                            .and_then(|result| result.map_err(|extract_err| extract_err.to_string()));
+
+                            match pdf_result {
+                                Ok(extracted_text) => {
+                                    let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
+                                        format!(
+                                            "{}\n\n... [truncated to first {} chars out of {}]",
+                                            &extracted_text[..FILE_READ_MAX_CHARS],
+                                            FILE_READ_MAX_CHARS,
+                                            extracted_text.len()
+                                        )
+                                    } else {
+                                        extracted_text
+                                    };
+
+                                    if let Some(app_handle) = &self.app_handle {
+                                        let file_op = create_file_read_event(
+                                            &path, &content, true, None, None,
+                                        );
+                                        emit_file_operation(app_handle, file_op);
+                                    }
+
+                                    ToolResult {
+                                        success: true,
+                                        data: json!({
+                                            "path": path,
+                                            "content": content,
+                                            "source": "pdf_extract_fallback"
+                                        }),
+                                        error: None,
+                                        metadata: HashMap::from([
+                                            ("tool_name".to_string(), json!(tool_call.name)),
+                                            ("path".to_string(), json!(path)),
+                                            ("source".to_string(), json!("pdf_extract")),
+                                        ]),
+                                    }
+                                }
+                                Err(pdf_error) => {
+                                    let error = format!(
+                                        "Failed to read PDF '{}': {}. Try using document_read for structured extraction.",
+                                        path, pdf_error
+                                    );
+                                    if let Some(app_handle) = &self.app_handle {
+                                        let file_op = create_file_read_event(
+                                            &path, "", false, Some(error.clone()), None,
+                                        );
+                                        emit_file_operation(app_handle, file_op);
+                                    }
+
+                                    ToolResult {
+                                        success: false,
+                                        data: json!({ "path": path, "error": error }),
+                                        error: Some(error),
+                                        metadata: HashMap::from([
+                                            ("tool_name".to_string(), json!(tool_call.name)),
+                                            ("path".to_string(), json!(path)),
+                                        ]),
+                                    }
+                                }
+                            }
+                        } else {
+                            // Binary file but not a PDF
+                            let error = format!(
+                                "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read for binary-aware reading.",
+                                path
+                            );
+                            if let Some(app_handle) = &self.app_handle {
+                                let file_op = create_file_read_event(
+                                    &path, "", false, Some(error.clone()), None,
+                                );
+                                emit_file_operation(app_handle, file_op);
+                            }
+
+                            ToolResult {
+                                success: false,
+                                data: json!({ "path": path }),
+                                error: Some(error),
+                                metadata: HashMap::from([
+                                    ("tool_name".to_string(), json!(tool_call.name)),
+                                    ("path".to_string(), json!(path)),
+                                ]),
+                            }
+                        }
+                    } else {
+                        // Non-InvalidData error (permission denied, not found, etc.)
+                        if let Some(app_handle) = &self.app_handle {
+                            let file_op =
+                                create_file_read_event(&path, "", false, Some(e.to_string()), None);
+                            emit_file_operation(app_handle, file_op);
+                        }
+
+                        ToolResult {
+                            success: false,
+                            data: json!({ "path": path }),
+                            error: Some(format!("Failed to read file: {}", e)),
+                            metadata: HashMap::from([
+                                ("tool_name".to_string(), json!(tool_call.name)),
+                                ("path".to_string(), json!(path)),
+                            ]),
+                        }
                     }
                 }
                 Err(_) => ToolResult {
@@ -1433,7 +1868,13 @@ impl ToolExecutor {
                         );
 
                         if let Some(app_handle) = &self.app_handle {
-                            emit_tool_error(app_handle, &action_id, &e.to_string(), 0, false);
+                            emit_tool_error(
+                                app_handle,
+                                &action_id,
+                                &e.to_string(),
+                                start_time.elapsed().as_millis() as u64,
+                                false,
+                            );
                         }
 
                         return Ok(ToolResult {
@@ -1481,7 +1922,13 @@ impl ToolExecutor {
                     );
 
                     // Emit tool error for stream tracking
-                    emit_tool_error(app_handle, &action_id, &e.to_string(), 0, true);
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &e.to_string(),
+                        start_time.elapsed().as_millis() as u64,
+                        true,
+                    );
 
                     return Ok(ToolResult {
                         success: false,
@@ -1544,6 +1991,15 @@ impl ToolExecutor {
                 start_time.elapsed().as_millis() as u64,
                 false,
             );
+            if let Some(app_handle) = &self.app_handle {
+                emit_tool_error(
+                    app_handle,
+                    &action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    true,
+                );
+            }
 
             return Ok(ToolResult {
                 success: false,
@@ -1569,10 +2025,41 @@ impl ToolExecutor {
             );
         }
 
-        let tool = self
-            .registry
-            .get_tool(&tool_call.name)
-            .ok_or_else(|| anyhow!("Tool not found: {}", tool_call.name))?;
+        let tool = match self.registry.get_tool(&tool_call.name) {
+            Some(tool) => tool,
+            None => {
+                let message = format!("Tool not found: {}", tool_call.name);
+                self.emit_tool_action(
+                    &action_id,
+                    &tool_call.name,
+                    "failed",
+                    &metadata_snapshot,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    &action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &message,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+                }
+
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "success": false }),
+                    error: Some(format!("Tool not found: {}", tool_call.name)),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
 
         for param in &tool.parameters {
             if param.required && !args.contains_key(&param.name) {
@@ -1590,9 +2077,18 @@ impl ToolExecutor {
                     start_time.elapsed().as_millis() as u64,
                     false,
                 );
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &error_message,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+                }
                 return Ok(ToolResult {
                     success: false,
-                    data: json!(null),
+                    data: json!({ "error": error_message, "success": false }),
                     error: Some(error_message),
                     metadata: HashMap::new(),
                 });
@@ -1656,6 +2152,15 @@ impl ToolExecutor {
                 start_time.elapsed().as_millis() as u64,
                 false,
             );
+            if let Some(app_handle) = &self.app_handle {
+                emit_tool_error(
+                    app_handle,
+                    &action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    true,
+                );
+            }
 
             return Ok(ToolResult {
                 success: false,
@@ -1683,7 +2188,29 @@ impl ToolExecutor {
             }
         }
 
-        let result = self.execute_tool_impl(&tool, args).await;
+        // Get per-tool timeout
+        let timeout_ms = self.timeout_config.get_timeout(&tool_call.name);
+        let timeout_duration = TokioDuration::from_millis(timeout_ms);
+
+        // Execute with per-tool timeout
+        let result = match timeout(
+            timeout_duration,
+            self.execute_tool_impl(&tool, args, &action_id),
+        )
+        .await
+        {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(e)) => Err(e),
+            Err(_) => {
+                tracing::warn!("Tool '{}' timed out after {}ms", tool_call.name, timeout_ms);
+                Err(anyhow!(
+                    "Tool '{}' timed out after {} seconds",
+                    tool_call.name,
+                    timeout_ms / 1000
+                ))
+            }
+        };
+
         self.finalize_tool_result(
             &action_id,
             &tool_call.name,
@@ -1696,12 +2223,10 @@ impl ToolExecutor {
     async fn execute_terminal_tool(
         &self,
         args: HashMap<String, serde_json::Value>,
+        tool_id: &str,
     ) -> Result<ToolResult> {
         use crate::features::terminal::{get_default_shell, ShellType};
         use crate::sys::security::command_validator::{validate_command, ValidationConfig};
-
-        // Generate a unique tool ID for streaming events
-        let tool_id = format!("terminal-{}", Uuid::new_v4());
 
         let command = args
             .get("command")
@@ -1736,11 +2261,11 @@ impl ToolExecutor {
             .unwrap_or(60_000);
 
         // Validate command using centralized validator (one-shot mode)
-        let validation = ValidationConfig::oneshot().with_correlation_id(&tool_id);
+        let validation = ValidationConfig::oneshot().with_correlation_id(tool_id);
         if let Err(e) = validate_command(&command, &validation) {
             return Ok(ToolResult {
                 success: false,
-                data: json!(null),
+                data: json!({ "error": e.to_string(), "success": false }),
                 error: Some(e.to_string()),
                 metadata: HashMap::new(),
             });
@@ -1750,7 +2275,7 @@ impl ToolExecutor {
         if let Some(app_handle) = &self.app_handle {
             emit_tool_progress(
                 app_handle,
-                &tool_id,
+                tool_id,
                 0.1,
                 Some(&format!("Running: {}", &command[..command.len().min(50)])),
             );
@@ -1760,7 +2285,7 @@ impl ToolExecutor {
             if let Err(e) = self.validate_path(dir).await {
                 return Ok(ToolResult {
                     success: false,
-                    data: json!(null),
+                    data: json!({ "error": e.to_string(), "success": false }),
                     error: Some(e.to_string()),
                     metadata: HashMap::new(),
                 });
@@ -1876,7 +2401,7 @@ impl ToolExecutor {
 
         // Emit progress: process spawned
         if let Some(app_handle) = &self.app_handle {
-            emit_tool_progress(app_handle, &tool_id, 0.3, Some("Process started"));
+            emit_tool_progress(app_handle, tool_id, 0.3, Some("Process started"));
         }
 
         let mut child = cmd
@@ -1886,7 +2411,7 @@ impl ToolExecutor {
         let stderr_handle = child.stderr.take();
 
         let stdout_app_handle = self.app_handle.clone();
-        let stdout_tool_id = tool_id.clone();
+        let stdout_tool_id = tool_id.to_string();
         let stdout_task = tokio::spawn(async move {
             let mut collected = Vec::new();
             if let Some(mut stdout) = stdout_handle {
@@ -1915,7 +2440,7 @@ impl ToolExecutor {
         });
 
         let stderr_app_handle = self.app_handle.clone();
-        let stderr_tool_id = tool_id.clone();
+        let stderr_tool_id = tool_id.to_string();
         let stderr_task = tokio::spawn(async move {
             let mut collected = Vec::new();
             if let Some(mut stderr) = stderr_handle {
@@ -1986,7 +2511,7 @@ impl ToolExecutor {
                 }
                 return Ok(ToolResult {
                     success: false,
-                    data: json!(null),
+                    data: json!({ "error": timeout_error.clone(), "success": false }),
                     error: Some(timeout_error),
                     metadata: HashMap::new(),
                 });
@@ -2015,7 +2540,7 @@ impl ToolExecutor {
 
         // Emit progress: command completed, processing output
         if let Some(app_handle) = &self.app_handle {
-            emit_tool_progress(app_handle, &tool_id, 0.8, Some("Processing output..."));
+            emit_tool_progress(app_handle, tool_id, 0.8, Some("Processing output..."));
         }
 
         if let Some(app_handle) = &self.app_handle {
@@ -2041,7 +2566,7 @@ impl ToolExecutor {
             emit_terminal_command(app_handle, terminal_event);
 
             // Final progress update
-            emit_tool_progress(app_handle, &tool_id, 1.0, Some("Complete"));
+            emit_tool_progress(app_handle, tool_id, 1.0, Some("Complete"));
         }
 
         let mut metadata = HashMap::new();
@@ -2095,6 +2620,7 @@ impl ToolExecutor {
         Ok(ToolResult {
             success,
             data: json!({
+                "command": command,
                 "stdout": stdout,
                 "stderr": stderr,
                 "exitCode": exit_code,
@@ -2105,12 +2631,40 @@ impl ToolExecutor {
         })
     }
 
+    /// Expand tilde (~) to home directory in path strings.
+    /// This is needed because the MCP filesystem server doesn't expand tilde.
+    fn expand_tilde_in_args(args: &mut HashMap<String, Value>) {
+        let path_fields = ["path", "file_path", "directory", "dir", "root"];
+        if let Some(home) = dirs::home_dir() {
+            let home_str = home.to_string_lossy().to_string();
+            for field in &path_fields {
+                if let Some(value) = args.get_mut(*field) {
+                    if let Some(path_str) = value.as_str().map(str::trim) {
+                        if path_str.starts_with('~') {
+                            let expanded = path_str.trim_start_matches('~').trim_start_matches('/');
+                            let new_path = if expanded.is_empty() {
+                                home_str.clone()
+                            } else {
+                                format!("{}/{}", home_str, expanded)
+                            };
+                            *value = json!(new_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     async fn execute_mcp_tool(
         &self,
         tool_call: &ToolCall,
-        args: HashMap<String, serde_json::Value>,
+        mut args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
         use crate::sys::commands::McpState;
+
+        // Expand tilde (~) in path arguments before calling MCP server
+        // The MCP filesystem server doesn't expand tilde, so we need to do it here
+        Self::expand_tilde_in_args(&mut args);
 
         let mcp_state = self
             .app_handle
@@ -2123,7 +2677,7 @@ impl ToolExecutor {
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(MCP_TOOL_TIMEOUT_MS)
-            .min(30_000);
+            .min(300_000);
         let started = Instant::now();
 
         tracing::info!(
@@ -2170,7 +2724,7 @@ impl ToolExecutor {
                 );
                 Ok(ToolResult {
                     success: false,
-                    data: json!(null),
+                    data: json!({ "error": format!("MCP tool execution failed: {}", e), "success": false }),
                     error: Some(format!("MCP tool execution failed: {}", e)),
                     metadata: HashMap::new(),
                 })
@@ -2202,6 +2756,7 @@ impl ToolExecutor {
         &self,
         tool: &Tool,
         args: HashMap<String, serde_json::Value>,
+        action_id: &str,
     ) -> Result<ToolResult> {
         match tool.id.as_str() {
             "file_read" => {
@@ -2220,7 +2775,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     });
@@ -2326,7 +2881,7 @@ impl ToolExecutor {
 
                                     Ok(ToolResult {
                                         success: false,
-                                        data: json!(null),
+                                        data: json!({ "error": error.clone(), "success": false }),
                                         error: Some(error),
                                         metadata: HashMap::from([(
                                             "path".to_string(),
@@ -2353,7 +2908,7 @@ impl ToolExecutor {
 
                             Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": error.clone(), "success": false }),
                                 error: Some(error),
                                 metadata: HashMap::from([("path".to_string(), json!(&path))]),
                             })
@@ -2373,7 +2928,7 @@ impl ToolExecutor {
 
                         Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to read file: {}", e), "success": false }),
                             error: Some(format!("Failed to read file: {}", e)),
                             metadata: HashMap::from([("path".to_string(), json!(&path))]),
                         })
@@ -2401,7 +2956,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     });
@@ -2462,7 +3017,7 @@ impl ToolExecutor {
                     }
                     Err(e) => Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": format!("Failed to write file: {}", e), "success": false }),
                         error: Some(format!("Failed to write file: {}", e)),
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     }),
@@ -2484,7 +3039,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     });
@@ -2543,7 +3098,7 @@ impl ToolExecutor {
                     }
                     Err(e) => Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": format!("Failed to delete file: {}", e), "success": false }),
                         error: Some(format!("Failed to delete file: {}", e)),
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     }),
@@ -2562,7 +3117,7 @@ impl ToolExecutor {
                             Err(e) => {
                                 return Ok(ToolResult {
                                     success: false,
-                                    data: json!(null),
+                                    data: json!({ "error": format!("Failed to create temp file: {}", e), "success": false }),
                                     error: Some(format!("Failed to create temp file: {}", e)),
                                     metadata: HashMap::new(),
                                 });
@@ -2595,7 +3150,7 @@ impl ToolExecutor {
                             }
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to save screenshot: {}", e), "success": false }),
                                 error: Some(format!("Failed to save screenshot: {}", e)),
                                 metadata: HashMap::new(),
                             }),
@@ -2603,7 +3158,7 @@ impl ToolExecutor {
                     }
                     Err(e) => Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": format!("Failed to capture screenshot: {}", e), "success": false }),
                         error: Some(format!("Failed to capture screenshot: {}", e)),
                         metadata: HashMap::new(),
                     }),
@@ -2623,7 +3178,7 @@ impl ToolExecutor {
                             Err(e) => {
                                 return Ok(ToolResult {
                                         success: false,
-                                        data: json!(null),
+                                        data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
                                         error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
                                         metadata: HashMap::new(),
                                     });
@@ -2632,7 +3187,7 @@ impl ToolExecutor {
                         None => {
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
                                 error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
                                 metadata: HashMap::new(),
                             });
@@ -2654,7 +3209,7 @@ impl ToolExecutor {
                             }),
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to click: {}", e), "success": false }),
                                 error: Some(format!("Failed to click: {}", e)),
                                 metadata: HashMap::new(),
                             }),
@@ -2671,7 +3226,7 @@ impl ToolExecutor {
                             }),
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
                                 error: Some(format!("Failed to invoke element: {}", e)),
                                 metadata: HashMap::new(),
                             }),
@@ -2698,7 +3253,7 @@ impl ToolExecutor {
                                         }),
                                         Err(e) => Ok(ToolResult {
                                             success: false,
-                                            data: json!(null),
+                                            data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
                                             error: Some(format!("Failed to invoke element: {}", e)),
                                             metadata: HashMap::new(),
                                         }),
@@ -2706,7 +3261,7 @@ impl ToolExecutor {
                                 } else {
                                     Ok(ToolResult {
                                         success: false,
-                                        data: json!(null),
+                                        data: json!({ "error": format!("Element with text '{}' not found", text), "success": false }),
                                         error: Some(format!(
                                             "Element with text '{}' not found",
                                             text
@@ -2717,7 +3272,7 @@ impl ToolExecutor {
                             }
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
                                 error: Some(format!("Failed to find element: {}", e)),
                                 metadata: HashMap::new(),
                             }),
@@ -2725,7 +3280,7 @@ impl ToolExecutor {
                     } else {
                         Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": "Invalid target format for ui_click - need coordinates, element_id, or text".to_string(), "success": false }),
                             error: Some("Invalid target format for ui_click - need coordinates, element_id, or text".to_string()),
                             metadata: HashMap::new(),
                         })
@@ -2733,7 +3288,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
                         error: Some("App handle not available for UI automation".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -2753,7 +3308,7 @@ impl ToolExecutor {
                             Err(e) => {
                                 return Ok(ToolResult {
                                         success: false,
-                                        data: json!(null),
+                                        data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
                                         error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
                                         metadata: HashMap::new(),
                                     });
@@ -2762,7 +3317,7 @@ impl ToolExecutor {
                         None => {
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
                                 error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
                                 metadata: HashMap::new(),
                             });
@@ -2780,7 +3335,7 @@ impl ToolExecutor {
                         if let Err(e) = automation.native.set_focus(element_id) {
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
                                 error: Some(format!("Failed to focus element: {}", e)),
                                 metadata: HashMap::new(),
                             });
@@ -2802,7 +3357,7 @@ impl ToolExecutor {
                                     if let Err(e) = automation.native.set_focus(&element.id) {
                                         return Ok(ToolResult {
                                             success: false,
-                                            data: json!(null),
+                                            data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
                                             error: Some(format!("Failed to focus element: {}", e)),
                                             metadata: HashMap::new(),
                                         });
@@ -2813,7 +3368,7 @@ impl ToolExecutor {
                             Err(e) => {
                                 return Ok(ToolResult {
                                     success: false,
-                                    data: json!(null),
+                                    data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
                                     error: Some(format!("Failed to find element: {}", e)),
                                     metadata: HashMap::new(),
                                 });
@@ -2833,7 +3388,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to type text: {}", e), "success": false }),
                             error: Some(format!("Failed to type text: {}", e)),
                             metadata: HashMap::new(),
                         }),
@@ -2841,7 +3396,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
                         error: Some("App handle not available for UI automation".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -2851,9 +3406,7 @@ impl ToolExecutor {
                 use crate::core::agi::executors::search_executor::{
                     SearchExecutor, SearchType as ExecSearchType,
                 };
-
-                // Generate a unique tool ID for streaming events
-                let tool_id = format!("search-{}", Uuid::new_v4());
+                let tool_id = action_id;
 
                 let query = args
                     .get("query")
@@ -2865,7 +3418,7 @@ impl ToolExecutor {
                 if let Some(app_handle) = &self.app_handle {
                     emit_tool_progress(
                         app_handle,
-                        &tool_id,
+                        tool_id,
                         0.1,
                         Some(&format!("Searching: {}", &query[..query.len().min(40)])),
                     );
@@ -2891,7 +3444,7 @@ impl ToolExecutor {
 
                 // Emit progress: search in progress
                 if let Some(app_handle) = &self.app_handle {
-                    emit_tool_progress(app_handle, &tool_id, 0.5, Some("Fetching results..."));
+                    emit_tool_progress(app_handle, tool_id, 0.5, Some("Fetching results..."));
                 }
 
                 let start = Instant::now();
@@ -2961,7 +3514,7 @@ impl ToolExecutor {
                         if let Some(app_handle) = &self.app_handle {
                             emit_tool_progress(
                                 app_handle,
-                                &tool_id,
+                                tool_id,
                                 1.0,
                                 Some(&format!("Found {} results", count)),
                             );
@@ -3002,9 +3555,7 @@ impl ToolExecutor {
                     .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing url parameter"))?;
-
-                // Generate a unique tool ID for streaming events
-                let tool_id = format!("browser-{}", Uuid::new_v4());
+                let tool_id = action_id;
 
                 if let Some(ref app) = self.app_handle {
                     use crate::automation::browser::NavigationOptions;
@@ -3014,7 +3565,7 @@ impl ToolExecutor {
                     // Emit progress: starting navigation
                     emit_tool_progress(
                         app,
-                        &tool_id,
+                        tool_id,
                         0.1,
                         Some(&format!("Navigating to {}", &url[..url.len().min(50)])),
                     );
@@ -3023,44 +3574,46 @@ impl ToolExecutor {
                     let tab_manager = match browser_state.get_tab_manager() {
                         Ok(tm) => tm.lock().await,
                         Err(e) => {
+                            let err_msg = format!("Failed to get tab manager: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(e),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
                     };
 
-                    emit_tool_progress(app, &tool_id, 0.3, Some("Browser ready"));
+                    emit_tool_progress(app, tool_id, 0.3, Some("Browser ready"));
 
                     match tab_manager.list_tabs().await {
                         Ok(tabs) => {
                             let tab_id = if tabs.is_empty() {
-                                emit_tool_progress(app, &tool_id, 0.4, Some("Opening new tab"));
+                                emit_tool_progress(app, tool_id, 0.4, Some("Opening new tab"));
                                 match tab_manager.open_tab(url).await {
                                     Ok(tid) => tid,
                                     Err(e) => {
+                                        let err_msg = format!("Failed to open tab: {}", e);
                                         return Ok(ToolResult {
                                             success: false,
-                                            data: json!(null),
-                                            error: Some(format!("Failed to open tab: {}", e)),
+                                            data: json!({ "error": err_msg.clone(), "success": false }),
+                                            error: Some(err_msg),
                                             metadata: HashMap::new(),
-                                        })
+                                        });
                                     }
                                 }
                             } else {
                                 tabs[0].id.clone()
                             };
 
-                            emit_tool_progress(app, &tool_id, 0.6, Some("Loading page..."));
+                            emit_tool_progress(app, tool_id, 0.6, Some("Loading page..."));
 
                             match tab_manager
                                 .navigate(&tab_id, url, NavigationOptions::default())
                                 .await
                             {
                                 Ok(_) => {
-                                    emit_tool_progress(app, &tool_id, 1.0, Some("Page loaded"));
+                                    emit_tool_progress(app, tool_id, 1.0, Some("Page loaded"));
                                     Ok(ToolResult {
                                         success: true,
                                         data: json!({ "success": true, "url": url, "tab_id": tab_id }),
@@ -3068,26 +3621,33 @@ impl ToolExecutor {
                                         metadata: HashMap::new(),
                                     })
                                 }
-                                Err(e) => Ok(ToolResult {
-                                    success: false,
-                                    data: json!(null),
-                                    error: Some(format!("Failed to navigate: {}", e)),
-                                    metadata: HashMap::new(),
-                                }),
+                                Err(e) => {
+                                    let err_msg = format!("Failed to navigate: {}", e);
+                                    Ok(ToolResult {
+                                        success: false,
+                                        data: json!({ "error": err_msg.clone(), "success": false }),
+                                        error: Some(err_msg),
+                                        metadata: HashMap::new(),
+                                    })
+                                }
                             }
                         }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to list tabs: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Failed to list tabs: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     }
                 } else {
+                    let err_msg = "App handle not available for browser navigation".to_string();
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some("App handle not available for browser navigation".to_string()),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::new(),
                     })
                 }
@@ -3118,12 +3678,13 @@ impl ToolExecutor {
                     let session_id = match session_manager.create_session(shell_type, None).await {
                         Ok(sid) => sid,
                         Err(e) => {
+                            let err_msg = format!("Failed to create session: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Failed to create session: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
-                            })
+                            });
                         }
                     };
 
@@ -3143,23 +3704,27 @@ impl ToolExecutor {
                                 )]),
                             })
                         }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to execute code: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Failed to execute code: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     }
                 } else {
+                    let err_msg = "App handle not available for code execution".to_string();
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some("App handle not available for code execution".to_string()),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::new(),
                     })
                 }
             }
-            "terminal_execute" => self.execute_terminal_tool(args).await,
+            "terminal_execute" => self.execute_terminal_tool(args, action_id).await,
             "git_push" => {
                 let path = args
                     .get("path")
@@ -3179,7 +3744,7 @@ impl ToolExecutor {
                     if let Err(e) = self.validate_path(&path).await {
                         return Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": e.to_string(), "success": false }),
                             error: Some(e.to_string()),
                             metadata: HashMap::from([("path".to_string(), json!(path))]),
                         });
@@ -3206,18 +3771,22 @@ impl ToolExecutor {
                                 ("branch".to_string(), json!(branch)),
                             ]),
                         }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Git push failed: {}", e)),
-                            metadata: HashMap::from([("path".to_string(), json!(path))]),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Git push failed: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::from([("path".to_string(), json!(path))]),
+                            })
+                        }
                     }
                 } else {
+                    let err_msg = "App handle not available for git_push".to_string();
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some("App handle not available for git_push".to_string()),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::new(),
                     })
                 }
@@ -3233,7 +3802,7 @@ impl ToolExecutor {
                 if !query_upper.starts_with("SELECT") && !query_upper.starts_with("WITH") {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "db_query only supports SELECT statements. Use db_execute for modifications.", "success": false }),
                         error: Some("db_query only supports SELECT statements. Use db_execute for modifications.".to_string()),
                         metadata: HashMap::new(),
                     });
@@ -3248,7 +3817,7 @@ impl ToolExecutor {
                     if query_upper.contains(keyword) {
                         return Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("SQL operation '{}' is not allowed in db_query.", keyword), "success": false }),
                             error: Some(format!(
                                 "SQL operation '{}' is not allowed in db_query.",
                                 keyword
@@ -3266,10 +3835,11 @@ impl ToolExecutor {
                     let conn = match db.conn.lock() {
                         Ok(c) => c,
                         Err(e) => {
+                            let err_msg = format!("Database lock error: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Database lock error: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
@@ -3333,7 +3903,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": e.clone(), "success": false }),
                             error: Some(e),
                             metadata: HashMap::from([("query".to_string(), json!(query))]),
                         }),
@@ -3341,7 +3911,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "Database not available", "success": false }),
                         error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3362,7 +3932,7 @@ impl ToolExecutor {
                 if !is_modification {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.", "success": false }),
                         error: Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string()),
                         metadata: HashMap::new(),
                     });
@@ -3374,7 +3944,7 @@ impl ToolExecutor {
                     if query_upper.contains(keyword) {
                         return Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword), "success": false }),
                             error: Some(format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword)),
                             metadata: HashMap::new(),
                         });
@@ -3389,10 +3959,11 @@ impl ToolExecutor {
                     let conn = match db.conn.lock() {
                         Ok(c) => c,
                         Err(e) => {
+                            let err_msg = format!("Database lock error: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Database lock error: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
@@ -3410,7 +3981,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Query execution error: {}", e), "success": false }),
                             error: Some(format!("Query execution error: {}", e)),
                             metadata: HashMap::from([("query".to_string(), json!(query))]),
                         }),
@@ -3418,7 +3989,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "Database not available", "success": false }),
                         error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3433,10 +4004,11 @@ impl ToolExecutor {
                     let conn = match db.conn.lock() {
                         Ok(c) => c,
                         Err(e) => {
+                            let err_msg = format!("Database lock error: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Database lock error: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
@@ -3452,17 +4024,20 @@ impl ToolExecutor {
                             error: None,
                             metadata: HashMap::new(),
                         }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to begin transaction: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Failed to begin transaction: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     }
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "Database not available", "success": false }),
                         error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3477,10 +4052,11 @@ impl ToolExecutor {
                     let conn = match db.conn.lock() {
                         Ok(c) => c,
                         Err(e) => {
+                            let err_msg = format!("Database lock error: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Database lock error: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
@@ -3496,17 +4072,20 @@ impl ToolExecutor {
                             error: None,
                             metadata: HashMap::new(),
                         }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to commit transaction: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Failed to commit transaction: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     }
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "Database not available", "success": false }),
                         error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3521,10 +4100,11 @@ impl ToolExecutor {
                     let conn = match db.conn.lock() {
                         Ok(c) => c,
                         Err(e) => {
+                            let err_msg = format!("Database lock error: {}", e);
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!("Database lock error: {}", e)),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::new(),
                             });
                         }
@@ -3540,17 +4120,20 @@ impl ToolExecutor {
                             error: None,
                             metadata: HashMap::new(),
                         }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to rollback transaction: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("Failed to rollback transaction: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     }
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "Database not available", "success": false }),
                         error: Some("Database not available".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3604,17 +4187,20 @@ impl ToolExecutor {
                             error: None,
                             metadata: HashMap::from([("url".to_string(), json!(url))]),
                         }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("API call failed: {}", e)),
-                            metadata: HashMap::from([("url".to_string(), json!(url))]),
-                        }),
+                        Err(e) => {
+                            let err_msg = format!("API call failed: {}", e);
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
+                                metadata: HashMap::from([("url".to_string(), json!(url))]),
+                            })
+                        }
                     }
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for API calls", "success": false }),
                         error: Some("App handle not available for API calls".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3641,7 +4227,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("OCR failed: {}", e), "success": false }),
                             error: Some(format!("OCR failed: {}", e)),
                             metadata: HashMap::from([(
                                 "image_path".to_string(),
@@ -3654,7 +4240,7 @@ impl ToolExecutor {
                 {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "OCR feature not enabled in build", "success": false }),
                         error: Some("OCR feature not enabled in build".to_string()),
                         metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
                     })
@@ -3687,7 +4273,7 @@ impl ToolExecutor {
                     metadata: HashMap::from([("language".to_string(), json!(language))]),
                 })
             }
-            "image_generate" => {
+            "image_generate" | "media_generate_image" => {
                 let prompt = args
                     .get("prompt")
                     .and_then(|v| v.as_str())
@@ -3737,7 +4323,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Image generation failed: {}", e), "success": false }),
                             error: Some(format!("Image generation failed: {}", e)),
                             metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
                         }),
@@ -3745,13 +4331,13 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for image generation", "success": false }),
                         error: Some("App handle not available for image generation".to_string()),
                         metadata: HashMap::new(),
                     })
                 }
             }
-            "video_generate" => {
+            "video_generate" | "media_generate_video" => {
                 let prompt = args
                     .get("prompt")
                     .and_then(|v| v.as_str())
@@ -3759,6 +4345,8 @@ impl ToolExecutor {
                     .to_string();
                 let duration_secs = args
                     .get("duration_seconds")
+                    .or_else(|| args.get("duration_secs"))
+                    .or_else(|| args.get("duration"))
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
                 let resolution = args
@@ -3816,7 +4404,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Video generation failed: {}", e), "success": false }),
                             error: Some(format!("Video generation failed: {}", e)),
                             metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
                         }),
@@ -3824,7 +4412,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for video generation", "success": false }),
                         error: Some("App handle not available for video generation".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3844,10 +4432,11 @@ impl ToolExecutor {
 
                 const MAX_DEPTH: u64 = 3;
                 if depth >= MAX_DEPTH {
+                    let err_msg = format!("Maximum recursion depth ({}) exceeded", MAX_DEPTH);
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
-                        error: Some(format!("Maximum recursion depth ({}) exceeded", MAX_DEPTH)),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::from([("depth".to_string(), json!(depth))]),
                     });
                 }
@@ -3882,7 +4471,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("LLM reasoning failed: {}", e), "success": false }),
                             error: Some(format!("LLM reasoning failed: {}", e)),
                             metadata: HashMap::from([("depth".to_string(), json!(depth))]),
                         }),
@@ -3890,7 +4479,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for LLM reasoning", "success": false }),
                         error: Some("App handle not available for LLM reasoning".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -3952,7 +4541,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to send email: {}", e), "success": false }),
                             error: Some(format!("Failed to send email: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -3960,7 +4549,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for email operations", "success": false }),
                         error: Some("App handle not available for email operations".to_string()),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
@@ -3997,7 +4586,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to fetch emails: {}", e), "success": false }),
                             error: Some(format!("Failed to fetch emails: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4005,7 +4594,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for email operations", "success": false }),
                         error: Some("App handle not available for email operations".to_string()),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
@@ -4040,7 +4629,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to create calendar event: {}", e), "success": false }),
                             error: Some(format!("Failed to create calendar event: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4048,7 +4637,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for calendar operations", "success": false }),
                         error: Some("App handle not available for calendar operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4083,7 +4672,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to list calendar events: {}", e), "success": false }),
                             error: Some(format!("Failed to list calendar events: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4091,7 +4680,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for calendar operations", "success": false }),
                         error: Some("App handle not available for calendar operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4143,7 +4732,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to upload to cloud storage: {}", e), "success": false }),
                             error: Some(format!("Failed to upload to cloud storage: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4151,7 +4740,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for cloud storage", "success": false }),
                         error: Some("App handle not available for cloud storage".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4202,7 +4791,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to download from cloud storage: {}", e), "success": false }),
                             error: Some(format!("Failed to download from cloud storage: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4210,7 +4799,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for cloud storage", "success": false }),
                         error: Some("App handle not available for cloud storage".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4236,15 +4825,16 @@ impl ToolExecutor {
                         "trello" => Provider::Trello,
                         "asana" => Provider::Asana,
                         other => {
+                            let err_msg = format!(
+                                "Unknown provider: {}. Use 'notion', 'trello', or 'asana'",
+                                other
+                            );
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(format!(
-                                    "Unknown provider: {}. Use 'notion', 'trello', or 'asana'",
-                                    other
-                                )),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            })
+                            });
                         }
                     };
 
@@ -4265,7 +4855,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to create task: {}", e), "success": false }),
                             error: Some(format!("Failed to create task: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4273,7 +4863,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for productivity tools", "success": false }),
                         error: Some("App handle not available for productivity tools".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4303,7 +4893,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to read document: {}", e), "success": false }),
                             error: Some(format!("Failed to read document: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4311,7 +4901,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for document operations", "success": false }),
                         error: Some("App handle not available for document operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4349,7 +4939,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to search document: {}", e), "success": false }),
                             error: Some(format!("Failed to search document: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4357,7 +4947,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for document operations", "success": false }),
                         error: Some("App handle not available for document operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4400,14 +4990,17 @@ impl ToolExecutor {
                             success: true,
                             data: json!({
                                 "file_path": path,
-                                "status": "created"
+                                "filePath": path,
+                                "format": "docx",
+                                "status": "created",
+                                "success": true
                             }),
                             error: None,
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to create Word document: {}", e), "success": false }),
                             error: Some(format!("Failed to create Word document: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4415,7 +5008,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for document operations", "success": false }),
                         error: Some("App handle not available for document operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4459,14 +5052,17 @@ impl ToolExecutor {
                             success: true,
                             data: json!({
                                 "file_path": path,
-                                "status": "created"
+                                "filePath": path,
+                                "format": "xlsx",
+                                "status": "created",
+                                "success": true
                             }),
                             error: None,
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to create Excel document: {}", e), "success": false }),
                             error: Some(format!("Failed to create Excel document: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4474,7 +5070,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for document operations", "success": false }),
                         error: Some("App handle not available for document operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4512,14 +5108,17 @@ impl ToolExecutor {
                             success: true,
                             data: json!({
                                 "file_path": path,
-                                "status": "created"
+                                "filePath": path,
+                                "format": "pdf",
+                                "status": "created",
+                                "success": true
                             }),
                             error: None,
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to create PDF document: {}", e), "success": false }),
                             error: Some(format!("Failed to create PDF document: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4527,7 +5126,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for document operations", "success": false }),
                         error: Some("App handle not available for document operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4586,7 +5185,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Image analysis failed: {}", e), "success": false }),
                             error: Some(format!("Image analysis failed: {}", e)),
                             metadata: HashMap::from([(
                                 "image_path".to_string(),
@@ -4597,7 +5196,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for image analysis", "success": false }),
                         error: Some("App handle not available for image analysis".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4613,7 +5212,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     });
@@ -4636,12 +5235,15 @@ impl ToolExecutor {
                         error: None,
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Git status failed: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
+                    Err(e) => {
+                        let err_msg = format!("Git status failed: {}", e);
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": err_msg.clone(), "success": false }),
+                            error: Some(err_msg),
+                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        })
+                    }
                 }
             }
             "git_commit" => {
@@ -4659,7 +5261,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     });
@@ -4681,12 +5283,15 @@ impl ToolExecutor {
                             ("message".to_string(), json!(message)),
                         ]),
                     }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Git commit failed: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
+                    Err(e) => {
+                        let err_msg = format!("Git commit failed: {}", e);
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": err_msg.clone(), "success": false }),
+                            error: Some(err_msg),
+                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        })
+                    }
                 }
             }
             "git_clone" => {
@@ -4704,7 +5309,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&destination).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("destination".to_string(), json!(destination))]),
                     });
@@ -4727,12 +5332,15 @@ impl ToolExecutor {
                             ("destination".to_string(), json!(destination)),
                         ]),
                     }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Git clone failed: {}", e)),
-                        metadata: HashMap::from([("url".to_string(), json!(url))]),
-                    }),
+                    Err(e) => {
+                        let err_msg = format!("Git clone failed: {}", e);
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": err_msg.clone(), "success": false }),
+                            error: Some(err_msg),
+                            metadata: HashMap::from([("url".to_string(), json!(url))]),
+                        })
+                    }
                 }
             }
             "git_add" => {
@@ -4754,7 +5362,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     });
@@ -4773,12 +5381,15 @@ impl ToolExecutor {
                         error: None,
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Git add failed: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
+                    Err(e) => {
+                        let err_msg = format!("Git add failed: {}", e);
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": err_msg.clone(), "success": false }),
+                            error: Some(err_msg),
+                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        })
+                    }
                 }
             }
             "schedule_reminder" => {
@@ -4890,7 +5501,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to schedule reminder: {}", e), "success": false }),
                             error: Some(format!("Failed to schedule reminder: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -4898,7 +5509,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
                         error: Some("App handle not available for scheduling".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -4954,12 +5565,11 @@ impl ToolExecutor {
                             }
                         }
                         ParsedSchedule::Once(_) => {
+                            let err_msg = "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string();
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
-                                error: Some(
-                                    "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string()
-                                ),
+                                data: json!({ "error": err_msg.clone(), "success": false }),
+                                error: Some(err_msg),
                                 metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                             });
                         }
@@ -5028,7 +5638,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to schedule task: {}", e), "success": false }),
                             error: Some(format!("Failed to schedule task: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5036,7 +5646,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
                         error: Some("App handle not available for scheduling".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5090,20 +5700,18 @@ impl ToolExecutor {
                                     ]),
                                 })
                             } else {
+                                let err_msg = format!("No scheduled task found with ID '{}'. Use list_scheduled_tasks to see available tasks.", job_id);
                                 Ok(ToolResult {
                                     success: false,
-                                    data: json!(null),
-                                    error: Some(format!(
-                                        "No scheduled task found with ID '{}'. Use list_scheduled_tasks to see available tasks.",
-                                        job_id
-                                    )),
+                                    data: json!({ "error": err_msg.clone(), "success": false }),
+                                    error: Some(err_msg),
                                     metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                                 })
                             }
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to cancel task: {}", e), "success": false }),
                             error: Some(format!("Failed to cancel task: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5111,7 +5719,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
                         error: Some("App handle not available for scheduling".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5178,7 +5786,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to list tasks: {}", e), "success": false }),
                             error: Some(format!("Failed to list tasks: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5186,7 +5794,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
                         error: Some("App handle not available for scheduling".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5223,7 +5831,7 @@ impl ToolExecutor {
                     .get("timeout_ms")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(FILE_LIST_TIMEOUT_MS)
-                    .min(30_000);
+                    .min(300_000);
                 let mut excludes =
                     Self::parse_string_array_param(&args, "exclude").unwrap_or_else(|| {
                         FILE_LIST_DEFAULT_EXCLUDES
@@ -5237,7 +5845,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([
                             ("path".to_string(), json!(&path)),
@@ -5349,7 +5957,7 @@ impl ToolExecutor {
                         );
                         Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to list directory: {}", e), "success": false }),
                             error: Some(format!("Failed to list directory: {}", e)),
                             metadata: HashMap::from([
                                 ("path".to_string(), json!(&path)),
@@ -5452,7 +6060,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to store memory: {}", e), "success": false }),
                             error: Some(format!("Failed to store memory: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5460,7 +6068,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
                         error: Some("App handle not available for memory operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5524,7 +6132,7 @@ impl ToolExecutor {
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to recall memory: {}", e), "success": false }),
                             error: Some(format!("Failed to recall memory: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5532,7 +6140,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
                         error: Some("App handle not available for memory operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5583,7 +6191,7 @@ impl ToolExecutor {
                         }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
+                            data: json!({ "error": format!("Failed to search memories: {}", e), "success": false }),
                             error: Some(format!("Failed to search memories: {}", e)),
                             metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                         }),
@@ -5591,7 +6199,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
                         error: Some("App handle not available for memory operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5629,7 +6237,7 @@ impl ToolExecutor {
                             }),
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
                                 error: Some(format!("Failed to delete memory: {}", e)),
                                 metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                             }),
@@ -5675,7 +6283,7 @@ impl ToolExecutor {
                             }),
                             Err(e) => Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
                                 error: Some(format!("Failed to delete memory: {}", e)),
                                 metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                             }),
@@ -5684,7 +6292,7 @@ impl ToolExecutor {
                 } else {
                     Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
                         error: Some("App handle not available for memory operations".to_string()),
                         metadata: HashMap::new(),
                     })
@@ -5708,7 +6316,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(&save_path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(&save_path))]),
                     });
@@ -5721,7 +6329,7 @@ impl ToolExecutor {
                         if !response.status().is_success() {
                             return Ok(ToolResult {
                                 success: false,
-                                data: json!(null),
+                                data: json!({ "error": format!("Download failed with status: {}", response.status()), "success": false }),
                                 error: Some(format!(
                                     "Download failed with status: {}",
                                     response.status()
@@ -5778,31 +6386,40 @@ impl ToolExecutor {
                                             ]),
                                         })
                                     }
-                                    Err(e) => Ok(ToolResult {
-                                        success: false,
-                                        data: json!(null),
-                                        error: Some(format!("Failed to save file: {}", e)),
-                                        metadata: HashMap::from([
-                                            ("url".to_string(), json!(&url)),
-                                            ("save_path".to_string(), json!(&save_path)),
-                                        ]),
-                                    }),
+                                    Err(e) => {
+                                        let err_msg = format!("Failed to save file: {}", e);
+                                        Ok(ToolResult {
+                                            success: false,
+                                            data: json!({ "error": err_msg.clone(), "success": false }),
+                                            error: Some(err_msg),
+                                            metadata: HashMap::from([
+                                                ("url".to_string(), json!(&url)),
+                                                ("save_path".to_string(), json!(&save_path)),
+                                            ]),
+                                        })
+                                    }
                                 }
                             }
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!(null),
-                                error: Some(format!("Failed to read response: {}", e)),
-                                metadata: HashMap::from([("url".to_string(), json!(&url))]),
-                            }),
+                            Err(e) => {
+                                let err_msg = format!("Failed to read response: {}", e);
+                                Ok(ToolResult {
+                                    success: false,
+                                    data: json!({ "error": err_msg.clone(), "success": false }),
+                                    error: Some(err_msg),
+                                    metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                                })
+                            }
                         }
                     }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Download request failed: {}", e)),
-                        metadata: HashMap::from([("url".to_string(), json!(&url))]),
-                    }),
+                    Err(e) => {
+                        let err_msg = format!("Download request failed: {}", e);
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": err_msg.clone(), "success": false }),
+                            error: Some(err_msg),
+                            metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                        })
+                    }
                 }
             }
             "api_upload" => {
@@ -5819,7 +6436,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(file_path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("file_path".to_string(), json!(file_path))]),
                     });
@@ -5879,7 +6496,7 @@ impl ToolExecutor {
                 if let Err(e) = self.validate_path(path).await {
                     return Ok(ToolResult {
                         success: false,
-                        data: json!(null),
+                        data: json!({ "error": e.to_string(), "success": false }),
                         error: Some(e.to_string()),
                         metadata: HashMap::from([("path".to_string(), json!(path))]),
                     });
@@ -6163,7 +6780,11 @@ impl ToolExecutor {
                             action_id,
                             tool_result.error.as_deref().unwrap_or("Unknown error"),
                             duration_ms,
-                            true, // Most tool errors are retryable
+                            tool_result
+                                .error
+                                .as_deref()
+                                .map(Self::infer_retryable_error)
+                                .unwrap_or(true),
                         );
                     }
                 }
@@ -6197,7 +6818,7 @@ impl ToolExecutor {
                         action_id,
                         &message,
                         duration_ms,
-                        true, // Most errors are retryable
+                        Self::infer_retryable_error(&message),
                     );
                 }
 
@@ -6458,6 +7079,59 @@ mod tests {
         let args: HashMap<String, serde_json::Value> =
             serde_json::from_str(&tool_call.arguments).unwrap();
         assert!(args.get("path").and_then(|v| v.as_str()).is_some());
+    }
+
+    #[tokio::test]
+    async fn test_unknown_tool_returns_failed_result() {
+        let registry = Arc::new(ToolRegistry::new().expect("registry"));
+        let executor = ToolExecutor::new(registry);
+        let tool_call = ToolCall {
+            id: "test_unknown_tool".to_string(),
+            name: "nonexistent_tool".to_string(),
+            arguments: "{}".to_string(),
+        };
+
+        let result = executor
+            .execute_tool_call(&tool_call)
+            .await
+            .expect("unknown tool should surface as tool failure");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Tool not found: nonexistent_tool"));
+    }
+
+    #[tokio::test]
+    async fn test_missing_required_parameter_returns_failed_result() {
+        let registry = create_registry_with_browser_tool(
+            "custom_required_tool",
+            vec![ToolParameter {
+                name: "input".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Required input".to_string(),
+                default: None,
+            }],
+        );
+        let executor = ToolExecutor::new(registry);
+        let tool_call = ToolCall {
+            id: "test_missing_required_parameter".to_string(),
+            name: "custom_required_tool".to_string(),
+            arguments: "{}".to_string(),
+        };
+
+        let result = executor
+            .execute_tool_call(&tool_call)
+            .await
+            .expect("missing parameters should surface as tool failure");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Missing required parameter: input"));
     }
 
     #[tokio::test]
@@ -6875,5 +7549,37 @@ mod tests {
             message.contains("App handle not available for browser automation"),
             "unexpected error: {message}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_registry_tools_are_routable_in_executor() {
+        let registry = Arc::new(ToolRegistry::new().expect("registry"));
+        registry
+            .register_all_tools()
+            .expect("register all default tools");
+        let executor = ToolExecutor::new(registry.clone());
+
+        let mut tool_ids: Vec<String> = registry
+            .list_tools()
+            .iter()
+            .map(|tool| tool.id.clone())
+            .collect();
+        tool_ids.sort();
+
+        for tool_id in tool_ids {
+            let tool_call = ToolCall {
+                id: format!("coverage_{tool_id}"),
+                name: tool_id.clone(),
+                arguments: "{}".to_string(),
+            };
+
+            if let Err(err) = executor.execute_tool_call(&tool_call).await {
+                let message = err.to_string();
+                assert!(
+                    !message.contains("Unknown tool"),
+                    "tool '{tool_id}' is registered but not routable in execute_tool_impl: {message}",
+                );
+            }
+        }
     }
 }

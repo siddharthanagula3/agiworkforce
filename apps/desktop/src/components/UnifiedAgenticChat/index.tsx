@@ -11,7 +11,7 @@
  */
 import { listen, isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -228,23 +228,66 @@ const normalizeInlineToolData = (
 
   if (normalizedTool.includes('image')) {
     const images = Array.isArray(data['images']) ? data['images'] : [];
-    data['images'] = images.map((image) => {
+    const normalizedImages = images.map((image) => {
       if (image && typeof image === 'object') {
         const img = image as Record<string, unknown>;
         return {
           ...img,
-          base64: (img['base64'] as string | undefined) ?? (img['b64_json'] as string | undefined),
+          url:
+            (img['url'] as string | undefined) ??
+            (img['image_url'] as string | undefined) ??
+            (img['src'] as string | undefined),
+          base64:
+            (img['base64'] as string | undefined) ??
+            (img['b64_json'] as string | undefined) ??
+            (img['image_base64'] as string | undefined),
         };
       }
       return image;
     });
+
+    // Accept single-image payload variants and normalize into images[]
+    if (normalizedImages.length === 0) {
+      const singleUrl =
+        (data['url'] as string | undefined) ??
+        (data['image_url'] as string | undefined) ??
+        (data['src'] as string | undefined);
+      const singleBase64 =
+        (data['base64'] as string | undefined) ??
+        (data['b64_json'] as string | undefined) ??
+        (data['image_base64'] as string | undefined);
+      if (singleUrl || singleBase64) {
+        normalizedImages.push({
+          url: singleUrl,
+          base64: singleBase64,
+        });
+      }
+    }
+
+    data['images'] = normalizedImages;
+    data['prompt'] =
+      (data['prompt'] as string | undefined) ??
+      (data['revised_prompt'] as string | undefined) ??
+      (data['input_prompt'] as string | undefined);
   }
 
   if (normalizedTool.includes('video')) {
+    const durationMs = data['duration_ms'] as number | undefined;
     data['videoUrl'] =
-      (data['videoUrl'] as string | undefined) ?? (data['video_url'] as string | undefined);
+      (data['videoUrl'] as string | undefined) ??
+      (data['video_url'] as string | undefined) ??
+      (data['url'] as string | undefined) ??
+      (data['output_url'] as string | undefined) ??
+      (data['src'] as string | undefined);
     data['duration'] =
-      (data['duration'] as number | undefined) ?? (data['duration_secs'] as number | undefined);
+      (data['duration'] as number | undefined) ??
+      (data['duration_secs'] as number | undefined) ??
+      (data['durationSeconds'] as number | undefined) ??
+      (durationMs !== undefined ? durationMs / 1000 : undefined);
+    data['prompt'] =
+      (data['prompt'] as string | undefined) ??
+      (data['revised_prompt'] as string | undefined) ??
+      (data['input_prompt'] as string | undefined);
   }
 
   if (normalizedTool.includes('document')) {
@@ -282,56 +325,34 @@ const normalizeInlineToolData = (
 };
 
 /**
- * Wrapper component that shows active tool streams above the chat input
- * Shows running streams and recently completed/errored streams for visibility
+ * BudgetTracker Component
+ * Moves message-based budget calculations out of the main UnifiedAgenticChat
+ * to prevent full-tree re-renders on every message update.
  */
-const ActiveToolStreamsDisplay: React.FC = () => {
-  const activeToolStreams = useUnifiedChatStore((state) => state.activeToolStreams);
-  const [tick, setTick] = React.useState(0);
+const BudgetTracker: React.FC = () => {
+  const budget = useBillingUsageStore(selectBudget);
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
+  const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // Refresh visibility check every second to handle completed stream expiration
-  React.useEffect(() => {
-    const hasCompletedStreams = Array.from(activeToolStreams.values()).some(
-      (s) => s.status === 'completed' || s.status === 'error',
-    );
+  useEffect(() => {
+    if (!budget.enabled) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    const messageId = String(lastMessage.id ?? crypto.randomUUID());
+    if (countedMessageIdsRef.current.has(messageId)) {
+      return;
+    }
+    // Only count tokens for completed assistant messages or user messages
+    if (lastMessage.metadata?.streaming) return;
 
-    if (!hasCompletedStreams) return;
+    const tokens =
+      lastMessage.metadata?.tokenCount ?? Math.ceil((lastMessage.content?.length ?? 0) * 0.25);
+    addTokenUsage(tokens);
+    countedMessageIdsRef.current.add(messageId);
+  }, [messages, budget.enabled, addTokenUsage]);
 
-    const interval = setInterval(() => {
-      setTick((t) => t + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [activeToolStreams]);
-
-  // Get running streams and recently completed/errored streams (within 3 seconds)
-  // tick is included to trigger recalculation when interval fires
-  const visibleStreams = React.useMemo(() => {
-    // Use tick to force recalculation
-    void tick;
-    const now = Date.now();
-    const streams = Array.from(activeToolStreams.values());
-    return streams.filter((s) => {
-      if (s.status === 'running') return true;
-      // Show completed/errored streams for 3 seconds after completion
-      if ((s.status === 'completed' || s.status === 'error') && s.completedAt) {
-        const completedTime = new Date(s.completedAt).getTime();
-        return now - completedTime < 3000;
-      }
-      return false;
-    });
-  }, [activeToolStreams, tick]);
-
-  // Don't render if no visible streams
-  if (visibleStreams.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="border-t border-gray-800 bg-gray-900/50 px-4 py-2">
-      <ActiveToolStreams showCompleted={true} maxStreams={3} />
-    </div>
-  );
+  return null;
 };
 
 export const UnifiedAgenticChat: React.FC<{
@@ -357,7 +378,6 @@ export const UnifiedAgenticChat: React.FC<{
     setIsLoading,
     setStreamingMessage,
     conversationMode,
-    messages,
     activeView,
     setWorkflowContext,
   } = useUnifiedChatStore(
@@ -369,7 +389,6 @@ export const UnifiedAgenticChat: React.FC<{
       setIsLoading: state.setIsLoading,
       setStreamingMessage: state.setStreamingMessage,
       conversationMode: state.conversationMode,
-      messages: state.messages,
       activeView: state.activeView,
       setWorkflowContext: state.setWorkflowContext,
     })),
@@ -385,14 +404,13 @@ export const UnifiedAgenticChat: React.FC<{
   );
 
   // CHT-008 fix: Consolidated billing store selectors
-  const budget = useBillingUsageStore(selectBudget);
-  const { addTokenUsage, loadCostOverview: loadOverview } = useBillingUsageStore(
+  const { loadCostOverview: loadOverview } = useBillingUsageStore(
     useShallow((state) => ({
-      addTokenUsage: state.addTokenUsage,
       loadCostOverview: state.loadCostOverview,
     })),
   );
-  const countedMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // Budget tracking moved to sub-component BudgetTracker
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // Ref to store unlisten functions for synchronous cleanup
@@ -410,11 +428,48 @@ export const UnifiedAgenticChat: React.FC<{
   >(new Map());
 
   // CHT-005 fix: Track active stream sessions to prevent race conditions
-  // Maps conversation_id to the message_id being streamed for that conversation
   const activeStreamSessionsRef = useRef<Map<number, string>>(new Map());
 
-  // AUDIT-STREAM-059 fix: Track stream watchdog timeout to clear it on stream-end/error
-  const streamWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // AUDIT-STREAM-059 fix: Track stream watchdog timeout
+  const streamWatchdogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Stream Throttling state - batches updates to avoid React saturation
+  const streamBufferRef = useRef<Map<string, string>>(new Map());
+  const rafIdRef = useRef<number | null>(null);
+
+  /**
+   * Processes buffered stream updates using requestAnimationFrame.
+   * This batches multiple chunks into a single React update per frame.
+   */
+  const processStreamBuffer = useCallback(() => {
+    if (streamBufferRef.current.size === 0) {
+      rafIdRef.current = null;
+      return;
+    }
+
+    const state = useUnifiedChatStore.getState();
+    streamBufferRef.current.forEach((content, messageId) => {
+      state.updateMessage(messageId, {
+        content,
+        metadata: { streaming: true },
+      });
+    });
+
+    streamBufferRef.current.clear();
+    rafIdRef.current = requestAnimationFrame(processStreamBuffer);
+  }, []);
+
+  const queueStreamUpdate = useCallback(
+    (messageId: string, fullContent: string) => {
+      streamBufferRef.current.set(messageId, fullContent);
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(processStreamBuffer);
+      }
+    },
+    [processStreamBuffer],
+  ); // Added queueStreamUpdate via useCallback dependency
+
+  // AUDIT-STREAM-059 fix: Track stream watchdog timeout
 
   // CHT-003 fix: Custom confirmation dialog to replace window.confirm()
   const {
@@ -679,33 +734,37 @@ export const UnifiedAgenticChat: React.FC<{
           console.warn(
             `[UnifiedAgenticChat] Tool execution timed out: ${toolName} (${toolCallId})`,
           );
-          upsertToolArtifact(
-            conversationId,
-            toolCallId,
-            {
-              toolName,
-              type: toolNameToArtifactType(toolName),
-              title: toolNameToTitle(toolName),
-              status: 'failed',
-              success: false,
-              error:
-                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-              content:
-                'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
-            },
-            payloadMessageId,
-          );
-          useUnifiedChatStore.getState().addActionTrailEntry({
-            type: 'error',
-            message: `${toolName} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
-            metadata: {
-              tool_call_id: toolCallId,
-              timeout_ms: toolHardTimeoutMs,
-            },
-            fadeAfter: 4500,
-          });
+          const timeoutMessage =
+            'Tool is taking longer than expected. Waiting for a final result from the agent.';
+          const abortOnTimeout = shouldAbortGenerationOnToolTimeout(toolName);
 
-          if (shouldAbortGenerationOnToolTimeout(toolName)) {
+          if (abortOnTimeout) {
+            upsertToolArtifact(
+              conversationId,
+              toolCallId,
+              {
+                toolName,
+                type: toolNameToArtifactType(toolName),
+                title: toolNameToTitle(toolName),
+                status: 'failed',
+                success: false,
+                error:
+                  'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+                content:
+                  'Tool timed out waiting for completion. Please retry the request or narrow the operation scope.',
+              },
+              payloadMessageId,
+            );
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'error',
+              message: `${toolName} timed out after ${Math.round(toolHardTimeoutMs / 1000)}s`,
+              metadata: {
+                tool_call_id: toolCallId,
+                timeout_ms: toolHardTimeoutMs,
+              },
+              fadeAfter: 4500,
+            });
+
             const state = useUnifiedChatStore.getState();
             state.setIsLoading(false);
             state.setStreamingMessage(null);
@@ -722,6 +781,31 @@ export const UnifiedAgenticChat: React.FC<{
                 );
               });
             }
+          } else {
+            upsertToolArtifact(
+              conversationId,
+              toolCallId,
+              {
+                toolName,
+                type: toolNameToArtifactType(toolName),
+                title: toolNameToTitle(toolName),
+                status: 'running',
+                success: undefined,
+                content: timeoutMessage,
+                timeoutWarning: true,
+              },
+              payloadMessageId,
+            );
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'running',
+              message: `${toolName} is taking longer than expected. Waiting for completion...`,
+              metadata: {
+                tool_call_id: toolCallId,
+                timeout_ms: toolHardTimeoutMs,
+                timeout_warning: true,
+              },
+              fadeAfter: 5000,
+            });
           }
           clearToolExecutionTimeout(toolCallId);
         }, toolHardTimeoutMs);
@@ -766,72 +850,18 @@ export const UnifiedAgenticChat: React.FC<{
           content: string;
         }>('chat:stream-chunk', ({ payload }) => {
           const state = useUnifiedChatStore.getState();
-
-          // Validate payload has required fields
-          if (!payload.message_id || typeof payload.content !== 'string') {
-            console.error('[UnifiedAgenticChat] Invalid stream payload', { payload });
-            return;
-          }
-
-          // Handle both string (UUID) and number (backend ID) message IDs
           const targetMessageId = String(payload.message_id);
-
-          // CHT-005 fix: Use the stream session mapping to find the correct target
-          // This is the authoritative source for which message should receive updates
           const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
 
-          // Priority 1: Use the session-tracked message ID (most reliable)
-          if (sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)) {
-            state.updateMessage(sessionMessageId, {
-              content: payload.content,
-              metadata: { streaming: true },
-            });
-            return;
-          }
+          const authoritativeId =
+            sessionMessageId && state.messages.some((m) => m.id === sessionMessageId)
+              ? sessionMessageId
+              : state.messages.some((m) => m.id === targetMessageId)
+                ? targetMessageId
+                : state.currentStreamingMessageId;
 
-          // Priority 2: Use the payload message_id if it exists in messages
-          const messageExists = state.messages.some((m) => m.id === targetMessageId);
-          if (messageExists) {
-            state.updateMessage(targetMessageId, {
-              content: payload.content,
-              metadata: { streaming: true },
-            });
-            return;
-          }
-
-          // Priority 3: Fallback to currentStreamingMessageId
-          const currentStreamingId = state.currentStreamingMessageId;
-          if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
-            console.warn(
-              `[UnifiedAgenticChat] CHT-005: Using fallback currentStreamingId (session: ${sessionMessageId}, payload: ${targetMessageId}, current: ${currentStreamingId})`,
-            );
-            state.updateMessage(currentStreamingId, {
-              content: payload.content,
-              metadata: { streaming: true },
-            });
-            return;
-          }
-
-          // Last resort: find any streaming assistant message (should rarely happen)
-          const lastStreaming = state.messages
-            .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
-            .pop();
-
-          if (lastStreaming) {
-            console.warn(
-              `[UnifiedAgenticChat] CHT-005: Using last-resort streaming message ${lastStreaming.id}`,
-            );
-            state.updateMessage(lastStreaming.id, {
-              content: payload.content,
-              metadata: { streaming: true },
-            });
-          } else {
-            console.error('[UnifiedAgenticChat] CHT-005: No streaming message found to update.', {
-              payloadMessageId: payload.message_id,
-              sessionMessageId,
-              currentStreamingId: state.currentStreamingMessageId,
-              availableMessageIds: state.messages.map((m) => m.id),
-            });
+          if (authoritativeId) {
+            queueStreamUpdate(authoritativeId, payload.content);
           }
         }),
       );
@@ -1451,8 +1481,8 @@ export const UnifiedAgenticChat: React.FC<{
             state.removeActionTrailEntry(runningEntry.id);
           }
 
-          // Clear any running agent status when tool result arrives
-          // This ensures the "Running..." indicator is cleared
+          // Keep agent status coherent during multi-step runs:
+          // a single tool result should update step text, not mark the whole run complete.
           const currentAgent = useUnifiedChatStore.getState().agentStatus;
           console.log(
             '[UnifiedAgenticChat] chat:tool-result - agentStatus:',
@@ -1461,11 +1491,15 @@ export const UnifiedAgenticChat: React.FC<{
             payload.success,
           );
           if (currentAgent && currentAgent.status === 'running') {
-            console.log('[UnifiedAgenticChat] Clearing running agent status from chat:tool-result');
+            console.log(
+              '[UnifiedAgenticChat] Updating running agent step from chat:tool-result',
+              payload.tool_name,
+            );
             useUnifiedChatStore.getState().setAgentStatus({
               ...currentAgent,
-              status: payload.success ? 'completed' : 'failed',
-              completedAt: new Date(),
+              currentStep: payload.success
+                ? `Completed ${payload.tool_name}`
+                : `Failed ${payload.tool_name}`,
             });
             // Verify the update
             const afterAgent = useUnifiedChatStore.getState().agentStatus;
@@ -1698,6 +1732,11 @@ export const UnifiedAgenticChat: React.FC<{
       // Mark as unmounted first to prevent new registrations
       isMountedRef.current = false;
 
+      // Clean up RAF
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+
       // Abort any active streaming to prevent background work after unmount
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -1744,27 +1783,13 @@ export const UnifiedAgenticChat: React.FC<{
     // AUDIT-005-014 fix: Remove stable store actions from dependency array
     // updateMessage and setStreamingMessage are stable zustand actions that don't change
     // Including them causes unnecessary re-registrations of event listeners
-  }, []);
+  }, [queueStreamUpdate]);
 
   useEffect(() => {
     if (defaultSidecarOpen === false) {
       setSidecarOpen(false);
     }
   }, [defaultSidecarOpen, setSidecarOpen]);
-
-  useEffect(() => {
-    if (!budget.enabled) return;
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-    const messageId = String(lastMessage.id ?? crypto.randomUUID());
-    if (countedMessageIdsRef.current.has(messageId)) {
-      return;
-    }
-    const tokens =
-      lastMessage.metadata?.tokenCount ?? Math.ceil((lastMessage.content?.length ?? 0) * 0.25);
-    addTokenUsage(tokens);
-    countedMessageIdsRef.current.add(messageId);
-  }, [messages, budget.enabled, addTokenUsage]);
 
   const fallbackProvider = llmConfig.defaultProvider;
   const providerForMessage = selectedProvider ?? fallbackProvider ?? undefined;
@@ -2419,6 +2444,7 @@ export const UnifiedAgenticChat: React.FC<{
                 />
               </div>
               <BudgetAlertsPanel />
+              <BudgetTracker />
               <SectionErrorBoundary
                 sectionName="ChatStream"
                 fallback={
@@ -2449,7 +2475,7 @@ export const UnifiedAgenticChat: React.FC<{
                   <div className="p-2 text-xs text-zinc-500">Tool progress unavailable</div>
                 }
               >
-                <ActiveToolStreamsDisplay />
+                <ActiveToolStreams />
               </SectionErrorBoundary>
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
