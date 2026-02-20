@@ -56,6 +56,16 @@ impl Default for ManagedCloudProvider {
 }
 
 impl ManagedCloudProvider {
+    fn is_anthropic_model(model: &str) -> bool {
+        let m = model.to_lowercase();
+        m.starts_with("claude")
+            || m.starts_with("anthropic/")
+            || m.contains("claude-")
+            || m.contains("sonnet")
+            || m.contains("opus")
+            || m.contains("haiku")
+    }
+
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(30))
@@ -88,7 +98,7 @@ impl ManagedCloudProvider {
     /// For Claude models, we preserve Anthropic-native features (server tools,
     /// prompt caching, thinking) so the managed cloud can proxy them correctly.
     fn transform_request(&self, request: &LLMRequest) -> Value {
-        let is_claude_model = request.model.to_lowercase().contains("claude");
+        let is_claude_model = Self::is_anthropic_model(&request.model);
 
         let mut transformed =
             serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
@@ -375,10 +385,20 @@ impl LLMProvider for ManagedCloudProvider {
                     .await
                     .map_err(|e| format!("Parse error: {}", e))?;
 
-                let content = body["choices"][0]["message"]["content"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
+                let content = if let Some(s) = body["choices"][0]["message"]["content"].as_str() {
+                    s.to_string()
+                } else if let Some(parts) = body["choices"][0]["message"]["content"].as_array() {
+                    parts
+                        .iter()
+                        .filter_map(|p| match p["type"].as_str() {
+                            Some("text") => p["text"].as_str(),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                } else {
+                    String::new()
+                };
 
                 let prompt_tokens = body["usage"]["prompt_tokens"].as_u64().map(|v| v as u32);
                 let completion_tokens = body["usage"]["completion_tokens"]
@@ -404,6 +424,62 @@ impl LLMProvider for ManagedCloudProvider {
 
                 let cost = credits.as_ref().map(|c| c.cost_cents / 100.0);
 
+                // Extract tool_calls from non-streaming response (OpenAI format)
+                let tool_calls = body["choices"][0]["message"]["tool_calls"]
+                    .as_array()
+                    .map(|calls| {
+                        calls
+                            .iter()
+                            .filter_map(|call| {
+                                let id = call["id"].as_str()?.to_string();
+                                let name = call["function"]["name"].as_str()?.to_string();
+                                let arguments = call["function"]["arguments"]
+                                    .as_str()
+                                    .unwrap_or("{}")
+                                    .to_string();
+                                Some(crate::core::llm::ToolCall {
+                                    id,
+                                    name,
+                                    arguments,
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|calls| !calls.is_empty());
+
+                // Also handle Anthropic-style tool blocks (for Claude models)
+                let tool_calls = tool_calls.or_else(|| {
+                    body["choices"][0]["message"]["content"]
+                        .as_array()
+                        .map(|parts| {
+                            parts
+                                .iter()
+                                .filter_map(|part| {
+                                    let part_type = part["type"].as_str()?;
+                                    if part_type == "tool_use" || part_type == "server_tool_use" {
+                                        let id = part["id"].as_str()?.to_string();
+                                        let raw_name = part["name"].as_str()?.to_string();
+                                        let name = if part_type == "server_tool_use" {
+                                            format!("__server__{}", raw_name)
+                                        } else {
+                                            raw_name
+                                        };
+                                        let arguments = serde_json::to_string(&part["input"])
+                                            .unwrap_or_else(|_| "{}".to_string());
+                                        Some(crate::core::llm::ToolCall {
+                                            id,
+                                            name,
+                                            arguments,
+                                        })
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .filter(|calls| !calls.is_empty())
+                });
+
                 Ok(LLMResponse {
                     content,
                     tokens: total_tokens,
@@ -412,6 +488,7 @@ impl LLMProvider for ManagedCloudProvider {
                     cost,
                     credits,
                     model: body["model"].as_str().unwrap_or(&request.model).to_string(),
+                    tool_calls,
                     ..LLMResponse::default()
                 })
             }

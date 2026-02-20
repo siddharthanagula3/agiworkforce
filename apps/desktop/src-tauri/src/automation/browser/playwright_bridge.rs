@@ -177,11 +177,11 @@ impl PlaywrightBridge {
             ws_endpoint: ws_endpoint.clone(),
         };
 
+        // Acquire both locks in consistent order: browsers -> processes
+        // This matches close_browser_by_id to prevent deadlocks
         let mut browsers = self.browsers.lock().await;
-        browsers.insert(browser_id.clone(), handle.clone());
-        drop(browsers);
-
         let mut processes = self.browser_processes.lock().await;
+        browsers.insert(browser_id.clone(), handle.clone());
         processes.insert(browser_id.clone(), child);
 
         tracing::info!("Browser launched with ID: {}", browser_id);
@@ -195,9 +195,11 @@ impl PlaywrightBridge {
     pub async fn close_browser_by_id(&self, id: &str) -> Result<()> {
         tracing::info!("Closing browser: {}", id);
 
+        // Acquire both locks in consistent order: browsers -> processes
         let mut browsers = self.browsers.lock().await;
+        let mut processes = self.browser_processes.lock().await;
+
         if let Some(_handle) = browsers.remove(id) {
-            let mut processes = self.browser_processes.lock().await;
             if let Some(mut child) = processes.remove(id) {
                 tracing::info!("Killing browser process for {}", id);
                 let _ = child.kill();

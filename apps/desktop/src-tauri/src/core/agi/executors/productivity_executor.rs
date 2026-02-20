@@ -21,11 +21,13 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
+use crate::features::document::{ExcelDocumentCreator, PdfDocumentCreator, WordDocumentCreator};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Executor for productivity operations.
 ///
@@ -150,6 +152,9 @@ impl ToolExecutor for ProductivityExecutor {
             "productivity_create_task",
             "document_read",
             "document_search",
+            "document_create_word",
+            "document_create_pdf",
+            "document_create_excel",
         ]
     }
 
@@ -168,9 +173,34 @@ impl ToolExecutor for ProductivityExecutor {
             "productivity_create_task" => execute_create_task(parameters, context).await,
             "document_read" => execute_document_read(parameters, context).await,
             "document_search" => execute_document_search(parameters, context).await,
+            "document_create_word" => execute_create_word(parameters, context).await,
+            "document_create_pdf" => execute_create_pdf(parameters, context).await,
+            "document_create_excel" => execute_create_excel(parameters, context).await,
             _ => Err(anyhow!("Unknown productivity tool: {}", tool_name)),
         }
     }
+}
+
+/// Resolve document output path (simplified version)
+fn resolve_doc_path(output_path: &str) -> Result<PathBuf> {
+    let trimmed = output_path.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("output_path cannot be empty"));
+    }
+
+    // Handle home directory shorthand
+    let resolved = if trimmed == "~" || trimmed.starts_with("~/") {
+        let home = dirs::home_dir().ok_or_else(|| anyhow!("Unable to resolve home directory"))?;
+        if trimmed == "~" {
+            home
+        } else {
+            home.join(trimmed.trim_start_matches("~/"))
+        }
+    } else {
+        PathBuf::from(trimmed)
+    };
+
+    Ok(resolved)
 }
 
 /// Execute productivity_create_task operation.
@@ -471,6 +501,186 @@ async fn execute_document_search(
         "query": query,
         "results": serde_json::to_value(&results).map_err(|e| anyhow!("Serialization failed: {}", e))?,
         "count": result_count
+    }))
+}
+
+/// Execute document_create_word operation.
+///
+/// Creates a Word document from paragraphs and optional configuration.
+///
+/// # Parameters
+///
+/// - `output_path` (required): Path where the document will be saved
+/// - `title` (optional): Document title
+/// - `author` (optional): Document author
+/// - `paragraphs` (optional): Array of paragraph strings
+async fn execute_create_word(
+    parameters: &HashMap<String, Value>,
+    _context: &ExecutorContext,
+) -> Result<Value> {
+    let output_path = parameters
+        .get("output_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing 'output_path' parameter"))?;
+
+    let title = parameters
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let author = parameters
+        .get("author")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let paragraphs: Vec<String> = parameters
+        .get("paragraphs")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| item.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Resolve output path (inline simplified version)
+    let resolved_path = resolve_doc_path(output_path)?;
+
+    // Use the creator directly
+    let creator = WordDocumentCreator::new();
+    creator.create_simple(&resolved_path.to_string_lossy(), title, author, paragraphs)?;
+
+    tracing::info!(
+        "[ProductivityExecutor] Word document created: {}",
+        resolved_path.display()
+    );
+
+    Ok(json!({
+        "success": true,
+        "file_path": resolved_path.to_string_lossy(),
+        "format": "docx"
+    }))
+}
+
+/// Execute document_create_pdf operation.
+///
+/// Creates a PDF document from text content and optional configuration.
+///
+/// # Parameters
+///
+/// - `output_path` (required): Path where the PDF will be saved
+/// - `title` (optional): Document title
+/// - `content` (optional): Text content for the PDF
+async fn execute_create_pdf(
+    parameters: &HashMap<String, Value>,
+    _context: &ExecutorContext,
+) -> Result<Value> {
+    let output_path = parameters
+        .get("output_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing 'output_path' parameter"))?;
+
+    let title = parameters
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let content = parameters
+        .get("content")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .unwrap_or_default();
+
+    // Convert content to paragraphs (split by newlines)
+    let paragraphs: Vec<String> = if content.is_empty() {
+        vec![]
+    } else {
+        content.split("\n").map(String::from).collect()
+    };
+
+    // Use the creator directly
+    let creator = PdfDocumentCreator::new();
+    let resolved_path = resolve_doc_path(output_path)?;
+    creator.create_simple(&resolved_path.to_string_lossy(), title, None, paragraphs)?;
+
+    tracing::info!(
+        "[ProductivityExecutor] PDF created: {}",
+        resolved_path.display()
+    );
+
+    Ok(json!({
+        "success": true,
+        "file_path": resolved_path.to_string_lossy(),
+        "format": "pdf"
+    }))
+}
+
+/// Execute document_create_excel operation.
+///
+/// Creates an Excel spreadsheet from headers and rows.
+///
+/// # Parameters
+///
+/// - `output_path` (required): Path where the Excel file will be saved
+/// - `sheet_name` (optional): Name of the first sheet (default: "Sheet1")
+/// - `headers` (optional): Array of column header strings
+/// - `rows` (optional): Array of row arrays (each row is an array of cell strings)
+async fn execute_create_excel(
+    parameters: &HashMap<String, Value>,
+    _context: &ExecutorContext,
+) -> Result<Value> {
+    let output_path = parameters
+        .get("output_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("Missing 'output_path' parameter"))?;
+
+    let sheet_name = parameters
+        .get("sheet_name")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .unwrap_or_else(|| "Sheet1".to_string());
+
+    let headers: Vec<String> = parameters
+        .get("headers")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| item.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let rows: Vec<Vec<String>> = parameters
+        .get("rows")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    item.as_array().map(|cells| {
+                        cells
+                            .iter()
+                            .filter_map(|c| c.as_str().map(String::from))
+                            .collect()
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Use the creator directly
+    let creator = ExcelDocumentCreator::new();
+    let resolved_path = resolve_doc_path(output_path)?;
+    creator.create_simple(&resolved_path.to_string_lossy(), &sheet_name, headers, rows)?;
+
+    tracing::info!(
+        "[ProductivityExecutor] Excel document created: {}",
+        resolved_path.display()
+    );
+
+    Ok(json!({
+        "success": true,
+        "file_path": resolved_path.to_string_lossy(),
+        "format": "xlsx"
     }))
 }
 

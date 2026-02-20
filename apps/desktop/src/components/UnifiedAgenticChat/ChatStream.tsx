@@ -35,6 +35,7 @@ import { IterationProgressPanel } from '../AGI';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleEmptyState } from './SimpleEmptyState';
 import { AdvancedEmptyState } from './AdvancedEmptyState';
+import { ToolRationaleDisplay } from './ToolRationaleDisplay';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -436,22 +437,33 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     body: string,
     panel: SidecarMode,
     payload?: Record<string, unknown>,
+    toolRationale?: {
+      toolName?: string;
+      rationale?: string;
+      alternatives?: string[];
+      capabilities?: string[];
+    },
   ) => (
-    <div className={card} key={messageId}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm text-zinc-200">
-          {panel === 'terminal' && <Terminal className="h-4 w-4 text-emerald-300" />}
-          {panel === 'browser' && <MousePointerClick className="h-4 w-4 text-sky-300" />}
-          {panel === 'code' && <Braces className="h-4 w-4 text-amber-400" />}
-          {panel === 'preview' && <PanelTopOpen className="h-4 w-4 text-orange-300" />}
-          {panel === 'diff' && <FileText className="h-4 w-4 text-slate-300" />}
-          <span className="font-medium">{label}</span>
+    <div className="space-y-2">
+      {toolRationale?.toolName && (
+        <ToolRationaleDisplay rationale={toolRationale} />
+      )}
+      <div className={card} key={messageId}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm text-zinc-200">
+            {panel === 'terminal' && <Terminal className="h-4 w-4 text-emerald-300" />}
+            {panel === 'browser' && <MousePointerClick className="h-4 w-4 text-sky-300" />}
+            {panel === 'code' && <Braces className="h-4 w-4 text-amber-400" />}
+            {panel === 'preview' && <PanelTopOpen className="h-4 w-4 text-orange-300" />}
+            {panel === 'diff' && <FileText className="h-4 w-4 text-slate-300" />}
+            <span className="font-medium">{label}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.(panel, payload)}>
+            View output
+          </Button>
         </div>
-        <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.(panel, payload)}>
-          View output
-        </Button>
+        <p className="mt-2 text-sm text-zinc-300">{body}</p>
       </div>
-      <p className="mt-2 text-sm text-zinc-300">{body}</p>
     </div>
   );
 
@@ -559,7 +571,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className={`flex flex-col gap-4 overflow-y-auto h-full ${showSearch ? 'pt-14' : ''}`}
+        className={`flex flex-col gap-4 overflow-y-auto h-full ${showSearch ? 'pt-16' : ''}`}
       >
         <AnimatePresence>
           {}
@@ -686,6 +698,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 meta.summary || message.content || 'Agent performed an action.',
                 kind,
                 { messageId: message.id, ...meta },
+                meta.toolRationale as any,
               );
             }
 
@@ -696,6 +709,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 meta.preview || 'Command finished. View output for details.',
                 'terminal',
                 { command: meta.command, messageId: message.id },
+                meta.toolRationale as any,
               );
             }
 

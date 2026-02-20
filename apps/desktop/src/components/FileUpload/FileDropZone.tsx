@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Upload, File, X, AlertCircle } from 'lucide-react';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 
 const cn = (...classes: (string | undefined | false)[]) => classes.filter(Boolean).join(' ');
 
@@ -40,9 +40,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       setError(null);
 
       if (file.size > maxSize * 1024 * 1024) {
-        const errorMsg = `File "${file.name}" is too large. Maximum size is ${maxSize}MB.`;
+        const errorMsg = `File exceeds ${maxSize}MB limit`;
         setError(errorMsg);
-        toast({ title: 'File too large', description: errorMsg, variant: 'destructive' });
+        toast.error(errorMsg, { description: `"${file.name}" is too large` });
         return false;
       }
 
@@ -59,9 +59,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         );
 
         if (!isAccepted) {
-          const errorMsg = `File "${file.name}" has an invalid type. Accepted types: ${accept}`;
+          const errorMsg = 'Invalid file type';
           setError(errorMsg);
-          toast({ title: 'Invalid file type', description: errorMsg, variant: 'destructive' });
+          toast.error(errorMsg, { description: `"${file.name}" is not an accepted format` });
           return false;
         }
       }
@@ -82,9 +82,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const validFiles = files.filter(validateFile);
 
       if (validFiles.length + uploadedFiles.length > maxFiles) {
-        const errorMsg = `You can only upload a maximum of ${maxFiles} files.`;
+        const errorMsg = `Maximum ${maxFiles} files allowed`;
         setError(errorMsg);
-        toast({ title: 'Too many files', description: errorMsg, variant: 'destructive' });
+        toast.error(errorMsg);
         return;
       }
 
@@ -103,9 +103,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const validFiles = files.filter(validateFile);
 
       if (validFiles.length + uploadedFiles.length > maxFiles) {
-        const errorMsg = `You can only upload a maximum of ${maxFiles} files.`;
+        const errorMsg = `Maximum ${maxFiles} files allowed`;
         setError(errorMsg);
-        toast({ title: 'Too many files', description: errorMsg, variant: 'destructive' });
+        toast.error(errorMsg);
         return;
       }
 

@@ -3,39 +3,112 @@ import { generateId, readFileAsDataURL } from './fileUtils';
 
 export interface UploadConfig {
   onProgress?: (progress: number) => void;
+  /** Chunk size in bytes for large file processing. Default: 1MB */
   chunkSize?: number;
+  /** Maximum file size in bytes before forcing chunked processing. Default: 5MB */
+  largeFileThreshold?: number;
+}
+
+/**
+ * Read file as data URL with progress tracking.
+ * For large files, uses chunked reading to avoid blocking the main thread.
+ */
+async function readFileWithProgress(
+  file: File,
+  onProgress?: (progress: number) => void,
+): Promise<string> {
+  // For smaller files, use direct reading
+  const SMALL_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
+
+  if (file.size <= SMALL_FILE_THRESHOLD) {
+    // Report progress for small files
+    if (onProgress) {
+      onProgress(10);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      onProgress(50);
+    }
+
+    const result = await readFileAsDataURL(file);
+
+    if (onProgress) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      onProgress(100);
+    }
+
+    return result;
+  }
+
+  // For larger files, use chunked reading with FileReader
+  return new Promise((resolve, reject) => {
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    let offset = 0;
+    const chunks: string[] = [];
+
+    const reader = new FileReader();
+
+    const readNextChunk = () => {
+      const slice = file.slice(offset, offset + chunkSize);
+      reader.readAsDataURL(slice);
+    };
+
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        chunks.push(e.target.result as string);
+        offset += chunkSize;
+
+        // Report progress
+        if (onProgress) {
+          const progress = Math.min(Math.round((offset / file.size) * 80) + 10, 90);
+          onProgress(progress);
+        }
+
+        if (offset < file.size) {
+          // Use setTimeout to prevent blocking the main thread
+          setTimeout(readNextChunk, 0);
+        } else {
+          // All chunks read, combine them
+          // For data URLs, we need to extract the base data and combine the binary parts
+          const firstChunk = chunks[0];
+          if (!firstChunk) {
+            reject(new Error(`Failed to read file: ${file.name}`));
+            return;
+          }
+          const dataUrlPrefix = firstChunk.split(',')[0] + ',';
+
+          // Combine all binary data
+          const combinedBinary = chunks.map((chunk) => chunk.split(',')[1]).join('');
+
+          resolve(dataUrlPrefix + combinedBinary);
+
+          if (onProgress) {
+            onProgress(100);
+          }
+        }
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error(`Failed to read file: ${file.name}`));
+    };
+
+    // Start reading
+    readNextChunk();
+  });
 }
 
 export async function uploadFile(file: File, config?: UploadConfig): Promise<FileAttachment> {
-  const { onProgress } = config || {};
+  const { onProgress, largeFileThreshold = 5 * 1024 * 1024 } = config || {};
 
-  // AUDIT-007-014 fix: Declare interval outside try block for guaranteed cleanup
-  let interval: ReturnType<typeof setInterval> | undefined;
+  // Validate file size
+  if (file.size > largeFileThreshold && !onProgress) {
+    console.warn(
+      `Large file (${(file.size / 1024 / 1024).toFixed(2)}MB): Consider adding onProgress callback for better UX`,
+    );
+  }
 
   try {
-    const dataUrl = await readFileAsDataURL(file);
-
-    if (onProgress) {
-      let progress = 0;
-      interval = setInterval(() => {
-        progress += 20;
-        if (progress > 100) {
-          progress = 100;
-          if (interval !== undefined) {
-            clearInterval(interval);
-            interval = undefined;
-          }
-        }
-        onProgress(progress);
-      }, 100);
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      if (interval !== undefined) {
-        clearInterval(interval);
-        interval = undefined;
-      }
-      onProgress(100);
-    }
+    // Read file with progress tracking
+    const dataUrl = await readFileWithProgress(file, onProgress);
 
     const attachment: FileAttachment = {
       id: generateId(),
@@ -47,12 +120,7 @@ export async function uploadFile(file: File, config?: UploadConfig): Promise<Fil
 
     return attachment;
   } catch (error) {
-    throw new Error(`Failed to upload ${file.name}: ${error}`);
-  } finally {
-    // AUDIT-007-014 fix: Ensure interval is always cleared, even on error
-    if (interval !== undefined) {
-      clearInterval(interval);
-    }
+    throw new Error(`Failed to process ${file.name}: ${error}`);
   }
 }
 

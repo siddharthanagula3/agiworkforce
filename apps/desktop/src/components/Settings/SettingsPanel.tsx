@@ -22,7 +22,9 @@ import {
   createDefaultLLMConfig,
   createDefaultWindowPreferences,
   useSettingsStore,
+  type Language,
 } from '../../stores/settingsStore';
+import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
 import { errorTracking } from '../../services/errorTracking';
 import { ResourceMonitor } from '../ResourceMonitor';
@@ -48,6 +50,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const setTheme = useSettingsStore((state) => state.setTheme);
+  const setLanguage = useSettingsStore((state) => state.setLanguage);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
@@ -143,6 +146,14 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
       setHasUnsavedChanges(true);
     },
     [setTheme],
+  );
+
+  const handleLanguageChange = useCallback(
+    (value: Language) => {
+      setLanguage(value);
+      setHasUnsavedChanges(true);
+    },
+    [setLanguage],
   );
 
   const handleAgentModeChange = useCallback(
@@ -433,6 +444,25 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectItem value="light">Light</SelectItem>
                           <SelectItem value="dark">Dark</SelectItem>
                           <SelectItem value="system">System</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="language">Language</Label>
+                      <Select
+                        value={resolvedWindowPreferences.language}
+                        onValueChange={(value) => handleLanguageChange(value as Language)}
+                      >
+                        <SelectTrigger id="language">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SUPPORTED_LANGUAGES.map((lang) => (
+                            <SelectItem key={lang.code} value={lang.code}>
+                              {lang.nativeName}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

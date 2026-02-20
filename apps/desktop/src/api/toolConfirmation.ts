@@ -82,10 +82,12 @@ export async function respondToolConfirmation(
   }
 
   try {
+    // Tauri converts snake_case Rust params to camelCase in TypeScript
+    // So request_id in Rust becomes requestId in TypeScript
     await invoke<void>('respond_tool_confirmation', {
-      request_id: requestId,
+      requestId: requestId,
       approved,
-      remember_choice: rememberChoice,
+      rememberChoice: rememberChoice,
       reason: reason ?? null,
     });
   } catch (error) {

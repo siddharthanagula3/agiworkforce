@@ -3,8 +3,12 @@
 //! Handles the native messaging host process that communicates with Chrome extension
 
 use super::*;
+use std::collections::HashMap;
 use std::io::{stdin, stdout, BufReader, BufWriter};
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
+
+const NATIVE_RESPONSE_TIMEOUT_MS: u64 = 15_000;
 
 /// Native messaging host that runs as a subprocess
 pub struct NativeMessagingHost {
@@ -35,6 +39,7 @@ impl NativeMessagingHost {
     pub async fn run_stdio_host(&self) -> Result<()> {
         let mut stdin = BufReader::new(stdin());
         let mut stdout = BufWriter::new(stdout());
+        let mut buffered_responses: HashMap<String, NativeResponse> = HashMap::new();
 
         tracing::info!("Native messaging host started");
 
@@ -46,17 +51,22 @@ impl NativeMessagingHost {
                     // Send to message handler
                     if let Err(e) = self.message_tx.send(request.clone()).await {
                         tracing::error!("Failed to forward message: {}", e);
+                        let response = NativeResponse::error(
+                            request.id,
+                            format!("Native host forwarding failed: {}", e),
+                        );
+                        if let Err(write_err) = write_message(&mut stdout, &response) {
+                            tracing::error!(
+                                "Failed to write forwarding error response: {}",
+                                write_err
+                            );
+                        }
                         continue;
                     }
 
-                    // Wait for response
-                    let response = {
-                        let mut rx = self.response_rx.lock().await;
-                        match rx.recv().await {
-                            Some(resp) => resp,
-                            None => NativeResponse::error(request.id, "Channel closed"),
-                        }
-                    };
+                    let response = self
+                        .wait_for_response_for_request(&request.id, &mut buffered_responses)
+                        .await;
 
                     // Send response back to extension
                     if let Err(e) = write_message(&mut stdout, &response) {
@@ -75,6 +85,65 @@ impl NativeMessagingHost {
         }
 
         Ok(())
+    }
+
+    async fn wait_for_response_for_request(
+        &self,
+        request_id: &str,
+        buffered_responses: &mut HashMap<String, NativeResponse>,
+    ) -> NativeResponse {
+        if let Some(response) = buffered_responses.remove(request_id) {
+            return response;
+        }
+
+        let deadline = Instant::now() + Duration::from_millis(NATIVE_RESPONSE_TIMEOUT_MS);
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return NativeResponse::error(
+                    request_id.to_string(),
+                    format!(
+                        "Timed out waiting for desktop response after {}ms",
+                        NATIVE_RESPONSE_TIMEOUT_MS
+                    ),
+                );
+            }
+
+            let next_response = tokio::time::timeout(remaining, async {
+                let mut rx = self.response_rx.lock().await;
+                rx.recv().await
+            })
+            .await;
+
+            let Some(response) = (match next_response {
+                Ok(response) => response,
+                Err(_) => {
+                    return NativeResponse::error(
+                        request_id.to_string(),
+                        format!(
+                            "Timed out waiting for desktop response after {}ms",
+                            NATIVE_RESPONSE_TIMEOUT_MS
+                        ),
+                    );
+                }
+            }) else {
+                return NativeResponse::error(
+                    request_id.to_string(),
+                    "Desktop response channel closed unexpectedly".to_string(),
+                );
+            };
+
+            if response.id == request_id {
+                return response;
+            }
+
+            tracing::warn!(
+                "Received out-of-order native response for id '{}'; buffering while waiting for '{}'",
+                response.id,
+                request_id
+            );
+            buffered_responses.insert(response.id.clone(), response);
+        }
     }
 
     pub async fn get_state(&self) -> ConnectionState {
@@ -448,4 +517,54 @@ fn register_windows_native_host(host_name: &str, manifest_path: &std::path::Path
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_wait_for_response_for_request_uses_buffered_response() {
+        let (host, _msg_rx, _resp_tx) = NativeMessagingHost::new();
+        let mut buffered = HashMap::new();
+        buffered.insert(
+            "req-1".to_string(),
+            NativeResponse::success("req-1".to_string(), serde_json::json!({ "ok": true })),
+        );
+
+        let response = host
+            .wait_for_response_for_request("req-1", &mut buffered)
+            .await;
+
+        assert!(response.success);
+        assert_eq!(response.id, "req-1");
+        assert!(buffered.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_response_for_request_buffers_out_of_order_responses() {
+        let (host, _msg_rx, resp_tx) = NativeMessagingHost::new();
+        let mut buffered = HashMap::new();
+
+        let _ = resp_tx
+            .send(NativeResponse::success(
+                "req-other".to_string(),
+                serde_json::json!({ "ok": true }),
+            ))
+            .await;
+        let _ = resp_tx
+            .send(NativeResponse::success(
+                "req-target".to_string(),
+                serde_json::json!({ "ok": true }),
+            ))
+            .await;
+
+        let response = host
+            .wait_for_response_for_request("req-target", &mut buffered)
+            .await;
+
+        assert!(response.success);
+        assert_eq!(response.id, "req-target");
+        assert!(buffered.contains_key("req-other"));
+    }
 }
