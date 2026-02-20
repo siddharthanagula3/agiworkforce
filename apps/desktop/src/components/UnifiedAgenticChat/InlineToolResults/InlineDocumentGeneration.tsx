@@ -57,6 +57,24 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
   const success = data?.success ?? true;
   const failed = status === 'failed' || status === 'error' || !success || Boolean(data?.error);
 
+  // Show error state if status indicates failure, even if data is null
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <FileText className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">Document generation failed</p>
+            {data?.error && <p className="text-xs text-muted-foreground mt-1">{data.error}</p>}
+            {!data?.error && result?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   if (status === 'running') {

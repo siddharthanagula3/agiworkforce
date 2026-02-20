@@ -61,6 +61,12 @@ export interface MessageMetadata {
   label?: string;
   summary?: string;
   preview?: string;
+  toolRationale?: {
+    toolName?: string;
+    rationale?: string;
+    alternatives?: string[];
+    capabilities?: string[];
+  };
 }
 
 export interface Attachment {

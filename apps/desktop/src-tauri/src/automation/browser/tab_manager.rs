@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::sys::error::{Error, Result};
@@ -84,6 +85,8 @@ impl TabManager {
         Ok(tab_id)
     }
 
+    /// Register a new tab. Uses consistent lock ordering: tabs first, then active.
+    /// This prevents deadlocks when multiple methods are called concurrently.
     pub async fn register_tab(&self, id: &str, url: &str) -> Result<()> {
         tracing::info!("Registering tab: {} ({})", id, url);
 
@@ -96,10 +99,12 @@ impl TabManager {
             created_at: chrono::Utc::now().timestamp_millis() as u64,
         };
 
+        // Acquire both locks in consistent order: tabs -> active
         let mut tabs = self.tabs.lock().await;
+        let mut active = self.active_tab.lock().await;
+
         tabs.insert(id.to_string(), tab_info);
 
-        let mut active = self.active_tab.lock().await;
         if active.is_none() {
             *active = Some(id.to_string());
         }
@@ -108,14 +113,17 @@ impl TabManager {
         Ok(())
     }
 
+    /// Close a tab. Uses consistent lock ordering: tabs first, then active.
     pub async fn close_tab(&self, id: &TabId) -> Result<()> {
         tracing::info!("Closing tab: {}", id);
 
+        // Acquire both locks in consistent order: tabs -> active
         let mut tabs = self.tabs.lock().await;
+        let mut active = self.active_tab.lock().await;
+
         tabs.remove(id)
             .ok_or_else(|| Error::Other(format!("Tab not found: {}", id)))?;
 
-        let mut active = self.active_tab.lock().await;
         if active.as_ref() == Some(id) {
             *active = None;
         }
@@ -127,12 +135,14 @@ impl TabManager {
     pub async fn switch_to_tab(&self, id: &TabId) -> Result<()> {
         tracing::info!("Switching to tab: {}", id);
 
+        // Acquire tabs first to verify tab exists
         let tabs = self.tabs.lock().await;
         if !tabs.contains_key(id) {
             return Err(Error::Other(format!("Tab not found: {}", id)));
         }
-        drop(tabs);
+        drop(tabs); // Release tabs before acquiring active to avoid holding too long
 
+        // Now acquire active
         let mut active = self.active_tab.lock().await;
         *active = Some(id.clone());
 
@@ -149,31 +159,55 @@ impl TabManager {
         Ok(tab_list)
     }
 
+    /// Get the active tab info. Uses consistent lock ordering: tabs first, then active.
+    /// This fixes the deadlock risk where get_active_tab was acquiring locks in the
+    /// opposite order (active -> tabs) compared to register_tab and close_tab (tabs -> active).
     pub async fn get_active_tab(&self) -> Result<Option<TabInfo>> {
+        // FIX: Acquire tabs first, then active - consistent with other methods
+        let tabs = self.tabs.lock().await;
         let active = self.active_tab.lock().await;
+
         if let Some(tab_id) = active.as_ref() {
-            let tabs = self.tabs.lock().await;
             Ok(tabs.get(tab_id).cloned())
         } else {
             Ok(None)
         }
     }
 
+    /// Navigate a tab to a URL. Does NOT hold locks across await points to prevent deadlocks.
     pub async fn navigate(&self, id: &TabId, url: &str, _options: NavigationOptions) -> Result<()> {
         tracing::info!("Navigating tab {} to {}", id, url);
 
+        // First check if tab exists (acquire and release lock immediately)
+        {
+            let tabs = self.tabs.lock().await;
+            if !tabs.contains_key(id) {
+                return Err(Error::Other(format!("Tab not found: {}", id)));
+            }
+        }
+
+        // Prepare the updated tab info (outside of lock)
+        let tab_url = url.to_string();
+
+        // Now acquire lock to update
         let mut tabs = self.tabs.lock().await;
-        let tab = tabs
-            .get_mut(id)
-            .ok_or_else(|| Error::Other(format!("Tab not found: {}", id)))?;
+        if let Some(tab) = tabs.get_mut(id) {
+            tab.url = tab_url.clone();
+            tab.loading = true;
+        } else {
+            return Err(Error::Other(format!("Tab not found: {}", id)));
+        }
+        drop(tabs); // Release lock before await
 
-        tab.url = url.to_string();
-        tab.loading = true;
+        // Sleep OUTSIDE of lock - this was causing a deadlock!
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        tab.loading = false;
-        tab.title = "Page Title".to_string();
+        // Re-acquire lock to mark loading complete
+        let mut tabs = self.tabs.lock().await;
+        if let Some(tab) = tabs.get_mut(id) {
+            tab.loading = false;
+            tab.title = "Page Title".to_string();
+        }
 
         tracing::info!("Navigation complete: {}", url);
         Ok(())
@@ -203,19 +237,36 @@ impl TabManager {
         Ok(())
     }
 
+    /// Reload a tab. Does NOT hold locks across await points to prevent deadlocks.
     pub async fn reload(&self, id: &TabId) -> Result<()> {
         tracing::info!("Reloading tab: {}", id);
 
-        let mut tabs = self.tabs.lock().await;
-        let tab = tabs
-            .get_mut(id)
-            .ok_or_else(|| Error::Other(format!("Tab not found: {}", id)))?;
+        // First check if tab exists
+        {
+            let tabs = self.tabs.lock().await;
+            if !tabs.contains_key(id) {
+                return Err(Error::Other(format!("Tab not found: {}", id)));
+            }
+        }
 
-        tab.loading = true;
+        // Mark as loading (acquire lock, modify, release)
+        {
+            let mut tabs = self.tabs.lock().await;
+            if let Some(tab) = tabs.get_mut(id) {
+                tab.loading = true;
+            }
+        }
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Sleep OUTSIDE of lock - this prevents deadlock!
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        tab.loading = false;
+        // Mark as not loading
+        {
+            let mut tabs = self.tabs.lock().await;
+            if let Some(tab) = tabs.get_mut(id) {
+                tab.loading = false;
+            }
+        }
 
         tracing::info!("Page reloaded: {}", id);
         Ok(())

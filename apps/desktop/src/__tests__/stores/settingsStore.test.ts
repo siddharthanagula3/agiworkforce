@@ -37,6 +37,7 @@ describe('settingsStore', () => {
       },
       windowPreferences: {
         theme: 'system',
+        language: 'en',
         startupPosition: 'center',
         dockOnStartup: null,
       },
@@ -184,6 +185,7 @@ describe('settingsStore', () => {
       useSettingsStore.setState({
         windowPreferences: {
           theme: 'system',
+          language: 'en',
           startupPosition: 'center',
           dockOnStartup: 'left',
         },
@@ -277,6 +279,7 @@ describe('settingsStore', () => {
         },
         windowPreferences: {
           theme: 'dark',
+          language: 'en',
           startupPosition: 'remember',
           dockOnStartup: 'left',
         },

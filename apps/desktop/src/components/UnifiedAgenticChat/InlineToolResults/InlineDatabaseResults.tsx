@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   XCircle,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -26,10 +27,36 @@ export interface DatabaseResultData {
   operation?: 'select' | 'insert' | 'update' | 'delete' | 'query';
 }
 
-export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, status: _status }) => {
+export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, status }) => {
   const [expanded, setExpanded] = useState(false);
 
   const data = result?.data as DatabaseResultData | undefined;
+
+  // Show running state
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+        <span className="text-sm text-muted-foreground">Executing query...</span>
+      </div>
+    );
+  }
+
+  // Show error state if status indicates failure
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-red-300 font-medium">Database operation failed</p>
+            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const {

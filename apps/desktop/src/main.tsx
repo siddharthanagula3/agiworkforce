@@ -4,6 +4,7 @@ import './lib/immerSetup';
 import App from './App';
 import './styles/globals.css';
 import { ThemeProvider } from './providers/ThemeProvider';
+import { I18nProvider } from './providers/I18nProvider';
 import { Toaster } from './components/ui/Toaster';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorTracking, setupGlobalErrorHandler } from './services/errorTracking';
@@ -25,11 +26,13 @@ rootElement.style.overflow = 'hidden';
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="agiworkforce-theme">
-      <TooltipProvider>
-        <App />
-        <Toaster />
-      </TooltipProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeProvider defaultTheme="dark" storageKey="agiworkforce-theme">
+        <TooltipProvider>
+          <App />
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
+    </I18nProvider>
   </React.StrictMode>,
 );

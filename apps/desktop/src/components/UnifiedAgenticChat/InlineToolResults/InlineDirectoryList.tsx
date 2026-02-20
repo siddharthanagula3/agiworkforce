@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Folder, File, FileText, ChevronRight, ChevronDown, FolderOpen } from 'lucide-react';
+import { Folder, File, FileText, ChevronRight, ChevronDown, FolderOpen, Loader2 } from 'lucide-react';
 import type { ToolResultProps } from './index';
 
 export interface DirectoryEntry {
@@ -26,10 +26,35 @@ export interface DirectoryListData {
   error?: string;
 }
 
-export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status: _status }) => {
+export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status }) => {
   const [expanded, setExpanded] = useState(true);
 
   const data = result?.data as DirectoryListData | undefined;
+
+  // Show running state
+  if (status === 'running') {
+    return (
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
+        <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
+        <span className="text-sm text-muted-foreground">Listing directory...</span>
+      </div>
+    );
+  }
+
+  // Show error state if status indicates failure
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <div className="text-red-400">⚠</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-red-300 font-medium">Directory listing failed</p>
+            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Hooks must be called unconditionally - call them before any conditional returns
   // Get entries - wrap in useMemo to fix exhaustive-deps warning

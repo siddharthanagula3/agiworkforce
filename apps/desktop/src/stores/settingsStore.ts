@@ -18,6 +18,7 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import type { Provider } from '../types/provider';
 export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
+export type Language = 'en' | 'es';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
 
@@ -45,6 +46,7 @@ interface LLMConfig {
 
 interface WindowPreferences {
   theme: Theme;
+  language: Language;
   startupPosition: 'center' | 'remember';
   dockOnStartup: 'left' | 'right' | null;
 }
@@ -90,6 +92,7 @@ interface SettingsState {
   removeFavoriteModel: (model: string) => void;
 
   setTheme: (theme: Theme) => void;
+  setLanguage: (language: Language) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
@@ -144,6 +147,7 @@ const defaultSettings: Pick<
   },
   windowPreferences: {
     theme: 'system',
+    language: 'en',
     startupPosition: 'center',
     dockOnStartup: null,
   },
@@ -189,7 +193,8 @@ const storageFallback: Storage = {
 // v3: Added alwaysUseAgentMode setting
 // v4: Added executionPreferences for extended timeout support
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
-const SETTINGS_STORE_VERSION = 6;
+// v6: Added language preference
+const SETTINGS_STORE_VERSION = 7;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -385,6 +390,16 @@ export const useSettingsStore = create<SettingsState>()(
           }
         },
 
+        setLanguage: (language: Language) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, language },
+            }),
+            undefined,
+            'settings/setLanguage',
+          );
+        },
+
         setStartupPosition: (position: 'center' | 'remember') => {
           set(
             (state) => ({
@@ -534,6 +549,7 @@ export const useSettingsStore = create<SettingsState>()(
             const mergedWindowPreferences: WindowPreferences = {
               ...defaultSettings.windowPreferences,
               ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
+              language: settings.windowPreferences?.language ?? defaultSettings.windowPreferences.language,
             };
 
             const mergedChatPreferences: ChatPreferences = {
@@ -584,6 +600,22 @@ export const useSettingsStore = create<SettingsState>()(
             } catch (error) {
               console.error('Failed to restore default provider:', error);
             }
+
+            // FIX-003: Sync allowed directories to the backend security guard
+            // This ensures file operations respect user-configured allowed directories
+            try {
+              const dirs = settings.allowedDirectories ?? [];
+              if (dirs.length > 0) {
+                await invoke('update_allowed_directories', { paths: dirs });
+                console.log('[settingsStore] Synced allowed directories to backend:', dirs.length);
+
+                // Also update MCP filesystem server to use the allowed directories
+                await invoke('mcp_update_filesystem_directories', { directories: dirs });
+                console.log('[settingsStore] Updated MCP filesystem with allowed directories:', dirs.length);
+              }
+            } catch (error) {
+              console.error('Failed to sync allowed directories to backend:', error);
+            }
           } catch (error) {
             console.error('Failed to load settings:', error);
 
@@ -616,6 +648,21 @@ export const useSettingsStore = create<SettingsState>()(
                 allowedDirectories,
               },
             });
+
+            // FIX-003: Sync allowed directories to the backend security guard
+            // This ensures file operations respect user-configured allowed directories
+            try {
+              if (allowedDirectories.length > 0) {
+                await invoke('update_allowed_directories', { paths: allowedDirectories });
+
+                // Also update MCP filesystem server to use the allowed directories
+                await invoke('mcp_update_filesystem_directories', { directories: allowedDirectories });
+                console.log('[settingsStore] Updated MCP filesystem with allowed directories:', allowedDirectories.length);
+              }
+            } catch (error) {
+              console.error('Failed to sync allowed directories to backend:', error);
+            }
+
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
             console.error('Failed to save settings:', error);
@@ -632,7 +679,12 @@ export const useSettingsStore = create<SettingsState>()(
         ),
         partialize: (state) => ({
           llmConfig: state.llmConfig,
-          windowPreferences: state.windowPreferences,
+          windowPreferences: {
+            theme: state.windowPreferences.theme,
+            language: state.windowPreferences.language,
+            startupPosition: state.windowPreferences.startupPosition,
+            dockOnStartup: state.windowPreferences.dockOnStartup,
+          },
           chatPreferences: state.chatPreferences,
           executionPreferences: state.executionPreferences,
           allowedDirectories: state.allowedDirectories,
@@ -667,6 +719,7 @@ export const useSettingsStore = create<SettingsState>()(
           const mergedWindowPreferences: WindowPreferences = {
             ...currentState.windowPreferences,
             ...(persisted?.windowPreferences ?? {}),
+            language: persisted?.windowPreferences?.language ?? currentState.windowPreferences.language,
           };
 
           const mergedChatPreferences: ChatPreferences = {
@@ -763,6 +816,16 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
+          // Migration from v6 to v7: Add language preference
+          if (version < 7) {
+            if (!state.windowPreferences) {
+              state.windowPreferences = {} as WindowPreferences;
+            }
+            if (!state.windowPreferences.language) {
+              state.windowPreferences.language = 'en';
+            }
+          }
+
           return state as SettingsState;
         },
         // Called when rehydration finishes (with or without errors)
@@ -809,6 +872,7 @@ export const selectFavoriteModels = (state: SettingsState) => state.llmConfig.fa
 
 export const selectWindowPreferences = (state: SettingsState) => state.windowPreferences;
 export const selectTheme = (state: SettingsState) => state.windowPreferences.theme;
+export const selectLanguage = (state: SettingsState) => state.windowPreferences.language;
 export const selectStartupPosition = (state: SettingsState) =>
   state.windowPreferences.startupPosition;
 export const selectDockOnStartup = (state: SettingsState) => state.windowPreferences.dockOnStartup;

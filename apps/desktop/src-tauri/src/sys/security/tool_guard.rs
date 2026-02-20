@@ -125,7 +125,7 @@ pub enum SecurityError {
 pub struct ToolExecutionGuard {
     allowed_tools: HashMap<String, ToolPolicy>,
     rate_limiters: Arc<Mutex<HashMap<String, RateLimiter>>>,
-    allowed_paths: Vec<PathBuf>,
+    allowed_paths: std::sync::RwLock<Vec<PathBuf>>,
     blocked_domains: Vec<String>,
 }
 
@@ -614,7 +614,10 @@ impl ToolExecutionGuard {
         Self {
             allowed_tools,
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
-            allowed_paths: vec![PathBuf::from("/tmp"), std::env::temp_dir()],
+            allowed_paths: std::sync::RwLock::new(vec![
+                PathBuf::from("/tmp"),
+                std::env::temp_dir(),
+            ]),
             blocked_domains: vec![
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),
@@ -626,10 +629,21 @@ impl ToolExecutionGuard {
 
     /// Override the allowed paths for file operations.
     /// Use this to enforce per-user allowed directories from settings.
-    pub fn set_allowed_paths(&mut self, paths: Vec<PathBuf>) {
+    /// This method uses interior mutability via RwLock.
+    pub fn set_allowed_paths(&self, paths: Vec<PathBuf>) {
         if !paths.is_empty() {
-            self.allowed_paths = paths;
+            if let Ok(mut guard) = self.allowed_paths.write() {
+                *guard = paths;
+            }
         }
+    }
+
+    /// Get the current allowed paths (for debugging/inspection)
+    pub fn get_allowed_paths(&self) -> Vec<PathBuf> {
+        self.allowed_paths
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
     }
 
     pub async fn validate_tool_call(
@@ -742,28 +756,40 @@ impl ToolExecutionGuard {
     fn validate_file_path(&self, path: &str) -> std::result::Result<(), SecurityError> {
         debug!("Validating file path: {}", path);
 
+        // Expand tilde ~ to home directory
+        let expanded_path = if path.starts_with("~/") {
+            if let Some(home_dir) = dirs::home_dir() {
+                let expanded = home_dir.join(path.trim_start_matches('~').trim_start_matches('/'));
+                expanded.to_string_lossy().to_string()
+            } else {
+                path.to_string()
+            }
+        } else {
+            path.to_string()
+        };
+
         // SECSYS-004 fix: Check for path traversal patterns (including URL-encoded)
-        let normalized_path = path.replace("%2e%2e", "..").replace("%2f", "/");
+        let normalized_path = expanded_path.replace("%2e%2e", "..").replace("%2f", "/");
         if normalized_path.contains("..") {
-            warn!("Path traversal detected: {}", path);
-            return Err(SecurityError::PathTraversal(path.to_string()));
+            warn!("Path traversal detected: {}", expanded_path);
+            return Err(SecurityError::PathTraversal(expanded_path.to_string()));
         }
 
         // SECSYS-004 fix: Block null bytes (path truncation attack)
-        if path.contains('\0') {
-            warn!("Null byte in path detected: {}", path);
+        if expanded_path.contains('\0') {
+            warn!("Null byte in path detected: {}", expanded_path);
             return Err(SecurityError::PathTraversal(
                 "Null byte in path not allowed".to_string(),
             ));
         }
 
-        let path_buf = PathBuf::from(path);
+        let path_buf = PathBuf::from(&expanded_path);
 
         // SECSYS-004 fix: Block network paths (UNC paths on Windows, NFS/SMB mounts)
         #[cfg(target_os = "windows")]
         {
-            if path.starts_with("\\\\") || path.starts_with("//") {
-                warn!("Network path detected: {}", path);
+            if expanded_path.starts_with("\\\\") || expanded_path.starts_with("//") {
+                warn!("Network path detected: {}", expanded_path);
                 return Err(SecurityError::InvalidParameter(
                     "Network paths (UNC) are not allowed".to_string(),
                 ));
@@ -780,19 +806,19 @@ impl ToolExecutionGuard {
         ];
 
         for prefix in &blocked_mount_prefixes {
-            if path.starts_with(prefix) {
+            if expanded_path.starts_with(prefix) {
                 // Allow /Volumes/ on macOS if it's under a known safe path
                 #[cfg(target_os = "macos")]
                 if prefix == &"/Volumes/" {
                     // Allow if it's a well-known volume name (not arbitrary network share)
-                    let path_lower = path.to_lowercase();
+                    let path_lower = expanded_path.to_lowercase();
                     if path_lower.starts_with("/volumes/macintosh hd")
                         || path_lower.starts_with("/volumes/data")
                     {
                         continue;
                     }
                 }
-                warn!("Mount point path detected: {}", path);
+                warn!("Mount point path detected: {}", expanded_path);
                 return Err(SecurityError::InvalidParameter(format!(
                     "Paths under '{}' are not allowed for security reasons",
                     prefix
@@ -803,14 +829,14 @@ impl ToolExecutionGuard {
         // SECSYS-004 fix: Block device files
         #[cfg(not(target_os = "windows"))]
         {
-            if path.starts_with("/dev/") {
-                warn!("Device path detected: {}", path);
+            if expanded_path.starts_with("/dev/") {
+                warn!("Device path detected: {}", expanded_path);
                 return Err(SecurityError::InvalidParameter(
                     "Device paths are not allowed".to_string(),
                 ));
             }
-            if path.starts_with("/proc/") || path.starts_with("/sys/") {
-                warn!("System pseudo-filesystem path detected: {}", path);
+            if expanded_path.starts_with("/proc/") || expanded_path.starts_with("/sys/") {
+                warn!("System pseudo-filesystem path detected: {}", expanded_path);
                 return Err(SecurityError::InvalidParameter(
                     "System paths (/proc, /sys) are not allowed".to_string(),
                 ));
@@ -831,9 +857,9 @@ impl ToolExecutionGuard {
                     if canonical_str.contains("..") {
                         warn!(
                             "Path traversal detected in resolved relative path: {}",
-                            path
+                            expanded_path
                         );
-                        return Err(SecurityError::PathTraversal(path.to_string()));
+                        return Err(SecurityError::PathTraversal(expanded_path.to_string()));
                     }
                     // Continue with absolute path validation below using the canonicalized path
                     // For now, allow relative paths that resolve within the CWD
@@ -850,8 +876,9 @@ impl ToolExecutionGuard {
 
         let is_allowed = self
             .allowed_paths
-            .iter()
-            .any(|allowed| path_buf.starts_with(allowed));
+            .read()
+            .map(|guard| guard.iter().any(|allowed| path_buf.starts_with(allowed)))
+            .unwrap_or(false);
 
         if !is_allowed {
             if let Some(home_dir) = dirs::home_dir() {
@@ -872,7 +899,7 @@ impl ToolExecutionGuard {
             ];
 
             for prefix in allowed_prefixes {
-                if path.starts_with(prefix) {
+                if expanded_path.starts_with(prefix) {
                     return Ok(());
                 }
             }
@@ -880,18 +907,22 @@ impl ToolExecutionGuard {
             // SECSYS-004 fix: On Windows, check for drive letters but block system drives
             #[cfg(target_os = "windows")]
             {
-                if let Some(first_char) = path.chars().next() {
-                    if first_char.is_ascii_alphabetic() && path.chars().nth(1) == Some(':') {
+                if let Some(first_char) = expanded_path.chars().next() {
+                    if first_char.is_ascii_alphabetic() && expanded_path.chars().nth(1) == Some(':')
+                    {
                         let drive = first_char.to_ascii_uppercase();
                         // Block Windows system drive except Users folder (already handled above)
-                        if drive == 'C' && !path.starts_with("C:\\Users\\") {
+                        if drive == 'C' && !expanded_path.starts_with("C:\\Users\\") {
                             // Allow specific safe Windows paths
                             let safe_windows_paths = vec!["C:\\Temp\\", "C:\\temp\\"];
-                            if !safe_windows_paths.iter().any(|p| path.starts_with(p)) {
-                                warn!("System drive path outside Users: {}", path);
+                            if !safe_windows_paths
+                                .iter()
+                                .any(|p| expanded_path.starts_with(p))
+                            {
+                                warn!("System drive path outside Users: {}", expanded_path);
                                 return Err(SecurityError::InvalidParameter(format!(
                                     "Path '{}' on system drive is not allowed",
-                                    path
+                                    expanded_path
                                 )));
                             }
                         }
@@ -899,10 +930,10 @@ impl ToolExecutionGuard {
                 }
             }
 
-            warn!("Path not in allowed directories: {}", path);
+            warn!("Path not in allowed directories: {}", expanded_path);
             return Err(SecurityError::InvalidParameter(format!(
                 "Path '{}' is not in allowed directories",
-                path
+                expanded_path
             )));
         }
 
@@ -914,8 +945,8 @@ impl ToolExecutionGuard {
 
                     // Check canonical path doesn't contain traversal
                     if canonical_str.contains("..") {
-                        warn!("Symlink path traversal detected: {}", path);
-                        return Err(SecurityError::PathTraversal(path.to_string()));
+                        warn!("Symlink path traversal detected: {}", expanded_path);
+                        return Err(SecurityError::PathTraversal(expanded_path.to_string()));
                     }
 
                     // SECSYS-004 fix: Re-validate the canonical path against blocked prefixes
@@ -923,7 +954,7 @@ impl ToolExecutionGuard {
                         if canonical_str.starts_with(prefix) {
                             warn!(
                                 "Symlink resolves to blocked mount point: {} -> {}",
-                                path, canonical_str
+                                expanded_path, canonical_str
                             );
                             return Err(SecurityError::PathTraversal(format!(
                                 "Path resolves to blocked location: {}",

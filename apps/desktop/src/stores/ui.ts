@@ -711,6 +711,20 @@ export const useUIStore = create<UIState>()(
                   lowered.includes('media')
                 ) {
                   target = 'media';
+                } else if (lowered.includes('calendar')) {
+                  target = 'tasks';
+                } else if (lowered.includes('automation') || lowered.includes('recording')) {
+                  target = 'tools';
+                } else if (lowered.includes('cloud')) {
+                  target = 'files';
+                } else if (
+                  lowered.includes('gmail') ||
+                  lowered.includes('email') ||
+                  lowered.includes('inbox')
+                ) {
+                  target = 'tasks';
+                } else if (lowered.includes('mcp')) {
+                  target = 'tools';
                 }
                 if (!target) return;
                 if (!state.sidecarOpen) {
