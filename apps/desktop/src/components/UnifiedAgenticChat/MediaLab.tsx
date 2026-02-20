@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image as ImageIcon,
   Sparkles,
@@ -98,21 +98,35 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const subscription = useBillingStore((state) => state.subscription);
   const plan = subscription?.plan_name?.toLowerCase() ?? 'free';
-  const videoAllowed = useMemo(
-    () =>
-      ['pro', 'max', 'team', 'enterprise', 'proplus', 'premium'].some((flag) =>
-        plan.includes(flag),
-      ),
+  const mediaLabAllowed = useMemo(
+    () => ['pro', 'max', 'enterprise'].some((flag) => plan.includes(flag)),
     [plan],
   );
+  const videoAllowed = mediaLabAllowed;
 
   const latestImages = imageJobs.filter((job) => job.status === 'completed' && job.images.length);
   const latestVideos = videoJobs.filter((job) => job.status !== 'failed');
 
   const currentProviderModel = imageProviders.find((p) => p.id === imageProvider)?.model;
 
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => {
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
   const handleImageSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!mediaLabAllowed) {
+      toast.error('Media Lab requires Pro, Max, or Enterprise.');
+      return;
+    }
     if (!imagePrompt.trim()) {
       toast.error('Add a prompt to generate images');
       return;
@@ -133,7 +147,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleVideoSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!videoAllowed) {
-      toast.error('Upgrade to Pro or Max to render Veo 3.1 videos');
+      toast.error('Media Lab requires Pro, Max, or Enterprise.');
       return;
     }
     if (!videoPrompt.trim()) {
@@ -196,7 +210,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           Video (Veo 3.1)
           {!videoAllowed && (
             <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300">
-              Pro/Max
+              Pro+
             </span>
           )}
         </button>
@@ -473,7 +487,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             {!videoAllowed && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
-                Veo 3.1 rendering is gated to Pro or Max. Switch plans on our website.
+                Media Lab is available on Pro, Max, and Enterprise plans.
               </div>
             )}
 

@@ -67,6 +67,46 @@ fn validate_sql_identifier(identifier: &str) -> Result<()> {
     Ok(())
 }
 
+/// Escapes a string value for safe use in SQL queries.
+/// This provides basic protection against SQL injection by escaping single quotes.
+fn escape_sql_value(value: &str) -> String {
+    // Escape single quotes by doubling them (SQL standard)
+    value.replace('\'', "''")
+}
+
+/// Validates that a value doesn't contain dangerous SQL patterns.
+#[allow(dead_code)]
+fn validate_sql_value(value: &str) -> Result<()> {
+    let upper = value.to_uppercase();
+
+    // Check for SQL injection patterns
+    let dangerous_patterns = [
+        ";",
+        "--",
+        "/*",
+        "*/",
+        "xp_",
+        "sp_",
+        "exec",
+        "execute",
+        "union select",
+        "drop table",
+        "insert into",
+        "delete from",
+    ];
+
+    for pattern in dangerous_patterns {
+        if upper.contains(pattern) {
+            return Err(Error::Other(format!(
+                "SQL value contains dangerous pattern: {}",
+                pattern
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_where_clause(clause: &str) -> Result<()> {
     if clause.is_empty() {
         return Ok(());
@@ -393,7 +433,28 @@ impl QueryBuilder {
         let values_list: Vec<String> = query
             .values
             .iter()
-            .map(|row| format!("({})", row.join(", ")))
+            .map(|row| {
+                // Escape each value in the row to prevent SQL injection
+                let escaped: Vec<String> = row
+                    .iter()
+                    .map(|v| {
+                        // Check if value looks like a literal (starts/ends with quote)
+                        // or is a number - in those cases, escape appropriately
+                        if v.starts_with('\'') && v.ends_with('\'') {
+                            // Already quoted - just escape internal quotes
+                            let inner = &v[1..v.len() - 1];
+                            format!("'{}'", escape_sql_value(inner))
+                        } else if v.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                            // Numeric value - pass through
+                            v.clone()
+                        } else {
+                            // Treat as string literal
+                            format!("'{}'", escape_sql_value(v))
+                        }
+                    })
+                    .collect();
+                format!("({})", escaped.join(", "))
+            })
             .collect();
 
         let mut sql = format!(
@@ -426,7 +487,22 @@ impl QueryBuilder {
             .iter()
             .map(|(col, val)| {
                 validate_sql_identifier(col).ok()?;
-                Some(format!("{} = {}", col, val))
+                // Escape the value to prevent SQL injection
+                let escaped_val = if val.starts_with('\'') && val.ends_with('\'') {
+                    // Already quoted - just escape internal quotes
+                    let inner = &val[1..val.len() - 1];
+                    format!("'{}'", escape_sql_value(inner))
+                } else if val
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+                {
+                    // Numeric value - pass through
+                    val.clone()
+                } else {
+                    // Treat as string literal
+                    format!("'{}'", escape_sql_value(val))
+                };
+                Some(format!("{} = {}", col, escaped_val))
             })
             .collect::<Option<Vec<_>>>()
             .ok_or_else(|| Error::Other("Invalid column name in SET clause".to_string()))?;

@@ -52,6 +52,7 @@ mod file_executor;
 pub mod git_executor;
 mod llm_executor;
 mod mcp_executor;
+mod media_executor;
 mod ocr_executor;
 mod outcome_executor;
 mod productivity_executor;
@@ -78,6 +79,7 @@ pub use git_executor::{
 };
 pub use llm_executor::LlmExecutor;
 pub use mcp_executor::{McpExecutor, McpExecutorExt, McpExecutorStats, McpToolResult};
+pub use media_executor::MediaExecutor;
 pub use ocr_executor::OcrExecutor;
 pub use outcome_executor::{OutcomeExecutor, OutcomeMeasurement, OutcomeSummary};
 pub use productivity_executor::ProductivityExecutor;
@@ -314,6 +316,12 @@ impl ExecutorRegistry {
         let outcome_exec: Arc<dyn ToolExecutor> = Arc::new(OutcomeExecutor::new());
         for name in outcome_exec.tool_names() {
             executors.insert(name.to_string(), outcome_exec.clone());
+        }
+
+        // Media generation executor (image/video)
+        let media_exec: Arc<dyn ToolExecutor> = Arc::new(MediaExecutor::new());
+        for name in media_exec.tool_names() {
+            executors.insert(name.to_string(), media_exec.clone());
         }
 
         Self {

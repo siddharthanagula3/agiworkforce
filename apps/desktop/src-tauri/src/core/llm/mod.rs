@@ -5,6 +5,7 @@ pub mod function_executor;
 pub mod llm_router;
 pub mod memory_integration;
 pub mod prompt_policy;
+pub mod provider_adapter;
 pub mod providers;
 pub mod server_tools;
 pub mod sse_parser;
@@ -132,7 +133,7 @@ pub enum ContentPart {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioInput {
-    pub data: Vec<u8>,
+    pub data: AudioData,
     pub format: AudioFormat,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_secs: Option<f64>,
@@ -150,6 +151,36 @@ pub enum AudioFormat {
     Opus,
     M4a,
     Webm,
+}
+
+impl AudioFormat {
+    /// Returns the file extension for this audio format
+    pub fn extension(&self) -> &'static str {
+        match self {
+            AudioFormat::Mp3 => "mp3",
+            AudioFormat::Wav => "wav",
+            AudioFormat::Ogg => "ogg",
+            AudioFormat::Flac => "flac",
+            AudioFormat::Aac => "aac",
+            AudioFormat::Opus => "opus",
+            AudioFormat::M4a => "m4a",
+            AudioFormat::Webm => "webm",
+        }
+    }
+
+    /// Returns the MIME type for this audio format
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            AudioFormat::Mp3 => "audio/mpeg",
+            AudioFormat::Wav => "audio/wav",
+            AudioFormat::Ogg => "audio/ogg",
+            AudioFormat::Flac => "audio/flac",
+            AudioFormat::Aac => "audio/aac",
+            AudioFormat::Opus => "audio/opus",
+            AudioFormat::M4a => "audio/mp4",
+            AudioFormat::Webm => "audio/webm",
+        }
+    }
 }
 
 /// Voice options for text-to-speech audio output
@@ -252,6 +283,17 @@ pub enum ImageFormat {
     Webp,
 }
 
+impl ImageFormat {
+    /// Returns the MIME type for this image format
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            ImageFormat::Png => "image/png",
+            ImageFormat::Jpeg => "image/jpeg",
+            ImageFormat::Webp => "image/webp",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoInput {
     pub data: VideoData,
@@ -290,6 +332,19 @@ pub enum VideoFormat {
     Mov,
     Avi,
     Mkv,
+}
+
+impl VideoFormat {
+    /// Returns the MIME type for this video format
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            VideoFormat::Mp4 => "video/mp4",
+            VideoFormat::Webm => "video/webm",
+            VideoFormat::Mov => "video/quicktime",
+            VideoFormat::Avi => "video/x-msvideo",
+            VideoFormat::Mkv => "video/x-matroska",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -388,6 +443,18 @@ pub struct LLMResponse {
     /// Response ID for conversation continuity (OpenAI Responses API)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_id: Option<String>,
+    /// Tokens used for prompt cache creation (Anthropic prompt caching)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_creation_input_tokens: Option<u32>,
+    /// Audio output data bytes (OpenAI TTS / audio responses)
+    #[serde(skip)]
+    pub audio_data: Option<Vec<u8>>,
+    /// Audio format for audio output
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_format: Option<AudioFormat>,
+    /// Transcript from audio input (OpenAI whisper / audio input)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_transcript: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

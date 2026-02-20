@@ -11,8 +11,18 @@ import type {
   GetPageInfoResponse,
   GetFormsResponse,
   FormInfo,
+  RunPageAction,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
+
+const MAX_CONTEXT_HTML_CHARS = 100_000;
+
+interface ActionExecutionResult {
+  success?: boolean;
+  error?: string;
+  type?: string;
+  [key: string]: unknown;
+}
 
 // Content script state
 const automationState: AutomationState = {
@@ -41,7 +51,9 @@ function initialize(): void {
   });
 
   // Check connection status
-  checkConnectionStatus();
+  void checkConnectionStatus();
+  void notifyTabReady();
+  void syncPageContext('content_init');
 
   logger.info('Content script initialized');
 }
@@ -91,6 +103,9 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'CONNECTION_STATUS_CHANGED':
       automationState.connectionStatus = (message as any).connected ? 'connected' : 'disconnected';
       updateIndicatorStatus();
+      if ((message as any).connected) {
+        void syncPageContext('connection_restored');
+      }
       return { success: true } as ExtensionResponse;
 
     case 'CLICK':
@@ -135,10 +150,159 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleCaptureElement();
     case 'GET_ELEMENT_INFO':
       return handleGetElementInfo();
+    case 'RUN_PAGE_ACTIONS':
+      return handleRunPageActions(message as any);
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
   }
+}
+
+async function notifyTabReady(): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'TAB_READY',
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.debug('Failed to notify TAB_READY', error);
+  }
+}
+
+function buildCurrentPageContext(): Record<string, unknown> {
+  const selectedText = window.getSelection()?.toString() || '';
+  return {
+    url: window.location.href,
+    title: document.title || 'Untitled',
+    html: document.documentElement.outerHTML.substring(0, MAX_CONTEXT_HTML_CHARS),
+    selectedText: selectedText.substring(0, 2_000),
+    timestamp: Date.now(),
+  };
+}
+
+async function syncPageContext(reason: string): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'SYNC_PAGE_CONTEXT',
+      timestamp: Date.now(),
+      context: {
+        ...buildCurrentPageContext(),
+        reason,
+      },
+    });
+  } catch (error) {
+    logger.debug('Failed to sync page context', { reason, error });
+  }
+}
+
+async function executePlannedAction(action: RunPageAction): Promise<ActionExecutionResult> {
+  const actionType = String(action.type || '').toLowerCase();
+  switch (actionType) {
+    case 'get_page_info': {
+      const response = handleGetPageInfo() as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'get_forms': {
+      const response = handleGetForms() as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'analyze_selection': {
+      const selected = window.getSelection()?.toString() || String(action.value || '');
+      return {
+        type: actionType,
+        success: true,
+        selectedText: selected.substring(0, 2_000),
+      };
+    }
+    case 'wait_for_selector': {
+      const selector = action.selector ? String(action.selector) : '';
+      const timeout = action.delay != null ? Math.max(Number(action.delay), 500) : 5_000;
+      const response = (await handleWaitForSelector({
+        selector,
+        timeout,
+        options: { visible: true },
+      })) as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'click': {
+      const response = (await handleClick({
+        selector: action.selector,
+        options: { delay: action.delay ?? undefined },
+      })) as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'type': {
+      const response = (await handleType({
+        selector: action.selector,
+        text: String(action.value || ''),
+        options: { delay: action.delay ?? undefined },
+      })) as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    default:
+      return {
+        type: actionType || 'unknown',
+        success: false,
+        error: `Unsupported page action: ${action.type}`,
+      };
+  }
+}
+
+async function handleRunPageActions(message: {
+  taskId?: string;
+  actions?: RunPageAction[];
+}): Promise<ExtensionResponse> {
+  const taskId = message.taskId || `task_${Date.now()}`;
+  const actions = Array.isArray(message.actions) ? message.actions : [];
+  const startedAt = Date.now();
+  const results: ActionExecutionResult[] = [];
+  let actionsPerformed = 0;
+  let firstError: string | undefined;
+
+  for (const action of actions) {
+    const result = await executePlannedAction(action);
+    results.push({
+      id: action.id,
+      ...result,
+    });
+    const success = result.success === true;
+    if (success) {
+      actionsPerformed += 1;
+    } else if (!firstError) {
+      firstError =
+        typeof result.error === 'string'
+          ? result.error
+          : `Action '${action.type}' failed without details`;
+    }
+  }
+
+  let screenshot: string | undefined;
+  try {
+    const capture = (await chrome.runtime.sendMessage({
+      type: 'CAPTURE_SCREENSHOT',
+      format: 'png',
+      quality: 80,
+    })) as { success?: boolean; data?: string };
+    if (capture?.success && typeof capture.data === 'string') {
+      screenshot = capture.data;
+    }
+  } catch (error) {
+    logger.debug('Unable to capture screenshot after page actions', error);
+  }
+
+  return {
+    success: !firstError,
+    taskId,
+    result: {
+      actions: results,
+      url: window.location.href,
+      title: document.title,
+    },
+    actionsPerformed,
+    duration: Date.now() - startedAt,
+    screenshot,
+    error: firstError,
+  } as ExtensionResponse;
 }
 
 function serializeElement(target: Element | null): Record<string, unknown> | null {

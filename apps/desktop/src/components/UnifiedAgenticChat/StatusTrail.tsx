@@ -7,6 +7,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 interface StatusTrailProps {
   messageId?: string;
   className?: string;
+  variant?: 'absolute' | 'inline';
 }
 
 function getIconForType(type: ActionTrailEntry['type']) {
@@ -135,7 +136,7 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
   );
 }
 
-export function StatusTrail({ messageId, className }: StatusTrailProps) {
+export function StatusTrail({ messageId, className, variant = 'inline' }: StatusTrailProps) {
   const prefersReducedMotion = useReducedMotion();
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail(messageId);
@@ -152,7 +153,7 @@ export function StatusTrail({ messageId, className }: StatusTrailProps) {
   return (
     <div
       className={cn(
-        'absolute -top-20 left-0 right-0',
+        variant === 'absolute' ? 'absolute -top-20 left-0 right-0' : 'relative mb-4',
         'flex flex-col gap-2',
         'px-4 py-2',
         className,

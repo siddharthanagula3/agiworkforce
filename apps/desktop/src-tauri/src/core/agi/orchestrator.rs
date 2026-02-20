@@ -629,7 +629,7 @@ impl AgentOrchestrator {
 
         let agent_id = self.spawn_agent(goal.clone()).await?;
 
-        let max_attempts = 300;
+        let max_attempts = 1200; // 1200 * 100ms = 120 seconds (matches frontend default)
         for _ in 0..max_attempts {
             if let Some(status) = self.get_agent_status(&agent_id).await {
                 if status.status == AgentState::Completed {
@@ -684,7 +684,7 @@ impl AgentOrchestrator {
 
         Ok(OrchestratorResult {
             success: false,
-            summary: "Task execution timed out after 30 seconds.".to_string(),
+            summary: "Task execution timed out after 120 seconds.".to_string(),
         })
     }
 }

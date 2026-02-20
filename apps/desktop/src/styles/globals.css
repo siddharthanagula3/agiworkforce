@@ -132,7 +132,6 @@
   --ease-spring-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
   /* Backdrop blur */
-  --blur-xs: 2px;
   --blur-xs: 4px;
   --blur-md: 12px;
   --blur-lg: 16px;

@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Emitter, State};
 use tokio::sync::oneshot;
@@ -56,6 +57,23 @@ impl ToolConfirmationState {
     /// Get the tool guard for policy lookups
     pub fn tool_guard(&self) -> &ToolExecutionGuard {
         &self.tool_guard
+    }
+
+    /// Update the allowed directories in the tool guard.
+    /// This is called when settings are loaded to sync user-configured directories.
+    pub fn update_allowed_paths(&self, paths: Vec<String>) {
+        let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        self.tool_guard.set_allowed_paths(path_bufs);
+        tracing::info!("Updated tool guard allowed paths");
+    }
+
+    /// Get the current allowed directories from the tool guard (for debugging)
+    pub fn get_allowed_paths(&self) -> Vec<String> {
+        self.tool_guard
+            .get_allowed_paths()
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect()
     }
 
     /// Register a pending confirmation and return a receiver for the response
@@ -276,6 +294,30 @@ pub fn cancel_tool_confirmation(
         request_id
     );
     Ok(())
+}
+
+/// Update the allowed directories in the security tool guard.
+/// This should be called after loading settings to sync user-configured directories.
+#[tauri::command]
+pub fn update_allowed_directories(
+    paths: Vec<String>,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.update_allowed_paths(paths.clone());
+    info!(
+        "[ToolConfirmation] Updated allowed directories: {:?}",
+        paths
+    );
+    Ok(())
+}
+
+/// Get the current allowed directories from the security tool guard.
+/// Useful for debugging and verification.
+#[tauri::command]
+pub fn get_allowed_directories(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<Vec<String>, String> {
+    Ok(state.get_allowed_paths())
 }
 
 // ============================================================================

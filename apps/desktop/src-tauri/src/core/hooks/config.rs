@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// Default timeout for hook execution in milliseconds.
-const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+/// Default timeout for hook execution in milliseconds (120 seconds).
+const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 /// Maximum allowed timeout for hooks in milliseconds (5 minutes).
 const MAX_TIMEOUT_MS: u64 = 300_000;

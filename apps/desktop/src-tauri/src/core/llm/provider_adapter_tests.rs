@@ -2,8 +2,11 @@
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
-    use crate::core::llm::provider_adapter::{ProviderAdapter, ProviderAdapterFactory};
+    use crate::core::llm::provider_adapter::{OpenAIServerTool, ProviderAdapterFactory};
+    use crate::core::llm::{
+        ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider,
+        ResponseFormat, ThinkingParameter, ToolChoice, ToolDefinition,
+    };
     use serde_json::json;
 
     #[test]
@@ -32,7 +35,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -75,7 +78,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -122,7 +125,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -176,7 +179,7 @@ mod tests {
             }),
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -196,7 +199,7 @@ mod tests {
     fn test_openai_adapter_with_tools() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
-        let tools = vec![ToolDefinition::Flat {
+        let tools = vec![ToolDefinition {
             name: "get_weather".to_string(),
             description: "Get the current weather".to_string(),
             parameters: json!({
@@ -230,7 +233,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -247,6 +250,79 @@ mod tests {
         assert_eq!(tools_arr[0]["type"], "function");
         assert_eq!(tools_arr[0]["function"]["name"], "get_weather");
         assert_eq!(adapted["tool_choice"], "auto");
+    }
+
+    #[test]
+    fn test_openai_builtin_tool_mapping_current_ids() {
+        assert_eq!(
+            OpenAIServerTool::from_str("computer_use_preview"),
+            Some(OpenAIServerTool::ComputerUsePreview)
+        );
+        assert_eq!(
+            OpenAIServerTool::from_str("local_shell"),
+            Some(OpenAIServerTool::LocalShell)
+        );
+        assert_eq!(
+            OpenAIServerTool::from_str("code_interpreter"),
+            Some(OpenAIServerTool::CodeInterpreter)
+        );
+        assert_eq!(
+            OpenAIServerTool::from_str("mcp"),
+            Some(OpenAIServerTool::Mcp)
+        );
+    }
+
+    #[test]
+    fn test_openai_apply_patch_drops_non_standard_validate_before_apply() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Apply the patch".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5.2".to_string(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "apply_patch".to_string(),
+                description: "Apply a patch".to_string(),
+                parameters: json!({
+                    "type": "apply_patch",
+                    "validate_before_apply": true
+                }),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("request should adapt");
+        let tools = adapted["tools"].as_array().expect("tools array must exist");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "apply_patch");
+        assert!(
+            tools[0].get("validate_before_apply").is_none(),
+            "non-standard field must be dropped"
+        );
     }
 
     #[test]
@@ -373,6 +449,137 @@ mod tests {
     }
 
     #[test]
+    fn test_openai_adapter_responses_api_top_level_function_call() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "resp_123",
+            "status": "completed",
+            "model": "gpt-5.2",
+            "output": [
+                {
+                    "type": "function_call",
+                    "id": "call_fn_1",
+                    "name": "get_weather",
+                    "arguments": "{\"location\":\"San Francisco\"}"
+                },
+                {
+                    "type": "message",
+                    "content": [
+                        { "type": "output_text", "text": "Checking weather..." }
+                    ]
+                }
+            ],
+            "usage": {
+                "input_tokens": 12,
+                "output_tokens": 18,
+                "total_tokens": 30,
+                "output_tokens_details": {
+                    "reasoning_tokens": 4
+                }
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert_eq!(response.content, "Checking weather...");
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_fn_1");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].arguments, "{\"location\":\"San Francisco\"}");
+    }
+
+    #[test]
+    fn test_openai_adapter_responses_api_server_tool_call_prefixed() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "resp_456",
+            "status": "in_progress",
+            "model": "gpt-5.2-codex",
+            "output": [
+                {
+                    "type": "local_shell_call",
+                    "id": "shell_call_1",
+                    "input": {
+                        "command": "ls -la"
+                    }
+                }
+            ],
+            "usage": {
+                "input_tokens": 5,
+                "output_tokens": 7,
+                "total_tokens": 12,
+                "output_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "shell_call_1");
+        assert_eq!(tool_calls[0].name, "__server__local_shell");
+        assert!(
+            tool_calls[0].arguments.contains("ls -la"),
+            "arguments should include shell command payload"
+        );
+    }
+
+    #[test]
+    fn test_openai_chat_completions_server_tool_call_prefixed() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "chatcmpl-server-1",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "gpt-4.1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_server_web_1",
+                        "type": "web_search",
+                        "input": {"query": "latest ai news"}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 10,
+                "total_tokens": 30
+            }
+        });
+
+        let result = adapter.adapt_response(&api_response);
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(response.tool_calls.is_some());
+        let tool_calls = response.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_server_web_1");
+        assert_eq!(tool_calls[0].name, "__server__web_search");
+        assert!(
+            tool_calls[0].arguments.contains("latest ai news"),
+            "arguments should include server tool payload"
+        );
+    }
+
+    #[test]
     fn test_openai_adapter_supports_features() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
@@ -463,7 +670,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,
@@ -546,7 +753,7 @@ mod tests {
             response_format: None,
             cache_control: None,
             effort: None,
-            code_execution: None,
+            thinking_level: None,
             metadata: None,
             audio_output: None,
             background: None,

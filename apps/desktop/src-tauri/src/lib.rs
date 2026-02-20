@@ -566,7 +566,11 @@ pub fn run() {
                 tracing::error!("Failed to write .ipc_token: {}", e);
             }
 
-            let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(presence_manager.clone(), realtime_token.clone()));
+            let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
+                presence_manager.clone(),
+                realtime_token.clone(),
+                Some(app.handle().clone()),
+            ));
             {
                 let server = realtime_server.clone();
                 async_runtime::spawn(async move {
@@ -1425,6 +1429,7 @@ pub fn run() {
             crate::sys::commands::mcp_check_server_health,
             crate::sys::commands::mcp_set_credential,
             crate::sys::commands::mcp_delete_credential,
+            crate::sys::commands::mcp_update_filesystem_directories,
 
             // MCP OAuth
             crate::sys::commands::mcp_oauth_start,
@@ -1461,6 +1466,10 @@ pub fn run() {
             crate::sys::commands::extension_stop_all,
             crate::sys::commands::extension_get_directory,
             crate::sys::commands::extension_select_package,
+            crate::sys::commands::extension_page_context,
+            crate::sys::commands::extension_analyze_forms,
+            crate::sys::commands::extension_task_result,
+            crate::sys::commands::extension_status,
 
 
             crate::sys::commands::github_clone_repo,
@@ -1906,6 +1915,8 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::clear_remembered_tool_choice,
             crate::sys::commands::tool_confirmation::get_pending_confirmation_count,
             crate::sys::commands::tool_confirmation::cancel_tool_confirmation,
+            crate::sys::commands::tool_confirmation::update_allowed_directories,
+            crate::sys::commands::tool_confirmation::get_allowed_directories,
 
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,

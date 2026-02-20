@@ -2,7 +2,8 @@ use super::workflow_engine::*;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
+use std::time::Duration;
+use tokio::time::{sleep, timeout};
 
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
@@ -550,8 +551,25 @@ impl WorkflowExecutor {
     }
 
     pub fn pause_execution(&self, execution_id: &str) -> Result<(), String> {
-        self.engine
-            .update_execution_status(execution_id, WorkflowStatus::Paused, None, None)?;
+        // Get current execution to capture current state
+        let execution = self.engine.get_execution_status(execution_id)?;
+
+        // Only allow pausing from running state
+        if execution.status != WorkflowStatus::Running
+            && execution.status != WorkflowStatus::WaitingApproval
+        {
+            return Err(format!(
+                "Cannot pause execution in {:?} state",
+                execution.status
+            ));
+        }
+
+        self.engine.update_execution_status(
+            execution_id,
+            WorkflowStatus::Paused,
+            execution.current_node_id,
+            None,
+        )?;
 
         Ok(())
     }
@@ -559,9 +577,23 @@ impl WorkflowExecutor {
     pub fn resume_execution(&self, execution_id: &str) -> Result<(), String> {
         let execution = self.engine.get_execution_status(execution_id)?;
 
-        if execution.status != WorkflowStatus::Paused {
-            return Err("Execution is not paused".to_string());
+        // Allow resuming from either Paused or WaitingApproval states
+        if execution.status != WorkflowStatus::Paused
+            && execution.status != WorkflowStatus::WaitingApproval
+        {
+            return Err(format!(
+                "Execution is not paused or waiting for approval (current status: {:?})",
+                execution.status
+            ));
         }
+
+        // Update status to Running before resuming
+        self.engine.update_execution_status(
+            execution_id,
+            WorkflowStatus::Running,
+            execution.current_node_id.clone(),
+            None,
+        )?;
 
         let workflow = self.engine.get_workflow(&execution.workflow_id)?;
 
@@ -574,26 +606,198 @@ impl WorkflowExecutor {
         if let Some(node_id) = execution.current_node_id {
             context.current_node_id = Some(node_id.clone());
 
+            // Restore outputs from previous execution if available
+            context.variables.extend(execution.outputs);
+
             if let Some(node) = workflow.nodes.iter().find(|n| n.id() == node_id) {
                 let node = node.clone();
                 let engine = Arc::clone(&self.engine);
+                let execution_id = execution_id.to_string();
                 tokio::spawn(async move {
                     let executor = WorkflowExecutor::new(engine);
+                    // Update status to Running when actually resuming execution
+                    let _ = executor.engine.update_execution_status(
+                        &execution_id,
+                        WorkflowStatus::Running,
+                        Some(node.id().to_string()),
+                        None,
+                    );
                     if let Err(e) = executor.execute_node(&workflow, &node, &mut context).await {
                         eprintln!("Failed to resume workflow: {}", e);
+                        let _ = executor.engine.update_execution_status(
+                            &execution_id,
+                            WorkflowStatus::Failed,
+                            Some(node.id().to_string()),
+                            Some(e),
+                        );
                     }
                 });
             }
+        } else {
+            // No current node, start fresh from beginning
+            let engine = Arc::clone(&self.engine);
+            let execution_id = execution_id.to_string();
+            tokio::spawn(async move {
+                let executor = WorkflowExecutor::new(engine);
+                if let Err(e) = executor.run_workflow(workflow, context).await {
+                    eprintln!("Failed to resume workflow: {}", e);
+                    let _ = executor.engine.update_execution_status(
+                        &execution_id,
+                        WorkflowStatus::Failed,
+                        None,
+                        Some(e),
+                    );
+                }
+            });
         }
 
         Ok(())
     }
 
     pub fn cancel_execution(&self, execution_id: &str) -> Result<(), String> {
-        self.engine
-            .update_execution_status(execution_id, WorkflowStatus::Cancelled, None, None)?;
+        // First get the current execution to check its status
+        let execution = self.engine.get_execution_status(execution_id)?;
+
+        // Only allow cancellation from non-terminal states
+        if execution.status == WorkflowStatus::Completed
+            || execution.status == WorkflowStatus::Failed
+            || execution.status == WorkflowStatus::Cancelled
+        {
+            return Err(format!(
+                "Cannot cancel execution in {:?} state",
+                execution.status
+            ));
+        }
+
+        self.engine.update_execution_status(
+            execution_id,
+            WorkflowStatus::Cancelled,
+            execution.current_node_id,
+            Some("Cancelled by user".to_string()),
+        )?;
 
         Ok(())
+    }
+
+    /// Approve a workflow that is waiting for approval
+    pub fn approve_execution(&self, execution_id: &str) -> Result<(), String> {
+        let execution = self.engine.get_execution_status(execution_id)?;
+
+        if execution.status != WorkflowStatus::WaitingApproval {
+            return Err(format!(
+                "Execution is not waiting for approval (current status: {:?})",
+                execution.status
+            ));
+        }
+
+        // Resume execution after approval
+        self.resume_execution(execution_id)
+    }
+
+    /// Reject a workflow that is waiting for approval
+    pub fn reject_execution(
+        &self,
+        execution_id: &str,
+        reason: Option<String>,
+    ) -> Result<(), String> {
+        let execution = self.engine.get_execution_status(execution_id)?;
+
+        if execution.status != WorkflowStatus::WaitingApproval {
+            return Err(format!(
+                "Execution is not waiting for approval (current status: {:?})",
+                execution.status
+            ));
+        }
+
+        self.engine.update_execution_status(
+            execution_id,
+            WorkflowStatus::Failed,
+            execution.current_node_id,
+            reason.or_else(|| Some("Rejected by user".to_string())),
+        )?;
+
+        Ok(())
+    }
+
+    /// Pause execution and wait for approval
+    pub async fn pause_for_approval(&self, execution_id: &str, reason: &str) -> Result<(), String> {
+        self.engine.update_execution_status(
+            execution_id,
+            WorkflowStatus::WaitingApproval,
+            None,
+            Some(reason.to_string()),
+        )?;
+
+        // Note: The actual waiting for approval resolution should be handled
+        // by the caller which will use the approval system to get user decision
+        // This method just sets the state and returns
+
+        Ok(())
+    }
+
+    /// Execute workflow with timeout
+    pub async fn execute_workflow_with_timeout(
+        &self,
+        workflow_id: String,
+        inputs: HashMap<String, Value>,
+        timeout_seconds: u64,
+    ) -> Result<String, String> {
+        let execution_id = self.engine.create_execution(&workflow_id, inputs.clone())?;
+        let workflow = self.engine.get_workflow(&workflow_id)?;
+        let context = ExecutionContext::new(execution_id.clone(), workflow_id.clone(), inputs);
+
+        let engine = Arc::clone(&self.engine);
+        let execution_id_clone = execution_id.clone();
+
+        tokio::spawn(async move {
+            let executor = WorkflowExecutor::new(engine);
+
+            let timeout_duration = Duration::from_secs(timeout_seconds);
+            let result = timeout(timeout_duration, executor.run_workflow(workflow, context)).await;
+
+            match result {
+                Ok(Ok(_)) => {
+                    // Workflow completed successfully - status already updated in run_workflow
+                    tracing::info!("Workflow {} completed within timeout", execution_id_clone);
+                }
+                Ok(Err(e)) => {
+                    // Workflow failed with error - status already updated in run_workflow
+                    tracing::error!("Workflow {} failed: {}", execution_id_clone, e);
+                }
+                Err(_) => {
+                    // Timeout occurred - update status to failed
+                    let _ = executor.engine.update_execution_status(
+                        &execution_id_clone,
+                        WorkflowStatus::Failed,
+                        None,
+                        Some(format!(
+                            "Workflow execution timed out after {} seconds",
+                            timeout_seconds
+                        )),
+                    );
+                    tracing::error!(
+                        "Workflow {} timed out after {} seconds",
+                        execution_id_clone,
+                        timeout_seconds
+                    );
+                }
+            }
+        });
+
+        Ok(execution_id)
+    }
+
+    /// Clean up old executions
+    pub fn cleanup_old_executions(&self, max_age_seconds: i64) -> Result<usize, String> {
+        self.engine.cleanup_old_executions(max_age_seconds)
+    }
+
+    /// Get stuck executions that may need attention
+    pub fn get_stuck_executions(
+        &self,
+        threshold_seconds: i64,
+    ) -> Result<Vec<super::workflow_engine::WorkflowExecution>, String> {
+        self.engine.get_stuck_executions(threshold_seconds)
     }
 }
 

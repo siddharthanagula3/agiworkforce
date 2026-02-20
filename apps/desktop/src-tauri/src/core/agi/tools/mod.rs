@@ -673,6 +673,26 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "browser_get_content".to_string(),
+            name: "Browser Get Content".to_string(),
+            description: "Get the full HTML content of the current page".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![ToolParameter {
+                name: "tab_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Tab ID (optional, uses first tab if not provided)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "browser_execute_async_js".to_string(),
             name: "Execute Async JavaScript".to_string(),
             description: "Execute async JavaScript in the browser and return the result"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -25,6 +25,12 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [imageDims, setImageDims] = useState<{
+    width: number;
+    height: number;
+    naturalWidth: number;
+    naturalHeight: number;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -37,17 +43,50 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     .filter((s) => s.tabId === currentTabId)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
 
+  const updateImageDims = useCallback(() => {
+    if (imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      setImageDims({
+        width: rect.width,
+        height: rect.height,
+        naturalWidth: imageRef.current.naturalWidth,
+        naturalHeight: imageRef.current.naturalHeight,
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (currentTabId && !isStreaming) {
       startStreaming(currentTabId);
     }
 
+    const observer = new ResizeObserver(updateImageDims);
+    if (containerRef.current) observer.observe(containerRef.current);
+
     return () => {
       if (isStreaming) {
         stopStreaming();
       }
+      observer.disconnect();
     };
-  }, [currentTabId, isStreaming, startStreaming, stopStreaming]);
+  }, [currentTabId, isStreaming, startStreaming, stopStreaming, updateImageDims]);
+
+  // Calculate scaled bounds for the highlight overlay
+  const scaledBounds = useMemo(() => {
+    if (!highlightedElement || !imageDims || imageDims.naturalWidth === 0) return null;
+
+    // Use current zoomed/panned rendered image dimensions for scaling
+    // Since the overlay will be a sibling of the img in a relative container
+    const scaleX = imageDims.width / imageDims.naturalWidth;
+    const scaleY = imageDims.height / imageDims.naturalHeight;
+
+    return {
+      x: highlightedElement.x * scaleX,
+      y: highlightedElement.y * scaleY,
+      width: highlightedElement.width * scaleX,
+      height: highlightedElement.height * scaleY,
+    };
+  }, [highlightedElement, imageDims]);
 
   const toggleStreaming = () => {
     if (isStreaming) {
@@ -178,30 +217,33 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
               transition: isPanning ? 'none' : 'transform 0.2s ease-out',
             }}
           >
-            <img
-              ref={imageRef}
-              src={`data:image/png;base64,${latestScreenshot.data}`}
-              alt="Browser screenshot"
-              className="max-w-full max-h-full object-contain pointer-events-none"
-              draggable={false}
-            />
+            <div className="relative inline-block">
+              <img
+                ref={imageRef}
+                src={`data:image/png;base64,${latestScreenshot.data}`}
+                alt="Browser screenshot"
+                className="max-w-full max-h-full object-contain pointer-events-none"
+                draggable={false}
+                onLoad={updateImageDims}
+              />
 
-            {}
-            {highlightedElement && (
-              <div
-                className="absolute border-2 border-yellow-400 bg-yellow-400/10 pointer-events-none animate-pulse"
-                style={{
-                  left: highlightedElement.x,
-                  top: highlightedElement.y,
-                  width: highlightedElement.width,
-                  height: highlightedElement.height,
-                }}
-              >
-                <div className="absolute -top-6 left-0 bg-yellow-400 text-black text-xs px-2 py-1 rounded">
-                  Target Element
+              {/* Highlight Overlay - scaled to rendered image size */}
+              {scaledBounds && (
+                <div
+                  className="absolute border-2 border-yellow-400 bg-yellow-400/10 pointer-events-none animate-pulse z-10"
+                  style={{
+                    left: scaledBounds.x,
+                    top: scaledBounds.y,
+                    width: scaledBounds.width,
+                    height: scaledBounds.height,
+                  }}
+                >
+                  <div className="absolute -top-6 left-0 bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
+                    Target Element
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
