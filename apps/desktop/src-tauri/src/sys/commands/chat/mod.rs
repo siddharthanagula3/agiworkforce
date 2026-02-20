@@ -37,26 +37,26 @@ const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 20;
 const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 20;
 /// Max total wait across all candidate retries for a single follow-up call.
 const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 40;
-/// Fast metadata follow-ups should fail much faster to avoid "stuck thinking" UX.
-const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 8;
-/// Fast metadata follow-ups should have a short overall retry budget.
-const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 16;
+/// Fast metadata follow-ups should still allow for MCP startup and remote latency.
+const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 15;
+/// Fast metadata follow-ups should have a bounded but realistic retry budget.
+const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 45;
 /// Limit fallback fan-out to avoid very long "thinking" states.
 const FOLLOWUP_MAX_CANDIDATES: usize = 2;
 /// Hard upper bound for a streaming tool loop.
 const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 180;
-/// Fast metadata loops should never keep the UI waiting for minutes.
-const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 45;
+/// Fast metadata loops should remain bounded while tolerating transient slowness.
+const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 120;
 /// Default streaming tool-loop iteration limit.
 const STREAMING_TOOL_LOOP_MAX_ITERATIONS: usize = 25;
-/// Fast metadata loops should terminate quickly if the model keeps re-calling tools.
-const FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS: usize = 4;
+/// Fast metadata loops should terminate quickly while still allowing recovery retries.
+const FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS: usize = 8;
 /// Long-running operations that can legitimately take minutes.
 const LONG_RUNNING_TOOL_TIMEOUT_SECS: u64 = 300;
 /// Default timeout for most tools.
 const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 120;
-/// Fast metadata tools should fail quickly and surface guidance.
-const FAST_TOOL_TIMEOUT_SECS: u64 = 10;
+/// Fast metadata tools should fail fast enough for UX but not before realistic completion windows.
+const FAST_TOOL_TIMEOUT_SECS: u64 = 45;
 
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 // AUDIT-STREAM-038 fix: Track active conversation for scoped stop
@@ -1041,51 +1041,7 @@ fn extract_text_from_attachments(attachments: &[ChatAttachment]) -> Vec<(String,
 
 /// Extract text from PDF bytes using pdf-extract crate
 fn extract_pdf_text(pdf_bytes: &[u8]) -> Result<String, String> {
-    // Use pdf-extract crate if available, otherwise return an error
-    // Note: This requires adding pdf-extract to Cargo.toml
-    #[cfg(feature = "pdf-extract")]
-    {
-        use pdf_extract::extract_text_from_mem;
-        extract_text_from_mem(pdf_bytes).map_err(|e| e.to_string())
-    }
-
-    #[cfg(not(feature = "pdf-extract"))]
-    {
-        // Fallback: try basic PDF text extraction without external crate
-        // Look for text streams in PDF
-        let content = String::from_utf8_lossy(pdf_bytes);
-
-        // Very basic extraction - look for text between BT and ET markers
-        let mut extracted = String::new();
-        let mut in_text = false;
-
-        for line in content.lines() {
-            if line.contains("BT") {
-                in_text = true;
-            } else if line.contains("ET") {
-                in_text = false;
-            } else if in_text {
-                // Try to extract text from Tj or TJ operators
-                if let Some(start) = line.find('(') {
-                    if let Some(end) = line.rfind(')') {
-                        if start < end {
-                            let text = &line[start + 1..end];
-                            if !text.is_empty() {
-                                extracted.push_str(text);
-                                extracted.push(' ');
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if extracted.trim().is_empty() {
-            Err("PDF text extraction not available - consider using a vision model to analyze the PDF as images".to_string())
-        } else {
-            Ok(extracted)
-        }
-    }
+    pdf_extract::extract_text_from_mem(pdf_bytes).map_err(|e| e.to_string())
 }
 
 /// Convert ChatAttachments to ContentPart for multimodal messages.
