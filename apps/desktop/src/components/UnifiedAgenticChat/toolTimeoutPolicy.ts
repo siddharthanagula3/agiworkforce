@@ -1,6 +1,6 @@
-const DEFAULT_TOOL_EXECUTION_HARD_TIMEOUT_MS = 120_000;
-const FAST_METADATA_TOOL_TIMEOUT_MS = 10_000;
-const LONG_RUNNING_TOOL_TIMEOUT_MS = 300_000;
+const DEFAULT_TOOL_EXECUTION_HARD_TIMEOUT_MS = 180_000;
+const FAST_METADATA_TOOL_TIMEOUT_MS = 45_000;
+const LONG_RUNNING_TOOL_TIMEOUT_MS = 600_000;
 
 export const resolveToolHardTimeoutMs = (toolName: string): number => {
   const normalized = toolName.toLowerCase();
@@ -32,15 +32,8 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
 };
 
 export const shouldAbortGenerationOnToolTimeout = (toolName: string): boolean => {
-  const normalized = toolName.toLowerCase();
-  return (
-    normalized === 'file_read' ||
-    normalized === 'file_list' ||
-    normalized.includes('list_directory') ||
-    normalized.includes('filesystem__list_directory') ||
-    normalized.includes('list_allowed_directories') ||
-    normalized.includes('filesystem__list_allowed_directories') ||
-    normalized.includes('read_text_file') ||
-    normalized.includes('filesystem__read_text_file')
-  );
+  void toolName;
+  // Keep generation alive by default. Backend tool lifecycle events and model loop
+  // should determine terminal state, avoiding premature frontend aborts.
+  return false;
 };
