@@ -20,6 +20,26 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
 
   const data = result?.data as TerminalOutputData | undefined;
+
+  // Show error state if status indicates failure, even if data is null
+  if (status === 'failed' || status === 'error') {
+    const errorData = data as TerminalOutputData | undefined;
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">Terminal command failed</p>
+            {errorData?.error && <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>}
+            {!errorData?.error && result?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   // In compact mode, hide terminal output completely

@@ -1,5 +1,7 @@
 use super::logs::append_server_log;
-use super::protocol::{JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId};
+use super::protocol::{
+    JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId,
+};
 use crate::core::mcp::{McpError, McpResult};
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -20,6 +22,9 @@ const CLEANUP_INTERVAL_SECS: u64 = 60;
 
 /// Default timeout for HTTP requests (30 seconds)
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
+
+/// Default timeout for stdio JSON-RPC request/response round-trips
+const STDIO_REQUEST_TIMEOUT_SECS: u64 = 120;
 
 /// SSE reconnection delay in milliseconds
 const SSE_RECONNECT_DELAY_MS: u64 = 1000;
@@ -64,7 +69,7 @@ pub struct StdioTransport {
 
     pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>>,
 
-    tx: mpsc::UnboundedSender<JsonRpcRequest>,
+    tx: mpsc::UnboundedSender<McpMessage>,
 
     shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
 
@@ -110,7 +115,7 @@ impl StdioTransport {
             .take()
             .ok_or_else(|| McpError::ConnectionError("Failed to get stderr handle".to_string()))?;
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<JsonRpcRequest>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<McpMessage>();
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
 
         let pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>> =
@@ -125,8 +130,12 @@ impl StdioTransport {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(request) = rx.recv() => {
-                        let msg = McpMessage::Request(request.clone());
+                    Some(msg) = rx.recv() => {
+                        // Extract request ID only for Request variants (for error tracking)
+                        let request_id = match &msg {
+                            McpMessage::Request(req) => Some(req.id.clone()),
+                            _ => None,
+                        };
                         match msg.to_string() {
                             Ok(json) => {
                                 let line = format!("{}\n", json);
@@ -135,10 +144,12 @@ impl StdioTransport {
 
                                     // Notify the specific request about the failure
                                     let mut pending = pending_write.lock();
-                                    if let Some(pending_req) = pending.remove(&request.id) {
-                                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                                            format!("Failed to write request: {}", e)
-                                        )));
+                                    if let Some(id) = request_id {
+                                        if let Some(pending_req) = pending.remove(&id) {
+                                            let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                                                format!("Failed to write request: {}", e)
+                                            )));
+                                        }
                                     }
 
                                     // Notify all remaining pending requests about the connection failure
@@ -157,7 +168,7 @@ impl StdioTransport {
                                 }
                             }
                             Err(e) => {
-                                tracing::error!("[MCP Transport] Failed to serialize request: {}", e);
+                                tracing::error!("[MCP Transport] Failed to serialize message: {}", e);
                             }
                         }
                     }
@@ -263,11 +274,17 @@ impl StdioTransport {
 
         // Periodic cleanup task for stale pending requests
         let pending_cleanup = pending.clone();
+        let is_shutdown_cleanup = is_shutdown.clone();
         tokio::spawn(async move {
             let mut interval =
                 tokio::time::interval(tokio::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
             loop {
                 interval.tick().await;
+
+                if is_shutdown_cleanup.load(Ordering::SeqCst) {
+                    tracing::debug!("[MCP Transport] Cleanup task stopping due to shutdown");
+                    break;
+                }
 
                 let mut pending = pending_cleanup.lock();
                 let now = Instant::now();
@@ -354,13 +371,18 @@ impl McpTransport for StdioTransport {
             );
         }
 
-        self.tx.send(request).map_err(|_| {
+        self.tx.send(McpMessage::Request(request)).map_err(|_| {
             // Clean up pending request if send fails
             self.pending.lock().remove(&id);
             McpError::ConnectionError("Failed to send request: channel closed".to_string())
         })?;
 
-        match tokio::time::timeout(tokio::time::Duration::from_secs(30), response_rx).await {
+        match tokio::time::timeout(
+            tokio::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
+            response_rx,
+        )
+        .await
+        {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => {
                 self.pending.lock().remove(&id);
@@ -371,37 +393,76 @@ impl McpTransport for StdioTransport {
             Err(_) => {
                 // Remove timed out request and return error
                 self.pending.lock().remove(&id);
-                Err(McpError::ConnectionError(
-                    "Request timeout after 30 seconds".to_string(),
-                ))
+                Err(McpError::ConnectionError(format!(
+                    "Request timeout after {} seconds",
+                    STDIO_REQUEST_TIMEOUT_SECS
+                )))
             }
         }
     }
 
     fn send_notification(&self, method: String, params: Option<serde_json::Value>) {
-        let request = JsonRpcRequest {
+        // BUG 1 FIX: Use JsonRpcNotification (no id field) per JSON-RPC 2.0 spec.
+        // Notifications MUST NOT include an id member. Previously this incorrectly
+        // created a JsonRpcRequest with id: RequestId::Null which serializes to
+        // {"id": null, ...}, causing MCP servers to reject the notification.
+        let notification = JsonRpcNotification {
             jsonrpc: "2.0".to_string(),
             method,
             params,
-            id: RequestId::Null,
         };
 
-        let _ = self.tx.send(request);
+        let _ = self.tx.send(McpMessage::Notification(notification));
     }
 
     fn is_alive(&self) -> bool {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return false;
         }
-        let child = self.child.lock();
-        child.is_some()
+        let mut child = self.child.lock();
+        let Some(process) = child.as_mut() else {
+            return false;
+        };
+
+        match process.try_wait() {
+            Ok(Some(status)) => {
+                tracing::warn!(
+                    "[MCP Transport] Child process exited while checking health: {}",
+                    status
+                );
+                self.is_shutdown.store(true, Ordering::SeqCst);
+                child.take();
+                false
+            }
+            Ok(None) => true,
+            Err(e) => {
+                tracing::warn!("[MCP Transport] Failed to poll child process health: {}", e);
+                false
+            }
+        }
     }
 
     async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Transport] Shutting down");
+        self.is_shutdown.store(true, Ordering::SeqCst);
 
         if let Some(tx) = self.shutdown_tx.lock().take() {
             let _ = tx.send(());
+        }
+
+        {
+            let mut pending = self.pending.lock();
+            if !pending.is_empty() {
+                tracing::warn!(
+                    "[MCP Transport] Shutdown draining {} pending requests",
+                    pending.len()
+                );
+            }
+            for (_, pending_req) in pending.drain() {
+                let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                    "Transport shutting down".to_string(),
+                )));
+            }
         }
 
         let child = {
@@ -590,11 +651,17 @@ impl HttpSseTransport {
 
         // Periodic cleanup task for stale pending requests
         let pending_cleanup = pending.clone();
+        let is_shutdown_cleanup = is_shutdown.clone();
         tokio::spawn(async move {
             let mut interval =
                 tokio::time::interval(tokio::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
             loop {
                 interval.tick().await;
+
+                if is_shutdown_cleanup.load(Ordering::SeqCst) {
+                    tracing::debug!("[MCP HTTP Transport] Cleanup task stopping due to shutdown");
+                    break;
+                }
 
                 let mut pending = pending_cleanup.lock();
                 let now = Instant::now();
@@ -1070,11 +1137,14 @@ impl McpTransport for HttpSseTransport {
             return;
         }
 
-        let request = JsonRpcRequest {
+        // BUG 1 FIX: Use JsonRpcNotification (no id field) per JSON-RPC 2.0 spec.
+        // Notifications MUST NOT include an id member. Previously this incorrectly
+        // created a JsonRpcRequest with id: RequestId::Null which serializes to
+        // {"id": null, ...}, causing MCP servers to reject the notification.
+        let notification = JsonRpcNotification {
             jsonrpc: "2.0".to_string(),
             method: method.clone(),
             params,
-            id: RequestId::Null,
         };
 
         let client = self.client.clone();
@@ -1095,7 +1165,7 @@ impl McpTransport for HttpSseTransport {
 
         // Send notification in background (fire and forget)
         tokio::spawn(async move {
-            let body = match serde_json::to_string(&request) {
+            let body = match serde_json::to_string(&notification) {
                 Ok(b) => b,
                 Err(e) => {
                     tracing::error!(
@@ -1128,9 +1198,26 @@ impl McpTransport for HttpSseTransport {
         );
 
         self.is_shutdown.store(true, Ordering::SeqCst);
+        self.sse_connected.store(false, Ordering::SeqCst);
 
         if let Some(tx) = self.shutdown_tx.lock().take() {
             let _ = tx.send(());
+        }
+
+        {
+            let mut pending = self.pending.lock();
+            if !pending.is_empty() {
+                tracing::warn!(
+                    "[MCP HTTP Transport] Shutdown draining {} pending requests for '{}'",
+                    pending.len(),
+                    self.server_name
+                );
+            }
+            for (_, pending_req) in pending.drain() {
+                let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                    "Transport shutting down".to_string(),
+                )));
+            }
         }
 
         Ok(())
@@ -1375,5 +1462,25 @@ mod tests {
 
         assert_eq!(event.event, Some("message".to_string()));
         assert!(event.data.contains("jsonrpc"));
+    }
+
+    #[test]
+    fn test_notification_serialization() {
+        // BUG 1 verification: notifications should NOT have an id field
+        use super::super::protocol::JsonRpcNotification;
+        let notif = JsonRpcNotification {
+            jsonrpc: "2.0".to_string(),
+            method: "notifications/initialized".to_string(),
+            params: None,
+        };
+        let msg = McpMessage::Notification(notif);
+        let json = msg.to_string().unwrap();
+        // Must NOT contain "id" field
+        assert!(
+            !json.contains("\"id\""),
+            "Notification should not have id field: {}",
+            json
+        );
+        assert!(json.contains("notifications/initialized"));
     }
 }

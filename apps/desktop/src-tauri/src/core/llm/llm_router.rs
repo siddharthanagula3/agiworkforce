@@ -894,7 +894,7 @@ impl LLMRouter {
                     } else if token_count < 4000 {
                         "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
                     } else {
-                        "gpt-5" // $1.25/$10 per 1M - strong performance
+                        "gpt-5.2" // Strong OpenAI balanced model
                     }
                 }
                 RoutingStrategy::AutoPremium => {
@@ -918,8 +918,8 @@ impl LLMRouter {
             routed_request.model = resolved_model.to_string();
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
-            // Use a safe default (January 2026: GPT-5 is the balanced default)
-            routed_request.model = "gpt-5".to_string();
+            // Use a safe default from the active model catalog.
+            routed_request.model = "gpt-5.2".to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }
@@ -1746,8 +1746,8 @@ impl LLMRouter {
             },
             Provider::ManagedCloud => match task {
                 TaskCategory::Simple => "gpt-5-nano".to_string(),
-                TaskCategory::Complex => "gpt-5".to_string(),
-                TaskCategory::Creative => "gpt-5".to_string(),
+                TaskCategory::Complex => "gpt-5.2".to_string(),
+                TaskCategory::Creative => "gpt-5.2".to_string(),
             },
         }
     }
@@ -1993,7 +1993,7 @@ impl LLMRouter {
                     } else if token_count < 4000 {
                         "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
                     } else {
-                        "gpt-5" // $1.25/$10 per 1M - strong performance
+                        "gpt-5.2" // Strong OpenAI balanced model
                     }
                 }
                 RoutingStrategy::AutoPremium => {
@@ -2017,8 +2017,8 @@ impl LLMRouter {
             routed_request.model = resolved_model.to_string();
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
-            // Use a safe default (January 2026: GPT-5 is the balanced default)
-            routed_request.model = "gpt-5".to_string();
+            // Use a safe default from the active model catalog.
+            routed_request.model = "gpt-5.2".to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }

@@ -8,60 +8,25 @@ use crate::core::llm::ToolDefinition;
 use crate::sys::commands::mcp::McpState;
 use anyhow::{anyhow, Result};
 use serde_json::json;
+use std::collections::HashSet;
 use std::sync::Arc;
 
-/// Default tools available in chat mode.
-/// These are safe, commonly-used tools that enable Claude Desktop-like functionality.
-const DEFAULT_CHAT_TOOLS: &[&str] = &[
-    // File operations
-    "file_read",
-    "file_write",
-    "file_delete",
-    // Directory operations
-    "file_list",
-    // Screenshot and UI
-    "ui_screenshot",
-    "ui_click",
-    "ui_type",
-    // Web search
-    "search_web",
-    // Terminal
-    "terminal_execute",
-    // Browser
-    "browser_navigate",
-    "browser_click",
-    "browser_extract",
-    "browser_type",
-    "browser_wait_for_selector",
-    "browser_get_text",
-    "browser_get_attribute",
-    "browser_screenshot",
-    "browser_hover",
-    "browser_focus",
-    "browser_scroll_into_view",
-    "browser_query_all",
-    "browser_get_content",
-    "browser_execute_async_js",
-    "browser_get_element_state",
-    "browser_wait_for_interactive",
-    "browser_select_option",
-    "browser_check",
-    "browser_uncheck",
-    "browser_get_url",
-    "browser_get_title",
-    "browser_go_back",
-    "browser_go_forward",
-    "browser_reload",
-    "browser_wait_for_navigation",
-    "browser_get_dom_snapshot",
-    // Document generation
-    "document_create_pdf",
-    "document_create_word",
-    "document_create_excel",
-    // Media generation
-    "image_generate",
-    "video_generate",
-];
+/// Excluded tools for chat schema generation.
+/// We intentionally hide legacy aliases to reduce duplicate tool choices.
+const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &["media_generate_image", "media_generate_video"];
+
+fn build_registry_tool_definitions(registry: &ToolRegistry) -> Vec<ToolDefinition> {
+    let mut tools: Vec<ToolDefinition> = registry
+        .list_tools()
+        .into_iter()
+        .filter(|tool| !CHAT_TOOL_SCHEMA_EXCLUSIONS.contains(&tool.id.as_str()))
+        .map(|tool| convert_tool_to_definition(&tool))
+        .collect();
+
+    // Deterministic order keeps prompt/tool schema stable across runs.
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    tools
+}
 
 /// Build tool definitions for chat.
 /// Returns a list of tools the LLM can call during conversation.
@@ -80,21 +45,11 @@ pub fn build_chat_tools(
 
     // Add core tools from registry
     if let Some(registry) = tool_registry {
-        for tool_id in DEFAULT_CHAT_TOOLS {
-            if let Some(tool) = registry.get_tool(tool_id) {
-                tools.push(convert_tool_to_definition(&tool));
-            }
-        }
+        tools.extend(build_registry_tool_definitions(registry));
     } else {
-        // AUDIT-TOOLS-048 fix: Create a fresh registry to ensure schema consistency
-        // This matches what happens at execution time in execute_chat_tool,
-        // preventing schema/runtime drift between LLM tool definitions and actual execution.
+        // Create a fresh registry to ensure schema/runtime consistency.
         if let Ok(registry) = create_tool_registry_for_schema() {
-            for tool_id in DEFAULT_CHAT_TOOLS {
-                if let Some(tool) = registry.get_tool(tool_id) {
-                    tools.push(convert_tool_to_definition(&tool));
-                }
-            }
+            tools.extend(build_registry_tool_definitions(&registry));
         } else {
             // Fallback: create basic tool definitions manually if registry creation fails
             tools.extend(create_builtin_tool_definitions());
@@ -106,6 +61,10 @@ pub fn build_chat_tools(
         let mcp_tools = mcp.registry.get_all_tool_definitions();
         tools.extend(mcp_tools);
     }
+
+    // Ensure unique tool names after merging built-in + MCP tool definitions.
+    let mut seen = HashSet::new();
+    tools.retain(|tool| seen.insert(tool.name.clone()));
 
     tools
 }
@@ -171,10 +130,18 @@ fn convert_tool_to_definition(tool: &Tool) -> ToolDefinition {
     let mut required = Vec::new();
 
     for param in &tool.parameters {
-        properties[&param.name] = json!({
+        let mut prop = json!({
             "type": get_json_schema_type(&param.parameter_type),
             "description": param.description,
         });
+
+        // BUG 2 FIX: Include default values so the LLM knows which parameters are optional
+        // and what value to expect when they are omitted.
+        if let Some(default_val) = &param.default {
+            prop["default"] = default_val.clone();
+        }
+
+        properties[&param.name] = prop;
 
         if param.required {
             required.push(param.name.clone());
@@ -1166,6 +1133,7 @@ pub async fn execute_chat_tool(
 mod tests {
     use super::*;
     use crate::sys::commands::chat::types::ModelCapabilitiesDto;
+    use std::collections::HashSet;
 
     fn test_tool(name: &str) -> ToolDefinition {
         ToolDefinition {
@@ -1223,5 +1191,17 @@ mod tests {
 
         let filtered = filter_tools_by_capabilities(tools, &caps);
         assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn build_chat_tools_includes_application_domains_from_registry() {
+        let tools = build_chat_tools(None, None);
+        let names: HashSet<&str> = tools.iter().map(|tool| tool.name.as_str()).collect();
+
+        // Ensure cross-domain app tools are exposed to chat when available.
+        assert!(names.contains("email_send"));
+        assert!(names.contains("calendar_create_event"));
+        assert!(names.contains("cloud_upload"));
+        assert!(names.contains("productivity_create_task"));
     }
 }

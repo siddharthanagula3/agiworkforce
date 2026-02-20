@@ -23,6 +23,8 @@ export type NativeMessageType =
   | 'GET_CONNECTION_STATUS'
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
+  | 'SYNC_PAGE_CONTEXT'
+  | 'RUN_PAGE_ACTIONS'
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO';
 
@@ -277,6 +279,42 @@ export interface TabReadyResponse {
   ready: boolean;
 }
 
+export interface SyncPageContextMessage extends BaseMessage {
+  type: 'SYNC_PAGE_CONTEXT';
+  context?: {
+    url?: string;
+    title?: string;
+    html?: string;
+    selectedText?: string;
+    timestamp?: number;
+    reason?: string;
+  };
+}
+
+export interface RunPageAction {
+  id: string;
+  type: string;
+  selector?: string | null;
+  value?: string | null;
+  delay?: number | null;
+}
+
+export interface RunPageActionsMessage extends BaseMessage {
+  type: 'RUN_PAGE_ACTIONS';
+  taskId: string;
+  actions: RunPageAction[];
+}
+
+export interface RunPageActionsResponse {
+  success: boolean;
+  taskId?: string;
+  result?: unknown;
+  actionsPerformed?: number;
+  duration?: number;
+  screenshot?: string;
+  error?: string;
+}
+
 // Context-menu DOM capture
 export interface CaptureElementMessage extends BaseMessage {
   type: 'CAPTURE_ELEMENT';
@@ -311,6 +349,8 @@ export type ExtensionMessage =
   | ConnectionStatusMessage
   | ConnectionStatusChangedMessage
   | TabReadyMessage
+  | SyncPageContextMessage
+  | RunPageActionsMessage
   | CaptureElementMessage
   | GetElementInfoMessage;
 
@@ -331,6 +371,7 @@ export type ExtensionResponse =
   | SubmitFormResponse
   | ConnectionStatusResponse
   | TabReadyResponse
+  | RunPageActionsResponse
   | ElementInfoResponse;
 
 // Popup state

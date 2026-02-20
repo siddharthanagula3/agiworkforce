@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useBillingStore } from '../../stores/auth';
 import { resetInFlightChatState } from '../../lib/newChatReset';
 import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
@@ -10,6 +11,15 @@ import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
+import { toast } from 'sonner';
+
+// Lazy load ArtifactPanel for code splitting
+const ArtifactPanel = lazy(() =>
+  import('../Artifacts/ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })),
+);
+
+// Lazy load MediaLab for code splitting
+const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -24,6 +34,14 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [customInstructionsConversationId, setCustomInstructionsConversationId] = useState<
     string | undefined
   >(undefined);
+  const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
+  const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
+  const subscription = useBillingStore((state) => state.subscription);
+  const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
+  const canAccessMediaLab = useMemo(
+    () => ['pro', 'max', 'enterprise'].some((tier) => planName.includes(tier)),
+    [planName],
+  );
 
   const handleOpenCustomInstructions = useCallback((conversationId: string) => {
     setCustomInstructionsConversationId(conversationId);
@@ -34,6 +52,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const sidecarState = useUnifiedChatStore(useShallow((state) => state.sidecar));
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
   const setSidecarWidth = useUnifiedChatStore((state) => state.setSidecarWidth);
+  const closeSidecar = useUnifiedChatStore((state) => state.closeSidecar);
   const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);
   const setSidebarWidth = useUnifiedChatStore((state) => state.setSidebarWidth);
   const sidebarCollapsed = useUnifiedChatStore((state) => state.sidebarCollapsed);
@@ -52,6 +71,38 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     await resetInFlightChatState();
     createConversation('New chat');
   }, [createConversation]);
+
+  const handleToggleArtifactPanel = useCallback(() => {
+    setIsArtifactPanelOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsMediaLabOpen(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleMediaLab = useCallback(() => {
+    if (!canAccessMediaLab) {
+      toast.error('Media Lab requires Pro, Max, or Enterprise.');
+      return;
+    }
+
+    setIsMediaLabOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsArtifactPanelOpen(false);
+        closeSidecar();
+      }
+      return next;
+    });
+  }, [canAccessMediaLab, closeSidecar]);
+
+  useEffect(() => {
+    if (!canAccessMediaLab && isMediaLabOpen) {
+      setIsMediaLabOpen(false);
+    }
+  }, [canAccessMediaLab, isMediaLabOpen]);
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const lastContentLengthRef = useRef(0);
@@ -146,6 +197,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         onOpenSettings={onOpenSettings}
         onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenCustomInstructions={handleOpenCustomInstructions}
+        onToggleArtifactPanel={handleToggleArtifactPanel}
+        onToggleMediaLab={handleToggleMediaLab}
+        canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
       />
@@ -161,7 +215,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         {}
         <div className="relative flex h-full flex-col">
           {}
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-32 scroll-smooth">
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-40 scroll-smooth">
             <div className="mx-auto w-full max-w-5xl px-4 py-6">
               {children}
               {}
@@ -210,6 +264,48 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         onOpenChange={setCustomInstructionsOpen}
         conversationId={customInstructionsConversationId}
       />
+
+      {/* Artifact Panel */}
+      {isArtifactPanelOpen && (
+        <div
+          className={cn(
+            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            !isResizing && 'transition-[width] duration-300',
+          )}
+          style={{
+            width: 400,
+            position: 'absolute',
+            top: 0,
+            right: sidecarState.isOpen ? sidecarWidth : 0,
+            bottom: 0,
+          }}
+        >
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              </div>
+            }
+          >
+            <ArtifactPanel onClose={() => setIsArtifactPanelOpen(false)} />
+          </Suspense>
+        </div>
+      )}
+
+      {/* MediaLab Panel */}
+      {isMediaLabOpen && (
+        <div className="absolute inset-0 z-40 flex flex-col bg-[#090b15]">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              </div>
+            }
+          >
+            <MediaLab onClose={() => setIsMediaLabOpen(false)} />
+          </Suspense>
+        </div>
+      )}
 
       {}
       <div className="fixed bottom-0 left-0 right-0 h-32 bg-linear-to-t from-cream-50 via-cream-50/80 to-transparent dark:from-charcoal-900 dark:via-charcoal-900/80 pointer-events-none z-10" />

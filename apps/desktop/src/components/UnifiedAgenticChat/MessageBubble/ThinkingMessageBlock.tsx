@@ -77,8 +77,8 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
         </div>
       )}
       <div className="min-w-0 relative max-w-full flex-1">
-        {/* Status Trail */}
-        <StatusTrail messageId={message.id} />
+        {/* Status Trail - Using inline variant to prevent overlap */}
+        <StatusTrail messageId={message.id} variant="inline" />
 
         {/* Reasoning Accordion */}
         <ReasoningAccordion

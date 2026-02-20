@@ -231,6 +231,7 @@ pub enum WorkflowTrigger {
 pub enum WorkflowStatus {
     Pending,
     Running,
+    WaitingApproval,
     Paused,
     Completed,
     Failed,
@@ -242,6 +243,7 @@ impl std::fmt::Display for WorkflowStatus {
         match self {
             WorkflowStatus::Pending => write!(f, "pending"),
             WorkflowStatus::Running => write!(f, "running"),
+            WorkflowStatus::WaitingApproval => write!(f, "waiting_approval"),
             WorkflowStatus::Paused => write!(f, "paused"),
             WorkflowStatus::Completed => write!(f, "completed"),
             WorkflowStatus::Failed => write!(f, "failed"),
@@ -565,6 +567,7 @@ impl WorkflowEngine {
                 let status = match status_str.as_str() {
                     "pending" => WorkflowStatus::Pending,
                     "running" => WorkflowStatus::Running,
+                    "waiting_approval" => WorkflowStatus::WaitingApproval,
                     "paused" => WorkflowStatus::Paused,
                     "completed" => WorkflowStatus::Completed,
                     "failed" => WorkflowStatus::Failed,
@@ -672,6 +675,84 @@ impl WorkflowEngine {
             .map_err(|e| format!("Failed to collect logs: {}", e))?;
 
         Ok(logs)
+    }
+
+    /// Clean up old executions that are in terminal states
+    pub fn cleanup_old_executions(&self, max_age_seconds: i64) -> Result<usize, String> {
+        let conn = self.get_connection()?;
+
+        let cutoff_time = Utc::now().timestamp() - max_age_seconds;
+
+        let deleted = conn
+            .execute(
+                "DELETE FROM workflow_executions
+             WHERE status IN ('completed', 'failed', 'cancelled')
+             AND completed_at IS NOT NULL
+             AND completed_at < ?1",
+                rusqlite::params![cutoff_time],
+            )
+            .map_err(|e| format!("Failed to clean up old executions: {}", e))?;
+
+        tracing::info!("Cleaned up {} old executions", deleted);
+        Ok(deleted)
+    }
+
+    /// Get all executions that need attention (stuck in non-terminal states for too long)
+    pub fn get_stuck_executions(
+        &self,
+        threshold_seconds: i64,
+    ) -> Result<Vec<WorkflowExecution>, String> {
+        let conn = self.get_connection()?;
+
+        let threshold_time = Utc::now().timestamp() - threshold_seconds;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, workflow_id, status, current_node_id, inputs, outputs, error, started_at, completed_at
+             FROM workflow_executions
+             WHERE status IN ('running', 'waiting_approval', 'paused')
+             AND started_at IS NOT NULL
+             AND started_at < ?1"
+        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        let executions = stmt
+            .query_map(rusqlite::params![threshold_time], |row| {
+                let status_str: String = row.get(2)?;
+                let status = match status_str.as_str() {
+                    "pending" => WorkflowStatus::Pending,
+                    "running" => WorkflowStatus::Running,
+                    "waiting_approval" => WorkflowStatus::WaitingApproval,
+                    "paused" => WorkflowStatus::Paused,
+                    "completed" => WorkflowStatus::Completed,
+                    "failed" => WorkflowStatus::Failed,
+                    "cancelled" => WorkflowStatus::Cancelled,
+                    _ => WorkflowStatus::Pending,
+                };
+
+                let inputs_json: String = row.get(4)?;
+                let outputs_json: String = row.get(5)?;
+
+                let inputs: HashMap<String, Value> =
+                    serde_json::from_str(&inputs_json).unwrap_or_default();
+                let outputs: HashMap<String, Value> =
+                    serde_json::from_str(&outputs_json).unwrap_or_default();
+
+                Ok(WorkflowExecution {
+                    id: row.get(0)?,
+                    workflow_id: row.get(1)?,
+                    status,
+                    current_node_id: row.get(3)?,
+                    inputs,
+                    outputs,
+                    error: row.get(6)?,
+                    started_at: row.get(7)?,
+                    completed_at: row.get(8)?,
+                })
+            })
+            .map_err(|e| format!("Failed to query stuck executions: {}", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to collect stuck executions: {}", e))?;
+
+        Ok(executions)
     }
 }
 

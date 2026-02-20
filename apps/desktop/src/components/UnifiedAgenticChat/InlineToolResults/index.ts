@@ -68,6 +68,19 @@ const InlineScreenshot = React.lazy(() =>
   import('./InlineScreenshot').then((m) => ({ default: m.InlineScreenshot })),
 );
 
+// Reuse existing components for multiple tool types
+const InlineBrowserAutomation = InlineScreenshot; // Reuse screenshot for browser ops
+const InlineEmailOperation = InlineTerminalOutput; // Reuse terminal style for email
+const InlineCalendarOperation = InlineTerminalOutput; // Reuse terminal style for calendar
+const InlineCloudOperation = InlineTerminalOutput; // Reuse terminal style for cloud ops
+const InlineMemoryOperation = InlineTerminalOutput; // Reuse terminal style for memory
+const InlineScheduleOperation = InlineTerminalOutput; // Reuse terminal style for schedule
+const InlineProductivityOperation = InlineTerminalOutput; // Reuse terminal style for productivity
+const InlineGitOperation = InlineTerminalOutput; // Reuse terminal style for git
+const InlineUIControl = InlineScreenshot; // Reuse screenshot for UI control
+const InlineCodeExecution = InlineTerminalOutput; // Reuse terminal for code execution
+const InlineImageAnalysis = InlineSearchResults; // Reuse search results style for image analysis
+
 /**
  * Registry of tool renderers
  * Maps tool/capability names to React components
@@ -77,33 +90,74 @@ export const TOOL_RENDERERS: Record<
   | React.ComponentType<ToolResultProps>
   | React.LazyExoticComponent<React.ComponentType<ToolResultProps>>
 > = {
-  // Web search and browsing
+  // ============================================
+  // WEB SEARCH & RESEARCH
+  // ============================================
   web_search: InlineSearchResults,
   perplexity_search: InlineSearchResults,
   search_web: InlineSearchResults,
   browser_search: InlineSearchResults,
 
-  // Code operations
+  // ============================================
+  // FILE OPERATIONS
+  // ============================================
   file_read: InlineCodeDiff,
   file_write: InlineCodeDiff,
   file_edit: InlineCodeDiff,
   file_create: InlineCodeDiff,
+  file_delete: InlineCodeDiff,
   code_edit: InlineCodeDiff,
 
-  // Directory/file listing operations (AUDIT-UI-024)
+  // Directory/file listing
   file_list: InlineDirectoryList,
   list_directory: InlineDirectoryList,
   list_directory_with_sizes: InlineDirectoryList,
   mcp__filesystem__list_directory: InlineDirectoryList,
   mcp__filesystem__list_allowed_directories: InlineDirectoryList,
 
-  // Terminal operations
+  // ============================================
+  // MCP FILESYSTEM TOOLS
+  // ============================================
+  mcp__filesystem__read_file: InlineCodeDiff,
+  mcp__filesystem__read_text_file: InlineCodeDiff,
+  mcp__filesystem__get_file_info: InlineSearchResults,
+  mcp__filesystem__search_files: InlineSearchResults,
+  mcp__filesystem__move_file: InlineTerminalOutput,
+  mcp__filesystem__create_directory: InlineTerminalOutput,
+  mcp__filesystem__write_file: InlineTerminalOutput,
+  mcp__filesystem__edit_file: InlineTerminalOutput,
+
+  // ============================================
+  // SUPABASE TOOLS
+  // ============================================
+  mcp__supabase__list_tables: InlineSearchResults,
+  mcp__supabase__list_extensions: InlineSearchResults,
+  mcp__supabase__list_migrations: InlineSearchResults,
+  mcp__supabase__execute_sql: InlineDatabaseResults,
+  mcp__supabase__get_logs: InlineSearchResults,
+  mcp__supabase__list_edge_functions: InlineSearchResults,
+
+  // ============================================
+  // CLAUDE IN CHROME TOOLS
+  // ============================================
+  mcp__claude_in_chrome__read_page: InlineSearchResults,
+  mcp__claude_in_chrome__get_page_text: InlineSearchResults,
+  mcp__claude_in_chrome__read_console_messages: InlineSearchResults,
+  mcp__claude_in_chrome__read_network_requests: InlineSearchResults,
+
+  // ============================================
+  // TERMINAL & CODE EXECUTION
+  // ============================================
   terminal_execute: InlineTerminalOutput,
   shell_command: InlineTerminalOutput,
   terminal_run: InlineTerminalOutput,
   bash_execute: InlineTerminalOutput,
+  code_execute: InlineCodeExecution,
+  code_analyze: InlineCodeDiff,
 
-  // Media generation
+  // ============================================
+  // MEDIA GENERATION (Image & Video)
+  // ============================================
   image_generate: InlineImageGeneration,
   media_generate_image: InlineImageGeneration,
   dalle_generate: InlineImageGeneration,
@@ -112,13 +166,117 @@ export const TOOL_RENDERERS: Record<
   video_generate: InlineVideoGeneration,
   media_generate_video: InlineVideoGeneration,
   veo_generate: InlineVideoGeneration,
+
+  // ============================================
+  // DOCUMENT GENERATION
+  // ============================================
   document_create_pdf: InlineDocumentGeneration,
   document_create_word: InlineDocumentGeneration,
   document_create_docx: InlineDocumentGeneration,
   document_create_excel: InlineDocumentGeneration,
   document_create_xlsx: InlineDocumentGeneration,
+  document_read: InlineDocumentGeneration,
+  document_search: InlineSearchResults,
 
-  // GitHub operations
+  // ============================================
+  // BROWSER AUTOMATION
+  // ============================================
+  browser_navigate: InlineBrowserAutomation,
+  browser_click: InlineBrowserAutomation,
+  browser_type: InlineBrowserAutomation,
+  browser_extract: InlineBrowserAutomation,
+  browser_wait_for_selector: InlineBrowserAutomation,
+  browser_get_text: InlineBrowserAutomation,
+  browser_get_attribute: InlineBrowserAutomation,
+  browser_screenshot: InlineScreenshot,
+  browser_hover: InlineBrowserAutomation,
+  browser_focus: InlineBrowserAutomation,
+  browser_scroll_into_view: InlineBrowserAutomation,
+  browser_query_all: InlineBrowserAutomation,
+  browser_execute_async_js: InlineBrowserAutomation,
+  browser_get_element_state: InlineBrowserAutomation,
+  browser_wait_for_interactive: InlineBrowserAutomation,
+  browser_select_option: InlineBrowserAutomation,
+  browser_check: InlineBrowserAutomation,
+  browser_uncheck: InlineBrowserAutomation,
+  browser_get_url: InlineBrowserAutomation,
+  browser_get_title: InlineBrowserAutomation,
+  browser_go_back: InlineBrowserAutomation,
+  browser_go_forward: InlineBrowserAutomation,
+  browser_reload: InlineBrowserAutomation,
+  browser_wait_for_navigation: InlineBrowserAutomation,
+  browser_get_dom_snapshot: InlineBrowserAutomation,
+  extension_page_context: InlineTerminalOutput,
+  extension_task_result: InlineTerminalOutput,
+
+  // ============================================
+  // UI AUTOMATION
+  // ============================================
+  ui_click: InlineUIControl,
+  ui_type: InlineUIControl,
+  ui_screenshot: InlineScreenshot,
+
+  // ============================================
+  // IMAGE ANALYSIS & OCR
+  // ============================================
+  image_ocr: InlineImageAnalysis,
+  image_analyze: InlineImageAnalysis,
+
+  // ============================================
+  // EMAIL OPERATIONS
+  // ============================================
+  email_send: InlineEmailOperation,
+  email_fetch: InlineEmailOperation,
+
+  // ============================================
+  // CALENDAR OPERATIONS
+  // ============================================
+  calendar_create_event: InlineCalendarOperation,
+  calendar_list_events: InlineCalendarOperation,
+
+  // ============================================
+  // CLOUD OPERATIONS
+  // ============================================
+  cloud_upload: InlineCloudOperation,
+  cloud_download: InlineCloudOperation,
+  api_upload: InlineAPIResponse,
+  api_download: InlineAPIResponse,
+
+  // ============================================
+  // PRODUCTIVITY (Task Management)
+  // ============================================
+  productivity_create_task: InlineProductivityOperation,
+
+  // ============================================
+  // MEMORY OPERATIONS
+  // ============================================
+  memory_remember: InlineMemoryOperation,
+  memory_recall: InlineMemoryOperation,
+  memory_search: InlineSearchResults,
+  memory_forget: InlineMemoryOperation,
+
+  // ============================================
+  // SCHEDULE OPERATIONS
+  // ============================================
+  schedule_reminder: InlineScheduleOperation,
+  schedule_recurring_task: InlineScheduleOperation,
+  cancel_scheduled_task: InlineScheduleOperation,
+  list_scheduled_tasks: InlineScheduleOperation,
+
+  // ============================================
+  // GIT OPERATIONS
+  // ============================================
+  git_init: InlineGitOperation,
+  git_add: InlineGitOperation,
+  git_commit: InlineGitOperation,
+  git_push: InlineGitOperation,
+  git_status: InlineGitOperation,
+  git_clone: InlineGitOperation,
+  github_create_repo: InlineGitHubPR,
+
+  // ============================================
+  // GITHUB OPERATIONS
+  // ============================================
   github_pr_create: InlineGitHubPR,
   github_pr_list: InlineGitHubPR,
   github_issue_create: InlineGitHubIssue,
@@ -126,24 +284,38 @@ export const TOOL_RENDERERS: Record<
   github_commit: InlineGitHubCommit,
   github_push: InlineGitHubCommit,
 
-  // Database operations
+  // ============================================
+  // DATABASE OPERATIONS
+  // ============================================
   db_query: InlineDatabaseResults,
   database_query: InlineDatabaseResults,
   db_execute: InlineDatabaseResults,
   sql_query: InlineDatabaseResults,
+  db_transaction_begin: InlineDatabaseResults,
+  db_transaction_commit: InlineDatabaseResults,
+  db_transaction_rollback: InlineDatabaseResults,
 
-  // API operations
+  // ============================================
+  // API OPERATIONS
+  // ============================================
   api_call: InlineAPIResponse,
   execute_api_call: InlineAPIResponse,
   http_request: InlineAPIResponse,
   fetch_url: InlineAPIResponse,
 
-  // Screenshot and OCR operations
+  // ============================================
+  // SCREENSHOT & CAPTURE
+  // ============================================
   screenshot: InlineScreenshot,
   computer_use_capture_screen: InlineScreenshot,
   automation_screenshot: InlineScreenshot,
   capture_screen: InlineScreenshot,
   automation_ocr: InlineScreenshot,
+
+  // ============================================
+  // LLM REASONING
+  // ============================================
+  llm_reason: InlineSearchResults,
 };
 
 /**
@@ -156,12 +328,21 @@ export function getToolRenderer(
   | React.LazyExoticComponent<React.ComponentType<ToolResultProps>>
   | null {
   if (!toolName) return null;
-  return TOOL_RENDERERS[toolName] || null;
+  if (TOOL_RENDERERS[toolName]) {
+    return TOOL_RENDERERS[toolName];
+  }
+
+  // Fallbacks for dynamically registered tools (especially MCP/app tools).
+  if (toolName.startsWith('mcp__')) return InlineTerminalOutput;
+  if (toolName.includes('search') || toolName.includes('fetch')) return InlineSearchResults;
+  if (toolName.includes('screenshot') || toolName.includes('capture')) return InlineScreenshot;
+
+  return InlineTerminalOutput;
 }
 
 /**
  * Check if a tool has an inline renderer
  */
 export function hasInlineRenderer(toolName: string | undefined): boolean {
-  return toolName !== undefined && toolName in TOOL_RENDERERS;
+  return getToolRenderer(toolName) !== null;
 }

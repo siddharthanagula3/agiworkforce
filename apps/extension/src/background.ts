@@ -8,6 +8,7 @@ import type {
   ExtensionResponse,
   ConnectionStatus,
   RateLimitState as _RateLimitState,
+  RunPageAction,
 } from './types';
 import {
   logger,
@@ -29,6 +30,38 @@ interface BackgroundState {
   isProcessingQueue: boolean;
 }
 
+interface PageContextSnapshot {
+  success?: boolean;
+  url?: string;
+  title?: string;
+  html?: string;
+  selectedText?: string;
+  timestamp?: number;
+  error?: string;
+}
+
+interface NativeResponseEnvelope {
+  success?: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+interface NativePageContextPlan {
+  success?: boolean;
+  task_id?: string;
+  actions?: RunPageAction[];
+  error?: string;
+}
+
+interface RunActionsExecutionPayload {
+  success?: boolean;
+  screenshot?: string;
+  result?: unknown;
+  error?: string;
+  actionsPerformed?: number;
+  duration?: number;
+}
+
 const state: BackgroundState = {
   isNativeConnected: false,
   nativePort: null,
@@ -48,9 +81,65 @@ const pendingRequests = new Map<
     timeout: NodeJS.Timeout;
   }
 >();
+const lastPageContextSyncByTab = new Map<number, { fingerprint: string; at: number }>();
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
+const MAX_CONTEXT_HTML_CHARS = 100_000;
+const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
+const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
+const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
+const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
+const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
+let nativeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let nativeReconnectAttempt = 0;
+let nativeHandshakeInFlight = false;
+
+function clearNativeReconnectTimer(): void {
+  if (nativeReconnectTimer) {
+    clearTimeout(nativeReconnectTimer);
+    nativeReconnectTimer = null;
+  }
+}
+
+function scheduleNativeReconnect(trigger: string): void {
+  if (nativeReconnectTimer) {
+    return;
+  }
+
+  nativeReconnectAttempt = Math.min(nativeReconnectAttempt + 1, NATIVE_RECONNECT_MAX_ATTEMPTS);
+  const delay = Math.min(
+    NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(nativeReconnectAttempt - 1, 0),
+    NATIVE_RECONNECT_MAX_DELAY_MS,
+  );
+
+  logger.info('Scheduling native reconnect', {
+    trigger,
+    attempt: nativeReconnectAttempt,
+    delayMs: delay,
+  });
+
+  if (state.connectionStatus !== 'connecting') {
+    state.connectionStatus = 'connecting';
+    void notifyConnectionStatusChange();
+  }
+
+  nativeReconnectTimer = setTimeout(() => {
+    nativeReconnectTimer = null;
+    connectToNativeHost();
+  }, delay);
+}
+
+async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (state.nativePort && state.isNativeConnected) {
+      return true;
+    }
+    await _sleep(NATIVE_CONNECT_POLL_INTERVAL_MS);
+  }
+  return false;
+}
 
 /**
  * Initialize the background service worker
@@ -67,7 +156,7 @@ function initialize(): void {
   // Connect to native host
   connectToNativeHost();
 
-  // Check initial connection status (keeping HTTP as fallback/health check for now)
+  // Check initial connection status via native messaging heartbeat
   checkDesktopConnection();
 
   // Periodic connection check
@@ -85,11 +174,14 @@ function initialize(): void {
  * Connect to the native messaging host
  */
 function connectToNativeHost(): void {
-  if (state.nativePort) {
+  if (state.nativePort || nativeHandshakeInFlight) {
     return;
   }
 
   try {
+    state.connectionStatus = 'connecting';
+    void notifyConnectionStatusChange();
+
     logger.info('Connecting to native host', { host: NATIVE_HOST_NAME });
     const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
 
@@ -98,22 +190,56 @@ function connectToNativeHost(): void {
 
     state.nativePort = port;
     state.isNativeConnected = true;
-    state.connectionStatus = 'connected';
     state.lastNativeError = null;
+    nativeHandshakeInFlight = true;
 
-    void sendNativeRequest({ type: 'ping' }).catch((error) => {
-      logger.warn('Native host handshake failed', error);
-    });
+    void (async () => {
+      try {
+        const connectResult = await sendNativeRequest({
+          type: 'connect',
+          extension_id: chrome.runtime.id,
+        });
+        if (!(connectResult as any)?.success) {
+          throw new Error((connectResult as any)?.error ?? 'Native connect handshake failed');
+        }
 
-    notifyConnectionStatusChange();
+        const pingResult = await sendNativeRequest({ type: 'ping' });
+        if (!(pingResult as any)?.success) {
+          throw new Error((pingResult as any)?.error ?? 'Native ping failed');
+        }
+
+        nativeReconnectAttempt = 0;
+        clearNativeReconnectTimer();
+        state.connectionStatus = 'connected';
+        notifyConnectionStatusChange();
+      } catch (error) {
+        logger.warn('Native host handshake failed', error);
+        try {
+          port.disconnect();
+        } catch (disconnectError) {
+          logger.debug('Native port disconnect after handshake failure failed', disconnectError);
+        }
+        state.isNativeConnected = false;
+        state.connectionStatus = 'disconnected';
+        state.nativePort = null;
+        state.lastNativeError = error instanceof Error ? error.message : 'Native handshake failed';
+        notifyConnectionStatusChange();
+        scheduleNativeReconnect('handshake_failed');
+      } finally {
+        nativeHandshakeInFlight = false;
+      }
+    })();
+
     logger.info('Connected to native host');
   } catch (error) {
     logger.error('Failed to connect to native host', error);
+    nativeHandshakeInFlight = false;
     state.isNativeConnected = false;
     state.nativePort = null;
     state.connectionStatus = 'disconnected';
     state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
     notifyConnectionStatusChange();
+    scheduleNativeReconnect('connect_failed');
   }
 }
 
@@ -122,30 +248,36 @@ function createRequestId(): string {
 }
 
 function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionResponse> {
-  if (!state.nativePort || !state.isNativeConnected) {
-    return Promise.resolve({ success: false, error: 'Not connected to native host' });
-  }
-
-  const id = createRequestId();
-
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pendingRequests.delete(id);
-      reject(new Error(`Native request timeout after ${NATIVE_REQUEST_TIMEOUT_MS}ms`));
-    }, NATIVE_REQUEST_TIMEOUT_MS);
+    void (async () => {
+      if (!state.nativePort || !state.isNativeConnected) {
+        connectToNativeHost();
+        const connected = await waitForNativeConnection(NATIVE_CONNECT_MAX_WAIT_MS);
+        if (!connected || !state.nativePort || !state.isNativeConnected) {
+          resolve({ success: false, error: 'Not connected to native host' });
+          return;
+        }
+      }
 
-    pendingRequests.set(id, { resolve, reject, timeout });
+      const id = createRequestId();
+      const timeout = setTimeout(() => {
+        pendingRequests.delete(id);
+        reject(new Error(`Native request timeout after ${NATIVE_REQUEST_TIMEOUT_MS}ms`));
+      }, NATIVE_REQUEST_TIMEOUT_MS);
 
-    try {
-      state.nativePort?.postMessage({
-        id,
-        message,
-      });
-    } catch (error) {
-      clearTimeout(timeout);
-      pendingRequests.delete(id);
-      reject(error);
-    }
+      pendingRequests.set(id, { resolve, reject, timeout });
+
+      try {
+        state.nativePort?.postMessage({
+          id,
+          message,
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        pendingRequests.delete(id);
+        reject(error);
+      }
+    })();
   });
 }
 
@@ -158,10 +290,14 @@ function handleNativeMessage(message: any): void {
   if (message && message.id && pendingRequests.has(message.id)) {
     const request = pendingRequests.get(message.id);
     if (request) {
-      const { resolve, timeout } = request;
+      const { resolve, reject, timeout } = request;
       clearTimeout(timeout);
       pendingRequests.delete(message.id);
-      resolve(message as ExtensionResponse);
+      if (message.success === false) {
+        reject(new Error(message.error ?? 'Native request failed'));
+      } else {
+        resolve(message as ExtensionResponse);
+      }
     }
   }
 }
@@ -173,12 +309,19 @@ function handleNativeDisconnect(): void {
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
 
+  for (const [requestId, pending] of pendingRequests.entries()) {
+    clearTimeout(pending.timeout);
+    pending.reject(new Error(error));
+    pendingRequests.delete(requestId);
+  }
+
   state.nativePort = null;
   state.isNativeConnected = false;
   state.connectionStatus = 'disconnected';
   state.lastNativeError = error;
 
   notifyConnectionStatusChange();
+  scheduleNativeReconnect('native_disconnect');
 }
 
 /**
@@ -224,6 +367,7 @@ async function handleMessageAsync(
   logger.debug('Processing message', { type: message.type, sender: sender.url });
 
   const tabId = sender.tab?.id ?? message.tabId;
+  const windowId = sender.tab?.windowId;
 
   // Check rate limits
   if (state.rateLimiter.isLimited(tabId || 0, message.type)) {
@@ -235,13 +379,18 @@ async function handleMessageAsync(
 
   switch (message.type) {
     case 'GET_CONNECTION_STATUS':
+      if (!state.isNativeConnected && !nativeHandshakeInFlight) {
+        connectToNativeHost();
+      }
       if (state.isNativeConnected) {
         void sendNativeRequest({ type: 'ping' }).catch((error) => {
           logger.warn('Native ping failed during status check', error);
           state.isNativeConnected = false;
           state.connectionStatus = 'disconnected';
           state.nativePort = null;
+          state.lastNativeError = error instanceof Error ? error.message : 'Native ping failed';
           notifyConnectionStatusChange();
+          scheduleNativeReconnect('status_ping_failed');
         });
       }
       return {
@@ -250,20 +399,57 @@ async function handleMessageAsync(
         connectionStatus: state.connectionStatus,
       } as ExtensionResponse;
 
+    case 'TAB_READY': {
+      if (tabId) {
+        void syncTabContextWithDesktop(tabId, 'tab_ready').catch((error) => {
+          logger.debug('TAB_READY context sync failed', error);
+        });
+      }
+      return { success: true, ready: true } as ExtensionResponse;
+    }
+
+    case 'SYNC_PAGE_CONTEXT': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No tab ID for page context sync' } as ExtensionResponse;
+      }
+
+      const messageContext = (message as any).context as Record<string, unknown> | undefined;
+      return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
+    }
+
     case 'CAPTURE_SCREENSHOT': {
-      if (!tabId) {
-        return { success: false, error: 'No tab ID' } as ExtensionResponse;
+      let resolvedTabId = tabId;
+      let resolvedWindowId = windowId;
+
+      if (!resolvedTabId || resolvedWindowId === undefined) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = resolvedTabId ?? activeTab?.id;
+        resolvedWindowId = resolvedWindowId ?? activeTab?.windowId;
+      }
+
+      if (!resolvedTabId && resolvedWindowId === undefined) {
+        return { success: false, error: 'No active tab/window for screenshot' } as ExtensionResponse;
       }
 
       try {
-        const canvas = await chrome.tabs.captureVisibleTab(tabId, {
+        const options = {
           format: (message as any).format ?? 'png',
           quality: (message as any).quality ?? 90,
-        });
+        } as chrome.tabs.CaptureVisibleTabOptions;
+        const canvas =
+          resolvedWindowId !== undefined
+            ? await chrome.tabs.captureVisibleTab(resolvedWindowId, options)
+            : await chrome.tabs.captureVisibleTab(options);
 
         return {
           success: true,
           data: canvas,
+          tabId: resolvedTabId,
           timestamp: Date.now(),
         } as ExtensionResponse;
       } catch (error) {
@@ -276,12 +462,131 @@ async function handleMessageAsync(
 
     default:
       // Forward other messages to content script
-      if (!tabId) {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+
+      if (!resolvedTabId) {
         return { success: false, error: 'No tab ID' } as ExtensionResponse;
       }
 
-      return forwardToContentScript(tabId, message);
+      return forwardToContentScript(resolvedTabId, message);
   }
+}
+
+async function syncTabContextWithDesktop(
+  tabId: number,
+  reason: string,
+  providedContext?: Record<string, unknown>,
+): Promise<ExtensionResponse> {
+  const context = (providedContext ??
+    (await forwardToContentScript(tabId, {
+      type: 'GET_PAGE_INFO',
+      tabId,
+    } as ExtensionMessage))) as unknown as PageContextSnapshot;
+
+  if (!context || context.success !== true) {
+    return {
+      success: false,
+      error: String(context?.error ?? 'Unable to collect page context'),
+    } as ExtensionResponse;
+  }
+
+  const url = String(context.url ?? '').trim();
+  const title = String(context.title ?? '').trim();
+  if (!url || !title) {
+    return { success: false, error: 'Invalid page context: missing url/title' } as ExtensionResponse;
+  }
+
+  const html = String(context.html ?? '').substring(0, MAX_CONTEXT_HTML_CHARS);
+  const selectedText = String(context.selectedText ?? '').substring(0, 2_000);
+  const timestamp = Number(context.timestamp ?? Date.now());
+  const fingerprint = `${url}::${title}::${selectedText.slice(0, 200)}`;
+  const previousSync = lastPageContextSyncByTab.get(tabId);
+  const now = Date.now();
+  if (previousSync && previousSync.fingerprint === fingerprint && now - previousSync.at < 5_000) {
+    return {
+      success: true,
+      skipped: true,
+      reason: 'page_context_unchanged',
+    } as ExtensionResponse;
+  }
+  lastPageContextSyncByTab.set(tabId, { fingerprint, at: now });
+
+  const pageContextResponse = (await sendNativeRequest({
+    type: 'page_context',
+    url,
+    title,
+    html,
+    selected_text: selectedText,
+    tab_id: tabId,
+    timestamp,
+    reason,
+  })) as unknown as NativeResponseEnvelope;
+
+  if (pageContextResponse.success !== true) {
+    return {
+      success: false,
+      error: String(pageContextResponse.error ?? 'Desktop rejected page context'),
+    } as ExtensionResponse;
+  }
+
+  const plannerData = (pageContextResponse.data ?? {}) as NativePageContextPlan;
+  const taskId = String(plannerData.task_id ?? '');
+  const actions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
+
+  if (!taskId || actions.length === 0) {
+    return {
+      success: true,
+      taskId,
+      actionsDispatched: 0,
+    } as ExtensionResponse;
+  }
+
+  const executionResponse = (await forwardToContentScript(tabId, {
+    type: 'RUN_PAGE_ACTIONS',
+    tabId,
+    taskId,
+    actions,
+  } as ExtensionMessage)) as unknown as RunActionsExecutionPayload;
+
+  const taskResultPayload = {
+    type: 'task_result',
+    task_id: taskId,
+    success: executionResponse.success === true,
+    screenshot:
+      typeof executionResponse.screenshot === 'string'
+        ? executionResponse.screenshot
+        : undefined,
+    result:
+      executionResponse.result !== undefined ? executionResponse.result : executionResponse,
+    error:
+      executionResponse.success === true
+        ? undefined
+        : String(executionResponse.error ?? 'Extension action execution failed'),
+    actions_performed: Number(executionResponse.actionsPerformed ?? 0),
+    duration: Number(executionResponse.duration ?? 0),
+  };
+
+  const taskResultResponse = (await sendNativeRequest(
+    taskResultPayload,
+  )) as unknown as NativeResponseEnvelope;
+  if (taskResultResponse.success !== true) {
+    return {
+      success: false,
+      error: String(taskResultResponse.error ?? 'Failed to submit task result'),
+      taskId,
+    } as ExtensionResponse;
+  }
+
+  return {
+    success: true,
+    taskId,
+    actionsDispatched: actions.length,
+    actionsPerformed: Number(executionResponse.actionsPerformed ?? 0),
+  } as ExtensionResponse;
 }
 
 /**
@@ -307,9 +612,16 @@ async function forwardToContentScript(
  * Check desktop app connection status
  */
 async function checkDesktopConnection(): Promise<void> {
-  if (state.isNativeConnected) {
+  if (!state.nativePort || !state.isNativeConnected) {
+    connectToNativeHost();
+  }
+
+  if (state.nativePort && state.isNativeConnected) {
     try {
-      await sendNativeRequest({ type: 'ping' });
+      const ping = await sendNativeRequest({ type: 'ping' });
+      if (!(ping as any)?.success) {
+        throw new Error((ping as any)?.error ?? 'Native ping failed');
+      }
       if (state.connectionStatus !== 'connected') {
         state.connectionStatus = 'connected';
         notifyConnectionStatusChange();
@@ -317,61 +629,18 @@ async function checkDesktopConnection(): Promise<void> {
       await storageUtils.setItem('connectedToDesktop', true);
       return;
     } catch (error) {
-      logger.warn('Native ping failed, falling back to HTTP health check', error);
-      state.isNativeConnected = false;
-      state.nativePort = null;
-      state.connectionStatus = 'disconnected';
+      logger.warn('Native ping failed', error);
     }
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    const response = await fetch('http://localhost:8787/health', {
-      method: 'GET',
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    const isConnected = response.ok;
-
-    if (isConnected !== state.isNativeConnected) {
-      // If we are native connected, we might not want to downgrade to "connected via HTTP" status
-      // unless native is ALSO disconnected.
-      // However, this function is mostly a fallback.
-      if (!state.isNativeConnected && isConnected) {
-        // Only update status if native is NOT connected.
-        // Native takes precedence.
-        state.connectionStatus = 'connected';
-      }
-
-      // If we are native connected, we don't care if HTTP fails,
-      // EXCEPT that we might want to log it.
-      // But if HTTP works, and Native works, we are good.
-
-      // Actually, if native is connected, we should trust native.
-      // This HTTP check is a legacy fallback.
-      // We will only update global status if native is NOT connected.
-
-      if (!state.isNativeConnected) {
-        state.connectionStatus = isConnected ? 'connected' : 'disconnected';
-        notifyConnectionStatusChange();
-      }
-
-      await storageUtils.setItem('connectedToDesktop', isConnected || state.isNativeConnected);
-    }
-  } catch (error) {
-    clearTimeout(timeoutId);
-
-    // Only update status if native is NOT connected
-    if (!state.isNativeConnected) {
-      state.connectionStatus = 'disconnected';
-      notifyConnectionStatusChange();
-    }
-
-    await storageUtils.setItem('connectedToDesktop', state.isNativeConnected);
+  state.nativePort = null;
+  state.isNativeConnected = false;
+  if (state.connectionStatus !== 'disconnected') {
+    state.connectionStatus = 'disconnected';
+    notifyConnectionStatusChange();
   }
+  await storageUtils.setItem('connectedToDesktop', false);
+  scheduleNativeReconnect('ping_failed');
 }
 
 /**
@@ -440,7 +709,22 @@ function setupContextMenu(): void {
  */
 chrome.tabs.onRemoved.addListener((tabId) => {
   state.rateLimiter.reset(tabId);
+  lastPageContextSyncByTab.delete(tabId);
   logger.debug('Cleaned up rate limit for tab', { tabId });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete') {
+    return;
+  }
+  const url = tab.url ?? '';
+  if (!/^https?:\/\//i.test(url)) {
+    return;
+  }
+
+  void syncTabContextWithDesktop(tabId, 'tab_updated').catch((error) => {
+    logger.debug('Tab update context sync skipped', error);
+  });
 });
 
 /**
@@ -468,7 +752,7 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    await chrome.tabs.captureVisibleTab(tab.id, {
+    await chrome.tabs.captureVisibleTab(tab.windowId, {
       format: 'png',
       quality: 90,
     });
@@ -539,6 +823,24 @@ chrome.alarms.create('keep-alive', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
+  }
+});
+
+chrome.runtime.onSuspend.addListener(() => {
+  if (!state.nativePort || !state.isNativeConnected) {
+    return;
+  }
+
+  try {
+    state.nativePort.postMessage({
+      id: createRequestId(),
+      message: {
+        type: 'disconnect',
+        reason: 'extension_service_worker_suspend',
+      },
+    });
+  } catch (error) {
+    logger.debug('Native disconnect on suspend failed', error);
   }
 });
 

@@ -20,6 +20,7 @@ pub struct LLMConfig {
 #[serde(rename_all = "camelCase")]
 pub struct DefaultModels {
     pub ollama: String,
+    #[serde(default)]
     pub managed_cloud: String,
 }
 
@@ -121,6 +122,15 @@ pub struct Settings {
 
 pub struct SettingsState {
     pub settings: Arc<Mutex<Settings>>,
+}
+
+impl SettingsState {
+    /// Get the current allowed directories from settings
+    pub fn get_allowed_directories(&self) -> Vec<String> {
+        // Use blocking lock since this is called from sync contexts
+        let settings = self.settings.blocking_lock();
+        settings.allowed_directories.clone()
+    }
 }
 
 impl Default for SettingsState {
