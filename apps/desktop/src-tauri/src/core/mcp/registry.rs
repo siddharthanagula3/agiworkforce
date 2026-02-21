@@ -9,11 +9,17 @@ use std::sync::Arc;
 /// Delimiter used to separate components in tool IDs.
 /// Format: mcp__<server_name>__<tool_name>
 const TOOL_ID_DELIMITER: &str = "__";
+const ENCODED_HEX_PREFIX: &str = "hex_";
+const ENCODED_HEX_PREFIX_LEGACY: &str = "hex:";
+const ENCODED_B64_PREFIX: &str = "b64_";
+const ENCODED_B64_PREFIX_LEGACY: &str = "b64:";
 
 /// Helper to create safe tool IDs with sanitized names.
 fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
-    let safe_server = format!("hex:{}", hex::encode(server_name));
-    let safe_tool = format!("hex:{}", hex::encode(tool_name));
+    // OpenAI function names must match ^[a-zA-Z0-9_-]+$.
+    // Use underscore-delimited encoding markers to avoid ":".
+    let safe_server = format!("{}{}", ENCODED_HEX_PREFIX, hex::encode(server_name));
+    let safe_tool = format!("{}{}", ENCODED_HEX_PREFIX, hex::encode(tool_name));
 
     format!(
         "mcp{}{}{}{}",
@@ -127,7 +133,10 @@ impl McpToolRegistry {
             )));
         }
         let decode_component = |value: &str| -> McpResult<String> {
-            if let Some(encoded) = value.strip_prefix("hex:") {
+            if let Some(encoded) = value
+                .strip_prefix(ENCODED_HEX_PREFIX)
+                .or_else(|| value.strip_prefix(ENCODED_HEX_PREFIX_LEGACY))
+            {
                 let bytes = hex::decode(encoded).map_err(|_| {
                     McpError::ToolNotFound(format!(
                         "Invalid encoded MCP tool ID component: {}",
@@ -140,7 +149,10 @@ impl McpToolRegistry {
                         value
                     ))
                 })
-            } else if let Some(encoded) = value.strip_prefix("b64:") {
+            } else if let Some(encoded) = value
+                .strip_prefix(ENCODED_B64_PREFIX)
+                .or_else(|| value.strip_prefix(ENCODED_B64_PREFIX_LEGACY))
+            {
                 let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
                     .decode(encoded)
                     .map_err(|_| {
@@ -317,5 +329,27 @@ mod tests {
         assert_eq!(params.len(), 2);
         assert!(params.iter().any(|p| p.name == "path" && p.required));
         assert!(params.iter().any(|p| p.name == "content" && !p.required));
+    }
+
+    #[test]
+    fn test_create_safe_tool_id_uses_openai_safe_charset() {
+        let tool_id = create_safe_tool_id("filesystem", "read_file");
+        assert_eq!(
+            tool_id,
+            "mcp__hex_66696c6573797374656d__hex_726561645f66696c65"
+        );
+        assert!(tool_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+    }
+
+    #[test]
+    fn test_parse_tool_id_accepts_legacy_hex_prefix() {
+        let parsed =
+            McpToolRegistry::parse_tool_id("mcp__hex:66696c6573797374656d__hex:726561645f66696c65");
+        assert!(parsed.is_ok());
+        let (server, tool) = parsed.unwrap();
+        assert_eq!(server, "filesystem");
+        assert_eq!(tool, "read_file");
     }
 }
