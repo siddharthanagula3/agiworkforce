@@ -706,6 +706,69 @@ pub async fn file_exists(path: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn file_open_with_default_app(
+    app: AppHandle,
+    path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
+    debug!("Opening path with default app: {}", path);
+
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
+
+    match fs::metadata(&canonical_path) {
+        Ok(metadata) => {
+            if !metadata.is_file() && !metadata.is_dir() {
+                return Err(format!(
+                    "Path is neither a file nor directory: {}",
+                    canonical_str
+                ));
+            }
+        }
+        Err(e) => return Err(format!("Path does not exist or is not accessible: {}", e)),
+    }
+
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
+        return Err("Permission denied".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("open");
+        cmd.arg(&canonical_str);
+        cmd
+    };
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args([
+            "-NoProfile",
+            "-Command",
+            "Start-Process",
+            "-FilePath",
+            &canonical_str,
+        ]);
+        cmd
+    };
+
+    #[cfg(target_os = "linux")]
+    let mut command = {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(&canonical_str);
+        cmd
+    };
+
+    command
+        .spawn()
+        .map_err(|e| format!("Failed to launch default app: {}", e))?;
+
+    log_file_operation(&canonical_str, FileOperation::Execute, true, None, &state).await?;
+    info!("Opened path with default app: {}", canonical_str);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
     debug!("Getting metadata for: {}", path);
 

@@ -3486,16 +3486,44 @@ pub async fn chat_send_message(
                                     }
                                     None => {
                                         error!("[Chat] All follow-up candidates failed");
-                                        full_content.push_str(
-                                            "\n\n*Tool execution completed but unable to generate final response.*",
-                                        );
+                                        let fallback_delta = {
+                                            let successful_tool_outputs = current_tool_results
+                                                .iter()
+                                                .filter(|result| result.success)
+                                                .take(3)
+                                                .filter_map(|result| {
+                                                    let content = result.to_message_content();
+                                                    let trimmed = content.trim();
+                                                    if trimmed.is_empty() {
+                                                        return None;
+                                                    }
+                                                    let snippet: String =
+                                                        trimmed.chars().take(3000).collect();
+                                                    Some(format!(
+                                                        "Tool `{}` output:\n{}",
+                                                        result.tool_name, snippet
+                                                    ))
+                                                })
+                                                .collect::<Vec<_>>();
+
+                                            if !successful_tool_outputs.is_empty() {
+                                                format!(
+                                                    "\n\nI couldn't generate a final explanation from the model, but the tool ran successfully:\n\n{}",
+                                                    successful_tool_outputs.join("\n\n")
+                                                )
+                                            } else {
+                                                "\n\n*Tool execution completed but unable to generate final response.*".to_string()
+                                            }
+                                        };
+
+                                        full_content.push_str(&fallback_delta);
                                         // AUDIT-STREAM-027 fix: Emit stream-chunk for fallback text
                                         let _ = app_handle_clone.emit(
                                             "chat:stream-chunk",
                                             serde_json::json!({
                                                 "conversation_id": conversation_id_clone,
                                                 "message_id": frontend_message_id_clone,
-                                                "delta": "\n\n*Tool execution completed but unable to generate final response.*",
+                                                "delta": fallback_delta,
                                                 "content": full_content.clone(),
                                                 "has_pending_messages": has_pending_messages()
                                             }),

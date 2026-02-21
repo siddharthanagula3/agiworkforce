@@ -1,7 +1,6 @@
 import { Copy, Download, FileText, FolderOpen, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
-import { open } from '@tauri-apps/plugin-shell';
 import { invoke } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
@@ -129,6 +128,15 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   };
 
+  const handleOpen = async () => {
+    if (!resolvedPath) return;
+    try {
+      await invoke<void>('file_open_with_default_app', { path: resolvedPath });
+    } catch (error) {
+      console.error('[InlineDocumentGeneration] Open failed', error);
+    }
+  };
+
   return (
     <div className="mt-3 rounded-lg bg-surface-elevated border border-border/50 overflow-hidden">
       <div className="px-3 py-2 bg-surface-overlay/30 border-b border-border/30">
@@ -151,7 +159,7 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
               size="sm"
               variant="secondary"
               className="gap-2"
-              onClick={() => void open(resolvedPath)}
+              onClick={() => void handleOpen()}
             >
               <FolderOpen className="h-4 w-4" />
               Open

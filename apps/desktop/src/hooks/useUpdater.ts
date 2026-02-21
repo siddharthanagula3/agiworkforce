@@ -9,7 +9,7 @@ import {
 } from '../stores/updaterStore';
 
 // Package version - will be replaced by build process or read from package.json
-const CURRENT_VERSION = '1.0.4';
+const CURRENT_VERSION_FALLBACK = '1.0.4';
 
 interface UpdateCheckResult {
   available: boolean;
@@ -21,6 +21,7 @@ interface UpdateCheckResult {
 export function useUpdater() {
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(CURRENT_VERSION_FALLBACK);
 
   // Store state and actions
   const status = useUpdaterStore((state) => state.status);
@@ -47,6 +48,24 @@ export function useUpdater() {
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const loadVersion = async () => {
+      try {
+        const { getVersion } = await import('@tauri-apps/api/app');
+        const version = await getVersion();
+        if (mountedRef.current && version) {
+          setCurrentVersion(version);
+        }
+      } catch (err) {
+        console.warn('[useUpdater] Failed to read app version from Tauri:', err);
+      }
+    };
+
+    void loadVersion();
   }, []);
 
   // Listen for update events from Tauri
@@ -119,7 +138,7 @@ export function useUpdater() {
       if (update?.available && update.version) {
         const info: UpdateInfo = {
           version: update.version,
-          currentVersion: CURRENT_VERSION,
+          currentVersion,
           releaseNotes: update.body,
           releaseDate: update.date,
         };
@@ -149,7 +168,15 @@ export function useUpdater() {
         setIsChecking(false);
       }
     }
-  }, [dismissedVersion, dismissedAt, setStatus, setError, setUpdateInfo, setLastCheckTime]);
+  }, [
+    currentVersion,
+    dismissedVersion,
+    dismissedAt,
+    setStatus,
+    setError,
+    setUpdateInfo,
+    setLastCheckTime,
+  ]);
 
   /**
    * Download and install the available update
@@ -244,7 +271,7 @@ export function useUpdater() {
     error,
     isChecking,
     isDownloading,
-    currentVersion: CURRENT_VERSION,
+    currentVersion,
 
     // Actions
     checkForUpdates: doCheckForUpdates,
