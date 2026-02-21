@@ -272,6 +272,7 @@ macro_rules! data_command_handlers {
             $crate::sys::commands::file_move,
             $crate::sys::commands::file_exists,
             $crate::sys::commands::file_metadata,
+            $crate::sys::commands::file_open_with_default_app,
             $crate::sys::commands::undo_file_operation,
             $crate::sys::commands::dir_create,
             $crate::sys::commands::dir_list,

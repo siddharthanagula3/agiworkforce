@@ -2201,6 +2201,26 @@ export function useAgenticEvents() {
             toolStreamCleanupTimeoutsRef.current.set(toolId, timeoutId);
           };
 
+          const clearRunningActionTrailEntries = (toolId: string, toolName?: string) => {
+            const state = useUnifiedChatStore.getState();
+            const matches = state.actionTrail.filter((entry) => {
+              if (entry.type !== 'running') return false;
+              const metadataToolCallId = (entry.metadata as Record<string, unknown> | undefined)?.[
+                'tool_call_id'
+              ];
+              if (metadataToolCallId === toolId) return true;
+              if (!toolName) return false;
+              return (
+                entry.message === `Executing ${toolName}...` ||
+                entry.message === `Calling ${toolName}...`
+              );
+            });
+
+            for (const entry of matches) {
+              state.removeActionTrailEntry(entry.id);
+            }
+          };
+
           switch (streamEvent.type) {
             case 'started': {
               const startedEvent = streamEvent as ToolStreamStartedEvent;
@@ -2232,6 +2252,7 @@ export function useAgenticEvents() {
               addActionTrailEntry?.({
                 type: 'running',
                 message: `Executing ${startedEvent.tool_name}...`,
+                metadata: { tool_call_id: startedEvent.tool_id },
               });
 
               if (startedEvent.tool_name.startsWith('extension_native_')) {
@@ -2256,6 +2277,8 @@ export function useAgenticEvents() {
                 addActionTrailEntry?.({
                   type: 'running',
                   message: progressEvent.message,
+                  metadata: { tool_call_id: progressEvent.tool_id },
+                  fadeAfter: 2000,
                 });
               }
               break;
@@ -2302,6 +2325,7 @@ export function useAgenticEvents() {
               const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
               const state = useUnifiedChatStore.getState();
               const stream = state.activeToolStreams.get(completedEvent.tool_id);
+              clearRunningActionTrailEntries(completedEvent.tool_id, stream?.tool_name);
               addActionTrailEntry?.({
                 type: 'completed',
                 message: `${stream?.tool_name || 'Tool'} completed (${completedEvent.duration_ms}ms)`,
@@ -2343,6 +2367,7 @@ export function useAgenticEvents() {
               const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
               const state = useUnifiedChatStore.getState();
               const stream = state.activeToolStreams.get(errorEvent.tool_id);
+              clearRunningActionTrailEntries(errorEvent.tool_id, stream?.tool_name);
               addActionTrailEntry?.({
                 type: 'error',
                 message: `${stream?.tool_name || 'Tool'} failed: ${errorEvent.error}`,
@@ -2377,6 +2402,7 @@ export function useAgenticEvents() {
                   stream_cancelled_at: timestamp,
                 },
               });
+              clearRunningActionTrailEntries(cancelledEvent.tool_id, toolName);
               scheduleToolStreamCleanup(cancelledEvent.tool_id);
               break;
             }

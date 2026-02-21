@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
+import { getOptionalEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -36,6 +36,15 @@ interface GitHubRelease {
   published_at: string;
   body: string;
   assets: GitHubAsset[];
+}
+
+function noUpdateResponse(): NextResponse {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Cache-Control': 'public, max-age=60, s-maxage=60',
+    },
+  });
 }
 
 function parseSemver(version: string): [number, number, number] | null {
@@ -82,7 +91,7 @@ async function handleReleaseCheck(
   // Validate target format
   if (!PLATFORM_MAP[target]) {
     // Unknown target - return empty response (no update)
-    return NextResponse.json({}, { status: 204 });
+    return noUpdateResponse();
   }
 
   // Validate version format (basic semver check)
@@ -106,8 +115,13 @@ async function handleReleaseCheck(
   // Set these in Vercel/production env:
   // - DESKTOP_GITHUB_OWNER
   // - DESKTOP_GITHUB_REPO
-  const OWNER = requireEnv('DESKTOP_GITHUB_OWNER');
-  const REPO = requireEnv('DESKTOP_GITHUB_REPO');
+  const OWNER = getOptionalEnv('DESKTOP_GITHUB_OWNER');
+  const REPO = getOptionalEnv('DESKTOP_GITHUB_REPO');
+
+  if (!OWNER || !REPO) {
+    logger.warn('Desktop release GitHub repository is not configured');
+    return noUpdateResponse();
+  }
 
   const GITHUB_API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
 
@@ -115,7 +129,7 @@ async function handleReleaseCheck(
 
   if (!response.ok) {
     logger.warn({ status: response.status }, 'GitHub API error during release check');
-    return NextResponse.json({}, { status: 204 }); // No update found if API fails
+    return noUpdateResponse(); // No update found if API fails
   }
 
   const release = (await response.json()) as GitHubRelease;
@@ -123,7 +137,7 @@ async function handleReleaseCheck(
 
   // 2. Compare versions
   if (!isNewerVersion(latestVersion, version)) {
-    return NextResponse.json({}, { status: 204 }); // Up to date
+    return noUpdateResponse(); // Up to date
   }
 
   // 3. Find matching asset
@@ -134,7 +148,7 @@ async function handleReleaseCheck(
   );
 
   if (!binaryAsset) {
-    return NextResponse.json({}, { status: 204 });
+    return noUpdateResponse();
   }
 
   // 4. Find signature
@@ -143,13 +157,13 @@ async function handleReleaseCheck(
 
   if (!signatureAsset) {
     logger.warn({ assetName: binaryAsset.name }, 'Signature missing for release asset');
-    return NextResponse.json({}, { status: 204 });
+    return noUpdateResponse();
   }
 
   // 5. Fetch signature content
   const sigResponse = await fetch(signatureAsset.browser_download_url, { headers });
   if (!sigResponse.ok) {
-    return NextResponse.json({}, { status: 204 });
+    return noUpdateResponse();
   }
   const signature = await sigResponse.text();
 
