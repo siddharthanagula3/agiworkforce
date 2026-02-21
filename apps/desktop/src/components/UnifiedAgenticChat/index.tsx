@@ -493,6 +493,19 @@ export const UnifiedAgenticChat: React.FC<{
     [processStreamBuffer],
   ); // Added queueStreamUpdate via useCallback dependency
 
+  const clearQueuedStreamUpdates = useCallback((messageId?: string) => {
+    if (messageId) {
+      streamBufferRef.current.delete(messageId);
+    } else {
+      streamBufferRef.current.clear();
+    }
+
+    if (streamBufferRef.current.size === 0 && rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  }, []);
+
   const markStreamActivity = useCallback(() => {
     lastStreamActivityAtRef.current = Date.now();
   }, []);
@@ -1047,6 +1060,11 @@ export const UnifiedAgenticChat: React.FC<{
           // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
           // This prevents stale stream-end events from clearing active loading state
           if (hasValidTarget) {
+            if (finalizedMessageId) {
+              clearQueuedStreamUpdates(finalizedMessageId);
+            } else {
+              clearQueuedStreamUpdates();
+            }
             // Clear the abort controller since streaming completed
             abortControllerRef.current = null;
 
@@ -1181,6 +1199,11 @@ export const UnifiedAgenticChat: React.FC<{
 
             // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
             if (hasValidTarget) {
+              if (finalizedMessageId) {
+                clearQueuedStreamUpdates(finalizedMessageId);
+              } else {
+                clearQueuedStreamUpdates();
+              }
               // Clear the abort controller since streaming errored
               abortControllerRef.current = null;
 
@@ -1976,7 +1999,7 @@ export const UnifiedAgenticChat: React.FC<{
     // AUDIT-005-014 fix: Remove stable store actions from dependency array
     // updateMessage and setStreamingMessage are stable zustand actions that don't change
     // Including them causes unnecessary re-registrations of event listeners
-  }, [markStreamActivity, queueStreamUpdate]);
+  }, [clearQueuedStreamUpdates, markStreamActivity, queueStreamUpdate]);
 
   useEffect(() => {
     if (defaultSidecarOpen === false) {
@@ -2493,6 +2516,7 @@ export const UnifiedAgenticChat: React.FC<{
         });
       }
       // Clean up loading state on error - for successful streaming, chat:stream-end handles this
+      clearQueuedStreamUpdates(assistantMessageId);
       setIsLoading(false);
       setStreamingMessage(null);
     } finally {
@@ -2522,6 +2546,7 @@ export const UnifiedAgenticChat: React.FC<{
               { idleMs, messageId: assistantMessageId },
             );
 
+            clearQueuedStreamUpdates(assistantMessageId);
             state.setIsLoading(false);
             state.setStreamingMessage(null);
             toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
@@ -2587,9 +2612,12 @@ export const UnifiedAgenticChat: React.FC<{
 
     const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
     if (currentStreamingId) {
+      clearQueuedStreamUpdates(currentStreamingId);
       updateMessage(currentStreamingId, {
         metadata: { streaming: false },
       });
+    } else {
+      clearQueuedStreamUpdates();
     }
 
     // AUDIT-STREAM-037 fix: Clear per-tool timeout callbacks to prevent stale timeout errors
@@ -2625,9 +2653,12 @@ export const UnifiedAgenticChat: React.FC<{
 
       const state = useUnifiedChatStore.getState();
       if (state.currentStreamingMessageId) {
+        clearQueuedStreamUpdates(state.currentStreamingMessageId);
         updateMessage(state.currentStreamingMessageId, {
           metadata: { streaming: false },
         });
+      } else {
+        clearQueuedStreamUpdates();
       }
       setIsLoading(false);
       setStreamingMessage(null);
@@ -2638,7 +2669,7 @@ export const UnifiedAgenticChat: React.FC<{
 
     window.addEventListener(NEW_CHAT_ABORT_EVENT, handleNewConversation);
     return () => window.removeEventListener(NEW_CHAT_ABORT_EVENT, handleNewConversation);
-  }, [setIsLoading, setStreamingMessage, updateMessage]);
+  }, [clearQueuedStreamUpdates, setIsLoading, setStreamingMessage, updateMessage]);
 
   const openSidecar = (panel: SidecarMode, payload?: Record<string, unknown>) => {
     openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
