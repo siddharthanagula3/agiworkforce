@@ -44,6 +44,14 @@ const InlineDocumentGeneration = React.lazy(() =>
   import('./InlineDocumentGeneration').then((m) => ({ default: m.InlineDocumentGeneration })),
 );
 
+const InlineDocumentRead = React.lazy(() =>
+  import('./InlineDocumentRead').then((m) => ({ default: m.InlineDocumentRead })),
+);
+
+const InlineDocumentSearch = React.lazy(() =>
+  import('./InlineDocumentSearch').then((m) => ({ default: m.InlineDocumentSearch })),
+);
+
 const InlineGitHubPR = React.lazy(() =>
   import('./InlineGitHub').then((m) => ({ default: m.InlineGitHubPR })),
 );
@@ -175,8 +183,9 @@ export const TOOL_RENDERERS: Record<
   document_create_docx: InlineDocumentGeneration,
   document_create_excel: InlineDocumentGeneration,
   document_create_xlsx: InlineDocumentGeneration,
-  document_read: InlineDocumentGeneration,
-  document_search: InlineSearchResults,
+  document_read: InlineDocumentRead,
+  document_extract_text: InlineDocumentRead,
+  document_search: InlineDocumentSearch,
 
   // ============================================
   // BROWSER AUTOMATION

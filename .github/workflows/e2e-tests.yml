@@ -55,25 +55,33 @@ jobs:
 
       - name: Start Vite dev server (background)
         run: |
-          VITE_DEV_PORT=5175 pnpm dev:vite > app.log 2>&1 &
+          set -euo pipefail
+          VITE_DEV_PORT=5175 TAURI_DEV_HOST=127.0.0.1 pnpm dev:vite > app.log 2>&1 &
           echo $! > app.pid
-          sleep 30
+          echo "Started Vite server with PID $(cat app.pid)"
         working-directory: apps/desktop
         timeout-minutes: 5
 
-      - name: Wait for app to be ready (120s max)
+      - name: Wait for app to be ready (180s max)
         run: |
-          for i in {1..60}; do
-            if curl -f http://localhost:5175 > /dev/null 2>&1; then
+          set -euo pipefail
+          for i in {1..90}; do
+            if ! kill -0 "$(cat app.pid)" > /dev/null 2>&1; then
+              echo "Vite process exited before app became ready"
+              tail -200 app.log || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:5175/ > /dev/null; then
               echo "App is ready after $((i*2)) seconds"
               exit 0
             fi
-            echo "Waiting for app... attempt $i/60"
+            echo "Waiting for app... attempt $i/90"
             sleep 2
           done
-          echo "App failed to start after 120 seconds"
-          cat app.log
+          echo "App failed to start after 180 seconds"
+          tail -200 app.log || true
           exit 1
+        working-directory: apps/desktop
 
       - name: Run smoke E2E tests
         run: |
@@ -132,7 +140,7 @@ jobs:
       - name: Stop app server
         if: always()
         run: |
-          if [ -f apps/desktop/app.pid ]; then
-            kill $(cat apps/desktop/app.pid) 2>/dev/null || true
+          if [ -f app.pid ]; then
+            kill "$(cat app.pid)" 2>/dev/null || true
           fi
         working-directory: apps/desktop

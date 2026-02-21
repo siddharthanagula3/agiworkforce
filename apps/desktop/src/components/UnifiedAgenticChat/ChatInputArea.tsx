@@ -83,13 +83,14 @@ export interface ChatInputAreaProps {
 }
 
 const MAX_ROWS = 10;
+const DEFAULT_CHAT_MAX_LENGTH = 20000;
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
   disabled = false,
   placeholder: defaultPlaceholder = 'Ask me anything...',
-  maxLength = 10000,
+  maxLength = DEFAULT_CHAT_MAX_LENGTH,
   enableAttachments = true,
   className = '',
 }) => {
@@ -119,6 +120,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const userModifiedContentRef = useRef(false);
 
@@ -240,9 +242,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isInputDisabled = disabled || isSending;
   const isQueueMode = isLoading || isStreaming;
   const isEmptyState = messages.length === 0;
+  const showFocusModeButtons = !isSimpleMode && isEmptyState;
   const showStopButton = (isStreaming || isLoading) && onStopGeneration;
   const pendingCount = pendingMessages.length;
   const placeholder = getFocusModePlaceholder(focusMode, defaultPlaceholder);
+  const sidebarOffset = sidebarCollapsed ? 64 : sidebarWidth;
 
   // Model display name
   const modelDisplayName = useMemo(() => {
@@ -373,6 +377,45 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   useEffect(() => {
     return cleanupAttachments;
   }, [cleanupAttachments]);
+
+  // Keep chat content above the fixed composer (including focus chips).
+  useEffect(() => {
+    const updateComposerReserve = () => {
+      if (!composerRef.current) return;
+      const rect = composerRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const bottomGap = Math.max(0, viewportHeight - rect.bottom);
+      const reserve = Math.ceil(rect.height + bottomGap + 16);
+      document.documentElement.style.setProperty('--agi-chat-input-reserve', `${reserve}px`);
+    };
+
+    updateComposerReserve();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => updateComposerReserve())
+        : null;
+    if (resizeObserver && composerRef.current) {
+      resizeObserver.observe(composerRef.current);
+    }
+
+    window.addEventListener('resize', updateComposerReserve);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateComposerReserve);
+      document.documentElement.style.removeProperty('--agi-chat-input-reserve');
+    };
+  }, [
+    isEmptyState,
+    sidecarOpen,
+    sidecarWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+    showFocusModeButtons,
+    attachments.length,
+    editingMessageId,
+    isQueueMode,
+  ]);
 
   // Input change handler
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -757,6 +800,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       {/* Main input container */}
       <motion.div
+        ref={composerRef}
         className={cn(
           'fixed z-40 w-full px-4',
           isEmptyState ? 'max-w-2xl' : 'max-w-5xl',
@@ -765,9 +809,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         initial={false}
         animate={{
           bottom: isEmptyState ? '50%' : '24px',
-          left: sidecarOpen
-            ? `calc(${sidebarCollapsed ? 64 : sidebarWidth}px + (100% - ${sidebarCollapsed ? 64 : sidebarWidth}px - ${sidecarWidth}px) / 2)`
-            : `calc(${sidebarCollapsed ? 64 : sidebarWidth}px + (100% - ${sidebarCollapsed ? 64 : sidebarWidth}px) / 2)`,
+          left: `calc(${sidebarOffset}px + (100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)) / 2)`,
           x: '-50%',
           y: isEmptyState ? '50%' : '0%',
           maxWidth: isEmptyState ? '42rem' : '64rem',
@@ -777,10 +819,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             ? { duration: 0.15 }
             : { type: 'spring', stiffness: 350, damping: 30 }
         }
-        style={{ willChange: 'transform' }}
+        style={{
+          willChange: 'transform',
+          width: `max(320px, calc(100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)))`,
+        }}
       >
         {/* Focus modes - hidden in simple mode */}
-        {!isSimpleMode && (
+        {showFocusModeButtons && (
           <FocusModeButtons
             focusMode={focusMode}
             onFocusModeChange={setFocusMode}

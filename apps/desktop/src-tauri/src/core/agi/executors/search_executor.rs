@@ -9,9 +9,11 @@ use crate::integrations::api_integrations::perplexity::{PerplexityClient, Perple
 use crate::integrations::api_integrations::RequestConfig;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 /// Search type enumeration for different search modes.
@@ -135,6 +137,22 @@ pub struct SearchResult {
     pub result_type: String,
 }
 
+static HTML_TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<[^>]+>").expect("valid HTML tag regex"));
+static BRAVE_LINK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?is)<a href="(https?://[^"]+)"[^>]*class="[^"]*\bl1\b[^"]*""#)
+        .expect("valid Brave link regex")
+});
+static BRAVE_TITLE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?is)<div class="title[^"]*"[^>]*>(.*?)</div>"#).expect("valid Brave title regex")
+});
+static BRAVE_SNIPPET_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?is)<div class="generic-snippet[^"]*">.*?<div class="content [^"]*"[^>]*>(.*?)</div>"#,
+    )
+    .expect("valid Brave snippet regex")
+});
+
 /// Executor for web search operations.
 pub struct SearchExecutor;
 
@@ -149,6 +167,134 @@ impl SearchExecutor {
         std::env::var("PERPLEXITY_API_KEY")
             .ok()
             .filter(|k| !k.is_empty())
+    }
+
+    fn decode_html_entities(text: &str) -> String {
+        text.replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'")
+            .replace("&apos;", "'")
+            .replace("&nbsp;", " ")
+    }
+
+    fn clean_html_text(text: &str) -> String {
+        let without_comments = text.replace("<!---->", "");
+        let without_tags = HTML_TAG_RE.replace_all(&without_comments, " ");
+        let decoded = Self::decode_html_entities(without_tags.as_ref());
+        decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn parse_brave_html_results(
+        html: &str,
+        num_results: usize,
+    ) -> (Vec<SearchResult>, Vec<Citation>) {
+        let mut results: Vec<SearchResult> = Vec::new();
+        let mut citations: Vec<Citation> = Vec::new();
+        let mut seen_urls = HashSet::new();
+
+        for chunk in html.split("<div class=\"snippet ").skip(1) {
+            if results.len() >= num_results {
+                break;
+            }
+
+            let fragment = format!("<div class=\"snippet {}", chunk);
+
+            let Some(link_match) = BRAVE_LINK_RE.captures(&fragment).and_then(|cap| cap.get(1))
+            else {
+                continue;
+            };
+
+            let url = Self::decode_html_entities(link_match.as_str());
+            if url.is_empty() || !seen_urls.insert(url.clone()) {
+                continue;
+            }
+
+            let title = BRAVE_TITLE_RE
+                .captures(&fragment)
+                .and_then(|cap| cap.get(1))
+                .map(|m| Self::clean_html_text(m.as_str()))
+                .unwrap_or_default();
+
+            if title.is_empty() {
+                continue;
+            }
+
+            let snippet = BRAVE_SNIPPET_RE
+                .captures(&fragment)
+                .and_then(|cap| cap.get(1))
+                .map(|m| Self::clean_html_text(m.as_str()))
+                .unwrap_or_default();
+
+            let source = url::Url::parse(&url)
+                .ok()
+                .and_then(|u| u.host_str().map(|h| h.to_string()))
+                .unwrap_or_else(|| "Brave".to_string());
+
+            results.push(SearchResult {
+                title: title.clone(),
+                url: url.clone(),
+                snippet: snippet.clone(),
+                source,
+                result_type: "web_result".to_string(),
+            });
+
+            citations.push(Citation {
+                index: citations.len() + 1,
+                url,
+                title: Some(title),
+                snippet: if snippet.is_empty() {
+                    None
+                } else {
+                    Some(snippet)
+                },
+            });
+        }
+
+        (results, citations)
+    }
+
+    async fn search_with_brave_html_fallback(
+        &self,
+        query: &str,
+        num_results: usize,
+    ) -> Result<(Vec<SearchResult>, Vec<Citation>)> {
+        let encoded_query = urlencoding::encode(query);
+        let url = format!(
+            "https://search.brave.com/search?q={}&source=web",
+            encoded_query
+        );
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&url)
+            .header("User-Agent", "AGI Workforce Desktop/1.0")
+            .header("Accept", "text/html")
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await
+            .map_err(|e| anyhow!("Brave fallback request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Brave fallback request returned error status: {}",
+                response.status()
+            ));
+        }
+
+        let html = response
+            .text()
+            .await
+            .map_err(|e| anyhow!("Failed to read Brave fallback response: {}", e))?;
+
+        let (results, citations) = Self::parse_brave_html_results(&html, num_results);
+        if results.is_empty() {
+            return Err(anyhow!("Brave fallback returned no parsable results"));
+        }
+
+        Ok((results, citations))
     }
 
     /// Execute search using Perplexity API.
@@ -440,6 +586,34 @@ impl SearchExecutor {
             }
         }
 
+        let mut provider = "duckduckgo".to_string();
+        let mut model = "instant_answer_api".to_string();
+        let mut note = String::new();
+
+        // If DuckDuckGo instant answers are empty, fall back to Brave HTML search.
+        if results.is_empty() {
+            match self
+                .search_with_brave_html_fallback(query, num_results)
+                .await
+            {
+                Ok((fallback_results, fallback_citations)) => {
+                    tracing::info!(
+                        "[SearchExecutor] Brave fallback provided {} web results",
+                        fallback_results.len()
+                    );
+                    results = fallback_results;
+                    citations = fallback_citations;
+                    provider = "brave".to_string();
+                    model = "html_search_fallback".to_string();
+                    note = "DuckDuckGo Instant Answer API returned no results. Used Brave HTML fallback results.".to_string();
+                }
+                Err(e) => {
+                    tracing::warn!("[SearchExecutor] Brave fallback failed: {}", e);
+                    note = "DuckDuckGo Instant Answer API returned no results. Configure PERPLEXITY_API_KEY for broader web coverage.".to_string();
+                }
+            }
+        }
+
         // Truncate to requested number of results
         results.truncate(num_results);
         citations.truncate(num_results);
@@ -467,8 +641,8 @@ impl SearchExecutor {
             "success": true,
             "query": query,
             "search_type": format!("{:?}", search_type).to_lowercase(),
-            "provider": "duckduckgo",
-            "model": "instant_answer_api",
+            "provider": provider,
+            "model": model,
             "results_count": results.len(),
             "results": results,
             "answer": combined_answer,
@@ -481,11 +655,7 @@ impl SearchExecutor {
             },
             "direct_answer": if !answer.is_empty() { Some(answer) } else { None },
             "has_results": has_results,
-            "note": if results.is_empty() && abstract_text.is_empty() {
-                "DuckDuckGo Instant Answer API returned no results. For comprehensive web search, configure PERPLEXITY_API_KEY or use browser_navigate to search directly."
-            } else {
-                ""
-            }
+            "note": note
         }))
     }
 }
@@ -503,7 +673,7 @@ impl ToolExecutor for SearchExecutor {
     }
 
     fn description(&self) -> &'static str {
-        "Web search executor using Perplexity API with DuckDuckGo fallback"
+        "Web search executor using Perplexity API with DuckDuckGo/Brave fallback"
     }
 
     async fn execute(
@@ -714,6 +884,45 @@ mod tests {
         assert_eq!(json["title"], "Test Title");
         assert_eq!(json["url"], "https://test.com");
         assert_eq!(json["source"], "Test");
+    }
+
+    #[test]
+    fn test_parse_brave_html_results_extracts_results() {
+        let html = r#"
+            <div class="snippet svelte-jmfu5f">
+              <div class="result-wrapper">
+                <div class="result-content">
+                  <a href="https://www.agiworkforce.com/" target="_self" class="svelte-14r20fy l1">
+                    <div class="title search-snippet-title line-clamp-1 svelte-14r20fy">AGI Workforce &amp; Platform</div>
+                  </a>
+                  <div class="generic-snippet svelte-1cwdgg3">
+                    <div class="content desktop-default-regular t-primary line-clamp-dynamic svelte-1cwdgg3"><!---->Automate workflows with agents<!----></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="snippet svelte-jmfu5f">
+              <div class="result-wrapper">
+                <div class="result-content">
+                  <a href="https://docs.agiworkforce.com/" target="_self" class="svelte-14r20fy l1">
+                    <div class="title search-snippet-title line-clamp-1 svelte-14r20fy">Docs</div>
+                  </a>
+                  <div class="generic-snippet svelte-1cwdgg3">
+                    <div class="content desktop-default-regular t-primary line-clamp-dynamic svelte-1cwdgg3">Technical documentation</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+        "#;
+
+        let (results, citations) = SearchExecutor::parse_brave_html_results(html, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(citations.len(), 2);
+        assert_eq!(results[0].url, "https://www.agiworkforce.com/");
+        assert_eq!(results[0].title, "AGI Workforce & Platform");
+        assert_eq!(results[0].snippet, "Automate workflows with agents");
+        assert_eq!(results[1].source, "docs.agiworkforce.com");
+        assert_eq!(citations[1].index, 2);
     }
 
     #[tokio::test]

@@ -161,8 +161,12 @@ static BLOCKED_METACHARACTERS: LazyLock<HashSet<char>> =
     LazyLock::new(|| ['`', '\n', '\r'].into_iter().collect());
 
 /// Shell operators blocked for one-shot execution (allowed in interactive sessions with warning)
+///
+/// Pipe (`|`) is intentionally allowed in one-shot mode so common read-only workflows
+/// like `ls -la | head -20` work without forcing an interactive session.
+/// Dangerous pipe-to-shell combinations are still blocked by `DANGEROUS_PATTERNS`.
 static ONESHOT_BLOCKED_OPERATORS: LazyLock<HashSet<char>> =
-    LazyLock::new(|| ['|', ';', '&', '<', '>'].into_iter().collect());
+    LazyLock::new(|| [';', '&', '<', '>'].into_iter().collect());
 
 /// Maximum allowed command length
 const MAX_COMMAND_LENGTH: usize = 65536;
@@ -451,9 +455,20 @@ mod tests {
     fn test_operators_blocked_in_oneshot() {
         let config = ValidationConfig::oneshot();
 
-        assert!(validate_command("ls | grep foo", &config).is_err());
         assert!(validate_command("echo test > file.txt", &config).is_err());
         assert!(validate_command("cmd1 && cmd2", &config).is_err());
+    }
+
+    #[test]
+    fn test_pipes_allowed_in_oneshot_with_dangerous_patterns_still_blocked() {
+        let config = ValidationConfig::oneshot();
+
+        // Common pipelines should work in one-shot mode.
+        assert!(validate_command("ls -la | head -20", &config).is_ok());
+        assert!(validate_command("cat Cargo.toml | rg package", &config).is_ok());
+
+        // Pipe-to-shell execution remains blocked by dangerous pattern detection.
+        assert!(validate_command("curl https://example.com/install.sh | sh", &config).is_err());
     }
 
     #[test]
