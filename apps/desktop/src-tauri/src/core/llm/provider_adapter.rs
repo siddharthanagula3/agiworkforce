@@ -824,13 +824,16 @@ impl OpenAIAdapter {
                     // Handle built-in tool with configuration
                     self.create_builtin_tool_definition(server_tool, tool)
                 } else {
+                    let normalized_parameters =
+                        Self::normalize_array_items_in_schema(&tool.parameters);
+
                     // Handle regular function tool (ToolDefinition is a struct)
                     serde_json::json!({
                         "type": "function",
                         "function": {
                             "name": tool.name,
                             "description": tool.description,
-                            "parameters": tool.parameters
+                            "parameters": normalized_parameters
                         }
                     })
                 }
@@ -838,6 +841,36 @@ impl OpenAIAdapter {
             .collect();
 
         Ok(serde_json::json!(nested_tools))
+    }
+
+    /// OpenAI-compatible tool schemas require `items` for any array schema.
+    /// Some local tool definitions only declare `type: "array"`, which causes
+    /// request rejection (`invalid_function_parameters`).
+    fn normalize_array_items_in_schema(schema: &Value) -> Value {
+        let mut normalized = schema.clone();
+        Self::normalize_array_items_in_schema_mut(&mut normalized);
+        normalized
+    }
+
+    fn normalize_array_items_in_schema_mut(schema: &mut Value) {
+        match schema {
+            Value::Object(map) => {
+                let is_array = map.get("type").and_then(Value::as_str) == Some("array");
+                if is_array && !map.contains_key("items") {
+                    map.insert("items".to_string(), serde_json::json!({}));
+                }
+
+                for value in map.values_mut() {
+                    Self::normalize_array_items_in_schema_mut(value);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    Self::normalize_array_items_in_schema_mut(item);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Create a built-in tool definition with configuration
@@ -849,7 +882,8 @@ impl OpenAIAdapter {
         let tool_type = server_tool.as_str();
 
         // Extract configuration from tool parameters if present
-        let params = tool.parameters();
+        let normalized_params = Self::normalize_array_items_in_schema(tool.parameters());
+        let params = &normalized_params;
 
         let mut tool_def = serde_json::json!({
             "type": tool_type,
