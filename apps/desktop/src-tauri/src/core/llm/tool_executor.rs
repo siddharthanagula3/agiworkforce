@@ -1261,6 +1261,16 @@ impl ToolExecutor {
                 "description": param.description,
             });
 
+            // OpenAI-compatible function schemas require `items` for arrays.
+            // Keep items permissive because tool registry currently models only
+            // "array" (not array item subtypes).
+            if matches!(
+                param.parameter_type,
+                crate::core::agi::tools::ParameterType::Array
+            ) {
+                prop["items"] = json!({});
+            }
+
             // BUG 2 FIX: Include default values in schema so the LLM knows
             // about optional parameter defaults and can use them correctly
             if let Some(default) = &param.default {

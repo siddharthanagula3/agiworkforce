@@ -141,16 +141,47 @@ impl ManagedCloudProvider {
         tools
             .iter()
             .map(|tool| {
+                let normalized_parameters = Self::normalize_array_items_in_schema(&tool.parameters);
                 serde_json::json!({
                     "type": "function",
                     "function": {
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": tool.parameters
+                        "parameters": normalized_parameters
                     }
                 })
             })
             .collect()
+    }
+
+    /// OpenAI-compatible function schemas require `items` in any array schema.
+    /// Some local tool definitions only specify `type: "array"`, which managed
+    /// cloud providers reject as `invalid_function_parameters`.
+    fn normalize_array_items_in_schema(schema: &Value) -> Value {
+        let mut normalized = schema.clone();
+        Self::normalize_array_items_in_schema_mut(&mut normalized);
+        normalized
+    }
+
+    fn normalize_array_items_in_schema_mut(schema: &mut Value) {
+        match schema {
+            Value::Object(map) => {
+                let is_array = map.get("type").and_then(Value::as_str) == Some("array");
+                if is_array && !map.contains_key("items") {
+                    map.insert("items".to_string(), serde_json::json!({}));
+                }
+
+                for value in map.values_mut() {
+                    Self::normalize_array_items_in_schema_mut(value);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    Self::normalize_array_items_in_schema_mut(item);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Transform LLMRequest to OpenAI-compatible format for the web API.
@@ -183,10 +214,12 @@ impl ManagedCloudProvider {
                         if server_tools::is_anthropic_server_tool(tool_name) {
                             server_tools::build_server_tool_definition(tool_name)
                         } else {
+                            let normalized_input_schema =
+                                Self::normalize_array_items_in_schema(&tool.parameters);
                             Some(serde_json::json!({
                                 "name": tool.name,
                                 "description": tool.description,
-                                "input_schema": tool.parameters
+                                "input_schema": normalized_input_schema
                             }))
                         }
                     })
@@ -720,5 +753,62 @@ impl LLMProvider for ManagedCloudProvider {
     fn supports_function_calling(&self) -> bool {
         // Managed cloud supports function calling through the API
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::llm::{ToolChoice, ToolDefinition};
+
+    #[test]
+    fn transform_request_adds_items_for_array_tool_params() {
+        let provider = ManagedCloudProvider::default();
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Run db update".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5-nano".to_string(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "db_execute".to_string(),
+                description: "Execute SQL".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "sql": { "type": "string" },
+                        "params": { "type": "array" }
+                    }
+                }),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let transformed = provider.transform_request(&request);
+        assert_eq!(
+            transformed["tools"][0]["function"]["parameters"]["properties"]["params"]["items"],
+            serde_json::json!({}),
+            "managed cloud tool schema should include items for array params"
+        );
     }
 }
