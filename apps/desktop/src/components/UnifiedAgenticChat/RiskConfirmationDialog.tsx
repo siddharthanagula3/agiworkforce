@@ -40,13 +40,13 @@ export const RiskConfirmationDialog: React.FC<RiskConfirmationDialogProps> = ({
           <AlertDialogTitle className={isHighRisk ? 'text-destructive' : 'text-yellow-600'}>
             {isHighRisk ? 'High-Risk Action Warning' : 'Security Warning'}
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <p className="whitespace-pre-wrap">{message}</p>
-            <p className="font-medium">
+          <AlertDialogDescription className="flex flex-col gap-3">
+            <span className="whitespace-pre-wrap block">{message}</span>
+            <span className="font-medium block">
               {isHighRisk
                 ? 'This action could cause system damage. Proceeding is not recommended.'
                 : 'Please review this request carefully before proceeding.'}
-            </p>
+            </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -1,8 +1,7 @@
 // AUDIT-ENV-064 fix: Unified Tauri runtime detection
 // Checks for both __TAURI_INTERNALS__ and __TAURI__ to handle different Tauri versions
 export const isTauri =
-  typeof window !== 'undefined' &&
-  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+  typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 const isTestEnvironment =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
@@ -46,6 +45,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'project_update':
     case 'project_delete':
     case 'project_update_settings':
+    case 'file_open_with_default_app':
       return undefined as T;
 
     case 'project_get_settings':
@@ -193,7 +193,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);
-      throw new Error(`Command not registered in tauri-mock: ${command}. This indicates a frontend-backend wiring issue.`);
+      throw new Error(
+        `Command not registered in tauri-mock: ${command}. This indicates a frontend-backend wiring issue.`,
+      );
   }
 }
 

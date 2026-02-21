@@ -31,7 +31,7 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
   initialContent,
   onSave,
   onCancel,
-  maxLength = 10000,
+  maxLength = 20000,
   className,
   autoFocus = true,
 }) => {
