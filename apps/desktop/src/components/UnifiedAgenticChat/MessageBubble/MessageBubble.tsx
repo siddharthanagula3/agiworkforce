@@ -315,7 +315,46 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     if (compactMode) {
       const toolDisplayInfo = getToolDisplayInfo(toolName);
       const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
+      const isCompleted = toolStatus === 'completed' || toolStatus === 'success';
+      const isFailed =
+        toolStatus === 'failed' || toolStatus === 'failure' || toolStatus === 'error';
       const statusText = isExecuting ? toolDisplayInfo.activeForm : toolDisplayInfo.completedForm;
+
+      // Compact mode should still surface tool output/error, otherwise successful
+      // tool-only runs appear as a status line with no actionable result.
+      const metadataArtifactsRaw = Array.isArray(message.metadata?.artifacts)
+        ? (message.metadata?.artifacts as unknown[])
+        : [];
+      const artifacts = [
+        ...(message.artifacts || []),
+        ...metadataArtifactsRaw.filter(
+          (artifact) =>
+            !(message.artifacts || []).some((existing) => {
+              const existingRecord = existing as unknown as Record<string, unknown>;
+              const artifactRecord = artifact as Record<string, unknown>;
+              return (
+                String(existingRecord['id'] || '') === String(artifactRecord['id'] || '') ||
+                String(existingRecord['content'] || '') === String(artifactRecord['content'] || '')
+              );
+            }),
+        ),
+      ] as Array<Record<string, unknown>>;
+
+      const metadataRecord = (message.metadata || {}) as Record<string, unknown>;
+      const toolCallId = String(actionId || message.metadata?.tool_call || '');
+      const matchedArtifact =
+        artifacts.find((artifact) => String(artifact['id'] || '') === toolCallId) ||
+        artifacts[artifacts.length - 1];
+      const compactError = String(
+        matchedArtifact?.['error'] ||
+          message.error ||
+          metadataRecord['error'] ||
+          (isFailed ? 'Tool execution failed.' : ''),
+      ).trim();
+      const compactContent = String(matchedArtifact?.['content'] || '').trim();
+      const rawPreview = compactError || compactContent;
+      const compactPreview =
+        rawPreview.length > 700 ? `${rawPreview.slice(0, 700).trimEnd()}...` : rawPreview;
 
       return (
         <div className={cn('px-4 py-2', embedded && 'pl-14')}>
@@ -323,6 +362,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <div className="animate-pulse">•</div>
             <span>{statusText}</span>
           </div>
+          {(isCompleted || isFailed) && compactPreview ? (
+            <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-zinc-900/70 px-2.5 py-2 text-xs text-zinc-200">
+              {compactPreview}
+            </pre>
+          ) : null}
         </div>
       );
     }
