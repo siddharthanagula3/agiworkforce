@@ -56,6 +56,65 @@ impl Default for ManagedCloudProvider {
 }
 
 impl ManagedCloudProvider {
+    fn canonicalize_cloud_model(model: &str) -> String {
+        let normalized = model.trim().to_lowercase();
+        match normalized.as_str() {
+            // OpenAI Codex aliases used by desktop tiers
+            "gpt-5.2-codex" => "gpt-5-codex".to_string(),
+            m if m.starts_with("gpt-5.2-codex-") => "gpt-5-codex".to_string(),
+            // Keep user-selected model ID when no alias is needed
+            _ => model.to_string(),
+        }
+    }
+
+    fn codex_effort_override(model: &str) -> Option<&'static str> {
+        let normalized = model.trim().to_lowercase();
+        if normalized.ends_with("-low") {
+            Some("low")
+        } else if normalized.ends_with("-medium") {
+            Some("medium")
+        } else if normalized.ends_with("-high") || normalized.ends_with("-xhigh") {
+            Some("high")
+        } else {
+            None
+        }
+    }
+
+    fn extract_error_message(value: &Value) -> Option<String> {
+        let candidate = value
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .or_else(|| value.pointer("/message").and_then(Value::as_str))
+            .or_else(|| value.pointer("/error").and_then(Value::as_str))
+            .or_else(|| value.pointer("/detail").and_then(Value::as_str))
+            .or_else(|| value.pointer("/code").and_then(Value::as_str));
+
+        candidate.and_then(|msg| {
+            let trimmed = msg.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.chars().take(500).collect::<String>())
+            }
+        })
+    }
+
+    async fn extract_error_detail(res: reqwest::Response) -> Option<String> {
+        let raw = res.text().await.ok()?;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+            if let Some(msg) = Self::extract_error_message(&value) {
+                return Some(msg);
+            }
+        }
+
+        Some(trimmed.chars().take(500).collect::<String>())
+    }
+
     fn is_anthropic_model(model: &str) -> bool {
         let m = model.to_lowercase();
         m.starts_with("claude")
@@ -98,10 +157,12 @@ impl ManagedCloudProvider {
     /// For Claude models, we preserve Anthropic-native features (server tools,
     /// prompt caching, thinking) so the managed cloud can proxy them correctly.
     fn transform_request(&self, request: &LLMRequest) -> Value {
-        let is_claude_model = Self::is_anthropic_model(&request.model);
+        let canonical_model = Self::canonicalize_cloud_model(&request.model);
+        let is_claude_model = Self::is_anthropic_model(&canonical_model);
 
         let mut transformed =
             serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
+        transformed["model"] = serde_json::json!(canonical_model);
 
         // Transform messages: OpenAI format for GPT models, Anthropic format for Claude
         transformed["messages"] =
@@ -155,10 +216,23 @@ impl ManagedCloudProvider {
 
         // GPT-5 nano doesn't support custom temperature (only default value of 1.0)
         // Remove temperature parameter for gpt-5-nano to avoid API errors
-        if request.model == "gpt-5-nano" {
+        if canonical_model == "gpt-5-nano" {
             transformed
                 .as_object_mut()
                 .and_then(|obj| obj.remove("temperature"));
+        }
+
+        // Map desktop Codex quality variants to OpenAI reasoning effort.
+        // This keeps "gpt-5.2-codex-low|medium|high|xhigh" behavior after
+        // alias normalization to the canonical API model.
+        if let Some(effort) = Self::codex_effort_override(&request.model) {
+            if transformed
+                .get("effort")
+                .and_then(Value::as_str)
+                .map_or(true, |current| current.trim().is_empty())
+            {
+                transformed["effort"] = serde_json::json!(effort);
+            }
         }
 
         transformed
@@ -378,7 +452,8 @@ impl LLMProvider for ManagedCloudProvider {
             .await
             .map_err(|e| format!("Network error: {}", e))?;
 
-        match res.status().as_u16() {
+        let status = res.status().as_u16();
+        match status {
             200 => {
                 let body: Value = res
                     .json()
@@ -527,10 +602,18 @@ impl LLMProvider for ManagedCloudProvider {
                 std::io::ErrorKind::ConnectionRefused,
                 method_not_allowed_message(),
             ))),
-            _ => Err(Box::new(std::io::Error::other(format!(
-                "Cloud provider error: {}",
-                res.status()
-            )))),
+            _ => {
+                let mut message = format!(
+                    "Cloud provider error: {} (model: {})",
+                    status,
+                    Self::canonicalize_cloud_model(&request.model)
+                );
+                if let Some(detail) = Self::extract_error_detail(res).await {
+                    message.push_str(": ");
+                    message.push_str(&detail);
+                }
+                Err(Box::new(std::io::Error::other(message)))
+            }
         }
     }
 
@@ -600,10 +683,16 @@ impl LLMProvider for ManagedCloudProvider {
                     method_not_allowed_message(),
                 )));
             } else {
-                return Err(Box::new(std::io::Error::other(format!(
-                    "Cloud provider error: {}",
-                    status
-                ))));
+                let mut message = format!(
+                    "Cloud provider error: {} (model: {})",
+                    status,
+                    Self::canonicalize_cloud_model(&request.model)
+                );
+                if let Some(detail) = Self::extract_error_detail(res).await {
+                    message.push_str(": ");
+                    message.push_str(&detail);
+                }
+                return Err(Box::new(std::io::Error::other(format!("{}", message))));
             }
         }
 
