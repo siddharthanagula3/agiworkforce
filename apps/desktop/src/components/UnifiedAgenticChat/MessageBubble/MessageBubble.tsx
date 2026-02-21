@@ -6,6 +6,7 @@
  */
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 import { useExecutionStore } from '../../../stores/executionStore';
@@ -127,6 +128,77 @@ function parseThinkingContent(
   return null;
 }
 
+type CompactToolOutput = {
+  command: string;
+  stdout: string;
+  stderr: string;
+  error: string;
+  raw: string;
+};
+
+function asNonEmptyString(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : '';
+}
+
+function parseJsonRecord(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Ignore parse errors and treat as plain text.
+  }
+  return null;
+}
+
+function extractCompactToolOutput(
+  artifact: Record<string, unknown> | undefined,
+  message: { content: string; error?: string; metadata?: unknown },
+  isFailed: boolean,
+): CompactToolOutput {
+  const metadataRecord =
+    message.metadata && typeof message.metadata === 'object'
+      ? (message.metadata as Record<string, unknown>)
+      : {};
+  const rawArtifactContent = asNonEmptyString(artifact?.['content']);
+  const parsedFromRaw =
+    rawArtifactContent.startsWith('{') && rawArtifactContent.endsWith('}')
+      ? parseJsonRecord(rawArtifactContent)
+      : null;
+  const source = parsedFromRaw ?? artifact ?? {};
+
+  const command = asNonEmptyString(source['command']);
+  const stdout = asNonEmptyString(source['stdout']) || asNonEmptyString(source['output']);
+  const stderr = asNonEmptyString(source['stderr']);
+  const error =
+    asNonEmptyString(artifact?.['error']) ||
+    asNonEmptyString(source['error']) ||
+    asNonEmptyString(source['message']) ||
+    asNonEmptyString(message.error) ||
+    asNonEmptyString(metadataRecord['error']) ||
+    (isFailed ? 'Tool execution failed.' : '');
+  const raw =
+    rawArtifactContent ||
+    asNonEmptyString(message.content) ||
+    asNonEmptyString(source['result']) ||
+    asNonEmptyString(source['text']);
+
+  return { command, stdout, stderr, error, raw };
+}
+
+function buildCompactToolCopyText(output: CompactToolOutput): string {
+  const sections: string[] = [];
+  if (output.command) sections.push(`$ ${output.command}`);
+  if (output.stdout) sections.push(output.stdout);
+  if (output.stderr) sections.push(`STDERR:\n${output.stderr}`);
+  if (output.error) sections.push(`ERROR:\n${output.error}`);
+  if (sections.length === 0 && output.raw) sections.push(output.raw);
+  return sections.join('\n\n');
+}
+
 const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   message,
   showAvatar = true,
@@ -142,6 +214,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null);
+  const [compactToolExpanded, setCompactToolExpanded] = useState(false);
+  const [compactToolCopied, setCompactToolCopied] = useState(false);
 
   // Store hooks
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
@@ -260,6 +334,23 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isResearchTask = message.metadata?.type === 'deep-research-task';
   const researchTask = researchTaskId ? researchTasks[researchTaskId as string] : null;
 
+  // Reset compact tool display state when message changes
+  useEffect(() => {
+    setCompactToolExpanded(false);
+    setCompactToolCopied(false);
+  }, [message.id]);
+
+  const handleCompactToolCopy = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCompactToolCopied(true);
+      window.setTimeout(() => setCompactToolCopied(false), 1500);
+    } catch {
+      setCompactToolCopied(false);
+    }
+  }, []);
+
   // Open sidecar for new messages
   useEffect(() => {
     // Auto-trigger sidecar for assistant outputs only.
@@ -340,33 +431,115 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         ),
       ] as Array<Record<string, unknown>>;
 
-      const metadataRecord = (message.metadata || {}) as Record<string, unknown>;
       const toolCallId = String(actionId || message.metadata?.tool_call || '');
       const matchedArtifact =
         artifacts.find((artifact) => String(artifact['id'] || '') === toolCallId) ||
         artifacts[artifacts.length - 1];
-      const compactError = String(
-        matchedArtifact?.['error'] ||
-          message.error ||
-          metadataRecord['error'] ||
-          (isFailed ? 'Tool execution failed.' : ''),
-      ).trim();
-      const compactContent = String(matchedArtifact?.['content'] || '').trim();
-      const rawPreview = compactError || compactContent;
-      const compactPreview =
-        rawPreview.length > 700 ? `${rawPreview.slice(0, 700).trimEnd()}...` : rawPreview;
+      const compactOutput = extractCompactToolOutput(matchedArtifact, message, isFailed);
+      const copyText = buildCompactToolCopyText(compactOutput);
+      const collapsedBodySource =
+        compactOutput.stdout || compactOutput.stderr || compactOutput.error || compactOutput.raw;
+      const collapsedBodyLines = collapsedBodySource ? collapsedBodySource.split('\n') : [];
+      const collapsedBodyPreview = collapsedBodyLines.slice(0, 3).join('\n').trim();
+      const hiddenLineCount = Math.max(collapsedBodyLines.length - 3, 0);
 
       return (
         <div className={cn('px-4 py-2', embedded && 'pl-14')}>
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <div className="animate-pulse">•</div>
-            <span>{statusText}</span>
+          <div className="rounded-lg border border-border/50 overflow-hidden bg-surface-elevated">
+            <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface-overlay/30 border-b border-border/30">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">{statusText}</p>
+                {compactOutput.command ? (
+                  <p className="text-xs font-mono text-emerald-400 truncate">
+                    $ {compactOutput.command}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void handleCompactToolCopy(copyText)}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-colors"
+                  title="Copy full output"
+                  aria-label="Copy full output"
+                >
+                  {compactToolCopied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompactToolExpanded((open) => !open)}
+                  className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-colors"
+                  title={compactToolExpanded ? 'Collapse output' : 'Expand output'}
+                >
+                  {compactToolExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  {compactToolExpanded ? 'Collapse' : 'Expand'}
+                </button>
+              </div>
+            </div>
+
+            {(isCompleted || isFailed) && (
+              <div className="px-3 py-2 bg-black/50 font-mono text-xs text-zinc-200">
+                {!compactToolExpanded ? (
+                  <>
+                    <pre className="whitespace-pre-wrap break-words">
+                      {collapsedBodyPreview || 'No output'}
+                    </pre>
+                    {hiddenLineCount > 0 ? (
+                      <p className="mt-1 text-[11px] text-zinc-400">
+                        +{hiddenLineCount} more lines
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {compactOutput.stdout ? (
+                      <div>
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-zinc-400">
+                          stdout
+                        </p>
+                        <pre className="whitespace-pre-wrap break-words text-zinc-200">
+                          {compactOutput.stdout}
+                        </pre>
+                      </div>
+                    ) : null}
+                    {compactOutput.stderr ? (
+                      <div>
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-amber-400">
+                          stderr
+                        </p>
+                        <pre className="whitespace-pre-wrap break-words text-amber-200">
+                          {compactOutput.stderr}
+                        </pre>
+                      </div>
+                    ) : null}
+                    {compactOutput.error ? (
+                      <div>
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-red-400">
+                          error
+                        </p>
+                        <pre className="whitespace-pre-wrap break-words text-red-300">
+                          {compactOutput.error}
+                        </pre>
+                      </div>
+                    ) : null}
+                    {!compactOutput.stdout && !compactOutput.stderr && !compactOutput.error ? (
+                      <pre className="whitespace-pre-wrap break-words text-zinc-200">
+                        {compactOutput.raw || 'No output'}
+                      </pre>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          {(isCompleted || isFailed) && compactPreview ? (
-            <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-zinc-900/70 px-2.5 py-2 text-xs text-zinc-200">
-              {compactPreview}
-            </pre>
-          ) : null}
         </div>
       );
     }
