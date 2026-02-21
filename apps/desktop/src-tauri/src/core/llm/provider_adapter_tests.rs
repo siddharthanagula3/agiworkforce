@@ -253,6 +253,61 @@ mod tests {
     }
 
     #[test]
+    fn test_openai_adapter_adds_items_for_array_tool_params() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Run a db update".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5-nano".to_string(),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            tools: Some(vec![ToolDefinition {
+                name: "db_execute".to_string(),
+                description: "Execute SQL".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "sql": { "type": "string" },
+                        "params": { "type": "array" }
+                    }
+                }),
+            }]),
+            tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            cache_control: None,
+            effort: None,
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter
+            .adapt_request(&request)
+            .expect("request should adapt");
+        let params = &adapted["tools"][0]["function"]["parameters"];
+        assert_eq!(
+            params["properties"]["params"]["items"],
+            json!({}),
+            "array params must include items schema"
+        );
+    }
+
+    #[test]
     fn test_openai_builtin_tool_mapping_current_ids() {
         assert_eq!(
             OpenAIServerTool::from_str("computer_use_preview"),
