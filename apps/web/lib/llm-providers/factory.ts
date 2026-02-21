@@ -26,11 +26,22 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'gemini-3-flash-preview': 'gemini-3-flash-preview', // Gemini 3 Flash
   // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
   // Anthropic requires date suffixes in model IDs
+  'claude-opus-4.6': 'claude-opus-4-6-20251101', // Claude Opus 4.6
   'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
+  'claude-opus-4-6': 'claude-opus-4-6-20251101', // Claude Opus 4.6 (hyphen alias)
+  'claude-opus-4-5': 'claude-opus-4-5-20251101', // Claude Opus 4.5 (hyphen alias)
   'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
+  'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5 (hyphen alias)
   'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
+  'claude-haiku-4-5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5 (hyphen alias)
   // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
   'gpt-5.2': 'gpt-5.2', // GPT-5.2 flagship
+  'gpt-5.2-codex': 'gpt-5-codex', // GPT-5.2 Codex alias
+  'gpt-5.2-codex-low': 'gpt-5-codex', // GPT-5.2 Codex (Low)
+  'gpt-5.2-codex-medium': 'gpt-5-codex', // GPT-5.2 Codex (Medium)
+  'gpt-5.2-codex-high': 'gpt-5-codex', // GPT-5.2 Codex (High)
+  'gpt-5.2-codex-xhigh': 'gpt-5-codex', // GPT-5.2 Codex (XHigh)
+  'gpt-5-codex': 'gpt-5-codex', // Canonical Codex model
   'gpt-5-pro': 'gpt-5-pro-2025-10-06', // GPT-5 Pro (use snapshot for stability)
   'gpt-5-nano': 'gpt-5-nano', // GPT-5 Nano (no date suffix per OpenAI docs)
   o3: 'o3-2025-04-16', // o3 reasoning model
