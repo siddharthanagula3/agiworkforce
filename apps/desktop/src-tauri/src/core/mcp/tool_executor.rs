@@ -8,6 +8,10 @@ use std::time::{Duration, Instant};
 
 /// Delimiter used to separate components in tool IDs (must match registry.rs)
 const TOOL_ID_DELIMITER: &str = "__";
+const ENCODED_HEX_PREFIX: &str = "hex_";
+const ENCODED_HEX_PREFIX_LEGACY: &str = "hex:";
+const ENCODED_B64_PREFIX: &str = "b64_";
+const ENCODED_B64_PREFIX_LEGACY: &str = "b64:";
 
 #[derive(Debug, Clone)]
 pub struct ToolExecutionResult {
@@ -39,14 +43,20 @@ pub struct McpToolExecutor {
 
 impl McpToolExecutor {
     fn decode_component(value: &str) -> McpResult<String> {
-        if let Some(encoded) = value.strip_prefix("hex:") {
+        if let Some(encoded) = value
+            .strip_prefix(ENCODED_HEX_PREFIX)
+            .or_else(|| value.strip_prefix(ENCODED_HEX_PREFIX_LEGACY))
+        {
             let bytes = hex::decode(encoded).map_err(|_| {
                 McpError::ToolNotFound(format!("Invalid encoded MCP tool ID component: {}", value))
             })?;
             String::from_utf8(bytes).map_err(|_| {
                 McpError::ToolNotFound(format!("Invalid UTF-8 in MCP tool ID component: {}", value))
             })
-        } else if let Some(encoded) = value.strip_prefix("b64:") {
+        } else if let Some(encoded) = value
+            .strip_prefix(ENCODED_B64_PREFIX)
+            .or_else(|| value.strip_prefix(ENCODED_B64_PREFIX_LEGACY))
+        {
             let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
                 McpError::ToolNotFound(format!("Invalid encoded MCP tool ID component: {}", value))
             })?;
