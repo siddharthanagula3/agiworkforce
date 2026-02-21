@@ -155,6 +155,22 @@ impl McpExecutor {
             String::from_utf8(bytes).map_err(|_| {
                 McpError::ToolNotFound(format!("Invalid UTF-8 in MCP tool ID component: {}", value))
             })
+        } else if value.len() >= 20 {
+            // Compact untagged URL-safe base64 fallback for long tool IDs.
+            let bytes = match URL_SAFE_NO_PAD.decode(value) {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(value.to_string()),
+            };
+            let decoded = match String::from_utf8(bytes) {
+                Ok(decoded) => decoded,
+                Err(_) => return Ok(value.to_string()),
+            };
+            // Guard against accidental decoding of plain legacy names.
+            if URL_SAFE_NO_PAD.encode(decoded.as_bytes()) == value {
+                Ok(decoded)
+            } else {
+                Ok(value.to_string())
+            }
         } else {
             Ok(value.to_string())
         }
@@ -258,13 +274,28 @@ impl McpExecutor {
     /// * `tool_name` - The tool name on the server
     pub fn create_tool_id(server_name: &str, tool_name: &str) -> String {
         // Reversible encoding to preserve original names (including delimiters)
-        // while staying compatible with OpenAI function-name regex.
-        let safe_server = format!("{}{}", ENCODED_HEX_PREFIX, hex::encode(server_name));
-        let safe_tool = format!("{}{}", ENCODED_HEX_PREFIX, hex::encode(tool_name));
+        // while staying compatible with OpenAI function-name charset and length limits.
+        let safe_server = format!("{}{}", ENCODED_B64_PREFIX, URL_SAFE_NO_PAD.encode(server_name));
+        let safe_tool = format!("{}{}", ENCODED_B64_PREFIX, URL_SAFE_NO_PAD.encode(tool_name));
 
-        format!(
+        let tagged_id = format!(
             "{}{}{}{}{}",
             MCP_TOOL_PREFIX, TOOL_ID_DELIMITER, safe_server, TOOL_ID_DELIMITER, safe_tool
+        );
+
+        if tagged_id.len() <= 64 {
+            return tagged_id;
+        }
+
+        let compact_server = URL_SAFE_NO_PAD.encode(server_name);
+        let compact_tool = URL_SAFE_NO_PAD.encode(tool_name);
+        format!(
+            "{}{}{}{}{}",
+            MCP_TOOL_PREFIX,
+            TOOL_ID_DELIMITER,
+            compact_server,
+            TOOL_ID_DELIMITER,
+            compact_tool
         )
     }
 
@@ -717,7 +748,7 @@ mod tests {
         let tool_id = McpExecutor::create_tool_id("filesystem", "read_file");
         assert_eq!(
             tool_id,
-            "mcp__hex_66696c6573797374656d__hex_726561645f66696c65"
+            "mcp__b64_ZmlsZXN5c3RlbQ__b64_cmVhZF9maWxl"
         );
     }
 
@@ -726,7 +757,7 @@ mod tests {
         let tool_id = McpExecutor::create_tool_id("file__system", "read__file");
         assert_eq!(
             tool_id,
-            "mcp__hex_66696c655f5f73797374656d__hex_726561645f5f66696c65"
+            "mcp__b64_ZmlsZV9fc3lzdGVt__b64_cmVhZF9fZmlsZQ"
         );
     }
 
@@ -739,6 +770,19 @@ mod tests {
         let (server, tool) = result.unwrap();
         assert_eq!(server, "filesystem");
         assert_eq!(tool, "read_file");
+    }
+
+    #[test]
+    fn test_create_tool_id_falls_back_to_compact_base64_for_long_names() {
+        let tool_id = McpExecutor::create_tool_id("claude_in_chrome", "read_network_requests");
+        assert_eq!(
+            tool_id,
+            "mcp__Y2xhdWRlX2luX2Nocm9tZQ__cmVhZF9uZXR3b3JrX3JlcXVlc3Rz"
+        );
+        assert!(tool_id.len() <= 64);
+        let parsed = McpExecutor::parse_tool_id(&tool_id).expect("compact base64 tool ID parses");
+        assert_eq!(parsed.0, "claude_in_chrome");
+        assert_eq!(parsed.1, "read_network_requests");
     }
 
     #[test]
