@@ -226,18 +226,21 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   // AUDIT-UI-052: Look up pending approval request ID for this tool
   const pendingApprovalId = useToolStore(
-    useCallback((state) => {
-      if (!toolName && !actionId) return undefined;
-      // Find a pending approval that matches this tool
-      const pending = state.pendingApprovals.find(
-        (a) =>
-          a.status === 'pending' &&
-          ((a.details['toolName'] as string | undefined) === toolName ||
-            (a.details['tool'] as string | undefined) === toolName ||
-            a.actionId === actionId),
-      );
-      return pending?.id;
-    }, [toolName, actionId]),
+    useCallback(
+      (state) => {
+        if (!toolName && !actionId) return undefined;
+        // Find a pending approval that matches this tool
+        const pending = state.pendingApprovals.find(
+          (a) =>
+            a.status === 'pending' &&
+            ((a.details['toolName'] as string | undefined) === toolName ||
+              (a.details['tool'] as string | undefined) === toolName ||
+              a.actionId === actionId),
+        );
+        return pending?.id;
+      },
+      [toolName, actionId],
+    ),
   );
 
   // Derive status from store if available, otherwise fallback to metadata
@@ -259,13 +262,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   // Open sidecar for new messages
   useEffect(() => {
+    // Auto-trigger sidecar for assistant outputs only.
+    if (message.role !== 'assistant') return;
     if (!sidecar.autoTrigger || sidecar.isOpen) return;
     if (processedMessageIdsRef.current.has(message.id)) return;
 
     const suggestedMode = getSuggestedSidecarMode(message);
     if (suggestedMode) {
       processedMessageIdsRef.current.add(message.id);
-      openSidecar(suggestedMode, message.id);
+      openSidecar(suggestedMode, message.id, {
+        messageId: message.id,
+        content: message.content,
+      });
     }
   }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
@@ -512,17 +520,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
             return widgets.length > 0;
           })() && (
-              <WidgetList
-                messageId={message.id}
-                widgets={
-                  ((message.metadata as Record<string, unknown> | undefined)?.['widgets'] ||
-                    (message.metadata as Record<string, unknown> | undefined)
-                      ?.['toolWidgets']) as WidgetData[]
-                }
-                isAssistant={isAssistant}
-                isStreaming={Boolean(message.metadata?.streaming)}
-              />
-            )}
+            <WidgetList
+              messageId={message.id}
+              widgets={
+                ((message.metadata as Record<string, unknown> | undefined)?.['widgets'] ||
+                  (message.metadata as Record<string, unknown> | undefined)?.[
+                    'toolWidgets'
+                  ]) as WidgetData[]
+              }
+              isAssistant={isAssistant}
+              isStreaming={Boolean(message.metadata?.streaming)}
+            />
+          )}
 
           {/* Action buttons */}
           {enableActions && (

@@ -108,21 +108,29 @@ jobs:
       - name: Start Vite dev server
         working-directory: apps/desktop
         run: |
-          VITE_DEV_PORT=5175 pnpm dev:vite > app.log 2>&1 &
+          set -euo pipefail
+          VITE_DEV_PORT=5175 TAURI_DEV_HOST=127.0.0.1 pnpm dev:vite > app.log 2>&1 &
           echo $! > app.pid
-          sleep 20
+          echo "Started Vite server with PID $(cat app.pid)"
 
       - name: Wait for app
+        working-directory: apps/desktop
         run: |
-          for i in {1..60}; do
-            if curl -f http://localhost:5175 >/dev/null 2>&1; then
+          set -euo pipefail
+          for i in {1..90}; do
+            if ! kill -0 "$(cat app.pid)" > /dev/null 2>&1; then
+              echo "Vite process exited before app became ready"
+              tail -200 app.log || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:5175/ > /dev/null; then
               echo "App is ready after $((i*2))s"
               exit 0
             fi
             sleep 2
           done
           echo "App failed to start"
-          cat apps/desktop/app.log
+          tail -200 app.log || true
           exit 1
 
       - name: Run deterministic Playwright suite

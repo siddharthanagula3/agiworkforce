@@ -159,7 +159,9 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
               return (
                 <div
                   key={idx}
-                  onClick={() => onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })}
+                  onClick={() =>
+                    onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })
+                  }
                   className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -179,7 +181,11 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-zinc-400 group-hover:text-white">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-zinc-400 group-hover:text-white"
+                  >
                     View <PanelTopOpen className="ml-2 w-3 h-3" />
                   </Button>
                 </div>
@@ -406,9 +412,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     };
   }, [items.length, isStreaming, lastMessageContentLength]);
 
-  const handleRetry = useCallback((id: string, content: string) => {
-    startEditingMessage(id, content);
-  }, [startEditingMessage]);
+  const handleRetry = useCallback(
+    (id: string, content: string) => {
+      startEditingMessage(id, content);
+    },
+    [startEditingMessage],
+  );
 
   const handleEditSave = useCallback(
     (messageId: string, newContent: string) => {
@@ -445,9 +454,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     },
   ) => (
     <div className="space-y-2">
-      {toolRationale?.toolName && (
-        <ToolRationaleDisplay rationale={toolRationale} />
-      )}
+      {toolRationale?.toolName && <ToolRationaleDisplay rationale={toolRationale} />}
       <div className={card} key={messageId}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm text-zinc-200">
@@ -554,7 +561,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
       {/* Current Action Indicator - shows at top when agent is working */}
       {/* Only render when there's actually an action to show to prevent layout jumps */}
-      <CurrentActionBadge />
+      <div className="px-4 pt-2 mb-1 overflow-visible">
+        <CurrentActionBadge />
+      </div>
 
       {/* Active Tool Streams - shows real-time progress for running tools (hidden in simple mode) */}
       {!isSimpleMode && (
@@ -572,6 +581,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
         ref={scrollContainerRef}
         onScroll={handleScroll}
         className={`flex flex-col gap-4 overflow-y-auto h-full ${showSearch ? 'pt-16' : ''}`}
+        style={{ paddingBottom: 'var(--agi-chat-input-reserve, 220px)' }}
       >
         <AnimatePresence>
           {}
