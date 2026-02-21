@@ -28,6 +28,7 @@ import { TerminalPanel } from '../Execution/TerminalPanel';
 import { MediaGallery } from '../Media/MediaGallery';
 import { BackgroundTasksPanel } from '../BackgroundTasks/BackgroundTasksPanel';
 import { ArtifactRenderer } from './ArtifactRenderer';
+import { DiffViewer } from './Sidecar/DiffViewer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 export type DynamicPanelType =
@@ -369,6 +370,18 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             </div>
           </div>
         );
+
+      case 'diff':
+        if (typeof payload?.['content'] === 'string') {
+          return (
+            <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">
+              <pre className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+                {payload['content'] as string}
+              </pre>
+            </div>
+          );
+        }
+        return <DiffViewer contextId={contextId ?? undefined} className="h-full" />;
 
       default:
         return (

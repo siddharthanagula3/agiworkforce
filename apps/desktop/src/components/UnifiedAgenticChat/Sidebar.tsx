@@ -67,6 +67,7 @@ interface SidebarProps {
   onOpenSettings?: () => void;
   onOpenFeedback?: () => void;
   onOpenCustomInstructions?: (conversationId: string) => void;
+  onNewChat?: () => void | Promise<void>;
   onToggleArtifactPanel?: () => void;
   onToggleMediaLab?: () => void;
   canAccessMediaLab?: boolean;
@@ -307,6 +308,7 @@ export function Sidebar({
   onOpenSettings,
   onOpenFeedback,
   onOpenCustomInstructions,
+  onNewChat,
   onToggleArtifactPanel,
   onToggleMediaLab,
   canAccessMediaLab = false,
@@ -478,13 +480,17 @@ export function Sidebar({
   }, [groupedConversations, expandedGroups, pinnedConversations]);
 
   const handleNewChat = useCallback(async () => {
-    await resetInFlightChatState();
-    createConversation('New chat');
+    if (onNewChat) {
+      await onNewChat();
+    } else {
+      await resetInFlightChatState();
+      createConversation('New chat');
+    }
     setActiveView('chat');
     if (isMobile && onCollapsedChange) {
       onCollapsedChange(true);
     }
-  }, [createConversation, setActiveView, isMobile, onCollapsedChange]);
+  }, [createConversation, isMobile, onCollapsedChange, onNewChat, setActiveView]);
 
   const handleSelectConversation = useCallback(
     (id: string) => {

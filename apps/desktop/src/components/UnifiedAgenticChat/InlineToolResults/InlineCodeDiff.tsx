@@ -81,6 +81,10 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
           ? 'Read'
           : 'Modified';
 
+  const hasReadContent = operation === 'read' && Boolean(after);
+  const hasDiffContent = Boolean(before && after);
+  const canExpand = hasReadContent || hasDiffContent;
+
   // Calculate line changes
   const beforeLines = before.split('\n').length;
   const afterLines = after.split('\n').length;
@@ -118,12 +122,13 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
             </span>
           )}
 
-          {before && after && (
+          {canExpand && (
             <Button
               size="xs"
               variant="ghost"
               onClick={() => setExpanded(!expanded)}
               className="h-6 w-6 p-0"
+              title={expanded ? 'Collapse' : 'Expand'}
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
@@ -149,14 +154,14 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
       </div>
 
       {/* Content Preview */}
-      {!expanded && (
+      {!expanded && canExpand && (
         <div className="px-3 py-2 bg-surface-base/50 border-t border-border/30 text-xs text-muted-foreground font-mono line-clamp-2 whitespace-pre-wrap">
           {content}
         </div>
       )}
 
       {/* Full Diff */}
-      {expanded && before && after && (
+      {expanded && hasDiffContent && (
         <div className="p-3 space-y-2 max-h-96 overflow-auto bg-surface-base/30">
           {/* Before */}
           <div className="space-y-1">
@@ -177,9 +182,9 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
       )}
 
       {/* Read-only content */}
-      {expanded && operation === 'read' && after && (
-        <div className="p-3 bg-surface-base/30">
-          <pre className="text-xs font-mono text-muted-foreground overflow-auto whitespace-pre-wrap break-words">
+      {expanded && hasReadContent && (
+        <div className="p-3 bg-surface-base/30 max-h-96 overflow-auto">
+          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words">
             {after}
           </pre>
         </div>

@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const defaultBaseUrl = 'http://127.0.0.1:5175';
+const baseURL = process.env['PLAYWRIGHT_BASE_URL'] || defaultBaseUrl;
+
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
@@ -18,7 +21,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    baseURL: 'http://localhost:5175',
+    baseURL,
     viewport: { width: 1920, height: 1080 },
     ignoreHTTPSErrors: true,
     actionTimeout: 10000,

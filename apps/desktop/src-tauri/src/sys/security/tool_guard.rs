@@ -522,6 +522,60 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
+            "document_read".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_extract_text".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_get_metadata".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_detect_type".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "document_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "file_path".to_string(),
+                    "path".to_string(),
+                    "query".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
             "document_create_pdf".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 5,
@@ -670,6 +724,23 @@ impl ToolExecutionGuard {
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
+                    ));
+                }
+            }
+            "document_read"
+            | "document_extract_text"
+            | "document_get_metadata"
+            | "document_detect_type"
+            | "document_search" => {
+                if let Some(path) = parameters
+                    .get("file_path")
+                    .or_else(|| parameters.get("path"))
+                    .and_then(|p| p.as_str())
+                {
+                    self.validate_file_path(path)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'file_path' parameter".to_string(),
                     ));
                 }
             }
@@ -1276,6 +1347,30 @@ mod tests {
         let guard = ToolExecutionGuard::new();
         let result = guard
             .validate_tool_call("file_read", &json!({"path": "../../../etc/passwd"}))
+            .await;
+        assert!(matches!(result, Err(SecurityError::PathTraversal(_))));
+    }
+
+    #[tokio::test]
+    async fn test_document_read_allowed() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "document_read",
+                &json!({"file_path": "/home/user/test.pdf"}),
+            )
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_document_read_path_traversal() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "document_read",
+                &json!({"file_path": "../../../etc/passwd"}),
+            )
             .await;
         assert!(matches!(result, Err(SecurityError::PathTraversal(_))));
     }

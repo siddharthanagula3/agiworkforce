@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useBillingStore } from '../../stores/auth';
+import { useArtifactStore } from '../../stores/artifactStore';
 import { resetInFlightChatState } from '../../lib/newChatReset';
 import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
@@ -26,6 +27,8 @@ interface AppLayoutProps {
   onOpenSettings?: () => void;
 }
 
+const ARTIFACT_PANEL_WIDTH = 400;
+
 export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -36,6 +39,8 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   >(undefined);
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
+  const openArtifactPanel = useArtifactStore((state) => state.openPanel);
+  const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
   const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
   const canAccessMediaLab = useMemo(
@@ -57,30 +62,43 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const setSidebarWidth = useUnifiedChatStore((state) => state.setSidebarWidth);
   const sidebarCollapsed = useUnifiedChatStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUnifiedChatStore((state) => state.setSidebarCollapsed);
+  const sidecarOpen = sidecarState.isOpen;
 
   const [isResizing, setIsResizing] = useState(false);
 
   const messages = useUnifiedChatStore((state) => state.messages);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
+  const activeConversationDbId = useMemo(
+    () => (activeConversationId ? uuidToDbId(activeConversationId) : undefined),
+    [activeConversationId],
+  );
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wasRightPanelVisibleRef = useRef(false);
 
   const handleNewChat = useCallback(async () => {
+    closeArtifactPanel();
+    setIsArtifactPanelOpen(false);
     await resetInFlightChatState();
     createConversation('New chat');
-  }, [createConversation]);
+  }, [closeArtifactPanel, createConversation]);
 
   const handleToggleArtifactPanel = useCallback(() => {
     setIsArtifactPanelOpen((prev) => {
       const next = !prev;
       if (next) {
         setIsMediaLabOpen(false);
+        closeSidecar();
+        openArtifactPanel();
+      } else {
+        closeArtifactPanel();
       }
       return next;
     });
-  }, []);
+  }, [closeArtifactPanel, closeSidecar, openArtifactPanel]);
 
   const handleToggleMediaLab = useCallback(() => {
     if (!canAccessMediaLab) {
@@ -104,8 +122,21 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
     }
   }, [canAccessMediaLab, isMediaLabOpen]);
 
+  useEffect(() => {
+    const isRightPanelVisible = sidecarOpen || isArtifactPanelOpen;
+    const justOpenedRightPanel = isRightPanelVisible && !wasRightPanelVisibleRef.current;
+
+    if (justOpenedRightPanel && !sidebarCollapsed) {
+      setSidebarCollapsed(true);
+    }
+
+    wasRightPanelVisibleRef.current = isRightPanelVisible;
+  }, [isArtifactPanelOpen, setSidebarCollapsed, sidebarCollapsed, sidecarOpen]);
+
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const lastContentLengthRef = useRef(0);
+  const artifactPanelWidth = isArtifactPanelOpen ? ARTIFACT_PANEL_WIDTH : 0;
+  const rightPanelOffset = (sidecarOpen ? sidecarWidth : 0) + artifactPanelWidth;
 
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.content || '';
@@ -182,7 +213,10 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   }, [handleNewChat, setCommandPaletteOpen, setSidebarCollapsed, sidebarCollapsed]);
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased">
+    <div
+      className="relative flex h-full w-full overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased"
+      style={{ '--agi-right-panel-offset': `${rightPanelOffset}px` } as React.CSSProperties}
+    >
       {}
       {messages.length === 0 && (
         <div className="absolute inset-0 pointer-events-none">
@@ -194,6 +228,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onNewChat={handleNewChat}
         onOpenSettings={onOpenSettings}
         onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenCustomInstructions={handleOpenCustomInstructions}
@@ -210,7 +245,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
           'flex flex-1 min-h-0 flex-col overflow-hidden ease-in-out',
           !isResizing && 'transition-all duration-300',
         )}
-        style={{ marginRight: sidecarState.isOpen ? sidecarWidth : 0 }}
+        style={{ marginRight: rightPanelOffset }}
       >
         {}
         <div className="relative flex h-full flex-col">
@@ -226,7 +261,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
       </main>
 
       {}
-      {sidecarState.isOpen && (
+      {sidecarOpen && (
         <div
           className={cn(
             'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
@@ -273,10 +308,10 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{
-            width: 400,
+            width: ARTIFACT_PANEL_WIDTH,
             position: 'absolute',
             top: 0,
-            right: sidecarState.isOpen ? sidecarWidth : 0,
+            right: sidecarOpen ? sidecarWidth : 0,
             bottom: 0,
           }}
         >
@@ -287,7 +322,13 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
               </div>
             }
           >
-            <ArtifactPanel onClose={() => setIsArtifactPanelOpen(false)} />
+            <ArtifactPanel
+              conversationId={activeConversationDbId}
+              onClose={() => {
+                closeArtifactPanel();
+                setIsArtifactPanelOpen(false);
+              }}
+            />
           </Suspense>
         </div>
       )}

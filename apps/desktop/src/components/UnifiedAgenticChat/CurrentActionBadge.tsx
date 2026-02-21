@@ -146,7 +146,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
           exit={{ opacity: 0, y: -10, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className={cn(
-            'inline-flex items-center gap-2 px-3 py-1.5 rounded-full',
+            'relative isolate overflow-hidden inline-flex items-center gap-2 px-3 py-1.5 rounded-full',
             'backdrop-blur-xs border',
             'shadow-lg',
             getColorClasses(displayAction.type).bg,
@@ -160,7 +160,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
           {/* Animated icon */}
           <span
             className={cn(
-              'shrink-0',
+              'relative z-10 shrink-0',
               getColorClasses(displayAction.type).icon,
               ['thinking', 'searching', 'coding', 'running'].includes(displayAction.type) &&
                 'animate-pulse',
@@ -172,7 +172,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
           {/* Message */}
           <span
             className={cn(
-              'text-xs font-medium truncate max-w-[200px]',
+              'relative z-10 text-xs font-medium truncate max-w-[200px]',
               getColorClasses(displayAction.type).text,
             )}
           >
@@ -181,7 +181,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
 
           {/* Progress indicator for multi-step operations */}
           {displayAction.currentStep !== undefined && displayAction.totalSteps !== undefined && (
-            <span className="text-xs text-zinc-500 tabular-nums">
+            <span className="relative z-10 text-xs text-zinc-500 tabular-nums">
               {displayAction.currentStep}/{displayAction.totalSteps}
             </span>
           )}
