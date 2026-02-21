@@ -455,6 +455,7 @@ export const UnifiedAgenticChat: React.FC<{
 
   // AUDIT-STREAM-059 fix: Track stream watchdog timeout
   const streamWatchdogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastStreamActivityAtRef = useRef<number>(0);
 
   // Stream Throttling state - batches updates to avoid React saturation
   const streamBufferRef = useRef<Map<string, string>>(new Map());
@@ -491,6 +492,10 @@ export const UnifiedAgenticChat: React.FC<{
     },
     [processStreamBuffer],
   ); // Added queueStreamUpdate via useCallback dependency
+
+  const markStreamActivity = useCallback(() => {
+    lastStreamActivityAtRef.current = Date.now();
+  }, []);
 
   // AUDIT-STREAM-059 fix: Track stream watchdog timeout
 
@@ -893,6 +898,7 @@ export const UnifiedAgenticChat: React.FC<{
           'chat:stream-start',
           ({ payload }) => {
             if (!isMountedRef.current) return;
+            markStreamActivity();
             console.log('[UnifiedAgenticChat] Stream started:', payload);
 
             // Create new AbortController for this streaming session
@@ -921,6 +927,7 @@ export const UnifiedAgenticChat: React.FC<{
           delta: string;
           content: string;
         }>('chat:stream-chunk', ({ payload }) => {
+          markStreamActivity();
           const authoritativeId = resolveStreamTargetMessageId(
             payload.conversation_id,
             payload.message_id,
@@ -947,6 +954,7 @@ export const UnifiedAgenticChat: React.FC<{
             daily_reset_at?: string;
           };
         }>('chat:stream-end', ({ payload }) => {
+          markStreamActivity();
           const state = useUnifiedChatStore.getState();
           const messageId = String(payload.message_id);
           const currentStreamingId = state.currentStreamingMessageId;
@@ -960,12 +968,14 @@ export const UnifiedAgenticChat: React.FC<{
           const currentMatchesSession =
             !!currentStreamingId &&
             (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
-          const hasValidTarget = targetId !== null || currentMatchesSession;
+          let finalizedMessageId: string | null = null;
+          let hasValidTarget = targetId !== null || currentMatchesSession;
 
           // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
           // This prevents stale stream-end events from one conversation clearing
           // active loading state for a different in-flight chat
           if (targetId) {
+            finalizedMessageId = targetId;
             state.updateMessage(targetId, {
               metadata: {
                 streaming: false,
@@ -979,6 +989,7 @@ export const UnifiedAgenticChat: React.FC<{
               'Tool completed without explicit terminal event.',
             );
           } else if (currentStreamingId && currentMatchesSession) {
+            finalizedMessageId = currentStreamingId;
             state.updateMessage(currentStreamingId, {
               metadata: {
                 streaming: false,
@@ -991,6 +1002,28 @@ export const UnifiedAgenticChat: React.FC<{
               'completed',
               'Tool completed without explicit terminal event.',
             );
+          } else {
+            // Fallback: clear any assistant message still marked as streaming to
+            // avoid stale "Generating" UI when stream-end IDs don't resolve cleanly.
+            const fallbackStreaming = [...state.messages]
+              .reverse()
+              .find((m) => m.role === 'assistant' && m.metadata?.streaming);
+            if (fallbackStreaming) {
+              finalizedMessageId = fallbackStreaming.id;
+              hasValidTarget = true;
+              state.updateMessage(fallbackStreaming.id, {
+                metadata: {
+                  streaming: false,
+                  tokenCount: payload.usage?.total_tokens,
+                  cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined,
+                },
+              });
+              finalizeRunningArtifactsForMessage(
+                fallbackStreaming.id,
+                'completed',
+                'Tool completed without explicit terminal event.',
+              );
+            }
           }
 
           // CHT-005 fix: Clean up stream session tracking
@@ -1038,7 +1071,12 @@ export const UnifiedAgenticChat: React.FC<{
           } else {
             console.warn(
               '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-end received without valid target, not clearing global state',
-              { payloadMessageId: messageId, sessionMessageId, currentStreamingId },
+              {
+                payloadMessageId: messageId,
+                sessionMessageId,
+                currentStreamingId,
+                finalizedMessageId,
+              },
             );
           }
         }),
@@ -1049,6 +1087,7 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ conversation_id: number; message_id: string | number; error: string }>(
           'chat:stream-error',
           ({ payload }) => {
+            markStreamActivity();
             const state = useUnifiedChatStore.getState();
             const messageId = String(payload.message_id);
             const currentStreamingId = state.currentStreamingMessageId;
@@ -1064,9 +1103,11 @@ export const UnifiedAgenticChat: React.FC<{
               (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
 
             // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
-            const hasValidTarget = targetId !== null || currentMatchesSession;
+            let hasValidTarget = targetId !== null || currentMatchesSession;
+            let finalizedMessageId: string | null = null;
 
             if (targetId) {
+              finalizedMessageId = targetId;
               // Use friendly error messages in simple mode
               const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
               const displayError = isSimpleMode
@@ -1084,6 +1125,7 @@ export const UnifiedAgenticChat: React.FC<{
                 payload.error || 'Tool failed while generating the response.',
               );
             } else if (currentStreamingId && currentMatchesSession) {
+              finalizedMessageId = currentStreamingId;
               const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
               const displayError = isSimpleMode
                 ? formatErrorForChat(payload.error, true)
@@ -1099,6 +1141,30 @@ export const UnifiedAgenticChat: React.FC<{
                 'failed',
                 payload.error || 'Tool failed while generating the response.',
               );
+            } else {
+              // Fallback: clear any assistant message still marked as streaming to
+              // avoid stale "Generating" UI when stream-error IDs don't resolve cleanly.
+              const fallbackStreaming = [...state.messages]
+                .reverse()
+                .find((m) => m.role === 'assistant' && m.metadata?.streaming);
+              if (fallbackStreaming) {
+                finalizedMessageId = fallbackStreaming.id;
+                hasValidTarget = true;
+                const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
+                const displayError = isSimpleMode
+                  ? formatErrorForChat(payload.error, true)
+                  : `Error: ${payload.error}`;
+                state.updateMessage(fallbackStreaming.id, {
+                  content: displayError,
+                  metadata: { streaming: false },
+                  error: payload.error,
+                });
+                finalizeRunningArtifactsForMessage(
+                  fallbackStreaming.id,
+                  'failed',
+                  payload.error || 'Tool failed while generating the response.',
+                );
+              }
             }
 
             // CHT-005 fix: Clean up stream session tracking on error
@@ -1140,7 +1206,12 @@ export const UnifiedAgenticChat: React.FC<{
             } else {
               console.warn(
                 '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-error received without valid target, not clearing global state',
-                { payloadMessageId: messageId, sessionMessageId, currentStreamingId },
+                {
+                  payloadMessageId: messageId,
+                  sessionMessageId,
+                  currentStreamingId,
+                  finalizedMessageId,
+                },
               );
             }
           },
@@ -1356,6 +1427,7 @@ export const UnifiedAgenticChat: React.FC<{
           }>;
           streaming: boolean;
         }>('chat:tool-calls', ({ payload }) => {
+          markStreamActivity();
           console.log('[UnifiedAgenticChat] Tool calls detected:', payload.tool_calls.length);
 
           // CHT-009 fix: Update message metadata so MessageBubble renders the ToolCallCard
@@ -1447,6 +1519,7 @@ export const UnifiedAgenticChat: React.FC<{
           tool_name: string;
           arguments: string;
         }>('chat:tool-executing', ({ payload }) => {
+          markStreamActivity();
           console.log('[UnifiedAgenticChat] Tool executing:', payload.tool_name);
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
@@ -1474,6 +1547,7 @@ export const UnifiedAgenticChat: React.FC<{
           status: string;
           tool_count?: number;
         }>('chat:agent-progress', ({ payload }) => {
+          markStreamActivity();
           console.log(
             `[UnifiedAgenticChat] Agent progress: iteration ${payload.iteration}/${payload.max_iterations} (${payload.status})`,
           );
@@ -1504,6 +1578,7 @@ export const UnifiedAgenticChat: React.FC<{
           result: string;
           result_data?: Record<string, unknown>;
         }>('chat:tool-result', ({ payload }) => {
+          markStreamActivity();
           console.log(
             '[UnifiedAgenticChat] Tool result RECEIVED:',
             payload.tool_name,
@@ -1901,7 +1976,7 @@ export const UnifiedAgenticChat: React.FC<{
     // AUDIT-005-014 fix: Remove stable store actions from dependency array
     // updateMessage and setStreamingMessage are stable zustand actions that don't change
     // Including them causes unnecessary re-registrations of event listeners
-  }, [queueStreamUpdate]);
+  }, [markStreamActivity, queueStreamUpdate]);
 
   useEffect(() => {
     if (defaultSidecarOpen === false) {
@@ -2422,34 +2497,59 @@ export const UnifiedAgenticChat: React.FC<{
       setStreamingMessage(null);
     } finally {
       // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
-      // The watchdog ensures we don't get stuck if stream-end never arrives
-      // Set a watchdog timeout - if stream-end doesn't arrive within 5 minutes, force cleanup
-      const WATCHDOG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+      // The watchdog now tracks inactivity (not absolute wall time), so long
+      // generations stay alive while chunks/tool events are still flowing.
+      const WATCHDOG_TIMEOUT_MS = 20 * 1000; // 20 seconds of inactivity
+      markStreamActivity();
+
+      const scheduleWatchdog = () => {
+        if (streamWatchdogTimeoutRef.current) {
+          clearTimeout(streamWatchdogTimeoutRef.current);
+        }
+        streamWatchdogTimeoutRef.current = setTimeout(() => {
+          const state = useUnifiedChatStore.getState();
+          const idleMs = Date.now() - lastStreamActivityAtRef.current;
+
+          // If there was recent activity, extend watchdog instead of forcing cleanup.
+          if (idleMs < WATCHDOG_TIMEOUT_MS) {
+            scheduleWatchdog();
+            return;
+          }
+
+          if (state.isLoading || state.currentStreamingMessageId) {
+            console.warn(
+              '[UnifiedAgenticChat] AUDIT-STREAM-059: Inactivity watchdog triggered - cleaning up stale streaming state',
+              { idleMs, messageId: assistantMessageId },
+            );
+
+            state.setIsLoading(false);
+            state.setStreamingMessage(null);
+            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+              clearTimeout(timeoutEntry.softTimeoutId);
+              clearTimeout(timeoutEntry.hardTimeoutId);
+            });
+            toolExecutionTimeoutsRef.current.clear();
+
+            const message = state.messages.find((m) => m.id === assistantMessageId);
+            const hasContent = Boolean(message?.content?.trim());
+            updateMessage(assistantMessageId, {
+              metadata: { streaming: false },
+              ...(hasContent
+                ? {}
+                : {
+                    content: 'Response timed out. Please try again.',
+                    error: 'stream_watchdog_timeout',
+                  }),
+            });
+          }
+          streamWatchdogTimeoutRef.current = null;
+        }, WATCHDOG_TIMEOUT_MS);
+      };
+
       if (streamWatchdogTimeoutRef.current) {
         clearTimeout(streamWatchdogTimeoutRef.current);
       }
-      streamWatchdogTimeoutRef.current = setTimeout(() => {
-        const state = useUnifiedChatStore.getState();
-        if (state.isLoading || state.currentStreamingMessageId) {
-          console.warn(
-            '[UnifiedAgenticChat] AUDIT-STREAM-059: Watchdog triggered - forcing cleanup of stuck loading state',
-          );
-          state.setIsLoading(false);
-          state.setStreamingMessage(null);
-          toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-            clearTimeout(timeoutEntry.softTimeoutId);
-            clearTimeout(timeoutEntry.hardTimeoutId);
-          });
-          toolExecutionTimeoutsRef.current.clear();
-          // Update message to show error state
-          updateMessage(assistantMessageId, {
-            content: 'Response timed out. Please try again.',
-            metadata: { streaming: false },
-            error: 'stream_watchdog_timeout',
-          });
-        }
-        streamWatchdogTimeoutRef.current = null;
-      }, WATCHDOG_TIMEOUT_MS);
+      scheduleWatchdog();
     }
   };
 

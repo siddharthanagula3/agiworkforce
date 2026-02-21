@@ -63,6 +63,22 @@ impl McpToolExecutor {
             String::from_utf8(bytes).map_err(|_| {
                 McpError::ToolNotFound(format!("Invalid UTF-8 in MCP tool ID component: {}", value))
             })
+        } else if value.len() >= 20 {
+            // Compact untagged URL-safe base64 fallback for long tool IDs.
+            let bytes = match URL_SAFE_NO_PAD.decode(value) {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(value.to_string()),
+            };
+            let decoded = match String::from_utf8(bytes) {
+                Ok(decoded) => decoded,
+                Err(_) => return Ok(value.to_string()),
+            };
+            // Guard against accidental decoding of plain legacy names.
+            if URL_SAFE_NO_PAD.encode(decoded.as_bytes()) == value {
+                Ok(decoded)
+            } else {
+                Ok(value.to_string())
+            }
         } else {
             Ok(value.to_string())
         }
