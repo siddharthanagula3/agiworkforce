@@ -1,45 +1,28 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import {
-  ArrowRight,
-  Bot,
-  Cpu,
-  Globe,
-  Shield,
-  Zap,
-  Sparkles,
-  CheckCircle2,
-  TrendingUp,
-} from 'lucide-react';
+import { ArrowRight, Bot, Cpu, Globe, Shield, Zap, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce | Your On-Demand AI Workforce - Just Ask, It Does',
+  title: 'AGI Workforce | Desktop + Web AI Automation',
   description:
-    'Tell the AI what you want done, and it handles everything. No setup, no coding, no technical skills needed. Desktop and web automation with full undo support. Powered by GPT-5, Claude 4.5, Gemini 3, and more.',
+    'AGI Workforce provides a desktop app and web app for chat-based AI workflows, browser automation, provider switching, and release-managed desktop downloads.',
   keywords: [
-    'AI agents',
-    'autonomous agents',
-    'workflow automation',
-    'desktop automation',
-    'web automation',
-    'GPT-5',
-    'Claude 4.5',
-    'Gemini 3',
-    'DeepSeek Chat',
-    'Llama 3.3',
-    'local AI',
-    'productivity tools',
-    'business automation',
-    'no-code automation',
-    'chat-based AI',
-    'reversible AI',
+    'AI automation',
+    'desktop app',
+    'web app',
+    'browser automation',
+    'Tauri desktop app',
+    'Ollama',
+    'OpenAI',
+    'Anthropic',
+    'Gemini',
   ],
   openGraph: {
-    title: 'AGI Workforce | Your On-Demand AI Workforce',
+    title: 'AGI Workforce | Desktop + Web AI Automation',
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support.',
+      'Desktop and web applications for AI-assisted workflows with multi-provider model support and browser automation tools.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [
@@ -47,15 +30,15 @@ export const metadata: Metadata = {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - Just ask, it does',
+        alt: 'AGI Workforce desktop and web AI automation',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce | Your On-Demand AI Workforce',
+    title: 'AGI Workforce | Desktop + Web AI Automation',
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
+      'Desktop and web applications for AI-assisted workflows with browser automation and multi-provider model support.',
     images: ['/og-image.svg'],
   },
 };
@@ -63,33 +46,58 @@ export const metadata: Metadata = {
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
-  name: 'AGI Workforce - On-Demand AI Workforce',
+  name: 'AGI Workforce',
   description:
-    'Just tell the AI what you want done and it handles everything. No setup, no coding required. Desktop and web automation with full undo support.',
+    'Desktop and web applications for AI-assisted workflows, provider-managed chat, and browser automation.',
   url: 'https://agiworkforce.com',
   mainEntity: {
     '@type': 'SoftwareApplication',
     name: 'AGI Workforce',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'macOS, Windows, Linux',
-    offers: {
-      '@type': 'AggregateOffer',
-      lowPrice: '0',
-      highPrice: '299.99',
-      priceCurrency: 'USD',
-      offerCount: '3',
-    },
     featureList: [
-      'Autonomous AI Agents',
-      'Multi-LLM Support (GPT-5, Claude 4.5, Gemini 3, DeepSeek Chat)',
-      'Desktop and Web Automation',
-      'Local-First Privacy',
-      'Native Performance with Rust',
-      'Chat-First Interface',
-      'Undo-Based Safety',
+      'Desktop application (Tauri)',
+      'Web application',
+      'Browser automation tools',
+      'Multiple LLM provider configuration',
+      'Local model support via Ollama',
+      'Chat interface',
     ],
   },
 };
+
+const features = [
+  {
+    icon: Cpu,
+    title: 'Desktop App (Tauri + Rust)',
+    desc: 'Native desktop shell with a React UI and Tauri backend for local tools, system integrations, and packaged releases.',
+  },
+  {
+    icon: Globe,
+    title: 'Web App + API Routes',
+    desc: 'Next.js web app with authenticated pages and API routes for chat, downloads, device linking, billing, and release checks.',
+  },
+  {
+    icon: Bot,
+    title: 'Multi-Provider Models',
+    desc: 'Model/provider configuration includes cloud providers and local Ollama support, with provider switching in desktop settings and tests.',
+  },
+  {
+    icon: Zap,
+    title: 'Browser Automation Flows',
+    desc: 'Desktop codebase includes browser automation hooks, stores, and end-to-end tests for automation workflows.',
+  },
+  {
+    icon: Shield,
+    title: 'Undo and Safety Controls',
+    desc: 'Desktop app exposes undo APIs and approval-related hooks/components for controlled execution flows.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Chat-First Interface',
+    desc: 'Primary product surface is a chat-driven UI with attachments, inline tool results, and settings panels.',
+  },
+];
 
 export default function Home() {
   return (
@@ -102,28 +110,26 @@ export default function Home() {
         <Header />
 
         <main className="flex-1 pt-24">
-          {/* Hero Section */}
           <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
             <div className="container relative mx-auto px-4 text-center">
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 mb-8 backdrop-blur-xs">
-                <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2 animate-pulse" />
-                Now in Public Beta - Free to Start
+              <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
+                <span className="mr-2 flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+                Desktop + Web Product Surface
               </div>
-              <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight md:text-7xl lg:text-8xl bg-clip-text text-transparent bg-gradient-to-b from-white to-white/50">
-                Your On-Demand <br />
-                AI Workforce
+              <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
+                AI Workflows for Desktop and Web
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                Just tell the AI what you want done, and it handles the rest. No setup, no
-                configuration, no technical knowledge required. Everything is reversible.
+                AGI Workforce ships a Tauri desktop app and a Next.js web app with chat, provider
+                configuration, browser automation tooling, and desktop release/update endpoints.
               </p>
-              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
                   href="/download"
                   className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
                 >
-                  Download for Desktop
+                  Download Desktop App
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
                 <Link
@@ -134,151 +140,122 @@ export default function Home() {
                 </Link>
               </div>
 
-              {/* Social Proof */}
               <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Free to start</span>
+                  <span>Desktop downloads for macOS, Windows, and Linux</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>No credit card required</span>
+                  <span>Web app and API routes are live in this codebase</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Local-first privacy</span>
+                  <span>Release/update endpoints implemented for desktop clients</span>
                 </div>
               </div>
 
-              {/* Application Preview */}
               <ApplicationPreview />
             </div>
           </section>
 
-          {/* Features Section */}
-          <section id="features" className="py-24 bg-zinc-950">
+          <section id="features" className="bg-zinc-950 py-24">
             <div className="container mx-auto px-4">
-              <div className="text-center mb-16">
-                <h2 className="text-3xl font-bold tracking-tight md:text-4xl mb-4">
-                  Built for the Autonomous Era
+              <div className="mb-16 text-center">
+                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
+                  What Is Implemented
                 </h2>
-                <p className="text-zinc-400 max-w-2xl mx-auto">
-                  Everything you need to automate your workflows and multiply your productivity with
-                  AI agents.
+                <p className="mx-auto max-w-2xl text-zinc-400">
+                  This page describes functionality visible in the current monorepo, desktop app,
+                  and website routes.
                 </p>
               </div>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {[
-                  {
-                    icon: Cpu,
-                    title: 'Autonomous Agents',
-                    desc: 'Deploy self-healing agents that plan, execute, and verify complex tasks across your desktop and web. No coding required.',
-                  },
-                  {
-                    icon: Zap,
-                    title: 'Native Performance',
-                    desc: 'Built with Rust and Tauri for blazing fast performance and minimal resource footprint. 10x faster than Electron.',
-                  },
-                  {
-                    icon: Shield,
-                    title: 'Local & Private',
-                    desc: 'Your data stays on your device. Run local LLMs via Ollama or connect to cloud providers securely with encrypted credentials.',
-                  },
-                  {
-                    icon: Globe,
-                    title: 'Web Automation',
-                    desc: 'Control browsers naturally to scrape data, fill forms, automate testing, and orchestrate complex web workflows.',
-                  },
-                  {
-                    icon: Bot,
-                    title: 'Multi-LLM Support',
-                    desc: 'Switch instantly between GPT-5, Claude 4.5, Gemini 3, Grok 4, DeepSeek Chat, Qwen 3, or local Llama 3.3 models.',
-                  },
-                  {
-                    icon: Sparkles,
-                    title: 'Chat-First Interface',
-                    desc: 'Simply tell the AI what you want done in plain English. No configuration, no setup - just describe your goal and watch it happen.',
-                  },
-                ].map((feature, i) => (
+              <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                {features.map((feature) => (
                   <div
-                    key={i}
-                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 hover:border-blue-500/50 transition-all hover:transform hover:scale-105"
+                    key={feature.title}
+                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-105 hover:border-blue-500/50"
                   >
-                    <feature.icon className="h-10 w-10 text-blue-500 mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                    <p className="text-zinc-400 leading-relaxed">{feature.desc}</p>
+                    <feature.icon className="mb-4 h-10 w-10 text-blue-500" />
+                    <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
+                    <p className="leading-relaxed text-zinc-400">{feature.desc}</p>
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* Stats Section */}
-          <section className="py-24 bg-black">
+          <section className="bg-black py-24">
             <div className="container mx-auto px-4">
-              <div className="grid md:grid-cols-3 gap-8 text-center">
+              <div className="grid gap-8 text-center md:grid-cols-3">
                 <div className="p-8">
-                  <div className="text-5xl font-bold text-blue-500 mb-2">10+</div>
-                  <div className="text-zinc-400 text-lg">Supported LLM Providers</div>
-                  <p className="text-zinc-600 text-sm mt-2">
-                    OpenAI, Anthropic, Google, X.AI, DeepSeek, Qwen, Ollama
+                  <div className="mb-2 text-5xl font-bold text-blue-500">3</div>
+                  <div className="text-lg text-zinc-400">Desktop Platforms Listed</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    macOS, Windows, Linux download targets
                   </p>
                 </div>
                 <div className="p-8">
-                  <div className="text-5xl font-bold text-blue-500 mb-2">3</div>
-                  <div className="text-zinc-400 text-lg">Platforms Supported</div>
-                  <p className="text-zinc-600 text-sm mt-2">macOS, Windows, Linux</p>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">2</div>
+                  <div className="text-lg text-zinc-400">Primary Apps</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Tauri desktop app and Next.js web app
+                  </p>
                 </div>
                 <div className="p-8">
-                  <div className="text-5xl font-bold text-blue-500 mb-2">100%</div>
-                  <div className="text-zinc-400 text-lg">Local-First</div>
-                  <p className="text-zinc-600 text-sm mt-2">Your data never leaves your device</p>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">1</div>
+                  <div className="text-lg text-zinc-400">Release Pipeline Surface</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Website routes support desktop update manifests and release lookups
+                  </p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Security Section */}
-          <section id="security" className="py-24 bg-zinc-950">
+          <section id="security" className="bg-zinc-950 py-24">
             <div className="container mx-auto px-4">
-              <div className="flex flex-col md:flex-row items-center gap-16">
+              <div className="flex flex-col items-center gap-16 md:flex-row">
                 <div className="flex-1 space-y-8">
-                  <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400 mb-2">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Enterprise-Grade Security
+                  <div className="mb-2 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
+                    <Shield className="mr-2 h-4 w-4" />
+                    Security and Safety Features in Code
                   </div>
                   <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                    Built with Security & Privacy First
+                    Built-In Protections and Controls
                   </h2>
                   <div className="space-y-6">
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
                       <div>
-                        <h3 className="text-xl font-semibold mb-2">Local-First Execution</h3>
+                        <h3 className="mb-2 text-xl font-semibold">
+                          Encrypted Local Secrets Code Paths
+                        </h3>
                         <p className="text-zinc-400">
-                          Your data never leaves your device unless you explicitly allow it. We
-                          prioritize local LLMs and secure, direct connections to cloud providers.
+                          The desktop Rust backend includes keyring and encryption dependencies
+                          (`keyring`, `aes-gcm`, `argon2`) for local credential handling.
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
                       <div>
-                        <h3 className="text-xl font-semibold mb-2">Undo-Based Safety</h3>
+                        <h3 className="mb-2 text-xl font-semibold">Undo Operations API</h3>
                         <p className="text-zinc-400">
-                          Every action is reversible. Made a mistake? Simply say &quot;undo&quot;
-                          and the AI will revert its changes. Full autonomy with complete peace of
-                          mind.
+                          Desktop TypeScript APIs expose undo summary, change listing, and undo
+                          execution commands backed by Tauri invokes.
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-4">
-                      <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                      <Shield className="h-6 w-6 shrink-0 text-blue-500" />
                       <div>
-                        <h3 className="text-xl font-semibold mb-2">End-to-End Encryption</h3>
+                        <h3 className="mb-2 text-xl font-semibold">
+                          Updater Signing Configuration
+                        </h3>
                         <p className="text-zinc-400">
-                          All sensitive data, including API keys and credentials, is encrypted at
-                          rest using industry-standard AES-256-GCM encryption.
+                          Tauri updater configuration is present with a public key and website
+                          endpoint for desktop release manifests.
                         </p>
                       </div>
                     </div>
@@ -286,32 +263,32 @@ export default function Home() {
                 </div>
                 <div className="flex-1">
                   <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xs">
-                    <div className="absolute inset-0 bg-blue-500/10 blur-3xl -z-10" />
+                    <div className="absolute inset-0 -z-10 bg-blue-500/10 blur-3xl" />
                     <div className="space-y-4 font-mono text-sm text-zinc-400">
                       <div className="flex items-center gap-2 text-green-400">
                         <Shield className="h-4 w-4" />
-                        <span>Security Scan Complete</span>
+                        <span>Release Config Snapshot</span>
                       </div>
                       <div className="h-px bg-white/10" />
                       <div className="flex justify-between">
-                        <span>Encryption</span>
-                        <span className="text-white">AES-256-GCM</span>
+                        <span>Desktop Version</span>
+                        <span className="text-white">1.1.2</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Data Storage</span>
-                        <span className="text-white">Local Encrypted</span>
+                        <span>Tauri Bundle</span>
+                        <span className="text-white">active: true</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Network</span>
-                        <span className="text-white">TLS 1.3</span>
+                        <span>Targets</span>
+                        <span className="text-white">all</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Undo System</span>
-                        <span className="text-white">Active</span>
+                        <span>Updater</span>
+                        <span className="text-white">Configured</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Action Reversibility</span>
-                        <span className="text-white">100%</span>
+                        <span>Release API Routes</span>
+                        <span className="text-white">Present</span>
                       </div>
                     </div>
                   </div>
@@ -320,70 +297,22 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Use Cases Section */}
-          <section className="py-24 bg-black">
-            <div className="container mx-auto px-4">
-              <div className="text-center mb-16">
-                <h2 className="text-3xl font-bold tracking-tight md:text-4xl mb-4">
-                  Perfect for Every Use Case
-                </h2>
-                <p className="text-zinc-400 max-w-2xl mx-auto">
-                  From individual developers to enterprise teams, AGI Workforce adapts to your needs
-                </p>
-              </div>
-              <div className="grid md:grid-cols-2 gap-8">
-                {[
-                  {
-                    icon: TrendingUp,
-                    title: 'Developers & Engineers',
-                    desc: 'Automate code reviews, testing, deployments, and documentation. Generate boilerplate code and debug issues faster.',
-                  },
-                  {
-                    icon: Bot,
-                    title: 'Business Professionals',
-                    desc: 'Automate data entry, report generation, email management, and CRM updates. Save hours every day.',
-                  },
-                  {
-                    icon: Sparkles,
-                    title: 'Content Creators',
-                    desc: 'Automate social media posting, image processing, video transcription, and content research.',
-                  },
-                  {
-                    icon: Globe,
-                    title: 'Data Analysts',
-                    desc: 'Scrape web data, process spreadsheets, generate visualizations, and create automated reports.',
-                  },
-                ].map((useCase, i) => (
-                  <div
-                    key={i}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 hover:border-blue-500/50 transition-colors"
-                  >
-                    <useCase.icon className="h-10 w-10 text-blue-500 mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">{useCase.title}</h3>
-                    <p className="text-zinc-400 leading-relaxed">{useCase.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* CTA Section */}
-          <section className="py-24 relative overflow-hidden">
+          <section className="relative overflow-hidden py-24">
             <div className="absolute inset-0 bg-blue-600/10" />
             <div className="container relative mx-auto px-4 text-center">
-              <h2 className="text-4xl font-bold tracking-tight mb-6 md:text-5xl">
-                Ready to multiply your productivity?
+              <h2 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl">
+                Build, test, and ship from one monorepo
               </h2>
-              <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-                Join thousands of developers, founders, and professionals using AGI Workforce to
-                automate the boring stuff and focus on what matters.
+              <p className="mx-auto mb-10 max-w-2xl text-xl text-zinc-400">
+                The repository includes desktop packaging, web routes, shared packages, and docs for
+                release and integration work.
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
                   href="/download"
                   className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-lg font-bold text-black transition-transform hover:scale-105"
                 >
-                  Get Started for Free
+                  Download Desktop App
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
                 <Link
@@ -399,31 +328,31 @@ export default function Home() {
 
         <footer className="border-t border-white/10 bg-black py-12">
           <div className="container mx-auto px-4">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+            <div className="mb-8 flex flex-col items-center justify-between gap-6 md:flex-row">
               <div className="flex items-center gap-2 font-bold">
                 <Bot className="h-5 w-5 text-zinc-500" />
                 <span className="text-zinc-500">AGI Workforce</span>
               </div>
               <div className="flex flex-wrap justify-center gap-6 text-sm">
-                <Link href="/about" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/about" className="text-zinc-400 transition-colors hover:text-white">
                   About
                 </Link>
-                <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/pricing" className="text-zinc-400 transition-colors hover:text-white">
                   Pricing
                 </Link>
-                <Link href="/docs" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/docs" className="text-zinc-400 transition-colors hover:text-white">
                   Documentation
                 </Link>
-                <Link href="/faq" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/faq" className="text-zinc-400 transition-colors hover:text-white">
                   FAQ
                 </Link>
-                <Link href="/contact" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/contact" className="text-zinc-400 transition-colors hover:text-white">
                   Contact
                 </Link>
-                <Link href="/privacy" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/privacy" className="text-zinc-400 transition-colors hover:text-white">
                   Privacy
                 </Link>
-                <Link href="/terms" className="text-zinc-400 hover:text-white transition-colors">
+                <Link href="/terms" className="text-zinc-400 transition-colors hover:text-white">
                   Terms
                 </Link>
               </div>

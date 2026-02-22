@@ -4,7 +4,7 @@
     "_postman_id": "agi-workforce-api-v1",
     "description": "Complete API collection for AGI Workforce platform including authentication, LLM operations, subscriptions, and device management.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "1.0.0"
+    "version": "1.1.2"
   },
   "auth": {
     "type": "bearer",
@@ -363,7 +363,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"MacBook Pro\",\n  \"platform\": \"macos\",\n  \"version\": \"1.0.0\"\n}"
+              "raw": "{\n  \"name\": \"MacBook Pro\",\n  \"platform\": \"macos\",\n  \"version\": \"1.1.2\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/desktop/register",

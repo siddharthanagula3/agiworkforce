@@ -94,9 +94,14 @@ pub fn filter_tools_by_capabilities(
         .filter(|tool| {
             let name = tool.name.as_str();
 
-            // Browser / computer-use tools require computerUse capability
-            if name.starts_with("browser_") || name.starts_with("ui_") {
-                return capabilities.computer_use;
+            // Local browser/UI automation tools run through desktop tool calling.
+            // They should stay available whenever function calling is enabled,
+            // even if the provider model does not advertise native "computer use".
+            if name.starts_with("browser_")
+                || name.starts_with("ui_")
+                || name.starts_with("computer_use_")
+            {
+                return true;
             }
 
             // Search tools require search capability
@@ -1191,6 +1196,22 @@ mod tests {
 
         let filtered = filter_tools_by_capabilities(tools, &caps);
         assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_keeps_browser_and_ui_tools_when_tools_enabled_without_computer_use() {
+        let tools = vec![test_tool("browser_navigate"), test_tool("ui_click")];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            computer_use: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        let names: HashSet<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
+
+        assert!(names.contains("browser_navigate"));
+        assert!(names.contains("ui_click"));
     }
 
     #[test]

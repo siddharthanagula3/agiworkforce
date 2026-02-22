@@ -14,7 +14,8 @@
     "cookies",
     "scripting",
     "nativeMessaging",
-    "alarms"
+    "alarms",
+    "contextMenus"
   ],
   "optional_permissions": ["downloads", "bookmarks", "history"],
   "host_permissions": ["<all_urls>"],
@@ -48,12 +49,6 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["src/injected.js"],
-      "matches": ["<all_urls>"]
-    }
-  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {

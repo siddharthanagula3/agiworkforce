@@ -3,6 +3,7 @@ use crate::core::mcp::client::McpTool;
 use crate::core::mcp::{McpClient, McpError, McpResult};
 use base64::Engine as _;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ const ENCODED_HEX_PREFIX: &str = "hex_";
 const ENCODED_HEX_PREFIX_LEGACY: &str = "hex:";
 const ENCODED_B64_PREFIX: &str = "b64_";
 const ENCODED_B64_PREFIX_LEGACY: &str = "b64:";
+const TOOL_ID_MAX_LEN: usize = 64;
 
 /// Helper to create safe tool IDs with sanitized names.
 fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
@@ -35,15 +37,31 @@ fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
         TOOL_ID_DELIMITER, safe_server, TOOL_ID_DELIMITER, safe_tool
     );
 
-    if tagged_id.len() <= 64 {
+    if tagged_id.len() <= TOOL_ID_MAX_LEN {
         return tagged_id;
     }
 
     let compact_server = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(server_name);
     let compact_tool = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(tool_name);
-    format!(
+    let compact_id = format!(
         "mcp{}{}{}{}",
         TOOL_ID_DELIMITER, compact_server, TOOL_ID_DELIMITER, compact_tool
+    );
+    if compact_id.len() <= TOOL_ID_MAX_LEN {
+        return compact_id;
+    }
+
+    // Final fallback for very long MCP server/tool names: use deterministic hash IDs
+    // that satisfy OpenAI's 64-char name limit and allowed charset.
+    let mut hasher = Sha256::new();
+    hasher.update(server_name.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(tool_name.as_bytes());
+    let digest = hasher.finalize();
+    let short_hash = hex::encode(&digest[..20]);
+    format!(
+        "mcp{}h{}{}",
+        TOOL_ID_DELIMITER, TOOL_ID_DELIMITER, short_hash
     )
 }
 
@@ -142,8 +160,8 @@ impl McpToolRegistry {
         parameters
     }
 
-    /// Parses a tool ID into (server_name, tool_name) components
-    /// Tool IDs are in the format: mcp__<server_name>__<tool_name>
+    /// Parses a tool ID into (server_name, tool_name) components.
+    /// Tool IDs are in the format: mcp__<server_name>__<tool_name>.
     fn parse_tool_id(tool_id: &str) -> McpResult<(String, String)> {
         let parts: Vec<&str> = tool_id.splitn(3, TOOL_ID_DELIMITER).collect();
         if parts.len() != 3 || parts[0] != "mcp" {
@@ -214,6 +232,13 @@ impl McpToolRegistry {
         let server_name = decode_component(parts[1])?;
         let tool_name = decode_component(parts[2])?;
 
+        if server_name == "h" {
+            return Err(McpError::ToolNotFound(format!(
+                "Hashed MCP tool ID requires registry lookup: {}",
+                tool_id
+            )));
+        }
+
         if server_name.is_empty() {
             return Err(McpError::ToolNotFound(format!(
                 "Empty server name in tool ID: {}",
@@ -231,6 +256,24 @@ impl McpToolRegistry {
         Ok((server_name.to_string(), tool_name.to_string()))
     }
 
+    /// Resolve tool IDs, including hashed IDs used for OpenAI name-length compliance.
+    fn resolve_tool_id(&self, tool_id: &str) -> McpResult<(String, String)> {
+        if let Ok(parsed) = Self::parse_tool_id(tool_id) {
+            return Ok(parsed);
+        }
+
+        for (server_name, tool) in self.mcp_client.list_all_tools() {
+            if create_safe_tool_id(&server_name, &tool.name) == tool_id {
+                return Ok((server_name, tool.name));
+            }
+        }
+
+        Err(McpError::ToolNotFound(format!(
+            "Invalid or unknown MCP tool ID '{}'",
+            tool_id
+        )))
+    }
+
     pub async fn execute_tool(
         &self,
         tool_id: &str,
@@ -238,7 +281,7 @@ impl McpToolRegistry {
     ) -> McpResult<Value> {
         tracing::debug!("[MCP Registry] execute_tool called: tool_id={}", tool_id);
 
-        let (server_name, tool_name) = Self::parse_tool_id(tool_id)?;
+        let (server_name, tool_name) = self.resolve_tool_id(tool_id)?;
 
         // Validate that the server exists before attempting to call the tool
         let servers = self.mcp_client.list_servers();
@@ -265,7 +308,7 @@ impl McpToolRegistry {
     }
 
     pub fn get_tool(&self, tool_id: &str) -> McpResult<Tool> {
-        let (server_name, tool_name) = Self::parse_tool_id(tool_id)?;
+        let (server_name, tool_name) = self.resolve_tool_id(tool_id)?;
 
         // Validate that the server exists
         let servers = self.mcp_client.list_servers();
@@ -372,10 +415,7 @@ mod tests {
     #[test]
     fn test_create_safe_tool_id_uses_openai_safe_charset() {
         let tool_id = create_safe_tool_id("filesystem", "read_file");
-        assert_eq!(
-            tool_id,
-            "mcp__b64_ZmlsZXN5c3RlbQ__b64_cmVhZF9maWxl"
-        );
+        assert_eq!(tool_id, "mcp__b64_ZmlsZXN5c3RlbQ__b64_cmVhZF9maWxl");
         assert!(tool_id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
@@ -402,5 +442,19 @@ mod tests {
         let parsed = McpToolRegistry::parse_tool_id(&tool_id).expect("compact base64 parses");
         assert_eq!(parsed.0, "claude_in_chrome");
         assert_eq!(parsed.1, "read_network_requests");
+    }
+
+    #[test]
+    fn test_create_safe_tool_id_hashes_when_still_too_long() {
+        let long_server = "this_is_a_very_long_server_name_used_for_testing_mcp_encoding_limits";
+        let long_tool =
+            "this_is_an_equally_long_tool_name_that_would_exceed_openai_function_name_limits";
+        let tool_id = create_safe_tool_id(long_server, long_tool);
+        assert!(tool_id.starts_with("mcp__h__"));
+        assert!(tool_id.len() <= 64);
+        assert!(tool_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+        assert!(McpToolRegistry::parse_tool_id(&tool_id).is_err());
     }
 }

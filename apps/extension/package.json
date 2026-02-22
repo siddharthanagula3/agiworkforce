@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
+    "test": "vitest run",
     "clean": "rm -rf dist",
     "package": "pnpm build && cd dist && zip -r ../extension.zip .",
     "lint": "eslint src --ext .js",
@@ -30,10 +31,12 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.261",
+    "jsdom": "^27.4.0",
     "terser": "^5.46.0",
     "typescript": "5.9.3",
     "vite": "^7.3.1",
-    "vite-plugin-static-copy": "^3.2.0"
+    "vite-plugin-static-copy": "^3.2.0",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=22.12.0",

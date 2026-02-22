@@ -53,6 +53,13 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     description: 'Enter text into a form field',
     category: 'browser',
   },
+  browser_autofill_job_application: {
+    displayName: 'Autofill application',
+    activeForm: 'Filling application...',
+    completedForm: 'Application filled',
+    description: 'Fill job application fields on supported platforms',
+    category: 'browser',
+  },
   browser_screenshot: {
     displayName: 'Take screenshot',
     activeForm: 'Taking screenshot...',
