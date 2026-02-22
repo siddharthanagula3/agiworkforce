@@ -14,6 +14,7 @@ import type {
   RunPageAction,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
+import { runPlatformJobAutofill } from './jobAutofill';
 
 const MAX_CONTEXT_HTML_CHARS = 100_000;
 
@@ -152,6 +153,8 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleGetElementInfo();
     case 'RUN_PAGE_ACTIONS':
       return handleRunPageActions(message as any);
+    case 'AUTO_FILL_JOB_APPLICATION':
+      return handleAutoFillJobApplication(message as any);
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
@@ -236,6 +239,39 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
         selector: action.selector,
         text: String(action.value || ''),
         options: { delay: action.delay ?? undefined },
+      })) as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'auto_fill_job_application': {
+      let parsedProfile: Record<string, unknown> = {};
+      let parsedOptions: Record<string, unknown> = {};
+
+      if (typeof action.value === 'string' && action.value.trim()) {
+        try {
+          const parsed = JSON.parse(action.value) as {
+            profile?: Record<string, unknown>;
+            options?: Record<string, unknown>;
+          };
+          parsedProfile = parsed.profile ?? {};
+          parsedOptions = parsed.options ?? {};
+        } catch {
+          parsedOptions = {};
+        }
+      }
+
+      const response = (await handleAutoFillJobApplication({
+        profile: parsedProfile,
+        options: parsedOptions,
+      })) as unknown as ActionExecutionResult;
+      return { type: actionType, ...response };
+    }
+    case 'submit_job_application': {
+      const response = (await handleAutoFillJobApplication({
+        profile: {},
+        options: {
+          autoSubmit: true,
+          allowSubmitWithMissingRequired: false,
+        },
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
@@ -339,7 +375,12 @@ function buildElementSelector(element: Element): string {
     const tag = current.tagName.toLowerCase();
     const classPart =
       typeof current.className === 'string' && current.className.trim()
-        ? `.${current.className.trim().split(/\s+/).slice(0, 2).map((cls) => CSS.escape(cls)).join('.')}`
+        ? `.${current.className
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((cls) => CSS.escape(cls))
+            .join('.')}`
         : '';
     const siblings = Array.from(current.parentElement.children).filter(
       (child) => child.tagName === current!.tagName,
@@ -741,6 +782,16 @@ async function handleFillForm(message: any): Promise<ExtensionResponse> {
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
+}
+
+async function handleAutoFillJobApplication(message: {
+  profile?: Record<string, unknown>;
+  options?: Record<string, unknown>;
+}): Promise<ExtensionResponse> {
+  const profile = message.profile ?? {};
+  const options = message.options ?? {};
+  const response = await runPlatformJobAutofill(profile, options);
+  return response as ExtensionResponse;
 }
 
 /**

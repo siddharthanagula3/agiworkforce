@@ -2,6 +2,7 @@ pub mod cache_manager;
 pub mod cost_calculator;
 pub mod fallback_chain;
 pub mod function_executor;
+pub mod job_autofill_runtime;
 pub mod llm_router;
 pub mod memory_integration;
 pub mod prompt_policy;

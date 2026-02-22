@@ -1,7 +1,8 @@
-use crate::core::llm::{LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{LLMRequest, Provider, RouteCandidate, RouterPreferences, RoutingStrategy};
+use crate::sys::commands::llm::LLMState;
+use crate::sys::commands::ollama::ollama_list_models;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
@@ -23,7 +24,7 @@ pub struct CompletionResponse {
 #[tauri::command]
 pub async fn get_code_completion(
     request: CompletionRequest,
-    router_state: State<'_, Arc<tokio::sync::Mutex<LLMRouter>>>,
+    state: State<'_, LLMState>,
 ) -> Result<CompletionResponse, String> {
     let start_time = std::time::Instant::now();
 
@@ -67,7 +68,7 @@ Provide accurate, idiomatic code completions. Return ONLY the code - no explanat
         ..Default::default()
     };
 
-    let router = router_state.lock().await;
+    let router = state.router.read().await;
     let candidates = router.candidates(&llm_request, &preferences);
 
     if candidates.is_empty() {
@@ -112,7 +113,7 @@ pub async fn get_inline_completion(
     context_before: String,
     context_after: String,
     language: String,
-    router_state: State<'_, Arc<tokio::sync::Mutex<LLMRouter>>>,
+    state: State<'_, LLMState>,
 ) -> Result<String, String> {
     // System prompt for AGI Workforce inline completion
     let system_prompt = format!(
@@ -167,7 +168,7 @@ Return ONLY the completion text - no explanations, no markdown, no code fences."
         ..Default::default()
     };
 
-    let router = router_state.lock().await;
+    let router = state.router.read().await;
     let candidates = router.candidates(&llm_request, &preferences);
 
     if candidates.is_empty() {
@@ -207,7 +208,7 @@ pub struct PromptCompletionResponse {
 #[tauri::command]
 pub async fn get_prompt_completion(
     request: PromptCompletionRequest,
-    router_state: State<'_, Arc<tokio::sync::Mutex<LLMRouter>>>,
+    state: State<'_, LLMState>,
 ) -> Result<PromptCompletionResponse, String> {
     let start_time = std::time::Instant::now();
 
@@ -276,14 +277,82 @@ Rules:
         ..Default::default()
     };
 
-    let router = router_state.lock().await;
-    let candidates = router.candidates(&llm_request, &preferences);
+    let (has_managed_cloud, has_zhipu, has_ollama, mut candidates) = {
+        let router = state.router.read().await;
+        (
+            router.has_provider(Provider::ManagedCloud),
+            router.has_provider(Provider::Zhipu),
+            router.has_provider(Provider::Ollama),
+            router.candidates(&llm_request, &preferences),
+        )
+    };
+
+    // Prefer GLM-4.7-Flash for Gemini-style ghost text prompt completion.
+    // In this app, cloud providers are typically accessed via ManagedCloud (Vercel-backed API),
+    // so prefer ManagedCloud + model hint first, then direct Zhipu if available, while keeping
+    // the normal router-generated fallbacks.
+    if has_managed_cloud {
+        candidates.insert(
+            0,
+            RouteCandidate {
+                provider: Provider::ManagedCloud,
+                model: "glm-4.7-flash".to_string(),
+                reason: "prompt-completion-managed-cloud-glm-free",
+                strategy: None,
+            },
+        );
+    }
+
+    if has_zhipu {
+        candidates.insert(
+            usize::from(has_managed_cloud),
+            RouteCandidate {
+                provider: Provider::Zhipu,
+                model: "glm-4.7-flash".to_string(),
+                reason: "prompt-completion-zhipu-free",
+                strategy: None,
+            },
+        );
+    }
+
+    // If Ollama is configured, try installed local models first. The router's default Ollama
+    // model may not be installed on a given machine (e.g. it defaults to llama4-maverick).
+    if has_ollama {
+        if let Ok(mut models) = ollama_list_models().await {
+            models.sort_by_key(|m| m.size);
+
+            let insert_at = usize::from(has_managed_cloud) + usize::from(has_zhipu);
+            let mut offset = 0usize;
+
+            for model in models.into_iter().take(3) {
+                let already_present = candidates.iter().any(|c| {
+                    c.provider == Provider::Ollama && c.model.eq_ignore_ascii_case(&model.name)
+                });
+                if already_present {
+                    continue;
+                }
+
+                candidates.insert(
+                    insert_at + offset,
+                    RouteCandidate {
+                        provider: Provider::Ollama,
+                        model: model.name,
+                        reason: "prompt-completion-ollama-installed",
+                        strategy: None,
+                    },
+                );
+                offset += 1;
+            }
+        }
+    }
 
     if candidates.is_empty() {
         return Err("No LLM providers configured for prompt completion".to_string());
     }
 
     // Try candidates in order until one succeeds
+    let router = state.router.read().await;
+    let mut failures: Vec<String> = Vec::new();
     for candidate in &candidates {
         match router.invoke_candidate(candidate, &llm_request).await {
             Ok(outcome) => {
@@ -312,6 +381,10 @@ Rules:
                 });
             }
             Err(e) => {
+                failures.push(format!(
+                    "{:?}/{}: {}",
+                    candidate.provider, candidate.model, e
+                ));
                 tracing::warn!(
                     "[PromptCompletion] Provider {:?} failed: {}. Trying next...",
                     candidate.provider,
@@ -322,7 +395,14 @@ Rules:
         }
     }
 
-    Err("All providers failed to generate prompt completion".to_string())
+    if failures.is_empty() {
+        Err("All providers failed to generate prompt completion".to_string())
+    } else {
+        Err(format!(
+            "All providers failed to generate prompt completion: {}",
+            failures.into_iter().take(3).collect::<Vec<_>>().join(" | ")
+        ))
+    }
 }
 
 #[cfg(test)]

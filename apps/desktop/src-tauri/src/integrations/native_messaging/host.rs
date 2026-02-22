@@ -75,7 +75,11 @@ impl NativeMessagingHost {
                 }
                 Err(e) => {
                     // EOF or error - extension disconnected
-                    if e.to_string().contains("EOF") || e.to_string().contains("UnexpectedEof") {
+                    let err = e.to_string();
+                    if err.contains("EOF")
+                        || err.contains("UnexpectedEof")
+                        || err.contains("fill whole buffer")
+                    {
                         tracing::info!("Extension disconnected");
                         break;
                     }

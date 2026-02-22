@@ -276,6 +276,8 @@ export default [
     rules: {
       // TypeScript rules
       ...tsPlugin.configs.recommended.rules,
+      // `no-undef` is not TypeScript-aware and produces false positives in TS files.
+      'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -328,10 +330,11 @@ export default [
 
   // Browser extension files
   {
-    files: ['apps/extension/**/*.js'],
+    files: ['apps/extension/**/*.js', 'apps/extension/**/*.ts', 'apps/extension/**/*.tsx'],
     languageOptions: {
       globals: {
         chrome: 'readonly',
+        CSS: 'readonly',
         document: 'readonly',
         window: 'readonly',
         console: 'readonly',

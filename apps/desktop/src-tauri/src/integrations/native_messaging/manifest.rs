@@ -3,6 +3,201 @@
 use super::*;
 use std::path::PathBuf;
 
+#[cfg(target_os = "macos")]
+fn normalize_macos_home_for_native_host_paths(home: &PathBuf) -> PathBuf {
+    let home_str = home.to_string_lossy();
+    let marker = "/Library/Containers/com.agiworkforce.desktop/Data";
+
+    if let Some(idx) = home_str.find(marker) {
+        let real_home = &home_str[..idx];
+        if !real_home.is_empty() {
+            return PathBuf::from(real_home);
+        }
+    }
+
+    home.clone()
+}
+
+#[cfg(target_os = "macos")]
+fn get_macos_user_home_for_native_host_paths() -> Result<PathBuf> {
+    let env_home = std::env::var("HOME").ok().map(PathBuf::from);
+    let dirs_home = dirs::home_dir();
+
+    for candidate in [env_home, dirs_home].into_iter().flatten() {
+        let normalized = normalize_macos_home_for_native_host_paths(&candidate);
+
+        tracing::debug!(
+            "Resolved macOS user home for native-host paths: candidate={:?} normalized={:?}",
+            candidate,
+            normalized
+        );
+
+        return Ok(normalized);
+    }
+
+    Err(anyhow!(
+        "Could not determine macOS user home for native messaging paths"
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn prepare_macos_native_host_binary(source: &PathBuf) -> Result<PathBuf> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    let home = get_macos_user_home_for_native_host_paths()?;
+    let destinations = [
+        home.join(
+            "Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop/native_messaging_host",
+        ),
+        home.join("Library/Application Support/com.agiworkforce.desktop/native_messaging_host"),
+    ];
+
+    let mut last_error: Option<anyhow::Error> = None;
+
+    for dest in destinations {
+        if let Some(parent) = dest.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                last_error = Some(anyhow!(
+                    "Failed to create native host destination dir {:?}: {}",
+                    parent,
+                    e
+                ));
+                continue;
+            }
+        }
+
+        if let Err(e) = fs::copy(source, &dest) {
+            last_error = Some(anyhow!(
+                "Failed to copy native host binary from {:?} to {:?}: {}",
+                source,
+                dest,
+                e
+            ));
+            continue;
+        }
+
+        let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+
+        // The bundled helper inherits app sandbox entitlements and crashes when Chrome launches it.
+        // Re-signing an external copy ad-hoc removes those entitlements and makes it launchable.
+        let _ = Command::new("/usr/bin/codesign")
+            .arg("--remove-signature")
+            .arg(&dest)
+            .output();
+
+        match Command::new("/usr/bin/codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(&dest)
+            .output()
+        {
+            Ok(output) if output.status.success() => {
+                tracing::info!(
+                    "Prepared external native messaging host binary at {:?} (ad-hoc signed)",
+                    dest
+                );
+            }
+            Ok(output) => {
+                tracing::warn!(
+                    "codesign ad-hoc signing failed for {:?} (status {:?}): {}",
+                    dest,
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "codesign not available or failed to launch for {:?}: {}",
+                    dest,
+                    e
+                );
+            }
+        }
+
+        return Ok(dest);
+    }
+
+    Err(last_error.unwrap_or_else(|| anyhow!("Failed to prepare macOS native host binary copy")))
+}
+
+#[cfg(target_os = "macos")]
+fn helper_fallback_enabled() -> bool {
+    std::env::var("AGI_NATIVE_HOST_INSTALLER_HELPER_CHILD")
+        .map(|value| value != "1")
+        .unwrap_or(true)
+}
+
+#[cfg(target_os = "macos")]
+fn try_install_manifests_via_external_helper(
+    helper_binary: &PathBuf,
+    extension_id: Option<&str>,
+) -> Result<Vec<PathBuf>> {
+    use std::process::Command;
+
+    if !helper_binary.exists() {
+        return Err(anyhow!(
+            "External helper binary does not exist: {:?}",
+            helper_binary
+        ));
+    }
+
+    let helper_name = helper_binary
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if helper_name != "native_messaging_host" {
+        return Err(anyhow!(
+            "Refusing helper fallback for non-helper executable: {:?}",
+            helper_binary
+        ));
+    }
+
+    let mut command = Command::new(helper_binary);
+    command
+        .arg("--install-manifests")
+        .env("AGI_NATIVE_HOST_INSTALLER_HELPER_CHILD", "1");
+    if let Some(ext_id) = extension_id {
+        command.arg(ext_id);
+    }
+
+    let output = command
+        .output()
+        .map_err(|e| anyhow!("Failed to launch external helper installer {:?}: {}", helper_binary, e))?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "External helper installer exited with status {:?}. stderr: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let manifest_filename = "com.agiworkforce.browser.json";
+    let mut installed = Vec::new();
+
+    if let Ok(chrome_dir) = get_chrome_native_messaging_dir() {
+        let path = chrome_dir.join(manifest_filename);
+        if path.exists() {
+            installed.push(path);
+        }
+    }
+    if let Ok(edge_dir) = get_edge_native_messaging_dir() {
+        let path = edge_dir.join(manifest_filename);
+        if path.exists() {
+            installed.push(path);
+        }
+    }
+
+    if installed.is_empty() {
+        return Err(anyhow!(
+            "External helper installer reported success but no manifests were found"
+        ));
+    }
+
+    Ok(installed)
+}
+
 /// Native messaging host manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NativeHostManifest {
@@ -42,12 +237,8 @@ impl NativeHostManifest {
 pub fn get_chrome_native_messaging_dir() -> Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
-        let home =
-            std::env::var("HOME").map_err(|_| anyhow!("HOME environment variable not set"))?;
-        Ok(PathBuf::from(format!(
-            "{}/Library/Application Support/Google/Chrome/NativeMessagingHosts",
-            home
-        )))
+        let home = get_macos_user_home_for_native_host_paths()?;
+        Ok(home.join("Library/Application Support/Google/Chrome/NativeMessagingHosts"))
     }
 
     #[cfg(target_os = "windows")]
@@ -88,12 +279,8 @@ pub fn get_chrome_native_messaging_dir() -> Result<PathBuf> {
 pub fn get_edge_native_messaging_dir() -> Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
-        let home =
-            std::env::var("HOME").map_err(|_| anyhow!("HOME environment variable not set"))?;
-        Ok(PathBuf::from(format!(
-            "{}/Library/Application Support/Microsoft Edge/NativeMessagingHosts",
-            home
-        )))
+        let home = get_macos_user_home_for_native_host_paths()?;
+        Ok(home.join("Library/Application Support/Microsoft Edge/NativeMessagingHosts"))
     }
 
     #[cfg(target_os = "windows")]
@@ -137,6 +324,31 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let current_exe_str = current_exe.to_string_lossy();
+        let helper_is_bundled_sidecar = exe_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name == "native_messaging_host")
+            .unwrap_or(false)
+            && current_exe_str.contains(".app/Contents/MacOS/");
+
+        if helper_is_bundled_sidecar {
+            match prepare_macos_native_host_binary(&exe_path) {
+                Ok(prepared_path) => {
+                    exe_path = prepared_path;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to prepare external macOS native host binary; falling back to bundled helper: {}",
+                        e
+                    );
+                }
+            }
+        }
+    }
+
     let exe_path_str = exe_path
         .to_str()
         .ok_or_else(|| anyhow!("Invalid executable path"))?;
@@ -159,9 +371,12 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
     let manifest_filename = format!("{}.json", host_name);
 
     let mut installed_paths = Vec::new();
+    let mut chrome_manifest_path: Option<PathBuf> = None;
+    let mut edge_manifest_path: Option<PathBuf> = None;
 
     // Install for Chrome
     if let Ok(chrome_dir) = get_chrome_native_messaging_dir() {
+        chrome_manifest_path = Some(chrome_dir.join(&manifest_filename));
         if let Err(e) = install_manifest_to_dir(&chrome_dir, &manifest_filename, &manifest_json) {
             tracing::warn!("Failed to install Chrome manifest: {}", e);
         } else {
@@ -171,6 +386,7 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
 
     // Install for Edge
     if let Ok(edge_dir) = get_edge_native_messaging_dir() {
+        edge_manifest_path = Some(edge_dir.join(&manifest_filename));
         if let Err(e) = install_manifest_to_dir(&edge_dir, &manifest_filename, &manifest_json) {
             tracing::warn!("Failed to install Edge manifest: {}", e);
         } else {
@@ -183,6 +399,48 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         // On Windows, also register in the registry
         if let Err(e) = register_windows_native_host(host_name, &manifest_json) {
             tracing::warn!("Failed to register Windows native host: {}", e);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let chrome_missing = chrome_manifest_path
+            .as_ref()
+            .map(|path| !path.exists())
+            .unwrap_or(true);
+
+        if helper_fallback_enabled() && (installed_paths.is_empty() || chrome_missing) {
+            match try_install_manifests_via_external_helper(&exe_path, extension_id) {
+                Ok(paths) => {
+                    tracing::info!(
+                        "Installed native messaging manifests via external helper at {} location(s)",
+                        paths.len()
+                    );
+                    for path in paths {
+                        if !installed_paths.iter().any(|existing| existing == &path) {
+                            installed_paths.push(path);
+                        }
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "External helper native messaging manifest install fallback failed: {}",
+                        error
+                    );
+                }
+            }
+        }
+
+        // Ensure returned paths include currently present manifest files even if they were pre-existing.
+        if let Some(path) = chrome_manifest_path {
+            if path.exists() && !installed_paths.iter().any(|existing| existing == &path) {
+                installed_paths.push(path);
+            }
+        }
+        if let Some(path) = edge_manifest_path {
+            if path.exists() && !installed_paths.iter().any(|existing| existing == &path) {
+                installed_paths.push(path);
+            }
         }
     }
 
@@ -285,5 +543,15 @@ mod tests {
         let json = manifest.to_json().unwrap();
         assert!(json.contains("com.test.host"));
         assert!(json.contains("chrome-extension://abcdefghijklmnop/"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_normalize_macos_home_for_native_host_paths_from_sandbox_home() {
+        let sandbox_home = PathBuf::from(
+            "/Users/siddhartha/Library/Containers/com.agiworkforce.desktop/Data",
+        );
+        let normalized = normalize_macos_home_for_native_host_paths(&sandbox_home);
+        assert_eq!(normalized, PathBuf::from("/Users/siddhartha"));
     }
 }

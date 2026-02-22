@@ -433,7 +433,10 @@ async function handleMessageAsync(
       }
 
       if (!resolvedTabId && resolvedWindowId === undefined) {
-        return { success: false, error: 'No active tab/window for screenshot' } as ExtensionResponse;
+        return {
+          success: false,
+          error: 'No active tab/window for screenshot',
+        } as ExtensionResponse;
       }
 
       try {
@@ -460,7 +463,7 @@ async function handleMessageAsync(
       }
     }
 
-    default:
+    default: {
       // Forward other messages to content script
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -473,6 +476,7 @@ async function handleMessageAsync(
       }
 
       return forwardToContentScript(resolvedTabId, message);
+    }
   }
 }
 
@@ -497,7 +501,10 @@ async function syncTabContextWithDesktop(
   const url = String(context.url ?? '').trim();
   const title = String(context.title ?? '').trim();
   if (!url || !title) {
-    return { success: false, error: 'Invalid page context: missing url/title' } as ExtensionResponse;
+    return {
+      success: false,
+      error: 'Invalid page context: missing url/title',
+    } as ExtensionResponse;
   }
 
   const html = String(context.html ?? '').substring(0, MAX_CONTEXT_HTML_CHARS);
@@ -557,11 +564,8 @@ async function syncTabContextWithDesktop(
     task_id: taskId,
     success: executionResponse.success === true,
     screenshot:
-      typeof executionResponse.screenshot === 'string'
-        ? executionResponse.screenshot
-        : undefined,
-    result:
-      executionResponse.result !== undefined ? executionResponse.result : executionResponse,
+      typeof executionResponse.screenshot === 'string' ? executionResponse.screenshot : undefined,
+    result: executionResponse.result !== undefined ? executionResponse.result : executionResponse,
     error:
       executionResponse.success === true
         ? undefined
@@ -661,7 +665,8 @@ async function notifyConnectionStatusChange(): Promise<void> {
           },
           () => {
             // Ignore errors - tab might not have content script
-            chrome.runtime.lastError; // Acknowledge error
+            const _lastError = chrome.runtime.lastError;
+            void _lastError;
           },
         );
       }
@@ -675,6 +680,11 @@ async function notifyConnectionStatusChange(): Promise<void> {
  * Set up context menu
  */
 function setupContextMenu(): void {
+  if (!chrome.contextMenus?.removeAll || !chrome.contextMenus?.create) {
+    logger.warn('contextMenus API unavailable; skipping context menu setup');
+    return;
+  }
+
   chrome.contextMenus.removeAll();
 
   chrome.contextMenus.create({
@@ -790,7 +800,6 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 /**
  * Create request ID for tracking
  */
-// @ts-ignore: Unused helper
 function _createRequestId(): string {
   return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -798,7 +807,6 @@ function _createRequestId(): string {
 /**
  * Get pending request or create new one
  */
-// @ts-ignore: Unused helper
 function _getPendingRequest(id: string) {
   return pendingRequests.get(id);
 }
@@ -806,7 +814,6 @@ function _getPendingRequest(id: string) {
 /**
  * Clean up pending request
  */
-// @ts-ignore: Unused helper
 function _removePendingRequest(id: string): void {
   const request = pendingRequests.get(id);
   if (request) {

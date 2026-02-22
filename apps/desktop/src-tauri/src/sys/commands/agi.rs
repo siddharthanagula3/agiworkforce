@@ -528,25 +528,44 @@ pub struct SystemResourcesResponse {
 
 #[tauri::command]
 pub async fn get_system_resources() -> Result<SystemResourcesResponse, String> {
+    let mut sys = sysinfo::System::new_all();
+    sys.refresh_cpu();
+    sys.refresh_memory();
+    let cpu_usage_percent = sys.global_cpu_info().cpu_usage() as f64;
+    let process_memory_mb = sys
+        .process(sysinfo::Pid::from(std::process::id() as usize))
+        .map(|p| p.memory() / 1024 / 1024)
+        .unwrap_or(0);
+    let memory_total_mb = sys.total_memory() / 1024 / 1024;
+    let storage_total_mb = 1000000;
+
+    let fallback_response = SystemResourcesResponse {
+        cpu_usage_percent,
+        memory_usage_mb: process_memory_mb,
+        memory_total_mb,
+        network_usage_mbps: 0.0,
+        storage_usage_mb: 0,
+        storage_total_mb,
+        available_tools: vec![],
+    };
+
     let agi_arc = {
         let guard = AGI_CORE.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "AGI not initialized".to_string())?
-            .clone()
+        guard.clone()
+    };
+
+    let Some(agi_arc) = agi_arc else {
+        return Ok(fallback_response);
     };
 
     let agi = agi_arc.lock().await;
-    let resource_state = agi
-        .resource_manager()
-        .get_state()
-        .await
-        .map_err(|e| format!("Failed to get resource state: {}", e))?;
-
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_memory();
-    let memory_total_mb = sys.total_memory() / 1024 / 1024;
-    let storage_total_mb = 1000000;
+    let resource_state = match agi.resource_manager().get_state().await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::warn!("Failed to get AGI resource state, using fallback system metrics: {}", e);
+            return Ok(fallback_response);
+        }
+    };
 
     Ok(SystemResourcesResponse {
         cpu_usage_percent: resource_state.cpu_usage_percent,

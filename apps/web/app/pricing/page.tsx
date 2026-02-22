@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, Check, AlertCircle, Zap, Sparkles } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
 import { getSupabaseClient } from '../../services/supabase';
@@ -12,6 +13,10 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('annual');
+  const [joinedWaitlistPlans, setJoinedWaitlistPlans] = useState<Record<'pro' | 'max', boolean>>({
+    pro: false,
+    max: false,
+  });
   const searchParams = useSearchParams();
   const showSubscriptionRequired = searchParams?.get('reason') === 'subscription_required';
 
@@ -50,6 +55,46 @@ function PricingContent() {
       alert(errorMessage);
       setLoadingPlan(null);
     }
+  };
+
+  const handleWaitlist = (plan: 'pro' | 'max') => {
+    void (async () => {
+      if (joinedWaitlistPlans[plan]) {
+        toast.success('Joined!!');
+        return;
+      }
+
+      setLoadingPlan(plan);
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        const res = await fetch('/api/waitlist', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ plan, billingInterval, source: 'pricing' }),
+        });
+
+        if (res.status === 401) {
+          window.location.href = '/signup?next=/pricing';
+          return;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message || data.error || 'Failed to join waitlist. Please try again.';
+          throw new Error(errorMessage);
+        }
+
+        setJoinedWaitlistPlans((prev) => ({ ...prev, [plan]: true }));
+        toast.success('Joined!!');
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to join waitlist. Please try again.';
+        toast.error(errorMessage);
+      } finally {
+        setLoadingPlan(null);
+      }
+    })();
   };
 
   const [subscription, setSubscription] = useState<{
@@ -99,6 +144,35 @@ function PricingContent() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchWaitlistStatus = async () => {
+      try {
+        const headers = await addCsrfHeaders();
+        const res = await fetch('/api/waitlist', { method: 'GET', headers });
+        if (!res.ok) return;
+
+        const data = (await res.json()) as { joinedPlans?: string[] };
+        if (!mounted) return;
+
+        const joined = new Set(data.joinedPlans ?? []);
+        setJoinedWaitlistPlans({
+          pro: joined.has('pro'),
+          max: joined.has('max'),
+        });
+      } catch {
+        // Ignore for anonymous users / unavailable API during initial load
+      }
+    };
+
+    void fetchWaitlistStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const isSubscribed = subscription && isActiveSubscriptionStatus(subscription.status);
 
   const handleManage = async () => {
@@ -128,6 +202,7 @@ function PricingContent() {
     if (loadingSubscription) return 'Loading...';
     if (loadingPlan === plan) return 'Redirecting...';
     if (loadingPlan === 'manage') return 'Loading...';
+    if (plan === 'pro' || plan === 'max') return 'Join Waitlist';
 
     if (isSubscribed && subscription?.plan_tier) {
       const currentLevel = getPlanLevel(subscription.plan_tier);
@@ -150,11 +225,22 @@ function PricingContent() {
   };
 
   const isButtonDisabled = (plan: string) => {
+    if (
+      (plan === 'pro' && joinedWaitlistPlans.pro) ||
+      (plan === 'max' && joinedWaitlistPlans.max)
+    ) {
+      return true;
+    }
     if (loadingSubscription || loadingPlan === plan || loadingPlan === 'manage') return true;
     return false;
   };
 
   const handleButtonClick = (plan: string) => {
+    if (plan === 'pro' || plan === 'max') {
+      handleWaitlist(plan);
+      return;
+    }
+
     if (!isSubscribed) {
       handleUpgrade(plan);
       return;
@@ -185,6 +271,7 @@ function PricingContent() {
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
+      <Toaster position="top-center" richColors closeButton />
       <Header />
 
       <main className="flex-1 pt-24">
@@ -394,12 +481,18 @@ function PricingContent() {
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
-                  className="mt-6 w-full inline-flex items-center justify-center gap-2"
+                  className={`mt-6 w-full inline-flex items-center justify-center gap-2 ${
+                    joinedWaitlistPlans.pro
+                      ? 'bg-blue-600/20 border border-blue-400 text-blue-200 hover:bg-blue-600/20'
+                      : ''
+                  }`}
                   onClick={() => handleButtonClick('pro')}
                   disabled={isButtonDisabled('pro')}
                 >
-                  {getButtonText('pro', 'Upgrade to Pro')}
-                  {!isSubscribed && <ArrowRight className="h-4 w-4" />}
+                  {joinedWaitlistPlans.pro
+                    ? 'Joined Waitlist'
+                    : getButtonText('pro', 'Join Waitlist')}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -466,12 +559,18 @@ function PricingContent() {
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
-                  className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
+                  className={`mt-6 w-full inline-flex items-center justify-center gap-2 ${
+                    joinedWaitlistPlans.max
+                      ? 'bg-purple-600/20 border border-purple-400 text-purple-200 hover:bg-purple-600/20'
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                   onClick={() => handleButtonClick('max')}
                   disabled={isButtonDisabled('max')}
                 >
-                  {getButtonText('max', 'Upgrade to Max')}
-                  {!isSubscribed && <ArrowRight className="h-4 w-4" />}
+                  {joinedWaitlistPlans.max
+                    ? 'Joined Waitlist'
+                    : getButtonText('max', 'Join Waitlist')}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
