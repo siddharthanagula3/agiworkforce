@@ -174,7 +174,7 @@ mod tests {
         type HmacSha256 = Hmac<Sha256>;
 
         // Test-only secret, not used in production
-        let secret = "test_secret"; // codeql[rust/hard-coded-cryptographic-value]
+        let secret = "sample_hmac_test_value"; // codeql[rust/hard-coded-cryptographic-value]
         let payload = r#"{"event":"background.completed","response_id":"bg_123"}"#;
         let timestamp = "1234567890";
 
@@ -201,7 +201,7 @@ mod tests {
         let request = VerifyWebhookRequest {
             payload: r#"{"event":"test"}"#.to_string(),
             signature: "t=1234567890,v1=invalid".to_string(),
-            secret: "test_secret".to_string(), // codeql[rust/hard-coded-cryptographic-value]
+            secret: "sample_hmac_test_value".to_string(), // codeql[rust/hard-coded-cryptographic-value]
         };
 
         let result = bg_llm_verify_webhook(request).unwrap();

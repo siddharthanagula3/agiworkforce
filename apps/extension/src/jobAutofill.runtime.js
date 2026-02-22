@@ -75,6 +75,10 @@ function assertNotTimedOut(deadlineEpochMs) {
   }
 }
 
+function hostMatches(host, domain) {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export function detectPlatformFromUrl(url) {
   try {
     const parsed = new URL(url);
@@ -83,9 +87,9 @@ export function detectPlatformFromUrl(url) {
     const query = parsed.search.toLowerCase();
 
     if (
-      host.includes('greenhouse.io') ||
-      host.includes('boards.greenhouse.io') ||
-      host.includes('job-boards.greenhouse.io') ||
+      hostMatches(host, 'greenhouse.io') ||
+      hostMatches(host, 'boards.greenhouse.io') ||
+      hostMatches(host, 'job-boards.greenhouse.io') ||
       path.includes('/job_app') ||
       path.includes('/application') ||
       query.includes('gh_jid=')
@@ -94,17 +98,17 @@ export function detectPlatformFromUrl(url) {
     }
 
     if (
-      host.includes('myworkdayjobs.com') ||
-      host.includes('workdayjobs.com') ||
-      host.includes('.myworkday.com') ||
-      host.includes('wd1.myworkday') ||
-      host.includes('wd3.myworkday') ||
-      host.includes('wd5.myworkday')
+      hostMatches(host, 'myworkdayjobs.com') ||
+      hostMatches(host, 'workdayjobs.com') ||
+      host.endsWith('.myworkday.com') ||
+      host === 'wd1.myworkday.com' ||
+      host === 'wd3.myworkday.com' ||
+      host === 'wd5.myworkday.com'
     ) {
       return 'workday';
     }
 
-    if (host.includes('workday.com') && path.includes('/job/')) {
+    if (hostMatches(host, 'workday.com') && path.includes('/job/')) {
       return 'workday';
     }
 
