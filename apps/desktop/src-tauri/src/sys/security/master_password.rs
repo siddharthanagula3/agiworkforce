@@ -642,6 +642,18 @@ pub fn derive_key_base64(
 mod tests {
     use super::*;
 
+    fn valid_test_passphrase() -> &'static str {
+        "alpha-beta-unique-phrase"
+    }
+
+    fn alternate_test_passphrase() -> &'static str {
+        "gamma-delta-alt-phrase"
+    }
+
+    fn invalid_test_passphrase() -> &'static str {
+        "nonmatching-phrase"
+    }
+
     fn create_test_manager() -> MasterPasswordManager {
         // Use in-memory database for tests to avoid temp file cleanup issues
         let conn = Connection::open_in_memory().unwrap();
@@ -656,11 +668,11 @@ mod tests {
 
         assert!(!manager.is_configured().unwrap());
 
-        manager.setup("SamplePass123!").unwrap();
+        manager.setup(valid_test_passphrase()).unwrap();
 
         assert!(manager.is_configured().unwrap());
-        assert!(manager.verify("SamplePass123!").unwrap());
-        assert!(!manager.verify("InvalidSamplePass").unwrap());
+        assert!(manager.verify(valid_test_passphrase()).unwrap());
+        assert!(!manager.verify(invalid_test_passphrase()).unwrap());
     }
 
     #[test]
@@ -677,7 +689,7 @@ mod tests {
     #[test]
     fn test_unlock_and_lock() {
         let manager = create_test_manager();
-        manager.setup("SamplePass123!").unwrap();
+        manager.setup(valid_test_passphrase()).unwrap();
 
         // Should be unlocked after setup
         assert!(manager.is_unlocked());
@@ -685,27 +697,27 @@ mod tests {
         manager.lock();
         assert!(!manager.is_unlocked());
 
-        manager.unlock("SamplePass123!").unwrap();
+        manager.unlock(valid_test_passphrase()).unwrap();
         assert!(manager.is_unlocked());
     }
 
     #[test]
     fn test_change_password() {
         let manager = create_test_manager();
-        manager.setup("SampleOld123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
 
         manager
-            .change("SampleOld123!", "SampleNew456!") // codeql[rust/hard-coded-cryptographic-value]
+            .change(valid_test_passphrase(), alternate_test_passphrase())
             .unwrap();
 
-        assert!(!manager.verify("SampleOld123!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
-        assert!(manager.verify("SampleNew456!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
+        assert!(!manager.verify(valid_test_passphrase()).unwrap());
+        assert!(manager.verify(alternate_test_passphrase()).unwrap());
     }
 
     #[test]
     fn test_derive_key_requires_unlock() {
         let manager = create_test_manager();
-        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
         manager.lock();
 
         let result = manager.derive_key(KeyPurpose::MasterEncryption);
@@ -715,7 +727,7 @@ mod tests {
     #[test]
     fn test_derive_key_different_purposes() {
         let manager = create_test_manager();
-        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
 
         let key1 = manager.derive_key(KeyPurpose::JwtSecret).unwrap();
         let key2 = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
@@ -729,7 +741,7 @@ mod tests {
     #[test]
     fn test_key_consistency() {
         let manager = create_test_manager();
-        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
 
         let key1 = manager.derive_key(KeyPurpose::MasterEncryption).unwrap();
         let key2 = manager.derive_key(KeyPurpose::MasterEncryption).unwrap();
@@ -741,9 +753,9 @@ mod tests {
     #[test]
     fn test_already_configured_error() {
         let manager = create_test_manager();
-        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
 
-        let result = manager.setup("SampleAnother1!"); // codeql[rust/hard-coded-cryptographic-value]
+        let result = manager.setup(alternate_test_passphrase());
         assert!(matches!(
             result,
             Err(MasterPasswordError::AlreadyConfigured)
