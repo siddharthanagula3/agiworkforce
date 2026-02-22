@@ -266,18 +266,18 @@ mod tests {
         assert!(!manager.is_configured().unwrap());
 
         // Setup
-        manager.setup("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
         assert!(manager.is_configured().unwrap());
 
         // Verify
-        assert!(manager.verify("TestPassword123!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
-        assert!(!manager.verify("WrongPassword").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
+        assert!(manager.verify("SamplePass123!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
+        assert!(!manager.verify("InvalidSamplePass").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
 
         // Lock and unlock
         manager.lock();
         assert!(!manager.is_unlocked());
 
-        manager.unlock("TestPassword123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.unlock("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
         assert!(manager.is_unlocked());
     }
 }
