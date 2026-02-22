@@ -33,7 +33,7 @@ async function requireSession() {
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const rateLimitResponse = await withRateLimit(request, 'waitlist_get');
+  const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { supabase, session } = await requireSession();
@@ -60,7 +60,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request, session.user.id);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'waitlist_post');
+  const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: unknown;
