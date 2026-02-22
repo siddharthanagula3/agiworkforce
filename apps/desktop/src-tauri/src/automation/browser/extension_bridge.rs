@@ -586,7 +586,22 @@ fn resolve_app_data_dir() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let home = dirs::home_dir()?;
-        Some(home.join("Library/Application Support/com.agiworkforce.desktop"))
+        let container_dir = home.join(
+            "Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop",
+        );
+        let legacy_dir = home.join("Library/Application Support/com.agiworkforce.desktop");
+
+        if container_dir.join(".ipc_token").exists() {
+            return Some(container_dir);
+        }
+        if legacy_dir.join(".ipc_token").exists() {
+            return Some(legacy_dir);
+        }
+        if container_dir.exists() {
+            return Some(container_dir);
+        }
+
+        Some(legacy_dir)
     }
 
     #[cfg(not(target_os = "macos"))]

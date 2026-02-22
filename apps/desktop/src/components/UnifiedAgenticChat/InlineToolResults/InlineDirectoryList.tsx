@@ -5,7 +5,15 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Folder, File, FileText, ChevronRight, ChevronDown, FolderOpen, Loader2 } from 'lucide-react';
+import {
+  Folder,
+  File,
+  FileText,
+  ChevronRight,
+  ChevronDown,
+  FolderOpen,
+  Loader2,
+} from 'lucide-react';
 import type { ToolResultProps } from './index';
 
 export interface DirectoryEntry {
@@ -31,6 +39,30 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
 
   const data = result?.data as DirectoryListData | undefined;
 
+  // Hooks must be called unconditionally - call them before any conditional returns
+  // Get entries - wrap in useMemo to keep stable references.
+  const entries: DirectoryEntry[] = useMemo(() => data?.entries || [], [data]);
+
+  // Separate directories and files - useMemo always called at top level
+  const { directories, files }: { directories: DirectoryEntry[]; files: DirectoryEntry[] } =
+    useMemo(() => {
+      const dirs: DirectoryEntry[] = [];
+      const fls: DirectoryEntry[] = [];
+      entries.forEach((entry) => {
+        if (entry.type === 'directory') {
+          dirs.push(entry);
+        } else {
+          fls.push(entry);
+        }
+      });
+      // Sort: directories first, then files, both alphabetically
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      fls.sort((a, b) => a.name.localeCompare(b.name));
+      return { directories: dirs, files: fls };
+    }, [entries]);
+
+  const path = data?.path || '';
+
   // Show running state
   if (status === 'running') {
     return (
@@ -55,30 +87,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
       </div>
     );
   }
-
-  // Hooks must be called unconditionally - call them before any conditional returns
-  // Get entries - wrap in useMemo to fix exhaustive-deps warning
-  const entries: DirectoryEntry[] = useMemo(() => data?.entries || [], [data]);
-
-  // Separate directories and files - useMemo always called at top level
-  const { directories, files }: { directories: DirectoryEntry[]; files: DirectoryEntry[] } =
-    useMemo(() => {
-      const dirs: DirectoryEntry[] = [];
-      const fls: DirectoryEntry[] = [];
-      entries.forEach((entry) => {
-        if (entry.type === 'directory') {
-          dirs.push(entry);
-        } else {
-          fls.push(entry);
-        }
-      });
-      // Sort: directories first, then files, both alphabetically
-      dirs.sort((a, b) => a.name.localeCompare(b.name));
-      fls.sort((a, b) => a.name.localeCompare(b.name));
-      return { directories: dirs, files: fls };
-    }, [entries]);
-
-  const path = data?.path || '';
 
   // Handle missing data case - after hooks are called
   if (!data) {

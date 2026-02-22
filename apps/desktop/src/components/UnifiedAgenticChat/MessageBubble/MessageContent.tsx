@@ -35,27 +35,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
       typeof child === 'string' ? parseCitations(child) : child,
     );
 
-  const hasBlockChildren = (children: React.ReactNode) =>
-    React.Children.toArray(children).some((child) => {
-      if (!React.isValidElement(child)) return false;
-      if (child.type === CodeBlock) return true;
-      if (typeof child.type !== 'string') return false;
-      return [
-        'div',
-        'pre',
-        'table',
-        'ul',
-        'ol',
-        'blockquote',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-      ].includes(child.type);
-    });
-
   return (
     <div
       className={`prose prose-sm dark:prose-invert max-w-none transition-opacity ${
@@ -68,19 +47,19 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
           rehypePlugins={[rehypeKatex]}
           components={{
             code(props) {
-              const { className, children, ...rest } =
+              const { inline, className, children, ...rest } =
                 props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
               const match = /language-(\w+)/.exec(className || '');
               const language = match ? match[1] : 'text';
               const code = String(children).replace(/\n$/, '');
-              const isLikelyBlockCode = Boolean(match) || code.includes('\n');
+              const isBlockCode = inline !== true;
 
               // In compact mode, hide ALL code blocks from assistant messages (not user messages)
-              if (compactMode && isLikelyBlockCode && !isUser) {
+              if (compactMode && isBlockCode && !isUser) {
                 return null; // Hide all code blocks in compact mode for assistant
               }
 
-              return isLikelyBlockCode ? (
+              return isBlockCode ? (
                 <CodeBlock
                   code={code}
                   language={language || 'text'}
@@ -118,9 +97,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               );
             },
             p({ children }) {
-              if (hasBlockChildren(children)) {
-                return <div className="my-3">{children}</div>;
-              }
               return <p>{applyCitations(children)}</p>;
             },
             li({ children }) {

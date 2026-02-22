@@ -425,7 +425,6 @@ function isFocusable(element) {
 
 function generateUniqueSelector(element) {
   if (element.id) {
-    // eslint-disable-next-line no-undef
     return `#${CSS.escape(element.id)}`;
   }
 
@@ -441,14 +440,12 @@ function generateUniqueSelector(element) {
         .split(/\s+/)
         .filter((c) => c);
       if (classes.length > 0) {
-        /* eslint-disable no-undef */
         selector +=
           '.' +
           classes
             .slice(0, 2)
             .map((c) => CSS.escape(c))
             .join('.');
-        /* eslint-enable no-undef */
       }
     }
 

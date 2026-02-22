@@ -58,8 +58,16 @@ import {
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
 
+const normalizeToolNameForUi = (toolName: string): string => {
+  if (toolName.startsWith('__server__')) {
+    const trimmed = toolName.slice('__server__'.length);
+    return trimmed || toolName;
+  }
+  return toolName;
+};
+
 const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
-  const normalized = toolName.toLowerCase();
+  const normalized = normalizeToolNameForUi(toolName).toLowerCase();
   if (normalized.includes('image') || normalized.includes('video')) return 'image';
   if (normalized.includes('document') || normalized.includes('pdf') || normalized.includes('word'))
     return 'document';
@@ -69,11 +77,12 @@ const toolNameToArtifactType = (toolName: string): Artifact['type'] => {
 };
 
 const toolNameToTitle = (toolName: string): string => {
-  const displayInfo = getToolDisplayInfo(toolName);
+  const normalizedToolName = normalizeToolNameForUi(toolName);
+  const displayInfo = getToolDisplayInfo(normalizedToolName);
   if (displayInfo.displayName !== 'Working') {
     return displayInfo.displayName;
   }
-  return toolName.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  return normalizedToolName.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
 const extractMcpTextBlocks = (data: Record<string, unknown>): string[] => {
@@ -222,7 +231,7 @@ const normalizeInlineToolData = (
   toolName: string,
   rawData: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const normalizedTool = toolName.toLowerCase();
+  const normalizedTool = normalizeToolNameForUi(toolName).toLowerCase();
   const data = { ...rawData };
 
   if (normalizedTool.includes('image')) {
@@ -317,6 +326,41 @@ const normalizeInlineToolData = (
     const text = (data['text'] as string | undefined) ?? (data['content'] as string | undefined);
     if (typeof text === 'string') {
       data['text'] = text;
+    }
+  }
+
+  if (normalizedTool.includes('screenshot') || normalizedTool.includes('capture_screen')) {
+    const rawResult = data['raw_result'];
+    const screenshotBase64 =
+      (data['imageBase64'] as string | undefined) ??
+      (data['image_base64'] as string | undefined) ??
+      (data['base64'] as string | undefined) ??
+      (typeof rawResult === 'string' && !rawResult.startsWith('{') && !rawResult.startsWith('[')
+        ? rawResult
+        : undefined);
+    const screenshotUrl =
+      (data['imageUrl'] as string | undefined) ??
+      (data['image_url'] as string | undefined) ??
+      (typeof rawResult === 'string' && rawResult.startsWith('http') ? rawResult : undefined);
+
+    if (screenshotBase64) {
+      data['imageBase64'] = screenshotBase64;
+    }
+    if (screenshotUrl) {
+      data['imageUrl'] = screenshotUrl;
+    }
+  }
+
+  if (normalizedTool.startsWith('browser_') || normalizedTool.startsWith('ui_')) {
+    // Preserve key browser/UI outputs in a consistent shape for inline renderers.
+    data['toolName'] = normalizeToolNameForUi(toolName);
+    const title = data['title'];
+    if (typeof title === 'string' && title.trim().length > 0) {
+      data['content'] = data['content'] ?? title;
+    }
+    const html = data['html'];
+    if (typeof html === 'string' && html.trim().length > 0 && !data['content']) {
+      data['content'] = html;
     }
   }
 
@@ -1057,9 +1101,23 @@ export const UnifiedAgenticChat: React.FC<{
             console.log('[UnifiedAgenticChat] Updated credits from stream-end:', payload.credits);
           }
 
-          // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
-          // This prevents stale stream-end events from clearing active loading state
-          if (hasValidTarget) {
+          const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
+          const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
+
+          if (!hasValidTarget) {
+            console.warn(
+              '[UnifiedAgenticChat] stream-end received without valid target; applying fallback cleanup policy',
+              {
+                payloadMessageId: messageId,
+                sessionMessageId,
+                currentStreamingId,
+                finalizedMessageId,
+                hasOtherActiveStreams,
+              },
+            );
+          }
+
+          if (shouldClearGlobalState) {
             if (finalizedMessageId) {
               clearQueuedStreamUpdates(finalizedMessageId);
             } else {
@@ -1086,16 +1144,6 @@ export const UnifiedAgenticChat: React.FC<{
               });
             }
             clearAgentIterationEntries();
-          } else {
-            console.warn(
-              '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-end received without valid target, not clearing global state',
-              {
-                payloadMessageId: messageId,
-                sessionMessageId,
-                currentStreamingId,
-                finalizedMessageId,
-              },
-            );
           }
         }),
       );
@@ -1197,8 +1245,23 @@ export const UnifiedAgenticChat: React.FC<{
               streamWatchdogTimeoutRef.current = null;
             }
 
-            // AUDIT-STREAM-033 fix: Only clear global loading state if we have a valid target
-            if (hasValidTarget) {
+            const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
+            const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
+
+            if (!hasValidTarget) {
+              console.warn(
+                '[UnifiedAgenticChat] stream-error received without valid target; applying fallback cleanup policy',
+                {
+                  payloadMessageId: messageId,
+                  sessionMessageId,
+                  currentStreamingId,
+                  finalizedMessageId,
+                  hasOtherActiveStreams,
+                },
+              );
+            }
+
+            if (shouldClearGlobalState) {
               if (finalizedMessageId) {
                 clearQueuedStreamUpdates(finalizedMessageId);
               } else {
@@ -1226,16 +1289,6 @@ export const UnifiedAgenticChat: React.FC<{
                 });
               }
               clearAgentIterationEntries();
-            } else {
-              console.warn(
-                '[UnifiedAgenticChat] AUDIT-STREAM-033: stream-error received without valid target, not clearing global state',
-                {
-                  payloadMessageId: messageId,
-                  sessionMessageId,
-                  currentStreamingId,
-                  finalizedMessageId,
-                },
-              );
             }
           },
         ),
@@ -1467,17 +1520,18 @@ export const UnifiedAgenticChat: React.FC<{
           if (targetMessageId) {
             const firstTool = payload.tool_calls[0];
             if (firstTool) {
+              const normalizedFirstToolName = normalizeToolNameForUi(firstTool.name);
               console.log(
                 `[UnifiedAgenticChat] Updating message ${targetMessageId} with tool metadata:`,
-                firstTool.name,
+                normalizedFirstToolName,
               );
               state.updateMessage(targetMessageId, {
                 metadata: {
                   // key fields for MessageBubble to detect tool call
-                  tool: firstTool.name,
+                  tool: normalizedFirstToolName,
                   tool_call: firstTool.id,
                   actionId: firstTool.id, // AUDIT-UI-035: Add actionId for MessageBubble store linkage
-                  name: firstTool.name,
+                  name: normalizedFirstToolName,
                   status: 'running',
                   // also keep streaming true so it shows as active
                   streaming: true,
@@ -1488,6 +1542,7 @@ export const UnifiedAgenticChat: React.FC<{
 
           // Add to action trail to show which tools are being called
           for (const tc of payload.tool_calls) {
+            const normalizedToolName = normalizeToolNameForUi(tc.name);
             let parsedArguments: Record<string, unknown> = {};
             try {
               parsedArguments = tc.arguments
@@ -1501,9 +1556,9 @@ export const UnifiedAgenticChat: React.FC<{
               payload.conversation_id,
               tc.id,
               {
-                toolName: tc.name, // Use 'toolName' consistently with upsertToolArtifact logic
-                type: toolNameToArtifactType(tc.name),
-                title: toolNameToTitle(tc.name),
+                toolName: normalizedToolName, // Use normalized tool names for renderer lookups
+                type: toolNameToArtifactType(normalizedToolName),
+                title: toolNameToTitle(normalizedToolName),
                 status: 'running',
                 content: '',
                 ...(parsedArguments['prompt'] ? { prompt: parsedArguments['prompt'] } : {}),
@@ -1517,7 +1572,7 @@ export const UnifiedAgenticChat: React.FC<{
 
             useUnifiedChatStore.getState().addActionTrailEntry({
               type: 'running',
-              message: `Calling ${tc.name}...`,
+              message: `Calling ${normalizedToolName}...`,
               metadata: { tool_call_id: tc.id, arguments: tc.arguments },
             });
 
@@ -1525,7 +1580,7 @@ export const UnifiedAgenticChat: React.FC<{
             // We start a timeout here as a fallback so every running tool resolves.
             scheduleToolExecutionTimeout(
               tc.id,
-              tc.name,
+              normalizedToolName,
               payload.conversation_id,
               false,
               payload.message_id,
@@ -1543,10 +1598,11 @@ export const UnifiedAgenticChat: React.FC<{
           arguments: string;
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
-          console.log('[UnifiedAgenticChat] Tool executing:', payload.tool_name);
+          const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
+          console.log('[UnifiedAgenticChat] Tool executing:', normalizedToolName);
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
-            payload.tool_name,
+            normalizedToolName,
             payload.conversation_id,
             true,
             payload.message_id,
@@ -1555,7 +1611,7 @@ export const UnifiedAgenticChat: React.FC<{
           // Update action trail with executing status
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: 'running',
-            message: `Executing ${payload.tool_name}...`,
+            message: `Executing ${normalizedToolName}...`,
             metadata: { tool_call_id: payload.tool_call_id },
           });
         }),
@@ -1602,9 +1658,10 @@ export const UnifiedAgenticChat: React.FC<{
           result_data?: Record<string, unknown>;
         }>('chat:tool-result', ({ payload }) => {
           markStreamActivity();
+          const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
           console.log(
             '[UnifiedAgenticChat] Tool result RECEIVED:',
-            payload.tool_name,
+            normalizedToolName,
             payload.success ? 'succeeded' : 'failed',
             'tool_call_id:',
             payload.tool_call_id,
@@ -1621,19 +1678,20 @@ export const UnifiedAgenticChat: React.FC<{
                 parsedData = parsed as Record<string, unknown>;
               }
             } catch {
-              // Keep preview-only mode when result payload is truncated text.
+              // Keep raw string available so inline renderers can still display content.
+              parsedData = { raw_result: payload.result };
             }
           }
 
-          const normalizedData = normalizeInlineToolData(payload.tool_name, parsedData);
+          const normalizedData = normalizeInlineToolData(normalizedToolName, parsedData);
 
           upsertToolArtifact(
             payload.conversation_id,
             payload.tool_call_id,
             {
-              toolName: payload.tool_name,
-              type: toolNameToArtifactType(payload.tool_name),
-              title: toolNameToTitle(payload.tool_name),
+              toolName: normalizedToolName,
+              type: toolNameToArtifactType(normalizedToolName),
+              title: toolNameToTitle(normalizedToolName),
               status: payload.success ? 'completed' : 'failed',
               success: payload.success,
               error: payload.success ? undefined : payload.result,
@@ -1662,8 +1720,8 @@ export const UnifiedAgenticChat: React.FC<{
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: payload.success ? 'completed' : 'error',
             message: payload.success
-              ? `${payload.tool_name} completed`
-              : `${payload.tool_name} failed`,
+              ? `${normalizedToolName} completed`
+              : `${normalizedToolName} failed`,
             metadata: { tool_call_id: payload.tool_call_id, result_preview: payload.result },
             fadeAfter: 3000,
           });
@@ -1683,8 +1741,8 @@ export const UnifiedAgenticChat: React.FC<{
             if (metadataToolCallId === payload.tool_call_id) return true;
             // Backward compatibility: clear legacy running entries that were added without metadata.
             return (
-              entry.message === `Executing ${payload.tool_name}...` ||
-              entry.message === `Calling ${payload.tool_name}...`
+              entry.message === `Executing ${normalizedToolName}...` ||
+              entry.message === `Calling ${normalizedToolName}...`
             );
           });
           console.log(
@@ -1709,13 +1767,13 @@ export const UnifiedAgenticChat: React.FC<{
           if (currentAgent && currentAgent.status === 'running') {
             console.log(
               '[UnifiedAgenticChat] Updating running agent step from chat:tool-result',
-              payload.tool_name,
+              normalizedToolName,
             );
             useUnifiedChatStore.getState().setAgentStatus({
               ...currentAgent,
               currentStep: payload.success
-                ? `Completed ${payload.tool_name}`
-                : `Failed ${payload.tool_name}`,
+                ? `Completed ${normalizedToolName}`
+                : `Failed ${normalizedToolName}`,
             });
             // Verify the update
             const afterAgent = useUnifiedChatStore.getState().agentStatus;

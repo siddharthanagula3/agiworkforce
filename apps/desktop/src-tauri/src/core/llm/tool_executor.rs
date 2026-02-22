@@ -1,4 +1,5 @@
 use crate::core::agi::tools::{Tool, ToolRegistry, ToolResult};
+use crate::core::llm::job_autofill_runtime::build_job_autofill_eval_script;
 use crate::core::llm::{ToolCall, ToolDefinition};
 use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
@@ -103,6 +104,7 @@ impl ToolTimeoutConfig {
             | "browser_type"
             | "browser_screenshot"
             | "browser_extract"
+            | "browser_autofill_job_application"
             | "image_generate"
             | "image_ocr"
             | "image_analyze"
@@ -284,6 +286,26 @@ impl ToolExecutor {
             Self::promote_alias_arg(args, "value", &["option", "text", "selected"]);
         }
 
+        if normalized == "browser_autofill_job_application" {
+            Self::promote_alias_arg(
+                args,
+                "profile",
+                &[
+                    "candidate_profile",
+                    "applicant_profile",
+                    "job_profile",
+                    "user_profile",
+                ],
+            );
+            Self::promote_alias_arg(args, "options", &["autofill_options", "settings"]);
+            Self::promote_alias_arg(args, "resume_path", &["resumePath", "resume_file_path"]);
+            Self::promote_alias_arg(
+                args,
+                "cover_letter_path",
+                &["coverLetterPath", "cover_letter_file_path"],
+            );
+        }
+
         if normalized == "image_generate" || normalized == "media_generate_image" {
             Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
         }
@@ -321,6 +343,200 @@ impl ToolExecutor {
                 &["destination", "file_path", "target_path"],
             );
         }
+    }
+
+    fn parse_object_value(value: &Value) -> Option<serde_json::Map<String, Value>> {
+        match value {
+            Value::Object(map) => Some(map.clone()),
+            Value::String(raw) => serde_json::from_str::<Value>(raw)
+                .ok()
+                .and_then(|parsed| parsed.as_object().cloned()),
+            _ => None,
+        }
+    }
+
+    fn parse_object_argument(
+        args: &HashMap<String, Value>,
+        key: &str,
+    ) -> Option<serde_json::Map<String, Value>> {
+        args.get(key).and_then(Self::parse_object_value)
+    }
+
+    fn build_job_autofill_profile(
+        args: &HashMap<String, Value>,
+    ) -> Result<serde_json::Map<String, Value>> {
+        let mut profile = Self::parse_object_argument(args, "profile").unwrap_or_default();
+
+        let canonical_fields = [
+            "firstName",
+            "lastName",
+            "fullName",
+            "email",
+            "phone",
+            "locationCity",
+            "locationState",
+            "locationCountry",
+            "linkedinUrl",
+            "githubUrl",
+            "portfolioUrl",
+            "websiteUrl",
+            "currentCompany",
+            "currentTitle",
+            "yearsOfExperience",
+            "workAuthorization",
+            "requiresSponsorship",
+            "salaryExpectation",
+            "resumeText",
+            "coverLetterText",
+            "customAnswers",
+            "files",
+        ];
+
+        for key in canonical_fields {
+            if profile.contains_key(key) {
+                continue;
+            }
+            if let Some(value) = args.get(key) {
+                if Self::value_is_present(value) {
+                    profile.insert(key.to_string(), value.clone());
+                }
+            }
+        }
+
+        let aliases = [
+            ("first_name", "firstName"),
+            ("last_name", "lastName"),
+            ("full_name", "fullName"),
+            ("location_city", "locationCity"),
+            ("location_state", "locationState"),
+            ("location_country", "locationCountry"),
+            ("linkedin_url", "linkedinUrl"),
+            ("github_url", "githubUrl"),
+            ("portfolio_url", "portfolioUrl"),
+            ("website_url", "websiteUrl"),
+            ("current_company", "currentCompany"),
+            ("current_title", "currentTitle"),
+            ("years_of_experience", "yearsOfExperience"),
+            ("work_authorization", "workAuthorization"),
+            ("requires_sponsorship", "requiresSponsorship"),
+            ("salary_expectation", "salaryExpectation"),
+            ("resume_text", "resumeText"),
+            ("cover_letter_text", "coverLetterText"),
+            ("custom_answers", "customAnswers"),
+        ];
+
+        for (alias_key, canonical_key) in aliases {
+            if profile.contains_key(canonical_key) {
+                continue;
+            }
+            if let Some(value) = args.get(alias_key) {
+                if Self::value_is_present(value) {
+                    profile.insert(canonical_key.to_string(), value.clone());
+                }
+            }
+        }
+
+        if profile.is_empty() {
+            return Err(anyhow!(
+                "Missing profile parameter. Provide a 'profile' object with fields like firstName/email/phone."
+            ));
+        }
+
+        Ok(profile)
+    }
+
+    fn build_job_autofill_options(args: &HashMap<String, Value>) -> serde_json::Map<String, Value> {
+        let mut options = Self::parse_object_argument(args, "options").unwrap_or_default();
+
+        let canonical_fields = [
+            "platform",
+            "autoSubmit",
+            "allowSubmitWithMissingRequired",
+            "includeOptionalFields",
+            "delayMs",
+            "maxSubmitSteps",
+        ];
+
+        for key in canonical_fields {
+            if options.contains_key(key) {
+                continue;
+            }
+            if let Some(value) = args.get(key) {
+                if Self::value_is_present(value) {
+                    options.insert(key.to_string(), value.clone());
+                }
+            }
+        }
+
+        let aliases = [
+            ("auto_submit", "autoSubmit"),
+            (
+                "allow_submit_with_missing_required",
+                "allowSubmitWithMissingRequired",
+            ),
+            ("include_optional_fields", "includeOptionalFields"),
+            ("delay_ms", "delayMs"),
+            ("max_submit_steps", "maxSubmitSteps"),
+        ];
+
+        for (alias_key, canonical_key) in aliases {
+            if options.contains_key(canonical_key) {
+                continue;
+            }
+            if let Some(value) = args.get(alias_key) {
+                if Self::value_is_present(value) {
+                    options.insert(canonical_key.to_string(), value.clone());
+                }
+            }
+        }
+
+        options
+    }
+
+    async fn attach_job_profile_file_from_path(
+        &self,
+        profile: &mut serde_json::Map<String, Value>,
+        args: &HashMap<String, Value>,
+        path_key: &str,
+        data_key: &str,
+        file_name_key: &str,
+        default_file_name: &str,
+    ) -> Result<()> {
+        let Some(path) = args
+            .get(path_key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Ok(());
+        };
+
+        self.validate_path(path).await?;
+        let (data_url, file_name) =
+            crate::core::llm::job_autofill_runtime::encode_file_as_data_url(
+                path,
+                default_file_name,
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to encode {} '{}': {}", path_key, path, e))?;
+
+        let files_value = profile
+            .entry("files".to_string())
+            .or_insert_with(|| Value::Object(serde_json::Map::new()));
+        if !files_value.is_object() {
+            *files_value = Value::Object(serde_json::Map::new());
+        }
+
+        if let Some(files) = files_value.as_object_mut() {
+            files
+                .entry(data_key.to_string())
+                .or_insert_with(|| Value::String(data_url));
+            files
+                .entry(file_name_key.to_string())
+                .or_insert_with(|| Value::String(file_name));
+        }
+
+        Ok(())
     }
 
     async fn execute_browser_tool(
@@ -861,6 +1077,77 @@ impl ToolExecutor {
                     data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
                     error: None,
                     metadata: HashMap::new(),
+                })
+            }
+            "browser_autofill_job_application" => {
+                let (client, tab_id) = get_client().await?;
+                let mut profile = Self::build_job_autofill_profile(&args)?;
+                self.attach_job_profile_file_from_path(
+                    &mut profile,
+                    &args,
+                    "resume_path",
+                    "resumeDataUrl",
+                    "resumeFileName",
+                    "resume.pdf",
+                )
+                .await?;
+                self.attach_job_profile_file_from_path(
+                    &mut profile,
+                    &args,
+                    "cover_letter_path",
+                    "coverLetterDataUrl",
+                    "coverLetterFileName",
+                    "cover-letter.pdf",
+                )
+                .await?;
+
+                let options = Self::build_job_autofill_options(&args);
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(120_000)
+                    .clamp(5_000, 300_000);
+
+                let script = build_job_autofill_eval_script(
+                    &Value::Object(profile),
+                    &Value::Object(options),
+                    timeout_ms,
+                )?;
+
+                let response = client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
+                let success = response
+                    .get("success")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let response_error = response
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .map(|value| value.to_string());
+
+                Ok(ToolResult {
+                    success,
+                    data: json!({
+                        "tab_id": tab_id,
+                        "platform": response.get("platform").cloned().unwrap_or(Value::Null),
+                        "filled_count": response.get("filledCount").cloned().unwrap_or(json!(0)),
+                        "skipped_count": response.get("skippedCount").cloned().unwrap_or(json!(0)),
+                        "missing_required_fields": response
+                            .get("missingRequiredFields")
+                            .cloned()
+                            .unwrap_or_else(|| json!([])),
+                        "submitted": response.get("submitted").cloned().unwrap_or(json!(false)),
+                        "steps_advanced": response.get("stepsAdvanced").cloned().unwrap_or(json!(0)),
+                        "details": response.get("details").cloned().unwrap_or_else(|| json!({})),
+                        "result": response
+                    }),
+                    error: if success {
+                        None
+                    } else {
+                        Some(response_error.unwrap_or_else(|| {
+                            "Job autofill failed in browser context".to_string()
+                        }))
+                    },
+                    metadata: HashMap::from([("tab_id".to_string(), json!(tab_id))]),
                 })
             }
             "browser_navigate" => {
@@ -7073,6 +7360,79 @@ mod tests {
     }
 
     #[test]
+    fn test_build_job_autofill_profile_maps_aliases() {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("first_name".to_string(), json!("Siddhartha"));
+        args.insert("last_name".to_string(), json!("Tester"));
+        args.insert("email".to_string(), json!("sid@example.com"));
+        args.insert(
+            "linkedin_url".to_string(),
+            json!("https://linkedin.com/in/sid"),
+        );
+
+        let profile = ToolExecutor::build_job_autofill_profile(&args).expect("profile");
+
+        assert_eq!(
+            profile.get("firstName").and_then(Value::as_str),
+            Some("Siddhartha")
+        );
+        assert_eq!(
+            profile.get("lastName").and_then(Value::as_str),
+            Some("Tester")
+        );
+        assert_eq!(
+            profile.get("email").and_then(Value::as_str),
+            Some("sid@example.com")
+        );
+        assert_eq!(
+            profile.get("linkedinUrl").and_then(Value::as_str),
+            Some("https://linkedin.com/in/sid")
+        );
+    }
+
+    #[test]
+    fn test_build_job_autofill_profile_requires_data() {
+        let args: HashMap<String, Value> = HashMap::new();
+        let result = ToolExecutor::build_job_autofill_profile(&args);
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .expect("missing profile should fail")
+            .to_string()
+            .contains("Missing profile parameter"));
+    }
+
+    #[test]
+    fn test_build_job_autofill_options_maps_aliases() {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("auto_submit".to_string(), json!(true));
+        args.insert(
+            "allow_submit_with_missing_required".to_string(),
+            json!(false),
+        );
+        args.insert("delay_ms".to_string(), json!(250));
+        args.insert("max_submit_steps".to_string(), json!(4));
+
+        let options = ToolExecutor::build_job_autofill_options(&args);
+
+        assert_eq!(
+            options.get("autoSubmit").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            options
+                .get("allowSubmitWithMissingRequired")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(options.get("delayMs").and_then(Value::as_u64), Some(250));
+        assert_eq!(
+            options.get("maxSubmitSteps").and_then(Value::as_u64),
+            Some(4)
+        );
+    }
+
+    #[test]
     fn test_tool_call_parsing() {
         let tool_call = ToolCall {
             id: "test_123".to_string(),
@@ -7554,6 +7914,45 @@ mod tests {
             .execute_tool_call(&tool_call)
             .await
             .expect_err("browser tool should fail cleanly without app handle");
+        let message = err.to_string();
+        assert!(
+            message.contains("App handle not available for browser automation"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_browser_autofill_tool_is_routed_not_unknown() {
+        let tool_call = ToolCall {
+            id: "test_browser_autofill_job_application".to_string(),
+            name: "browser_autofill_job_application".to_string(),
+            arguments: serde_json::json!({
+                "profile": {
+                    "firstName": "Siddhartha",
+                    "lastName": "Tester",
+                    "email": "sid@example.com"
+                },
+                "options": {
+                    "autoSubmit": false
+                }
+            })
+            .to_string(),
+        };
+
+        let executor = ToolExecutor::new(create_registry_with_browser_tool(
+            "browser_autofill_job_application",
+            vec![ToolParameter {
+                name: "profile".to_string(),
+                parameter_type: ParameterType::Object,
+                required: true,
+                description: "Profile object".to_string(),
+                default: None,
+            }],
+        ));
+        let err = executor
+            .execute_tool_call(&tool_call)
+            .await
+            .expect_err("autofill browser tool should fail cleanly without app handle");
         let message = err.to_string();
         assert!(
             message.contains("App handle not available for browser automation"),
