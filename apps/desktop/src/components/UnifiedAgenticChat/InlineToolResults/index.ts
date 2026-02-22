@@ -77,7 +77,7 @@ const InlineScreenshot = React.lazy(() =>
 );
 
 // Reuse existing components for multiple tool types
-const InlineBrowserAutomation = InlineScreenshot; // Reuse screenshot for browser ops
+const InlineBrowserAutomation = InlineTerminalOutput; // Browser ops usually return structured/text output
 const InlineEmailOperation = InlineTerminalOutput; // Reuse terminal style for email
 const InlineCalendarOperation = InlineTerminalOutput; // Reuse terminal style for calendar
 const InlineCloudOperation = InlineTerminalOutput; // Reuse terminal style for cloud ops
@@ -85,7 +85,7 @@ const InlineMemoryOperation = InlineTerminalOutput; // Reuse terminal style for 
 const InlineScheduleOperation = InlineTerminalOutput; // Reuse terminal style for schedule
 const InlineProductivityOperation = InlineTerminalOutput; // Reuse terminal style for productivity
 const InlineGitOperation = InlineTerminalOutput; // Reuse terminal style for git
-const InlineUIControl = InlineScreenshot; // Reuse screenshot for UI control
+const InlineUIControl = InlineTerminalOutput; // UI click/type usually return status payloads
 const InlineCodeExecution = InlineTerminalOutput; // Reuse terminal for code execution
 const InlineImageAnalysis = InlineSearchResults; // Reuse search results style for image analysis
 
@@ -194,6 +194,7 @@ export const TOOL_RENDERERS: Record<
   browser_click: InlineBrowserAutomation,
   browser_type: InlineBrowserAutomation,
   browser_extract: InlineBrowserAutomation,
+  browser_autofill_job_application: InlineBrowserAutomation,
   browser_wait_for_selector: InlineBrowserAutomation,
   browser_get_text: InlineBrowserAutomation,
   browser_get_attribute: InlineBrowserAutomation,
@@ -317,9 +318,14 @@ export const TOOL_RENDERERS: Record<
   // ============================================
   screenshot: InlineScreenshot,
   computer_use_capture_screen: InlineScreenshot,
+  computer_use_preview: InlineScreenshot,
+  __server__computer_use_preview: InlineScreenshot,
   automation_screenshot: InlineScreenshot,
   capture_screen: InlineScreenshot,
   automation_ocr: InlineScreenshot,
+  computer_use_click: InlineUIControl,
+  computer_use_type: InlineUIControl,
+  computer_use_move_mouse: InlineUIControl,
 
   // ============================================
   // LLM REASONING
