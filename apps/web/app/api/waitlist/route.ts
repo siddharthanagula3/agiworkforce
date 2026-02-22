@@ -57,7 +57,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const { supabase, session } = await requireSession();
 
-  const csrfError = await requireCsrfToken(request, session.user.id);
+  const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'default');
