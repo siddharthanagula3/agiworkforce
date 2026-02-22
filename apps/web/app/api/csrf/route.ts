@@ -19,8 +19,9 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
       data: { session },
     } = await supabase.auth.getSession();
 
-    // Generate session ID - prefer user ID if authenticated, otherwise use cookie-based session
-    const sessionId = session?.user?.id || getSessionIdFromRequest(request);
+    // Use cookie-derived session binding so all endpoints that call requireCsrfToken(request)
+    // validate against the same session identifier.
+    const sessionId = getSessionIdFromRequest(request);
 
     // Generate CSRF token
     const token = generateCsrfToken(sessionId);
