@@ -1084,6 +1084,70 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "browser_autofill_job_application".to_string(),
+            name: "Autofill Job Application".to_string(),
+            description: "Autofill job application forms using a profile object (optimized for Greenhouse/Workday with generic fallback), with optional multi-step submit.".to_string(),
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::TextProcessing,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "profile".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: true,
+                    description: "Job profile data. Supports fields like firstName, lastName, fullName, email, phone, linkedinUrl, githubUrl, workAuthorization, requiresSponsorship, salaryExpectation, customAnswers, and files.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "options".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "Autofill options. Supports platform ('auto'|'greenhouse'|'workday'|'generic'), autoSubmit, allowSubmitWithMissingRequired, includeOptionalFields, delayMs, and maxSubmitSteps.".to_string(),
+                    default: Some(serde_json::json!({
+                        "platform": "auto",
+                        "autoSubmit": false,
+                        "allowSubmitWithMissingRequired": false
+                    })),
+                },
+                ToolParameter {
+                    name: "resume_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Optional local path to resume file. If provided, it is encoded and attached as profile.files.resumeDataUrl.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "cover_letter_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Optional local path to cover letter file. If provided, it is encoded and attached as profile.files.coverLetterDataUrl.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Autofill timeout in milliseconds (default: 120000, max: 300000).".to_string(),
+                    default: Some(serde_json::json!(120000)),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 15.0,
+                memory_mb: 150,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "code_execute".to_string(),
             name: "Execute Code".to_string(),
             description: "Execute code in various languages".to_string(),

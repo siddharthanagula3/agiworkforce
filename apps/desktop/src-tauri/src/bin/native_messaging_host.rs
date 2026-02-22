@@ -1,23 +1,72 @@
 use agiworkforce_desktop::integrations::native_messaging::host::NativeMessagingHost;
+use agiworkforce_desktop::integrations::native_messaging::manifest::install_manifests;
 use agiworkforce_desktop::integrations::native_messaging::NativeResponse;
 use agiworkforce_desktop::integrations::realtime::RealtimeEvent;
 use futures::{SinkExt, StreamExt};
+use std::path::PathBuf;
 use tokio::time::{timeout, Duration};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 
 const REALTIME_AUTH_TIMEOUT_MS: u64 = 4_000;
 
+fn parse_install_manifests_args() -> Option<Option<String>> {
+    let mut args = std::env::args().skip(1);
+    match args.next().as_deref() {
+        Some("--install-manifests") => Some(args.next()),
+        _ => None,
+    }
+}
+
 // Helper to find app data dir matching Tauri's logic
 #[cfg(target_os = "macos")]
-fn get_app_data_dir() -> Option<std::path::PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join("Library/Application Support/com.agiworkforce.desktop"))
+fn get_app_data_dir_candidates() -> Vec<PathBuf> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+
+    vec![
+        // Sandboxed release app path (preferred when running the notarized .app).
+        home.join(
+            "Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop",
+        ),
+        // Legacy/dev path used by unsandboxed runs.
+        home.join("Library/Application Support/com.agiworkforce.desktop"),
+    ]
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_app_data_dir() -> Option<std::path::PathBuf> {
-    dirs::data_local_dir().map(|p| p.join("com.agiworkforce.desktop"))
+fn get_app_data_dir_candidates() -> Vec<PathBuf> {
+    dirs::data_local_dir()
+        .map(|p| vec![p.join("com.agiworkforce.desktop")])
+        .unwrap_or_default()
+}
+
+fn read_realtime_token() -> Result<String, Box<dyn std::error::Error>> {
+    let mut attempted_paths = Vec::new();
+
+    for dir in get_app_data_dir_candidates() {
+        let token_path = dir.join(".ipc_token");
+        attempted_paths.push(token_path.display().to_string());
+
+        let token = match std::fs::read_to_string(&token_path) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        let trimmed = token.trim().to_string();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        return Ok(trimmed);
+    }
+
+    let msg = format!(
+        "Failed to read realtime auth token from any known path: {}",
+        attempted_paths.join(", ")
+    );
+    Err(std::io::Error::new(std::io::ErrorKind::NotFound, msg).into())
 }
 
 #[tokio::main]
@@ -30,36 +79,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting Native Messaging Host...");
 
+    if let Some(extension_id) = parse_install_manifests_args() {
+        tracing::info!(
+            "Running native host manifest installation helper mode (extension_id={:?})",
+            extension_id
+        );
+        let installed = install_manifests(extension_id.as_deref())?;
+        tracing::info!(
+            "Installed native messaging manifests at {} location(s)",
+            installed.len()
+        );
+        return Ok(());
+    }
+
     // Create host instance
     let (host, mut msg_rx, resp_tx) = NativeMessagingHost::new();
 
-    // Read auth token
-    let token = if let Some(dir) = get_app_data_dir() {
-        let token_path = dir.join(".ipc_token");
-        match std::fs::read_to_string(&token_path) {
-            Ok(t) => {
-                let trimmed = t.trim().to_string();
-                if trimmed.is_empty() {
-                    let msg = format!("Realtime auth token is empty at {}", token_path.display());
-                    tracing::error!("{}", msg);
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, msg).into());
-                }
-                trimmed
-            }
-            Err(e) => {
-                let msg = format!(
-                    "Failed to read realtime auth token at {}: {}",
-                    token_path.display(),
-                    e
-                );
-                tracing::error!("{}", msg);
-                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, msg).into());
-            }
+    // Read auth token (supports both sandboxed and unsandboxed app data locations).
+    let token = match read_realtime_token() {
+        Ok(token) => token,
+        Err(e) => {
+            tracing::error!("{}", e);
+            return Err(e);
         }
-    } else {
-        let msg = "Failed to determine app data directory for realtime auth token";
-        tracing::error!("{}", msg);
-        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, msg).into());
     };
 
     // Connect to the main app via WebSocket

@@ -149,7 +149,27 @@ pub async fn native_messaging_set_extension_id(
     state: State<'_, NativeMessagingStateWrapper>,
 ) -> Result<(), String> {
     tracing::info!("Setting extension ID: {}", extension_id);
-    *state.extension_id.write().await = Some(extension_id);
+    *state.extension_id.write().await = Some(extension_id.clone());
+
+    // Keep on-disk native messaging manifests aligned with the latest extension ID.
+    // Without this, allowed_origins can become stale and Chrome will reject host connections.
+    match install_manifests(Some(extension_id.as_str())) {
+        Ok(paths) => {
+            tracing::info!(
+                "Reinstalled native messaging manifests for extension {} at {} location(s)",
+                extension_id,
+                paths.len()
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Failed to reinstall native messaging manifests for extension {}: {}",
+                extension_id,
+                error
+            );
+        }
+    }
+
     Ok(())
 }
 

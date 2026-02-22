@@ -1492,6 +1492,9 @@ pub fn run() {
             crate::sys::commands::computer_use_zoom_region,
             crate::sys::commands::computer_use_zoom_at_point,
             crate::sys::commands::computer_use_suggest_zoom_level,
+            crate::sys::commands::continuous_job_runner_start,
+            crate::sys::commands::continuous_job_runner_stop,
+            crate::sys::commands::continuous_job_runner_status,
 
 
             crate::sys::commands::code_generate_edit,

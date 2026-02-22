@@ -26,7 +26,8 @@ export type NativeMessageType =
   | 'SYNC_PAGE_CONTEXT'
   | 'RUN_PAGE_ACTIONS'
   | 'CAPTURE_ELEMENT'
-  | 'GET_ELEMENT_INFO';
+  | 'GET_ELEMENT_INFO'
+  | 'AUTO_FILL_JOB_APPLICATION';
 
 // Base message structure
 export interface BaseMessage {
@@ -250,6 +251,71 @@ export interface SubmitFormResponse {
   error?: string;
 }
 
+// High-level job application autofill (platform-aware)
+export interface JobApplicationFiles {
+  resumeDataUrl?: string;
+  resumeFileName?: string;
+  coverLetterDataUrl?: string;
+  coverLetterFileName?: string;
+}
+
+export interface JobApplicationProfile {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  locationCity?: string;
+  locationState?: string;
+  locationCountry?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
+  websiteUrl?: string;
+  currentCompany?: string;
+  currentTitle?: string;
+  yearsOfExperience?: string;
+  workAuthorization?: string;
+  requiresSponsorship?: boolean | string;
+  salaryExpectation?: string;
+  resumeText?: string;
+  coverLetterText?: string;
+  customAnswers?: Record<string, string>;
+  files?: JobApplicationFiles;
+}
+
+export interface JobAutofillOptions {
+  platform?: 'auto' | 'greenhouse' | 'workday' | 'generic';
+  autoSubmit?: boolean;
+  allowSubmitWithMissingRequired?: boolean;
+  includeOptionalFields?: boolean;
+  delayMs?: number;
+  maxSubmitSteps?: number;
+}
+
+export interface AutoFillJobApplicationMessage extends BaseMessage {
+  type: 'AUTO_FILL_JOB_APPLICATION';
+  profile?: JobApplicationProfile;
+  options?: JobAutofillOptions;
+}
+
+export interface AutoFillJobApplicationResponse {
+  success: boolean;
+  platform?: 'greenhouse' | 'workday' | 'generic' | 'unknown';
+  filledCount?: number;
+  skippedCount?: number;
+  genericFlowStarted?: boolean;
+  missingRequiredFields?: string[];
+  submitted?: boolean;
+  stepsAdvanced?: number;
+  details?: {
+    filledFields: string[];
+    skippedFields: string[];
+    errors: string[];
+  };
+  error?: string;
+}
+
 // Connection status
 export interface ConnectionStatusMessage extends BaseMessage {
   type: 'GET_CONNECTION_STATUS';
@@ -352,7 +418,8 @@ export type ExtensionMessage =
   | SyncPageContextMessage
   | RunPageActionsMessage
   | CaptureElementMessage
-  | GetElementInfoMessage;
+  | GetElementInfoMessage
+  | AutoFillJobApplicationMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -372,7 +439,8 @@ export type ExtensionResponse =
   | ConnectionStatusResponse
   | TabReadyResponse
   | RunPageActionsResponse
-  | ElementInfoResponse;
+  | ElementInfoResponse
+  | AutoFillJobApplicationResponse;
 
 // Popup state
 export interface PopupState {

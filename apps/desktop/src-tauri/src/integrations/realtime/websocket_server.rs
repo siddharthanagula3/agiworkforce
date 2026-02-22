@@ -1,6 +1,7 @@
 use super::{PresenceManager, RealtimeEvent};
 use crate::automation::browser::advanced::Cookie;
 use crate::automation::browser::{AccessibilityAnalyzer, AdvancedBrowserOps, CdpClient};
+use crate::integrations::native_messaging::manifest::install_manifests;
 use crate::integrations::native_messaging::{ConnectionState, NativeMessage};
 use crate::sys::commands::BrowserStateWrapper;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
@@ -491,6 +492,14 @@ impl RealtimeServer {
             NativeMessage::Ping => Ok(json!({ "pong": true })),
 
             NativeMessage::Connect { extension_id } => {
+                if let Err(error) = install_manifests(Some(extension_id.as_str())) {
+                    tracing::warn!(
+                        "Failed to refresh native messaging manifests for extension {}: {}",
+                        extension_id,
+                        error
+                    );
+                }
+
                 if let Some(app) = app_handle {
                     if let Some(native_state) =
                         app.try_state::<crate::sys::commands::NativeMessagingStateWrapper>()
