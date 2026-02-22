@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 
 // Lazy load ArtifactPanel for code splitting
 const ArtifactPanel = lazy(() =>
-  import('../Artifacts/ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })),
+  import('@/components/Artifacts/ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })),
 );
 
 // Lazy load MediaLab for code splitting
