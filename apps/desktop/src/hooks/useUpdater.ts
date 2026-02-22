@@ -9,7 +9,7 @@ import {
 } from '../stores/updaterStore';
 
 // Package version - will be replaced by build process or read from package.json
-const CURRENT_VERSION_FALLBACK = '1.0.4';
+const CURRENT_VERSION_FALLBACK = '1.1.2';
 
 interface UpdateCheckResult {
   available: boolean;

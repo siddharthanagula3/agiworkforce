@@ -1,5 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
-import { Activity, AlertCircle, Cpu, HardDrive, Wifi } from 'lucide-react';
+import { Activity, AlertCircle, Cpu, HardDrive } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 export interface SystemResources {
@@ -27,6 +27,29 @@ interface ResourceGaugeProps {
   icon: React.FC<{ className?: string }>;
   color: string;
   compact?: boolean;
+}
+
+function getInvokeErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  if (typeof err === 'string') {
+    return err;
+  }
+
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string') {
+      return message;
+    }
+  }
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Failed to fetch resources';
+  }
 }
 
 const ResourceGauge: React.FC<ResourceGaugeProps> = ({
@@ -81,11 +104,6 @@ const ResourceGauge: React.FC<ResourceGaugeProps> = ({
             style={{ width: `${percentage}%` }}
           />
         </div>
-        {!compact && (
-          <div className="absolute -top-5 right-0 text-xs font-medium text-gray-600 dark:text-gray-400">
-            {percentage.toFixed(1)}%
-          </div>
-        )}
       </div>
 
       {compact && (
@@ -115,7 +133,7 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
         setError(null);
       } catch (err) {
         console.error('Failed to fetch system resources:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch resources');
+        setError(getInvokeErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -195,30 +213,6 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
           color="bg-blue-500"
           compact={compact}
         />
-
-        {}
-        <ResourceGauge
-          label="Network"
-          value={resources.networkUsageMbps}
-          max={100}
-          unit="Mbps"
-          icon={Wifi}
-          color="bg-green-500"
-          compact={compact}
-        />
-
-        {}
-        {resources.storageTotalMb > 0 && (
-          <ResourceGauge
-            label="Storage"
-            value={resources.storageUsageMb}
-            max={resources.storageTotalMb}
-            unit="MB"
-            icon={HardDrive}
-            color="bg-orange-500"
-            compact={compact}
-          />
-        )}
 
         {}
         {showTools && resources.availableTools.length > 0 && (

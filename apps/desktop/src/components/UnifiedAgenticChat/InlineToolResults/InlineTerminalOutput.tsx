@@ -13,6 +13,8 @@ export interface TerminalOutputData {
   exitCode?: number;
   success?: boolean;
   error?: string;
+  content?: string;
+  toolName?: string;
 }
 
 export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status }) => {
@@ -30,7 +32,9 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">Terminal command failed</p>
-            {errorData?.error && <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>}
+            {errorData?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>
+            )}
             {!errorData?.error && result?.error && (
               <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
             )}
@@ -48,20 +52,39 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
   }
 
   const { command = '', stdout = '', stderr = '', exitCode = 0, success = true, error } = data;
+  const toolName = typeof data.toolName === 'string' ? data.toolName : undefined;
+  const structuredContent =
+    typeof data.content === 'string' && data.content.trim().length > 0 ? data.content : '';
+  const fallbackJson =
+    !stdout && !stderr && !structuredContent
+      ? (() => {
+          const clone = { ...data } as Record<string, unknown>;
+          delete clone['command'];
+          delete clone['stdout'];
+          delete clone['stderr'];
+          if (Object.keys(clone).length === 0) return '';
+          try {
+            return JSON.stringify(clone, null, 2);
+          } catch {
+            return String(clone);
+          }
+        })()
+      : '';
+  const output = stdout || stderr || structuredContent || fallbackJson;
+  const displayCommand = command || toolName || 'tool';
 
   if (status === 'running') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-border/50">
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-          <span className="text-sm text-muted-foreground font-mono">{command}</span>
+          <span className="text-sm text-muted-foreground font-mono">{displayCommand}</span>
         </div>
       </div>
     );
   }
 
   const hasError = !success || error || (stderr && stderr.trim());
-  const output = stdout || stderr || '';
   const lines = output.split('\n');
   const preview = lines.slice(0, 3).join('\n');
   const hasMore = lines.length > 3;
@@ -72,7 +95,7 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
       <div className="flex items-center justify-between px-3 py-2 bg-surface-overlay/50 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
           <Terminal className="h-4 w-4 shrink-0 text-emerald-400" />
-          <span className="text-xs font-mono text-emerald-400 truncate">$ {command}</span>
+          <span className="text-xs font-mono text-emerald-400 truncate">$ {displayCommand}</span>
         </div>
 
         <div className="flex items-center gap-2">
