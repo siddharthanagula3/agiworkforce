@@ -380,7 +380,12 @@ fn map_period_stats_to_day_stats(period: &PeriodStats) -> DayStats {
         automations_run: period.total_automations_run,
         avg_quality_score: period.avg_time_saved_per_run,
         change_from_yesterday: 0.0, // Default, would need previous period data
-        top_employee: top_emp.map(|e| e.employee_name.clone()).unwrap_or_default(),
+        // Avoid writing a specific employee name into metrics/log-oriented payloads.
+        top_employee: if top_emp.is_some() {
+            "redacted".to_string()
+        } else {
+            String::new()
+        },
         top_employee_time_saved: top_emp.map(|e| e.total_time_saved_hours).unwrap_or(0.0),
     }
 }
