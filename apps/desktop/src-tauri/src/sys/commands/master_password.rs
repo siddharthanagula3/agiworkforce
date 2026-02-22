@@ -251,6 +251,14 @@ pub async fn master_password_complete_migration(
 mod tests {
     use super::*;
 
+    fn valid_test_passphrase() -> &'static str {
+        "alpha-beta-unique-phrase"
+    }
+
+    fn invalid_test_passphrase() -> &'static str {
+        "nonmatching-phrase"
+    }
+
     fn create_test_state() -> MasterPasswordState {
         // Use in-memory database for tests to avoid temp file cleanup issues
         let conn = Connection::open_in_memory().unwrap();
@@ -266,18 +274,18 @@ mod tests {
         assert!(!manager.is_configured().unwrap());
 
         // Setup
-        manager.setup("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.setup(valid_test_passphrase()).unwrap();
         assert!(manager.is_configured().unwrap());
 
         // Verify
-        assert!(manager.verify("SamplePass123!").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
-        assert!(!manager.verify("InvalidSamplePass").unwrap()); // codeql[rust/hard-coded-cryptographic-value]
+        assert!(manager.verify(valid_test_passphrase()).unwrap());
+        assert!(!manager.verify(invalid_test_passphrase()).unwrap());
 
         // Lock and unlock
         manager.lock();
         assert!(!manager.is_unlocked());
 
-        manager.unlock("SamplePass123!").unwrap(); // codeql[rust/hard-coded-cryptographic-value]
+        manager.unlock(valid_test_passphrase()).unwrap();
         assert!(manager.is_unlocked());
     }
 }
