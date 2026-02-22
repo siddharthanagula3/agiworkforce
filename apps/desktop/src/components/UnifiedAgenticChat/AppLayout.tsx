@@ -7,17 +7,13 @@ import { useArtifactStore } from '../../stores/artifactStore';
 import { resetInFlightChatState } from '../../lib/newChatReset';
 import { CustomInstructionsDialog } from '../CustomInstructions';
 import { FeedbackDialog } from '../Feedback';
+import { ArtifactPanel } from '../Artifacts/ArtifactPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
 import { toast } from 'sonner';
-
-// Lazy load ArtifactPanel for code splitting
-const ArtifactPanel = lazy(() =>
-  import('@/components/Artifacts/ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })),
-);
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
