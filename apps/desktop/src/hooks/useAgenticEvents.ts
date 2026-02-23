@@ -1321,6 +1321,9 @@ export function useAgenticEvents() {
         step: string;
         stepIndex: number;
         totalSteps: number;
+        tool?: string;
+        type?: string;
+        url?: string;
       }>('agent:step-started', (event) => {
         if (!isMountedRef.current) return;
         const { taskId, step, stepIndex, totalSteps } = event.payload;
@@ -1337,6 +1340,14 @@ export function useAgenticEvents() {
           description: step,
           status: 'running',
         });
+        // Dispatch browser activity indicator when a browser step starts
+        if (event.payload.tool === 'browser_navigate' || event.payload.type === 'browser') {
+          window.dispatchEvent(
+            new CustomEvent('agi:browser-active', {
+              detail: { active: true, url: event.payload.url ?? '' },
+            }),
+          );
+        }
       });
       push(unlistenStepStarted);
 
@@ -1400,6 +1411,10 @@ export function useAgenticEvents() {
           description: `Successfully completed ${stepsCompleted} steps`,
           status: 'success',
         });
+        // Clear browser activity indicator when task finishes
+        window.dispatchEvent(
+          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
+        );
       });
       push(unlistenTaskCompleted2);
 
@@ -1423,6 +1438,10 @@ export function useAgenticEvents() {
           status: 'failed',
           error: taskError,
         });
+        // Clear browser activity indicator when task fails
+        window.dispatchEvent(
+          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
+        );
       });
       push(unlistenTaskFailed2);
 
@@ -1480,8 +1499,28 @@ export function useAgenticEvents() {
           status: 'failed',
           error,
         });
+        // Clear any active browser indicator when agent task ends
+        window.dispatchEvent(
+          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
+        );
       });
       push(unlistenBgAgentFailed);
+
+      // automation:permission_required — show permissions dialog
+      const unlistenPermRequired = await listen<{
+        reason: string;
+        message: string;
+      }>('automation:permission_required', (event) => {
+        if (!isMountedRef.current) return;
+        // Emit a custom DOM event that the App can catch to show the modal
+        window.dispatchEvent(
+          new CustomEvent('agi:show-permissions-dialog', {
+            detail: event.payload,
+            bubbles: false,
+          }),
+        );
+      });
+      push(unlistenPermRequired);
 
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {
         if (!isMountedRef.current) return;

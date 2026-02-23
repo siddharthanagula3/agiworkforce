@@ -14,7 +14,7 @@ const WINDOW_MIN_HEIGHT: f64 = 700.0;
 const WINDOW_DOCK_MIN_WIDTH: f64 = 360.0;
 const WINDOW_DEFAULT_MAX_WIDTH: f64 = 480.0;
 const DOCK_THRESHOLD: f64 = 32.0;
-const DOCKING_ENABLED: bool = false;
+const DOCKING_ENABLED: bool = true;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +174,25 @@ pub fn apply_dock(
     })?;
 
     emit_state(window, app_state)?;
+    Ok(())
+}
+
+/// Dock the main window to the right edge to make room for the browser.
+///
+/// Called automatically after a successful `browser_navigate` command so the
+/// desktop app tiles to the right while the browser occupies the left half of
+/// the screen. Safe to call even when the window is already docked — it is a
+/// no-op if the window is already at `DockPosition::Right`.
+pub fn auto_tile_for_browser(app: &tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        let app_state = window
+            .state::<AppState>()
+            .clone();
+        // Only tile if not already docked right
+        if app_state.snapshot().dock != Some(DockPosition::Right) {
+            apply_dock(&window, &app_state, DockPosition::Right)?;
+        }
+    }
     Ok(())
 }
 

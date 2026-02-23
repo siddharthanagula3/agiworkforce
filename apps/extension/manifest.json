@@ -15,7 +15,8 @@
     "scripting",
     "nativeMessaging",
     "alarms",
-    "contextMenus"
+    "contextMenus",
+    "sidePanel"
   ],
   "optional_permissions": ["downloads", "bookmarks", "history"],
   "host_permissions": ["<all_urls>"],
@@ -64,6 +65,9 @@
       },
       "description": "Capture current page"
     }
+  },
+  "side_panel": {
+    "default_path": "src/side_panel.html"
   },
   "minimum_chrome_version": "105",
   "offline_enabled": false

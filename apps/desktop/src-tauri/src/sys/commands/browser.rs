@@ -313,6 +313,7 @@ pub async fn browser_list_tabs(
 
 #[command]
 pub async fn browser_navigate(
+    app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
     url: String,
     tab_id: Option<String>,
@@ -344,6 +345,12 @@ pub async fn browser_navigate(
 
     let client = state.get_cdp_client_for_tab(&target_tab_id).await?;
     client.navigate(&url).await.map_err(|e| e.to_string())?;
+
+    // Auto-tile the desktop app to the right so the browser has room on the left
+    if let Err(e) = crate::auto_tile_for_browser(&app) {
+        tracing::warn!("auto_tile_for_browser failed (non-fatal): {}", e);
+    }
+
     Ok(())
 }
 
