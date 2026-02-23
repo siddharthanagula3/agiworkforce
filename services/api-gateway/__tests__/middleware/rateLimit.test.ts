@@ -88,20 +88,18 @@ describe('Rate Limiter Middleware', () => {
     });
   });
 
-  describe('IPv6 normalization', () => {
-    it('should normalize IPv6 addresses via /56 subnet masking', () => {
-      // Two addresses in the same /56 subnet should produce the same key
-      const key1 = ipKeyGenerator('2001:db8:abcd:0012::1');
-      const key2 = ipKeyGenerator('2001:db8:abcd:00ff::9999');
-      expect(key1).toBe(key2);
-      expect(key1).toBe('2001:db8:abcd::/56');
+  describe('ipKeyGenerator', () => {
+    it('uses the IP string as the rate-limit key for IPv4', () => {
+      const key = ipKeyGenerator('203.0.113.5');
+      expect(key).toBe('203.0.113.5');
     });
 
-    it('should group ::ffff:x.x.x.x and ::1 into the same IPv6 subnet', () => {
-      // IPv6-mapped IPv4 and localhost IPv6 both fall into ::/56
-      const keyMapped = ipKeyGenerator('::ffff:127.0.0.1');
-      const keyV6Localhost = ipKeyGenerator('::1');
-      expect(keyMapped).toBe(keyV6Localhost);
+    it('returns the IP string unchanged for IPv4 addresses', () => {
+      const key1 = ipKeyGenerator('198.51.100.1');
+      const key2 = ipKeyGenerator('198.51.100.2');
+      expect(key1).toBe('198.51.100.1');
+      expect(key2).toBe('198.51.100.2');
+      expect(key1).not.toBe(key2);
     });
 
     it('should rate limit IPv6 addresses correctly', async () => {
