@@ -7,20 +7,24 @@ AGI Workforce is a comprehensive ecosystem for AI-driven workforce automation, f
 This is a **pnpm monorepo** with the following components:
 
 ### Applications (`apps/`)
+
 - **`apps/desktop`**: The main desktop application built with **Tauri v2** (Rust) and **React** (TypeScript). Uses **Tailwind CSS v4** for styling and **Vite** as the build tool.
 - **`apps/web`**: A web-based dashboard built with **Next.js** and **React**. Integrates with **Supabase** for authentication and data storage.
 - **`apps/extension`**: A browser extension for cross-platform agent capabilities.
 
 ### Services (`services/`)
+
 - **`services/api-gateway`**: An **Express**-based gateway serving as the primary entry point for mobile and external client integrations.
 - **`services/signaling-server`**: A **WebSocket** server for real-time signaling and P2P communication, built with Express and `ws`.
 
 ### Packages (`packages/`)
+
 - **`packages/types`**: Shared TypeScript type definitions across all applications and services.
 - **`packages/utils`**: Shared utility functions and common logic.
 
 ### Infrastructure & Others
-- **`supabase/`**: Database schema, migrations, and Supabase configuration.
+
+- **`apps/web/supabase/`**: Database schema, migrations, and Supabase configuration (lives inside the web app).
 - **`.minimax/`**: Specialized AI agent skills (e.g., PDF/Docx processing, browser automation).
 - **`docs/`**: API specifications (OpenAPI), architecture diagrams, and guides.
 
@@ -36,11 +40,13 @@ This is a **pnpm monorepo** with the following components:
 ## Building and Running
 
 ### Prerequisites
+
 - Node.js >= 22.12.0
 - pnpm >= 9.15.0
 - Rust (for desktop app)
 
 ### Root Commands
+
 ```bash
 pnpm install          # Install dependencies
 pnpm build            # Build all projects (except desktop)
@@ -51,6 +57,7 @@ pnpm format           # Run formatter
 ```
 
 ### Component Commands
+
 - **Desktop App**: `cd apps/desktop && pnpm dev`
 - **Web App**: `cd apps/web && pnpm dev`
 - **API Gateway**: `cd services/api-gateway && pnpm dev`

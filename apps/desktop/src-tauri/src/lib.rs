@@ -1592,6 +1592,10 @@ pub fn run() {
             crate::sys::commands::canvas::canvas_a2ui_execute,
             crate::sys::commands::canvas::canvas_add_text,
 
+            // System automation permissions (macOS Accessibility, Screen Recording)
+            crate::sys::commands::check_automation_permissions,
+            crate::sys::commands::request_automation_permission,
+
             // Notifications (OS-level desktop notifications)
             crate::sys::commands::notification_check_permission,
             crate::sys::commands::notification_request_permission,
@@ -1921,6 +1925,8 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::cancel_tool_confirmation,
             crate::sys::commands::tool_confirmation::update_allowed_directories,
             crate::sys::commands::tool_confirmation::get_allowed_directories,
+            crate::sys::commands::tool_confirmation::set_auto_approve_all,
+            crate::sys::commands::tool_confirmation::get_auto_approve_all,
 
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,
