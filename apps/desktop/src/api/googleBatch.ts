@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { toast } from 'sonner';
 
 // ========================================
 // Types
@@ -122,6 +123,19 @@ export interface GoogleApiErrorDetail {
 }
 
 // ========================================
+// Internal helpers
+// ========================================
+
+function handleNotImplemented(error: unknown): never {
+  const msg = typeof error === 'string' ? error : String(error);
+  if (msg.includes('NOT_IMPLEMENTED')) {
+    toast.error('Google Batch API is not yet available in this release.');
+    throw new Error('Google Batch API: NOT_IMPLEMENTED');
+  }
+  throw error;
+}
+
+// ========================================
 // Batch Job Management
 // ========================================
 
@@ -140,13 +154,17 @@ export interface CreateBatchJobOptions {
  * @returns BatchJob with job ID and initial state
  */
 export async function createBatchJob(options: CreateBatchJobOptions): Promise<BatchJob> {
-  return invoke('google_batch_create', {
-    requests: options.requests,
-    inputFilePath: options.inputFilePath,
-    model: options.model,
-    displayName: options.displayName,
-    outputType: options.outputType,
-  });
+  try {
+    return await invoke('google_batch_create', {
+      requests: options.requests,
+      inputFilePath: options.inputFilePath,
+      model: options.model,
+      displayName: options.displayName,
+      outputType: options.outputType,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 /**
@@ -156,7 +174,11 @@ export async function createBatchJob(options: CreateBatchJobOptions): Promise<Ba
  * @returns Updated BatchJob with current state
  */
 export async function getBatchJob(jobName: string): Promise<BatchJob> {
-  return invoke('google_batch_get', { jobName });
+  try {
+    return await invoke('google_batch_get', { jobName });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 export interface ListBatchJobsOptions {
@@ -174,11 +196,15 @@ export interface ListBatchJobsOptions {
 export async function listBatchJobs(
   options: ListBatchJobsOptions = {},
 ): Promise<ListBatchJobsResponse> {
-  return invoke('google_batch_list', {
-    pageSize: options.pageSize,
-    pageToken: options.pageToken,
-    filter: options.filter,
-  });
+  try {
+    return await invoke('google_batch_list', {
+      pageSize: options.pageSize,
+      pageToken: options.pageToken,
+      filter: options.filter,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 /**
@@ -188,7 +214,11 @@ export async function listBatchJobs(
  * @returns Updated BatchJob with CANCELLED state
  */
 export async function cancelBatchJob(jobName: string): Promise<BatchJob> {
-  return invoke('google_batch_cancel', { jobName });
+  try {
+    return await invoke('google_batch_cancel', { jobName });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 /**
@@ -197,7 +227,11 @@ export async function cancelBatchJob(jobName: string): Promise<BatchJob> {
  * @param jobName - Batch job name
  */
 export async function deleteBatchJob(jobName: string): Promise<void> {
-  return invoke('google_batch_delete', { jobName });
+  try {
+    return await invoke('google_batch_delete', { jobName });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 export interface GetBatchResultsOptions {
@@ -212,10 +246,14 @@ export interface GetBatchResultsOptions {
  * @returns BatchJob with results populated
  */
 export async function getBatchResults(options: GetBatchResultsOptions): Promise<BatchJob> {
-  return invoke('google_batch_get_results', {
-    jobName: options.jobName,
-    outputPath: options.outputPath,
-  });
+  try {
+    return await invoke('google_batch_get_results', {
+      jobName: options.jobName,
+      outputPath: options.outputPath,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 export interface WaitForCompletionOptions {
@@ -292,13 +330,17 @@ export interface CreateEmbeddingsBatchOptions {
 export async function createEmbeddingsBatch(
   options: CreateEmbeddingsBatchOptions,
 ): Promise<EmbeddingsBatchJob> {
-  return invoke('google_batch_create_embeddings', {
-    texts: options.texts,
-    inputFilePath: options.inputFilePath,
-    model: options.model || 'gemini-embedding-001',
-    taskType: options.taskType,
-    displayName: options.displayName,
-  });
+  try {
+    return await invoke('google_batch_create_embeddings', {
+      texts: options.texts,
+      inputFilePath: options.inputFilePath,
+      model: options.model || 'gemini-embedding-001',
+      taskType: options.taskType,
+      displayName: options.displayName,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 /**
@@ -308,7 +350,11 @@ export async function createEmbeddingsBatch(
  * @returns EmbeddingsBatchJob with current state
  */
 export async function getEmbeddingsBatch(jobName: string): Promise<EmbeddingsBatchJob> {
-  return invoke('google_batch_get_embeddings', { jobName });
+  try {
+    return await invoke('google_batch_get_embeddings', { jobName });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 // ========================================
@@ -328,11 +374,15 @@ export interface CreateImageBatchOptions {
  * @returns BatchJob with job ID
  */
 export async function createImageBatch(options: CreateImageBatchOptions): Promise<BatchJob> {
-  return invoke('google_batch_create_images', {
-    prompts: options.prompts,
-    model: options.model,
-    displayName: options.displayName,
-  });
+  try {
+    return await invoke('google_batch_create_images', {
+      prompts: options.prompts,
+      model: options.model,
+      displayName: options.displayName,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 // ========================================
@@ -361,12 +411,16 @@ export async function calculateBatchCost(
   outputTokens: number,
   cachedTokens: number = 0,
 ): Promise<number> {
-  return invoke('google_batch_calculate_cost', {
-    model,
-    inputTokens,
-    outputTokens,
-    cachedTokens,
-  });
+  try {
+    return await invoke('google_batch_calculate_cost', {
+      model,
+      inputTokens,
+      outputTokens,
+      cachedTokens,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 /**
@@ -376,10 +430,14 @@ export async function calculateBatchCost(
  * @param outputPath - File path
  */
 export async function createJsonlFile(requests: BatchRequest[], outputPath: string): Promise<void> {
-  return invoke('google_batch_create_jsonl', {
-    requests,
-    outputPath,
-  });
+  try {
+    return await invoke('google_batch_create_jsonl', {
+      requests,
+      outputPath,
+    });
+  } catch (error) {
+    return handleNotImplemented(error);
+  }
 }
 
 // ========================================
