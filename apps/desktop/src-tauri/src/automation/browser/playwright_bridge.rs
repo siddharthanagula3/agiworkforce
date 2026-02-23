@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tungstenite::connect;
 use tungstenite::Message;
@@ -327,13 +328,21 @@ impl PlaywrightBridge {
     ///
     /// Sends an HTTP GET to `http://127.0.0.1:<port>/json` and deserializes the
     /// response into a vector of `CdpTarget`.
+    #[allow(dead_code)]
     pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
         let port = self.config.ws_port;
         let url = format!("http://127.0.0.1:{}/json", port);
 
         tracing::debug!("Fetching CDP targets from {}", url);
 
-        let targets: Vec<CdpTarget> = reqwest::get(&url)
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
+
+        let targets: Vec<CdpTarget> = client
+            .get(&url)
+            .send()
             .await
             .map_err(|e| {
                 Error::Other(format!(
@@ -360,7 +369,9 @@ impl PlaywrightBridge {
     /// The connection is opened, one message is sent, responses are read until
     /// the one with the matching `id` is found, and then the socket is closed.
     /// Because `tungstenite` is synchronous, this is wrapped in
-    /// `tokio::task::spawn_blocking`.
+    /// `tokio::task::spawn_blocking`. A 30-second timeout prevents hanging if
+    /// Chrome stops responding.
+    #[allow(dead_code)]
     async fn send_cdp_command(
         &self,
         ws_url: &str,
@@ -377,6 +388,7 @@ impl PlaywrightBridge {
 
         let ws_url_owned = ws_url.to_string();
         let method_owned = method.to_string();
+        let method_for_timeout = method.to_string();
         let payload_str = serde_json::to_string(&payload)
             .map_err(|e| Error::Other(format!("Failed to serialize CDP command: {}", e)))?;
 
@@ -387,62 +399,68 @@ impl PlaywrightBridge {
             ws_url
         );
 
-        let result = tokio::task::spawn_blocking(move || -> std::result::Result<serde_json::Value, String> {
-            let url = Url::parse(&ws_url_owned)
-                .map_err(|e| format!("Invalid WebSocket URL '{}': {}", ws_url_owned, e))?;
+        let result = tokio::time::timeout(
+            Duration::from_secs(30),
+            tokio::task::spawn_blocking(move || -> std::result::Result<serde_json::Value, String> {
+                let url = Url::parse(&ws_url_owned)
+                    .map_err(|e| format!("Invalid WebSocket URL '{}': {}", ws_url_owned, e))?;
 
-            let (mut socket, _response) = connect(url)
-                .map_err(|e| format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e))?;
+                let (mut socket, _response) = connect(url)
+                    .map_err(|e| format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e))?;
 
-            socket
-                .send(Message::Text(payload_str))
-                .map_err(|e| format!("Failed to send CDP command '{}': {}", method_owned, e))?;
+                socket
+                    .send(Message::Text(payload_str))
+                    .map_err(|e| format!("Failed to send CDP command '{}': {}", method_owned, e))?;
 
-            // Read messages until we find the response with our command id.
-            loop {
-                let msg = socket
-                    .read()
-                    .map_err(|e| format!("Failed to read CDP response for '{}': {}", method_owned, e))?;
+                // Read messages until we find the response with our command id.
+                loop {
+                    let msg = socket
+                        .read()
+                        .map_err(|e| format!("Failed to read CDP response for '{}': {}", method_owned, e))?;
 
-                match msg {
-                    Message::Text(text) => {
-                        let parsed: serde_json::Value = serde_json::from_str(&text)
-                            .map_err(|e| format!("Failed to parse CDP response JSON: {}", e))?;
+                    match msg {
+                        Message::Text(text) => {
+                            let parsed: serde_json::Value = serde_json::from_str(&text)
+                                .map_err(|e| format!("Failed to parse CDP response JSON: {}", e))?;
 
-                        // Check if this response matches our command id.
-                        if let Some(resp_id) = parsed.get("id").and_then(|v| v.as_u64()) {
-                            if resp_id == cmd_id {
-                                // Check for CDP-level errors.
-                                if let Some(error_obj) = parsed.get("error") {
-                                    let error_msg = error_obj
-                                        .get("message")
-                                        .and_then(|m| m.as_str())
-                                        .unwrap_or("Unknown CDP error");
+                            // Check if this response matches our command id.
+                            if let Some(resp_id) = parsed.get("id").and_then(|v| v.as_u64()) {
+                                if resp_id == cmd_id {
+                                    // Check for CDP-level errors.
+                                    if let Some(error_obj) = parsed.get("error") {
+                                        let error_msg = error_obj
+                                            .get("message")
+                                            .and_then(|m| m.as_str())
+                                            .unwrap_or("Unknown CDP error");
+                                        let _ = socket.close(None);
+                                        return Err(format!(
+                                            "CDP error for '{}': {}",
+                                            method_owned, error_msg
+                                        ));
+                                    }
+
                                     let _ = socket.close(None);
-                                    return Err(format!(
-                                        "CDP error for '{}': {}",
-                                        method_owned, error_msg
-                                    ));
+                                    return Ok(parsed);
                                 }
-
-                                let _ = socket.close(None);
-                                return Ok(parsed);
                             }
+                            // Not our response (could be an event); keep reading.
                         }
-                        // Not our response (could be an event); keep reading.
+                        Message::Close(_) => {
+                            return Err(format!(
+                                "WebSocket closed before receiving response for '{}'",
+                                method_owned
+                            ));
+                        }
+                        // Binary, Ping, Pong, Frame — skip them.
+                        _ => {}
                     }
-                    Message::Close(_) => {
-                        return Err(format!(
-                            "WebSocket closed before receiving response for '{}'",
-                            method_owned
-                        ));
-                    }
-                    // Binary, Ping, Pong, Frame — skip them.
-                    _ => {}
                 }
-            }
-        })
+            })
+        )
         .await
+        .map_err(|_| Error::Other(format!(
+            "CDP command '{}' timed out after 30s", method_for_timeout
+        )))?
         .map_err(|e| Error::Other(format!("CDP command task panicked: {}", e)))?
         .map_err(Error::Other)?;
 
@@ -450,6 +468,7 @@ impl PlaywrightBridge {
     }
 
     /// Helper: find the first `"page"` target with a valid `webSocketDebuggerUrl`.
+    #[allow(dead_code)]
     async fn first_page_ws_url(&self) -> Result<String> {
         let targets = self.list_targets().await?;
         for target in &targets {
@@ -467,6 +486,7 @@ impl PlaywrightBridge {
     /// Navigate the first available browser page to the given URL.
     ///
     /// Uses the CDP `Page.navigate` method.
+    #[allow(dead_code)]
     pub async fn navigate(&self, url: &str) -> Result<()> {
         let ws_url = self.first_page_ws_url().await?;
         let params = serde_json::json!({ "url": url });
@@ -492,6 +512,7 @@ impl PlaywrightBridge {
     /// Click on the element matching the given CSS selector on the first available page.
     ///
     /// Uses `Runtime.evaluate` to execute `document.querySelector(selector).click()`.
+    #[allow(dead_code)]
     pub async fn click_selector(&self, selector: &str) -> Result<()> {
         let js = format!(
             r#"(function() {{
@@ -521,6 +542,7 @@ impl PlaywrightBridge {
     /// Type text into the element matching the given CSS selector on the first available page.
     ///
     /// Focuses the element, sets its value, and dispatches `input` and `change` events.
+    #[allow(dead_code)]
     pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
         let js = format!(
             r#"(function() {{
@@ -554,6 +576,7 @@ impl PlaywrightBridge {
     /// Take a screenshot of the first available page and return it as a base64-encoded PNG string.
     ///
     /// Uses the CDP `Page.captureScreenshot` method.
+    #[allow(dead_code)]
     pub async fn screenshot_base64(&self) -> Result<String> {
         let ws_url = self.first_page_ws_url().await?;
         let params = serde_json::json!({ "format": "png" });
@@ -580,6 +603,7 @@ impl PlaywrightBridge {
     /// Execute a JavaScript expression in the first available page and return the result.
     ///
     /// Uses the CDP `Runtime.evaluate` method with `returnByValue: true`.
+    #[allow(dead_code)]
     pub async fn evaluate_js(&self, expression: &str) -> Result<serde_json::Value> {
         let ws_url = self.first_page_ws_url().await?;
         let params = serde_json::json!({
@@ -606,17 +630,23 @@ impl PlaywrightBridge {
     }
 }
 
-/// Escape single quotes, backslashes, and newlines in a string intended for
-/// insertion into a JavaScript single-quoted string literal.
+/// Escape special characters in a string intended for insertion into a
+/// JavaScript single-quoted string literal.
+#[allow(dead_code)]
 fn escape_js_string(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('\'', "\\'")
         .replace('\n', "\\n")
         .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('\0', "\\0")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
 }
 
 /// Check the CDP `Runtime.evaluate` response for an exception description and
 /// return an error if one is present.
+#[allow(dead_code)]
 fn check_runtime_exception(response: &serde_json::Value, context: &str) -> Result<()> {
     if let Some(result) = response.get("result") {
         if let Some(exception) = result.get("exceptionDetails") {

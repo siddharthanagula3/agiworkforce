@@ -1472,6 +1472,10 @@ export function useAgenticEvents() {
           description: summaryPath ? `${goal}\n\nReport saved: ${summaryPath}` : goal,
           status: 'success',
         });
+        // Clear any active browser indicator when agent task ends
+        window.dispatchEvent(
+          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
+        );
       });
       push(unlistenBgAgentCompleted);
 

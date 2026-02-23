@@ -192,6 +192,8 @@ pub fn auto_tile_for_browser(app: &tauri::AppHandle) -> Result<()> {
         if app_state.snapshot().dock != Some(DockPosition::Right) {
             apply_dock(&window, &app_state, DockPosition::Right)?;
         }
+    } else {
+        tracing::debug!("auto_tile_for_browser: main window not found, skipping");
     }
     Ok(())
 }
