@@ -45,6 +45,7 @@ describe('settingsStore', () => {
         promptCompletionEnabled: true,
         alwaysUseAgentMode: false,
         compactMode: true,
+        autoApproveTools: false,
       },
       allowedDirectories: [],
       loading: false,
