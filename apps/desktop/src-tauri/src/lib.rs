@@ -665,6 +665,15 @@ pub fn run() {
 
             Ok(())
         })
+        // COMMAND REGISTRATION POLICY:
+        // All Tauri IPC commands MUST be registered in this generate_handler![...] block.
+        // The macro-based registry.rs file has been DELETED as it was a dead alternative
+        // that caused missed registrations. This flat list is the SOLE source of truth.
+        // When adding a new command:
+        //   1. Implement the fn with #[tauri::command] in sys/commands/<domain>.rs
+        //   2. pub use it from sys/commands/mod.rs
+        //   3. Add crate::sys::commands::<fn_name>, here
+        //   4. Run: bash apps/desktop/check-wiring.sh
         .invoke_handler(tauri::generate_handler![
 
 
@@ -839,6 +848,7 @@ pub fn run() {
             crate::sys::commands::email_fetch_inbox,
             crate::sys::commands::email_mark_read,
             crate::sys::commands::email_delete,
+            crate::sys::commands::email_move_message,
             crate::sys::commands::email_download_attachment,
             crate::sys::commands::email_send,
             crate::sys::commands::contact_create,
@@ -1270,6 +1280,11 @@ pub fn run() {
             crate::sys::commands::terminal_ai_explain_error,
             crate::sys::commands::terminal_smart_commit,
             crate::sys::commands::terminal_ai_suggest_improvements,
+            crate::sys::commands::terminal_clear_history,
+            crate::sys::commands::terminal_set_env,
+            crate::sys::commands::terminal_get_env,
+            crate::sys::commands::terminal_list_env,
+            crate::sys::commands::terminal_unset_env,
 
 
             crate::sys::commands::api_request,

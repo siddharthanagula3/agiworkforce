@@ -23,15 +23,25 @@ fn get_macos_user_home_for_native_host_paths() -> Result<PathBuf> {
     let env_home = std::env::var("HOME").ok().map(PathBuf::from);
     let dirs_home = dirs::home_dir();
 
-    for candidate in [env_home, dirs_home].into_iter().flatten() {
+    // Try env HOME first
+    if let Some(candidate) = env_home {
         let normalized = normalize_macos_home_for_native_host_paths(&candidate);
-
         tracing::debug!(
-            "Resolved macOS user home for native-host paths: candidate={:?} normalized={:?}",
+            "Resolved macOS user home (env): candidate={:?} normalized={:?}",
             candidate,
             normalized
         );
+        return Ok(normalized);
+    }
 
+    // Fallback to dirs::home_dir()
+    if let Some(candidate) = dirs_home {
+        let normalized = normalize_macos_home_for_native_host_paths(&candidate);
+        tracing::debug!(
+            "Resolved macOS user home (dirs): candidate={:?} normalized={:?}",
+            candidate,
+            normalized
+        );
         return Ok(normalized);
     }
 
@@ -553,5 +563,48 @@ mod tests {
         );
         let normalized = normalize_macos_home_for_native_host_paths(&sandbox_home);
         assert_eq!(normalized, PathBuf::from("/Users/siddhartha"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_get_macos_user_home_prefers_env_home() {
+        // When HOME env var is set, it should be used as the candidate
+        let original = std::env::var("HOME").ok();
+        std::env::set_var("HOME", "/Users/testuser");
+
+        let result = get_macos_user_home_for_native_host_paths();
+        assert!(result.is_ok(), "Should resolve home when HOME env is set");
+        assert_eq!(result.unwrap(), PathBuf::from("/Users/testuser"));
+
+        // Restore original
+        match original {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_get_macos_user_home_falls_back_to_dirs() {
+        // When HOME env var is unset, dirs::home_dir() should be used as fallback
+        let original = std::env::var("HOME").ok();
+        std::env::remove_var("HOME");
+
+        let result = get_macos_user_home_for_native_host_paths();
+        // dirs::home_dir() may or may not return Some depending on the system,
+        // but the important thing is that the function does NOT panic and
+        // the fallback path is reachable (no never_loop).
+        // On most macOS systems dirs::home_dir() will still return Some.
+        if dirs::home_dir().is_some() {
+            assert!(result.is_ok(), "Should fall back to dirs::home_dir()");
+        } else {
+            assert!(result.is_err(), "Should error when no home dir available");
+        }
+
+        // Restore original
+        match original {
+            Some(val) => std::env::set_var("HOME", val),
+            None => {}
+        }
     }
 }
