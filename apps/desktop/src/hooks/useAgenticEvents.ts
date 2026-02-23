@@ -1,4 +1,5 @@
 import { invoke, listen, UnlistenFn } from '../lib/tauri-mock';
+import { EVENTS } from '../constants/event-names';
 import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
 import { isTauri } from '../lib/tauri-mock';
@@ -1447,7 +1448,7 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalDenied);
 
-      const unlistenGoalProgress = await listen<GoalProgressEvent>('agi:goal_progress', (event) => {
+      const unlistenGoalProgress = await listen<GoalProgressEvent>(EVENTS.AGI_GOAL_PROGRESS, (event) => {
         if (!isMountedRef.current) return;
         const { goalId, progress, currentStep } = event.payload;
 

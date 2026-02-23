@@ -13,7 +13,7 @@
  * - Health checks: Moderate limits (100/min) for monitoring
  */
 
-import rateLimit, { type Options } from 'express-rate-limit';
+import rateLimit, { type Options, ipKeyGenerator } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
 import { logger } from '../lib/logger';
 
@@ -89,8 +89,9 @@ function keyGenerator(req: Request): string {
   }
 
   // Fall back to IP address for unauthenticated requests
-  // Use req.ip for IPv4/IPv6 handling
-  return `ip:${req.ip || 'unknown'}`;
+  // Use ipKeyGenerator to normalize IPv6 addresses (e.g. ::ffff:127.0.0.1 -> 127.0.0.1)
+  const ip = req.ip || 'unknown';
+  return `ip:${ipKeyGenerator(ip)}`;
 }
 
 /**
