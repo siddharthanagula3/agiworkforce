@@ -49,9 +49,9 @@ pub mod ui;
 pub use data::state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use ui::tray::build_system_tray;
 pub use ui::window::{
-    apply_dock, close_floating_window, create_floating_window, hide_window, initialize_window,
-    is_floating_window_visible, set_always_on_top, set_pinned, show_window, toggle_floating_window,
-    undock, DockPreviewEvent, DockState,
+    apply_dock, auto_tile_for_browser, close_floating_window, create_floating_window, hide_window,
+    initialize_window, is_floating_window_visible, set_always_on_top, set_pinned, show_window,
+    toggle_floating_window, undock, DockPreviewEvent, DockState,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

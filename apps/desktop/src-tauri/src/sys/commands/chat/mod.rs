@@ -1912,6 +1912,33 @@ pub async fn chat_send_message(
         }
     }
 
+    // Inject browser page context from the extension if available
+    if let Ok(guard) = crate::sys::commands::extension::LATEST_PAGE_CONTEXT.lock() {
+        if let Some(ref page_ctx) = *guard {
+            let mut browser_context = format!(
+                "## Browser Context\n\nURL: {}\nTitle: {}",
+                page_ctx.url, page_ctx.title
+            );
+            if let Some(ref selected) = page_ctx.selected_text {
+                let trimmed = selected.trim();
+                if !trimmed.is_empty() {
+                    browser_context.push_str(&format!("\nSelected text: {}", trimmed));
+                }
+            }
+            llm_messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: browser_context,
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            });
+            debug!(
+                "[Chat] Added browser page context: {} ({})",
+                page_ctx.title, page_ctx.url
+            );
+        }
+    }
+
     // Process attachments for multimodal content if present
     let mut multimodal_parts: Option<Vec<ContentPart>> =
         if let Some(ref attachments) = request.attachments {
@@ -2425,6 +2452,13 @@ pub async fn chat_send_message(
                                         "success": false,
                                         "error": error_msg,
                                         "duration_ms": start_time.elapsed().as_millis() as u64
+                                    }),
+                                );
+                                let _ = app_handle_clone.emit(
+                                    "automation:permission_required",
+                                    serde_json::json!({
+                                        "reason": "agent_mode",
+                                        "message": "Grant Accessibility, Screen Recording, and Input Monitoring permissions to use Agent mode."
                                     }),
                                 );
                                 let _ = app_handle_clone.emit(
@@ -3873,8 +3907,19 @@ Please confirm the tool permissions or try a different approach.",
         let orchestrator_arc = match orchestrator_arc {
             Some(orch) => orch,
             None => {
-                let automation = AutomationService::new()
-                    .map_err(|e| format!("Automation service unavailable: {}", e))?;
+                let automation = match AutomationService::new() {
+                    Ok(service) => service,
+                    Err(e) => {
+                        let _ = app_handle.emit(
+                            "automation:permission_required",
+                            serde_json::json!({
+                                "reason": "agent_mode",
+                                "message": "Grant Accessibility, Screen Recording, and Input Monitoring permissions to use Agent mode."
+                            }),
+                        );
+                        return Err(format!("Automation service unavailable: {}", e));
+                    }
+                };
                 let orchestrator = AgentOrchestrator::new(
                     4,
                     AGIConfig::default(),

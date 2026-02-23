@@ -1,12 +1,29 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tungstenite::connect;
+use tungstenite::Message;
 use url::Url;
 
 use crate::sys::error::{Error, Result};
+
+/// Represents a Chrome DevTools Protocol target (browser page/tab).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CdpTarget {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub target_type: String,
+    pub url: String,
+    pub title: String,
+    #[serde(rename = "webSocketDebuggerUrl")]
+    pub ws_debugger_url: Option<String>,
+}
+
+/// Atomic counter for generating unique CDP command IDs.
+static CDP_COMMAND_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -301,6 +318,321 @@ impl PlaywrightBridge {
             }
         }
     }
+
+    // ---------------------------------------------------------------
+    // Chrome DevTools Protocol (CDP) commands
+    // ---------------------------------------------------------------
+
+    /// Fetch the list of available CDP targets (pages/tabs) from the running Chrome instance.
+    ///
+    /// Sends an HTTP GET to `http://127.0.0.1:<port>/json` and deserializes the
+    /// response into a vector of `CdpTarget`.
+    pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
+        let port = self.config.ws_port;
+        let url = format!("http://127.0.0.1:{}/json", port);
+
+        tracing::debug!("Fetching CDP targets from {}", url);
+
+        let targets: Vec<CdpTarget> = reqwest::get(&url)
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to connect to Chrome DevTools at {}. Is Chrome running with --remote-debugging-port={}? Error: {}",
+                    url, port, e
+                ))
+            })?
+            .json()
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to parse CDP targets response: {}",
+                    e
+                ))
+            })?;
+
+        tracing::debug!("Found {} CDP targets", targets.len());
+        Ok(targets)
+    }
+
+    /// Open a WebSocket to the given CDP target URL, send a single JSON-RPC
+    /// command, and return the response.
+    ///
+    /// The connection is opened, one message is sent, responses are read until
+    /// the one with the matching `id` is found, and then the socket is closed.
+    /// Because `tungstenite` is synchronous, this is wrapped in
+    /// `tokio::task::spawn_blocking`.
+    async fn send_cdp_command(
+        &self,
+        ws_url: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let cmd_id = CDP_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
+
+        let payload = serde_json::json!({
+            "id": cmd_id,
+            "method": method,
+            "params": params,
+        });
+
+        let ws_url_owned = ws_url.to_string();
+        let method_owned = method.to_string();
+        let payload_str = serde_json::to_string(&payload)
+            .map_err(|e| Error::Other(format!("Failed to serialize CDP command: {}", e)))?;
+
+        tracing::debug!(
+            "Sending CDP command id={} method={} to {}",
+            cmd_id,
+            method,
+            ws_url
+        );
+
+        let result = tokio::task::spawn_blocking(move || -> std::result::Result<serde_json::Value, String> {
+            let url = Url::parse(&ws_url_owned)
+                .map_err(|e| format!("Invalid WebSocket URL '{}': {}", ws_url_owned, e))?;
+
+            let (mut socket, _response) = connect(url)
+                .map_err(|e| format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e))?;
+
+            socket
+                .send(Message::Text(payload_str))
+                .map_err(|e| format!("Failed to send CDP command '{}': {}", method_owned, e))?;
+
+            // Read messages until we find the response with our command id.
+            loop {
+                let msg = socket
+                    .read()
+                    .map_err(|e| format!("Failed to read CDP response for '{}': {}", method_owned, e))?;
+
+                match msg {
+                    Message::Text(text) => {
+                        let parsed: serde_json::Value = serde_json::from_str(&text)
+                            .map_err(|e| format!("Failed to parse CDP response JSON: {}", e))?;
+
+                        // Check if this response matches our command id.
+                        if let Some(resp_id) = parsed.get("id").and_then(|v| v.as_u64()) {
+                            if resp_id == cmd_id {
+                                // Check for CDP-level errors.
+                                if let Some(error_obj) = parsed.get("error") {
+                                    let error_msg = error_obj
+                                        .get("message")
+                                        .and_then(|m| m.as_str())
+                                        .unwrap_or("Unknown CDP error");
+                                    let _ = socket.close(None);
+                                    return Err(format!(
+                                        "CDP error for '{}': {}",
+                                        method_owned, error_msg
+                                    ));
+                                }
+
+                                let _ = socket.close(None);
+                                return Ok(parsed);
+                            }
+                        }
+                        // Not our response (could be an event); keep reading.
+                    }
+                    Message::Close(_) => {
+                        return Err(format!(
+                            "WebSocket closed before receiving response for '{}'",
+                            method_owned
+                        ));
+                    }
+                    // Binary, Ping, Pong, Frame — skip them.
+                    _ => {}
+                }
+            }
+        })
+        .await
+        .map_err(|e| Error::Other(format!("CDP command task panicked: {}", e)))?
+        .map_err(Error::Other)?;
+
+        Ok(result)
+    }
+
+    /// Helper: find the first `"page"` target with a valid `webSocketDebuggerUrl`.
+    async fn first_page_ws_url(&self) -> Result<String> {
+        let targets = self.list_targets().await?;
+        for target in &targets {
+            if target.target_type == "page" {
+                if let Some(ref ws_url) = target.ws_debugger_url {
+                    return Ok(ws_url.clone());
+                }
+            }
+        }
+        Err(Error::Other(
+            "No browser pages available. Launch a browser first.".to_string(),
+        ))
+    }
+
+    /// Navigate the first available browser page to the given URL.
+    ///
+    /// Uses the CDP `Page.navigate` method.
+    pub async fn navigate(&self, url: &str) -> Result<()> {
+        let ws_url = self.first_page_ws_url().await?;
+        let params = serde_json::json!({ "url": url });
+
+        tracing::info!("CDP navigate to '{}'", url);
+        let response = self.send_cdp_command(&ws_url, "Page.navigate", params).await?;
+
+        // Check if navigation returned an error message in the result.
+        if let Some(result) = response.get("result") {
+            if let Some(error_text) = result.get("errorText").and_then(|v| v.as_str()) {
+                if !error_text.is_empty() {
+                    return Err(Error::Other(format!(
+                        "Navigation to '{}' failed: {}",
+                        url, error_text
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Click on the element matching the given CSS selector on the first available page.
+    ///
+    /// Uses `Runtime.evaluate` to execute `document.querySelector(selector).click()`.
+    pub async fn click_selector(&self, selector: &str) -> Result<()> {
+        let js = format!(
+            r#"(function() {{
+                var el = document.querySelector('{}');
+                if (!el) throw new Error('Element not found: {}');
+                el.click();
+                return true;
+            }})()"#,
+            escape_js_string(selector),
+            escape_js_string(selector),
+        );
+
+        tracing::info!("CDP click_selector '{}'", selector);
+        let ws_url = self.first_page_ws_url().await?;
+        let params = serde_json::json!({
+            "expression": js,
+            "returnByValue": true,
+        });
+        let response = self
+            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
+            .await?;
+
+        check_runtime_exception(&response, "click_selector")?;
+        Ok(())
+    }
+
+    /// Type text into the element matching the given CSS selector on the first available page.
+    ///
+    /// Focuses the element, sets its value, and dispatches `input` and `change` events.
+    pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
+        let js = format!(
+            r#"(function() {{
+                var el = document.querySelector('{}');
+                if (!el) throw new Error('Element not found: {}');
+                el.focus();
+                el.value = '{}';
+                el.dispatchEvent(new Event('input', {{bubbles: true}}));
+                el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                return true;
+            }})()"#,
+            escape_js_string(selector),
+            escape_js_string(selector),
+            escape_js_string(text),
+        );
+
+        tracing::info!("CDP type_text into '{}'", selector);
+        let ws_url = self.first_page_ws_url().await?;
+        let params = serde_json::json!({
+            "expression": js,
+            "returnByValue": true,
+        });
+        let response = self
+            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
+            .await?;
+
+        check_runtime_exception(&response, "type_text")?;
+        Ok(())
+    }
+
+    /// Take a screenshot of the first available page and return it as a base64-encoded PNG string.
+    ///
+    /// Uses the CDP `Page.captureScreenshot` method.
+    pub async fn screenshot_base64(&self) -> Result<String> {
+        let ws_url = self.first_page_ws_url().await?;
+        let params = serde_json::json!({ "format": "png" });
+
+        tracing::info!("CDP screenshot_base64");
+        let response = self
+            .send_cdp_command(&ws_url, "Page.captureScreenshot", params)
+            .await?;
+
+        let data = response
+            .get("result")
+            .and_then(|r| r.get("data"))
+            .and_then(|d| d.as_str())
+            .ok_or_else(|| {
+                Error::Other(
+                    "Page.captureScreenshot did not return expected 'result.data' field"
+                        .to_string(),
+                )
+            })?;
+
+        Ok(data.to_string())
+    }
+
+    /// Execute a JavaScript expression in the first available page and return the result.
+    ///
+    /// Uses the CDP `Runtime.evaluate` method with `returnByValue: true`.
+    pub async fn evaluate_js(&self, expression: &str) -> Result<serde_json::Value> {
+        let ws_url = self.first_page_ws_url().await?;
+        let params = serde_json::json!({
+            "expression": expression,
+            "returnByValue": true,
+        });
+
+        tracing::info!("CDP evaluate_js");
+        let response = self
+            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
+            .await?;
+
+        check_runtime_exception(&response, "evaluate_js")?;
+
+        // Extract the actual result value from the CDP response envelope.
+        let result_value = response
+            .get("result")
+            .and_then(|r| r.get("result"))
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+
+        Ok(result_value)
+    }
+}
+
+/// Escape single quotes, backslashes, and newlines in a string intended for
+/// insertion into a JavaScript single-quoted string literal.
+fn escape_js_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+/// Check the CDP `Runtime.evaluate` response for an exception description and
+/// return an error if one is present.
+fn check_runtime_exception(response: &serde_json::Value, context: &str) -> Result<()> {
+    if let Some(result) = response.get("result") {
+        if let Some(exception) = result.get("exceptionDetails") {
+            let desc = exception
+                .get("exception")
+                .and_then(|ex| ex.get("description"))
+                .and_then(|d| d.as_str())
+                .or_else(|| exception.get("text").and_then(|t| t.as_str()))
+                .unwrap_or("Unknown JavaScript exception");
+            return Err(Error::Other(format!(
+                "JavaScript exception in {}: {}",
+                context, desc
+            )));
+        }
+    }
+    Ok(())
 }
 
 impl Drop for PlaywrightBridge {

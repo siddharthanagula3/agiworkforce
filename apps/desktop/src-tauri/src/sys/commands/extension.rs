@@ -5,6 +5,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::sync::Mutex;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::State;
@@ -20,6 +21,10 @@ pub struct PageContext {
     pub tab_id: u32,
     pub timestamp: u64,
 }
+
+/// Global storage for the latest page context received from the browser extension.
+/// Read by chat/mod.rs when building the LLM system prompt.
+pub static LATEST_PAGE_CONTEXT: Mutex<Option<PageContext>> = Mutex::new(None);
 
 /// Response to page context submission
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +130,11 @@ pub(crate) async fn process_page_context_event(
             actions: None,
             error: Some("Missing required fields (url, title)".to_string()),
         });
+    }
+
+    // Store the latest page context so chat can inject it into the LLM system prompt
+    if let Ok(mut guard) = LATEST_PAGE_CONTEXT.lock() {
+        *guard = Some(context.clone());
     }
 
     // Limit HTML size for in-memory analysis/event payloads
