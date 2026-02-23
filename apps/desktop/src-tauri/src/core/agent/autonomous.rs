@@ -302,6 +302,35 @@ impl AutonomousAgent {
             .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
             .retain(|id| id != &task_id);
 
+        // BUG-05 fix: evict old terminal tasks to prevent unbounded task_queue growth.
+        // Keep the 50 most-recently completed/failed tasks for status queries; anything
+        // beyond that is evicted oldest-first.
+        {
+            const MAX_TERMINAL_TASKS: usize = 50;
+            let mut queue = self
+                .task_queue
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let terminal_count = queue
+                .iter()
+                .filter(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_)))
+                .count();
+            if terminal_count > MAX_TERMINAL_TASKS {
+                let to_remove = terminal_count - MAX_TERMINAL_TASKS;
+                let mut removed = 0;
+                queue.retain(|t| {
+                    if removed < to_remove
+                        && matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_))
+                    {
+                        removed += 1;
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+        }
+
         tracing::info!(
             "[Agent] Task {} completed with status: {:?}",
             task_id,
