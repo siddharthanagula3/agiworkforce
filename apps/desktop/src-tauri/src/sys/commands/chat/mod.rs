@@ -1602,17 +1602,21 @@ pub async fn chat_send_message(
         _ => RoutingStrategy::Auto, // Default to Auto (maps to AutoBalanced)
     };
 
-    // TODO: Billing lock held for entire send — consider refactoring to release earlier
-    let _billing_guard = _billing_state.0.lock().await;
+    // BUG-11 fix: acquire billing lock only long enough to read plan tier, then release
+    // before any streaming work begins to avoid blocking other concurrent requests.
     #[cfg(feature = "billing")]
-    let plan_tier = if let Ok(service) = _billing_guard.stripe_service() {
-        if let Ok(Some(sub)) = service.get_primary_subscription() {
-            sub.plan_name.to_lowercase()
+    let plan_tier = {
+        let _billing_guard = _billing_state.0.lock().await;
+        if let Ok(service) = _billing_guard.stripe_service() {
+            if let Ok(Some(sub)) = service.get_primary_subscription() {
+                sub.plan_name.to_lowercase()
+            } else {
+                "free".to_string()
+            }
         } else {
             "free".to_string()
         }
-    } else {
-        "free".to_string()
+        // _billing_guard dropped here, before streaming starts
     };
 
     #[cfg(not(feature = "billing"))]

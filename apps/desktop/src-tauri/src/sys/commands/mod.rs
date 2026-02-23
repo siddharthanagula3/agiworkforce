@@ -89,6 +89,7 @@ pub mod terminal;
 pub mod thinking;
 
 pub mod swarm; // Added in Phase 26
+pub mod system_permissions;
 pub mod tool_confirmation;
 pub mod tray;
 pub mod tutorials;
@@ -190,6 +191,7 @@ pub use shortcuts::*;
 pub use skills::*;
 pub use subscription::*;
 pub use swarm::*; // Added in Phase 26
+pub use system_permissions::*;
 pub use task_persistence::*;
 pub use teams::*;
 pub use templates::*;
