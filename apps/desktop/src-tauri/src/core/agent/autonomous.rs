@@ -163,7 +163,51 @@ impl AutonomousAgent {
         Ok(task_id)
     }
 
-    async fn process_task_queue(&self) -> Result<()> {
+    /// Convenience method for background agents: plans and executes a goal
+    /// synchronously (blocks until complete or fails). Returns a human-readable
+    /// completion message.
+    ///
+    /// This combines submit_task + process_task_queue polling into a single call.
+    /// Uses auto_approve=true since background agents run unattended.
+    pub async fn run_goal(&self, goal: String) -> Result<String> {
+        let task_id = self.submit_task(goal, Some(true)).await?;
+
+        let timeout = std::time::Duration::from_secs(86400); // 24h max
+        let start = std::time::Instant::now();
+
+        loop {
+            if start.elapsed() > timeout {
+                return Err(anyhow!("run_goal timed out after 24 hours"));
+            }
+
+            // Process one cycle of the task queue
+            self.process_task_queue().await?;
+
+            // Check if our task is done
+            if let Some(task) = self.get_task_status(&task_id)? {
+                match &task.status {
+                    TaskStatus::Completed => {
+                        return Ok(format!("Task completed: {}", task.description));
+                    }
+                    TaskStatus::Failed(err) => {
+                        return Err(anyhow!("Task failed: {}", err));
+                    }
+                    TaskStatus::Cancelled => {
+                        return Err(anyhow!("Task was cancelled"));
+                    }
+                    _ => {
+                        // Still running, continue loop
+                    }
+                }
+            } else {
+                return Err(anyhow!("Task {} disappeared from queue", task_id));
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+
+    pub(crate) async fn process_task_queue(&self) -> Result<()> {
         {
             let running = self
                 .running_tasks
@@ -327,7 +371,7 @@ impl AutonomousAgent {
         Ok(())
     }
 
-    async fn execute_task(&self, task_id: String) -> Result<()> {
+    pub async fn execute_task(&self, task_id: String) -> Result<()> {
         let mut task = {
             let mut queue = self
                 .task_queue

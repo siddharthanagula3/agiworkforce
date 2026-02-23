@@ -1426,6 +1426,63 @@ export function useAgenticEvents() {
       });
       push(unlistenTaskFailed2);
 
+      // ──────────────────────────────────────────────────────────────────────
+      // Background Agent long-run completion events (overnight / 10+ hr runs)
+      // ──────────────────────────────────────────────────────────────────────
+
+      const unlistenBgAgentCompleted = await listen<{
+        agentId: string;
+        goal: string;
+        summaryPath: string;
+      }>('background_agent:completed', async (event) => {
+        if (!isMountedRef.current) return;
+        const { agentId, goal, summaryPath } = event.payload;
+        try {
+          const { sendNotification } = await import('@tauri-apps/plugin-notification');
+          await sendNotification({
+            title: 'AGI Workforce — Task Completed',
+            body: goal.length > 120 ? goal.slice(0, 117) + '...' : goal,
+          });
+        } catch {
+          // Notification plugin unavailable (e.g. browser/test env) — silently skip
+        }
+        upsertActionLogEntry({
+          id: agentId,
+          type: 'plan',
+          title: 'Background task completed',
+          description: summaryPath ? `${goal}\n\nReport saved: ${summaryPath}` : goal,
+          status: 'success',
+        });
+      });
+      push(unlistenBgAgentCompleted);
+
+      const unlistenBgAgentFailed = await listen<{
+        agentId: string;
+        goal: string;
+        error: string;
+      }>('background_agent:failed', async (event) => {
+        if (!isMountedRef.current) return;
+        const { agentId, goal: _goal, error } = event.payload;
+        try {
+          const { sendNotification } = await import('@tauri-apps/plugin-notification');
+          await sendNotification({
+            title: 'AGI Workforce — Task Failed',
+            body: error.length > 120 ? error.slice(0, 117) + '...' : error,
+          });
+        } catch {
+          // Notification plugin unavailable (e.g. browser/test env) — silently skip
+        }
+        upsertActionLogEntry({
+          id: agentId,
+          type: 'plan',
+          title: 'Background task failed',
+          description: error,
+          status: 'failed',
+          error,
+        });
+      });
+      push(unlistenBgAgentFailed);
+
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {
         if (!isMountedRef.current) return;
         const existingTasks = useUnifiedChatStore.getState().backgroundTasks;

@@ -36,11 +36,16 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use uuid::Uuid;
 
+use crate::automation::AutomationService;
+use crate::core::agent::autonomous::AutonomousAgent;
+use crate::core::agent::AgentConfig;
+use crate::core::llm::LLMRouter;
+
 /// Maximum number of concurrent background agents allowed.
 pub const MAX_BACKGROUND_AGENTS: usize = 8;
 
-/// Default timeout for background agent execution (5 minutes).
-pub const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 300;
+/// Default timeout for background agent execution (24 hours).
+pub const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 86400;
 
 /// Status of a background agent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -336,17 +341,27 @@ pub struct BackgroundAgentManager {
     app_handle: Option<AppHandle>,
     /// Queue of agents waiting to run.
     queue: Arc<RwLock<Vec<String>>>,
+    /// LLM router for the autonomous agent (None if not yet available).
+    router: Option<Arc<RwLock<LLMRouter>>>,
+    /// Automation service for the autonomous agent (None if not yet available).
+    automation: Option<Arc<AutomationService>>,
 }
 
 impl BackgroundAgentManager {
     /// Create a new background agent manager.
-    pub fn new(db_conn: Arc<std::sync::Mutex<Connection>>) -> Self {
+    pub fn new(
+        db_conn: Arc<std::sync::Mutex<Connection>>,
+        router: Option<Arc<RwLock<LLMRouter>>>,
+        automation: Option<Arc<AutomationService>>,
+    ) -> Self {
         Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
             handles: Arc::new(Mutex::new(HashMap::new())),
             db_conn,
             app_handle: None,
             queue: Arc::new(RwLock::new(Vec::new())),
+            router,
+            automation,
         }
     }
 
@@ -774,6 +789,8 @@ impl BackgroundAgentManager {
         let db_conn = Arc::clone(&self.db_conn);
         let app_handle = self.app_handle.clone();
         let timeout_secs = agent.timeout_secs;
+        let router = self.router.clone();
+        let automation = self.automation.clone();
 
         tokio::spawn(async move {
             execute_background_agent(
@@ -784,6 +801,8 @@ impl BackgroundAgentManager {
                 db_conn,
                 app_handle,
                 timeout_secs,
+                router,
+                automation,
             )
             .await
         });
@@ -1048,10 +1067,11 @@ impl BackgroundAgentManager {
     }
 }
 
-/// Execute a background agent.
+/// Execute a background agent using the real `AutonomousAgent` LLM+tool loop.
 ///
 /// This function runs in a separate task and handles the actual execution
 /// of the agent's goal, responding to commands (pause, cancel, etc.).
+/// It prevents OS sleep for the duration of the run via `SleepPrevention`.
 async fn execute_background_agent(
     agent_id: String,
     agent: BackgroundAgent,
@@ -1060,149 +1080,209 @@ async fn execute_background_agent(
     db_conn: Arc<std::sync::Mutex<Connection>>,
     app_handle: Option<AppHandle>,
     timeout_secs: u64,
+    router: Option<Arc<RwLock<LLMRouter>>>,
+    automation: Option<Arc<AutomationService>>,
 ) {
     tracing::info!(
-        "[BackgroundAgent] Starting execution for agent {}: {}",
+        "[BackgroundAgent] Starting real execution for agent {}: {}",
         agent_id,
         agent.goal
     );
 
-    let timeout = Duration::from_secs(timeout_secs);
-    let start_time = std::time::Instant::now();
+    // Prevent OS sleep while this agent runs
+    let _sleep_guard = crate::sys::power::SleepPrevention::enable();
 
-    // Simulated execution loop - in production, this would integrate with AGI Core
-    // For now, we simulate progress updates
-    let mut step = 0;
-    let total_steps = 10; // Estimated steps
-
-    loop {
-        // Check for commands
-        if let Ok(cmd) = command_rx.try_recv() {
-            match cmd {
-                AgentCommand::Pause => {
-                    tracing::info!("[BackgroundAgent] Agent {} paused", agent_id);
-                    return; // Exit the execution loop
+    // Build AutonomousAgent if router + automation are available
+    let autonomous = match (router, automation) {
+        (Some(r), Some(a)) => {
+            let config = AgentConfig {
+                auto_approve: true,
+                ..Default::default()
+            };
+            match AutonomousAgent::new(config, a, r) {
+                Ok(mut ag) => {
+                    if let Some(ref handle) = app_handle {
+                        ag.set_app_handle(handle.clone());
+                    }
+                    ag
                 }
-                AgentCommand::Cancel => {
-                    tracing::info!("[BackgroundAgent] Agent {} cancelled", agent_id);
+                Err(e) => {
+                    tracing::error!(
+                        "[BackgroundAgent] Failed to create AutonomousAgent: {}",
+                        e
+                    );
+                    let mut agents_lock = agents.write().await;
+                    if let Some(a) = agents_lock.get_mut(&agent_id) {
+                        a.fail(format!("Failed to initialize agent: {e}"));
+                        let _ = persist_agent_to_db(&db_conn, a);
+                    }
                     return;
-                }
-                AgentCommand::TakeOver => {
-                    tracing::info!("[BackgroundAgent] Agent {} taken over", agent_id);
-                    return;
-                }
-                AgentCommand::Resume => {
-                    // Continue execution
                 }
             }
         }
-
-        // Check timeout
-        if start_time.elapsed() > timeout {
-            let error = format!("Agent timed out after {} seconds", timeout_secs);
-            tracing::warn!("[BackgroundAgent] Agent {} timed out", agent_id);
-
-            // Update agent status
-            {
-                let mut agents_lock = agents.write().await;
-                if let Some(agent) = agents_lock.get_mut(&agent_id) {
-                    agent.fail(error.clone());
-                    let _ = persist_agent_to_db(&db_conn, agent);
-                }
+        _ => {
+            tracing::warn!(
+                "[BackgroundAgent] No router/automation available for agent {}; \
+                 cannot execute real tasks.",
+                agent_id
+            );
+            let mut agents_lock = agents.write().await;
+            if let Some(a) = agents_lock.get_mut(&agent_id) {
+                a.fail("No LLM router or automation service available".to_string());
+                let _ = persist_agent_to_db(&db_conn, a);
             }
-
-            // Send failure notification
-            if let Some(ref app) = app_handle {
-                let _ = app.emit(
-                    "background_agent:failed",
-                    serde_json::json!({
-                        "agentId": agent_id,
-                        "message": error,
-                    }),
-                );
-            }
-
             return;
         }
-
-        // Update progress
-        step += 1;
-        {
-            let mut agents_lock = agents.write().await;
-            if let Some(agent) = agents_lock.get_mut(&agent_id) {
-                agent.update_progress(
-                    step,
-                    total_steps,
-                    format!("Processing step {} of {}", step, total_steps),
-                );
-                let _ = persist_agent_to_db(&db_conn, agent);
-            }
-        }
-
-        // Emit progress event
-        if let Some(ref app) = app_handle {
-            let _ = app.emit(
-                "background_agent:progress",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "step": step,
-                    "totalSteps": total_steps,
-                }),
-            );
-        }
-
-        // Simulate work
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        // Check if done (simulated completion)
-        if step >= total_steps {
-            break;
-        }
-    }
-
-    // Agent completed successfully
-    let summary = AgentSummary {
-        description: format!("Successfully completed: {}", agent.goal),
-        files_changed: Vec::new(),
-        actions_taken: vec!["Analyzed task".to_string(), "Executed plan".to_string()],
-        warnings: Vec::new(),
-        goal_achieved: true,
     };
 
+    // Mark Running
     {
         let mut agents_lock = agents.write().await;
-        if let Some(agent) = agents_lock.get_mut(&agent_id) {
-            agent.complete(summary.clone());
-            let _ = persist_agent_to_db(&db_conn, agent);
+        if let Some(a) = agents_lock.get_mut(&agent_id) {
+            a.started_at = Some(Utc::now());
+            a.status = BackgroundAgentStatus::Running;
+            let _ = persist_agent_to_db(&db_conn, a);
         }
     }
 
-    // Send completion notification
+    // Notify frontend: agent started
     if let Some(ref app) = app_handle {
-        use tauri_plugin_notification::NotificationExt;
-
-        let title = "Background Task Completed";
-        let body = truncate_string(&summary.description, 150);
-
-        if let Err(e) = app.notification().builder().title(title).body(body).show() {
-            tracing::warn!(
-                "[BackgroundAgent] Failed to show completion notification: {}",
-                e
-            );
-        }
-
         let _ = app.emit(
-            "background_agent:completed",
-            serde_json::json!({
-                "agentId": agent_id,
-            }),
+            "background_agent:started",
+            serde_json::json!({ "agentId": agent_id }),
         );
     }
 
+    // Run with timeout and command cancellation
+    let timeout_duration = Duration::from_secs(if timeout_secs == 0 {
+        86400 // fallback: 24h if zero
+    } else {
+        timeout_secs
+    });
+
+    let goal = agent.goal.clone();
+    let result: Result<String, anyhow::Error> = tokio::select! {
+        r = autonomous.run_goal(goal.clone()) => r,
+        _ = async {
+            loop {
+                match command_rx.recv().await {
+                    Some(AgentCommand::Cancel) | Some(AgentCommand::TakeOver) | None => break,
+                    Some(AgentCommand::Pause) => break,
+                    Some(AgentCommand::Resume) => continue,
+                }
+            }
+        } => Err(anyhow::anyhow!("Cancelled by command")),
+        _ = tokio::time::sleep(timeout_duration) => {
+            Err(anyhow::anyhow!("Agent timed out after {} seconds", timeout_secs))
+        },
+    };
+
+    // Write markdown summary file
+    let summary_path = write_agent_summary(&agent_id, &goal, &result);
+
+    // Update final status and emit completion event
+    {
+        let mut agents_lock = agents.write().await;
+        if let Some(a) = agents_lock.get_mut(&agent_id) {
+            match &result {
+                Ok(_) => {
+                    a.status = BackgroundAgentStatus::Completed;
+                    a.completed_at = Some(Utc::now());
+                    a.summary = Some(AgentSummary {
+                        description: format!("Successfully completed: {}", goal),
+                        files_changed: summary_path
+                            .as_deref()
+                            .map(|p| vec![p.to_string()])
+                            .unwrap_or_default(),
+                        actions_taken: vec![format!("Completed goal: {}", goal)],
+                        warnings: Vec::new(),
+                        goal_achieved: true,
+                    });
+                }
+                Err(e) => {
+                    a.fail(e.to_string());
+                }
+            }
+            let _ = persist_agent_to_db(&db_conn, a);
+        }
+    }
+
+    // Emit completion or failure event to frontend
+    if let Some(ref app) = app_handle {
+        if result.is_ok() {
+            let _ = app.emit(
+                "background_agent:completed",
+                serde_json::json!({
+                    "agentId": agent_id,
+                    "goal": goal,
+                    "summaryPath": summary_path,
+                }),
+            );
+        } else {
+            let _ = app.emit(
+                "background_agent:failed",
+                serde_json::json!({
+                    "agentId": agent_id,
+                    "goal": goal,
+                    "error": result.as_ref().err().map(|e| e.to_string()).unwrap_or_default(),
+                }),
+            );
+        }
+    }
+
     tracing::info!(
-        "[BackgroundAgent] Agent {} completed successfully",
-        agent_id
+        "[BackgroundAgent] Agent {} finished: {}",
+        agent_id,
+        if result.is_ok() { "success" } else { "failed" }
     );
+    // _sleep_guard drops here -> OS sleep re-enabled
+}
+
+/// Write a markdown summary file to the user's Desktop.
+/// Returns the file path if successful.
+fn write_agent_summary(
+    agent_id: &str,
+    goal: &str,
+    result: &Result<String, anyhow::Error>,
+) -> Option<String> {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()?;
+    let date = Utc::now().format("%Y-%m-%d").to_string();
+    let short_id = &agent_id[..agent_id.len().min(8)];
+    let filename = format!("agi-run-{}-{}.md", date, short_id);
+    let path = std::path::PathBuf::from(&home)
+        .join("Desktop")
+        .join(&filename);
+
+    let status_str = match result {
+        Ok(_) => "Completed".to_string(),
+        Err(e) => format!("Failed: {}", e),
+    };
+
+    let content = format!(
+        "# AGI Workforce Run Report\n\n\
+         **Goal:** {}\n\n\
+         **Finished:** {}\n\n\
+         **Status:** {}\n",
+        goal,
+        Utc::now().to_rfc3339(),
+        status_str,
+    );
+
+    match std::fs::write(&path, content) {
+        Ok(()) => {
+            tracing::info!(
+                "[BackgroundAgent] Summary written to {}",
+                path.display()
+            );
+            Some(path.to_string_lossy().to_string())
+        }
+        Err(e) => {
+            tracing::warn!("[BackgroundAgent] Failed to write summary: {}", e);
+            None
+        }
+    }
 }
 
 /// Helper function to persist an agent to the database.
@@ -1302,7 +1382,7 @@ mod tests {
         )
         .unwrap();
 
-        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)))
+        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)), None, None)
     }
 
     #[test]
