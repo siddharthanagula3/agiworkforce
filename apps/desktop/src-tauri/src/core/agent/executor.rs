@@ -370,7 +370,17 @@ impl TaskExecutor {
     }
 
     fn check_blocked_prefix(path: &std::path::Path) -> Result<()> {
+        #[cfg(not(target_os = "windows"))]
         const BLOCKED: &[&str] = &["/etc", "/proc", "/sys", "/dev", "/boot", "/root"];
+
+        #[cfg(target_os = "windows")]
+        const BLOCKED: &[&str] = &[
+            "C:\\Windows",
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
+            "C:\\ProgramData",
+            "C:\\Users\\Default",
+        ];
         for prefix in BLOCKED {
             if path.starts_with(prefix) {
                 return Err(anyhow::anyhow!(
