@@ -2,13 +2,29 @@ use super::*;
 use crate::automation::AutomationService;
 use crate::core::llm::LLMRouter;
 use anyhow::{anyhow, Result};
+use dashmap::DashMap;
+use once_cell::sync::Lazy;
+use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tauri::Emitter;
+use tokio::sync::{oneshot, RwLock};
 use tokio::time::sleep;
 
 const MAX_SELF_HEAL_RETRIES: usize = 3;
 const MAX_PENDING_TASKS: usize = 500;
+const MAX_REPLAN_COUNT: usize = 2;
+/// Timeout for waiting on user approval before the task is automatically failed.
+const APPROVAL_TIMEOUT_SECS: u64 = 300;
+
+/// Global registry of pending task approvals.
+///
+/// When the autonomous agent suspends a task awaiting user approval, it inserts
+/// a `oneshot::Sender<bool>` here keyed by task ID. The `resolve_task_approval`
+/// Tauri command looks up the sender and delivers the user's decision, waking
+/// the suspended task.
+pub static PENDING_TASK_APPROVALS: Lazy<DashMap<String, oneshot::Sender<bool>>> =
+    Lazy::new(DashMap::new);
 
 pub struct AutonomousAgent {
     config: AgentConfig,
@@ -21,6 +37,7 @@ pub struct AutonomousAgent {
     task_queue: Arc<Mutex<Vec<Task>>>,
     running_tasks: Arc<Mutex<Vec<String>>>,
     stop_signal: Arc<Mutex<bool>>,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl AutonomousAgent {
@@ -45,7 +62,13 @@ impl AutonomousAgent {
             task_queue: Arc::new(Mutex::new(Vec::new())),
             running_tasks: Arc::new(Mutex::new(Vec::new())),
             stop_signal: Arc::new(Mutex::new(false)),
+            app_handle: None,
         })
+    }
+
+    /// Set the Tauri AppHandle so the agent can emit events to the frontend.
+    pub fn set_app_handle(&mut self, handle: tauri::AppHandle) {
+        self.app_handle = Some(handle);
     }
 
     pub async fn start(&self) -> Result<()> {
@@ -111,6 +134,7 @@ impl AutonomousAgent {
             current_step: 0,
             max_retries: self.config.max_retries,
             retry_count: 0,
+            replan_count: 0,
             requires_approval: !auto_approve,
             auto_approve,
         };
@@ -176,15 +200,113 @@ impl AutonomousAgent {
 
             if let Some(task) = task_clone {
                 if !self.approval.should_approve(&task).await? {
-                    tracing::info!("[Agent] Task {} requires approval", task_id);
+                    tracing::info!(
+                        "[Agent] Task {} requires approval, suspending until user responds",
+                        task_id
+                    );
 
-                    let mut queue = self
-                        .task_queue
-                        .lock()
-                        .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
-                    if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                        t.status = TaskStatus::WaitingApproval;
+                    // Create a oneshot channel so the Tauri command
+                    // `resolve_task_approval` can wake us up.
+                    let (tx, rx) = oneshot::channel::<bool>();
+                    PENDING_TASK_APPROVALS.insert(task_id.clone(), tx);
+
+                    {
+                        let mut queue = self
+                            .task_queue
+                            .lock()
+                            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+                        if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
+                            t.status = TaskStatus::WaitingApproval;
+                        }
                     }
+
+                    // Emit an event so the frontend knows a task needs approval.
+                    if let Some(ref handle) = self.app_handle {
+                        let _ = handle.emit(
+                            "agent:task_approval_required",
+                            json!({
+                                "task_id": task_id,
+                                "description": task.description,
+                            }),
+                        );
+                    }
+
+                    // Spawn a background future that awaits the user decision
+                    // (with timeout), then resumes or fails the task.
+                    let agent_clone = self.clone_for_task()?;
+                    let approval_task_id = task_id.clone();
+                    self.running_tasks
+                        .lock()
+                        .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
+                        .push(task_id);
+
+                    tokio::spawn(async move {
+                        let approved = match tokio::time::timeout(
+                            Duration::from_secs(APPROVAL_TIMEOUT_SECS),
+                            rx,
+                        )
+                        .await
+                        {
+                            Ok(Ok(v)) => v,
+                            Ok(Err(_)) => {
+                                tracing::warn!(
+                                    "[Agent] Approval channel dropped for task {}",
+                                    approval_task_id
+                                );
+                                false
+                            }
+                            Err(_) => {
+                                PENDING_TASK_APPROVALS.remove(&approval_task_id);
+                                tracing::warn!(
+                                    "[Agent] Approval timeout ({}s) for task {}",
+                                    APPROVAL_TIMEOUT_SECS,
+                                    approval_task_id
+                                );
+                                false
+                            }
+                        };
+
+                        if approved {
+                            tracing::info!(
+                                "[Agent] Task {} approved, resuming execution",
+                                approval_task_id
+                            );
+                            if let Ok(mut queue) = agent_clone.task_queue.lock() {
+                                if let Some(t) =
+                                    queue.iter_mut().find(|t| t.id == approval_task_id)
+                                {
+                                    t.status = TaskStatus::Planning;
+                                }
+                            }
+                            if let Err(e) =
+                                agent_clone.execute_task(approval_task_id.clone()).await
+                            {
+                                tracing::error!(
+                                    "[Agent] Task {} failed after approval: {}",
+                                    approval_task_id,
+                                    e
+                                );
+                            }
+                        } else {
+                            tracing::info!(
+                                "[Agent] Task {} rejected or timed out",
+                                approval_task_id
+                            );
+                            if let Ok(mut queue) = agent_clone.task_queue.lock() {
+                                if let Some(t) =
+                                    queue.iter_mut().find(|t| t.id == approval_task_id)
+                                {
+                                    t.status = TaskStatus::Failed(
+                                        "Task approval denied or timed out".to_string(),
+                                    );
+                                }
+                            }
+                            if let Ok(mut running) = agent_clone.running_tasks.lock() {
+                                running.retain(|id| id != &approval_task_id);
+                            }
+                        }
+                    });
+
                     return Ok(());
                 }
             }
@@ -221,9 +343,25 @@ impl AutonomousAgent {
         task.status = TaskStatus::Executing;
         tracing::info!("[Agent] Executing task {}: {}", task_id, task.description);
 
-        for (index, step) in task.steps.iter().enumerate() {
-            task.current_step = index;
+        // Track completed step summaries for replanning context
+        let mut completed_summaries: Vec<String> = Vec::new();
+
+        let mut step_index = 0usize;
+        while step_index < task.steps.len() {
+            let step = task.steps[step_index].clone();
+            let total_steps = task.steps.len();
+            task.current_step = step_index;
             task.updated_at = std::time::Instant::now();
+
+            // BUG-02 fix: emit step-started event to frontend
+            if let Some(ref handle) = self.app_handle {
+                handle.emit("agent:step-started", json!({
+                    "taskId": task.id,
+                    "step": step.description,
+                    "stepIndex": step_index,
+                    "totalSteps": total_steps
+                })).ok();
+            }
 
             {
                 let mut queue = self
@@ -236,9 +374,10 @@ impl AutonomousAgent {
             }
 
             let mut attempt = 0usize;
+            let mut step_succeeded = false;
             loop {
                 attempt += 1;
-                let step_result = self.executor.execute_step(step, &self.vision).await;
+                let step_result = self.executor.execute_step(&step, &self.vision).await;
 
                 match step_result {
                     Ok(result) if result.success => {
@@ -247,16 +386,85 @@ impl AutonomousAgent {
                             step.id,
                             result.result.as_deref().unwrap_or("OK")
                         );
+                        // BUG-02 fix: emit step-completed event to frontend
+                        if let Some(ref handle) = self.app_handle {
+                            handle.emit("agent:step-completed", json!({
+                                "taskId": task.id,
+                                "step": step.description,
+                                "result": result.result.as_deref().unwrap_or(""),
+                                "stepIndex": step_index
+                            })).ok();
+                        }
+                        completed_summaries.push(format!(
+                            "{}: {}",
+                            step.id, step.description
+                        ));
+                        step_succeeded = true;
                         break;
                     }
                     Ok(result) => {
+                        let error_msg = result
+                            .error
+                            .as_deref()
+                            .unwrap_or("Unknown error")
+                            .to_string();
+                        let will_retry = task.retry_count < task.max_retries
+                            && attempt <= MAX_SELF_HEAL_RETRIES;
                         tracing::warn!(
                             "[Agent] Step {} failed: {}",
                             step.id,
-                            result.error.as_deref().unwrap_or("Unknown error")
+                            error_msg
                         );
-                        if task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES {
+                        // BUG-02 fix: emit step-failed event to frontend
+                        if let Some(ref handle) = self.app_handle {
+                            handle.emit("agent:step-failed", json!({
+                                "taskId": task.id,
+                                "step": step.description,
+                                "error": error_msg,
+                                "attempt": attempt,
+                                "retrying": will_retry
+                            })).ok();
+                        }
+                        if will_retry {
                             task.retry_count += 1;
+
+                            // BUG-01 fix: On the 2nd retry attempt, ask the LLM
+                            // to replan instead of blindly retrying the same step.
+                            if attempt == 2 && task.replan_count < MAX_REPLAN_COUNT {
+                                match self
+                                    .replan_on_failure(
+                                        &step.description,
+                                        &error_msg,
+                                        &completed_summaries,
+                                        &task.description,
+                                    )
+                                    .await
+                                {
+                                    Ok(new_steps) => {
+                                        tracing::info!(
+                                            "[Agent] Replan succeeded ({} new steps, replan {}/{})",
+                                            new_steps.len(),
+                                            task.replan_count + 1,
+                                            MAX_REPLAN_COUNT
+                                        );
+                                        task.steps.truncate(step_index);
+                                        task.steps.extend(new_steps);
+                                        task.retry_count = 0;
+                                        task.replan_count += 1;
+                                        // Break inner loop; outer while-loop will
+                                        // pick up the first replanned step at step_index.
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "[Agent] Replan failed ({}), falling back to blind retry",
+                                            e
+                                        );
+                                        continue;
+                                    }
+                                }
+                            }
+
                             tracing::info!(
                                 "[Agent] Self-correcting step {} (attempt {}/{})",
                                 step.id,
@@ -267,16 +475,64 @@ impl AutonomousAgent {
                         } else {
                             task.status = TaskStatus::Failed(format!(
                                 "Step {} failed: {}",
-                                step.id,
-                                result.error.as_deref().unwrap_or("Unknown")
+                                step.id, error_msg
                             ));
                             break;
                         }
                     }
                     Err(e) => {
-                        tracing::error!("[Agent] Step {} error: {}", step.id, e);
-                        if task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES {
+                        let error_msg = e.to_string();
+                        let will_retry = task.retry_count < task.max_retries
+                            && attempt <= MAX_SELF_HEAL_RETRIES;
+                        tracing::error!("[Agent] Step {} error: {}", step.id, error_msg);
+                        // BUG-02 fix: emit step-failed event to frontend
+                        if let Some(ref handle) = self.app_handle {
+                            handle.emit("agent:step-failed", json!({
+                                "taskId": task.id,
+                                "step": step.description,
+                                "error": error_msg,
+                                "attempt": attempt,
+                                "retrying": will_retry
+                            })).ok();
+                        }
+                        if will_retry {
                             task.retry_count += 1;
+
+                            // BUG-01 fix: On the 2nd retry attempt, ask the LLM
+                            // to replan instead of blindly retrying the same step.
+                            if attempt == 2 && task.replan_count < MAX_REPLAN_COUNT {
+                                match self
+                                    .replan_on_failure(
+                                        &step.description,
+                                        &error_msg,
+                                        &completed_summaries,
+                                        &task.description,
+                                    )
+                                    .await
+                                {
+                                    Ok(new_steps) => {
+                                        tracing::info!(
+                                            "[Agent] Replan succeeded ({} new steps, replan {}/{})",
+                                            new_steps.len(),
+                                            task.replan_count + 1,
+                                            MAX_REPLAN_COUNT
+                                        );
+                                        task.steps.truncate(step_index);
+                                        task.steps.extend(new_steps);
+                                        task.retry_count = 0;
+                                        task.replan_count += 1;
+                                        break;
+                                    }
+                                    Err(replan_err) => {
+                                        tracing::warn!(
+                                            "[Agent] Replan failed ({}), falling back to blind retry",
+                                            replan_err
+                                        );
+                                        continue;
+                                    }
+                                }
+                            }
+
                             tracing::warn!(
                                 "[Agent] Retrying step {} after error (attempt {}/{})",
                                 step.id,
@@ -285,7 +541,7 @@ impl AutonomousAgent {
                             );
                             continue;
                         } else {
-                            task.status = TaskStatus::Failed(e.to_string());
+                            task.status = TaskStatus::Failed(error_msg);
                             break;
                         }
                     }
@@ -296,11 +552,46 @@ impl AutonomousAgent {
                 break;
             }
 
+            // Only advance to next step if the current step actually succeeded.
+            // If we broke out of the inner loop due to replanning, step_succeeded
+            // will be false and we re-execute at the same step_index (which now
+            // points to the first replanned step).
+            if step_succeeded {
+                step_index += 1;
+            }
+
             sleep(Duration::from_millis(75)).await;
         }
 
+        // BUG-02 fix: count completed steps for the task-completed event
+        let completed_count = if task.status == TaskStatus::Executing {
+            task.steps.len()
+        } else {
+            task.current_step
+        };
+
         if task.status == TaskStatus::Executing {
             task.status = TaskStatus::Completed;
+        }
+
+        // BUG-02 fix: emit task-completed or task-failed event to frontend
+        if let Some(ref handle) = self.app_handle {
+            match &task.status {
+                TaskStatus::Completed => {
+                    handle.emit("agent:task-completed", json!({
+                        "taskId": task.id,
+                        "success": true,
+                        "stepsCompleted": completed_count
+                    })).ok();
+                }
+                TaskStatus::Failed(error_message) => {
+                    handle.emit("agent:task-failed", json!({
+                        "taskId": task.id,
+                        "error": error_message
+                    })).ok();
+                }
+                _ => {}
+            }
         }
 
         {
@@ -353,6 +644,57 @@ impl AutonomousAgent {
             task.status
         );
         Ok(())
+    }
+
+    /// BUG-01 fix: Ask the LLM to produce revised steps when a step fails on
+    /// the second retry attempt. The prompt includes the failed step, the error
+    /// message, and summaries of already-completed steps so the LLM can craft a
+    /// plan that accounts for the failure. Returns the new steps parsed from the
+    /// LLM response. Falls back to an error if the LLM call or JSON parsing fails,
+    /// allowing the caller to continue with the normal retry path.
+    async fn replan_on_failure(
+        &self,
+        failed_step_description: &str,
+        error_message: &str,
+        completed_summaries: &[String],
+        task_goal: &str,
+    ) -> Result<Vec<TaskStep>> {
+        let completed_str = if completed_summaries.is_empty() {
+            "None".to_string()
+        } else {
+            completed_summaries.join("\n- ")
+        };
+
+        let prompt = format!(
+            r#"A task step failed during autonomous execution. Provide revised steps to complete the goal.
+
+Failed step: "{}"
+Error: "{}"
+
+Previously completed steps:
+- {}
+
+Goal: "{}"
+
+Provide ONLY the remaining steps needed (do not repeat completed steps).
+Output a JSON array of steps in the same format as the original plan.
+Each step needs: id, action (with type), description, expected_result, timeout (seconds), retry_on_failure (boolean).
+Be concise."#,
+            failed_step_description, error_message, completed_str, task_goal
+        );
+
+        let response = self
+            .router
+            .read()
+            .await
+            .send_message(&prompt, None)
+            .await
+            .map_err(|e| anyhow!("LLM replan request failed: {}", e))?;
+
+        // Reuse the planner's JSON parsing logic
+        self.planner
+            .parse_plan_response(&response)
+            .map_err(|e| anyhow!("Failed to parse replanned steps: {}", e))
     }
 
     async fn check_resource_limits(&self) -> Result<bool> {
@@ -431,6 +773,7 @@ impl AutonomousAgent {
             task_queue: self.task_queue.clone(),
             running_tasks: self.running_tasks.clone(),
             stop_signal: self.stop_signal.clone(),
+            app_handle: self.app_handle.clone(),
         })
     }
 
