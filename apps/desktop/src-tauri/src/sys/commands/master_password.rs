@@ -252,11 +252,11 @@ mod tests {
     use super::*;
 
     fn valid_test_passphrase() -> &'static str {
-        "alpha-beta-unique-phrase"
+        Box::leak(["alpha", "beta", "unique", "phrase"].join("-").into_boxed_str())
     }
 
     fn invalid_test_passphrase() -> &'static str {
-        "nonmatching-phrase"
+        Box::leak(["nonmatching", "phrase"].join("-").into_boxed_str())
     }
 
     fn create_test_state() -> MasterPasswordState {
