@@ -5,24 +5,25 @@ import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce | Desktop + Web AI Automation',
+  title: 'AGI Workforce | AI Agent for Desktop',
   description:
-    'AGI Workforce provides a desktop app and web app for chat-based AI workflows, browser automation, provider switching, and release-managed desktop downloads.',
+    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — available on macOS, Windows, and Linux.',
   keywords: [
+    'AI agent',
     'AI automation',
-    'desktop app',
-    'web app',
+    'desktop AI app',
     'browser automation',
     'Tauri desktop app',
     'Ollama',
     'OpenAI',
     'Anthropic',
     'Gemini',
+    'Claude',
   ],
   openGraph: {
-    title: 'AGI Workforce | Desktop + Web AI Automation',
+    title: 'AGI Workforce | AI Agent for Desktop',
     description:
-      'Desktop and web applications for AI-assisted workflows with multi-provider model support and browser automation tools.',
+      'A native AI agent desktop app with chat, browser automation, and multi-provider model support. Now in Public Beta.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [
@@ -30,15 +31,15 @@ export const metadata: Metadata = {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce desktop and web AI automation',
+        alt: 'AGI Workforce — AI agent desktop app',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce | Desktop + Web AI Automation',
+    title: 'AGI Workforce | AI Agent for Desktop',
     description:
-      'Desktop and web applications for AI-assisted workflows with browser automation and multi-provider model support.',
+      'Native AI agent desktop app with chat, browser automation, and multi-provider LLM support. Now in Public Beta.',
     images: ['/og-image.svg'],
   },
 };
@@ -48,7 +49,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AGI Workforce',
   description:
-    'Desktop and web applications for AI-assisted workflows, provider-managed chat, and browser automation.',
+    'AGI Workforce is a native desktop AI agent with chat, browser automation, multi-provider LLM support, and tool execution — now in public beta.',
   url: 'https://agiworkforce.com',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -115,14 +116,14 @@ export default function Home() {
             <div className="container relative mx-auto px-4 text-center">
               <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
                 <span className="mr-2 flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-                Desktop + Web Product Surface
+                Now in Public Beta
               </div>
               <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                AI Workflows for Desktop and Web
+                AGI for Everyone
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                AGI Workforce ships a Tauri desktop app and a Next.js web app with chat, provider
-                configuration, browser automation tooling, and desktop release/update endpoints.
+                A native desktop AI agent with chat, browser automation, multi-provider model
+                support, and tool execution — available on macOS, Windows, and Linux.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
@@ -143,15 +144,15 @@ export default function Home() {
               <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Desktop downloads for macOS, Windows, and Linux</span>
+                  <span>Available on macOS, Windows, and Linux</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Web app and API routes are live in this codebase</span>
+                  <span>Claude, GPT, Gemini, Grok, DeepSeek, and Ollama</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Release/update endpoints implemented for desktop clients</span>
+                  <span>Browser automation, file management, and terminal tools</span>
                 </div>
               </div>
 
@@ -163,11 +164,10 @@ export default function Home() {
             <div className="container mx-auto px-4">
               <div className="mb-16 text-center">
                 <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  What Is Implemented
+                  Everything You Need
                 </h2>
                 <p className="mx-auto max-w-2xl text-zinc-400">
-                  This page describes functionality visible in the current monorepo, desktop app,
-                  and website routes.
+                  AGI Workforce ships a complete set of AI automation tools out of the box.
                 </p>
               </div>
               <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -189,24 +189,24 @@ export default function Home() {
             <div className="container mx-auto px-4">
               <div className="grid gap-8 text-center md:grid-cols-3">
                 <div className="p-8">
+                  <div className="mb-2 text-5xl font-bold text-blue-500">6+</div>
+                  <div className="text-lg text-zinc-400">AI Providers</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Claude, GPT-4o, Gemini, Grok, DeepSeek, Ollama
+                  </p>
+                </div>
+                <div className="p-8">
                   <div className="mb-2 text-5xl font-bold text-blue-500">3</div>
-                  <div className="text-lg text-zinc-400">Desktop Platforms Listed</div>
+                  <div className="text-lg text-zinc-400">Platforms</div>
                   <p className="mt-2 text-sm text-zinc-600">
-                    macOS, Windows, Linux download targets
+                    macOS, Windows, and Linux desktop downloads
                   </p>
                 </div>
                 <div className="p-8">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">2</div>
-                  <div className="text-lg text-zinc-400">Primary Apps</div>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">∞</div>
+                  <div className="text-lg text-zinc-400">Automatable Tasks</div>
                   <p className="mt-2 text-sm text-zinc-600">
-                    Tauri desktop app and Next.js web app
-                  </p>
-                </div>
-                <div className="p-8">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">1</div>
-                  <div className="text-lg text-zinc-400">Release Pipeline Surface</div>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Website routes support desktop update manifests and release lookups
+                    Browser, file system, terminal, and custom MCP tools
                   </p>
                 </div>
               </div>
@@ -272,7 +272,7 @@ export default function Home() {
                       <div className="h-px bg-white/10" />
                       <div className="flex justify-between">
                         <span>Desktop Version</span>
-                        <span className="text-white">1.1.2</span>
+                        <span className="text-white">1.1.3</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Tauri Bundle</span>
@@ -301,11 +301,11 @@ export default function Home() {
             <div className="absolute inset-0 bg-blue-600/10" />
             <div className="container relative mx-auto px-4 text-center">
               <h2 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl">
-                Build, test, and ship from one monorepo
+                Start automating today
               </h2>
               <p className="mx-auto mb-10 max-w-2xl text-xl text-zinc-400">
-                The repository includes desktop packaging, web routes, shared packages, and docs for
-                release and integration work.
+                Download the desktop app and connect your preferred AI provider in minutes. No
+                infrastructure required.
               </p>
               <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link

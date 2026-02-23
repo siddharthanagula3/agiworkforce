@@ -1,5 +1,6 @@
 import { invoke } from '@/lib/tauri-mock';
 import { Eye, EyeOff, KeyRound, Lock, LockOpen, RefreshCw, Shield } from 'lucide-react';
+import { toast } from '@/hooks/useToast';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '../ui/Button';
@@ -74,8 +75,17 @@ export function MasterPasswordSettings() {
       onSetup={() => setView('setup')}
       onUnlock={() => setView('unlock')}
       onLock={async () => {
-        await invoke('master_password_lock');
-        await loadStatus();
+        try {
+          await invoke('master_password_lock');
+          await loadStatus();
+        } catch (err) {
+          console.error('Failed to lock master password:', err);
+          toast({
+            title: 'Lock failed',
+            description: 'Failed to lock. Please try again.',
+            variant: 'destructive',
+          });
+        }
       }}
       onChange={() => setView('change')}
       onMigrate={() => setView('migration')}

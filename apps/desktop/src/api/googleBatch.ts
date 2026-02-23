@@ -127,7 +127,12 @@ export interface GoogleApiErrorDetail {
 // ========================================
 
 function handleNotImplemented(error: unknown): never {
-  const msg = typeof error === 'string' ? error : String(error);
+  const msg =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : JSON.stringify(error);
   if (msg.includes('NOT_IMPLEMENTED')) {
     toast.error('Google Batch API is not yet available in this release.');
     throw new Error('Google Batch API: NOT_IMPLEMENTED');
