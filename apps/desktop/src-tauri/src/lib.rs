@@ -468,7 +468,22 @@ pub fn run() {
             // Background Agent Manager for "&" prefix background tasks
             {
                 use crate::core::agent::{BackgroundAgentManager, BackgroundAgentManagerState};
-                let bg_agent_manager = BackgroundAgentManager::new(db_conn_arc.clone());
+                use crate::sys::commands::llm::LLMState;
+
+                // Retrieve the LLM router and automation service Arcs for background agent use.
+                // These are managed earlier in this setup block (LLMState at ~line 206,
+                // AutomationService at ~line 358), so ordering is safe.
+                let llm_state: tauri::State<LLMState> = app.state();
+                let router = Some(llm_state.router.clone());
+
+                let automation_state: tauri::State<Option<std::sync::Arc<crate::automation::AutomationService>>> = app.state();
+                let automation = automation_state.inner().clone();
+
+                let bg_agent_manager = BackgroundAgentManager::new(
+                    db_conn_arc.clone(),
+                    router,
+                    automation,
+                );
                 let mut bg_manager_with_handle = bg_agent_manager;
                 bg_manager_with_handle.set_app_handle(app.handle().clone());
                 let bg_state = BackgroundAgentManagerState::new(bg_manager_with_handle);
