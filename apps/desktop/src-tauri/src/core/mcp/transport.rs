@@ -77,6 +77,73 @@ pub struct StdioTransport {
     is_shutdown: Arc<AtomicBool>,
 }
 
+/// Resolve a command name to its absolute path.
+///
+/// Tauri desktop apps launched from Finder/Dock inherit a minimal PATH
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`) that omits Homebrew, nvm, and other
+/// user-installed Node.js locations. We probe the most common install paths
+/// so that `npx`, `node`, etc. are found even without a full shell environment.
+fn resolve_command_path(command: &str) -> String {
+    // Already an absolute path — use as-is.
+    if command.starts_with('/') {
+        return command.to_string();
+    }
+
+    // Build an augmented PATH that covers the most common Node.js install locations.
+    let extra_dirs = [
+        "/opt/homebrew/bin",       // Homebrew on Apple Silicon
+        "/usr/local/bin",          // Homebrew on Intel / manual installs
+        "/usr/local/sbin",
+        "/opt/local/bin",          // MacPorts
+        "/usr/bin",
+        "/bin",
+    ];
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let mut search_dirs: Vec<&str> = extra_dirs.iter().copied().collect();
+
+    // Also honour whatever PATH the process already has.
+    for p in current_path.split(':') {
+        if !search_dirs.contains(&p) {
+            search_dirs.push(p);
+        }
+    }
+
+    // Check nvm directories dynamically.
+    let home = std::env::var("HOME").unwrap_or_default();
+    let nvm_dir = format!("{}/.nvm/versions/node", home);
+    let mut nvm_bins: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+        for entry in entries.flatten() {
+            let bin = format!("{}/bin", entry.path().display());
+            nvm_bins.push(bin);
+        }
+    }
+
+    // Search extra_dirs first, then nvm entries.
+    for dir in &search_dirs {
+        let candidate = format!("{}/{}", dir, command);
+        if std::path::Path::new(&candidate).is_file() {
+            tracing::debug!("[MCP Transport] Resolved '{}' → '{}'", command, candidate);
+            return candidate;
+        }
+    }
+    for dir in &nvm_bins {
+        let candidate = format!("{}/{}", dir, command);
+        if std::path::Path::new(&candidate).is_file() {
+            tracing::debug!("[MCP Transport] Resolved '{}' → '{}' (nvm)", command, candidate);
+            return candidate;
+        }
+    }
+
+    tracing::warn!(
+        "[MCP Transport] Could not resolve '{}' to an absolute path; \
+         spawning with bare name (may fail if not in PATH)",
+        command
+    );
+    command.to_string()
+}
+
 impl StdioTransport {
     pub async fn new(
         server_name: String,
@@ -84,18 +151,31 @@ impl StdioTransport {
         args: &[String],
         env: &HashMap<String, String>,
     ) -> McpResult<Self> {
+        let resolved = resolve_command_path(command);
         tracing::info!(
             "[MCP Transport] Starting server '{}': {} {:?}",
             server_name,
-            command,
+            resolved,
             args
         );
 
-        let mut cmd = Command::new(command);
+        // Augment PATH so child processes launched by npm/npx can also find node.
+        let augmented_path = {
+            let current = std::env::var("PATH").unwrap_or_default();
+            let prepend = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin";
+            if current.contains("/opt/homebrew/bin") {
+                current
+            } else {
+                format!("{}:{}", prepend, current)
+            }
+        };
+
+        let mut cmd = Command::new(&resolved);
         cmd.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .env("PATH", &augmented_path)
             .envs(env);
 
         let mut child = cmd
