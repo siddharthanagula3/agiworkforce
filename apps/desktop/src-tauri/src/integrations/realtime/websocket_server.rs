@@ -366,7 +366,12 @@ impl RealtimeServer {
                     // that already emit dedicated events in their execution handlers.
                     let emit_generic_task_event = !matches!(
                         native_type.as_str(),
-                        "page_context" | "task_result" | "ping" | "connect" | "disconnect"
+                        "page_context"
+                            | "task_result"
+                            | "ping"
+                            | "connect"
+                            | "disconnect"
+                            | "selected_text_query"
                     );
 
                     if emit_generic_task_event {
@@ -1069,6 +1074,34 @@ impl RealtimeServer {
                         .await?;
                 serde_json::to_value(response)
                     .map_err(|e| format!("Failed to serialize task_result response: {}", e))
+            }
+
+            NativeMessage::SelectedTextQuery {
+                selected_text,
+                context_url,
+                tab_id,
+            } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+
+                // Store the selected text in the latest page context so the LLM prompt
+                // builder can include it when the user next sends a message.
+                if let Ok(mut guard) = crate::sys::commands::extension::LATEST_PAGE_CONTEXT.lock() {
+                    if let Some(ref mut ctx) = *guard {
+                        ctx.selected_text = Some(selected_text.clone());
+                    }
+                }
+
+                // Emit a Tauri event so the frontend can open the chat and pre-fill context.
+                let _ = app.emit(
+                    "extension:selected_text_query",
+                    &json!({
+                        "text": selected_text,
+                        "context_url": context_url,
+                        "tab_id": tab_id,
+                    }),
+                );
+
+                Ok(json!({ "success": true }))
             }
 
             NativeMessage::ExecuteScript { script, tab_id } => {

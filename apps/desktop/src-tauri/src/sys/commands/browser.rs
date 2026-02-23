@@ -1,6 +1,9 @@
 use serde_json::Value;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{command, State};
+
+static BROWSER_ALREADY_TILED: AtomicBool = AtomicBool::new(false);
 
 use crate::automation::browser::advanced::{AdvancedBrowserOps, Cookie};
 use crate::automation::browser::dom_operations::{ClickOptions, DomOperations, TypeOptions};
@@ -346,9 +349,11 @@ pub async fn browser_navigate(
     let client = state.get_cdp_client_for_tab(&target_tab_id).await?;
     client.navigate(&url).await.map_err(|e| e.to_string())?;
 
-    // Auto-tile the desktop app to the right so the browser has room on the left
-    if let Err(e) = crate::auto_tile_for_browser(&app) {
-        tracing::warn!("auto_tile_for_browser failed (non-fatal): {}", e);
+    // Auto-tile only on first navigation (avoid re-snapping on every link click)
+    if !BROWSER_ALREADY_TILED.swap(true, Ordering::Relaxed) {
+        if let Err(e) = crate::auto_tile_for_browser(&app) {
+            tracing::warn!("auto_tile_for_browser failed (non-fatal): {}", e);
+        }
     }
 
     Ok(())
