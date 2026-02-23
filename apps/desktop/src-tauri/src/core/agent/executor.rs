@@ -3,6 +3,7 @@ use crate::automation::{
     input::{lock_enigo, KeyboardSimulator, MouseSimulator},
     AutomationService,
 };
+use crate::sys::security::command_validator::{validate_command, ValidationConfig};
 
 use anyhow::Result;
 use enigo::Key;
@@ -87,18 +88,32 @@ impl TaskExecutor {
                 Ok(format!("Typed: {}", text))
             }
             Action::Navigate { url } => {
-                tracing::info!(
-                    "[Executor] Would navigate to {} using browser automation",
-                    url
-                );
+                // BUG-07 fix: validate URL before handing to OS open to prevent
+                // command injection and ensure the call is to a real web URL.
+                // Full CDP-controlled navigation requires wiring PlaywrightBridge
+                // into the executor (architectural TODO); OS-level open is the
+                // current fallback and must at least be sanitised.
+                let parsed = url::Url::parse(url)
+                    .map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
+                if !matches!(parsed.scheme(), "http" | "https" | "file") {
+                    return Err(anyhow::anyhow!(
+                        "Blocked URL scheme '{}': only http/https/file are permitted",
+                        parsed.scheme()
+                    ));
+                }
+                let safe_url = parsed.as_str();
 
-                tracing::info!("Opening browser to: {}", url);
+                tracing::warn!(
+                    "[Executor] Navigate uses OS-level open; \
+                     subsequent CDP actions will target a different window. \
+                     Wire PlaywrightBridge into TaskExecutor to fix BUG-07 fully."
+                );
 
                 #[cfg(target_os = "windows")]
                 {
                     use std::process::Command;
                     Command::new("cmd")
-                        .args(["/C", "start", url])
+                        .args(["/C", "start", safe_url])
                         .spawn()
                         .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
                 }
@@ -107,7 +122,7 @@ impl TaskExecutor {
                 {
                     use std::process::Command;
                     Command::new("xdg-open")
-                        .arg(url)
+                        .arg(safe_url)
                         .spawn()
                         .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
                 }
@@ -116,12 +131,12 @@ impl TaskExecutor {
                 {
                     use std::process::Command;
                     Command::new("open")
-                        .arg(url)
+                        .arg(safe_url)
                         .spawn()
                         .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
                 }
 
-                Ok(format!("Opened browser to {}", url))
+                Ok(format!("Opened browser to {}", safe_url))
             }
             Action::WaitForElement {
                 target,
@@ -133,6 +148,15 @@ impl TaskExecutor {
             Action::ExecuteCommand { command, args } => {
                 use tokio::process::Command;
                 use tokio::time::{timeout, Duration};
+
+                // BUG-02 fix: validate through CommandValidator before spawning
+                let full_command = if args.is_empty() {
+                    command.clone()
+                } else {
+                    format!("{} {}", command, args.join(" "))
+                };
+                validate_command(&full_command, &ValidationConfig::oneshot())
+                    .map_err(|e| anyhow::anyhow!("Command blocked by security validator: {}", e))?;
 
                 tracing::info!("Executing command: {} {:?}", command, args);
 
@@ -175,12 +199,16 @@ impl TaskExecutor {
                 }
             }
             Action::ReadFile { path } => {
-                let content = std::fs::read_to_string(path)?;
-                Ok(format!("Read {} bytes from {}", content.len(), path))
+                // BUG-01 fix: canonicalize and reject sensitive system paths
+                let canonical = Self::validate_file_path(path)?;
+                let content = std::fs::read_to_string(&canonical)?;
+                Ok(format!("Read {} bytes from {}", content.len(), canonical.display()))
             }
             Action::WriteFile { path, content } => {
-                std::fs::write(path, content)?;
-                Ok(format!("Wrote {} bytes to {}", content.len(), path))
+                // BUG-01 fix: validate destination before writing
+                let canonical = Self::validate_write_path(path)?;
+                std::fs::write(&canonical, content)?;
+                Ok(format!("Wrote {} bytes to {}", content.len(), canonical.display()))
             }
             Action::SearchText { query } => {
                 let elements = vision.search_text(query).await?;
@@ -191,7 +219,14 @@ impl TaskExecutor {
                 ))
             }
             Action::Scroll { direction, amount } => {
-                self.automation.mouse.lock().await.scroll(*amount)?;
+                // BUG-03 fix: map direction to a signed delta — positive = up, negative = down
+                let delta = match direction {
+                    ScrollDirection::Up => *amount,
+                    ScrollDirection::Down => -(*amount),
+                    ScrollDirection::Left => -(*amount),
+                    ScrollDirection::Right => *amount,
+                };
+                self.automation.mouse.lock().await.scroll(delta)?;
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
             Action::PressKey { keys } => {
@@ -302,6 +337,51 @@ impl TaskExecutor {
         }
     }
 
+    /// BUG-01 fix: validate a read path — must exist and must not be a protected system dir.
+    fn validate_file_path(path: &str) -> Result<std::path::PathBuf> {
+        if path.contains('\0') {
+            return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
+        }
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|e| anyhow::anyhow!("Path inaccessible: {}", e))?;
+        Self::check_blocked_prefix(&canonical)?;
+        Ok(canonical)
+    }
+
+    /// BUG-01 fix: validate a write path — file may not exist yet, so no canonicalize.
+    fn validate_write_path(path: &str) -> Result<std::path::PathBuf> {
+        if path.contains('\0') {
+            return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
+        }
+        let p = std::path::Path::new(path);
+        // Reject any path component that is ".."
+        for component in p.components() {
+            if component == std::path::Component::ParentDir {
+                return Err(anyhow::anyhow!("Path traversal rejected: '..' not allowed"));
+            }
+        }
+        let resolved = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(p)
+        };
+        Self::check_blocked_prefix(&resolved)?;
+        Ok(resolved)
+    }
+
+    fn check_blocked_prefix(path: &std::path::Path) -> Result<()> {
+        const BLOCKED: &[&str] = &["/etc", "/proc", "/sys", "/dev", "/boot", "/root"];
+        for prefix in BLOCKED {
+            if path.starts_with(prefix) {
+                return Err(anyhow::anyhow!(
+                    "Access denied: '{}' is a protected system path",
+                    path.display()
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn parse_key_string(&self, key_str: &str) -> Result<Key> {
         let key = match key_str.to_lowercase().as_str() {
             "enter" | "return" => Key::Return,
@@ -314,7 +394,26 @@ impl TaskExecutor {
             "end" => Key::End,
             "pageup" | "pgup" => Key::PageUp,
             "pagedown" | "pgdn" => Key::PageDown,
-            "insert" | "ins" => Key::Home,
+            // BUG-06 fix: Insert is only available on Windows/Linux in enigo 0.6;
+            // macOS has no hardware Insert key so return an error on that platform.
+            "insert" | "ins" => {
+                #[cfg(any(
+                    target_os = "windows",
+                    all(unix, not(target_os = "macos"))
+                ))]
+                {
+                    Key::Insert
+                }
+                #[cfg(not(any(
+                    target_os = "windows",
+                    all(unix, not(target_os = "macos"))
+                )))]
+                {
+                    return Err(anyhow::anyhow!(
+                        "Insert key is not supported on this platform"
+                    ));
+                }
+            }
 
             "up" | "uparrow" => Key::UpArrow,
             "down" | "downarrow" => Key::DownArrow,
