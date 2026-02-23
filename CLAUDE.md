@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Knowledge & Documentation
 
-Training data has a ~6 month lag. For anything version-sensitive, always fetch live docs before writing code.
+Training data has a ~6-month lag. For anything version-sensitive, always fetch live docs before writing code.
 
 **Always fetch live docs for:**
 
