@@ -422,18 +422,17 @@ async function handleMessageAsync(
       return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
     }
 
-    case 'queue_message' as ExtensionMessage['type']: {
-      const msgEntry = message as unknown as {
-        type: string;
-        id: string;
-        text: string;
-        timestamp: number;
-      };
+    case 'queue_message': {
+      if (!tabId) {
+        logger.warn('queue_message: no active tab');
+        return { success: false, error: 'No active tab' } as ExtensionResponse;
+      }
+      const msgEntry = message as import('./types').QueueMessageMessage;
       sendNativeRequest({
         type: 'queue_message',
         id: msgEntry.id,
         text: msgEntry.text,
-        tabId: tabId ?? 0,
+        tabId,
         timestamp: msgEntry.timestamp,
       })
         .then(() => {
@@ -445,7 +444,7 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    case 'open_side_panel' as ExtensionMessage['type']: {
+    case 'open_side_panel': {
       if (chrome.sidePanel && tabId) {
         chrome.sidePanel.open({ tabId }).catch(() => {});
       }
