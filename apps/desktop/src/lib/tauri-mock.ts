@@ -24,6 +24,38 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_onboarding_status':
       return { completed: false } as T;
 
+    case 'check_automation_permissions':
+      return { accessibility: false, screen_recording: false, input_monitoring: false } as T;
+
+    case 'request_automation_permission':
+    case 'set_auto_approve_all':
+    case 'get_auto_approve_all':
+      return undefined as T;
+
+    // Master password commands
+    case 'master_password_get_status':
+      return {
+        is_configured: false,
+        is_unlocked: false,
+        last_changed: null,
+        needs_migration: false,
+      } as T;
+    case 'master_password_is_configured':
+      return false as T;
+    case 'master_password_is_unlocked':
+      return false as T;
+    case 'master_password_needs_migration':
+      return false as T;
+    case 'master_password_setup':
+    case 'master_password_unlock':
+    case 'master_password_change':
+      return { success: true, message: 'ok' } as T;
+    case 'master_password_lock':
+    case 'master_password_verify':
+    case 'master_password_start_migration':
+    case 'master_password_complete_migration':
+      return undefined as T;
+
     case 'get_all_templates':
     case 'get_installed_templates':
     case 'get_user_workflows':
