@@ -1227,7 +1227,13 @@ export async function routeIntelligently(
     // Use standard chat model routing
     const taskType = intentToTaskType(intent.primary);
     const pool = MODEL_POOLS[autoMode];
-    const { modelId, reason: selectionReason } = selectModelFromPool(pool, taskType, autoMode);
+    const { modelId, reason: selectionReason } = selectModelFromPool(
+      pool,
+      taskType,
+      autoMode,
+      message,
+      classificationOptions.hasAttachments,
+    );
 
     selectedModel = modelId;
     reason = `Intent: ${intent.primary}. ${selectionReason}`;
@@ -1330,7 +1336,13 @@ export function routeIntelligentlySync(
     // Use standard chat model routing
     const taskType = intentToTaskType(intent.primary);
     const pool = MODEL_POOLS[autoMode];
-    const { modelId, reason: selectionReason } = selectModelFromPool(pool, taskType, autoMode);
+    const { modelId, reason: selectionReason } = selectModelFromPool(
+      pool,
+      taskType,
+      autoMode,
+      message,
+      classificationOptions.hasAttachments,
+    );
 
     selectedModel = modelId;
     reason = `Intent: ${intent.primary}. ${selectionReason}`;

@@ -35,7 +35,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Switch } from '../ui/Switch';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
+import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
+import { MasterPasswordSettings } from './MasterPasswordSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 interface SettingsPanelProps {
@@ -52,6 +54,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
+  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
@@ -162,6 +165,14 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
       setHasUnsavedChanges(true);
     },
     [setAlwaysUseAgentMode],
+  );
+
+  const handleAutoApproveToolsChange = useCallback(
+    (value: boolean) => {
+      setAutoApproveTools(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAutoApproveTools],
   );
 
   // Reset hasUnsavedChanges when panel opens (fresh state)
@@ -343,6 +354,32 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                             onCheckedChange={handleAgentModeChange}
                           />
                         </div>
+
+                        <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="autoApproveTools" className="flex items-center gap-2">
+                              Auto-Approve All Tools
+                              {chatPreferences.autoApproveTools && (
+                                <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Skip all &quot;Allow this action?&quot; confirmation dialogs. Every
+                              tool call (file writes, terminal commands, web access, etc.) is
+                              automatically approved without asking.{' '}
+                              <strong className="text-orange-600 dark:text-orange-400">
+                                Use with caution.
+                              </strong>
+                            </p>
+                          </div>
+                          <Switch
+                            id="autoApproveTools"
+                            checked={chatPreferences.autoApproveTools}
+                            onCheckedChange={handleAutoApproveToolsChange}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -471,7 +508,16 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </TabsContent>
 
               <TabsContent value="data-privacy" className="space-y-6 pt-6">
-                <DataPrivacyTab />
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Master Password</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Encrypt stored API keys and secrets with an Argon2id-derived master password.
+                  </p>
+                  <MasterPasswordSettings />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <DataPrivacyTab />
+                </div>
               </TabsContent>
 
               <TabsContent value="system" className="space-y-6 pt-6">
@@ -481,6 +527,13 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     Monitor your system performance and resource usage
                   </p>
                   <ResourceMonitor showTools={true} />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    macOS system permissions required for agent mode automation.
+                  </p>
+                  <AutomationPermissionsSettings />
                 </div>
                 <div className="pt-6 border-t border-border">
                   <UpdateSettings />

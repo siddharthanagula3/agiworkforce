@@ -58,6 +58,11 @@ export interface ChatPreferences {
   alwaysUseAgentMode: boolean;
   /** Show simple one-line status messages instead of detailed command/code blocks */
   compactMode: boolean;
+  /**
+   * Auto-approve all tool confirmation dialogs — skips every "Allow this action?" popup.
+   * Equivalent to God Mode / trust-all. Use with caution.
+   */
+  autoApproveTools: boolean;
 }
 
 export interface ExecutionPreferences {
@@ -99,6 +104,7 @@ interface SettingsState {
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
+  setAutoApproveTools: (enabled: boolean) => void;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;
@@ -155,6 +161,7 @@ const defaultSettings: Pick<
     promptCompletionEnabled: true, // AI-powered ghost text enabled by default
     alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
+    autoApproveTools: false, // Off by default - show confirmation dialogs
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
@@ -194,7 +201,7 @@ const storageFallback: Storage = {
 // v4: Added executionPreferences for extended timeout support
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
 // v6: Added language preference
-const SETTINGS_STORE_VERSION = 7;
+const SETTINGS_STORE_VERSION = 8;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -450,6 +457,16 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
+        setAutoApproveTools: (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, autoApproveTools: enabled },
+            }),
+            undefined,
+            'settings/setAutoApproveTools',
+          );
+        },
+
         addAllowedDirectory: (path: string) => {
           set(
             (state) => {
@@ -549,7 +566,8 @@ export const useSettingsStore = create<SettingsState>()(
             const mergedWindowPreferences: WindowPreferences = {
               ...defaultSettings.windowPreferences,
               ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
-              language: settings.windowPreferences?.language ?? defaultSettings.windowPreferences.language,
+              language:
+                settings.windowPreferences?.language ?? defaultSettings.windowPreferences.language,
             };
 
             const mergedChatPreferences: ChatPreferences = {
@@ -601,6 +619,15 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to restore default provider:', error);
             }
 
+            // Sync autoApproveTools to backend on load
+            try {
+              await invoke('set_auto_approve_all', {
+                enabled: mergedChatPreferences.autoApproveTools ?? false,
+              });
+            } catch (error) {
+              console.error('Failed to sync auto-approve-all to backend:', error);
+            }
+
             // FIX-003: Sync allowed directories to the backend security guard
             // This ensures file operations respect user-configured allowed directories
             try {
@@ -611,7 +638,10 @@ export const useSettingsStore = create<SettingsState>()(
 
                 // Also update MCP filesystem server to use the allowed directories
                 await invoke('mcp_update_filesystem_directories', { directories: dirs });
-                console.log('[settingsStore] Updated MCP filesystem with allowed directories:', dirs.length);
+                console.log(
+                  '[settingsStore] Updated MCP filesystem with allowed directories:',
+                  dirs.length,
+                );
               }
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
@@ -656,11 +686,23 @@ export const useSettingsStore = create<SettingsState>()(
                 await invoke('update_allowed_directories', { paths: allowedDirectories });
 
                 // Also update MCP filesystem server to use the allowed directories
-                await invoke('mcp_update_filesystem_directories', { directories: allowedDirectories });
-                console.log('[settingsStore] Updated MCP filesystem with allowed directories:', allowedDirectories.length);
+                await invoke('mcp_update_filesystem_directories', {
+                  directories: allowedDirectories,
+                });
+                console.log(
+                  '[settingsStore] Updated MCP filesystem with allowed directories:',
+                  allowedDirectories.length,
+                );
               }
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
+            }
+
+            // Sync autoApproveTools flag to the backend confirmation state
+            try {
+              await invoke('set_auto_approve_all', { enabled: chatPreferences.autoApproveTools });
+            } catch (error) {
+              console.error('Failed to sync auto-approve-all to backend:', error);
             }
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');
@@ -719,7 +761,8 @@ export const useSettingsStore = create<SettingsState>()(
           const mergedWindowPreferences: WindowPreferences = {
             ...currentState.windowPreferences,
             ...(persisted?.windowPreferences ?? {}),
-            language: persisted?.windowPreferences?.language ?? currentState.windowPreferences.language,
+            language:
+              persisted?.windowPreferences?.language ?? currentState.windowPreferences.language,
           };
 
           const mergedChatPreferences: ChatPreferences = {
@@ -780,6 +823,7 @@ export const useSettingsStore = create<SettingsState>()(
                 promptCompletionEnabled: true,
                 alwaysUseAgentMode: false,
                 compactMode: true,
+                autoApproveTools: false,
               };
             } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
               state.chatPreferences.alwaysUseAgentMode = false;
@@ -823,6 +867,13 @@ export const useSettingsStore = create<SettingsState>()(
             }
             if (!state.windowPreferences.language) {
               state.windowPreferences.language = 'en';
+            }
+          }
+
+          // Migration from v7 to v8: Add autoApproveTools setting
+          if (version < 8) {
+            if (state.chatPreferences && state.chatPreferences.autoApproveTools === undefined) {
+              state.chatPreferences.autoApproveTools = false;
             }
           }
 
