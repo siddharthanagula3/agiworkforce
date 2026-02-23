@@ -542,6 +542,11 @@ pub fn is_native_messaging_installed() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Guards tests that mutate process-global environment variables so they
+    /// don't race each other when `cargo test` runs them in parallel.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_manifest_creation() {
@@ -568,6 +573,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_get_macos_user_home_prefers_env_home() {
+        let _guard = ENV_LOCK.lock().unwrap();
         // When HOME env var is set, it should be used as the candidate
         let original = std::env::var("HOME").ok();
         std::env::set_var("HOME", "/Users/testuser");
@@ -586,6 +592,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_get_macos_user_home_falls_back_to_dirs() {
+        let _guard = ENV_LOCK.lock().unwrap();
         // When HOME env var is unset, dirs::home_dir() should be used as fallback
         let original = std::env::var("HOME").ok();
         std::env::remove_var("HOME");

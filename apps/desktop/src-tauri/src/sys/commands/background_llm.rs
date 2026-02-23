@@ -166,9 +166,8 @@ pub fn bg_llm_verify_webhook(request: VerifyWebhookRequest) -> Result<bool> {
 mod tests {
     use super::*;
 
-    fn test_webhook_secret() -> &'static str {
-        Box::leak(["hmac", "fixture", "value"].join("-").into_boxed_str())
-    }
+    // gitleaks:allow  (test fixture – not a real secret)
+    const TEST_WEBHOOK_SECRET: &str = "hmac-fixture-value";
 
     #[test]
     fn test_verify_webhook() {
@@ -178,7 +177,7 @@ mod tests {
         type HmacSha256 = Hmac<Sha256>;
 
         // Test-only secret, not used in production
-        let secret = test_webhook_secret();
+        let secret = TEST_WEBHOOK_SECRET;
         let payload = r#"{"event":"background.completed","response_id":"bg_123"}"#;
         let timestamp = "1234567890";
 
@@ -205,7 +204,7 @@ mod tests {
         let request = VerifyWebhookRequest {
             payload: r#"{"event":"test"}"#.to_string(),
             signature: "t=1234567890,v1=invalid".to_string(),
-            secret: test_webhook_secret().to_string(),
+            secret: TEST_WEBHOOK_SECRET.to_string(),
         };
 
         let result = bg_llm_verify_webhook(request).unwrap();
