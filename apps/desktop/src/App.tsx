@@ -46,6 +46,7 @@ const UnifiedAgenticChat = lazy(() =>
   })),
 );
 import { UpdateChecker } from './components/Updates';
+import { AutomationPermissionsModal } from './components/Settings/AutomationPermissionsModal';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -491,6 +492,7 @@ const DesktopShell = () => {
           <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
         </Suspense>
         <UpdateChecker onUpdateNow={openSettings} />
+        <AutomationPermissionsModal />
         <ErrorToastContainer position="top-right" />
         <TimeoutWarningDialog
           warning={timeoutWarning}

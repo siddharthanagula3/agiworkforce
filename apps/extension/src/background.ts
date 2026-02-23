@@ -422,6 +422,36 @@ async function handleMessageAsync(
       return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
     }
 
+    case 'queue_message' as ExtensionMessage['type']: {
+      const msgEntry = message as unknown as {
+        type: string;
+        id: string;
+        text: string;
+        timestamp: number;
+      };
+      sendNativeRequest({
+        type: 'queue_message',
+        id: msgEntry.id,
+        text: msgEntry.text,
+        tabId: tabId ?? 0,
+        timestamp: msgEntry.timestamp,
+      })
+        .then(() => {
+          // no-op: response already sent via handleMessage's async path
+        })
+        .catch((err: unknown) => {
+          logger.warn('queue_message native send failed', err);
+        });
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'open_side_panel' as ExtensionMessage['type']: {
+      if (chrome.sidePanel && tabId) {
+        chrome.sidePanel.open({ tabId }).catch(() => {});
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'CAPTURE_SCREENSHOT': {
       let resolvedTabId = tabId;
       let resolvedWindowId = windowId;
@@ -699,6 +729,13 @@ function setupContextMenu(): void {
     contexts: ['all'],
   });
 
+  // Show only when text is selected
+  chrome.contextMenus.create({
+    id: 'ask-agi-workforce',
+    title: 'Ask AGI Workforce',
+    contexts: ['selection'],
+  });
+
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) return;
 
@@ -710,8 +747,30 @@ function setupContextMenu(): void {
       chrome.tabs.sendMessage(tab.id, {
         type: 'GET_ELEMENT_INFO',
       });
+    } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+      void sendNativeMessage({
+        type: 'selected_text_query',
+        tabId: tab.id,
+        url: info.pageUrl,
+        selectedText: info.selectionText,
+        timestamp: Date.now(),
+      });
+      if (chrome.sidePanel) {
+        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+      }
     }
   });
+}
+
+/**
+ * Fire-and-forget wrapper for native message sends that do not need a response
+ */
+function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
+  return sendNativeRequest(message)
+    .then(() => undefined)
+    .catch((err: unknown) => {
+      logger.warn('sendNativeMessage failed', err);
+    });
 }
 
 /**
