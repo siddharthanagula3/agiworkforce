@@ -70,10 +70,15 @@ pub struct PlaywrightConfig {
 
 impl Default for PlaywrightConfig {
     fn default() -> Self {
+        // BUG-10 fix: allow CDP port to be overridden via CDP_PORT env var
+        let ws_port = std::env::var("CDP_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(9222);
         Self {
             node_path: "node".to_string(),
             playwright_path: "npx playwright".to_string(),
-            ws_port: 9222,
+            ws_port,
         }
     }
 }
