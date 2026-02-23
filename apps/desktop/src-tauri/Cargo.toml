@@ -23,7 +23,7 @@ unused_results = "allow"
 
 [dependencies]
 
-tauri = { version = "2.9.3", features = ["tray-icon", "devtools", "test"] }
+tauri = { version = "2.9.3", features = ["tray-icon", "test"] }
 tauri-plugin-shell = { version = "2.3.3", optional = true }
 tauri-plugin-process = "2.2.0"
 tauri-plugin-fs = "2.4.4"
@@ -232,6 +232,7 @@ cocoa = "0.25"
 
 [features]
 default = ["shell", "updater"]
+devtools = ["tauri/devtools"]
 # Note: "ocr" feature requires Tesseract to be installed on the system
 # Enable with: cargo build --features ocr
 # Install Tesseract: brew install tesseract (macOS) or apt install tesseract-ocr libtesseract-dev (Linux)
