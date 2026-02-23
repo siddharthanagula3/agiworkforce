@@ -111,6 +111,12 @@ The user wants to open Notepad and type "Hello".
         self.parse_plan(&response)
     }
 
+    /// Public entry point for parsing an LLM plan response into TaskSteps.
+    /// Used by the autonomous agent's `replan_on_failure` method.
+    pub fn parse_plan_response(&self, response: &str) -> Result<Vec<TaskStep>> {
+        self.parse_plan(response)
+    }
+
     async fn generate_basic_plan(&self, description: &str) -> Result<String> {
         let steps = vec![
             json!({
