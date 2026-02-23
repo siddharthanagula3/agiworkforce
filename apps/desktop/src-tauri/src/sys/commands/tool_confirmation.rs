@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State};
 use tokio::sync::oneshot;
@@ -26,6 +27,9 @@ pub struct ToolConfirmationState {
     remembered_choices: Arc<Mutex<HashMap<String, bool>>>,
     /// Tool execution guard for policy lookups
     tool_guard: Arc<ToolExecutionGuard>,
+    /// Global auto-approve flag — when true, all tool confirmations are auto-approved
+    /// without showing the user a dialog. Equivalent to "God Mode" / trust-all.
+    auto_approve_all: Arc<AtomicBool>,
 }
 
 impl ToolConfirmationState {
@@ -34,7 +38,22 @@ impl ToolConfirmationState {
             pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
             remembered_choices: Arc::new(Mutex::new(HashMap::new())),
             tool_guard: Arc::new(ToolExecutionGuard::new()),
+            auto_approve_all: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Set the global auto-approve flag
+    pub fn set_auto_approve_all(&self, enabled: bool) {
+        self.auto_approve_all.store(enabled, Ordering::Relaxed);
+        info!(
+            "[ToolConfirmation] Auto-approve all: {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
+    }
+
+    /// Get the current global auto-approve flag
+    pub fn is_auto_approve_all(&self) -> bool {
+        self.auto_approve_all.load(Ordering::Relaxed)
     }
 
     /// Check if user has a remembered choice for this tool
@@ -320,6 +339,26 @@ pub fn get_allowed_directories(
     Ok(state.get_allowed_paths())
 }
 
+/// Enable or disable global auto-approve mode.
+/// When enabled, all tool confirmation dialogs are bypassed and every tool
+/// call is automatically approved. Use with caution.
+#[tauri::command]
+pub fn set_auto_approve_all(
+    enabled: bool,
+    state: State<'_, ToolConfirmationState>,
+) -> Result<(), String> {
+    state.set_auto_approve_all(enabled);
+    Ok(())
+}
+
+/// Get the current global auto-approve state.
+#[tauri::command]
+pub fn get_auto_approve_all(
+    state: State<'_, ToolConfirmationState>,
+) -> Result<bool, String> {
+    Ok(state.is_auto_approve_all())
+}
+
 // ============================================================================
 // Response Types
 // ============================================================================
@@ -347,6 +386,15 @@ pub async fn request_tool_confirmation(
 ) -> Result<bool, String> {
     let request_id = request.request_id.clone();
     let tool_name = request.tool_name.clone();
+
+    // Global auto-approve bypass — skip all dialogs when trust-all is enabled
+    if state.is_auto_approve_all() {
+        debug!(
+            "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
+            tool_name
+        );
+        return Ok(true);
+    }
 
     // Check for remembered choice
     if let Some(remembered) = state.get_remembered_choice(&tool_name) {
