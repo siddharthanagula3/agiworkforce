@@ -12,3 +12,4 @@ pub mod security;
 pub mod telemetry;
 pub mod test_utils;
 pub mod utils;
+pub mod power;
