@@ -121,7 +121,10 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'qwen-max', label: 'Qwen Max' },
     { value: 'qwen-flash', label: 'Qwen Flash' },
   ],
-  moonshot: [{ value: 'kimi-k2.5', label: 'Kimi K2.5' }],
+  moonshot: [
+    { value: 'kimi-k2.5', label: 'Kimi K2.5' },
+    { value: 'kimi-k2.5-thinking', label: 'Kimi K2.5 Thinking' },
+  ],
   perplexity: [
     { value: 'sonar', label: 'Sonar' },
     { value: 'sonar-reasoning', label: 'Sonar Reasoning' },
@@ -150,7 +153,8 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
  * - max/enterprise: All models including flagships
  */
 export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
-  // Free/Hobby: Economy tier models only (< $1/1M output tokens)
+  // Free/Hobby: Economy tier models only (< $3/1M output tokens, no flagship models)
+  // Kimi K2.5 is Moonshot's flagship ("most intelligent model") at $3/M output — excluded from free/hobby.
   free: [
     // Economy models - best value
     'gemini-3-flash-preview',
@@ -158,7 +162,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5',
     'grok-4-fast-reasoning',
     'claude-haiku-4.5',
     'grok-4-fast-non-reasoning',
@@ -175,7 +178,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5',
     'grok-4-fast-reasoning',
     'claude-haiku-4.5',
     'grok-4-fast-non-reasoning',
@@ -185,6 +187,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'sonar',
   ],
   // Pro: Economy + balanced tier models ($1-15/1M output tokens)
+  // kimi-k2.5 added here: Moonshot flagship at $0.60/$3.00 per M tokens, comparable to qwen-max ($6/M).
   pro: [
     // Pro-tier additions
     'gpt-5.2',
@@ -192,6 +195,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
+    'kimi-k2.5', // Moonshot flagship: $0.60/$3.00 per M tokens, 262K context, multimodal
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -201,7 +205,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5',
     'grok-4-fast-reasoning',
     'claude-haiku-4.5',
     'grok-4-fast-non-reasoning',
@@ -211,6 +214,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'sonar',
   ],
   // Max: All models including flagships
+  // kimi-k2.5-thinking added alongside flagship tier: thinking mode requires max subscription.
   max: [
     // Flagship models
     'claude-opus-4.6',
@@ -218,13 +222,16 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'o3',
     'grok-4',
     'deepseek-r1',
+    'kimi-k2.5-thinking', // Moonshot flagship + reasoning mode — max tier only
     // Pro-tier models
     'gpt-5.2',
+    'gpt-5.2-codex-xhigh',
     'gpt-5.2-codex-high',
     'gpt-5.2-codex-medium',
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
+    'kimi-k2.5',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -234,7 +241,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5',
     'grok-4-fast-reasoning',
     'claude-haiku-4.5',
     'grok-4-fast-non-reasoning',
@@ -250,6 +256,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'o3',
     'grok-4',
     'deepseek-r1',
+    'kimi-k2.5-thinking',
     'gpt-5.2',
     'gpt-5.2-codex-xhigh',
     'gpt-5.2-codex-high',
@@ -257,6 +264,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
+    'kimi-k2.5',
     'sonar-pro',
     'sonar-reasoning',
     'sonar-deep-research',
@@ -265,7 +273,6 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'deepseek-chat',
     'glm-4.6v',
     'glm-4.6v-flash',
-    'kimi-k2.5',
     'grok-4-fast-reasoning',
     'claude-haiku-4.5',
     'grok-4-fast-non-reasoning',
@@ -340,6 +347,7 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'qwen-flash': 1_000_000, // 1M per MuleRouter docs
   // Moonshot K2.5 (thinking controlled via API parameter, not separate model)
   'kimi-k2.5': 256_000, // 262,144 per official docs
+  'kimi-k2.5-thinking': 256_000, // Thinking variant used by Rust router
   // Perplexity
   sonar: 128_000,
   'sonar-reasoning': 128_000,
@@ -395,16 +403,16 @@ export interface ModelMetadata {
   name: string;
   provider: Provider;
   modelType:
-  | 'chat'
-  | 'code'
-  | 'reasoning'
-  | 'multimodal'
-  | 'image'
-  | 'video'
-  | 'search'
-  | 'tts'
-  | 'stt'
-  | 'music';
+    | 'chat'
+    | 'code'
+    | 'reasoning'
+    | 'multimodal'
+    | 'image'
+    | 'video'
+    | 'search'
+    | 'tts'
+    | 'stt'
+    | 'music';
   contextWindow: number;
   inputCost: number;
   outputCost: number;
@@ -1370,8 +1378,8 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     provider: 'moonshot',
     modelType: 'multimodal',
     contextWindow: 256_000, // 262,144 per official docs
-    inputCost: 0.8, // ¥4.00/1M = ~$0.56 (using official pricing)
-    outputCost: 3.5, // ¥21.00/1M = ~$2.94
+    inputCost: 0.6, // $0.60/1M (platform.moonshot.ai, verified Feb 2026)
+    outputCost: 3.0, // $3.00/1M (platform.moonshot.ai, verified Feb 2026)
     capabilities: {
       streaming: true,
       tools: true,
@@ -1391,6 +1399,39 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     quality: 'excellent',
     qualityTier: 'balanced',
     bestFor: ['Vision', 'Math', 'Reasoning', 'Agent Tasks', 'Multimodal'],
+    released: 'January 2026',
+  },
+  // Kimi K2.5 Thinking - reasoning variant used by Rust router
+  // Maps to same kimi-k2.5 API model with {"thinking":{"type":"enabled"}} parameter.
+  // Placed in max/enterprise only because extended thinking generates more tokens.
+  'kimi-k2.5-thinking': {
+    id: 'kimi-k2.5-thinking',
+    apiModelId: 'kimi-k2.5',
+    name: 'Kimi K2.5 Thinking',
+    provider: 'moonshot',
+    modelType: 'reasoning',
+    contextWindow: 256_000,
+    inputCost: 0.6, // $0.60/1M — same underlying model as kimi-k2.5
+    outputCost: 3.0, // $3.00/1M (platform.moonshot.ai, verified Feb 2026)
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: false,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: { swebench: 55, humaneval: 92, mmlu: 88, gpqa: 84, aime: 99 },
+    speed: 'medium',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['Math', 'Reasoning', 'Complex Analysis', 'Agent Tasks'],
     released: 'January 2026',
   },
 
