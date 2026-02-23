@@ -1085,7 +1085,7 @@ export function useAgenticEvents() {
                 try {
                   const INVOKE_TIMEOUT_MS = 10000;
                   await Promise.race([
-                    invoke('agent_set_workflow_hash', { workflowHash: workflowHash }),
+                    invoke('agent_set_workflow_hash', { workflow_hash: workflowHash }),
                     new Promise<never>((_, reject) => {
                       timeoutId = setTimeout(
                         () =>

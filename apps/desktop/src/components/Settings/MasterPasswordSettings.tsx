@@ -15,6 +15,8 @@ interface MasterPasswordStatus {
 
 type View = 'status' | 'setup' | 'unlock' | 'change' | 'migration';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export function MasterPasswordSettings() {
   const [status, setStatus] = useState<MasterPasswordStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,6 +195,11 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
 
     if (password !== confirm) {
       setError('Passwords do not match');
@@ -374,6 +381,11 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (newPw.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
 
     if (newPw !== confirm) {
       setError('New passwords do not match');
