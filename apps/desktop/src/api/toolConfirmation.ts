@@ -116,7 +116,7 @@ export async function getToolSafetyTier(toolName: string): Promise<ToolSafetyTie
 
   try {
     const result = await invoke<ToolSafetyTierInfo>('get_tool_safety_tier', {
-      tool_name: toolName,
+      toolName: toolName,
     });
     return result;
   } catch (error) {
@@ -174,7 +174,7 @@ export async function clearRememberedToolChoice(toolName: string): Promise<void>
   }
 
   try {
-    await invoke<void>('clear_remembered_tool_choice', { tool_name: toolName });
+    await invoke<void>('clear_remembered_tool_choice', { toolName: toolName });
   } catch (error) {
     console.error('[toolConfirmation] Failed to clear remembered choice:', error);
     throw error;
@@ -214,7 +214,7 @@ export async function cancelToolConfirmation(requestId: string): Promise<void> {
   }
 
   try {
-    await invoke<void>('cancel_tool_confirmation', { request_id: requestId });
+    await invoke<void>('cancel_tool_confirmation', { requestId: requestId });
   } catch (error) {
     console.error('[toolConfirmation] Failed to cancel confirmation:', error);
     throw error;
