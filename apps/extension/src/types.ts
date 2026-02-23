@@ -27,7 +27,9 @@ export type NativeMessageType =
   | 'RUN_PAGE_ACTIONS'
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO'
-  | 'AUTO_FILL_JOB_APPLICATION';
+  | 'AUTO_FILL_JOB_APPLICATION'
+  | 'queue_message'
+  | 'open_side_panel';
 
 // Base message structure
 export interface BaseMessage {
@@ -396,6 +398,20 @@ export interface ElementInfoResponse {
   error?: string;
 }
 
+// Queue message — sent from side panel to background to forward text to the desktop app
+export interface QueueMessageMessage extends BaseMessage {
+  type: 'queue_message';
+  id: string;
+  text: string;
+  tabId: number;
+  timestamp: number;
+}
+
+// Open side panel — sent from content script FAB button to background
+export interface OpenSidePanelMessage extends BaseMessage {
+  type: 'open_side_panel';
+}
+
 // Union types for all messages
 export type ExtensionMessage =
   | CaptureScreenshotMessage
@@ -419,7 +435,9 @@ export type ExtensionMessage =
   | RunPageActionsMessage
   | CaptureElementMessage
   | GetElementInfoMessage
-  | AutoFillJobApplicationMessage;
+  | AutoFillJobApplicationMessage
+  | QueueMessageMessage
+  | OpenSidePanelMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
