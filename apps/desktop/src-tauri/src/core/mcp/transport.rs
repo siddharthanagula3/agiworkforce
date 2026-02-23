@@ -77,19 +77,14 @@ pub struct StdioTransport {
     is_shutdown: Arc<AtomicBool>,
 }
 
-/// Resolve a command name to its absolute path.
+/// Build an augmented PATH string that includes common Node.js install locations,
+/// Homebrew, MacPorts, and nvm directories.
 ///
 /// Tauri desktop apps launched from Finder/Dock inherit a minimal PATH
 /// (`/usr/bin:/bin:/usr/sbin:/sbin`) that omits Homebrew, nvm, and other
-/// user-installed Node.js locations. We probe the most common install paths
-/// so that `npx`, `node`, etc. are found even without a full shell environment.
-fn resolve_command_path(command: &str) -> String {
-    // Already an absolute path — use as-is.
-    if command.starts_with('/') {
-        return command.to_string();
-    }
-
-    // Build an augmented PATH that covers the most common Node.js install locations.
+/// user-installed Node.js locations. This helper builds a comprehensive PATH
+/// so child processes can find `npx`, `node`, etc.
+fn build_augmented_path() -> String {
     let extra_dirs = [
         "/opt/homebrew/bin",       // Homebrew on Apple Silicon
         "/usr/local/bin",          // Homebrew on Intel / manual installs
@@ -100,38 +95,46 @@ fn resolve_command_path(command: &str) -> String {
     ];
 
     let current_path = std::env::var("PATH").unwrap_or_default();
-    let mut search_dirs: Vec<&str> = extra_dirs.iter().copied().collect();
+    let mut dirs: Vec<String> = extra_dirs.iter().map(|s| s.to_string()).collect();
 
     // Also honour whatever PATH the process already has.
     for p in current_path.split(':') {
-        if !search_dirs.contains(&p) {
-            search_dirs.push(p);
+        if !p.is_empty() && !dirs.iter().any(|d| d == p) {
+            dirs.push(p.to_string());
         }
     }
 
-    // Check nvm directories dynamically.
+    // Include nvm directories dynamically.
     let home = std::env::var("HOME").unwrap_or_default();
     let nvm_dir = format!("{}/.nvm/versions/node", home);
-    let mut nvm_bins: Vec<String> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
         for entry in entries.flatten() {
             let bin = format!("{}/bin", entry.path().display());
-            nvm_bins.push(bin);
+            if !dirs.iter().any(|d| d == &bin) {
+                dirs.push(bin);
+            }
         }
     }
 
-    // Search extra_dirs first, then nvm entries.
-    for dir in &search_dirs {
-        let candidate = format!("{}/{}", dir, command);
-        if std::path::Path::new(&candidate).is_file() {
-            tracing::debug!("[MCP Transport] Resolved '{}' → '{}'", command, candidate);
-            return candidate;
-        }
+    dirs.join(":")
+}
+
+/// Resolve a command name to its absolute path.
+///
+/// Uses `build_augmented_path` to search common install locations so that
+/// `npx`, `node`, etc. are found even without a full shell environment.
+fn resolve_command_path(command: &str) -> String {
+    // Already an absolute path — use as-is.
+    if command.starts_with('/') {
+        return command.to_string();
     }
-    for dir in &nvm_bins {
+
+    let augmented = build_augmented_path();
+
+    for dir in augmented.split(':') {
         let candidate = format!("{}/{}", dir, command);
         if std::path::Path::new(&candidate).is_file() {
-            tracing::debug!("[MCP Transport] Resolved '{}' → '{}' (nvm)", command, candidate);
+            tracing::debug!("[MCP Transport] Resolved '{}' -> '{}'", command, candidate);
             return candidate;
         }
     }
@@ -159,15 +162,13 @@ impl StdioTransport {
             args
         );
 
-        // Augment PATH so child processes launched by npm/npx can also find node.
-        let augmented_path = {
-            let current = std::env::var("PATH").unwrap_or_default();
-            let prepend = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin";
-            if current.contains("/opt/homebrew/bin") {
-                current
-            } else {
-                format!("{}:{}", prepend, current)
-            }
+        // Build augmented PATH using the shared helper, then merge any user-supplied
+        // PATH from `env` so it is appended rather than silently replacing ours.
+        let augmented_path = build_augmented_path();
+        let final_path = if let Some(user_path) = env.get("PATH") {
+            format!("{}:{}", augmented_path, user_path)
+        } else {
+            augmented_path
         };
 
         let mut cmd = Command::new(&resolved);
@@ -175,8 +176,8 @@ impl StdioTransport {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("PATH", &augmented_path)
-            .envs(env);
+            .envs(env)
+            .env("PATH", &final_path);
 
         let mut child = cmd
             .spawn()
