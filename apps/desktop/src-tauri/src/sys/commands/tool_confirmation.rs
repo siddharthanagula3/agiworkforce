@@ -138,6 +138,7 @@ impl Default for ToolConfirmationState {
 
 /// Summary of a tool confirmation request for the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolConfirmationSummary {
     pub request_id: String,
     pub tool_name: String,
@@ -364,6 +365,7 @@ pub fn get_auto_approve_all(
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolSafetyTierInfo {
     pub tool_name: String,
     pub safety_tier: String,

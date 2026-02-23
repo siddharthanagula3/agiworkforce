@@ -390,7 +390,7 @@ impl LLMRouter {
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4.5".to_string(),
+                        "claude-sonnet-4-5".to_string(),
                         "Coding intent detected - routing to Claude Sonnet 4.5 (excellent coding)."
                             .to_string(),
                     )
@@ -428,7 +428,7 @@ impl LLMRouter {
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4.5".to_string(),
+                        "claude-sonnet-4-5".to_string(),
                         "Agentic intent detected - routing to Claude Sonnet 4.5 for tool orchestration.".to_string(),
                     )
                 }
@@ -892,7 +892,7 @@ impl LLMRouter {
                     if token_count < 500 {
                         "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
                     } else if token_count < 4000 {
-                        "claude-sonnet-4.5" // $3/$15 per 1M - excellent quality
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
                     } else {
                         "gpt-5.2" // Strong OpenAI balanced model
                     }
@@ -900,9 +900,9 @@ impl LLMRouter {
                 RoutingStrategy::AutoPremium => {
                     // Premium: Always best models, switch based on context window needs
                     if token_count < 16000 {
-                        "claude-sonnet-4.5" // $3/$15 per 1M - excellent coding
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
                     } else {
-                        "claude-opus-4.6" // $5/$25 per 1M - best for heavy lifting
+                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
                     }
                 }
                 _ => candidate.model.as_str(),
@@ -1170,7 +1170,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Anthropic,
-                        model: "claude-sonnet-4.5".to_string(),
+                        model: "claude-sonnet-4-5".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1256,7 +1256,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4.5".to_string(),
+                                model: "claude-haiku-4-5".to_string(),
                                 reason: "auto-economy-quality",
                             },
                         ]
@@ -1308,7 +1308,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4.5".to_string(), // Best quality/price: 208 Elo/$
+                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
                                 reason: "auto-economy",
                             },
                         ]
@@ -1392,7 +1392,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4.5".to_string(),
+                                model: "claude-sonnet-4-5".to_string(),
                                 reason: "auto-balanced-sonnet",
                             },
                             RouteCandidate {
@@ -1426,7 +1426,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4.5".to_string(),
+                                model: "claude-sonnet-4-5".to_string(),
                                 reason: "auto-balanced-performance",
                             },
                             RouteCandidate {
@@ -1438,7 +1438,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4.5".to_string(), // Excellent coding: 77.2% SWE-bench
+                                model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced-coding",
                             },
                             RouteCandidate {
@@ -1520,7 +1520,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-sonnet-4.5".to_string(), // Excellent coding: 77.2% SWE-bench
+                                model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1571,7 +1571,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4.6".to_string(), // Best reasoning/coding
+                                model: "claude-opus-4-6".to_string(), // Best reasoning/coding
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
@@ -1605,7 +1605,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4.6".to_string(),
+                                model: "claude-opus-4-6".to_string(),
                                 reason: "auto-premium-reasoning",
                             },
                             RouteCandidate {
@@ -1617,7 +1617,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4.6".to_string(), // Best coding: 80.9% SWE-bench
+                                model: "claude-opus-4-6".to_string(), // Best coding: 80.9% SWE-bench
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
@@ -1669,7 +1669,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4.6".to_string(),
+                                model: "claude-opus-4-6".to_string(),
                                 reason: "auto-premium-creative",
                             },
                         ]
@@ -1702,9 +1702,9 @@ impl LLMRouter {
                 TaskCategory::Creative => "gpt-5-nano".to_string(),
             },
             Provider::Anthropic => match task {
-                TaskCategory::Simple => "claude-haiku-4.5".to_string(),
-                TaskCategory::Complex => "claude-sonnet-4.5".to_string(),
-                TaskCategory::Creative => "claude-sonnet-4.5".to_string(),
+                TaskCategory::Simple => "claude-haiku-4-5".to_string(),
+                TaskCategory::Complex => "claude-sonnet-4-5".to_string(),
+                TaskCategory::Creative => "claude-sonnet-4-5".to_string(),
             },
             Provider::Google => match task {
                 TaskCategory::Simple => "gemini-3-flash-preview".to_string(),
@@ -1991,7 +1991,7 @@ impl LLMRouter {
                     if token_count < 500 {
                         "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
                     } else if token_count < 4000 {
-                        "claude-sonnet-4.5" // $3/$15 per 1M - excellent quality
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
                     } else {
                         "gpt-5.2" // Strong OpenAI balanced model
                     }
@@ -1999,9 +1999,9 @@ impl LLMRouter {
                 RoutingStrategy::AutoPremium => {
                     // Premium: Always best models, switch based on context window needs
                     if token_count < 16000 {
-                        "claude-sonnet-4.5" // $3/$15 per 1M - excellent coding
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
                     } else {
-                        "claude-opus-4.6" // $5/$25 per 1M - best for heavy lifting
+                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
                     }
                 }
                 _ => candidate.model.as_str(),
