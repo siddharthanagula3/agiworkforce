@@ -136,6 +136,17 @@ pub enum NativeMessage {
         duration: u64,
     },
 
+    /// Selected text query from the browser context menu ("Ask AGI Workforce").
+    /// Field names match what the extension sends (camelCase from JS context menu handler).
+    SelectedTextQuery {
+        #[serde(rename = "selectedText")]
+        selected_text: String,
+        #[serde(rename = "url")]
+        context_url: Option<String>,
+        #[serde(rename = "tabId")]
+        tab_id: Option<i32>,
+    },
+
     // Script execution (controlled)
     ExecuteScript {
         script: String,
