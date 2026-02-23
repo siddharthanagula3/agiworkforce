@@ -665,7 +665,8 @@ export function useAgenticEvents() {
     }
 
     const state = useUnifiedChatStore.getState();
-    const targetMessage = state.messages.find((msg) => msg.id === targetMessageId);
+    const conversationMessages = resolveActiveConversationMessages();
+    const targetMessage = conversationMessages.find((msg) => msg.id === targetMessageId);
     if (!targetMessage) {
       return;
     }
@@ -1083,7 +1084,7 @@ export function useAgenticEvents() {
                 try {
                   const INVOKE_TIMEOUT_MS = 10000;
                   await Promise.race([
-                    invoke('agent_set_workflow_hash', { workflow_hash: workflowHash }),
+                    invoke('agent_set_workflow_hash', { workflowHash: workflowHash }),
                     new Promise<never>((_, reject) => {
                       timeoutId = setTimeout(
                         () =>
