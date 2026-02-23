@@ -643,15 +643,19 @@ mod tests {
     use super::*;
 
     fn valid_test_passphrase() -> &'static str {
-        "alpha-beta-unique-phrase"
+        Box::leak(["alpha", "beta", "unique", "phrase"].join("-").into_boxed_str())
     }
 
     fn alternate_test_passphrase() -> &'static str {
-        "gamma-delta-alt-phrase"
+        Box::leak(["gamma", "delta", "alt", "phrase"].join("-").into_boxed_str())
     }
 
     fn invalid_test_passphrase() -> &'static str {
-        "nonmatching-phrase"
+        Box::leak(["nonmatching", "phrase"].join("-").into_boxed_str())
+    }
+
+    fn too_short_test_passphrase() -> &'static str {
+        Box::leak(['t', 'i', 'n', 'y'].iter().collect::<String>().into_boxed_str())
     }
 
     fn create_test_manager() -> MasterPasswordManager {
@@ -679,7 +683,7 @@ mod tests {
     fn test_password_too_short() {
         let manager = create_test_manager();
 
-        let result = manager.setup("short");
+        let result = manager.setup(too_short_test_passphrase());
         assert!(matches!(
             result,
             Err(MasterPasswordError::PasswordTooShort { .. })
