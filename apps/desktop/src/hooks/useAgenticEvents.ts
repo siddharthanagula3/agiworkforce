@@ -1448,31 +1448,36 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalDenied);
 
-      const unlistenGoalProgress = await listen<GoalProgressEvent>(EVENTS.AGI_GOAL_PROGRESS, (event) => {
-        if (!isMountedRef.current) return;
-        const { goalId, progress, currentStep } = event.payload;
+      const unlistenGoalProgress = await listen<GoalProgressEvent>(
+        EVENTS.AGI_GOAL_PROGRESS,
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { goalId, progress, currentStep } = event.payload;
 
-        // Update agent status with progress
-        const state = useUnifiedChatStore.getState();
-        const existingAgent = state.agents.find((a) => a.currentGoal === goalId || a.id === goalId);
+          // Update agent status with progress
+          const state = useUnifiedChatStore.getState();
+          const existingAgent = state.agents.find(
+            (a) => a.currentGoal === goalId || a.id === goalId,
+          );
 
-        if (existingAgent) {
-          handlersRef.current.updateAgentStatus(existingAgent.id, {
-            progress,
-            currentStep,
-            status: 'running',
+          if (existingAgent) {
+            handlersRef.current.updateAgentStatus(existingAgent.id, {
+              progress,
+              currentStep,
+              status: 'running',
+            });
+          }
+
+          // Update action trail with progress
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: 'running',
+            message: currentStep || `Progress: ${Math.round(progress * 100)}%`,
+            progress: progress * 100,
+            fadeAfter: 10000,
           });
-        }
-
-        // Update action trail with progress
-        const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
-        addActionTrailEntry?.({
-          type: 'running',
-          message: currentStep || `Progress: ${Math.round(progress * 100)}%`,
-          progress: progress * 100,
-          fadeAfter: 10000,
-        });
-      });
+        },
+      );
       push(unlistenGoalProgress);
 
       const unlistenStepCompleted = await listen<StepCompletedEvent>(

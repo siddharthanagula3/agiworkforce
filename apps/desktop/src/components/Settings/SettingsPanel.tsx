@@ -542,6 +542,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </Tabs>
           )}
 
+          {/* TODO(release): Add Privacy Policy link -> https://agiworkforce.com/privacy */}
+          {/* TODO(release): Add Terms of Service link -> https://agiworkforce.com/terms */}
+          {/* TODO(release): Add Support link -> https://agiworkforce.com/support */}
           <div className="flex justify-end gap-3 mt-6 pt-6 border-t px-6 pb-6">
             <Button variant="outline" onClick={() => void handleCancel()}>
               Cancel
