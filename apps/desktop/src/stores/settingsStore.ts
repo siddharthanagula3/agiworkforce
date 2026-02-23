@@ -104,7 +104,7 @@ interface SettingsState {
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
-  setAutoApproveTools: (enabled: boolean) => void;
+  setAutoApproveTools: (enabled: boolean) => Promise<void>;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;
@@ -457,7 +457,7 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
-        setAutoApproveTools: (enabled: boolean) => {
+        setAutoApproveTools: async (enabled: boolean) => {
           set(
             (state) => ({
               chatPreferences: { ...state.chatPreferences, autoApproveTools: enabled },
@@ -465,6 +465,13 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAutoApproveTools',
           );
+          if (isTauriContext()) {
+            try {
+              await invoke('set_auto_approve_all', { enabled });
+            } catch (error) {
+              console.error('Failed to sync auto-approve-all to backend:', error);
+            }
+          }
         },
 
         addAllowedDirectory: (path: string) => {
