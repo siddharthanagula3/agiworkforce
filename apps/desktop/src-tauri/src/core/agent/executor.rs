@@ -95,9 +95,9 @@ impl TaskExecutor {
                 // current fallback and must at least be sanitised.
                 let parsed = url::Url::parse(url)
                     .map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
-                if !matches!(parsed.scheme(), "http" | "https" | "file") {
+                if !matches!(parsed.scheme(), "http" | "https") {
                     return Err(anyhow::anyhow!(
-                        "Blocked URL scheme '{}': only http/https/file are permitted",
+                        "Blocked URL scheme '{}': only http/https are permitted",
                         parsed.scheme()
                     ));
                 }
@@ -112,8 +112,11 @@ impl TaskExecutor {
                 #[cfg(target_os = "windows")]
                 {
                     use std::process::Command;
+                    // Quote the URL to prevent shell metacharacter injection
+                    // via &, |, ^ etc. in cmd.exe
+                    let quoted = format!("start \"\" \"{}\"", safe_url.replace('"', ""));
                     Command::new("cmd")
-                        .args(["/C", "start", safe_url])
+                        .args(["/C", &quoted])
                         .spawn()
                         .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
                 }
@@ -226,12 +229,16 @@ impl TaskExecutor {
                     ScrollDirection::Left => -(*amount),
                     ScrollDirection::Right => *amount,
                 };
+                #[cfg(target_os = "macos")]
+                let perm_msg = "Mouse automation requires Input Monitoring permission. \
+                    Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring.";
+                #[cfg(not(target_os = "macos"))]
+                let perm_msg = "Mouse automation requires input automation permission. \
+                    Please grant the necessary permissions in your system settings.";
+
                 self.automation.mouse.lock().await
                     .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "Mouse automation requires Input Monitoring permission. \
-                         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-                    ))?
+                    .ok_or_else(|| anyhow::anyhow!("{}", perm_msg))?
                     .scroll(delta)?;
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
@@ -354,7 +361,9 @@ impl TaskExecutor {
         Ok(canonical)
     }
 
-    /// BUG-01 fix: validate a write path — file may not exist yet, so no canonicalize.
+    /// BUG-01 fix: validate a write path — file may not exist yet, so we
+    /// canonicalize the longest existing ancestor to defeat symlink bypasses,
+    /// then re-append the non-existent tail before checking blocked prefixes.
     fn validate_write_path(path: &str) -> Result<std::path::PathBuf> {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
@@ -371,13 +380,41 @@ impl TaskExecutor {
         } else {
             std::env::current_dir()?.join(p)
         };
-        Self::check_blocked_prefix(&resolved)?;
-        Ok(resolved)
+
+        // Walk up from the full path until we find an existing ancestor,
+        // canonicalize it (resolving symlinks), then re-append the tail.
+        let mut tail: Vec<std::ffi::OsString> = Vec::new();
+        let mut tmp = resolved.as_path();
+        let real = loop {
+            match std::fs::canonicalize(tmp) {
+                Ok(canon) => {
+                    let mut r = canon;
+                    for part in tail.iter().rev() {
+                        r.push(part);
+                    }
+                    break r;
+                }
+                Err(_) => {
+                    if let Some(name) = tmp.file_name() {
+                        tail.push(name.to_owned());
+                        tmp = tmp.parent().unwrap_or(tmp);
+                    } else {
+                        break tmp.to_path_buf();
+                    }
+                }
+            }
+        };
+
+        Self::check_blocked_prefix(&real)?;
+        Ok(real)
     }
 
     fn check_blocked_prefix(path: &std::path::Path) -> Result<()> {
         #[cfg(not(target_os = "windows"))]
-        const BLOCKED: &[&str] = &["/etc", "/proc", "/sys", "/dev", "/boot", "/root"];
+        const BLOCKED: &[&str] = &[
+            "/etc", "/proc", "/sys", "/dev", "/boot", "/root",
+            "/usr", "/var", "/sbin", "/bin",
+        ];
 
         #[cfg(target_os = "windows")]
         const BLOCKED: &[&str] = &[
@@ -387,6 +424,7 @@ impl TaskExecutor {
             "C:\\ProgramData",
             "C:\\Users\\Default",
         ];
+
         for prefix in BLOCKED {
             if path.starts_with(prefix) {
                 return Err(anyhow::anyhow!(
@@ -395,6 +433,32 @@ impl TaskExecutor {
                 ));
             }
         }
+
+        // Block sensitive directories under the user's home directory
+        if let Some(home) = dirs::home_dir() {
+            let home_blocked = vec![
+                home.join(".ssh"),
+                home.join(".gnupg"),
+                home.join(".config"),
+            ];
+
+            #[cfg(target_os = "macos")]
+            let home_blocked = {
+                let mut v = home_blocked;
+                v.push(home.join("Library"));
+                v
+            };
+
+            for prefix in &home_blocked {
+                if path.starts_with(prefix) {
+                    return Err(anyhow::anyhow!(
+                        "Access denied: '{}' is a protected user path",
+                        path.display()
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 

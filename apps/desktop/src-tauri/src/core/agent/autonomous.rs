@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 const MAX_SELF_HEAL_RETRIES: usize = 3;
+const MAX_PENDING_TASKS: usize = 500;
 
 pub struct AutonomousAgent {
     config: AgentConfig,
@@ -114,10 +115,25 @@ impl AutonomousAgent {
             auto_approve,
         };
 
-        self.task_queue
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?
-            .push(task);
+        {
+            let mut queue = self
+                .task_queue
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let pending_count = queue
+                .iter()
+                .filter(|t| {
+                    matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval)
+                })
+                .count();
+            if pending_count >= MAX_PENDING_TASKS {
+                return Err(anyhow!(
+                    "Task queue full ({} pending tasks)",
+                    MAX_PENDING_TASKS
+                ));
+            }
+            queue.push(task);
+        }
 
         tracing::info!("[Agent] Task {} queued for execution", task_id);
         Ok(task_id)
