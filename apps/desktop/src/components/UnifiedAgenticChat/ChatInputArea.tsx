@@ -37,6 +37,7 @@ import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 
 // Sub-components
 import { AttachmentPreview } from './AttachmentPreview';
+import { BrowserActivityBadge } from './BrowserActivityBadge';
 import { ContextDisplay } from './ContextDisplay';
 import { DragOverlay } from './DragOverlay';
 import { FocusModeButtons, getFocusModePlaceholder } from './FocusModeButtons';
@@ -938,29 +939,32 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
           {/* Toolbar row - below textarea */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
-            {/* Left toolbar */}
-            <InputToolbar
-              // Keep tool affordances available while generation is in-flight.
-              disabled={disabled}
-              enableAttachments={enableAttachments}
-              selectedModel={selectedModel}
-              isSimpleMode={isSimpleMode}
-              isVoiceSupported={isVoiceSupported}
-              isRecording={isListening}
-              isTranscribing={isTranscribing}
-              preferWhisperCloud={preferWhisperCloud}
-              availableLocalWhisper={availableLocalWhisper}
-              showTranscriptionModeSelector={showTranscriptionModeSelector}
-              onAttachClick={() => fileInputRef.current?.click()}
-              onToggleRecording={toggleListening}
-              onModeSelectorChange={setShowTranscriptionModeSelector}
-              onPreferWhisperCloudChange={setPreferWhisperCloud}
-              onScreenCapture={handleScreenCapture}
-              conversationId={(() => {
-                const activeId = useUnifiedChatStore.getState().activeConversationId;
-                return activeId ? uuidToDbId(activeId) : undefined;
-              })()}
-            />
+            {/* Left toolbar + browser activity badge */}
+            <div className="flex items-center gap-2">
+              <InputToolbar
+                // Keep tool affordances available while generation is in-flight.
+                disabled={disabled}
+                enableAttachments={enableAttachments}
+                selectedModel={selectedModel}
+                isSimpleMode={isSimpleMode}
+                isVoiceSupported={isVoiceSupported}
+                isRecording={isListening}
+                isTranscribing={isTranscribing}
+                preferWhisperCloud={preferWhisperCloud}
+                availableLocalWhisper={availableLocalWhisper}
+                showTranscriptionModeSelector={showTranscriptionModeSelector}
+                onAttachClick={() => fileInputRef.current?.click()}
+                onToggleRecording={toggleListening}
+                onModeSelectorChange={setShowTranscriptionModeSelector}
+                onPreferWhisperCloudChange={setPreferWhisperCloud}
+                onScreenCapture={handleScreenCapture}
+                conversationId={(() => {
+                  const activeId = useUnifiedChatStore.getState().activeConversationId;
+                  return activeId ? uuidToDbId(activeId) : undefined;
+                })()}
+              />
+              <BrowserActivityBadge />
+            </div>
 
             {/* Right side controls */}
             <div className="flex items-center gap-2">
