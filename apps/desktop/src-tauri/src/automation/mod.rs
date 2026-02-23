@@ -192,16 +192,37 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 pub struct AutomationService {
     pub native: PlatformDriver,
-    pub keyboard: tokio::sync::Mutex<KeyboardSimulator>,
-    pub mouse: tokio::sync::Mutex<MouseSimulator>,
+    pub keyboard: tokio::sync::Mutex<Option<KeyboardSimulator>>,
+    pub mouse: tokio::sync::Mutex<Option<MouseSimulator>>,
     pub clipboard: tokio::sync::Mutex<ClipboardManager>,
 }
+
 impl AutomationService {
     pub fn new() -> anyhow::Result<Self> {
+        let keyboard = match KeyboardSimulator::new() {
+            Ok(kb) => Some(kb),
+            Err(e) => {
+                tracing::warn!(
+                    "KeyboardSimulator unavailable (Input Monitoring permission likely not granted): {}",
+                    e
+                );
+                None
+            }
+        };
+        let mouse = match MouseSimulator::new() {
+            Ok(m) => Some(m),
+            Err(e) => {
+                tracing::warn!(
+                    "MouseSimulator unavailable (Input Monitoring permission likely not granted): {}",
+                    e
+                );
+                None
+            }
+        };
         Ok(Self {
             native: PlatformDriver::new()?,
-            keyboard: tokio::sync::Mutex::new(KeyboardSimulator::new()?),
-            mouse: tokio::sync::Mutex::new(MouseSimulator::new()?),
+            keyboard: tokio::sync::Mutex::new(keyboard),
+            mouse: tokio::sync::Mutex::new(mouse),
             clipboard: tokio::sync::Mutex::new(ClipboardManager::new()?),
         })
     }

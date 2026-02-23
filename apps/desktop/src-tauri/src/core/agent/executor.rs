@@ -226,7 +226,13 @@ impl TaskExecutor {
                     ScrollDirection::Left => -(*amount),
                     ScrollDirection::Right => *amount,
                 };
-                self.automation.mouse.lock().await.scroll(delta)?;
+                self.automation.mouse.lock().await
+                    .as_mut()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Mouse automation requires Input Monitoring permission. \
+                         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+                    ))?
+                    .scroll(delta)?;
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
             Action::PressKey { keys } => {

@@ -282,7 +282,12 @@ pub async fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
         .ok_or_else(|| format!("Unsupported key code: {}", request.key))?;
 
     let service = global_service().map_err(|e| e.to_string())?;
-    let mut keyboard = service.keyboard.lock().await;
+    let mut kb_guard = service.keyboard.lock().await;
+    let keyboard = kb_guard.as_mut().ok_or_else(|| {
+        "Keyboard automation requires Input Monitoring permission. \
+         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+            .to_string()
+    })?;
 
     keyboard
         .send_hotkey(&modifiers, key)
@@ -350,7 +355,24 @@ pub async fn automation_click(
     };
 
     {
-        let mut mouse = service.mouse.lock().await;
+        let mut mouse_guard = service.mouse.lock().await;
+        let mouse = match mouse_guard.as_mut() {
+            Some(m) => m,
+            None => {
+                let err_str = "Mouse automation requires Input Monitoring permission. \
+                    Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+                    .to_string();
+                emit_ui_action(
+                    &app,
+                    "UI Click",
+                    &err_str,
+                    "failed",
+                    json!(request),
+                    Some(err_str.clone()),
+                );
+                return Err(err_str);
+            }
+        };
 
         let button = match button_name.as_str() {
             "right" => MouseButton::Right,
@@ -461,7 +483,12 @@ pub async fn automation_drag_drop(
     }
 
     let service = global_service().map_err(|e| e.to_string())?;
-    let mut mouse = service.mouse.lock().await;
+    let mut mouse_guard = service.mouse.lock().await;
+    let mouse = mouse_guard.as_mut().ok_or_else(|| {
+        "Mouse automation requires Input Monitoring permission. \
+         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+            .to_string()
+    })?;
 
     if let Err(err) = mouse
         .drag_and_drop(
@@ -664,7 +691,27 @@ async fn execute_text_input(
         }
     };
 
-    let mut keyboard = service.keyboard.lock().await;
+    let mut kb_guard = service.keyboard.lock().await;
+    let keyboard = match kb_guard.as_mut() {
+        Some(kb) => kb,
+        None => {
+            let err_str = "Keyboard automation requires Input Monitoring permission. \
+                Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+                .to_string();
+            emit_ui_action(
+                app,
+                "Type Text",
+                &err_str,
+                "failed",
+                json!({
+                    "elementId": element_id,
+                    "textLength": text.chars().count(),
+                }),
+                Some(err_str.clone()),
+            );
+            return Err(err_str);
+        }
+    };
 
     if let Err(err) = keyboard.send_text(&text).await {
         let error_string = err.to_string();
