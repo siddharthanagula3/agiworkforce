@@ -2,48 +2,23 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+// registry.rs was deleted; lib.rs generate_handler![] is now the sole source of truth.
 const libRs = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf8');
-const registryRs = readFileSync(
-  resolve(__dirname, '../../src-tauri/src/sys/commands/registry.rs'),
-  'utf8',
-);
 
 describe('tauri command registration contracts', () => {
   it('keeps realtime + messaging commands registered when frontend invokes them', () => {
-    const contracts = [
-      {
-        libPath: 'crate::sys::commands::messaging::send_message',
-        registryPath: '$crate::sys::commands::messaging::send_message',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::connect_websocket',
-        registryPath: '$crate::sys::commands::realtime::connect_websocket',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::get_team_presence',
-        registryPath: '$crate::sys::commands::realtime::get_team_presence',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::get_user_presence',
-        registryPath: '$crate::sys::commands::realtime::get_user_presence',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::set_user_online',
-        registryPath: '$crate::sys::commands::realtime::set_user_online',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::set_user_offline',
-        registryPath: '$crate::sys::commands::realtime::set_user_offline',
-      },
-      {
-        libPath: 'crate::sys::commands::realtime::update_user_activity',
-        registryPath: '$crate::sys::commands::realtime::update_user_activity',
-      },
+    const libPaths = [
+      'crate::sys::commands::messaging::send_message',
+      'crate::sys::commands::realtime::connect_websocket',
+      'crate::sys::commands::realtime::get_team_presence',
+      'crate::sys::commands::realtime::get_user_presence',
+      'crate::sys::commands::realtime::set_user_online',
+      'crate::sys::commands::realtime::set_user_offline',
+      'crate::sys::commands::realtime::update_user_activity',
     ];
 
-    for (const contract of contracts) {
-      expect(libRs).toContain(contract.libPath);
-      expect(registryRs).toContain(contract.registryPath);
+    for (const path of libPaths) {
+      expect(libRs).toContain(path);
     }
   });
 });
