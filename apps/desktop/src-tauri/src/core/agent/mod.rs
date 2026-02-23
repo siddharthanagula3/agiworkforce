@@ -72,6 +72,7 @@ pub struct Task {
     pub current_step: usize,
     pub max_retries: usize,
     pub retry_count: usize,
+    pub replan_count: usize,
     pub requires_approval: bool,
     pub auto_approve: bool,
 }
@@ -81,7 +82,7 @@ impl Serialize for Task {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("Task", 11)?;
+        let mut state = serializer.serialize_struct("Task", 12)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("description", &self.description)?;
         state.serialize_field("status", &self.status)?;
@@ -91,6 +92,7 @@ impl Serialize for Task {
         state.serialize_field("currentStep", &self.current_step)?;
         state.serialize_field("maxRetries", &self.max_retries)?;
         state.serialize_field("retryCount", &self.retry_count)?;
+        state.serialize_field("replanCount", &self.replan_count)?;
         state.serialize_field("requiresApproval", &self.requires_approval)?;
         state.serialize_field("autoApprove", &self.auto_approve)?;
         state.end()
@@ -114,6 +116,8 @@ impl<'de> Deserialize<'de> for Task {
             current_step: usize,
             max_retries: usize,
             retry_count: usize,
+            #[serde(default)]
+            replan_count: usize,
             requires_approval: bool,
             auto_approve: bool,
         }
@@ -137,6 +141,7 @@ impl<'de> Deserialize<'de> for Task {
             current_step: helper.current_step,
             max_retries: helper.max_retries,
             retry_count: helper.retry_count,
+            replan_count: helper.replan_count,
             requires_approval: helper.requires_approval,
             auto_approve: helper.auto_approve,
         })

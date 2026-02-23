@@ -148,7 +148,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Claude, GPT, Gemini, Grok, DeepSeek, and Ollama</span>
+                  <span>Claude, GPT-4o, Gemini, Grok, DeepSeek, and Ollama</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />

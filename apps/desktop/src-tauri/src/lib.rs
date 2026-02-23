@@ -1942,6 +1942,7 @@ pub fn run() {
             crate::sys::commands::tool_confirmation::get_allowed_directories,
             crate::sys::commands::tool_confirmation::set_auto_approve_all,
             crate::sys::commands::tool_confirmation::get_auto_approve_all,
+            crate::sys::commands::tool_confirmation::resolve_task_approval,
 
             // Master Password (SECSYS-001 security enhancement)
             crate::sys::commands::master_password::master_password_is_configured,

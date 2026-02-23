@@ -359,6 +359,44 @@ pub fn get_auto_approve_all(
     Ok(state.is_auto_approve_all())
 }
 
+/// Resolve a pending autonomous-agent task approval.
+///
+/// Called by the frontend when the user approves or rejects a task that is
+/// stuck in `TaskStatus::WaitingApproval`. This sends a boolean signal through
+/// the oneshot channel registered in `PENDING_TASK_APPROVALS`, waking the
+/// suspended agent task so it can resume execution (on approve) or fail
+/// gracefully (on reject).
+#[tauri::command]
+pub async fn resolve_task_approval(
+    task_id: String,
+    approved: bool,
+) -> Result<(), String> {
+    use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
+
+    info!(
+        "[TaskApproval] User {} task {}",
+        if approved { "approved" } else { "rejected" },
+        task_id,
+    );
+
+    let sender = PENDING_TASK_APPROVALS
+        .remove(&task_id)
+        .map(|(_, tx)| tx)
+        .ok_or_else(|| {
+            format!(
+                "No pending approval found for task_id: {} (may have timed out)",
+                task_id
+            )
+        })?;
+
+    sender.send(approved).map_err(|_| {
+        format!(
+            "Failed to deliver approval signal for task {} (receiver dropped)",
+            task_id
+        )
+    })
+}
+
 // ============================================================================
 // Response Types
 // ============================================================================
