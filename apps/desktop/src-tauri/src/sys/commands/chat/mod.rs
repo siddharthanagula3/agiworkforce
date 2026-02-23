@@ -3164,6 +3164,56 @@ pub async fn chat_send_message(
                                     });
                                 }
 
+                                // BUG-06: compact followup_messages to prevent unbounded
+                                // context growth across streaming tool loop iterations.
+                                const TOOL_LOOP_COMPACT_THRESHOLD: usize = 20;
+                                const TOOL_LOOP_KEEP_RECENT: usize = 10;
+                                if followup_messages.len() > TOOL_LOOP_COMPACT_THRESHOLD {
+                                    let total = followup_messages.len();
+                                    let keep_start = 1.min(total);
+                                    let keep_end_start =
+                                        total.saturating_sub(TOOL_LOOP_KEEP_RECENT);
+                                    let compacted_count =
+                                        keep_end_start.saturating_sub(keep_start);
+                                    if compacted_count > 0 {
+                                        let mut summary_parts: Vec<String> = Vec::new();
+                                        for msg in
+                                            &followup_messages[keep_start..keep_end_start]
+                                        {
+                                            let preview: String =
+                                                msg.content.chars().take(200).collect();
+                                            summary_parts
+                                                .push(format!("[{}]: {}", msg.role, preview));
+                                        }
+                                        let summary_msg = crate::core::llm::ChatMessage {
+                                            role: "system".to_string(),
+                                            content: format!(
+                                                "[Compacted {} tool-loop messages]\n{}",
+                                                compacted_count,
+                                                summary_parts.join("\n")
+                                            ),
+                                            tool_calls: None,
+                                            tool_call_id: None,
+                                            multimodal_content: None,
+                                        };
+                                        let mut compacted =
+                                            Vec::with_capacity(2 + TOOL_LOOP_KEEP_RECENT);
+                                        if keep_start > 0 {
+                                            compacted.push(followup_messages[0].clone());
+                                        }
+                                        compacted.push(summary_msg);
+                                        compacted.extend_from_slice(
+                                            &followup_messages[keep_end_start..],
+                                        );
+                                        tracing::debug!(
+                                            "[Chat] Compacted tool loop messages: {} -> {}",
+                                            total,
+                                            compacted.len()
+                                        );
+                                        followup_messages = compacted;
+                                    }
+                                }
+
                                 // Send follow-up request to LLM (non-streaming for tool loop)
                                 let followup_request = crate::core::llm::LLMRequest {
                                     messages: followup_messages,
