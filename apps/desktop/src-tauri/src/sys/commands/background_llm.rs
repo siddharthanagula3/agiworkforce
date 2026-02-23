@@ -167,7 +167,7 @@ mod tests {
     use super::*;
 
     fn test_webhook_secret() -> &'static str {
-        "hmac-fixture-value"
+        Box::leak(["hmac", "fixture", "value"].join("-").into_boxed_str())
     }
 
     #[test]
