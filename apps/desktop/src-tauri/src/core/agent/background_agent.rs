@@ -1135,25 +1135,11 @@ async fn execute_background_agent(
         }
     };
 
-    // Mark Running
-    {
-        let mut agents_lock = agents.write().await;
-        if let Some(a) = agents_lock.get_mut(&agent_id) {
-            a.started_at = Some(Utc::now());
-            a.status = BackgroundAgentStatus::Running;
-            let _ = persist_agent_to_db(&db_conn, a);
-        }
-    }
+    // Note: start_agent_execution() already called agent.start() (sets Running + started_at)
+    // and emitted "background_agent:started" before spawning this task. No duplicate here.
 
-    // Notify frontend: agent started
-    if let Some(ref app) = app_handle {
-        let _ = app.emit(
-            "background_agent:started",
-            serde_json::json!({ "agentId": agent_id }),
-        );
-    }
-
-    // Run with timeout and command cancellation
+    // Run with timeout and command cancellation.
+    // Track whether the command branch was a Pause (reversible) vs Cancel (terminal).
     let timeout_duration = Duration::from_secs(if timeout_secs == 0 {
         86400 // fallback: 24h if zero
     } else {
@@ -1161,31 +1147,61 @@ async fn execute_background_agent(
     });
 
     let goal = agent.goal.clone();
-    let result: Result<String, anyhow::Error> = tokio::select! {
-        r = autonomous.run_goal(goal.clone()) => r,
-        _ = async {
+
+    // Command branch returns Ok(true) for Pause, Ok(false) for Cancel/TakeOver/disconnect.
+    let cmd_result: tokio::sync::oneshot::Receiver<bool> = {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
             loop {
                 match command_rx.recv().await {
-                    Some(AgentCommand::Cancel) | Some(AgentCommand::TakeOver) | None => break,
-                    Some(AgentCommand::Pause) => break,
+                    Some(AgentCommand::Pause) => {
+                        let _ = tx.send(true); // true = paused
+                        break;
+                    }
+                    Some(AgentCommand::Cancel)
+                    | Some(AgentCommand::TakeOver)
+                    | None => {
+                        let _ = tx.send(false); // false = cancelled
+                        break;
+                    }
                     Some(AgentCommand::Resume) => continue,
                 }
             }
-        } => Err(anyhow::anyhow!("Cancelled by command")),
-        _ = tokio::time::sleep(timeout_duration) => {
-            Err(anyhow::anyhow!("Agent timed out after {} seconds", timeout_secs))
-        },
+        });
+        rx
     };
 
-    // Write markdown summary file
-    let summary_path = write_agent_summary(&agent_id, &goal, &result);
+    enum RunOutcome {
+        Finished(Result<String, anyhow::Error>),
+        Paused,
+        Cancelled,
+        TimedOut,
+    }
 
-    // Update final status and emit completion event
+    let outcome = tokio::select! {
+        r = autonomous.run_goal(goal.clone()) => RunOutcome::Finished(r),
+        cmd = cmd_result => match cmd {
+            Ok(true)  => RunOutcome::Paused,
+            _         => RunOutcome::Cancelled,
+        },
+        _ = tokio::time::sleep(timeout_duration) => RunOutcome::TimedOut,
+    };
+
+    // Write markdown summary file (for Finished outcomes)
+    let result_for_summary = match &outcome {
+        RunOutcome::Finished(r) => Some(r),
+        _ => None,
+    };
+    let summary_path = result_for_summary
+        .map(|r| write_agent_summary(&agent_id, &goal, r))
+        .unwrap_or(None);
+
+    // Update final status and emit event
     {
         let mut agents_lock = agents.write().await;
         if let Some(a) = agents_lock.get_mut(&agent_id) {
-            match &result {
-                Ok(_) => {
+            match &outcome {
+                RunOutcome::Finished(Ok(_)) => {
                     a.status = BackgroundAgentStatus::Completed;
                     a.completed_at = Some(Utc::now());
                     a.summary = Some(AgentSummary {
@@ -1199,7 +1215,16 @@ async fn execute_background_agent(
                         goal_achieved: true,
                     });
                 }
-                Err(e) => {
+                RunOutcome::Paused => {
+                    a.status = BackgroundAgentStatus::Paused;
+                }
+                RunOutcome::Cancelled => {
+                    a.fail("Cancelled by user command".to_string());
+                }
+                RunOutcome::TimedOut => {
+                    a.fail(format!("Agent timed out after {} seconds", timeout_secs));
+                }
+                RunOutcome::Finished(Err(e)) => {
                     a.fail(e.to_string());
                 }
             }
@@ -1207,33 +1232,68 @@ async fn execute_background_agent(
         }
     }
 
-    // Emit completion or failure event to frontend
+    // Emit frontend event
     if let Some(ref app) = app_handle {
-        if result.is_ok() {
-            let _ = app.emit(
-                "background_agent:completed",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "goal": goal,
-                    "summaryPath": summary_path,
-                }),
-            );
-        } else {
-            let _ = app.emit(
-                "background_agent:failed",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "goal": goal,
-                    "error": result.as_ref().err().map(|e| e.to_string()).unwrap_or_default(),
-                }),
-            );
+        match &outcome {
+            RunOutcome::Finished(Ok(_)) => {
+                let _ = app.emit(
+                    "background_agent:completed",
+                    serde_json::json!({
+                        "agentId": agent_id,
+                        "goal": goal,
+                        "summaryPath": summary_path,
+                    }),
+                );
+            }
+            RunOutcome::Paused => {
+                let _ = app.emit(
+                    "background_agent:paused",
+                    serde_json::json!({ "agentId": agent_id }),
+                );
+            }
+            RunOutcome::Cancelled => {
+                let _ = app.emit(
+                    "background_agent:failed",
+                    serde_json::json!({
+                        "agentId": agent_id,
+                        "goal": goal,
+                        "error": "Cancelled by user",
+                    }),
+                );
+            }
+            RunOutcome::TimedOut => {
+                let _ = app.emit(
+                    "background_agent:failed",
+                    serde_json::json!({
+                        "agentId": agent_id,
+                        "goal": goal,
+                        "error": format!("Timed out after {} seconds", timeout_secs),
+                    }),
+                );
+            }
+            RunOutcome::Finished(Err(e)) => {
+                let _ = app.emit(
+                    "background_agent:failed",
+                    serde_json::json!({
+                        "agentId": agent_id,
+                        "goal": goal,
+                        "error": e.to_string(),
+                    }),
+                );
+            }
         }
     }
 
     tracing::info!(
         "[BackgroundAgent] Agent {} finished: {}",
         agent_id,
-        if result.is_ok() { "success" } else { "failed" }
+        match &outcome {
+            RunOutcome::Finished(Ok(_)) => "completed",
+            RunOutcome::Paused => "paused",
+            RunOutcome::Cancelled => "cancelled",
+            RunOutcome::TimedOut => "timed_out",
+            RunOutcome::Finished(Err(_)) => "failed",
+        }
     );
     // _sleep_guard drops here -> OS sleep re-enabled
 }
