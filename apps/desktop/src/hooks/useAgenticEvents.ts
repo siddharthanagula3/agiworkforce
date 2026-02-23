@@ -1315,6 +1315,117 @@ export function useAgenticEvents() {
       });
       push(unlistenAgentSpawned);
 
+      // BUG-02 fix: Listen to autonomous agent step/task lifecycle events
+      const unlistenStepStarted = await listen<{
+        taskId: string;
+        step: string;
+        stepIndex: number;
+        totalSteps: number;
+      }>('agent:step-started', (event) => {
+        if (!isMountedRef.current) return;
+        const { taskId, step, stepIndex, totalSteps } = event.payload;
+        const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+        addActionTrailEntry?.({
+          type: 'running',
+          message: `Step ${stepIndex + 1}/${totalSteps}: ${step}`,
+          progress: (stepIndex / totalSteps) * 100,
+        });
+        upsertActionLogEntry({
+          id: `${taskId}-step-${stepIndex}`,
+          type: 'plan',
+          title: `Step ${stepIndex + 1}/${totalSteps}`,
+          description: step,
+          status: 'running',
+        });
+      });
+      push(unlistenStepStarted);
+
+      const unlistenAgentStepCompleted = await listen<{
+        taskId: string;
+        step: string;
+        result: string;
+        stepIndex: number;
+      }>('agent:step-completed', (event) => {
+        if (!isMountedRef.current) return;
+        const { taskId, step, result, stepIndex } = event.payload;
+        upsertActionLogEntry({
+          id: `${taskId}-step-${stepIndex}`,
+          type: 'plan',
+          title: `Step ${stepIndex + 1} completed`,
+          description: step,
+          status: 'success',
+          result,
+        });
+      });
+      push(unlistenAgentStepCompleted);
+
+      const unlistenStepFailed = await listen<{
+        taskId: string;
+        step: string;
+        error: string;
+        attempt: number;
+        retrying: boolean;
+      }>('agent:step-failed', (event) => {
+        if (!isMountedRef.current) return;
+        const { taskId, step, error, attempt, retrying } = event.payload;
+        upsertActionLogEntry({
+          id: `${taskId}-step-attempt-${attempt}`,
+          type: 'plan',
+          title: retrying ? `Step failed (retrying, attempt ${attempt})` : 'Step failed',
+          description: step,
+          status: retrying ? 'running' : 'failed',
+          error,
+        });
+      });
+      push(unlistenStepFailed);
+
+      const unlistenTaskCompleted2 = await listen<{
+        taskId: string;
+        success: boolean;
+        stepsCompleted: number;
+      }>('agent:task-completed', (event) => {
+        if (!isMountedRef.current) return;
+        const { taskId, stepsCompleted } = event.payload;
+        const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+        addActionTrailEntry?.({
+          type: 'completed',
+          message: `Task completed (${stepsCompleted} steps)`,
+          progress: 100,
+          fadeAfter: 10000,
+        });
+        upsertActionLogEntry({
+          id: taskId,
+          type: 'plan',
+          title: 'Task completed',
+          description: `Successfully completed ${stepsCompleted} steps`,
+          status: 'success',
+        });
+      });
+      push(unlistenTaskCompleted2);
+
+      const unlistenTaskFailed2 = await listen<{
+        taskId: string;
+        error: string;
+      }>('agent:task-failed', (event) => {
+        if (!isMountedRef.current) return;
+        const { taskId, error: taskError } = event.payload;
+        const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+        addActionTrailEntry?.({
+          type: 'error',
+          message: `Task failed: ${taskError}`,
+          progress: 0,
+        });
+        upsertActionLogEntry({
+          id: taskId,
+          type: 'plan',
+          title: 'Task failed',
+          description: taskError,
+          status: 'failed',
+          error: taskError,
+        });
+      });
+      push(unlistenTaskFailed2);
+
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {
         if (!isMountedRef.current) return;
         const existingTasks = useUnifiedChatStore.getState().backgroundTasks;
