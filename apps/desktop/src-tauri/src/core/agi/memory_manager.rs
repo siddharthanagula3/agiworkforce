@@ -321,19 +321,46 @@ pub struct MemoryManager {
     tfidf_index: RwLock<TfIdfIndex>,
     /// Configuration for semantic search
     semantic_config: RwLock<SemanticSearchConfig>,
+    /// BUG-09 fix: cached at construction time — schema does not change at runtime
+    has_last_accessed: bool,
+    /// BUG-09 fix: cached presence of 'compacted' column in daily_logs
+    has_compacted_col: bool,
 }
 
 impl MemoryManager {
+    /// BUG-09 fix: check column presence once at construction, not on every call.
+    fn probe_schema(conn: &Connection) -> (bool, bool) {
+        let has_last_accessed = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        let has_compacted_col = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('daily_logs') WHERE name = 'compacted'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        (has_last_accessed, has_compacted_col)
+    }
+
     /// Create a new MemoryManager with a connection to the database
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
+        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
             decay_config: Mutex::new(DecayConfig::default()),
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
+            has_last_accessed,
+            has_compacted_col,
         })
     }
 
@@ -341,12 +368,15 @@ impl MemoryManager {
     pub fn from_path(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
+        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
             decay_config: Mutex::new(DecayConfig::default()),
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
+            has_last_accessed,
+            has_compacted_col,
         })
     }
 
@@ -354,12 +384,15 @@ impl MemoryManager {
     pub fn with_decay_config(db_path: &str, config: DecayConfig) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
+        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
             decay_config: Mutex::new(config),
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
+            has_last_accessed,
+            has_compacted_col,
         })
     }
 
@@ -370,12 +403,15 @@ impl MemoryManager {
     ) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
+        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
             decay_config: Mutex::new(DecayConfig::default()),
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(semantic_config),
+            has_last_accessed,
+            has_compacted_col,
         })
     }
 
@@ -447,7 +483,8 @@ impl MemoryManager {
         let category_str = category.as_str();
 
         let result = conn.query_row(
-            "SELECT id, category, topic, content, importance, source, created_at, updated_at
+            // BUG-08 fix: include last_accessed so map_memory_row column 8 is always valid
+            "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
              FROM user_memory
              WHERE category = ?1 AND topic = ?2",
             params![category_str, topic],
@@ -472,7 +509,8 @@ impl MemoryManager {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, category, topic, content, importance, source, created_at, updated_at
+                // BUG-08 fix: include last_accessed
+                "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
                  FROM user_memory
                  WHERE content LIKE ?1 OR topic LIKE ?1
                  ORDER BY importance DESC, updated_at DESC
@@ -504,7 +542,8 @@ impl MemoryManager {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, category, topic, content, importance, source, created_at, updated_at
+                // BUG-08 fix: include last_accessed
+                "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
                  FROM user_memory
                  WHERE category = ?1
                  ORDER BY importance DESC, updated_at DESC
@@ -530,7 +569,8 @@ impl MemoryManager {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, category, topic, content, importance, source, created_at, updated_at
+                // BUG-08 fix: include last_accessed
+                "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
                  FROM user_memory
                  WHERE importance >= ?1
                  ORDER BY importance DESC, updated_at DESC
@@ -729,15 +769,8 @@ impl MemoryManager {
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
-        // Check if last_accessed column exists
-        let has_last_accessed = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
+        // BUG-09 fix: use cached schema probe result instead of per-call pragma
+        let has_last_accessed = self.has_last_accessed;
 
         // Get current importance
         let current_importance: i32 = conn
@@ -814,15 +847,8 @@ impl MemoryManager {
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
-        // Check if last_accessed column exists
-        let has_last_accessed = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
+        // BUG-09 fix: use cached schema probe result instead of per-call pragma
+        let has_last_accessed = self.has_last_accessed;
 
         if !has_last_accessed {
             return Ok(vec![]);
@@ -877,15 +903,8 @@ impl MemoryManager {
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
 
-        // Check if last_accessed column exists
-        let has_last_accessed = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
+        // BUG-09 fix: use cached schema probe result instead of per-call pragma
+        let has_last_accessed = self.has_last_accessed;
 
         if !has_last_accessed {
             return Ok(DecayResult {
@@ -1041,14 +1060,8 @@ impl MemoryManager {
             .format("%Y-%m-%d")
             .to_string();
 
-        // Check if compacted column exists
-        let has_compacted_col: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM pragma_table_info('daily_logs') WHERE name = 'compacted'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(false);
+        // BUG-09 fix: use cached schema probe result instead of per-call pragma
+        let has_compacted_col = self.has_compacted_col;
 
         let sql = if has_compacted_col {
             "SELECT log_date, COUNT(*) as cnt,
