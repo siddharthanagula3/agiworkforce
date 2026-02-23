@@ -83,25 +83,38 @@ function sendMessage(): void {
   sendBtn.disabled = true;
   renderQueue();
 
-  chrome.runtime.sendMessage(
-    {
-      type: 'queue_message',
-      id: entry.id,
-      text,
-      timestamp: entry.timestamp,
-    },
-    (response: { success?: boolean; error?: string } | undefined) => {
-      sendBtn.disabled = false;
-      if (chrome.runtime.lastError) {
-        entry.status = 'error';
-        entry.result = chrome.runtime.lastError.message;
-      } else {
-        entry.status = response?.success ? 'processing' : 'error';
-        entry.result = response?.error;
-      }
-      renderQueue();
+  const timeoutMs = 10_000;
+  const responsePromise = new Promise<{ success?: boolean; error?: string } | undefined>(
+    (resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'queue_message', id: entry.id, text, timestamp: entry.timestamp },
+        (response: { success?: boolean; error?: string } | undefined) => {
+          if (chrome.runtime.lastError) {
+            resolve({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response);
+          }
+        },
+      );
     },
   );
+  const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
+    setTimeout(
+      () => resolve({ success: false, error: 'Extension communication timeout' }),
+      timeoutMs,
+    ),
+  );
+
+  Promise.race([responsePromise, timeoutPromise]).then((response) => {
+    sendBtn.disabled = false;
+    if (!response?.success) {
+      entry.status = 'error';
+      entry.result = response?.error ?? 'Unknown error';
+    } else {
+      entry.status = 'processing';
+    }
+    renderQueue();
+  });
 }
 
 document.getElementById('sendBtn')?.addEventListener('click', sendMessage);

@@ -892,10 +892,14 @@ function updateIndicatorStatus(): void {
  * Uses shadow DOM to prevent page style interference.
  */
 function injectFloatingOverlay(): void {
-  if (document.getElementById('agi-workforce-overlay-host')) return;
+  // Only inject on regular http/https pages — skip chrome://, chrome-extension://, about:, etc.
+  if (!/^https?:/.test(location.protocol)) return;
+
+  // Use a data attribute for deduplication so the ID is not predictable by page scripts.
+  if (document.querySelector('[data-agi-workforce-overlay]')) return;
 
   const host = document.createElement('div');
-  host.id = 'agi-workforce-overlay-host';
+  host.setAttribute('data-agi-workforce-overlay', 'true');
   host.style.cssText =
     'position:fixed;bottom:24px;right:24px;z-index:2147483647;pointer-events:none;';
 
