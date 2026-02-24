@@ -28,8 +28,7 @@ export type NativeMessageType =
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO'
   | 'AUTO_FILL_JOB_APPLICATION'
-  | 'queue_message'
-  | 'open_side_panel';
+  | 'queue_message';
 
 // Base message structure
 export interface BaseMessage {
@@ -403,13 +402,15 @@ export interface QueueMessageMessage extends BaseMessage {
   type: 'queue_message';
   id: string;
   text: string;
-  tabId: number;
+  tabId?: number;
   timestamp: number;
 }
 
-// Open side panel — sent from content script FAB button to background
-export interface OpenSidePanelMessage extends BaseMessage {
+// Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
+export interface OpenSidePanelMessage {
   type: 'open_side_panel';
+  timestamp?: number;
+  tabId?: number;
 }
 
 // Union types for all messages

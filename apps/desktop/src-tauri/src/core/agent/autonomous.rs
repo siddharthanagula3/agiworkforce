@@ -330,6 +330,10 @@ impl AutonomousAgent {
                                     approval_task_id,
                                     e
                                 );
+                                // Clean up running_tasks slot on error
+                                if let Ok(mut running) = agent_clone.running_tasks.lock() {
+                                    running.retain(|id| id != &approval_task_id);
+                                }
                             }
                         } else {
                             tracing::info!(
@@ -485,6 +489,10 @@ impl AutonomousAgent {
                                     .await
                                 {
                                     Ok(new_steps) => {
+                                        if new_steps.is_empty() {
+                                            tracing::warn!("[Agent] Replan returned 0 steps, falling back to blind retry");
+                                            continue;
+                                        }
                                         tracing::info!(
                                             "[Agent] Replan succeeded ({} new steps, replan {}/{})",
                                             new_steps.len(),
@@ -555,6 +563,10 @@ impl AutonomousAgent {
                                     .await
                                 {
                                     Ok(new_steps) => {
+                                        if new_steps.is_empty() {
+                                            tracing::warn!("[Agent] Replan returned 0 steps, falling back to blind retry");
+                                            continue;
+                                        }
                                         tracing::info!(
                                             "[Agent] Replan succeeded ({} new steps, replan {}/{})",
                                             new_steps.len(),
