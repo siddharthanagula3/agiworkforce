@@ -136,30 +136,37 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
     std::fs::copy(db_path, &backup_path)
         .map_err(|e| format!("Failed to create backup: {}", e))?;
 
-    // Step 3: Open the unencrypted source database
-    let source = Connection::open(db_path)
-        .map_err(|e| format!("Failed to open source DB: {}", e))?;
+    // Steps 3-5 are wrapped in a block so the source connection is dropped
+    // before Step 6's file rename. On Windows, the rename would fail if the
+    // source file is still locked by an open connection.
+    {
+        // Step 3: Open the unencrypted source database
+        let source = Connection::open(db_path)
+            .map_err(|e| format!("Failed to open source DB: {}", e))?;
 
-    // Step 4: Use ATTACH with KEY to create an encrypted copy via sqlcipher_export
-    let hex_key = hex::encode(key);
-    source
-        .execute_batch(&format!(
-            "ATTACH DATABASE '{}' AS encrypted KEY \"x'{}'\";",
-            temp_encrypted_path, hex_key
-        ))
-        .map_err(|e| format!("Failed to attach encrypted DB: {}", e))?;
+        // Step 4: Use ATTACH with KEY to create an encrypted copy via sqlcipher_export
+        let hex_key = hex::encode(key);
+        source
+            .execute_batch(&format!(
+                "ATTACH DATABASE '{}' AS encrypted KEY \"x'{}'\";",
+                temp_encrypted_path, hex_key
+            ))
+            .map_err(|e| format!("Failed to attach encrypted DB: {}", e))?;
 
-    // Step 5: Export all data from the unencrypted source into the encrypted target
-    source
-        .execute_batch(
-            "SELECT sqlcipher_export('encrypted');\
-             DETACH DATABASE encrypted;",
-        )
-        .map_err(|e| {
-            // Cleanup the partial encrypted file on failure
-            let _ = std::fs::remove_file(&temp_encrypted_path);
-            format!("Failed to export data to encrypted DB: {}", e)
-        })?;
+        // Step 5: Export all data from the unencrypted source into the encrypted target
+        source
+            .execute_batch(
+                "SELECT sqlcipher_export('encrypted');\
+                 DETACH DATABASE encrypted;",
+            )
+            .map_err(|e| {
+                // Cleanup the partial encrypted file on failure
+                let _ = std::fs::remove_file(&temp_encrypted_path);
+                format!("Failed to export data to encrypted DB: {}", e)
+            })?;
+
+        // `source` is dropped here, releasing the file lock
+    }
 
     // Step 6: Replace the original with the encrypted version
     std::fs::rename(&temp_encrypted_path, db_path).map_err(|e| {
