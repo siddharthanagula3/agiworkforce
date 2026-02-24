@@ -277,7 +277,10 @@ pub fn run() {
             app.manage(SettingsState::new());
 
 
-            let settings_conn = Connection::open(&db_path).context("Failed to open settings database")?;
+            let settings_conn = crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ).map_err(|e| anyhow::anyhow!("Failed to open settings database: {}", e))?;
             let settings_service = SettingsService::new(Arc::new(Mutex::new(settings_conn)))
                 .context("Failed to initialize settings service")?;
             app.manage(SettingsServiceState::new(settings_service));
@@ -296,7 +299,10 @@ pub fn run() {
 
 
             let calendar_state = CalendarState::new();
-            match Connection::open(&db_path) {
+            match crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ) {
                 Ok(calendar_conn) => match load_persisted_calendar_accounts(&calendar_conn) {
                     Ok(accounts) => {
                         let mut restored = 0usize;
@@ -324,7 +330,10 @@ pub fn run() {
 
             // Gmail OAuth state for handling Gmail OAuth 2.0 flows
             let gmail_oauth_state = GmailOAuthState::new();
-            match Connection::open(&db_path) {
+            match crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ) {
                 Ok(gmail_conn) => {
                     match crate::sys::commands::gmail_oauth::load_persisted_gmail_accounts(&gmail_conn) {
                         Ok(accounts) => {
@@ -584,7 +593,10 @@ pub fn run() {
             app.manage(Arc::new(LSPState::new()));
 
 
-            let cache_conn = Connection::open(&db_path).context("Failed to open database for codebase cache")?;
+            let cache_conn = crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ).map_err(|e| anyhow::anyhow!("Failed to open database for codebase cache: {}", e))?;
             let codebase_cache = crate::data::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
                     .context("Failed to initialize codebase cache")?;
             app.manage(crate::sys::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
@@ -597,13 +609,19 @@ pub fn run() {
             app.manage(workflow_engine_state);
 
 
-            let marketplace_conn = Connection::open(&db_path).context("Failed to open database for marketplace")?;
+            let marketplace_conn = crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ).map_err(|e| anyhow::anyhow!("Failed to open database for marketplace: {}", e))?;
             app.manage(crate::sys::commands::marketplace::MarketplaceState {
                     db: Arc::new(Mutex::new(marketplace_conn)),
                 });
 
 
-            let template_conn = Connection::open(&db_path).context("Failed to open database for template manager")?;
+            let template_conn = crate::data::db::encryption::open_encrypted_connection(
+                &db_path.to_string_lossy(),
+                &db_encryption_key,
+            ).map_err(|e| anyhow::anyhow!("Failed to open database for template manager: {}", e))?;
             let template_db = Arc::new(Mutex::new(template_conn));
             let template_manager = crate::sys::commands::templates::initialize_template_manager(template_db)
                 .map_err(|e| anyhow::anyhow!("Failed to initialize template manager: {}", e))?;
@@ -613,7 +631,10 @@ pub fn run() {
 
 
             let presence_db = Arc::new(tokio::sync::Mutex::new(
-                Connection::open(&db_path).context("Failed to open database for presence")?,
+                crate::data::db::encryption::open_encrypted_connection(
+                    &db_path.to_string_lossy(),
+                    &db_encryption_key,
+                ).map_err(|e| anyhow::anyhow!("Failed to open database for presence: {}", e))?,
             ));
             let presence_manager = Arc::new(crate::integrations::realtime::PresenceManager::new(presence_db));
             let websocket_port = 8787;
@@ -644,7 +665,10 @@ pub fn run() {
                 realtime_token,
             ));
             let metrics_db = Arc::new(Mutex::new(
-                Connection::open(&db_path).context("Failed to open database for metrics")?,
+                crate::data::db::encryption::open_encrypted_connection(
+                    &db_path.to_string_lossy(),
+                    &db_encryption_key,
+                ).map_err(|e| anyhow::anyhow!("Failed to open database for metrics: {}", e))?,
             ));
             let metrics_collector = Arc::new(
                 crate::data::metrics::RealtimeMetricsCollector::new(metrics_db.clone(), realtime_server.clone()),
@@ -682,7 +706,10 @@ pub fn run() {
             app.manage(crate::sys::commands::NotificationCenterState::new());
 
             let task_db_conn = Arc::new(Mutex::new(
-                Connection::open(&db_path).context("Failed to open database for task manager")?,
+                crate::data::db::encryption::open_encrypted_connection(
+                    &db_path.to_string_lossy(),
+                    &db_encryption_key,
+                ).map_err(|e| anyhow::anyhow!("Failed to open database for task manager: {}", e))?,
             ));
             let task_manager = Arc::new(crate::features::tasks::TaskManager::new(
                 task_db_conn,

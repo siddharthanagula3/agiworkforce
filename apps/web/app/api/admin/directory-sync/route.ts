@@ -230,13 +230,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create connection' }, { status: 500 });
     }
 
-    // 'suspicious_activity' is the closest available SecurityEventType for auditing
-    // legitimate admin configuration changes. There is no 'admin_action' or
-    // 'configuration_change' type in the current schema; this entry records the
-    // action for audit trail purposes and is expected/normal behaviour.
     await logSecurityEvent({
       userId,
-      eventType: 'suspicious_activity',
+      eventType: 'admin_action',
       severity: 'medium',
       ipAddress: getClientIp(request),
       endpoint: '/api/admin/directory-sync',
@@ -335,13 +331,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to delete connection' }, { status: 500 });
     }
 
-    // 'suspicious_activity' is the closest available SecurityEventType for auditing
-    // legitimate admin configuration changes. There is no 'admin_action' or
-    // 'configuration_change' type in the current schema; this entry records the
-    // action for audit trail purposes and is expected/normal behaviour.
     await logSecurityEvent({
       userId,
-      eventType: 'suspicious_activity',
+      eventType: 'admin_action',
       severity: 'high',
       ipAddress: getClientIp(request),
       endpoint: '/api/admin/directory-sync',

@@ -299,9 +299,26 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Parse request body
-  // SECURITY: Enforce actual body size limit — not just Content-Length header which can be
-  // absent, spoofed, or omitted with chunked transfer encoding.
   const MAX_BODY_BYTES = 2_000_000; // 2 MB
+
+  // SECURITY: Early rejection based on Content-Length header to avoid buffering
+  // obviously oversized payloads. This prevents most abuse without reading the body.
+  const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `Request body too large (Content-Length: ${contentLength} bytes). Maximum is ${MAX_BODY_BYTES} bytes.`,
+          type: 'invalid_request_error',
+          code: 'payload_too_large',
+        },
+      },
+      { status: 413 },
+    );
+  }
+
+  // SECURITY: Also enforce actual body size limit after reading — Content-Length can be
+  // absent, spoofed, or omitted with chunked transfer encoding.
   let body: unknown;
   try {
     const rawBody = await request.arrayBuffer();

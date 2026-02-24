@@ -9,8 +9,8 @@ This is a **pnpm monorepo** with the following components:
 ### Applications (`apps/`)
 
 - **`apps/desktop`**: The main desktop application built with **Tauri v2** (Rust) and **React** (TypeScript). Uses **Tailwind CSS v4** for styling and **Vite** as the build tool.
-- **`apps/web`**: A web-based dashboard built with **Next.js** and **React**. Integrates with **Supabase** for authentication and data storage.
-- **`apps/extension`**: A browser extension for cross-platform agent capabilities.
+- **`apps/web`**: A web-based dashboard built with **Next.js** and **React**. Integrates with **Supabase** for authentication (including SSO) and data storage. Includes admin APIs for security and directory sync.
+- **`apps/extension`**: A browser extension with native messaging, side panel, and desktop automation capabilities.
 
 ### Services (`services/`)
 
@@ -33,9 +33,11 @@ This is a **pnpm monorepo** with the following components:
 - **Frontend**: React (v19), Next.js (v16), Tailwind CSS (v4), Radix UI, Zustand (state management), Lucide (icons).
 - **Desktop**: Tauri (v2), Rust.
 - **Backend**: Node.js (v22+), Express, WebSockets, Supabase.
-- **Database**: PostgreSQL (via Supabase).
+- **Database**: PostgreSQL (via Supabase), SQLite (local desktop with SQLCipher encryption).
 - **Testing**: Vitest (unit/integration), Playwright (E2E).
 - **Tooling**: pnpm, ESLint, Prettier, Husky, lint-staged, TypeScript.
+- **Security**: Master password (Argon2id), SQLCipher encryption, JWT hardening, kill switch, circuit breaker.
+- **Enterprise**: SSO (Supabase), SCIM/Directory Sync (WorkOS), proxy/custom CA support, rate limiting.
 
 ## Building and Running
 
