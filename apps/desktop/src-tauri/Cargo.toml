@@ -23,7 +23,7 @@ unused_results = "allow"
 
 [dependencies]
 
-tauri = { version = "2.9.3", features = ["tray-icon", "test"] }
+tauri = { version = "2.9.3", features = ["tray-icon"] }
 tauri-plugin-shell = { version = "2.3.3", optional = true }
 tauri-plugin-process = "2.2.0"
 tauri-plugin-fs = "2.4.4"
