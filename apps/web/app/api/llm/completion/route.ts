@@ -152,8 +152,9 @@ function findCheaperFallbackModel(
 
   // Try each fallback model and find the cheapest one that's cheaper than current
   for (const fallback of fallbackModels) {
-    // Skip if it's the same model
-    if (fallback.model === modelLower || fallback.provider === currentProvider) {
+    // Skip only if it's the exact same model (not same provider — cheaper same-provider
+    // models like claude-haiku should be valid fallbacks for claude-opus)
+    if (fallback.model === modelLower) {
       continue;
     }
 

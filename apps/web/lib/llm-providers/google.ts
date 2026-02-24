@@ -163,7 +163,6 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
 
 export class GoogleProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
-    // Force redeployment - 2026-02-03
     return 'https://generativelanguage.googleapis.com/v1beta';
   }
 

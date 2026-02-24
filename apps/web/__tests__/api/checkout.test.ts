@@ -21,7 +21,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-vi.mock('../../services/supabase-server', () => ({
+vi.mock('@/services/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn(() => ({
