@@ -75,8 +75,9 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
   }
 
   // Check for Tauri desktop app (tauri:// or tauri.localhost)
-  // SECURITY: Using regex with boundary to prevent bypass via tauri.localhost.attacker.com
-  if (origin.startsWith('tauri://')) {
+  // SECURITY: Strict regex to prevent bypass via tauri://evil.example.com
+  const tauriSchemePattern = /^tauri:\/\/[a-zA-Z0-9._-]+$/;
+  if (tauriSchemePattern.test(origin)) {
     return true;
   }
   const tauriLocalhostPattern = /^https:\/\/tauri\.localhost(:\d+)?$/;

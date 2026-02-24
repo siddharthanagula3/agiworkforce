@@ -11,7 +11,7 @@ default-run = "agiworkforce-desktop"
 
 
 warnings = "warn"
-unsafe_code = "warn"  
+unsafe_code = "deny"
 unused = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
