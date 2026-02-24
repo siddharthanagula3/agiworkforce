@@ -213,12 +213,16 @@ describe('Auth Routes', () => {
     });
 
     it('should verify a valid token', async () => {
-      // Generate a valid token using the test secret
+      // Generate a valid token using the test secret with required issuer/audience
       const jwt = await import('jsonwebtoken');
       const validToken = jwt.default.sign(
         { userId: 'user-123', email: 'test@example.com' },
         process.env['JWT_SECRET']!,
-        { expiresIn: '1h' },
+        {
+          expiresIn: '1h',
+          issuer: 'agiworkforce-api-gateway',
+          audience: 'agiworkforce',
+        },
       );
 
       const response = await request(app)

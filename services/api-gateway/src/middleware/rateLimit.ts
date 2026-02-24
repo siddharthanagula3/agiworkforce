@@ -73,6 +73,12 @@ export const rateLimitConfigs = {
   // SECURITY: Default fallback for unlisted endpoints
   default: { windowMs: 60_000, max: 100 },
 } as const;
+// TODO(scaling): When deploying multiple API gateway instances behind a load balancer,
+// migrate to a Redis-backed store using `rate-limit-redis` to enforce global rate limits:
+//   import RedisStore from 'rate-limit-redis';
+//   import { createClient } from 'redis';
+//   const client = createClient({ url: process.env.REDIS_URL });
+//   store: new RedisStore({ sendCommand: (...args) => client.sendCommand(args) })
 
 export type RateLimitKey = keyof typeof rateLimitConfigs;
 

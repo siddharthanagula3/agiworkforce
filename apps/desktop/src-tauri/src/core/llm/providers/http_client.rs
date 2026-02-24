@@ -1,9 +1,9 @@
+use super::http_client_factory::{create_http_client, HttpClientConfig};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// A lazily-initialized fallback client without retry middleware.
 /// This uses `reqwest::Client::new()` which is infallible with default settings.
@@ -20,22 +20,28 @@ static FALLBACK_CLIENT: Lazy<Arc<ClientWithMiddleware>> = Lazy::new(|| {
 /// - Automatic retries for 429 (Rate Limit) and 5xx errors
 /// - Strict timeouts: 30s connect, 5m read
 /// - Exponential backoff for retries
+/// - Proxy and custom CA certificate support via [`HttpClientConfig`]
 pub struct HttpClient {
     client: Arc<ClientWithMiddleware>,
 }
 
 impl HttpClient {
-    /// Create a new HTTP client with retry and timeout configuration
+    /// Create a new HTTP client with retry and timeout configuration.
+    ///
+    /// Uses [`create_http_client`] under the hood so that proxy settings from
+    /// environment variables (`HTTP_PROXY`, `HTTPS_PROXY`) and system root
+    /// certificates are honoured automatically.
     pub fn new() -> Result<Self, String> {
+        Self::with_config(HttpClientConfig::default())
+    }
+
+    /// Create a new HTTP client with explicit proxy / CA certificate configuration.
+    pub fn with_config(config: HttpClientConfig) -> Result<Self, String> {
         // Retry policy: exponential backoff for transient errors
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3); // Retry up to 3 times
 
-        // Build the client with timeouts
-        let client = Client::builder()
-            .connect_timeout(Duration::from_secs(30)) // 30s connect timeout
-            .timeout(Duration::from_secs(300)) // 5m read timeout
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        // Build the base client via the centralized factory
+        let client = create_http_client(&config)?;
 
         let client = ClientBuilder::new(client)
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))

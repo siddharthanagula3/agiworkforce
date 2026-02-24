@@ -2,10 +2,10 @@
 
 import { Button, Input } from '@/components/ui';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { Bot, Github, Mail } from 'lucide-react';
+import { Bot, Building2, Github, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useMemo } from 'react';
+import { Suspense, useState, useMemo, useRef } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 
 // Get the app URL for redirects - use env var for production, fallback to window for dev
@@ -29,7 +29,79 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [ssoMode, setSsoMode] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
+
+  // Debounce SSO domain check — only fire after user stops typing
+  const ssoCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Check whether the email's domain has SSO configured.
+   * Called with a debounce delay on every email change so we avoid
+   * flooding the API while the user is still typing.
+   */
+  const checkSsoDomain = (emailValue: string) => {
+    if (ssoCheckTimerRef.current) {
+      clearTimeout(ssoCheckTimerRef.current);
+    }
+
+    const domain = emailValue.split('@')[1];
+    if (!domain || !domain.includes('.')) {
+      setSsoMode(false);
+      return;
+    }
+
+    ssoCheckTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/auth/sso-check?domain=${encodeURIComponent(domain)}`, {
+          method: 'GET',
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { ssoEnabled: boolean };
+          setSsoMode(data.ssoEnabled);
+        }
+      } catch {
+        // Ignore network errors — fall back to standard login
+        setSsoMode(false);
+      }
+    }, 400);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    // Reset SSO mode whenever email changes so stale state doesn't linger
+    setSsoMode(false);
+    checkSsoDomain(value);
+  };
+
+  /** Initiate SSO login via Supabase — redirects the browser to the IdP. */
+  const handleSsoLogin = async () => {
+    const domain = email.split('@')[1];
+    if (!domain) {
+      setMessage({ type: 'error', text: 'Please enter your work email address.' });
+      return;
+    }
+
+    setSsoLoading(true);
+    setMessage(null);
+
+    const supabase = getSupabaseClient();
+
+    const { error } = await supabase.auth.signInWithSSO({
+      domain,
+      options: {
+        redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+      },
+    });
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      setSsoLoading(false);
+    }
+    // On success the browser is redirected to the IdP — no further action needed here.
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,38 +222,65 @@ function LoginForm() {
                 type="email"
                 placeholder="Email address"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={handleEmailChange}
                 required
                 autoComplete="email"
                 aria-label="Email address"
               />
             </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                aria-label="Password"
-              />
-            </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-12 border-dashed border-zinc-700 hover:border-zinc-500"
-              onClick={handleMagicLink}
-              disabled={magicLinkLoading || loading}
-            >
-              {magicLinkLoading ? 'Sending...' : 'Sign in with Magic Link'}
-            </Button>
+            {/* SSO prompt: shown when the typed email domain has SSO configured */}
+            {ssoMode && (
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm text-blue-400">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <span>Your organization uses single sign-on (SSO).</span>
+                </div>
+                <Button
+                  type="button"
+                  className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white"
+                  onClick={handleSsoLogin}
+                  disabled={ssoLoading}
+                >
+                  {ssoLoading ? 'Redirecting to your identity provider...' : 'Continue with SSO'}
+                </Button>
+                <p className="text-xs text-zinc-500 text-center">
+                  You will be redirected to your organization&apos;s login page.
+                </p>
+              </div>
+            )}
+
+            {/* Standard password + magic link fields — hidden when SSO is active */}
+            {!ssoMode && (
+              <>
+                <div>
+                  <label htmlFor="password" className="sr-only">
+                    Password
+                  </label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    aria-label="Password"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 border-dashed border-zinc-700 hover:border-zinc-500"
+                  onClick={handleMagicLink}
+                  disabled={magicLinkLoading || loading}
+                >
+                  {magicLinkLoading ? 'Sending...' : 'Sign in with Magic Link'}
+                </Button>
+              </>
+            )}
 
             {message && (
               <p
@@ -195,18 +294,22 @@ function LoginForm() {
               </p>
             )}
 
-            <div className="flex justify-end">
-              <Link
-                href="/forgot-password"
-                className="text-sm text-zinc-400 hover:text-white transition-colors"
-              >
-                Forgot your password?
-              </Link>
-            </div>
+            {!ssoMode && (
+              <>
+                <div className="flex justify-end">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Forgot your password?
+                  </Link>
+                </div>
 
-            <Button type="submit" className="w-full h-12" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
+                <Button type="submit" className="w-full h-12" disabled={loading}>
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
+              </>
+            )}
           </form>
         </div>
 
