@@ -308,7 +308,11 @@ function parseMessage(message: RawData): GatewayMessage | null {
 
 function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
   try {
-    const payload = jwt.verify(message.token, JWT_SECRET);
+    const payload = jwt.verify(message.token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: 'agiworkforce-api-gateway',
+      audience: 'agiworkforce',
+    });
     const parseResult = authenticatedUserSchema.safeParse(payload);
     if (!parseResult.success) {
       ws.send(

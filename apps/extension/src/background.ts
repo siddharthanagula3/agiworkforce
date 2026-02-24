@@ -423,38 +423,41 @@ async function handleMessageAsync(
     }
 
     case 'queue_message': {
-      if (!tabId) {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
         logger.warn('queue_message: no active tab');
         return { success: false, error: 'No active tab' } as ExtensionResponse;
       }
       const msgEntry = message as import('./types').QueueMessageMessage;
-      sendNativeRequest({
-        type: 'queue_message',
-        id: msgEntry.id,
-        text: msgEntry.text,
-        tabId,
-        timestamp: msgEntry.timestamp,
-      })
-        .then(() => {
-          // no-op: response already sent via handleMessage's async path
-        })
-        .catch((err: unknown) => {
-          logger.warn('queue_message native send failed', err);
-          chrome.runtime
-            .sendMessage({
-              type: 'queue_status_update',
-              id: msgEntry.id,
-              status: 'error',
-              result: err instanceof Error ? err.message : 'Native send failed',
-            })
-            .catch(() => {});
+      try {
+        await sendNativeRequest({
+          type: 'queue_message',
+          id: msgEntry.id,
+          text: msgEntry.text,
+          tabId: resolvedTabId,
+          timestamp: msgEntry.timestamp,
         });
-      return { success: true } as ExtensionResponse;
+        return { success: true } as ExtensionResponse;
+      } catch (err: unknown) {
+        logger.warn('queue_message native send failed', err);
+        return { success: false, error: 'Native send failed' } as ExtensionResponse;
+      }
     }
 
     case 'open_side_panel': {
-      if (chrome.sidePanel && tabId) {
-        chrome.sidePanel.open({ tabId }).catch(() => {});
+      let resolvedTabId = tabId;
+      if (chrome.sidePanel && !resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (chrome.sidePanel && resolvedTabId) {
+        chrome.sidePanel.open({ tabId: resolvedTabId }).catch(() => {});
+      } else if (!resolvedTabId) {
+        logger.warn('open_side_panel: no active tab');
       }
       return { success: true } as ExtensionResponse;
     }

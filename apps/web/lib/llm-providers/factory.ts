@@ -104,11 +104,11 @@ function logProviderDiagnostics() {
     const envKey = envKeyMap[p];
     const value = process.env[envKey];
     if (value) {
-      // Show first 8 and last 4 chars for debugging (safe for API keys)
+      // Show first 4 and last 4 chars for debugging (minimise key exposure)
       const masked =
         value.length > 12
-          ? `${value.substring(0, 8)}...${value.substring(value.length - 4)}`
-          : '[short key]';
+          ? `${value.substring(0, 4)}...${value.substring(value.length - 4)}`
+          : '[configured]';
       status[p] = `configured (${masked})`;
     } else {
       status[p] = 'NOT CONFIGURED';
@@ -142,10 +142,7 @@ export class LLMProviderFactory {
       return null;
     }
 
-    logger.debug(
-      { provider, keyLength: key.length, keyPrefix: key.substring(0, 8) },
-      'Creating provider with API key',
-    );
+    logger.debug({ provider, keyLength: key.length }, 'Creating provider with API key');
 
     // Get custom base URL if available (for providers like Qwen using MuleRouter)
     const baseUrl = this.getProviderBaseUrl(providerLower);

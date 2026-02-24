@@ -1,3 +1,4 @@
+use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, LLMProvider, LLMRequest, LLMResponse,
@@ -10,7 +11,6 @@ use reqwest::Client;
 use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
-use std::time::Duration;
 
 pub struct ManagedCloudProvider {
     client: Client,
@@ -126,11 +126,15 @@ impl ManagedCloudProvider {
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let client = Client::builder()
-            .connect_timeout(Duration::from_secs(30))
-            .timeout(Duration::from_secs(300))
-            .build()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Self::with_config(HttpClientConfig::default())
+    }
+
+    /// Create a new provider with explicit proxy / CA certificate configuration.
+    pub fn with_config(
+        config: HttpClientConfig,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = create_http_client(&config)
+            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
         Ok(Self { client })
     }
 

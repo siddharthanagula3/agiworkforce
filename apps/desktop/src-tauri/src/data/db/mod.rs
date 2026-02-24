@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Result};
 use std::sync::{Arc, Mutex};
 
+pub mod encryption;
 pub mod migrations;
 pub mod models;
 pub mod repository;
