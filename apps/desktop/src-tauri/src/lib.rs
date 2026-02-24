@@ -138,12 +138,56 @@ pub fn run() {
             }
 
             let db_path = app_data_dir.join("agiworkforce.db");
-            tracing::info!("Database initialized at {:?}", db_path);
+            tracing::info!("Database path: {:?}", db_path);
 
+            // Derive the database encryption key from machine identity.
+            // This uses PBKDF2 with machine-specific salt to produce a
+            // deterministic 32-byte key unique to this machine.
+            let db_encryption_key = {
+                use crate::sys::security::{derive_key, KeyPurpose};
+                derive_key(KeyPurpose::DatabaseEncryption)
+            };
 
-            let conn = Connection::open(&db_path).context("Failed to open database")?;
+            let db_path_str = db_path.to_string_lossy().to_string();
 
-            // Configure SQLite for better performance and reliability
+            // Attempt to migrate an existing unencrypted database to SQLCipher.
+            // This is a one-time operation for users upgrading from plain SQLite.
+            if db_path.exists() {
+                if let Err(e) = crate::data::db::encryption::migrate_to_encrypted(
+                    &db_path_str,
+                    &db_encryption_key,
+                ) {
+                    tracing::warn!(
+                        "Database encryption migration skipped or failed: {}. \
+                         Will attempt to open the database as-is.",
+                        e
+                    );
+                }
+            }
+
+            // Open the database with encryption. If encrypted open fails,
+            // fall back to opening without encryption so the app remains
+            // functional (with a warning).
+            let conn = match crate::data::db::encryption::open_encrypted_connection(
+                &db_path_str,
+                &db_encryption_key,
+            ) {
+                Ok(c) => {
+                    tracing::info!("Database opened with SQLCipher encryption");
+                    c
+                }
+                Err(enc_err) => {
+                    tracing::warn!(
+                        "Failed to open database with encryption: {}. \
+                         Falling back to unencrypted mode.",
+                        enc_err
+                    );
+                    Connection::open(&db_path).context("Failed to open database")?
+                }
+            };
+
+            // Configure SQLite for better performance and reliability.
+            // These PRAGMAs must come after the encryption key PRAGMA.
             conn.execute_batch("
                 PRAGMA busy_timeout = 5000;
                 PRAGMA journal_mode = WAL;
@@ -158,7 +202,7 @@ pub fn run() {
                 return Err(anyhow::anyhow!("Failed to run migrations: {}", e).into());
             }
 
-
+            tracing::info!("Database initialized at {:?}", db_path);
 
             let db_conn_arc = Arc::new(Mutex::new(conn));
             app.manage(AppDatabase {

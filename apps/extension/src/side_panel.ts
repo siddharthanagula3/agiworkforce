@@ -18,7 +18,9 @@ function renderQueue(): void {
   const empty = document.getElementById('emptyState') as HTMLElement;
 
   const items = list.querySelectorAll('.queue-item');
-  items.forEach((el) => el.remove());
+  items.forEach((el) => {
+    el.remove();
+  });
 
   if (queue.length === 0) {
     empty.style.display = '';
@@ -86,16 +88,19 @@ function sendMessage(): void {
   const timeoutMs = 10_000;
   const responsePromise = new Promise<{ success?: boolean; error?: string } | undefined>(
     (resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'queue_message', id: entry.id, text, timestamp: entry.timestamp },
-        (response: { success?: boolean; error?: string } | undefined) => {
-          if (chrome.runtime.lastError) {
-            resolve({ success: false, error: chrome.runtime.lastError.message });
-          } else {
-            resolve(response);
-          }
-        },
-      );
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tabId = tabs[0]?.id;
+        chrome.runtime.sendMessage(
+          { type: 'queue_message', id: entry.id, text, tabId, timestamp: entry.timestamp },
+          (response: { success?: boolean; error?: string } | undefined) => {
+            if (chrome.runtime.lastError) {
+              resolve({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+              resolve(response);
+            }
+          },
+        );
+      });
     },
   );
   const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>

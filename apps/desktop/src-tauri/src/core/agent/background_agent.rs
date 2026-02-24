@@ -791,6 +791,7 @@ impl BackgroundAgentManager {
         let timeout_secs = agent.timeout_secs;
         let router = self.router.clone();
         let automation = self.automation.clone();
+        let handles_clone = Arc::clone(&self.handles);
 
         tokio::spawn(async move {
             execute_background_agent(
@@ -803,6 +804,7 @@ impl BackgroundAgentManager {
                 timeout_secs,
                 router,
                 automation,
+                handles_clone,
             )
             .await
         });
@@ -1082,6 +1084,7 @@ async fn execute_background_agent(
     timeout_secs: u64,
     router: Option<Arc<RwLock<LLMRouter>>>,
     automation: Option<Arc<AutomationService>>,
+    handles: Arc<Mutex<HashMap<String, AgentHandle>>>,
 ) {
     tracing::info!(
         "[BackgroundAgent] Starting real execution for agent {}: {}",
@@ -1097,6 +1100,9 @@ async fn execute_background_agent(
         (Some(r), Some(a)) => {
             let config = AgentConfig {
                 auto_approve: true,
+                // P1: Explicit cost caps for background agents (run unattended)
+                max_cost_per_task: 5.0,
+                max_session_cost: 50.0,
                 ..Default::default()
             };
             match AutonomousAgent::new(config, a, r) {
@@ -1290,6 +1296,12 @@ async fn execute_background_agent(
                 );
             }
         }
+    }
+
+    // Clean up the handle entry so dead handles do not accumulate.
+    {
+        let mut handles_lock = handles.lock().await;
+        handles_lock.remove(&agent_id);
     }
 
     tracing::info!(

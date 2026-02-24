@@ -84,6 +84,19 @@ fn is_retryable_error(error: &str) -> bool {
     false
 }
 
+/// Determine if an error indicates a server-side 5xx failure
+fn is_server_error(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.contains("500")
+        || e.contains("502")
+        || e.contains("503")
+        || e.contains("504")
+        || e.contains("internal server error")
+        || e.contains("bad gateway")
+        || e.contains("service unavailable")
+        || e.contains("gateway timeout")
+}
+
 /// Calculate delay for exponential backoff
 fn calculate_backoff_delay(attempt: u32, config: &RetryConfig) -> Duration {
     let delay_ms =
@@ -219,6 +232,10 @@ pub struct LLMRouter {
     cost_calculator: CostCalculator,
     cache_manager: Option<CacheManager>,
     db_connection: Option<Arc<Mutex<Connection>>>,
+    /// Cumulative cost across all LLM invocations in this session (USD).
+    cumulative_cost: Arc<parking_lot::Mutex<f64>>,
+    /// Optional rate-limit / 5xx circuit-breaker tracker shared with the fallback chain.
+    rate_limit_tracker: Option<Arc<crate::core::llm::fallback_chain::RateLimitTracker>>,
 }
 
 impl Default for LLMRouter {
@@ -619,6 +636,10 @@ impl LLMRouter {
             cost_calculator: CostCalculator::new(),
             cache_manager: None,
             db_connection: None,
+            cumulative_cost: Arc::new(parking_lot::Mutex::new(0.0)),
+            rate_limit_tracker: Some(Arc::new(
+                crate::core::llm::fallback_chain::RateLimitTracker::new(Default::default()),
+            )),
         }
     }
 
@@ -681,6 +702,24 @@ impl LLMRouter {
 
     pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::ManagedCloud, provider);
+    }
+
+    /// Get the cumulative cost (USD) across all LLM invocations in this session.
+    pub fn get_cumulative_cost(&self) -> f64 {
+        *self.cumulative_cost.lock()
+    }
+
+    /// Reset the cumulative cost counter to zero.
+    pub fn reset_cumulative_cost(&self) {
+        *self.cumulative_cost.lock() = 0.0;
+    }
+
+    /// Set a shared rate-limit / 5xx circuit-breaker tracker.
+    pub fn set_rate_limit_tracker(
+        &mut self,
+        tracker: Arc<crate::core::llm::fallback_chain::RateLimitTracker>,
+    ) {
+        self.rate_limit_tracker = Some(tracker);
     }
 
     pub fn has_provider(&self, provider: Provider) -> bool {
@@ -1003,14 +1042,19 @@ impl LLMRouter {
             }
         }
 
-        Ok(RouteOutcome {
+        let outcome = RouteOutcome {
             provider: candidate.provider,
             model: response.model.clone(),
             response,
             prompt_tokens,
             completion_tokens,
             cost: total_cost,
-        })
+        };
+
+        // Accumulate cost for session-level cost cap enforcement
+        *self.cumulative_cost.lock() += outcome.cost;
+
+        Ok(outcome)
     }
 
     /// Invoke a candidate with retry logic and exponential backoff
@@ -1024,7 +1068,15 @@ impl LLMRouter {
 
         for attempt in 0..=retry_config.max_retries {
             match self.invoke_candidate(candidate, request).await {
-                Ok(outcome) => return Ok(outcome),
+                Ok(outcome) => {
+                    if let Some(ref tracker) = self.rate_limit_tracker {
+                        tracker.record_success(
+                            candidate.provider,
+                            Some(&candidate.model),
+                        );
+                    }
+                    return Ok(outcome);
+                }
                 Err(e) => {
                     let error_str = e.to_string();
                     let is_retryable = is_retryable_error(&error_str);
@@ -1040,6 +1092,15 @@ impl LLMRouter {
                     );
 
                     if !is_retryable || attempt == retry_config.max_retries {
+                        // Record 5xx server errors in the circuit breaker
+                        if is_server_error(&error_str) {
+                            if let Some(ref tracker) = self.rate_limit_tracker {
+                                tracker.record_server_error(
+                                    candidate.provider,
+                                    Some(&candidate.model),
+                                );
+                            }
+                        }
                         last_error = Some(e);
                         break;
                     }

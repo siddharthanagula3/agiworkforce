@@ -1088,6 +1088,23 @@ impl RealtimeServer {
                 if let Ok(mut guard) = crate::sys::commands::extension::LATEST_PAGE_CONTEXT.lock() {
                     match *guard {
                         Some(ref mut ctx) => {
+                            // If tab_id or context_url differ from stored context,
+                            // clear stale title/html so they are not attributed to
+                            // the wrong page.
+                            if let Some(new_tab_id) = tab_id.and_then(|id| u32::try_from(id).ok()) {
+                                if ctx.tab_id != new_tab_id {
+                                    ctx.title.clear();
+                                    ctx.html.clear();
+                                    ctx.tab_id = new_tab_id;
+                                }
+                            }
+                            if let Some(ref url) = context_url {
+                                if ctx.url != *url {
+                                    ctx.url = url.clone();
+                                    ctx.title.clear();
+                                    ctx.html.clear();
+                                }
+                            }
                             ctx.selected_text = Some(selected_text.clone());
                         }
                         None => {
