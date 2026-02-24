@@ -554,14 +554,12 @@ export const useToolStore = create<ToolState>()(
               'tool/approveOperation',
             ),
 
-          rejectOperation: (id, reason) =>
+          rejectOperation: (id, _reason) =>
             set(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
-                if (index !== -1 && state.pendingApprovals[index]) {
-                  state.pendingApprovals[index]!.status = 'rejected';
-                  state.pendingApprovals[index]!.rejectedAt = new Date();
-                  state.pendingApprovals[index]!.rejectionReason = reason;
+                if (index !== -1) {
+                  // Remove directly - mutations before splice are discarded by Immer
                   state.pendingApprovals.splice(index, 1);
                 }
               },

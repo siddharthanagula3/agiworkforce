@@ -151,12 +151,14 @@ describe('retry utility', () => {
         expect(result).toBe('success');
         expect(operation).toHaveBeenCalledTimes(4);
 
-        // Verify the delays grew exponentially by checking expected values directly
-        expect(expectedDelays[0]).toBe(100);
-        expect(expectedDelays[1]).toBe(200);
-        expect(expectedDelays[2]).toBe(400);
-        expect(expectedDelays[1]).toBeGreaterThan(expectedDelays[0]!);
-        expect(expectedDelays[2]).toBeGreaterThan(expectedDelays[1]!);
+        // Verify the delays grew exponentially using the measured observedDelays
+        // observedDelays[0] = 0 (first call, no prior delay)
+        // observedDelays[1..3] = measured intervals between successive calls
+        expect(observedDelays[1]).toBe(100);
+        expect(observedDelays[2]).toBe(200);
+        expect(observedDelays[3]).toBe(400);
+        expect(observedDelays[2]!).toBeGreaterThan(observedDelays[1]!);
+        expect(observedDelays[3]!).toBeGreaterThan(observedDelays[2]!);
       } finally {
         vi.useRealTimers();
       }

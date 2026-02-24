@@ -391,9 +391,12 @@ function mapMessagesToAnthropic(
       content: msg.content,
     };
 
-    // Add cache_control to last message if prompt caching is enabled
+    // Add cache_control to last message if prompt caching is enabled.
+    // The Anthropic API requires cache_control inside content block objects, not at message level.
     if (usePromptCache && isLast) {
-      contentObj.cache_control = { type: 'ephemeral' };
+      contentObj.content = [
+        { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
+      ];
     }
 
     result.push(contentObj);

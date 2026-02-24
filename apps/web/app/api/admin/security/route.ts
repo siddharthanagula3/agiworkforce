@@ -63,6 +63,10 @@ async function verifyAdminAccess(
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: restrict admin security dashboard reads
+    const rateLimitResponse = await withRateLimit(request, 'admin-security');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // Verify admin access
     const { isAdmin, error: authError } = await verifyAdminAccess(request);
 
