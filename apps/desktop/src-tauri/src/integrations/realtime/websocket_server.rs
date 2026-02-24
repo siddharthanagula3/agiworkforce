@@ -1086,8 +1086,24 @@ impl RealtimeServer {
                 // Store the selected text in the latest page context so the LLM prompt
                 // builder can include it when the user next sends a message.
                 if let Ok(mut guard) = crate::sys::commands::extension::LATEST_PAGE_CONTEXT.lock() {
-                    if let Some(ref mut ctx) = *guard {
-                        ctx.selected_text = Some(selected_text.clone());
+                    match *guard {
+                        Some(ref mut ctx) => {
+                            ctx.selected_text = Some(selected_text.clone());
+                        }
+                        None => {
+                            let now_ms = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_millis() as u64)
+                                .unwrap_or(0);
+                            *guard = Some(crate::sys::commands::extension::PageContext {
+                                url: context_url.clone().unwrap_or_default(),
+                                title: String::new(),
+                                html: String::new(),
+                                selected_text: Some(selected_text.clone()),
+                                tab_id: tab_id.unwrap_or(0).max(0) as u32,
+                                timestamp: now_ms,
+                            });
+                        }
                     }
                 }
 

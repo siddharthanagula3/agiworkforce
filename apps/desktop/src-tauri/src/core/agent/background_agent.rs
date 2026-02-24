@@ -1149,9 +1149,9 @@ async fn execute_background_agent(
     let goal = agent.goal.clone();
 
     // Command branch returns Ok(true) for Pause, Ok(false) for Cancel/TakeOver/disconnect.
-    let cmd_result: tokio::sync::oneshot::Receiver<bool> = {
+    let (cmd_handle, cmd_result): (tokio::task::JoinHandle<()>, tokio::sync::oneshot::Receiver<bool>) = {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             loop {
                 match command_rx.recv().await {
                     Some(AgentCommand::Pause) => {
@@ -1168,7 +1168,7 @@ async fn execute_background_agent(
                 }
             }
         });
-        rx
+        (handle, rx)
     };
 
     enum RunOutcome {
@@ -1186,6 +1186,14 @@ async fn execute_background_agent(
         },
         _ = tokio::time::sleep(timeout_duration) => RunOutcome::TimedOut,
     };
+
+    // Clean up: abort the command listener if it's still running
+    cmd_handle.abort();
+
+    // NOTE: When Paused or Cancelled, the `run_goal` future is dropped but any
+    // tokio::spawn subtasks inside AutonomousAgent may continue briefly until
+    // they hit an await point. A full CancellationToken-based approach is needed
+    // for true cooperative cancellation (tracked for a future release).
 
     // Write markdown summary file (for Finished outcomes)
     let result_for_summary = match &outcome {

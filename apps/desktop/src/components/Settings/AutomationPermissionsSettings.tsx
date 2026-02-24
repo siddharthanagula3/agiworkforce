@@ -1,6 +1,6 @@
 import { invoke } from '@/lib/tauri-mock';
 import { Check, ExternalLink, Loader2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '../ui/Button';
 
@@ -70,6 +70,15 @@ export function AutomationPermissionsSettings() {
   const [permissions, setPermissions] = useState<AutomationPermissions | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState<string | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -92,7 +101,7 @@ export function AutomationPermissionsSettings() {
       try {
         await invoke('request_automation_permission', { kind });
         // Re-check after a short delay to give the user time to toggle in Settings
-        setTimeout(() => void refresh(), 2000);
+        refreshTimerRef.current = setTimeout(() => void refresh(), 2000);
       } catch (err) {
         console.error('Failed to open System Settings:', err);
       } finally {
