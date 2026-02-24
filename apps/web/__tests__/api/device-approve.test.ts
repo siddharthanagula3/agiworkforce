@@ -64,6 +64,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 // Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/approve/route';
+import { requireCsrfToken } from '@/lib/csrf';
 
 describe('Device Approve API', () => {
   // Valid hex code per schema
@@ -92,6 +93,38 @@ describe('Device Approve API', () => {
 
         const response = await POST(request);
         expect(response.status).toBe(401);
+      });
+    });
+
+    describe('CSRF Protection', () => {
+      it('should return 403 when x-csrf-token header is absent', async () => {
+        // Override the global mock so requireCsrfToken enforces the check for
+        // this test only, returning a 403 as the real implementation would.
+        vi.mocked(requireCsrfToken).mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              error: 'Invalid or missing CSRF token',
+              code: 'CSRF_VALIDATION_FAILED',
+            }),
+            {
+              status: 403,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
+        );
+
+        // Request has no x-csrf-token header — CSRF check must reject it.
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'approve' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(403);
+
+        const data = await response.json();
+        expect(data.code).toBe('CSRF_VALIDATION_FAILED');
       });
     });
 
@@ -190,6 +223,12 @@ describe('Device Approve API', () => {
         const data = await response.json();
         expect(data.success).toBe(true);
         expect(data.status).toBe('approved');
+
+        // Security: the approve endpoint must NOT expose raw tokens in its response.
+        // Tokens are encrypted and stored in the DB; the device retrieves them exactly
+        // once via the poll endpoint (GET /api/device/poll) after the code is consumed.
+        expect(data.access_token).toBeUndefined();
+        expect(data.refresh_token).toBeUndefined();
       });
 
       it('should accept valid deny action', async () => {

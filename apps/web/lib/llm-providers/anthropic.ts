@@ -1,7 +1,83 @@
 import 'server-only';
 
-import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
+import {
+  BaseLLMProvider,
+  LLMProviderRequest,
+  LLMProviderResponse,
+  RETRYABLE_HTTP_STATUS_CODES,
+} from './base';
 import { logger } from '@/lib/logger';
+
+/**
+ * Transform tools from OpenAI format to Anthropic format.
+ * Handles three cases: already-Anthropic format, OpenAI function format, and bare format.
+ */
+function transformTools(tools: any[]): any[] {
+  return tools.map((tool: any) => {
+    // If tool is already in Anthropic format (has input_schema), use as-is
+    if (tool.input_schema) {
+      return tool;
+    }
+    // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
+    if (tool.type === 'function' && tool.function) {
+      return {
+        name: tool.function.name,
+        description: tool.function.description,
+        input_schema: tool.function.parameters || {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      };
+    }
+    // Fallback: assume it's missing input_schema, use parameters if available
+    return {
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.parameters ||
+        tool.input_schema || {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+    };
+  });
+}
+
+/**
+ * Handle Anthropic HTTP error responses by throwing a descriptive error.
+ * Status-specific messages use keywords that route.ts error matching expects.
+ * @param retryAfter Optional value of the 'retry-after' response header for 429 responses.
+ */
+function handleAnthropicHttpError(
+  status: number,
+  errorText: string,
+  retryAfter?: string | null,
+): never {
+  if (status === 401) {
+    throw new Error('Anthropic authentication error (401): Please check your API key.');
+  } else if (status === 402) {
+    throw new Error('Anthropic insufficient credits (402): Please upgrade your plan.');
+  } else if (status === 403) {
+    throw new Error(
+      'Anthropic API permission denied (403): Your API key may not have access to this resource.',
+    );
+  } else if (status === 404) {
+    throw new Error(`Anthropic not found (404): ${errorText}`);
+  } else if (status === 413) {
+    throw new Error('Anthropic API request too large (413): Maximum request size is 32 MB.');
+  } else if (status === 429) {
+    throw new Error(
+      `Anthropic rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+    );
+  } else if (RETRYABLE_HTTP_STATUS_CODES.has(status)) {
+    throw new Error(`Anthropic API service error (${status}): Please try again later.`);
+  } else if (status === 529) {
+    throw new Error('Anthropic API overloaded (529): Please try again later.');
+  } else {
+    throw new Error(`Anthropic API error: ${status} ${errorText}`);
+  }
+}
 
 export class AnthropicProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
@@ -50,38 +126,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     }
 
     // Transform tools from OpenAI format to Anthropic format if needed
-    let anthropicTools;
-    if (request.tools) {
-      anthropicTools = request.tools.map((tool: any) => {
-        // If tool is already in Anthropic format (has input_schema), use as-is
-        if (tool.input_schema) {
-          return tool;
-        }
-        // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
-        if (tool.type === 'function' && tool.function) {
-          return {
-            name: tool.function.name,
-            description: tool.function.description,
-            input_schema: tool.function.parameters || {
-              type: 'object',
-              properties: {},
-              required: [],
-            },
-          };
-        }
-        // Fallback: assume it's missing input_schema, use parameters if available
-        return {
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.parameters ||
-            tool.input_schema || {
-              type: 'object',
-              properties: {},
-              required: [],
-            },
-        };
-      });
-    }
+    const anthropicTools = request.tools ? transformTools(request.tools) : undefined;
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -125,34 +170,7 @@ export class AnthropicProvider extends BaseLLMProvider {
           'Anthropic API error',
         );
 
-        // Handle specific error types based on status code
-        // Use keywords that route.ts error matching expects
-        if (response.status === 401) {
-          throw new Error('Anthropic authentication error (401): Please check your API key.');
-        } else if (response.status === 402) {
-          throw new Error('Anthropic insufficient credits (402): Please upgrade your plan.');
-        } else if (response.status === 403) {
-          throw new Error(
-            'Anthropic API permission denied (403): Your API key may not have access to this resource.',
-          );
-        } else if (response.status === 404) {
-          throw new Error(`Anthropic not found (404): ${errorText}`);
-        } else if (response.status === 413) {
-          throw new Error('Anthropic API request too large (413): Maximum request size is 32 MB.');
-        } else if (response.status === 429) {
-          const retryAfter = response.headers.get('retry-after');
-          throw new Error(
-            `Anthropic rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
-          );
-        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
-          throw new Error(
-            `Anthropic API service error (${response.status}): Please try again later.`,
-          );
-        } else if (response.status === 529) {
-          throw new Error('Anthropic API overloaded (529): Please try again later.');
-        } else {
-          throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
-        }
+        handleAnthropicHttpError(response.status, errorText, response.headers.get('retry-after'));
       }
 
       const data = await response.json();
@@ -221,38 +239,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
 
     // Transform tools from OpenAI format to Anthropic format if needed
-    let anthropicTools;
-    if (request.tools) {
-      anthropicTools = request.tools.map((tool: any) => {
-        // If tool is already in Anthropic format (has input_schema), use as-is
-        if (tool.input_schema) {
-          return tool;
-        }
-        // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
-        if (tool.type === 'function' && tool.function) {
-          return {
-            name: tool.function.name,
-            description: tool.function.description,
-            input_schema: tool.function.parameters || {
-              type: 'object',
-              properties: {},
-              required: [],
-            },
-          };
-        }
-        // Fallback: assume it's missing input_schema, use parameters if available
-        return {
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.parameters ||
-            tool.input_schema || {
-              type: 'object',
-              properties: {},
-              required: [],
-            },
-        };
-      });
-    }
+    const anthropicTools = request.tools ? transformTools(request.tools) : undefined;
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -307,34 +294,7 @@ export class AnthropicProvider extends BaseLLMProvider {
         'Anthropic streaming API error',
       );
 
-      // Handle specific error types based on status code
-      // Use keywords that route.ts error matching expects
-      if (response.status === 401) {
-        throw new Error('Anthropic authentication error (401): Please check your API key.');
-      } else if (response.status === 402) {
-        throw new Error('Anthropic insufficient credits (402): Please upgrade your plan.');
-      } else if (response.status === 403) {
-        throw new Error(
-          'Anthropic API permission denied (403): Your API key may not have access to this model.',
-        );
-      } else if (response.status === 404) {
-        throw new Error(`Anthropic not found (404): Model "${request.model}" not available.`);
-      } else if (response.status === 413) {
-        throw new Error('Anthropic API request too large (413): Maximum request size is 32 MB.');
-      } else if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        throw new Error(
-          `Anthropic rate limit exceeded (429). ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
-        );
-      } else if (response.status === 500 || response.status === 502 || response.status === 503) {
-        throw new Error(
-          `Anthropic API service error (${response.status}): Please try again later.`,
-        );
-      } else if (response.status === 529) {
-        throw new Error('Anthropic API overloaded (529): Please try again later.');
-      } else {
-        throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
-      }
+      handleAnthropicHttpError(response.status, errorText, response.headers.get('retry-after'));
     }
 
     if (!response.body) {

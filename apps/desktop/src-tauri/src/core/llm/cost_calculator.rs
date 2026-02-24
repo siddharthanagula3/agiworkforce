@@ -647,18 +647,6 @@ impl CostCalculator {
         }
     }
 
-    /// Helper to add a new model at runtime (for future model updates)
-    /// This allows the dev team to easily add new models like Claude 5, GPT-6, etc.
-    #[allow(dead_code)]
-    pub fn add_model(&mut self, provider: Provider, model: &'static str, input: f64, output: f64) {
-        self.pricing.insert(
-            (provider, model),
-            Pricing {
-                input_per_million: input,
-                output_per_million: output,
-            },
-        );
-    }
 
     /// Providers whose pricing entries ManagedCloud may proxy through.
     /// ManagedCloud routes to models like `gpt-5-nano` (OpenAI), `deepseek-reasoner`

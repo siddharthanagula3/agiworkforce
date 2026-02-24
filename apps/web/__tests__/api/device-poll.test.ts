@@ -56,6 +56,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 // Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/poll/route';
+import { createClient } from '@supabase/supabase-js';
 
 describe('Device Poll API', () => {
   // Use valid values per schema: device_fingerprint must be hex only
@@ -103,6 +104,143 @@ describe('Device Poll API', () => {
 
         const data = await response.json();
         expect(data.status).toBe('pending');
+      });
+    });
+
+    describe('Token decryption and edge cases', () => {
+      it('should return 500 when the stored token is corrupted and cannot be decrypted', async () => {
+        // The device record shows "approved" and the RPC consume call returns a row
+        // with a corrupted (non-base64-GCM) access_token. decryptToken() will throw,
+        // and the route must surface that as an internal error (500).
+        vi.mocked(createClient).mockReturnValueOnce({
+          from: vi.fn(() => ({
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    device_id: 'device-123',
+                    device_fingerprint: 'abc123def456',
+                    status: 'approved',
+                    user_id: 'user-456',
+                    expires_at: new Date(Date.now() + 60000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              })),
+            })),
+            update: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            })),
+          })),
+          rpc: vi.fn().mockResolvedValue({
+            data: [
+              {
+                status: 'approved',
+                user_id: 'user-456',
+                user_email: 'test@example.com',
+                user_name: 'Test User',
+                // Deliberately corrupted — too short to be a valid GCM blob
+                access_token: 'bm90LXZhbGlk',
+                refresh_token: 'bm90LXZhbGlk',
+              },
+            ],
+            error: null,
+          }),
+        } as never);
+
+        const request = new NextRequest('http://localhost/api/device/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+        // decryptToken throws -> createError.internal -> withErrorHandler -> 500
+        expect(response.status).toBe(500);
+      });
+
+      it('should return pending when the RPC returns no rows (already-consumed token)', async () => {
+        // The device record is in "approved" state but the atomic consume RPC
+        // returns null/empty (another poll request already consumed the tokens).
+        // The route should treat this as "pending" rather than exposing an error.
+        vi.mocked(createClient).mockReturnValueOnce({
+          from: vi.fn(() => ({
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    device_id: 'device-123',
+                    device_fingerprint: 'abc123def456',
+                    status: 'approved',
+                    user_id: 'user-456',
+                    expires_at: new Date(Date.now() + 60000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              })),
+            })),
+            update: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            })),
+          })),
+          // RPC returns null — tokens already consumed by a concurrent request
+          rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+        } as never);
+
+        const request = new NextRequest('http://localhost/api/device/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(200);
+
+        const data = await response.json();
+        expect(data.status).toBe('pending');
+      });
+
+      it('should return expired status when the device authorization record is past its expiry', async () => {
+        // The device record exists but expires_at is in the past.
+        // The route detects expiry before fingerprint/status checks and returns "expired".
+        vi.mocked(createClient).mockReturnValueOnce({
+          from: vi.fn(() => ({
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    device_id: 'device-123',
+                    device_fingerprint: 'abc123def456',
+                    status: 'pending',
+                    user_id: null,
+                    // Expired one minute ago
+                    expires_at: new Date(Date.now() - 60000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              })),
+            })),
+            update: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            })),
+          })),
+          rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+        } as never);
+
+        const request = new NextRequest('http://localhost/api/device/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(200);
+
+        const data = await response.json();
+        expect(data.status).toBe('expired');
       });
     });
   });
