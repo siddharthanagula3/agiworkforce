@@ -45,7 +45,7 @@ function verifyWorkOSSignature(
   rawBody: string,
   signatureHeader: string,
   secret: string,
-  toleranceSeconds = 300,
+  toleranceSeconds = 60,
 ): boolean {
   try {
     const parts = signatureHeader.split(',').reduce(
@@ -545,12 +545,22 @@ async function handleGroupUserAdded(
     return;
   }
 
-  // Map group name to role (convention: group name containing "admin" gets admin role)
+  // Map group name to role via exact-match allowlists (env-var driven, not substring)
+  // SCIM_ADMIN_GROUP_NAMES: comma-separated exact group names that grant admin role (default: "Admins")
+  // SCIM_VIEWER_GROUP_NAMES: comma-separated exact group names that grant viewer role (default: "Viewers,ReadOnly")
+  const adminGroups = (process.env.SCIM_ADMIN_GROUP_NAMES ?? 'Admins')
+    .split(',')
+    .map((g) => g.trim().toLowerCase())
+    .filter(Boolean);
+  const viewerGroups = (process.env.SCIM_VIEWER_GROUP_NAMES ?? 'Viewers,ReadOnly')
+    .split(',')
+    .map((g) => g.trim().toLowerCase())
+    .filter(Boolean);
   const groupNameLower = group.name.toLowerCase();
   let role: 'owner' | 'admin' | 'member' | 'viewer' = 'member';
-  if (groupNameLower.includes('admin')) {
+  if (adminGroups.includes(groupNameLower)) {
     role = 'admin';
-  } else if (groupNameLower.includes('viewer') || groupNameLower.includes('readonly')) {
+  } else if (viewerGroups.includes(groupNameLower)) {
     role = 'viewer';
   }
 

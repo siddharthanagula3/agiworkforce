@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -132,5 +133,12 @@ export async function GET(request: NextRequest) {
 
   const statusCode = status === 'healthy' ? 200 : status === 'degraded' ? 200 : 503;
 
-  return NextResponse.json(healthCheck, { status: statusCode });
+  return NextResponse.json(healthCheck, {
+    status: statusCode,
+    headers: getCorsHeaders(request),
+  });
+}
+
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
