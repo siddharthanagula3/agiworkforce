@@ -642,21 +642,14 @@ pub fn derive_key_base64(
 mod tests {
     use super::*;
 
-    fn valid_test_passphrase() -> &'static str {
-        Box::leak(["alpha", "beta", "unique", "phrase"].join("-").into_boxed_str())
-    }
-
-    fn alternate_test_passphrase() -> &'static str {
-        Box::leak(["gamma", "delta", "alt", "phrase"].join("-").into_boxed_str())
-    }
-
-    fn invalid_test_passphrase() -> &'static str {
-        Box::leak(["nonmatching", "phrase"].join("-").into_boxed_str())
-    }
-
-    fn too_short_test_passphrase() -> &'static str {
-        Box::leak(['t', 'i', 'n', 'y'].iter().collect::<String>().into_boxed_str())
-    }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn valid_test_passphrase() -> &'static str { "alpha-beta-unique-phrase" }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn alternate_test_passphrase() -> &'static str { "gamma-delta-alt-phrase" }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn invalid_test_passphrase() -> &'static str { "nonmatching-phrase" }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn too_short_test_passphrase() -> &'static str { "tiny" }
 
     fn create_test_manager() -> MasterPasswordManager {
         // Use in-memory database for tests to avoid temp file cleanup issues
