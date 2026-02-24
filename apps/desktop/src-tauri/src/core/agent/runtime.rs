@@ -363,7 +363,7 @@ impl AgentRuntime {
                             task_id,
                             error_msg
                         );
-                        return Err(last_error.unwrap());
+                        return Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Task failed after retries with unknown error")));
                     }
 
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;

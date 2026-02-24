@@ -607,7 +607,9 @@ impl WindowCoordinator {
         while start.elapsed() < timeout {
             if let Ok(windows) = WindowEnumerator::find_by_title(title_contains) {
                 if !windows.is_empty() {
-                    return Ok(windows.into_iter().next().unwrap());
+                    if let Some(window) = windows.into_iter().next() {
+                        return Ok(window);
+                    }
                 }
             }
 

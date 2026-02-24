@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -54,24 +55,6 @@ async function verifyAdminAccess(
   const isAdminFromAppMetadata = user.app_metadata?.role === 'admin';
 
   if (isAdminFromAppMetadata) {
-    return { isAdmin: true, userId: user.id };
-  }
-
-  // Fallback: Check profiles table for admin flag
-  // Note: This is less secure than app_metadata if RLS policies are misconfigured
-  // Consider removing this fallback or ensuring strict RLS on profiles.is_admin
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.is_admin) {
-    // Log a warning when using profiles table fallback (AUDIT-008-013)
-    logger.warn(
-      { userId: user.id },
-      'Admin access granted via profiles table - consider migrating to app_metadata',
-    );
     return { isAdmin: true, userId: user.id };
   }
 
@@ -145,7 +128,10 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Unknown action. Supported: dashboard, metrics, alerts, events, user, ips' },
+          { status: 400 },
+        );
     }
   } catch (error) {
     logger.error({ error }, 'Error in security monitoring API');
@@ -155,6 +141,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: restrict admin security actions
+    const rateLimitResponse = await withRateLimit(request, 'admin-security');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // Verify admin access
     const { isAdmin, userId: adminUserId, error: authError } = await verifyAdminAccess(request);
 
@@ -332,7 +322,7 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json(
           {
-            error: `Unknown action: ${action}. Supported: cleanup, suspend-user, ban-user, reactivate-user.`,
+            error: 'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user',
           },
           { status: 400 },
         );
