@@ -12,9 +12,9 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use super::types::{ComputerUseAction, HotkeyModifier, ScreenAnalysis};
+use crate::automation::safety_patterns;
 
 /// Static patterns for safety checks.
-static DANGEROUS_TEXT_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
 static PROMPT_INJECTION_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
 static SENSITIVE_WINDOW_TITLES: OnceLock<Vec<Regex>> = OnceLock::new();
 
@@ -314,26 +314,8 @@ impl ComputerUseSafetyLayer {
 
     /// Initializes static patterns.
     fn init_patterns() {
-        DANGEROUS_TEXT_PATTERNS.get_or_init(|| {
-            vec![
-                // Destructive commands
-                Regex::new(r"(?i)rm\s+-rf").unwrap(),
-                Regex::new(r"(?i)format\s+[a-z]:").unwrap(),
-                Regex::new(r"(?i)del\s+/[fqs]").unwrap(),
-                Regex::new(r"(?i)deltree").unwrap(),
-                Regex::new(r"(?i)mkfs").unwrap(),
-                // Sensitive paths
-                Regex::new(r"(?i)system32").unwrap(),
-                Regex::new(r"(?i)/etc/passwd").unwrap(),
-                Regex::new(r"(?i)~/.ssh").unwrap(),
-                // Sensitive data
-                Regex::new(r"(?i)password|passwd|credential|api[_-]?key|secret|token").unwrap(),
-                // Registry manipulation
-                Regex::new(r"(?i)regedit|reg\s+delete|reg\s+add").unwrap(),
-                // Sudo/admin
-                Regex::new(r"(?i)sudo\s+rm|sudo\s+dd").unwrap(),
-            ]
-        });
+        // Ensure shared dangerous command patterns are initialised
+        let _ = safety_patterns::dangerous_command_patterns();
 
         SENSITIVE_WINDOW_TITLES.get_or_init(|| {
             vec![
@@ -458,7 +440,7 @@ impl ComputerUseSafetyLayer {
         }
 
         // Dangerous content check
-        let patterns = DANGEROUS_TEXT_PATTERNS.get().unwrap();
+        let patterns = safety_patterns::dangerous_command_patterns();
         for pattern in patterns {
             if pattern.is_match(text) {
                 if self.config.require_confirmation_for_destructive {
