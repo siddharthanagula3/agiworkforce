@@ -51,7 +51,10 @@ impl Database {
         let conn = self
             .conn
             .lock()
-            .map_err(|_e| rusqlite::Error::InvalidQuery)?;
+            .map_err(|_e| rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                Some("Database mutex poisoned".to_string()),
+            ))?;
         f(&conn)
     }
 

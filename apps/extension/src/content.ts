@@ -631,6 +631,70 @@ async function handleGetAttribute(message: any): Promise<ExtensionResponse> {
 }
 
 /**
+ * Allowlist of safe attributes for setAttribute.
+ * Blocks event handlers (on*) and dangerous URL attributes on sensitive elements.
+ */
+const SAFE_ATTRIBUTES = new Set([
+  'class',
+  'id',
+  'name',
+  'value',
+  'placeholder',
+  'type',
+  'checked',
+  'disabled',
+  'readonly',
+  'selected',
+  'title',
+  'alt',
+  'role',
+  'tabindex',
+  'style',
+  'width',
+  'height',
+  'min',
+  'max',
+  'step',
+  'pattern',
+  'maxlength',
+]);
+
+/** Attributes that can inject URLs on script/link/form/iframe elements */
+const DANGEROUS_URL_ATTRIBUTES = new Set(['src', 'href', 'action', 'formaction']);
+
+/** Elements where URL attributes are dangerous */
+const SENSITIVE_URL_ELEMENTS = new Set([
+  'SCRIPT',
+  'LINK',
+  'FORM',
+  'IFRAME',
+  'OBJECT',
+  'EMBED',
+  'A',
+]);
+
+function isAttributeAllowed(attribute: string, element: Element): boolean {
+  const lowerAttr = attribute.toLowerCase();
+
+  // Block all event handler attributes
+  if (lowerAttr.startsWith('on')) {
+    return false;
+  }
+
+  // Allow data-* and aria-* prefixed attributes
+  if (lowerAttr.startsWith('data-') || lowerAttr.startsWith('aria-')) {
+    return true;
+  }
+
+  // Block dangerous URL attributes on sensitive elements
+  if (DANGEROUS_URL_ATTRIBUTES.has(lowerAttr) && SENSITIVE_URL_ELEMENTS.has(element.tagName)) {
+    return false;
+  }
+
+  return SAFE_ATTRIBUTES.has(lowerAttr);
+}
+
+/**
  * Set element attribute handler
  */
 async function handleSetAttribute(message: any): Promise<ExtensionResponse> {
@@ -644,6 +708,10 @@ async function handleSetAttribute(message: any): Promise<ExtensionResponse> {
     const element = domUtils.querySelector(selector);
     if (!element) {
       return { success: false, error: 'Element not found' };
+    }
+
+    if (!isAttributeAllowed(attribute, element)) {
+      return { success: false, error: `Attribute "${attribute}" is not allowed on this element` };
     }
 
     element.setAttribute(attribute, value);
@@ -674,17 +742,62 @@ async function handleWaitForSelector(message: any): Promise<ExtensionResponse> {
 }
 
 /**
- * Execute script handler
+ * Allowlisted script operations that can be executed via handleExecuteScript.
+ * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+ */
+const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: any[]) => unknown> = {
+  scrollTo: (...args: any[]) => window.scrollTo(args[0] ?? 0, args[1] ?? 0),
+  scrollBy: (...args: any[]) => window.scrollBy(args[0] ?? 0, args[1] ?? 0),
+  scrollIntoView: (...args: any[]) => {
+    const el = document.querySelector(args[0]);
+    el?.scrollIntoView(args[1] ?? { behavior: 'smooth', block: 'center' });
+    return !!el;
+  },
+  getScrollPosition: () => ({ x: window.scrollX, y: window.scrollY }),
+  getViewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
+  getComputedStyle: (...args: any[]) => {
+    const el = document.querySelector(args[0]);
+    if (!el) return null;
+    const style = window.getComputedStyle(el);
+    return args[1] ? style.getPropertyValue(args[1]) : null;
+  },
+  getBoundingRect: (...args: any[]) => {
+    const el = document.querySelector(args[0]);
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  },
+  focusElement: (...args: any[]) => {
+    const el = document.querySelector(args[0]) as HTMLElement | null;
+    el?.focus();
+    return !!el;
+  },
+  blurElement: (...args: any[]) => {
+    const el = document.querySelector(args[0]) as HTMLElement | null;
+    el?.blur();
+    return !!el;
+  },
+};
+
+/**
+ * Execute script handler.
+ * SECURITY: Only allowlisted operations are supported. Arbitrary script execution is blocked.
  */
 async function handleExecuteScript(message: any): Promise<ExtensionResponse> {
   try {
     const { script, args = [] } = message;
 
-    // Create a function from the script string
-    const fn = new Function(...args.map((_: unknown, i: number) => `arg${i}`), script);
+    // Look up the operation in the allowlist
+    const operation = ALLOWED_SCRIPT_OPERATIONS[script];
+    if (!operation) {
+      return {
+        success: false,
+        error: `Script operation "${String(script)}" is not allowed. Supported operations: ${Object.keys(ALLOWED_SCRIPT_OPERATIONS).join(', ')}`,
+      };
+    }
 
-    // Execute with args
-    const result = fn(...args);
+    // Execute the allowlisted operation
+    const result = operation(...args);
 
     // Handle async results
     const finalResult = result instanceof Promise ? await result : result;

@@ -172,6 +172,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 status poll requests per minute (allow frequent polling)
     failClosed: false, // Not sensitive: just querying status
   },
+  'admin-security': {
+    limit: 10,
+    window: '1 m', // 10 admin security actions per minute
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute

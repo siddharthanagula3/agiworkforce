@@ -281,8 +281,7 @@ describe('Stripe Webhook Security Tests', () => {
 
       const response = await POST(request);
 
-      // Should be 200 or 500 (depending on idempotency check), but not 400
-      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
     });
 
     it('should reject replay attacks with old timestamps', async () => {
@@ -389,10 +388,9 @@ describe('Stripe Webhook Security Tests', () => {
       const response = await POST(request);
 
       // The response indicates the event was already processed
-      if (response.status === 200) {
-        const data = await response.json();
-        expect(data.message).toContain('already processed');
-      }
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.message).toContain('already processed');
     });
   });
 
@@ -427,8 +425,7 @@ describe('Stripe Webhook Security Tests', () => {
 
       const response = await POST(request);
 
-      // Should process without 400 error
-      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
     });
 
     it('should handle customer.subscription.deleted events', async () => {
@@ -459,8 +456,7 @@ describe('Stripe Webhook Security Tests', () => {
 
       const response = await POST(request);
 
-      // Should process subscription deletion
-      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
     });
 
     it('should handle invoice.payment_failed events', async () => {
@@ -491,8 +487,7 @@ describe('Stripe Webhook Security Tests', () => {
 
       const response = await POST(request);
 
-      // Should process payment failure
-      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
     });
   });
 

@@ -81,7 +81,7 @@ impl SseStreamParser {
 
             match parse_sse_event(&event, self.provider) {
                 Ok(chunk) => {
-                    self.pending_chunks.insert(0, Ok(chunk));
+                    self.pending_chunks.push(Ok(chunk));
                 }
                 Err(e) => {
                     let error_str = e.to_string();
@@ -107,7 +107,7 @@ impl SseStreamParser {
                         || error_str.contains("504")
                     {
                         tracing::error!("Critical stream error: {}", e);
-                        self.pending_chunks.insert(0, Err(e));
+                        self.pending_chunks.push(Err(e));
                     } else {
                         // Non-critical parsing errors (e.g., partial data, comments, empty data fields)
                         // Use WARN level for better debugging visibility (upgraded from DEBUG)
@@ -124,7 +124,7 @@ impl Stream for SseStreamParser {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if !self.pending_chunks.is_empty() {
-            return Poll::Ready(self.pending_chunks.pop());
+            return Poll::Ready(Some(self.pending_chunks.remove(0)));
         }
 
         match self.inner.as_mut().poll_next(cx) {
@@ -142,7 +142,7 @@ impl Stream for SseStreamParser {
                 self.process_buffer();
 
                 if !self.pending_chunks.is_empty() {
-                    return Poll::Ready(self.pending_chunks.pop());
+                    return Poll::Ready(Some(self.pending_chunks.remove(0)));
                 }
 
                 cx.waker().wake_by_ref();

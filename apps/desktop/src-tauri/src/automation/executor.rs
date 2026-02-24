@@ -336,7 +336,7 @@ impl ExecutorService {
         if let Some(app) = app_handle {
             let _ = app.emit("automation:request_screenshot", serde_json::json!({
                  "action_id": action.id,
-                 "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
+                 "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
              }));
         }
 

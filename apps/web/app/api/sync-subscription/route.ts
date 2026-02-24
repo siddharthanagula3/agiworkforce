@@ -42,15 +42,16 @@ async function handleSyncSubscription(request: NextRequest): Promise<NextRespons
     } else {
       const supabase = await createSupabaseServerClient();
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (!session) {
+      if (userError || !user) {
         throw createError.unauthorized('Please sign in to continue');
       }
 
-      userId = session.user.id;
-      email = session.user.email ?? null;
+      userId = user.id;
+      email = user.email ?? null;
     }
 
     if (!userId || !email) {
