@@ -12,6 +12,14 @@ use crate::sys::error::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::LazyLock;
+
+static DECISION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)(decided|decided to|we(?:'ll| will)|let's|i(?:'ll| will)|use|implement|adopt|switch to|migrate to|prefer|choose)").expect("valid decision regex"),
+        Regex::new(r"(?i)(architecture|tech stack|technology stack|style guide|coding standard|convention|pattern)").expect("valid architecture regex"),
+    ]
+});
 
 /// Configuration for memory injection into LLM context
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,12 +94,7 @@ pub struct MemoryInjector {
 impl MemoryInjector {
     /// Create a new memory injector with default configuration
     pub fn new(config: MemoryInjectionConfig) -> Result<Self> {
-        let decision_patterns = vec![
-            // Decision patterns like "I decided to...", "We'll use...", "Let's implement..."
-            Regex::new(r"(?i)(decided|decided to|we(?:'ll| will)|let's|i(?:'ll| will)|use|implement|adopt|switch to|migrate to|prefer|choose)").unwrap(),
-            // Architectural patterns like "Architecture:", "Tech stack:", "Style guide:"
-            Regex::new(r"(?i)(architecture|tech stack|technology stack|style guide|coding standard|convention|pattern)").unwrap(),
-        ];
+        let decision_patterns = DECISION_PATTERNS.clone();
 
         Ok(Self {
             config,

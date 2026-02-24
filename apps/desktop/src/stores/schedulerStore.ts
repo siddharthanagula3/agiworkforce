@@ -10,8 +10,7 @@
  * - Persist middleware: Using createJSONStorage, partialize, version
  * - Tauri event subscription for real-time job updates
  */
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 

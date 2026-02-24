@@ -580,7 +580,7 @@ impl ComputerUseSafetyLayer {
 
     /// Checks rate limiting.
     fn check_rate_limit(&self) -> Option<SafetyReason> {
-        let mut timestamps = self.action_timestamps.lock().unwrap();
+        let mut timestamps = self.action_timestamps.lock().unwrap_or_else(|e| e.into_inner());
         let now = std::time::Instant::now();
         let one_minute_ago = now - std::time::Duration::from_secs(60);
 

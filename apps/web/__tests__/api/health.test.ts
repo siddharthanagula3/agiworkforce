@@ -104,7 +104,7 @@ describe('Health Check API', () => {
       const data = await response.json();
       expect(data.status).toBe('unhealthy');
       expect(data.checks.database.status).toBe('unhealthy');
-      expect(data.checks.database.message).toBe('Connection failed');
+      expect(data.checks.database.message).toBe('unavailable');
     });
 
     it('should return unhealthy status when Stripe check fails', async () => {
@@ -119,7 +119,7 @@ describe('Health Check API', () => {
 
       const data = await response.json();
       expect(data.checks.stripe.status).toBe('unhealthy');
-      expect(data.checks.stripe.message).toBe('Stripe key not configured');
+      expect(data.checks.stripe.message).toBe('unavailable');
     });
 
     it('should return unhealthy status when environment variables are missing', async () => {
@@ -187,7 +187,7 @@ describe('Health Check API', () => {
       const data = await response.json();
 
       expect(data.checks.stripe.status).toBe('unhealthy');
-      expect(data.checks.stripe.message).toBe('Stripe key not configured');
+      expect(data.checks.stripe.message).toBe('unavailable');
     });
 
     it('should handle missing Supabase credentials gracefully', async () => {
@@ -202,7 +202,7 @@ describe('Health Check API', () => {
       const data = await response.json();
 
       expect(data.checks.database.status).toBe('unhealthy');
-      expect(data.checks.database.message).toBe('Supabase credentials not configured');
+      expect(data.checks.database.message).toBe('unavailable');
     });
   });
 });

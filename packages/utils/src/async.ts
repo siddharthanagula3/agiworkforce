@@ -301,7 +301,7 @@ export const retryStrategies = {
       if (error.message.includes('429') || error.message.includes('Rate limit')) {
         return true;
       }
-      if (error.message.includes('5')) {
+      if (/\b5\d{2}\b/.test(error.message)) {
         return attempt < 3;
       }
       return false;
@@ -383,11 +383,15 @@ export function makeRetriable<TArgs extends unknown[], TReturn>(
  * ```
  */
 export async function withTimeout<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
+    timer = setTimeout(
+      () => reject(new Error(`Operation timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
   });
 
-  return Promise.race([operation(), timeoutPromise]);
+  return Promise.race([operation(), timeoutPromise]).finally(() => clearTimeout(timer!));
 }
 
 /**
