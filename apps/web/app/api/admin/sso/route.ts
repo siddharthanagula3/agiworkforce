@@ -331,13 +331,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     logger.info({ userId, organization_id, domain, provider_type }, 'SSO connection created');
 
-    // 'suspicious_activity' is the closest available SecurityEventType for auditing
-    // legitimate admin configuration changes. There is no 'admin_action' or
-    // 'configuration_change' type in the current schema; this entry records the
-    // action for audit trail purposes and is expected/normal behaviour.
     await logSecurityEvent({
       userId,
-      eventType: 'suspicious_activity',
+      eventType: 'admin_action',
       severity: 'low',
       endpoint: '/api/admin/sso',
       details: {
@@ -464,13 +460,9 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       logger.info({ userId, connectionId, domain: conn.domain }, 'SSO connection deactivated');
     }
 
-    // 'suspicious_activity' is the closest available SecurityEventType for auditing
-    // legitimate admin configuration changes. There is no 'admin_action' or
-    // 'configuration_change' type in the current schema; this entry records the
-    // action for audit trail purposes and is expected/normal behaviour.
     await logSecurityEvent({
       userId,
-      eventType: 'suspicious_activity',
+      eventType: 'admin_action',
       severity: 'medium',
       endpoint: '/api/admin/sso',
       details: {

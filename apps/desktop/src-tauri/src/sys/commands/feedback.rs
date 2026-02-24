@@ -120,9 +120,15 @@ pub async fn get_filtered_logs(app: tauri::AppHandle) -> Result<Vec<String>, Str
             // Apply sensitive data filtering
             let sanitized = crate::sys::logging::filter_sensitive_data(line);
 
-            // Truncate long lines (stack traces, serialized JSON)
+            // Truncate long lines (stack traces, serialized JSON).
+            // Walk backwards to find a valid UTF-8 char boundary to avoid
+            // panicking on multi-byte codepoints.
             let truncated = if sanitized.len() > max_line_bytes {
-                format!("{}...[truncated]", &sanitized[..max_line_bytes])
+                let mut end = max_line_bytes;
+                while !sanitized.is_char_boundary(end) && end > 0 {
+                    end -= 1;
+                }
+                format!("{}...[truncated]", &sanitized[..end])
             } else {
                 sanitized
             };

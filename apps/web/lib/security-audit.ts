@@ -23,6 +23,7 @@ export type SecurityEventType =
   | 'rate_limit_exceeded'
   | 'authorization_failed'
   | 'suspicious_activity'
+  | 'admin_action'
   | 'csrf_validation_failed'
   | 'invalid_signature';
 
