@@ -3,6 +3,10 @@ name: Release
 # Desktop releases use release-desktop.yml on v* tags. This workflow is manual-only to avoid duplicate drafts.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.1.3)'
+        required: true
 
 permissions:
   contents: write
@@ -23,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Get version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        run: echo "VERSION=${{ github.event.inputs.version || '${GITHUB_REF#refs/tags/v}' }}" >> $GITHUB_ENV
 
       - name: Create release
         id: create-release
@@ -63,9 +67,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 9.15.3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -340,7 +340,7 @@ export function useAgenticEvents() {
       case 'calendar':
       case 'gmail':
       case 'email':
-        return 'terminal';
+        return 'mcp';
       case 'ui':
       case 'desktop':
         return 'ui';

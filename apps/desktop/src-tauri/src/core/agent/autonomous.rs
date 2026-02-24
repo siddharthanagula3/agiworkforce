@@ -112,7 +112,7 @@ impl AutonomousAgent {
         description: String,
         auto_approve: Option<bool>,
     ) -> Result<String> {
-        let task_id = format!("task_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let task_id = format!("task_{}", &uuid::Uuid::new_v4().to_string()[..12]);
         let auto_approve = auto_approve.unwrap_or(self.config.auto_approve);
 
         tracing::info!("[Agent] Planning task: {}", description);

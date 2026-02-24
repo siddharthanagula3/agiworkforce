@@ -103,12 +103,12 @@ jobs:
             fi
           fi
 
-          # Escape for GitHub Actions
-          CHANGELOG="${CHANGELOG//'%'/'%25'}"
-          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
-          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
-
-          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+          # Use heredoc syntax for multi-line output
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Create draft release
         id: create-release
@@ -131,7 +131,7 @@ jobs:
 
             ### What's New
 
-            ${decodeURIComponent('${{ steps.changelog.outputs.changelog }}').replace(/%0A/g, '\n')}
+            ${{ steps.changelog.outputs.changelog }}
 
             ### Downloads
 

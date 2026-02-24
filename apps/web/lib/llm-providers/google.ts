@@ -56,6 +56,20 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
 
   const contents: any[] = [];
 
+  // Build a map of tool_call_id → function name from assistant tool_calls
+  const toolCallIdToName = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.role === 'assistant' && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+      for (const tc of msg.tool_calls as any[]) {
+        const id = tc.id || tc.tool_call_id;
+        const name = tc.function?.name || tc.name;
+        if (id && name) {
+          toolCallIdToName.set(id, name);
+        }
+      }
+    }
+  }
+
   for (const msg of messages) {
     if (msg.role === 'system') continue;
 
@@ -69,12 +83,18 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
         responseContent = { result: msg.content };
       }
 
+      // Look up the actual function name from the tool_call_id
+      const functionName =
+        (msg.tool_call_id && toolCallIdToName.get(msg.tool_call_id)) ||
+        msg.tool_call_id ||
+        'unknown_tool';
+
       const functionResponse = {
         role: 'user',
         parts: [
           {
             functionResponse: {
-              name: msg.tool_call_id || 'unknown_tool',
+              name: functionName,
               response: responseContent,
             },
           },

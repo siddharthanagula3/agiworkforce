@@ -265,8 +265,19 @@ export class AnthropicProvider extends BaseLLMProvider {
       ...(request.effort && { effort: request.effort }),
     };
 
+    // Apply prompt cache on system message (matching sendRequest behavior)
     if (systemMessage) {
-      body.system = systemMessage.content;
+      if (request.usePromptCache) {
+        body.system = [
+          {
+            type: 'text',
+            text: systemMessage.content,
+            cache_control: { type: 'ephemeral' },
+          },
+        ];
+      } else {
+        body.system = systemMessage.content;
+      }
     }
 
     const response = await fetch(url, {

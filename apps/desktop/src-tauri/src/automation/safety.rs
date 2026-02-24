@@ -55,7 +55,7 @@ impl ComputerUseSafety {
     }
 
     fn is_text_safe(&self, text: &str) -> bool {
-        let patterns = DANGEROUS_PATTERNS.get().unwrap();
+        let patterns = DANGEROUS_PATTERNS.get_or_init(|| vec![]);
 
         for pattern in patterns {
             if pattern.is_match(text) {
@@ -97,7 +97,7 @@ impl ComputerUseSafety {
     }
 
     fn is_key_safe(&self, key: &str) -> bool {
-        let dangerous_keys = DANGEROUS_KEYS.get().unwrap();
+        let dangerous_keys = DANGEROUS_KEYS.get_or_init(|| vec![]);
 
         if dangerous_keys.iter().any(|k| k == key) {
             tracing::warn!("Dangerous key combination blocked: {}", key);

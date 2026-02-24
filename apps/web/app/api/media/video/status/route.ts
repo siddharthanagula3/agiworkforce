@@ -73,10 +73,18 @@ interface GoogleOperationResponse {
  */
 function parseTaskId(taskId: string): { provider: 'runway' | 'google'; originalId: string } {
   if (taskId.startsWith('runway_')) {
-    return { provider: 'runway', originalId: taskId.substring(7) };
+    const originalId = taskId.substring(7);
+    if (!/^[a-zA-Z0-9_-]+$/.test(originalId)) {
+      throw createError.validation('Invalid task_id: contains disallowed characters');
+    }
+    return { provider: 'runway', originalId };
   }
   if (taskId.startsWith('google_')) {
-    return { provider: 'google', originalId: taskId.substring(7) };
+    const originalId = taskId.substring(7);
+    if (!/^[a-zA-Z0-9_-]+$/.test(originalId)) {
+      throw createError.validation('Invalid task_id: contains disallowed characters');
+    }
+    return { provider: 'google', originalId };
   }
   throw createError.validation('Invalid task_id format');
 }
@@ -162,12 +170,13 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
   }
 
   // Poll the operation status
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/operations/${operationId}?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/operations/${operationId}`;
 
   const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
   });
 

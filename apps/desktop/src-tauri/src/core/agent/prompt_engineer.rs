@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::core::llm::prompt_policy;
+
+static TEMPLATE_PLACEHOLDER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\{\{(\w+)\}\}").expect("valid regex for template placeholders")
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptTemplate {
@@ -293,8 +298,7 @@ Generate unit tests, integration tests, and edge case tests."#
             prompt = prompt.replace(&placeholder, &value);
         }
 
-        let re = regex::Regex::new(r"\{\{(\w+)\}\}").unwrap();
-        prompt = re.replace_all(&prompt, "[MISSING: $1]").to_string();
+        prompt = TEMPLATE_PLACEHOLDER_RE.replace_all(&prompt, "[MISSING: $1]").to_string();
 
         Ok(prompt)
     }

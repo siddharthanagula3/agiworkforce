@@ -469,8 +469,18 @@ export class SubscriptionService {
         stripe_subscription_id: data.stripe_subscription_id,
       };
     } catch (error) {
+      // Differentiate between "not found" scenarios and actual errors
+      const isNotFound =
+        error instanceof Error &&
+        (error.message.includes('No such customer') || error.message.includes('resource_missing'));
+
+      if (isNotFound) {
+        logger.info({ error, userId }, 'Stripe resource not found during sync');
+        return null;
+      }
+
       logger.error({ error, userId }, 'Error executing syncWithStripe');
-      return null;
+      throw error;
     }
   }
 }

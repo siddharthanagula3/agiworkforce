@@ -141,7 +141,13 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'timeout';
 
 export interface ApprovalRequest {
   id: string;
-  type: 'file_delete' | 'terminal_command' | 'api_call' | 'data_modification' | 'mcp_tool' | 'tool_execution';
+  type:
+    | 'file_delete'
+    | 'terminal_command'
+    | 'api_call'
+    | 'data_modification'
+    | 'mcp_tool'
+    | 'tool_execution';
   description: string;
   riskLevel: ApprovalRiskLevel;
   details: Record<string, unknown>;
@@ -540,9 +546,8 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
-                if (index !== -1 && state.pendingApprovals[index]) {
-                  state.pendingApprovals[index]!.status = 'approved';
-                  state.pendingApprovals[index]!.approvedAt = new Date();
+                if (index !== -1) {
+                  // Remove directly - no need to update status on an item being removed
                   state.pendingApprovals.splice(index, 1);
                 }
               },
@@ -663,9 +668,13 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 const existing = state.activeToolStreams.get(toolId);
                 if (existing) {
+                  // Filter out undefined values to avoid overwriting valid data with undefined
+                  const filteredUpdates = Object.fromEntries(
+                    Object.entries(updates).filter(([_, v]) => v !== undefined),
+                  );
                   const updated: ToolStreamStateEntry = {
                     ...existing,
-                    ...updates,
+                    ...filteredUpdates,
                     outputChunks: updates.outputChunks
                       ? [...existing.outputChunks, ...updates.outputChunks]
                       : existing.outputChunks,
