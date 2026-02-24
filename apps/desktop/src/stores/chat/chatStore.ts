@@ -1318,8 +1318,11 @@ export const useChatStore = create<ChatState>()(
             set(
               (state) => {
                 const messageInMessages = state.messages.find((m) => m.id === messageId);
-                if (messageInMessages) {
-                  messageInMessages.bookmarked = !messageInMessages.bookmarked;
+                // Compute the target value once to avoid double-toggle on same proxy object
+                const newValue = messageInMessages ? !messageInMessages.bookmarked : undefined;
+
+                if (messageInMessages && newValue !== undefined) {
+                  messageInMessages.bookmarked = newValue;
                 }
 
                 for (const convoId of Object.keys(state.messagesByConversation)) {
@@ -1327,7 +1330,7 @@ export const useChatStore = create<ChatState>()(
                   if (messages) {
                     const message = messages.find((m) => m.id === messageId);
                     if (message) {
-                      message.bookmarked = !message.bookmarked;
+                      message.bookmarked = newValue ?? !message.bookmarked;
                       break;
                     }
                   }
@@ -1340,27 +1343,37 @@ export const useChatStore = create<ChatState>()(
           toggleMessageReaction: (messageId, reaction) =>
             set(
               (state) => {
-                const toggleReaction = (message: EnhancedMessage | undefined) => {
+                // Compute the target action once to avoid double-toggle on same proxy object
+                const messageInMessages = state.messages.find((m) => m.id === messageId);
+                const shouldAdd = messageInMessages
+                  ? !(messageInMessages.reactions ?? []).includes(reaction)
+                  : true;
+
+                const applyReaction = (message: EnhancedMessage | undefined) => {
                   if (!message) return;
                   if (!message.reactions) {
                     message.reactions = [];
                   }
-                  const index = message.reactions.indexOf(reaction);
-                  if (index >= 0) {
-                    message.reactions.splice(index, 1);
+                  if (shouldAdd) {
+                    if (!message.reactions.includes(reaction)) {
+                      message.reactions.push(reaction);
+                    }
                   } else {
-                    message.reactions.push(reaction);
+                    const index = message.reactions.indexOf(reaction);
+                    if (index >= 0) {
+                      message.reactions.splice(index, 1);
+                    }
                   }
                 };
 
-                toggleReaction(state.messages.find((m) => m.id === messageId));
+                applyReaction(messageInMessages);
 
                 for (const convoId of Object.keys(state.messagesByConversation)) {
                   const messages = state.messagesByConversation[convoId];
                   if (messages) {
                     const message = messages.find((m) => m.id === messageId);
                     if (message) {
-                      toggleReaction(message);
+                      applyReaction(message);
                       break;
                     }
                   }

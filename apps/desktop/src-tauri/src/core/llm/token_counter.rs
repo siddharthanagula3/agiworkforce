@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use tiktoken_rs::{cl100k_base, CoreBPE};
 
 lazy_static! {
-    static ref TOKENIZER: CoreBPE = cl100k_base().unwrap();
+    static ref TOKENIZER: CoreBPE = cl100k_base().expect("Failed to initialize cl100k_base tokenizer");
 }
 
 /// Image detail level for token calculation

@@ -871,8 +871,11 @@ impl UndoManager {
 
         // Try credential helper
         if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+            let config = git2::Config::open_default()
+                .or_else(|_| git2::Config::new())
+                .map_err(|e| git2::Error::from_str(&format!("Failed to open git config: {}", e)))?;
             return git2::Cred::credential_helper(
-                &git2::Config::open_default().unwrap_or_else(|_| git2::Config::new().unwrap()),
+                &config,
                 url,
                 username_from_url,
             );
