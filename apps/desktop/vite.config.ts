@@ -90,8 +90,9 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       // Minification settings
       minify: isDebug ? false : 'esbuild',
 
-      // Source maps for debugging - always enabled to catch production issues
-      sourcemap: true,
+      // Source maps for debugging - enabled in dev/test only; disabled in production
+      // to avoid shipping source maps that expose original source code to end users (M24)
+      sourcemap: mode !== 'production',
 
       // Output directory
       outDir: 'dist',
@@ -246,8 +247,9 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     // Esbuild Configuration
     // ===================
     esbuild: {
-      // Keep console logs in production for debugging
-      drop: mode === 'production' ? ['debugger'] : [],
+      // Drop debugger statements and console calls in production to avoid
+      // leaking internal diagnostics or implementation details (M25)
+      drop: mode === 'production' ? ['debugger', 'console'] : [],
       // Preserve legal comments
       legalComments: 'none',
       // Keep function/class names to avoid initialization issues

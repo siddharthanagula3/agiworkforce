@@ -186,6 +186,14 @@ export interface ToolStreamStateEntry {
   parameters?: Record<string, unknown>;
 }
 
+/**
+ * Cap an array to `limit` most-recent entries.
+ * Returns the original array reference unchanged when under the limit.
+ */
+function capArray<T>(arr: T[], limit: number): T[] {
+  return arr.length > limit ? arr.slice(-limit) : arr;
+}
+
 // Storage fallback for SSR/non-browser environments
 const storageFallback: Storage = {
   get length() {
@@ -320,9 +328,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.fileOperations.push({ ...op, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap fileOperations at 200 entries
-                if (state.fileOperations.length > 200) {
-                  state.fileOperations = state.fileOperations.slice(-200);
-                }
+                state.fileOperations = capArray(state.fileOperations, 200);
               },
               undefined,
               'tool/addFileOperation',
@@ -334,9 +340,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.terminalCommands.push({ ...cmd, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap terminalCommands at 200 entries
-                if (state.terminalCommands.length > 200) {
-                  state.terminalCommands = state.terminalCommands.slice(-200);
-                }
+                state.terminalCommands = capArray(state.terminalCommands, 200);
               },
               undefined,
               'tool/addTerminalCommand',
@@ -365,9 +369,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.toolExecutions.push({ ...exec, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap toolExecutions at 200 entries
-                if (state.toolExecutions.length > 200) {
-                  state.toolExecutions = state.toolExecutions.slice(-200);
-                }
+                state.toolExecutions = capArray(state.toolExecutions, 200);
               },
               undefined,
               'tool/addToolExecution',
@@ -379,9 +381,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.screenshots.push({ ...screenshot, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap screenshots at 200 entries
-                if (state.screenshots.length > 200) {
-                  state.screenshots = state.screenshots.slice(-200);
-                }
+                state.screenshots = capArray(state.screenshots, 200);
               },
               undefined,
               'tool/addScreenshot',
@@ -397,9 +397,8 @@ export const useToolStore = create<ToolState>()(
                   createdAt: now,
                   updatedAt: now,
                 });
-                if (state.actionLog.length > 500) {
-                  state.actionLog = state.actionLog.slice(0, 500);
-                }
+                state.actionLog =
+                  state.actionLog.length > 500 ? state.actionLog.slice(0, 500) : state.actionLog;
               },
               undefined,
               'tool/addActionLogEntry',

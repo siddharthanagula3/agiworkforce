@@ -10,28 +10,29 @@ import { randomUUID } from 'crypto';
  * Google: { functionDeclarations: [{ name, description, parameters }] }
  */
 function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations: unknown[] } {
-  const declarations = tools.map((tool: any) => {
+  const declarations = (tools as Record<string, unknown>[]).map((tool) => {
     // Handle OpenAI format: { type: "function", function: { name, description, parameters } }
-    if (tool.function) {
+    if (tool['function']) {
+      const fn = tool['function'] as Record<string, unknown>;
       return {
-        name: tool.function.name,
-        description: tool.function.description || '',
-        parameters: tool.function.parameters || { type: 'object', properties: {} },
+        name: fn['name'],
+        description: fn['description'] || '',
+        parameters: fn['parameters'] || { type: 'object', properties: {} },
       };
     }
     // Handle Anthropic format: { name, description, input_schema }
-    if (tool.input_schema) {
+    if (tool['input_schema']) {
       return {
-        name: tool.name,
-        description: tool.description || '',
-        parameters: tool.input_schema,
+        name: tool['name'],
+        description: tool['description'] || '',
+        parameters: tool['input_schema'],
       };
     }
     // Handle flat format (from desktop's transform): { name, description, parameters }
     return {
-      name: tool.name,
-      description: tool.description || '',
-      parameters: tool.parameters || { type: 'object', properties: {} },
+      name: tool['name'],
+      description: tool['description'] || '',
+      parameters: tool['parameters'] || { type: 'object', properties: {} },
     };
   });
 
@@ -60,11 +61,13 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
   const toolCallIdToName = new Map<string, string>();
   for (const msg of messages) {
     if (msg.role === 'assistant' && msg.tool_calls && Array.isArray(msg.tool_calls)) {
-      for (const tc of msg.tool_calls as any[]) {
-        const id = tc.id || tc.tool_call_id;
-        const name = tc.function?.name || tc.name;
+      for (const tc of msg.tool_calls as unknown[]) {
+        const tcObj = tc as Record<string, unknown>;
+        const id = tcObj['id'] || tcObj['tool_call_id'];
+        const fn = tcObj['function'] as Record<string, unknown> | undefined;
+        const name = fn?.['name'] || tcObj['name'];
         if (id && name) {
-          toolCallIdToName.set(id, name);
+          toolCallIdToName.set(String(id), String(name));
         }
       }
     }
@@ -117,12 +120,17 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
       if (msg.content && msg.content.trim()) {
         parts.push({ text: msg.content });
       }
-      for (const tc of msg.tool_calls as any[]) {
-        const funcName = tc.function?.name || tc.name || 'unknown';
-        let funcArgs: any = {};
+      for (const tc of msg.tool_calls as unknown[]) {
+        const tcObj = tc as Record<string, unknown>;
+        const fn = tcObj['function'] as Record<string, unknown> | undefined;
+        const funcName = String(fn?.['name'] || tcObj['name'] || 'unknown');
+        let funcArgs: Record<string, unknown> = {};
         try {
-          const rawArgs = tc.function?.arguments || tc.arguments || '{}';
-          funcArgs = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
+          const rawArgs = fn?.['arguments'] || tcObj['arguments'] || '{}';
+          funcArgs =
+            typeof rawArgs === 'string'
+              ? JSON.parse(rawArgs)
+              : (rawArgs as Record<string, unknown>);
         } catch {
           funcArgs = {};
         }

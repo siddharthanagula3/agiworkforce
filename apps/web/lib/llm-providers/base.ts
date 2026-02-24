@@ -1,5 +1,8 @@
 import 'server-only';
 
+/** HTTP status codes that indicate a temporary server error and should be retried */
+export const RETRYABLE_HTTP_STATUS_CODES = new Set([500, 502, 503, 504]);
+
 export interface LLMProviderResponse {
   content: string;
   model: string;
