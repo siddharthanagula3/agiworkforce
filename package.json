@@ -28,7 +28,7 @@
   },
   "scripts": {
     "prepare": "husky install",
-    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=15 --ignore-pattern 'apps/extension/**'",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=5 --ignore-pattern 'apps/extension/**'",
     "lint:fix": "pnpm lint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

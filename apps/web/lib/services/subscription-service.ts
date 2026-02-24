@@ -9,6 +9,8 @@ import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 // AUDIT-P3: Use shared Stripe type helpers for safer period access
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 
+const STRIPE_API_VERSION = '2026-01-28.clover' as Stripe.LatestApiVersion;
+
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -193,12 +195,11 @@ export class SubscriptionService {
 
     // Log warning for unmapped price IDs (helps debug configuration issues)
     if (priceId && !tier) {
-      logger.error(
+      logger.warn(
         { priceId },
-        'CRITICAL: Price ID not found in tier mapping. User may be incorrectly downgraded to free tier. Check STRIPE_PRICE_* environment variables and PRICE_ID_OVERRIDES.',
+        'Price ID not found in tier mapping; defaulting to free tier. Check STRIPE_PRICE_* environment variables and PRICE_ID_OVERRIDES.',
       );
-      // Throw error instead of silently downgrading - better to fail loudly than corrupt data
-      throw new Error(`Price ID ${priceId} not found in tier mapping. Cannot determine plan tier.`);
+      return 'free';
     }
 
     // Only return 'free' if there's genuinely no price ID (e.g., new user without subscription)
@@ -263,7 +264,7 @@ export class SubscriptionService {
     }
 
     const stripe = new Stripe(stripeKey, {
-      apiVersion: '2026-01-28.clover' as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION,
     });
 
     try {

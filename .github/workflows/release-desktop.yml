@@ -454,7 +454,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
         run: |
           # Install dependencies
-          npm install @supabase/supabase-js
+          npm install @supabase/supabase-js@2.93.3
 
           # Create update script
           cat > update-releases.mjs << 'SCRIPT'
