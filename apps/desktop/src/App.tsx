@@ -489,7 +489,7 @@ const DesktopShell = () => {
                 void useAccountStore
                   .getState()
                   .syncWithBackend?.()
-                  .catch(() => {
+                  ?.catch(() => {
                     setSubscriptionFetchFailed(true);
                   });
               }}

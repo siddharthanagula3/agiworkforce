@@ -64,8 +64,8 @@ pnpm typecheck:all      # Type check all packages
 ### Apps
 
 - **desktop** (`apps/desktop`): Tauri 2.x desktop app with React 19, Vite 7, and Rust backend. Main user-facing product.
-- **web** (`apps/web`): Next.js 16 web application (App Router). Authentication via Supabase, Stripe payments, Upstash Redis rate limiting.
-- **extension** (`apps/extension`): Browser extension (not fully built out).
+- **web** (`apps/web`): Next.js 16 web application (App Router). Authentication via Supabase (with SSO), Stripe payments, Upstash Redis rate limiting, admin APIs for security and directory sync.
+- **extension** (`apps/extension`): Browser extension with native messaging, side panel, and desktop automation capabilities.
 
 ### Packages
 
@@ -117,7 +117,8 @@ core/
                     # ai_orchestrator.rs, background_agent.rs, context_manager.rs, undo_manager.rs
   llm/              # LLM routing layer: llm_router.rs, provider_adapter.rs,
                     # sse_parser.rs, token_counter.rs, cost_calculator.rs, cache_manager.rs
-  llm/providers/    # Provider implementations: managed_cloud_provider.rs, ollama.rs, http_client.rs
+  llm/providers/    # Provider implementations: managed_cloud_provider.rs, ollama.rs,
+                    # http_client.rs, http_client_factory.rs (proxy/CA cert support)
   mcp/              # Model Context Protocol: client.rs, manager.rs, registry.rs,
                     # protocol.rs, extensions.rs, health.rs, transport.rs
   orchestration/    # Workflow engine: workflow_engine.rs, workflow_executor.rs, workflow_scheduler.rs
@@ -125,20 +126,21 @@ core/
                     # memory_manager.rs, executors/ (15 domain executors: file, git, browser,
                     # terminal, media, code, api, calendar, cloud, db, email, llm, mcp, ocr, etc.)
   swarm/            # Multi-agent swarm: agent_spawner.rs, orchestrator.rs,
-                    # task_decomposer.rs, result_aggregator.rs
+                    # task_decomposer.rs, result_aggregator.rs, circuit_breaker.rs
   embeddings/       # Vector embeddings and semantic search
   research/         # Research orchestration
 features/           # Domain features: terminal, calendar, communications, speech,
                     # clipboard, search, tasks, teams, workflows, webhooks, projects
 sys/
   commands/         # All Tauri command handlers (one file per domain, ~60+ files)
-  security/         # Auth, master password (Argon2id), secret management
+  security/         # Auth, master password (Argon2id), secret management, kill switch
   billing/          # Stripe billing state
   telemetry/        # Telemetry
 automation/         # Desktop automation: input/, screen/, computer_use/, browser/,
                     # vision_planner.rs, recorder.rs, safety.rs
 data/
-  db/               # SQLite via rusqlite: models, repository pattern, migrations
+  db/               # SQLite via rusqlite: models, repository pattern, migrations,
+                    # encryption.rs (SQLCipher support for database-at-rest encryption)
   settings/         # Settings persistence
   state/            # App state
 integrations/       # External integrations
@@ -151,11 +153,12 @@ The `LLMRouter` (`core/llm/llm_router.rs`) handles:
 
 - Exponential backoff retry with configurable `RetryConfig` (3 retries, 500ms initial, 2x multiplier)
 - Fallback chain across providers when retries fail
-- Cost tracking via `CostCalculator` and `TokenCounter`
+- Cost tracking via `CostCalculator` and `TokenCounter` with per-task and per-session caps ($5/$50 defaults)
+- Circuit breaker for LLM provider 5xx errors with exponential cooldown
 - SSE streaming via `sse_parser.rs`
 - Prompt caching for Anthropic/OpenAI
 
-Provider implementations: `ManagedCloudProvider` handles Anthropic, OpenAI, Google, xAI, DeepSeek, and others. `OllamaProvider` handles local models.
+Provider implementations: `ManagedCloudProvider` handles Anthropic, OpenAI, Google, xAI, DeepSeek, and others. `OllamaProvider` handles local models. `HttpClientFactory` centralizes HTTP client creation with proxy and custom CA cert support for corporate environments.
 
 **Adding a new model:** Update `MODEL_METADATA` in `apps/desktop/src/constants/llm.ts`, add to `MODEL_POOLS` in `src/lib/modelRouter.ts`, and update the Rust provider adapter if needed.
 
@@ -172,15 +175,29 @@ Provider implementations: `ManagedCloudProvider` handles Anthropic, OpenAI, Goog
 - **Master password**: Argon2id (OWASP params) for key derivation, stored verifier (not password) in SQLite
 - **Key derivation**: Combines password-derived key + machine ID via HKDF-SHA256 with purpose-specific salts
 - **Secret management**: `SecretManager` + `AuthManager` in `sys/security/`
-- Migration support for existing installations upgrading to master-password-based encryption
+- **Database encryption**: SQLCipher (via `bundled-sqlcipher` feature) for database-at-rest encryption, with migration support from unencrypted databases
+- **Kill switch**: `account_status` column on Supabase profiles (active/suspended/banned/disabled), enforced in API gateway auth middleware
+- **JWT hardening**: Algorithm pinning (HS256), issuer/audience claims on all sign/verify paths
+- **Prompt sanitization**: `escape_xml()` for XML injection prevention, `sanitize_multiline_for_prompt()` for code selection preservation
+- **TLS**: `rustls-tls-native-roots` for system certificate store trust (corporate SSL inspection)
 
 ### Local Database
 
-SQLite via `rusqlite` at `src-tauri/src/data/db/`. Schema managed by SQL migrations in `src-tauri/migrations/`. Repository pattern with typed models in `data/db/models.rs` and query functions in `data/db/repository.rs`. Database struct wraps `Arc<Mutex<Connection>>`.
+SQLite via `rusqlite` at `src-tauri/src/data/db/`. Schema managed by SQL migrations in `src-tauri/migrations/`. Repository pattern with typed models in `data/db/models.rs` and query functions in `data/db/repository.rs`. Database struct wraps `Arc<Mutex<Connection>>`. Encryption via SQLCipher (module: `encryption.rs`) with key derivation from machine ID and master password when enabled.
+
+## Enterprise Features
+
+- **SSO**: Supabase `signInWithSSO()` integration with domain detection. Routes: `/api/auth/sso-check` (GET, detects SSO domain), `/api/admin/sso` (CRUD)
+- **SCIM/Directory Sync**: WorkOS webhook handler at `/api/webhooks/directory-sync` (5 event types with HMAC-SHA256 verification), admin API at `/api/admin/directory-sync`
+- **Admin Security API**: `/api/admin/security` for suspend-user, ban-user, reactivate-user actions
+- **Proxy & Custom CA Support**: `HttpClientFactory` in `core/llm/providers/http_client_factory.rs` reads proxy URLs from env (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and accepts custom CA cert paths for corporate SSL inspection
+- **Filesystem deny list**: Tauri capabilities exclude 9 sensitive paths (`.docker`, `.npmrc`, `.pypirc`, `.netrc`, `.azure`, `.config/gh`, `.config/heroku`, `.config/op`, `.config/stripe`)
+- **Frontend components**: `StatusBanner` polls CDN status, error boundary detects connection issues, degraded state banner shows when subscription fetch fails
+- **Rate limiting**: All API endpoints protected via Upstash Redis rate limiting
 
 ## Database
 
-Supabase (PostgreSQL) for the web app with migrations in `apps/web/supabase/migrations/`. The desktop app uses a local SQLite database separately.
+Supabase (PostgreSQL) for the web app with migrations in `apps/web/supabase/migrations/`. The desktop app uses a local SQLite database separately. Recent migrations include `20260223000000_resilience_security_fixes.sql` (kill switch, search_path), `20260224000000_add_sso_connections.sql` (SSO), and `20260224000001_add_scim_fields.sql` (directory sync).
 
 ## Tech Stack
 
