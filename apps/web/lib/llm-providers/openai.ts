@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
+import {
+  BaseLLMProvider,
+  LLMProviderRequest,
+  LLMProviderResponse,
+  RETRYABLE_HTTP_STATUS_CODES,
+} from './base';
 import { logger } from '@/lib/logger';
 
 /**
@@ -153,7 +158,7 @@ export class OpenAIProvider extends BaseLLMProvider {
           throw new Error('OpenAI insufficient credits (402): Please upgrade your plan.');
         } else if (response.status === 404) {
           throw new Error(`OpenAI not found (404): ${errorText}`);
-        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+        } else if (RETRYABLE_HTTP_STATUS_CODES.has(response.status)) {
           throw new Error(`OpenAI API service error (${response.status}): Please try again later.`);
         } else {
           throw new Error(`OpenAI API error: ${response.status} ${errorText}`);

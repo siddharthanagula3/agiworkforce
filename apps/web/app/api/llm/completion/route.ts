@@ -316,6 +316,25 @@ async function handleLLMCompletion(request: NextRequest) {
   // Determine provider from model
   let provider = LLMProviderFactory.getProviderFromModel(llmRequest.model);
 
+  const KNOWN_PROVIDERS = new Set([
+    'openai',
+    'anthropic',
+    'google',
+    'xai',
+    'qwen',
+    'moonshot',
+    'deepseek',
+    'perplexity',
+    'zhipu',
+  ]);
+  if (!KNOWN_PROVIDERS.has(provider)) {
+    logger.error(
+      { provider, model: llmRequest.model },
+      'Unexpected LLM provider returned from routing',
+    );
+    throw createError.internal('Invalid LLM provider configuration');
+  }
+
   // Validate message length to prevent abuse (max 1MB total content)
   const MAX_MESSAGE_LENGTH = 100000; // 100k chars per message
   const MAX_TOTAL_LENGTH = 1000000; // 1MB total
@@ -628,9 +647,7 @@ async function handleLLMCompletion(request: NextRequest) {
         },
         'Streaming request failed',
       );
-      throw createError.internal(
-        `Streaming request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      throw createError.internal('Streaming request failed');
     }
   }
 

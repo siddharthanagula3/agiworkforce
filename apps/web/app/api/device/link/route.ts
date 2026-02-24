@@ -45,7 +45,20 @@ async function handleDeviceLink(request: NextRequest) {
     // Retry on rare uniqueness conflicts to avoid transient pairing failures.
     let link_code = '';
     let upsertError: unknown = null;
-    const appUrl = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
+
+    // Validate NEXT_PUBLIC_APP_URL to prevent verification links pointing to wrong domains
+    const appUrlRaw = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
+    let appUrl: string;
+    try {
+      const parsed = new URL(appUrlRaw);
+      if (parsed.protocol !== 'https:') {
+        throw new Error(`Expected https: protocol, got ${parsed.protocol}`);
+      }
+      appUrl = parsed.origin;
+    } catch (err) {
+      logger.warn({ appUrl: appUrlRaw, err }, 'NEXT_PUBLIC_APP_URL is invalid; using default');
+      appUrl = 'https://agiworkforce.com';
+    }
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     for (let attempt = 0; attempt < 3; attempt++) {
       link_code = randomBytes(8).toString('hex').toUpperCase();

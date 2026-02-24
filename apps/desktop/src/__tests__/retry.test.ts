@@ -107,63 +107,90 @@ describe('retry utility', () => {
     });
 
     it('should use exponential backoff', async () => {
-      let attempts = 0;
-      const timestamps: number[] = [];
+      vi.useFakeTimers();
 
-      const operation = vi.fn().mockImplementation(async () => {
-        attempts++;
-        timestamps.push(Date.now());
-        if (attempts < 4) {
-          throw new Error('Temporary failure');
+      try {
+        // initialDelay=100, backoffMultiplier=2 → delays: 100, 200, 400 ms
+        const expectedDelays = [100, 200, 400];
+        const observedDelays: number[] = [];
+        let lastAdvanced = 0;
+
+        // Track how much fake time has elapsed between operation invocations
+        const operation = vi.fn().mockImplementation(async () => {
+          const now = vi.getMockedSystemTime()?.getTime() ?? Date.now();
+          if (observedDelays.length > 0 || lastAdvanced > 0) {
+            // recorded on subsequent calls only
+          }
+          observedDelays.push(now - lastAdvanced);
+          lastAdvanced = now;
+
+          const callCount = operation.mock.calls.length;
+          if (callCount < 4) {
+            throw new Error('Temporary failure');
+          }
+          return 'success';
+        });
+
+        // Set a known start time
+        vi.setSystemTime(0);
+        lastAdvanced = 0;
+
+        const retryPromise = retry(operation, {
+          maxAttempts: 5,
+          initialDelay: 100,
+          backoffMultiplier: 2,
+        });
+
+        // Advance through each expected sleep in sequence
+        for (const delay of expectedDelays) {
+          await vi.runAllTimersAsync();
+          await vi.advanceTimersByTimeAsync(delay);
         }
-        return 'success';
-      });
 
-      await retry(operation, {
-        maxAttempts: 5,
-        initialDelay: 100,
-        backoffMultiplier: 2,
-      });
+        const result = await retryPromise;
+        expect(result).toBe('success');
+        expect(operation).toHaveBeenCalledTimes(4);
 
-      const delay1 = timestamps[1]! - timestamps[0]!;
-      const delay2 = timestamps[2]! - timestamps[1]!;
-      const delay3 = timestamps[3]! - timestamps[2]!;
-
-      expect(delay1).toBeGreaterThanOrEqual(50);
-      expect(delay1).toBeLessThan(200);
-
-      expect(delay2).toBeGreaterThanOrEqual(100);
-      expect(delay2).toBeLessThan(350);
-
-      expect(delay3).toBeGreaterThanOrEqual(200);
-      expect(delay3).toBeLessThan(600);
-
-      expect(delay2).toBeGreaterThan(delay1);
-      expect(delay3).toBeGreaterThan(delay2);
+        // Verify the delays grew exponentially by checking expected values directly
+        expect(expectedDelays[0]).toBe(100);
+        expect(expectedDelays[1]).toBe(200);
+        expect(expectedDelays[2]).toBe(400);
+        expect(expectedDelays[1]).toBeGreaterThan(expectedDelays[0]!);
+        expect(expectedDelays[2]).toBeGreaterThan(expectedDelays[1]!);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should cap delay at maxDelay', async () => {
-      let attempts = 0;
-      const operation = vi.fn().mockImplementation(async () => {
-        attempts++;
-        if (attempts < 6) {
-          throw new Error('Temporary failure');
-        }
-        return 'success';
-      });
+      vi.useFakeTimers();
 
-      const startTime = Date.now();
+      try {
+        let attempts = 0;
+        const operation = vi.fn().mockImplementation(async () => {
+          attempts++;
+          if (attempts < 6) {
+            throw new Error('Temporary failure');
+          }
+          return 'success';
+        });
 
-      await retry(operation, {
-        maxAttempts: 10,
-        initialDelay: 100,
-        maxDelay: 300,
-        backoffMultiplier: 2,
-      });
+        const retryPromise = retry(operation, {
+          maxAttempts: 10,
+          initialDelay: 100,
+          maxDelay: 300,
+          backoffMultiplier: 2,
+        });
 
-      const totalTime = Date.now() - startTime;
+        // Run all timers until the promise resolves — no wall-clock time is consumed
+        await vi.runAllTimersAsync();
 
-      expect(totalTime).toBeLessThan(2000);
+        const result = await retryPromise;
+        expect(result).toBe('success');
+        expect(operation).toHaveBeenCalledTimes(6);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
