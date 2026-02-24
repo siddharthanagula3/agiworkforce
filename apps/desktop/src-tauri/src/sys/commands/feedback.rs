@@ -143,6 +143,10 @@ pub async fn submit_feedback(
     metadata: FeedbackMetadata,
     logs: Option<String>,
 ) -> Result<(), String> {
+    // SECURITY: Using the anon key intentionally here because feedback can be submitted
+    // before the user is authenticated (e.g., from the login screen). The `feedback` table
+    // MUST have an RLS policy that only allows INSERT for anon and restricts SELECT/UPDATE/DELETE
+    // to service_role. If authenticated-only feedback is desired, accept a user JWT parameter instead.
     let supabase_url = std::env::var("VITE_SUPABASE_URL")
         .or_else(|_| std::env::var("SUPABASE_URL"))
         .unwrap_or_default();

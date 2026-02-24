@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 function verifyDiagnosticSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
@@ -26,6 +27,9 @@ function verifyDiagnosticSecret(request: NextRequest): boolean {
  * and the webhook is properly configured
  */
 export async function GET(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
   if (!verifyDiagnosticSecret(request)) {
     logger.warn('Unauthorized validate-webhook request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

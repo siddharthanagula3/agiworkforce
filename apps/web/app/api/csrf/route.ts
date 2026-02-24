@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/services/supabase-server';
 import { generateCsrfToken, getSessionIdFromRequest } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 /**
  * GET endpoint to generate CSRF tokens for authenticated users
@@ -14,6 +15,8 @@ import { logger } from '@/lib/logger';
  */
 async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
   try {
+    const rateLimitResponse = await withRateLimit(request, 'default');
+    if (rateLimitResponse) return rateLimitResponse;
     const supabase = await createSupabaseServerClient();
     const {
       data: { session },

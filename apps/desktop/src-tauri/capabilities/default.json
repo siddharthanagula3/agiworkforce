@@ -63,7 +63,16 @@
         { "path": "$HOME/.config/gcloud/**" },
         { "path": "$HOME/Library/Keychains/**" },
         { "path": "/etc/passwd" },
-        { "path": "/etc/shadow" }
+        { "path": "/etc/shadow" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" }
       ]
     },
     {
@@ -81,7 +90,16 @@
         { "path": "$HOME/.gnupg/**" },
         { "path": "$HOME/.kube/**" },
         { "path": "$HOME/.config/gcloud/**" },
-        { "path": "$HOME/Library/Keychains/**" }
+        { "path": "$HOME/Library/Keychains/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" }
       ]
     },
     {
@@ -101,7 +119,16 @@
         { "path": "$HOME/.config/gcloud/**" },
         { "path": "$HOME/Library/Keychains/**" },
         { "path": "/etc/passwd" },
-        { "path": "/etc/shadow" }
+        { "path": "/etc/shadow" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" }
       ]
     },
     {
@@ -118,7 +145,16 @@
         { "path": "$HOME/.aws/**" },
         { "path": "$HOME/.gnupg/**" },
         { "path": "$HOME/.kube/**" },
-        { "path": "$HOME/.config/gcloud/**" }
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" }
       ]
     },
     "fs:allow-read-text-file-lines-next",
