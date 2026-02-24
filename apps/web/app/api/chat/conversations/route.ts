@@ -62,12 +62,13 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
   });
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError || !user) {
     throw createError.unauthorized();
   }
-  return session.user;
+  return user;
 }
 
 async function handleGetConversations(request: NextRequest) {

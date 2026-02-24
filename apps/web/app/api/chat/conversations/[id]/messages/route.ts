@@ -182,7 +182,17 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   // Call LLM API
   const llmApiUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
-  const llmResponse = await fetch(`${llmApiUrl}/api/llm/v1/chat/completions`, {
+  const llmEndpoint = `${llmApiUrl}/api/llm/v1/chat/completions`;
+
+  // Validate outbound URL uses a trusted origin
+  const trustedOrigin = new URL(llmApiUrl).origin;
+  const actualOrigin = new URL(llmEndpoint).origin;
+  if (actualOrigin !== trustedOrigin) {
+    logger.error({ llmEndpoint, trustedOrigin, actualOrigin }, 'LLM endpoint origin mismatch');
+    throw createError.internal('LLM API configuration error');
+  }
+
+  const llmResponse = await fetch(llmEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

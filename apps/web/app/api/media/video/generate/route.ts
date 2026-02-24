@@ -171,12 +171,13 @@ async function generateWithGoogleVeo(
   const aspectRatio = '16:9'; // Veo3 default
 
   // Google Veo3 endpoint via Generative Language API
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
     body: JSON.stringify({
       instances: [

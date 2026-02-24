@@ -74,14 +74,15 @@ export async function GET(request: NextRequest) {
         checks.database.status = 'healthy';
       } else {
         checks.database.status = 'unhealthy';
-        checks.database.message = error.message;
+        checks.database.message = 'unavailable';
+        logger.error({ error: error.message }, 'Database health check query failed');
       }
     } else {
-      checks.database.message = 'Supabase credentials not configured';
+      checks.database.message = 'unavailable';
     }
   } catch (error) {
     checks.database.status = 'unhealthy';
-    checks.database.message = error instanceof Error ? error.message : 'Unknown error';
+    checks.database.message = 'unavailable';
     logger.error({ error }, 'Database health check failed');
   }
 
@@ -98,11 +99,11 @@ export async function GET(request: NextRequest) {
       await stripe.products.list({ limit: 1 });
       checks.stripe.status = 'healthy';
     } else {
-      checks.stripe.message = 'Stripe key not configured';
+      checks.stripe.message = 'unavailable';
     }
   } catch (error) {
     checks.stripe.status = 'unhealthy';
-    checks.stripe.message = error instanceof Error ? error.message : 'Unknown error';
+    checks.stripe.message = 'unavailable';
     logger.error({ error }, 'Stripe health check failed');
   }
 
