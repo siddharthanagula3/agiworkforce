@@ -440,6 +440,14 @@ async function handleMessageAsync(
         })
         .catch((err: unknown) => {
           logger.warn('queue_message native send failed', err);
+          chrome.runtime
+            .sendMessage({
+              type: 'queue_status_update',
+              id: msgEntry.id,
+              status: 'error',
+              result: err instanceof Error ? err.message : 'Native send failed',
+            })
+            .catch(() => {});
         });
       return { success: true } as ExtensionResponse;
     }

@@ -251,13 +251,10 @@ pub async fn master_password_complete_migration(
 mod tests {
     use super::*;
 
-    fn valid_test_passphrase() -> &'static str {
-        Box::leak(["alpha", "beta", "unique", "phrase"].join("-").into_boxed_str())
-    }
-
-    fn invalid_test_passphrase() -> &'static str {
-        Box::leak(["nonmatching", "phrase"].join("-").into_boxed_str())
-    }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn valid_test_passphrase() -> &'static str { "alpha-beta-unique-phrase" }
+    // gitleaks:allow (test fixture — not a real secret)
+    fn invalid_test_passphrase() -> &'static str { "nonmatching-phrase" }
 
     fn create_test_state() -> MasterPasswordState {
         // Use in-memory database for tests to avoid temp file cleanup issues

@@ -226,8 +226,12 @@ impl TaskExecutor {
                 let delta = match direction {
                     ScrollDirection::Up => *amount,
                     ScrollDirection::Down => -(*amount),
-                    ScrollDirection::Left => -(*amount),
-                    ScrollDirection::Right => *amount,
+                    ScrollDirection::Left | ScrollDirection::Right => {
+                        return Err(anyhow::anyhow!(
+                            "Horizontal scroll ({:?}) is not yet supported",
+                            direction
+                        ));
+                    }
                 };
                 #[cfg(target_os = "macos")]
                 let perm_msg = "Mouse automation requires Input Monitoring permission. \
