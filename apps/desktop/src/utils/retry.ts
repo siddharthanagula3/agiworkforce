@@ -118,7 +118,7 @@ export async function retryWithStrategy<T>(
         if (error.message.includes('429') || error.message.includes('Rate limit')) {
           return true;
         }
-        if (error.message.includes('5')) {
+        if (/\b5\d{2}\b/.test(error.message)) {
           return attempt < 3;
         }
         return false;

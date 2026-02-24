@@ -451,6 +451,11 @@ export class SubscriptionService {
         throw error;
       }
 
+      if (!data) {
+        logger.error({ userId }, 'Subscription upsert returned no row');
+        throw new Error('Subscription upsert returned no data');
+      }
+
       // Allocate credits if needed
       await this.allocateCreditsForPeriod(
         userId,
