@@ -12,6 +12,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { encryptToken } from '@/lib/device-token-crypto';
 
 const DeviceApproveRequestSchema = z.object({
   code: z
@@ -121,13 +122,17 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    // Approve: store the current session tokens for the device to retrieve exactly once.
+    // Approve: store the current session tokens (encrypted) for the device to retrieve exactly once.
     const accessToken = session.access_token;
     const refreshToken = session.refresh_token;
 
     if (!accessToken || !refreshToken) {
       throw createError.internal('Missing session tokens');
     }
+
+    // Encrypt tokens at rest — the poll endpoint will decrypt on retrieval
+    const encryptedAccessToken = encryptToken(accessToken);
+    const encryptedRefreshToken = encryptToken(refreshToken);
 
     const userEmail = session.user.email ?? null;
     const userName =
@@ -142,8 +147,8 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
         user_id: session.user.id,
         user_email: userEmail,
         user_name: userName,
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
         authorized_at: nowIso,
         updated_at: nowIso,
       })

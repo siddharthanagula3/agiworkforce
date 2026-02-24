@@ -11,6 +11,7 @@ pub mod mac;
 pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety;
+pub mod safety_patterns;
 pub mod screen;
 pub mod screen_watcher;
 pub mod types;

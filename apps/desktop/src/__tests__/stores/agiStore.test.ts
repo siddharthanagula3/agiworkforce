@@ -1,407 +1,536 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useExecutionStore } from '../../stores/executionStore';
+import type {
+  ActiveGoal,
+  ExecutionStep,
+  TerminalLog,
+  BrowserAction,
+  FileChange,
+} from '../../stores/executionStore';
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
+/**
+ * Tests for the real ExecutionStore (Zustand + immer).
+ *
+ * This store manages all AGI execution state: goals, steps, terminal logs,
+ * browser actions, file changes, LLM streaming, and panel UI state.
+ */
 
-interface Goal {
-  id: string;
-  description: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  status: 'pending' | 'planning' | 'executing' | 'completed' | 'failed';
-  createdAt: number;
-  steps?: Step[];
-  outcomes?: Outcome[];
-}
-
-interface Step {
-  id: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  result?: any;
-}
-
-interface Outcome {
-  id: string;
-  description: string;
-  achieved: boolean;
-  actualValue: number;
-  expectedValue: number;
-}
-
-interface AGIStore {
-  goals: Goal[];
-  activeGoalId: string | null;
-  isExecuting: boolean;
-  createGoal: (description: string, priority: Goal['priority']) => Promise<string>;
-  executeGoal: (goalId: string) => Promise<void>;
-  cancelExecution: (goalId: string) => Promise<void>;
-  getGoal: (goalId: string) => Goal | undefined;
-  deleteGoal: (goalId: string) => Promise<void>;
-  reset: () => void;
-}
-
-const createAGIStore = (): AGIStore => {
-  const state = {
-    goals: [] as Goal[],
-    activeGoalId: null as string | null,
-    isExecuting: false,
-  };
-
-  return {
-    get goals() {
-      return state.goals;
-    },
-    get activeGoalId() {
-      return state.activeGoalId;
-    },
-    get isExecuting() {
-      return state.isExecuting;
-    },
-
-    async createGoal(description: string, priority: Goal['priority']): Promise<string> {
-      const id = `goal-${Date.now()}-${Math.random()}`;
-      const goal: Goal = {
-        id,
-        description,
-        priority,
-        status: 'pending',
-        createdAt: Date.now(),
-      };
-      state.goals.push(goal);
-      return id;
-    },
-
-    async executeGoal(goalId: string): Promise<void> {
-      const goal = state.goals.find((g) => g.id === goalId);
-      if (!goal) throw new Error('Goal not found');
-
-      state.activeGoalId = goalId;
-      state.isExecuting = true;
-      goal.status = 'executing';
-
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      goal.status = 'completed';
-      state.isExecuting = false;
-    },
-
-    async cancelExecution(goalId: string): Promise<void> {
-      const goal = state.goals.find((g) => g.id === goalId);
-      if (!goal) throw new Error('Goal not found');
-
-      goal.status = 'failed';
-      state.isExecuting = false;
-      state.activeGoalId = null;
-    },
-
-    getGoal(goalId: string): Goal | undefined {
-      return state.goals.find((g) => g.id === goalId);
-    },
-
-    async deleteGoal(goalId: string): Promise<void> {
-      state.goals = state.goals.filter((g) => g.id !== goalId);
-      if (state.activeGoalId === goalId) {
-        state.activeGoalId = null;
-      }
-    },
-
-    reset() {
-      state.goals = [];
-      state.activeGoalId = null;
-      state.isExecuting = false;
-    },
-  };
-};
-
-describe('AGI Store', () => {
-  let store: AGIStore;
-
+describe('ExecutionStore (real Zustand store)', () => {
   beforeEach(() => {
-    store = createAGIStore();
-    store.reset();
+    // Reset the store to initial state before each test
+    useExecutionStore.getState().reset();
   });
 
-  describe('Goal Creation', () => {
-    it('should create a new goal', async () => {
-      const goalId = await store.createGoal('Process customer emails', 'High');
+  describe('Active Goal Management', () => {
+    const sampleGoal: ActiveGoal = {
+      id: 'goal-1',
+      description: 'Analyze user feedback',
+      status: 'planning',
+      startTime: Date.now(),
+      totalSteps: 0,
+      completedSteps: 0,
+      progressPercent: 0,
+    };
 
-      expect(store.goals).toHaveLength(1);
-      expect(store.goals[0]?.id).toBe(goalId);
-      expect(store.goals[0]?.description).toBe('Process customer emails');
-      expect(store.goals[0]?.priority).toBe('High');
+    it('should start with no active goal', () => {
+      const state = useExecutionStore.getState();
+      expect(state.activeGoal).toBeNull();
     });
 
-    it('should create goals with different priorities', async () => {
-      await store.createGoal('Low priority task', 'Low');
-      await store.createGoal('High priority task', 'High');
-      await store.createGoal('Critical task', 'Critical');
+    it('should set an active goal', () => {
+      useExecutionStore.getState().setActiveGoal(sampleGoal);
 
-      expect(store.goals).toHaveLength(3);
-      expect(store.goals[0]?.priority).toBe('Low');
-      expect(store.goals[1]?.priority).toBe('High');
-      expect(store.goals[2]?.priority).toBe('Critical');
+      const state = useExecutionStore.getState();
+      expect(state.activeGoal).toBeDefined();
+      expect(state.activeGoal!.id).toBe('goal-1');
+      expect(state.activeGoal!.description).toBe('Analyze user feedback');
+      expect(state.activeGoal!.status).toBe('planning');
     });
 
-    it('should set initial status to pending', async () => {
-      await store.createGoal('Test goal', 'Medium');
+    it('should update an active goal status', () => {
+      useExecutionStore.getState().setActiveGoal(sampleGoal);
+      useExecutionStore.getState().setActiveGoal({
+        ...sampleGoal,
+        status: 'executing',
+        totalSteps: 5,
+      });
 
-      expect(store.goals[0]?.status).toBe('pending');
-    });
-  });
-
-  describe('Goal Execution', () => {
-    it('should execute a goal', async () => {
-      const goalId = await store.createGoal('Test execution', 'Medium');
-
-      await store.executeGoal(goalId);
-
-      const goal = store.getGoal(goalId);
-      expect(goal?.status).toBe('completed');
+      const state = useExecutionStore.getState();
+      expect(state.activeGoal!.status).toBe('executing');
+      expect(state.activeGoal!.totalSteps).toBe(5);
     });
 
-    it('should set active goal during execution', async () => {
-      const goalId = await store.createGoal('Active goal test', 'High');
+    it('should clear the active goal when set to null', () => {
+      useExecutionStore.getState().setActiveGoal(sampleGoal);
+      useExecutionStore.getState().setActiveGoal(null);
 
-      const executionPromise = store.executeGoal(goalId);
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(store.activeGoalId).toBe(goalId);
-      expect(store.isExecuting).toBe(true);
-
-      await executionPromise;
-
-      expect(store.isExecuting).toBe(false);
-    });
-
-    it('should handle execution errors', async () => {
-      const invalidGoalId = 'nonexistent-goal';
-
-      await expect(store.executeGoal(invalidGoalId)).rejects.toThrow('Goal not found');
-    });
-
-    it('should cancel execution', async () => {
-      const goalId = await store.createGoal('Cancellable goal', 'Medium');
-
-      void store.executeGoal(goalId);
-
-      await store.cancelExecution(goalId);
-
-      const goal = store.getGoal(goalId);
-      expect(goal?.status).toBe('failed');
-      expect(store.isExecuting).toBe(false);
-      expect(store.activeGoalId).toBe(null);
+      const state = useExecutionStore.getState();
+      expect(state.activeGoal).toBeNull();
     });
   });
 
-  describe('Goal Retrieval', () => {
-    it('should get goal by id', async () => {
-      const goalId = await store.createGoal('Retrievable goal', 'Low');
-
-      const goal = store.getGoal(goalId);
-
-      expect(goal).toBeDefined();
-      expect(goal?.id).toBe(goalId);
-      expect(goal?.description).toBe('Retrievable goal');
+  describe('Execution Steps', () => {
+    it('should start with an empty steps array', () => {
+      expect(useExecutionStore.getState().steps).toHaveLength(0);
     });
 
-    it('should return undefined for nonexistent goal', () => {
-      const goal = store.getGoal('nonexistent-id');
+    it('should add execution steps', () => {
+      const step: ExecutionStep = {
+        id: 'step-1',
+        goalId: 'goal-1',
+        index: 0,
+        description: 'Fetch data from API',
+        status: 'in-progress',
+        startTime: Date.now(),
+      };
 
-      expect(goal).toBeUndefined();
+      useExecutionStore.getState().addStep(step);
+
+      const state = useExecutionStore.getState();
+      expect(state.steps).toHaveLength(1);
+      expect(state.steps[0]!.id).toBe('step-1');
+      expect(state.steps[0]!.description).toBe('Fetch data from API');
+      expect(state.steps[0]!.status).toBe('in-progress');
     });
 
-    it('should list all goals', async () => {
-      await store.createGoal('Goal 1', 'Low');
-      await store.createGoal('Goal 2', 'Medium');
-      await store.createGoal('Goal 3', 'High');
+    it('should update a step by ID', () => {
+      const step: ExecutionStep = {
+        id: 'step-1',
+        goalId: 'goal-1',
+        index: 0,
+        description: 'Fetch data',
+        status: 'in-progress',
+        startTime: Date.now(),
+      };
 
-      expect(store.goals).toHaveLength(3);
-      expect(store.goals.map((g) => g.description)).toEqual(['Goal 1', 'Goal 2', 'Goal 3']);
-    });
-  });
+      useExecutionStore.getState().addStep(step);
+      useExecutionStore.getState().updateStep('step-1', {
+        status: 'completed',
+        endTime: Date.now(),
+        executionTimeMs: 1500,
+      });
 
-  describe('Goal Deletion', () => {
-    it('should delete a goal', async () => {
-      const goalId = await store.createGoal('Deletable goal', 'Medium');
-
-      await store.deleteGoal(goalId);
-
-      expect(store.goals).toHaveLength(0);
-      expect(store.getGoal(goalId)).toBeUndefined();
-    });
-
-    it('should clear active goal if deleted', async () => {
-      const goalId = await store.createGoal('Active deletable goal', 'High');
-
-      void store.executeGoal(goalId);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      await store.deleteGoal(goalId);
-
-      expect(store.activeGoalId).toBe(null);
+      const updated = useExecutionStore.getState().steps[0];
+      expect(updated!.status).toBe('completed');
+      expect(updated!.executionTimeMs).toBe(1500);
+      expect(updated!.endTime).toBeDefined();
     });
 
-    it('should delete only the specified goal', async () => {
-      const goalId1 = await store.createGoal('Goal 1', 'Low');
-      const goalId2 = await store.createGoal('Goal 2', 'Medium');
-      const goalId3 = await store.createGoal('Goal 3', 'High');
+    it('should append LLM reasoning to a step', () => {
+      const step: ExecutionStep = {
+        id: 'step-1',
+        goalId: 'goal-1',
+        index: 0,
+        description: 'Reasoning step',
+        status: 'in-progress',
+      };
 
-      await store.deleteGoal(goalId2);
+      useExecutionStore.getState().addStep(step);
+      useExecutionStore.getState().appendLLMReasoning('step-1', 'Analyzing the ');
+      useExecutionStore.getState().appendLLMReasoning('step-1', 'input data...');
 
-      expect(store.goals).toHaveLength(2);
-      expect(store.goals.map((g) => g.id)).toEqual([goalId1, goalId3]);
+      const result = useExecutionStore.getState().steps[0];
+      expect(result!.llmReasoning).toBe('Analyzing the input data...');
     });
-  });
 
-  describe('Store Reset', () => {
-    it('should reset store to initial state', async () => {
-      await store.createGoal('Goal 1', 'Low');
-      await store.createGoal('Goal 2', 'High');
-
-      store.reset();
-
-      expect(store.goals).toHaveLength(0);
-      expect(store.activeGoalId).toBe(null);
-      expect(store.isExecuting).toBe(false);
-    });
-  });
-
-  describe('Goal Outcomes', () => {
-    it('should track outcomes for a goal', async () => {
-      const goalId = await store.createGoal('Goal with outcomes', 'High');
-      const goal = store.getGoal(goalId);
-
-      if (goal) {
-        goal.outcomes = [
-          {
-            id: 'outcome-1',
-            description: 'Outcome 1',
-            achieved: true,
-            actualValue: 1.0,
-            expectedValue: 1.0,
-          },
-          {
-            id: 'outcome-2',
-            description: 'Outcome 2',
-            achieved: false,
-            actualValue: 0.5,
-            expectedValue: 1.0,
-          },
-        ];
+    it('should cap steps at 200 entries', () => {
+      const store = useExecutionStore.getState();
+      for (let i = 0; i < 210; i++) {
+        store.addStep({
+          id: `step-${i}`,
+          goalId: 'goal-1',
+          index: i,
+          description: `Step ${i}`,
+          status: 'completed',
+        });
       }
 
-      expect(goal?.outcomes).toHaveLength(2);
-      expect(goal?.outcomes?.[0]?.achieved).toBe(true);
-      expect(goal?.outcomes?.[1]?.achieved).toBe(false);
+      const state = useExecutionStore.getState();
+      expect(state.steps).toHaveLength(200);
+      // Should keep the most recent entries
+      expect(state.steps[199]!.id).toBe('step-209');
     });
   });
 
-  describe('Goal Steps', () => {
-    it('should track execution steps', async () => {
-      const goalId = await store.createGoal('Goal with steps', 'Medium');
-      const goal = store.getGoal(goalId);
+  describe('Terminal Logs', () => {
+    it('should add terminal logs', () => {
+      const log: TerminalLog = {
+        id: 'log-1',
+        timestamp: Date.now(),
+        command: 'ls -la',
+        output: 'total 42\ndrwxr-xr-x ...',
+        exitCode: 0,
+        isError: false,
+      };
 
-      if (goal) {
-        goal.steps = [
-          {
-            id: 'step-1',
-            description: 'Load data',
-            status: 'completed',
-            result: { data: 'loaded' },
-          },
-          {
-            id: 'step-2',
-            description: 'Process data',
-            status: 'in_progress',
-          },
-          {
-            id: 'step-3',
-            description: 'Save results',
-            status: 'pending',
-          },
-        ];
+      useExecutionStore.getState().addTerminalLog(log);
+
+      const state = useExecutionStore.getState();
+      expect(state.terminalLogs).toHaveLength(1);
+      expect(state.terminalLogs[0]!.command).toBe('ls -la');
+    });
+
+    it('should clear terminal logs', () => {
+      useExecutionStore.getState().addTerminalLog({
+        id: 'log-1',
+        timestamp: Date.now(),
+        output: 'output',
+        isError: false,
+      });
+
+      useExecutionStore.getState().clearTerminalLogs();
+
+      expect(useExecutionStore.getState().terminalLogs).toHaveLength(0);
+    });
+
+    it('should set terminal scroll lock', () => {
+      expect(useExecutionStore.getState().terminalScrollLock).toBe(true); // default
+      useExecutionStore.getState().setTerminalScrollLock(false);
+      expect(useExecutionStore.getState().terminalScrollLock).toBe(false);
+    });
+  });
+
+  describe('Browser Actions', () => {
+    it('should add browser actions', () => {
+      const action: BrowserAction = {
+        id: 'action-1',
+        timestamp: Date.now(),
+        type: 'navigate',
+        url: 'https://example.com',
+        success: true,
+      };
+
+      useExecutionStore.getState().addBrowserAction(action);
+
+      const state = useExecutionStore.getState();
+      expect(state.browserActions).toHaveLength(1);
+      expect(state.browserActions[0]!.url).toBe('https://example.com');
+    });
+
+    it('should update current browser state from screenshot action', () => {
+      const action: BrowserAction = {
+        id: 'action-1',
+        timestamp: Date.now(),
+        type: 'screenshot',
+        screenshotData: 'base64-data-here',
+        success: true,
+      };
+
+      useExecutionStore.getState().addBrowserAction(action);
+
+      const state = useExecutionStore.getState();
+      expect(state.currentScreenshot).toBe('base64-data-here');
+    });
+
+    it('should update current browser URL and screenshot', () => {
+      useExecutionStore.getState().updateCurrentBrowserState('https://example.com', 'img-data');
+
+      const state = useExecutionStore.getState();
+      expect(state.currentBrowserUrl).toBe('https://example.com');
+      expect(state.currentScreenshot).toBe('img-data');
+    });
+  });
+
+  describe('File Changes', () => {
+    it('should add file changes', () => {
+      const change: FileChange = {
+        id: 'fc-1',
+        timestamp: Date.now(),
+        path: '/src/app.ts',
+        operation: 'modify',
+        oldContent: 'const x = 1;',
+        newContent: 'const x = 2;',
+        language: 'typescript',
+        accepted: null,
+      };
+
+      useExecutionStore.getState().addFileChange(change);
+
+      const state = useExecutionStore.getState();
+      expect(state.fileChanges).toHaveLength(1);
+      expect(state.fileChanges[0]!.path).toBe('/src/app.ts');
+      expect(state.fileChanges[0]!.accepted).toBeNull();
+    });
+
+    it('should update file change acceptance', () => {
+      useExecutionStore.getState().addFileChange({
+        id: 'fc-1',
+        timestamp: Date.now(),
+        path: '/src/app.ts',
+        operation: 'modify',
+        accepted: null,
+      });
+
+      useExecutionStore.getState().updateFileChange('fc-1', true);
+
+      expect(useExecutionStore.getState().fileChanges[0]!.accepted).toBe(true);
+    });
+
+    it('should clear file changes', () => {
+      useExecutionStore.getState().addFileChange({
+        id: 'fc-1',
+        timestamp: Date.now(),
+        path: '/src/a.ts',
+        operation: 'create',
+        accepted: null,
+      });
+
+      useExecutionStore.getState().clearFileChanges();
+
+      expect(useExecutionStore.getState().fileChanges).toHaveLength(0);
+    });
+
+    it('should cap file changes at 500 entries', () => {
+      const store = useExecutionStore.getState();
+      for (let i = 0; i < 510; i++) {
+        store.addFileChange({
+          id: `fc-${i}`,
+          timestamp: Date.now(),
+          path: `/src/file-${i}.ts`,
+          operation: 'modify',
+          accepted: null,
+        });
       }
 
-      expect(goal?.steps).toHaveLength(3);
-      expect(goal?.steps?.[0]?.status).toBe('completed');
-      expect(goal?.steps?.[1]?.status).toBe('in_progress');
-      expect(goal?.steps?.[2]?.status).toBe('pending');
+      expect(useExecutionStore.getState().fileChanges).toHaveLength(500);
     });
   });
 
-  describe('Priority Handling', () => {
-    it('should handle different priority levels', async () => {
-      const priorities: Goal['priority'][] = ['Low', 'Medium', 'High', 'Critical'];
+  describe('LLM Streaming', () => {
+    it('should append LLM stream chunks', () => {
+      useExecutionStore.getState().appendLLMStream('Hello ');
+      useExecutionStore.getState().appendLLMStream('world!');
 
-      for (const priority of priorities) {
-        await new Promise((resolve) => setTimeout(resolve, 1));
+      expect(useExecutionStore.getState().currentLLMStream).toBe('Hello world!');
+    });
 
-        const goalId = await store.createGoal(`${priority} priority goal`, priority);
-        const goal = store.getGoal(goalId);
+    it('should clear the LLM stream', () => {
+      useExecutionStore.getState().appendLLMStream('some text');
+      useExecutionStore.getState().clearLLMStream();
 
-        expect(goal).toBeDefined();
-        expect(goal?.priority).toBe(priority);
-        expect(goal?.description).toBe(`${priority} priority goal`);
-      }
+      expect(useExecutionStore.getState().currentLLMStream).toBe('');
+    });
 
-      expect(store.goals).toHaveLength(4);
+    it('should set streaming state', () => {
+      expect(useExecutionStore.getState().isStreaming).toBe(false);
+
+      useExecutionStore.getState().setStreaming(true);
+      expect(useExecutionStore.getState().isStreaming).toBe(true);
+
+      useExecutionStore.getState().setStreaming(false);
+      expect(useExecutionStore.getState().isStreaming).toBe(false);
     });
   });
 
-  describe('Concurrent Execution', () => {
-    it('should prevent concurrent executions', async () => {
-      const goalId1 = await store.createGoal('Goal 1', 'High');
-      const goalId2 = await store.createGoal('Goal 2', 'High');
+  describe('Panel UI State', () => {
+    it('should start with panel hidden', () => {
+      expect(useExecutionStore.getState().panelVisible).toBe(false);
+    });
 
-      const execution1 = store.executeGoal(goalId1);
+    it('should set panel visibility', () => {
+      useExecutionStore.getState().setPanelVisible(true);
+      expect(useExecutionStore.getState().panelVisible).toBe(true);
+    });
 
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(store.isExecuting).toBe(true);
+    it('should toggle panel visibility', () => {
+      useExecutionStore.getState().togglePanel();
+      expect(useExecutionStore.getState().panelVisible).toBe(true);
 
-      await execution1;
+      useExecutionStore.getState().togglePanel();
+      expect(useExecutionStore.getState().panelVisible).toBe(false);
+    });
 
-      await store.executeGoal(goalId2);
+    it('should set active tab', () => {
+      expect(useExecutionStore.getState().activeTab).toBe('thinking');
 
-      const goal1 = store.getGoal(goalId1);
-      const goal2 = store.getGoal(goalId2);
+      useExecutionStore.getState().setActiveTab('terminal');
+      expect(useExecutionStore.getState().activeTab).toBe('terminal');
 
-      expect(goal1?.status).toBe('completed');
-      expect(goal2?.status).toBe('completed');
+      useExecutionStore.getState().setActiveTab('browser');
+      expect(useExecutionStore.getState().activeTab).toBe('browser');
+
+      useExecutionStore.getState().setActiveTab('files');
+      expect(useExecutionStore.getState().activeTab).toBe('files');
+
+      useExecutionStore.getState().setActiveTab('reflection');
+      expect(useExecutionStore.getState().activeTab).toBe('reflection');
     });
   });
 
-  describe('Goal Timestamps', () => {
-    it('should record creation timestamp', async () => {
-      const beforeCreate = Date.now();
-      const goalId = await store.createGoal('Timestamped goal', 'Medium');
-      const afterCreate = Date.now();
+  describe('Reflection State', () => {
+    it('should start with default reflection state', () => {
+      const reflection = useExecutionStore.getState().reflection;
+      expect(reflection.currentInsight).toBeNull();
+      expect(reflection.failurePatterns).toHaveLength(0);
+      expect(reflection.corrections).toHaveLength(0);
+      expect(reflection.subGoals).toHaveLength(0);
+      expect(reflection.recommendations).toHaveLength(0);
+      expect(reflection.iteration).toBe(0);
+      expect(reflection.isReflecting).toBe(false);
+      expect(reflection.goalAchievable).toBe(true);
+      expect(reflection.confidence).toBe(1.0);
+    });
 
-      const goal = store.getGoal(goalId);
+    it('should set reflecting state', () => {
+      useExecutionStore.getState().setReflecting(true);
+      expect(useExecutionStore.getState().reflection.isReflecting).toBe(true);
+    });
 
-      expect(goal?.createdAt).toBeGreaterThanOrEqual(beforeCreate);
-      expect(goal?.createdAt).toBeLessThanOrEqual(afterCreate);
+    it('should set iteration number', () => {
+      useExecutionStore.getState().setIteration(3);
+      expect(useExecutionStore.getState().reflection.iteration).toBe(3);
+    });
+
+    it('should set recommendations', () => {
+      useExecutionStore
+        .getState()
+        .setRecommendations(['Try a different approach', 'Break into smaller steps']);
+
+      const recommendations = useExecutionStore.getState().reflection.recommendations;
+      expect(recommendations).toHaveLength(2);
+      expect(recommendations[0]).toBe('Try a different approach');
+    });
+
+    it('should clear reflection state', () => {
+      useExecutionStore.getState().setReflecting(true);
+      useExecutionStore.getState().setIteration(5);
+      useExecutionStore.getState().setRecommendations(['test']);
+
+      useExecutionStore.getState().clearReflection();
+
+      const reflection = useExecutionStore.getState().reflection;
+      expect(reflection.isReflecting).toBe(false);
+      expect(reflection.iteration).toBe(0);
+      expect(reflection.recommendations).toHaveLength(0);
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle invalid goal id gracefully', async () => {
-      await expect(store.executeGoal('invalid-id')).rejects.toThrow();
-      await expect(store.cancelExecution('invalid-id')).rejects.toThrow();
+  describe('Cleanup and Reset', () => {
+    it('should cleanup goal contexts while preserving goal state', () => {
+      useExecutionStore.getState().setActiveGoal({
+        id: 'goal-1',
+        description: 'Test goal',
+        status: 'completed',
+        startTime: Date.now(),
+        totalSteps: 2,
+        completedSteps: 2,
+        progressPercent: 100,
+      });
+
+      useExecutionStore.getState().addStep({
+        id: 'step-1',
+        goalId: 'goal-1',
+        index: 0,
+        description: 'Step 1',
+        status: 'completed',
+      });
+
+      useExecutionStore.getState().addTerminalLog({
+        id: 'log-1',
+        timestamp: Date.now(),
+        output: 'output',
+        isError: false,
+      });
+
+      useExecutionStore.getState().cleanupGoalContexts();
+
+      const state = useExecutionStore.getState();
+      // Goal should still be there
+      expect(state.activeGoal).toBeDefined();
+      expect(state.activeGoal!.id).toBe('goal-1');
+      // But execution data should be cleared
+      expect(state.steps).toHaveLength(0);
+      expect(state.terminalLogs).toHaveLength(0);
+      expect(state.browserActions).toHaveLength(0);
+      expect(state.fileChanges).toHaveLength(0);
+      expect(state.isStreaming).toBe(false);
     });
 
-    it('should maintain state consistency on errors', async () => {
-      const goalId = await store.createGoal('Test goal', 'Medium');
-      const initialGoalsCount = store.goals.length;
+    it('should fully reset all state', () => {
+      useExecutionStore.getState().setActiveGoal({
+        id: 'goal-1',
+        description: 'Test',
+        status: 'executing',
+        startTime: Date.now(),
+        totalSteps: 1,
+        completedSteps: 0,
+        progressPercent: 0,
+      });
+      useExecutionStore.getState().setPanelVisible(true);
+      useExecutionStore.getState().setActiveTab('terminal');
+      useExecutionStore.getState().setStreaming(true);
 
-      try {
-        await store.executeGoal('invalid-id');
-      } catch (error) {
-        // ignore error
-      }
+      useExecutionStore.getState().reset();
 
-      expect(store.goals).toHaveLength(initialGoalsCount);
-      expect(store.getGoal(goalId)).toBeDefined();
+      const state = useExecutionStore.getState();
+      expect(state.activeGoal).toBeNull();
+      expect(state.steps).toHaveLength(0);
+      expect(state.panelVisible).toBe(false);
+      expect(state.activeTab).toBe('thinking');
+      expect(state.isStreaming).toBe(false);
+    });
+  });
+
+  describe('Selectors', () => {
+    it('selectActiveStep should return the in-progress step', async () => {
+      const { selectActiveStep } = await import('../../stores/executionStore');
+
+      useExecutionStore.getState().addStep({
+        id: 'step-1',
+        goalId: 'goal-1',
+        index: 0,
+        description: 'Done',
+        status: 'completed',
+      });
+      useExecutionStore.getState().addStep({
+        id: 'step-2',
+        goalId: 'goal-1',
+        index: 1,
+        description: 'Active',
+        status: 'in-progress',
+      });
+      useExecutionStore.getState().addStep({
+        id: 'step-3',
+        goalId: 'goal-1',
+        index: 2,
+        description: 'Pending',
+        status: 'pending',
+      });
+
+      const activeStep = selectActiveStep(useExecutionStore.getState());
+      expect(activeStep).toBeDefined();
+      expect(activeStep!.id).toBe('step-2');
+      expect(activeStep!.description).toBe('Active');
+    });
+
+    it('selectPendingFileChanges should return unreviewed changes', async () => {
+      const { selectPendingFileChanges } = await import('../../stores/executionStore');
+
+      useExecutionStore.getState().addFileChange({
+        id: 'fc-1',
+        timestamp: Date.now(),
+        path: '/a.ts',
+        operation: 'modify',
+        accepted: true,
+      });
+      useExecutionStore.getState().addFileChange({
+        id: 'fc-2',
+        timestamp: Date.now(),
+        path: '/b.ts',
+        operation: 'create',
+        accepted: null,
+      });
+      useExecutionStore.getState().addFileChange({
+        id: 'fc-3',
+        timestamp: Date.now(),
+        path: '/c.ts',
+        operation: 'delete',
+        accepted: null,
+      });
+
+      const pending = selectPendingFileChanges(useExecutionStore.getState());
+      expect(pending).toHaveLength(2);
+      expect(pending.map((c) => c.id)).toEqual(['fc-2', 'fc-3']);
     });
   });
 });
