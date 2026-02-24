@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
 
@@ -73,11 +74,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Read the per-request nonce set by middleware for CSP compliance
+  const headersList = await headers();
+  const nonce = headersList.get('x-nonce') ?? '';
+
   // JSON-LD Schema for Organization
   const organizationSchema = {
     '@context': 'https://schema.org',
@@ -116,11 +121,13 @@ export default function RootLayout({
       <head>
         {/* Organization Schema */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
         {/* SoftwareApplication Schema */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
         />
