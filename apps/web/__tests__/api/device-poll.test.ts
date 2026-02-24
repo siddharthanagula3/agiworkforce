@@ -202,6 +202,41 @@ describe('Device Poll API', () => {
         expect(data.status).toBe('pending');
       });
 
+      it('should return 403 when device fingerprint does not match stored fingerprint', async () => {
+        vi.mocked(createClient).mockReturnValueOnce({
+          from: vi.fn(() => ({
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    device_id: 'device-123',
+                    device_fingerprint: 'abc123def456',
+                    status: 'pending',
+                    user_id: null,
+                    expires_at: new Date(Date.now() + 60000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  error: null,
+                }),
+              })),
+            })),
+            update: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            })),
+          })),
+          rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+        } as never);
+
+        const request = new NextRequest('http://localhost/api/device/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: 'device-123', device_fingerprint: '000000000000' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(403);
+      });
+
       it('should return expired status when the device authorization record is past its expiry', async () => {
         // The device record exists but expires_at is in the past.
         // The route detects expiry before fingerprint/status checks and returns "expired".

@@ -94,6 +94,9 @@ const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
 let nativeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let nativeReconnectAttempt = 0;
 let nativeHandshakeInFlight = false;
+// Set to true when max reconnect attempts exhausted or host is permanently unavailable.
+// Prevents infinite permission popup loops on macOS.
+let nativeReconnectGaveUp = false;
 
 function clearNativeReconnectTimer(): void {
   if (nativeReconnectTimer) {
@@ -108,6 +111,18 @@ function scheduleNativeReconnect(trigger: string): void {
   }
 
   nativeReconnectAttempt = Math.min(nativeReconnectAttempt + 1, NATIVE_RECONNECT_MAX_ATTEMPTS);
+
+  // Stop retrying once max attempts are exhausted. Without this guard the
+  // reconnect loop runs indefinitely, launching the native host binary on
+  // every attempt and triggering repeated macOS permission prompts.
+  if (nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
+    logger.warn('Max native reconnect attempts reached; giving up until user action', { trigger });
+    nativeReconnectGaveUp = true;
+    state.connectionStatus = 'disconnected';
+    void notifyConnectionStatusChange();
+    return;
+  }
+
   const delay = Math.min(
     NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(nativeReconnectAttempt - 1, 0),
     NATIVE_RECONNECT_MAX_DELAY_MS,
@@ -159,8 +174,11 @@ function initialize(): void {
   // Check initial connection status via native messaging heartbeat
   checkDesktopConnection();
 
-  // Periodic connection check
+  // Periodic connection check — skip if we have given up (prevents macOS popup storms)
   setInterval(() => {
+    if (nativeReconnectGaveUp) {
+      return;
+    }
     checkDesktopConnection();
     if (!state.isNativeConnected) {
       connectToNativeHost();
@@ -174,7 +192,7 @@ function initialize(): void {
  * Connect to the native messaging host
  */
 function connectToNativeHost(): void {
-  if (state.nativePort || nativeHandshakeInFlight) {
+  if (state.nativePort || nativeHandshakeInFlight || nativeReconnectGaveUp) {
     return;
   }
 
@@ -209,6 +227,7 @@ function connectToNativeHost(): void {
         }
 
         nativeReconnectAttempt = 0;
+        nativeReconnectGaveUp = false; // Reset so future disconnects can retry
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         notifyConnectionStatusChange();
@@ -251,7 +270,9 @@ function sendNativeRequest(message: Record<string, unknown>): Promise<ExtensionR
   return new Promise((resolve, reject) => {
     void (async () => {
       if (!state.nativePort || !state.isNativeConnected) {
-        connectToNativeHost();
+        if (!nativeReconnectGaveUp) {
+          connectToNativeHost();
+        }
         const connected = await waitForNativeConnection(NATIVE_CONNECT_MAX_WAIT_MS);
         if (!connected || !state.nativePort || !state.isNativeConnected) {
           resolve({ success: false, error: 'Not connected to native host' });
@@ -321,6 +342,20 @@ function handleNativeDisconnect(): void {
   state.lastNativeError = error;
 
   notifyConnectionStatusChange();
+
+  // Stop retrying immediately for permanent errors (host not installed, or macOS
+  // access denied) — these will never resolve without user action and would cause
+  // repeated macOS permission prompts on every reconnect attempt.
+  const isPermanentError =
+    error.includes('not found') ||
+    error.includes('not allowed') ||
+    error.includes('com.agiworkforce.browser');
+  if (isPermanentError) {
+    logger.warn('Native host permanently unavailable; halting reconnect', { error });
+    nativeReconnectGaveUp = true;
+    return;
+  }
+
   scheduleNativeReconnect('native_disconnect');
 }
 
@@ -379,7 +414,7 @@ async function handleMessageAsync(
 
   switch (message.type) {
     case 'GET_CONNECTION_STATUS':
-      if (!state.isNativeConnected && !nativeHandshakeInFlight) {
+      if (!state.isNativeConnected && !nativeHandshakeInFlight && !nativeReconnectGaveUp) {
         connectToNativeHost();
       }
       if (state.isNativeConnected) {
@@ -657,7 +692,9 @@ async function forwardToContentScript(
  */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
-    connectToNativeHost();
+    if (!nativeReconnectGaveUp) {
+      connectToNativeHost();
+    }
   }
 
   if (state.nativePort && state.isNativeConnected) {

@@ -112,11 +112,17 @@ async function handleDevicePoll(request: NextRequest) {
         refresh_token?: string | null;
       } | null;
 
-      if (!consumed?.status) {
+      if (consumed === null || consumed === undefined) {
+        // RPC returned no rows: tokens were already consumed by a concurrent poll.
+        // Return 'pending' so the client retries; subsequent polls will get 'expired'.
         return NextResponse.json(
           { status: 'pending' },
           { headers: { 'Cache-Control': 'no-store' } },
         );
+      }
+      if (!consumed.status) {
+        // RPC returned a row but status is missing — unexpected state.
+        throw createError.internal('Device token consumption returned unexpected state');
       }
 
       if (consumed.status === 'expired' || consumed.status === 'consumed') {
