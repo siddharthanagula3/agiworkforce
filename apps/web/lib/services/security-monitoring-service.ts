@@ -180,6 +180,7 @@ export class SecurityMonitoringService {
         rate_limit_exceeded: 0,
         authorization_failed: 0,
         suspicious_activity: 0,
+        admin_action: 0,
         csrf_validation_failed: 0,
         invalid_signature: 0,
       };

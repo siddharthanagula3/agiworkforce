@@ -39,6 +39,18 @@ CREATE INDEX IF NOT EXISTS idx_profiles_account_status
   ON public.profiles(account_status)
   WHERE account_status != 'active';
 
+-- Enforce the kill switch at the database level with a RESTRICTIVE RLS policy.
+-- RESTRICTIVE policies are ANDed with existing PERMISSIVE policies, so even if
+-- a user matches a permissive policy they will be blocked if their account is
+-- not active.  NULL account_status is allowed for backward compatibility with
+-- rows created before the column existed (they default to 'active' but belts
+-- and suspenders).
+CREATE POLICY "deny_inactive_accounts" ON public.profiles
+  AS RESTRICTIVE
+  FOR ALL
+  TO authenticated
+  USING (account_status = 'active' OR account_status IS NULL);
+
 -- =============================================================================
 -- P2: Revoke export_user_data(UUID) direct access from authenticated role
 -- =============================================================================
@@ -49,6 +61,8 @@ CREATE INDEX IF NOT EXISTS idx_profiles_account_status
 -- resolves the caller's own UUID via auth.uid().
 
 REVOKE EXECUTE ON FUNCTION public.export_user_data(UUID) FROM authenticated;
+REVOKE ALL ON FUNCTION public.export_user_data(UUID) FROM anon;
+REVOKE ALL ON FUNCTION public.export_user_data(UUID) FROM PUBLIC;
 
 -- Ensure the safe self-service wrapper remains callable by authenticated users.
 -- (This grant was already applied in the GDPR migration, but is re-stated here

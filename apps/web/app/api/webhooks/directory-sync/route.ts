@@ -188,9 +188,43 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
   const displayName = buildDisplayName(user);
   const orgInfo = await resolveOrganization(user.directory_id);
 
-  // Check if a Supabase auth user with this email already exists
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-  const existingUser = existingUsers?.users?.find((u) => u.email === email);
+  // Check if a Supabase auth user with this email already exists.
+  // First check our profiles table (fast indexed query), then fall back to
+  // paginated listUsers() if needed (e.g., auth user exists but profile doesn't).
+  let existingUser: { id: string; email?: string } | undefined;
+
+  const { data: existingProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existingProfile) {
+    existingUser = { id: existingProfile.id, email };
+  } else {
+    // Profile not found -- search auth.users with pagination in case
+    // an auth user exists without a corresponding profile row.
+    const PER_PAGE = 50;
+    let page = 1;
+    let searchDone = false;
+    while (!searchDone) {
+      const { data: pageData } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: PER_PAGE,
+      });
+      const users = pageData?.users ?? [];
+      const match = users.find((u) => u.email === email);
+      if (match) {
+        existingUser = { id: match.id, email: match.email };
+        searchDone = true;
+      } else if (users.length < PER_PAGE) {
+        // Last page reached, user not found
+        searchDone = true;
+      } else {
+        page++;
+      }
+    }
+  }
 
   let userId: string;
 
@@ -275,13 +309,9 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
       .eq('id', orgInfo.connectionId);
   }
 
-  // 'suspicious_activity' is the closest available SecurityEventType for auditing
-  // normal SCIM provisioning events. There is no 'provisioning_event' or
-  // 'admin_action' type in the current schema; this entry records the action
-  // for audit trail purposes and is expected/normal behaviour.
   await logSecurityEvent({
     userId,
-    eventType: 'suspicious_activity',
+    eventType: 'admin_action',
     severity: 'low',
     ipAddress: getClientIp(request),
     endpoint: '/api/webhooks/directory-sync',
@@ -372,13 +402,9 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
 
   logger.info({ userId, workosUserId: user.id, email }, 'SCIM user.updated processed');
 
-  // 'suspicious_activity' is the closest available SecurityEventType for auditing
-  // normal SCIM provisioning events. There is no 'provisioning_event' or
-  // 'admin_action' type in the current schema; this entry records the action
-  // for audit trail purposes and is expected/normal behaviour.
   await logSecurityEvent({
     userId,
-    eventType: 'suspicious_activity',
+    eventType: 'admin_action',
     severity: 'low',
     ipAddress: getClientIp(request),
     endpoint: '/api/webhooks/directory-sync',
@@ -455,13 +481,9 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
 
   logger.info({ userId, workosUserId: user.id, email }, 'SCIM user.deleted — account disabled');
 
-  // 'suspicious_activity' is the closest available SecurityEventType for auditing
-  // normal SCIM provisioning events. There is no 'provisioning_event' or
-  // 'admin_action' type in the current schema; this entry records the action
-  // for audit trail purposes and is expected/normal behaviour.
   await logSecurityEvent({
     userId,
-    eventType: 'suspicious_activity',
+    eventType: 'admin_action',
     severity: 'high',
     ipAddress: getClientIp(request),
     endpoint: '/api/webhooks/directory-sync',
@@ -556,13 +578,9 @@ async function handleGroupUserAdded(
     'SCIM group.user_added — user added to organization',
   );
 
-  // 'suspicious_activity' is the closest available SecurityEventType for auditing
-  // normal SCIM provisioning events. There is no 'provisioning_event' or
-  // 'admin_action' type in the current schema; this entry records the action
-  // for audit trail purposes and is expected/normal behaviour.
   await logSecurityEvent({
     userId,
-    eventType: 'suspicious_activity',
+    eventType: 'admin_action',
     severity: 'low',
     ipAddress: getClientIp(request),
     endpoint: '/api/webhooks/directory-sync',
@@ -645,13 +663,9 @@ async function handleGroupUserRemoved(
     'SCIM group.user_removed — user removed from organization',
   );
 
-  // 'suspicious_activity' is the closest available SecurityEventType for auditing
-  // normal SCIM provisioning events. There is no 'provisioning_event' or
-  // 'admin_action' type in the current schema; this entry records the action
-  // for audit trail purposes and is expected/normal behaviour.
   await logSecurityEvent({
     userId,
-    eventType: 'suspicious_activity',
+    eventType: 'admin_action',
     severity: 'medium',
     ipAddress: getClientIp(request),
     endpoint: '/api/webhooks/directory-sync',
