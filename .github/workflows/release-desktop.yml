@@ -388,7 +388,8 @@ jobs:
             libtiff-dev \
             zlib1g-dev \
             libwebp-dev \
-            libasound2-dev
+            libasound2-dev \
+            libclang-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
