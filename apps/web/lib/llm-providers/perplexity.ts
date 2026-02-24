@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
+import {
+  BaseLLMProvider,
+  LLMProviderRequest,
+  LLMProviderResponse,
+  RETRYABLE_HTTP_STATUS_CODES,
+} from './base';
 import { logger } from '@/lib/logger';
 
 /**
@@ -95,7 +100,7 @@ export class PerplexityProvider extends BaseLLMProvider {
           throw new Error(
             `Perplexity API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
           );
-        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+        } else if (RETRYABLE_HTTP_STATUS_CODES.has(response.status)) {
           throw new Error(
             'Perplexity API service temporarily unavailable. Please try again later.',
           );

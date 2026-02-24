@@ -538,6 +538,9 @@ export function classifyIntentLocally(
     }
   }
 
+  const KEYWORD_SCORE_HIGH = 3;
+  const KEYWORD_SCORE_MEDIUM = 1;
+
   // Score each intent type
   const scores: Array<{ type: IntentType; score: number; keywords: string[] }> = [];
 
@@ -547,14 +550,14 @@ export function classifyIntentLocally(
 
     for (const keyword of keywords.high) {
       if (lowerMessage.includes(keyword)) {
-        score += 3;
+        score += KEYWORD_SCORE_HIGH;
         matchedKeywords.push(keyword);
       }
     }
 
     for (const keyword of keywords.medium) {
       if (lowerMessage.includes(keyword)) {
-        score += 1;
+        score += KEYWORD_SCORE_MEDIUM;
         matchedKeywords.push(keyword);
       }
     }
