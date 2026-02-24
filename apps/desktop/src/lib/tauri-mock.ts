@@ -224,6 +224,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'export_roi_report':
       return 'mock_report_path.txt' as T;
 
+    case 'get_filtered_logs':
+      return [] as T;
+
+    case 'submit_feedback':
+      return undefined as T;
+
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);
