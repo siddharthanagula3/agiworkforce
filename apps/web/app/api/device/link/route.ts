@@ -8,8 +8,13 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 async function handleDeviceLink(request: NextRequest) {
+  // CSRF protection - prevent cross-site device pairing
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   // Rate limiting - prevent abuse of device code generation
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) {

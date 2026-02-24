@@ -26,7 +26,7 @@ export function sleep(ms: number): Promise<void> {
 /**
  * Custom AbortError for environments where DOMException may not be available.
  */
-class AbortError extends Error {
+export class AbortError extends Error {
   constructor(message = 'Aborted') {
     super(message);
     this.name = 'AbortError';
