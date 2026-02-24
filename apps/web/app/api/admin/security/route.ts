@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
+import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -155,7 +156,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Verify admin access
-    const { isAdmin, error: authError } = await verifyAdminAccess(request);
+    const { isAdmin, userId: adminUserId, error: authError } = await verifyAdminAccess(request);
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
@@ -175,9 +176,164 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      case 'suspend-user': {
+        const body = await request.json();
+        const { userId: targetUserId, reason } = body as {
+          userId?: string;
+          reason?: string;
+        };
+
+        if (!targetUserId || !reason) {
+          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+        }
+
+        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+          auth: { persistSession: false },
+        });
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ account_status: 'suspended' })
+          .eq('id', targetUserId);
+
+        if (updateError) {
+          logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
+          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+        }
+
+        // Session invalidation is handled at the middleware level:
+        // auth middleware checks account_status on every request and rejects suspended users.
+
+        // Log the admin action
+        await logSecurityEvent({
+          userId: adminUserId,
+          eventType: 'suspicious_activity',
+          severity: 'high',
+          endpoint: '/api/admin/security?action=suspend-user',
+          details: { action: 'suspend-user', targetUserId, reason },
+        });
+
+        logger.info({ adminUserId, targetUserId, reason }, 'User account suspended by admin');
+
+        return NextResponse.json({
+          success: true,
+          message: `User ${targetUserId} has been suspended`,
+          account_status: 'suspended',
+        });
+      }
+
+      case 'ban-user': {
+        const body = await request.json();
+        const { userId: targetUserId, reason } = body as {
+          userId?: string;
+          reason?: string;
+        };
+
+        if (!targetUserId || !reason) {
+          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+        }
+
+        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+          auth: { persistSession: false },
+        });
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ account_status: 'banned' })
+          .eq('id', targetUserId);
+
+        if (updateError) {
+          logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
+          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+        }
+
+        // Belt-and-suspenders: also set Supabase-level ban in addition to middleware check
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+            ban_duration: '876600h', // ~100 years
+          });
+        } catch (banError) {
+          logger.warn(
+            { error: banError, targetUserId },
+            'Failed to set Supabase ban, relying on middleware check',
+          );
+        }
+
+        // Log the admin action
+        await logSecurityEvent({
+          userId: adminUserId,
+          eventType: 'suspicious_activity',
+          severity: 'critical',
+          endpoint: '/api/admin/security?action=ban-user',
+          details: { action: 'ban-user', targetUserId, reason },
+        });
+
+        logger.info({ adminUserId, targetUserId, reason }, 'User account banned by admin');
+
+        return NextResponse.json({
+          success: true,
+          message: `User ${targetUserId} has been banned`,
+          account_status: 'banned',
+        });
+      }
+
+      case 'reactivate-user': {
+        const body = await request.json();
+        const { userId: targetUserId, reason } = body as {
+          userId?: string;
+          reason?: string;
+        };
+
+        if (!targetUserId || !reason) {
+          return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
+        }
+
+        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+          auth: { persistSession: false },
+        });
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ account_status: 'active' })
+          .eq('id', targetUserId);
+
+        if (updateError) {
+          logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
+          return NextResponse.json({ error: 'Failed to update account status' }, { status: 500 });
+        }
+
+        // Remove any Supabase-level ban
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+            ban_duration: 'none',
+          });
+        } catch (unbanError) {
+          logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Supabase ban');
+        }
+
+        // Log the admin action
+        await logSecurityEvent({
+          userId: adminUserId,
+          eventType: 'suspicious_activity',
+          severity: 'high',
+          endpoint: '/api/admin/security?action=reactivate-user',
+          details: { action: 'reactivate-user', targetUserId, reason },
+        });
+
+        logger.info({ adminUserId, targetUserId, reason }, 'User account reactivated by admin');
+
+        return NextResponse.json({
+          success: true,
+          message: `User ${targetUserId} has been reactivated`,
+          account_status: 'active',
+        });
+      }
+
       default:
         return NextResponse.json(
-          { error: `Unknown action: ${action}. Use action=cleanup for log cleanup.` },
+          {
+            error: `Unknown action: ${action}. Supported: cleanup, suspend-user, ban-user, reactivate-user.`,
+          },
           { status: 400 },
         );
     }

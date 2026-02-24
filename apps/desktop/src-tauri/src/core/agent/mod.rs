@@ -263,6 +263,10 @@ pub struct AgentConfig {
     pub vision_model: VisionModel,
     pub cpu_limit_percent: f64,
     pub memory_limit_mb: u64,
+    /// Maximum cost allowed per individual task in USD (default $5.00)
+    pub max_cost_per_task: f64,
+    /// Maximum cumulative cost allowed per session in USD (default $50.00)
+    pub max_session_cost: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -294,6 +298,8 @@ impl Default for AgentConfig {
             vision_model: VisionModel::Hybrid,
             cpu_limit_percent: 50.0,
             memory_limit_mb: 512,
+            max_cost_per_task: 5.0,
+            max_session_cost: 50.0,
         }
     }
 }

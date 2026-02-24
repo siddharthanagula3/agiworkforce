@@ -1340,14 +1340,14 @@ export function useAgenticEvents() {
           description: step,
           status: 'running',
         });
-        // Dispatch browser activity indicator when a browser step starts
-        if (event.payload.tool === 'browser_navigate' || event.payload.type === 'browser') {
-          window.dispatchEvent(
-            new CustomEvent('agi:browser-active', {
-              detail: { active: true, url: event.payload.url ?? '' },
-            }),
-          );
-        }
+        // Dispatch browser activity indicator for all steps; only active for browser steps
+        const isBrowserStep =
+          event.payload.tool === 'browser_navigate' || event.payload.type === 'browser';
+        window.dispatchEvent(
+          new CustomEvent('agi:browser-active', {
+            detail: { active: isBrowserStep, url: isBrowserStep ? (event.payload.url ?? '') : '' },
+          }),
+        );
       });
       push(unlistenStepStarted);
 

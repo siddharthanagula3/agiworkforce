@@ -11,6 +11,30 @@ use crate::automation::browser::playwright_bridge::{BrowserOptions, BrowserType}
 use crate::automation::browser::BrowserState;
 
 // =============================================================================
+// SECURITY: Input sanitization for CDP JavaScript injection prevention
+// =============================================================================
+
+/// Sanitize a CSS selector before embedding it in a JavaScript string literal.
+/// Escapes backslashes, single quotes, and double quotes to prevent breaking out of
+/// `document.querySelector('...')` or CSS attribute selectors like `[name="..."]`.
+fn sanitize_selector(selector: &str) -> String {
+    selector
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('"', "\\\"")
+}
+
+/// Sanitize a value before embedding it in a JavaScript single-quoted string.
+/// Used for form field values and other user-supplied data interpolated into JS.
+fn sanitize_js_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+// =============================================================================
 // BROWSER STATE WRAPPER WITH GRACEFUL DEGRADATION
 // =============================================================================
 
@@ -349,10 +373,13 @@ pub async fn browser_navigate(
     let client = state.get_cdp_client_for_tab(&target_tab_id).await?;
     client.navigate(&url).await.map_err(|e| e.to_string())?;
 
-    // Auto-tile only on first navigation (avoid re-snapping on every link click)
-    if !BROWSER_ALREADY_TILED.swap(true, Ordering::Relaxed) {
+    // Auto-tile only on first navigation (avoid re-snapping on every link click).
+    // Only set the flag AFTER success so a failure does not prevent retries.
+    if !BROWSER_ALREADY_TILED.load(Ordering::Relaxed) {
         if let Err(e) = crate::auto_tile_for_browser(&app) {
             tracing::warn!("auto_tile_for_browser failed (non-fatal): {}", e);
+        } else {
+            BROWSER_ALREADY_TILED.store(true, Ordering::Relaxed);
         }
     }
 
@@ -626,9 +653,10 @@ pub async fn browser_execute_async_js(
     tab_id: Option<String>,
 ) -> Result<Value, String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
-    // For async JS, we wrap it in a Promise and await it
+    // Wrap user script so its return value (including Promises) is captured.
+    // Using Promise.resolve() allows both sync and async scripts to work.
     let wrapped_script = format!(
-        "new Promise((resolve) => {{ {}; resolve(undefined); }})",
+        "Promise.resolve().then(async () => {{ {} }})",
         script
     );
     client
@@ -644,6 +672,7 @@ pub async fn browser_get_element_state(
     tab_id: Option<String>,
 ) -> Result<Value, String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
+    let safe_selector = sanitize_selector(&selector);
     let script = format!(
         r#"
         (function() {{
@@ -662,7 +691,7 @@ pub async fn browser_get_element_state(
             }};
         }})()
         "#,
-        selector
+        safe_selector
     );
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }
@@ -676,6 +705,7 @@ pub async fn browser_wait_for_interactive(
 ) -> Result<(), String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     let timeout = timeout_ms.unwrap_or(30000);
+    let safe_selector = sanitize_selector(&selector);
     let script = format!(
         r#"
         new Promise((resolve, reject) => {{
@@ -716,7 +746,7 @@ pub async fn browser_wait_for_interactive(
             check();
         }})
         "#,
-        timeout, selector
+        timeout, safe_selector
     );
     client.evaluate(&script).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -730,9 +760,19 @@ pub async fn browser_fill_form(
     tab_id: Option<String>,
 ) -> Result<(), String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
+    let safe_form_selector = sanitize_selector(&selector);
     if let Some(fields) = data.as_object() {
         for (field_selector, value) in fields {
-            let value_str = value.as_str().unwrap_or("");
+            // Coerce non-string JSON values (numbers, booleans) to their string
+            // representation instead of silently becoming empty strings.
+            let value_str = match value {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                _ => String::new(),
+            };
+            let safe_field = sanitize_selector(field_selector);
+            let safe_value = sanitize_js_value(&value_str);
             // Try to find input elements within the form
             let script = format!(
                 r#"
@@ -756,14 +796,14 @@ pub async fn browser_fill_form(
                     return {{ error: 'Field not found: {}' }};
                 }})()
                 "#,
-                selector,
-                field_selector,
-                field_selector,
-                field_selector,
-                field_selector,
-                field_selector,
-                value_str,
-                field_selector
+                safe_form_selector,
+                safe_field,
+                safe_field,
+                safe_field,
+                safe_field,
+                safe_field,
+                safe_value,
+                safe_field
             );
             client.evaluate(&script).await.map_err(|e| e.to_string())?;
         }
@@ -779,6 +819,8 @@ pub async fn browser_drag_and_drop(
     tab_id: Option<String>,
 ) -> Result<(), String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
+    let safe_source = sanitize_selector(&source);
+    let safe_target = sanitize_selector(&target);
     let script = format!(
         r#"
         (function() {{
@@ -817,7 +859,7 @@ pub async fn browser_drag_and_drop(
             return {{ success: true }};
         }})()
         "#,
-        source, target
+        safe_source, safe_target
     );
     client.evaluate(&script).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -832,6 +874,7 @@ pub async fn browser_upload_file(
 ) -> Result<(), String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     // Convert file paths to file data URLs using FileReader
+    let safe_selector = sanitize_selector(&selector);
     let paths_json = serde_json::to_string(&paths).map_err(|e| e.to_string())?;
     let script = format!(
         r#"
@@ -860,7 +903,7 @@ pub async fn browser_upload_file(
             return {{ success: true, fileCount: paths.length }};
         }})()
         "#,
-        selector, paths_json
+        safe_selector, paths_json
     );
     client.evaluate(&script).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -1075,6 +1118,7 @@ pub async fn browser_highlight_element(
     tab_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let (client, _) = state.get_client_for_tab(tab_id).await?;
+    let safe_selector = sanitize_selector(&selector);
     let script = format!(
         r#"
         (function() {{
@@ -1092,7 +1136,7 @@ pub async fn browser_highlight_element(
             }};
         }})()
         "#,
-        selector
+        safe_selector
     );
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }

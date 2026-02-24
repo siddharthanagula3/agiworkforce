@@ -408,6 +408,22 @@ impl PlaywrightBridge {
                 let (mut socket, _response) = connect(url)
                     .map_err(|e| format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e))?;
 
+                // Set a read timeout so that socket.read() does not block
+                // indefinitely if Chrome becomes unresponsive. Without this,
+                // the tokio::time::timeout above would fire but the blocking
+                // task would continue, leaking a thread.
+                {
+                    let read_timeout = Some(Duration::from_secs(10));
+                    match socket.get_mut() {
+                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+                            let _ = tcp.set_read_timeout(read_timeout);
+                        }
+                        _ => {
+                            // TLS or other stream variants -- best-effort, skip.
+                        }
+                    }
+                }
+
                 socket
                     .send(Message::Text(payload_str))
                     .map_err(|e| format!("Failed to send CDP command '{}': {}", method_owned, e))?;

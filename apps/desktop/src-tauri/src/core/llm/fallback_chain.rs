@@ -297,7 +297,7 @@ impl RateLimitTracker {
         provider.as_string().to_string()
     }
 
-    /// Check if a provider/model is currently rate limited
+    /// Check if a provider/model is currently rate limited (includes 5xx cooldowns).
     pub fn is_rate_limited(&self, provider: Provider, model: Option<&str>) -> bool {
         let cooldowns = self.cooldowns.read();
 
@@ -312,6 +312,20 @@ impl RateLimitTracker {
         // Also check provider-level cooldown
         let provider_key = self.key(provider, None);
         if let Some(entry) = cooldowns.get(&provider_key) {
+            if !entry.is_expired() {
+                return true;
+            }
+        }
+
+        // Also check 5xx server-error cooldowns
+        let error_model_key = format!("5xx:{}", model_key);
+        if let Some(entry) = cooldowns.get(&error_model_key) {
+            if !entry.is_expired() {
+                return true;
+            }
+        }
+        let error_provider_key = format!("5xx:{}", provider_key);
+        if let Some(entry) = cooldowns.get(&error_provider_key) {
             if !entry.is_expired() {
                 return true;
             }
@@ -383,11 +397,52 @@ impl RateLimitTracker {
         );
     }
 
+    /// Record a server error (5xx) for a provider/model, entering a short cooldown.
+    ///
+    /// Uses a shorter base cooldown (15s) and max cooldown (120s) compared to rate
+    /// limits, since 5xx errors are typically transient and resolve faster.
+    pub fn record_server_error(&self, provider: Provider, model: Option<&str>) {
+        let key = format!("5xx:{}", self.key(provider, model));
+        let mut cooldowns = self.cooldowns.write();
+
+        let existing = cooldowns.get(&key);
+        let consecutive_hits = existing.map(|e| e.consecutive_hits + 1).unwrap_or(1);
+
+        let base_duration = Duration::from_secs(15);
+        let max_duration = Duration::from_secs(120);
+        let backoff_factor = self
+            .config
+            .backoff_multiplier
+            .powi((consecutive_hits - 1) as i32);
+        let duration = Duration::from_secs_f64(
+            (base_duration.as_secs_f64() * backoff_factor).min(max_duration.as_secs_f64()),
+        );
+
+        tracing::warn!(
+            provider = %provider.as_string(),
+            model = model.unwrap_or("(provider-level)"),
+            consecutive_hits = consecutive_hits,
+            cooldown_secs = duration.as_secs(),
+            "Server error (5xx) recorded, entering cooldown"
+        );
+
+        cooldowns.insert(
+            key,
+            CooldownEntry {
+                started_at: Some(Instant::now()),
+                duration,
+                consecutive_hits,
+                model: model.map(String::from),
+            },
+        );
+    }
+
     /// Record a successful request, resetting the consecutive hit counter
     pub fn record_success(&self, provider: Provider, model: Option<&str>) {
         let key = self.key(provider, model);
         let mut cooldowns = self.cooldowns.write();
         cooldowns.remove(&key);
+        cooldowns.remove(&format!("5xx:{}", key));
     }
 
     /// Clear all cooldowns (useful for testing or manual reset)
