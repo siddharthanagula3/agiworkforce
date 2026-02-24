@@ -39,7 +39,7 @@ Use Node `>=22.12` and pnpm `>=9.15`.
 ## Coding Style & Naming Conventions
 
 Prettier is authoritative (`.prettierrc.json`): 2-space indent, single quotes, semicolons, trailing commas, `printWidth: 100`.
-Follow ESLint rules (`eslint.config.mjs`, `.eslintrc.cjs`) and fix warnings before opening a PR.
+Follow ESLint rules (`eslint.config.mjs`) and fix warnings before opening a PR.
 
 - React components: `PascalCase.tsx`
 - Hooks: `useX.ts`
