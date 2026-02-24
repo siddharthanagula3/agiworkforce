@@ -1199,6 +1199,7 @@ pub fn run() {
             crate::sys::commands::settings_v2_clear_cache,
             crate::sys::commands::settings_v2_list_all,
             crate::sys::commands::feedback::submit_feedback,
+            crate::sys::commands::feedback::get_filtered_logs,
 
 
             crate::sys::commands::capture_screen_full,
