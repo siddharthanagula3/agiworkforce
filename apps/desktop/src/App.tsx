@@ -12,13 +12,23 @@ import {
   type TimeoutWarningData,
 } from './components/Execution/TimeoutWarningDialog';
 
-import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } from 'lucide-react';
+import {
+  AlertTriangle,
+  CircleUserRound,
+  Maximize2,
+  Minimize2,
+  Moon,
+  Plus,
+  RefreshCcw,
+  Sun,
+} from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorHandling';
 import ErrorToastContainer from './components/Errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { useAuthStore } from './stores/auth';
+import { useAccountStore } from './stores/accountStore';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore from './stores/errorStore';
 
@@ -47,6 +57,7 @@ const UnifiedAgenticChat = lazy(() =>
 );
 import { UpdateChecker } from './components/Updates';
 import { AutomationPermissionsModal } from './components/Settings/AutomationPermissionsModal';
+import { StatusBanner } from './components/StatusBanner';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -63,6 +74,7 @@ const DesktopShell = () => {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
+  const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
   const { theme, setTheme } = useThemeContext();
 
   const toggleTheme = useCallback(() => {
@@ -72,6 +84,17 @@ const DesktopShell = () => {
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
+
+  const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
+
+  // Track when subscription fetch fails so we can show the degraded-state banner
+  useEffect(() => {
+    if (subscriptionFetchStatus === 'failed') {
+      setSubscriptionFetchFailed(true);
+    } else if (subscriptionFetchStatus === 'succeeded') {
+      setSubscriptionFetchFailed(false);
+    }
+  }, [subscriptionFetchStatus]);
 
   const clearHistory = useUnifiedChatStore((store) => store.clearHistory);
   const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
@@ -451,6 +474,29 @@ const DesktopShell = () => {
         {!isTauri && (
           <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
+          </div>
+        )}
+        <StatusBanner />
+        {subscriptionFetchFailed && (
+          <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Using cached account data. Subscription status may be outdated.</span>
+            </div>
+            <button
+              onClick={() => {
+                setSubscriptionFetchFailed(false);
+                void useAccountStore
+                  .getState()
+                  .syncWithBackend?.()
+                  .catch(() => {
+                    setSubscriptionFetchFailed(true);
+                  });
+              }}
+              className="text-amber-200 underline hover:text-amber-100 text-xs"
+            >
+              Retry
+            </button>
           </div>
         )}
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">

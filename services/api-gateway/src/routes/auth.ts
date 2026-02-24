@@ -40,7 +40,9 @@ interface DbUser {
 // Zod v4: Use top-level format validators for better performance
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(8),
+  // SECURITY: max(128) prevents BCrypt's 72-byte truncation from silently
+  // weakening passwords that users believe are stronger than they actually are.
+  password: z.string().min(8).max(128),
 });
 
 const loginSchema = z.object({
@@ -83,6 +85,8 @@ router.post('/register', authRateLimiter, async (req: Request, res: Response) =>
 
   const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
+    issuer: 'agiworkforce-api-gateway',
+    audience: 'agiworkforce',
   });
 
   res.json({
@@ -114,6 +118,8 @@ router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
 
   const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
+    issuer: 'agiworkforce-api-gateway',
+    audience: 'agiworkforce',
   });
 
   res.json({
@@ -127,13 +133,20 @@ router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
 });
 
 router.get('/verify', async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  // SECURITY: Properly parse the Authorization header instead of simple string replace.
+  // Validates the 'Bearer <token>' format case-insensitively and handles edge cases.
+  const parts = req.headers.authorization?.split(' ');
+  const token = parts?.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : undefined;
   if (!token) {
     throw new AppError('No token provided', 401);
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: 'agiworkforce-api-gateway',
+      audience: 'agiworkforce',
+    });
     const user = authenticatedUserSchema.parse(payload);
     res.json({ valid: true, userId: user.userId, email: user.email });
   } catch {

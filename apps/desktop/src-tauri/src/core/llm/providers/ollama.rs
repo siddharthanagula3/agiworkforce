@@ -1,3 +1,4 @@
+use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::core::llm::{ContentPart, LLMProvider, LLMRequest, LLMResponse};
 use futures_util::Stream;
@@ -5,7 +6,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OllamaMessage {
@@ -58,11 +58,16 @@ pub struct OllamaProvider {
 
 impl OllamaProvider {
     pub fn new(base_url: Option<String>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let client = Client::builder()
-            .connect_timeout(Duration::from_secs(30))
-            .timeout(Duration::from_secs(300))
-            .build()
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Self::with_config(base_url, HttpClientConfig::default())
+    }
+
+    /// Create a new Ollama provider with explicit proxy / CA certificate configuration.
+    pub fn with_config(
+        base_url: Option<String>,
+        config: HttpClientConfig,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = create_http_client(&config)
+            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
         Ok(Self {
             client,
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),

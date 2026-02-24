@@ -5,10 +5,10 @@ use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{oneshot, Notify, RwLock};
 use tokio::time::sleep;
 
 const MAX_SELF_HEAL_RETRIES: usize = 3;
@@ -34,9 +34,11 @@ pub struct AutonomousAgent {
     executor: TaskExecutor,
     vision: VisionAutomation,
     approval: ApprovalManager,
-    task_queue: Arc<Mutex<Vec<Task>>>,
-    running_tasks: Arc<Mutex<Vec<String>>>,
-    stop_signal: Arc<Mutex<bool>>,
+    task_queue: Arc<parking_lot::Mutex<Vec<Task>>>,
+    running_tasks: Arc<parking_lot::Mutex<Vec<String>>>,
+    stop_signal: Arc<parking_lot::Mutex<bool>>,
+    /// Notified when a task reaches a terminal state, waking `run_goal` waiters.
+    task_notify: Arc<Notify>,
     app_handle: Option<tauri::AppHandle>,
 }
 
@@ -59,9 +61,10 @@ impl AutonomousAgent {
             executor,
             vision,
             approval,
-            task_queue: Arc::new(Mutex::new(Vec::new())),
-            running_tasks: Arc::new(Mutex::new(Vec::new())),
-            stop_signal: Arc::new(Mutex::new(false)),
+            task_queue: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            running_tasks: Arc::new(parking_lot::Mutex::new(Vec::new())),
+            stop_signal: Arc::new(parking_lot::Mutex::new(false)),
+            task_notify: Arc::new(Notify::new()),
             app_handle: None,
         })
     }
@@ -77,17 +80,10 @@ impl AutonomousAgent {
 
     pub async fn run_autonomous_loop(&self) -> Result<()> {
         tracing::info!("[Agent] Starting autonomous agent loop");
-        *self
-            .stop_signal
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire stop signal lock"))? = false;
+        *self.stop_signal.lock() = false;
 
         loop {
-            if *self
-                .stop_signal
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire stop signal lock"))?
-            {
+            if *self.stop_signal.lock() {
                 tracing::info!("[Agent] Stop signal received, shutting down");
                 break;
             }
@@ -108,9 +104,7 @@ impl AutonomousAgent {
 
     pub fn stop(&self) {
         tracing::info!("[Agent] Stopping autonomous agent");
-        if let Ok(mut stop) = self.stop_signal.lock() {
-            *stop = true;
-        }
+        *self.stop_signal.lock() = true;
     }
 
     pub async fn submit_task(
@@ -140,10 +134,7 @@ impl AutonomousAgent {
         };
 
         {
-            let mut queue = self
-                .task_queue
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let mut queue = self.task_queue.lock();
             let pending_count = queue
                 .iter()
                 .filter(|t| {
@@ -196,33 +187,33 @@ impl AutonomousAgent {
                         return Err(anyhow!("Task was cancelled"));
                     }
                     _ => {
-                        // Still running, continue loop
+                        // Still running — wait for notification instead of busy-polling
                     }
                 }
             } else {
                 return Err(anyhow!("Task {} disappeared from queue", task_id));
             }
 
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // Wait for a task to change state, with a 5s fallback to re-check
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                self.task_notify.notified(),
+            )
+            .await
+            .ok(); // timeout is fine — just re-loop and check
         }
     }
 
     pub(crate) async fn process_task_queue(&self) -> Result<()> {
         {
-            let running = self
-                .running_tasks
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?;
+            let running = self.running_tasks.lock();
             if running.len() >= self.config.max_concurrent_tasks {
                 return Ok(());
             }
         }
 
         let (task_id, requires_approval_check) = {
-            let mut queue = self
-                .task_queue
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let mut queue = self.task_queue.lock();
             if let Some(task) = queue.iter_mut().find(|t| t.status == TaskStatus::Pending) {
                 let task_id = task.id.clone();
                 let requires_approval = task.requires_approval && !task.auto_approve;
@@ -235,10 +226,7 @@ impl AutonomousAgent {
 
         if requires_approval_check {
             let task_clone = {
-                let queue = self
-                    .task_queue
-                    .lock()
-                    .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+                let queue = self.task_queue.lock();
                 queue.iter().find(|t| t.id == task_id).cloned()
             };
 
@@ -255,10 +243,7 @@ impl AutonomousAgent {
                     PENDING_TASK_APPROVALS.insert(task_id.clone(), tx);
 
                     {
-                        let mut queue = self
-                            .task_queue
-                            .lock()
-                            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+                        let mut queue = self.task_queue.lock();
                         if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                             t.status = TaskStatus::WaitingApproval;
                         }
@@ -281,7 +266,6 @@ impl AutonomousAgent {
                     let approval_task_id = task_id.clone();
                     self.running_tasks
                         .lock()
-                        .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
                         .push(task_id);
 
                     tokio::spawn(async move {
@@ -315,7 +299,8 @@ impl AutonomousAgent {
                                 "[Agent] Task {} approved, resuming execution",
                                 approval_task_id
                             );
-                            if let Ok(mut queue) = agent_clone.task_queue.lock() {
+                            {
+                                let mut queue = agent_clone.task_queue.lock();
                                 if let Some(t) =
                                     queue.iter_mut().find(|t| t.id == approval_task_id)
                                 {
@@ -331,16 +316,16 @@ impl AutonomousAgent {
                                     e
                                 );
                                 // Clean up running_tasks slot on error
-                                if let Ok(mut running) = agent_clone.running_tasks.lock() {
-                                    running.retain(|id| id != &approval_task_id);
-                                }
+                                agent_clone.running_tasks.lock()
+                                    .retain(|id| id != &approval_task_id);
                             }
                         } else {
                             tracing::info!(
                                 "[Agent] Task {} rejected or timed out",
                                 approval_task_id
                             );
-                            if let Ok(mut queue) = agent_clone.task_queue.lock() {
+                            {
+                                let mut queue = agent_clone.task_queue.lock();
                                 if let Some(t) =
                                     queue.iter_mut().find(|t| t.id == approval_task_id)
                                 {
@@ -349,9 +334,8 @@ impl AutonomousAgent {
                                     );
                                 }
                             }
-                            if let Ok(mut running) = agent_clone.running_tasks.lock() {
-                                running.retain(|id| id != &approval_task_id);
-                            }
+                            agent_clone.running_tasks.lock()
+                                .retain(|id| id != &approval_task_id);
                         }
                     });
 
@@ -360,27 +344,29 @@ impl AutonomousAgent {
             }
         }
 
+        // Push task_id to running_tasks BEFORE spawning to avoid a race where
+        // execute_task could finish before the push.
+        self.running_tasks
+            .lock()
+            .push(task_id.clone());
+
         let agent_clone = self.clone_for_task()?;
-        let task_id_clone = task_id.clone();
+        let task_id_clone = task_id;
         tokio::spawn(async move {
-            if let Err(e) = agent_clone.execute_task(task_id_clone).await {
+            if let Err(e) = agent_clone.execute_task(task_id_clone.clone()).await {
                 tracing::error!("[Agent] Task execution failed: {}", e);
+                // Clean up running_tasks slot on error (mirrors the approval path)
+                agent_clone.running_tasks.lock()
+                    .retain(|id| id != &task_id_clone);
             }
         });
 
-        self.running_tasks
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
-            .push(task_id);
         Ok(())
     }
 
     pub async fn execute_task(&self, task_id: String) -> Result<()> {
         let mut task = {
-            let mut queue = self
-                .task_queue
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let mut queue = self.task_queue.lock();
             queue
                 .iter_mut()
                 .find(|t| t.id == task_id)
@@ -390,6 +376,9 @@ impl AutonomousAgent {
 
         task.status = TaskStatus::Executing;
         tracing::info!("[Agent] Executing task {}: {}", task_id, task.description);
+
+        // P1: Capture cost before this task starts for per-task cost cap enforcement
+        let cost_before_task = self.router.read().await.get_cumulative_cost();
 
         // Track completed step summaries for replanning context
         let mut completed_summaries: Vec<String> = Vec::new();
@@ -412,10 +401,7 @@ impl AutonomousAgent {
             }
 
             {
-                let mut queue = self
-                    .task_queue
-                    .lock()
-                    .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+                let mut queue = self.task_queue.lock();
                 if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                     *t = task.clone();
                 }
@@ -608,6 +594,38 @@ impl AutonomousAgent {
                 break;
             }
 
+            // P1: Check cost caps after each successful step
+            if step_succeeded {
+                let current_cost = self.router.read().await.get_cumulative_cost();
+                let task_cost = current_cost - cost_before_task;
+                if task_cost > self.config.max_cost_per_task {
+                    task.status = TaskStatus::Failed(format!(
+                        "Task cost cap exceeded: ${:.2} > ${:.2} limit",
+                        task_cost, self.config.max_cost_per_task
+                    ));
+                    tracing::warn!(
+                        "[Agent] Task {} aborted: cost ${:.2} exceeds per-task cap ${:.2}",
+                        task_id,
+                        task_cost,
+                        self.config.max_cost_per_task
+                    );
+                    break;
+                }
+                if current_cost > self.config.max_session_cost {
+                    task.status = TaskStatus::Failed(format!(
+                        "Session cost cap exceeded: ${:.2} > ${:.2} limit",
+                        current_cost, self.config.max_session_cost
+                    ));
+                    tracing::warn!(
+                        "[Agent] Task {} aborted: session cost ${:.2} exceeds cap ${:.2}",
+                        task_id,
+                        current_cost,
+                        self.config.max_session_cost
+                    );
+                    break;
+                }
+            }
+
             // Only advance to next step if the current step actually succeeded.
             // If we broke out of the inner loop due to replanning, step_succeeded
             // will be false and we re-execute at the same step_index (which now
@@ -651,10 +669,7 @@ impl AutonomousAgent {
         }
 
         {
-            let mut queue = self
-                .task_queue
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let mut queue = self.task_queue.lock();
             if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
                 *t = task.clone();
             }
@@ -662,18 +677,17 @@ impl AutonomousAgent {
 
         self.running_tasks
             .lock()
-            .map_err(|_| anyhow!("Failed to acquire running tasks lock"))?
             .retain(|id| id != &task_id);
+
+        // Wake any `run_goal` waiters now that this task reached a terminal state.
+        self.task_notify.notify_waiters();
 
         // BUG-05 fix: evict old terminal tasks to prevent unbounded task_queue growth.
         // Keep the 50 most-recently completed/failed tasks for status queries; anything
         // beyond that is evicted oldest-first.
         {
             const MAX_TERMINAL_TASKS: usize = 50;
-            let mut queue = self
-                .task_queue
-                .lock()
-                .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+            let mut queue = self.task_queue.lock();
             let terminal_count = queue
                 .iter()
                 .filter(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_)))
@@ -785,14 +799,6 @@ Be concise."#,
         }
 
         let cpu_usage = sys.global_cpu_info().cpu_usage();
-        if cpu_usage > 80.0 {
-            tracing::warn!(
-                "CPU usage high: {:.1}%, throttling autonomous agent",
-                cpu_usage
-            );
-            return Ok(false);
-        }
-
         let used_memory = sys.used_memory();
         let total_memory = sys.total_memory();
         let memory_percent = (used_memory as f64 / total_memory as f64) * 100.0;
@@ -829,23 +835,18 @@ Be concise."#,
             task_queue: self.task_queue.clone(),
             running_tasks: self.running_tasks.clone(),
             stop_signal: self.stop_signal.clone(),
+            task_notify: self.task_notify.clone(),
             app_handle: self.app_handle.clone(),
         })
     }
 
     pub fn get_task_status(&self, task_id: &str) -> Result<Option<Task>> {
-        let queue = self
-            .task_queue
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+        let queue = self.task_queue.lock();
         Ok(queue.iter().find(|t| t.id == task_id).cloned())
     }
 
     pub fn list_tasks(&self) -> Result<Vec<Task>> {
-        let queue = self
-            .task_queue
-            .lock()
-            .map_err(|_| anyhow!("Failed to acquire task queue lock"))?;
+        let queue = self.task_queue.lock();
         Ok(queue.clone())
     }
 }
