@@ -1,10 +1,6 @@
+use super::safety_patterns;
 use super::types::ComputerAction;
 use anyhow::Result;
-use regex::Regex;
-use std::sync::OnceLock;
-
-static DANGEROUS_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
-static DANGEROUS_KEYS: OnceLock<Vec<String>> = OnceLock::new();
 
 pub struct ComputerUseSafety;
 
@@ -16,28 +12,9 @@ impl Default for ComputerUseSafety {
 
 impl ComputerUseSafety {
     pub fn new() -> Self {
-        DANGEROUS_PATTERNS.get_or_init(|| {
-            vec![
-                Regex::new(r"(?i)rm\s+-rf").unwrap(),
-                Regex::new(r"(?i)format\s+[a-z]:").unwrap(),
-                Regex::new(r"(?i)del\s+/[fqs]").unwrap(),
-                Regex::new(r"(?i)deltree").unwrap(),
-                Regex::new(r"(?i)mkfs").unwrap(),
-                Regex::new(r"(?i)system32").unwrap(),
-                Regex::new(r"(?i)windir").unwrap(),
-                Regex::new(r"(?i)password|passwd|credential|api[_-]?key|secret|token").unwrap(),
-                Regex::new(r"(?i)regedit|reg\s+delete|reg\s+add").unwrap(),
-            ]
-        });
-
-        DANGEROUS_KEYS.get_or_init(|| {
-            vec![
-                "Alt+F4".to_string(),
-                "Ctrl+Alt+Del".to_string(),
-                "Win+L".to_string(),
-            ]
-        });
-
+        // Ensure shared patterns are initialised
+        let _ = safety_patterns::dangerous_command_patterns();
+        let _ = safety_patterns::dangerous_key_combinations();
         Self
     }
 
@@ -55,7 +32,7 @@ impl ComputerUseSafety {
     }
 
     fn is_text_safe(&self, text: &str) -> bool {
-        let patterns = DANGEROUS_PATTERNS.get_or_init(|| vec![]);
+        let patterns = safety_patterns::dangerous_command_patterns();
 
         for pattern in patterns {
             if pattern.is_match(text) {
@@ -97,7 +74,7 @@ impl ComputerUseSafety {
     }
 
     fn is_key_safe(&self, key: &str) -> bool {
-        let dangerous_keys = DANGEROUS_KEYS.get_or_init(|| vec![]);
+        let dangerous_keys = safety_patterns::dangerous_key_combinations();
 
         if dangerous_keys.iter().any(|k| k == key) {
             tracing::warn!("Dangerous key combination blocked: {}", key);
@@ -110,19 +87,7 @@ impl ComputerUseSafety {
     pub fn is_task_safe(&self, task: &str) -> bool {
         let task_lower = task.to_lowercase();
 
-        let dangerous_keywords = [
-            "delete system",
-            "format drive",
-            "remove windows",
-            "steal",
-            "hack",
-            "crack password",
-            "bypass security",
-            "disable firewall",
-            "disable antivirus",
-        ];
-
-        for keyword in &dangerous_keywords {
+        for keyword in safety_patterns::DANGEROUS_TASK_KEYWORDS {
             if task_lower.contains(keyword) {
                 tracing::warn!("Dangerous task detected: {}", task);
                 return false;

@@ -7,6 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { decryptToken } from '@/lib/device-token-crypto';
 
 async function handleDevicePoll(request: NextRequest) {
   // Parse body once and reuse - request.json() can only be called once
@@ -56,10 +57,7 @@ async function handleDevicePoll(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { status: 'pending' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'pending' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Expiry check first (also treat already-consumed codes as expired)
@@ -71,10 +69,7 @@ async function handleDevicePoll(request: NextRequest) {
           .update({ status: 'expired', updated_at: new Date().toISOString() })
           .eq('device_id', device_id);
       }
-      return NextResponse.json(
-        { status: 'expired' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'expired' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Device ownership verification: if a fingerprint was recorded, require a matching fingerprint.
@@ -153,11 +148,28 @@ async function handleDevicePoll(request: NextRequest) {
         return NextResponse.json({ status: 'pending' });
       }
 
+      // Decrypt tokens that were encrypted at rest by the approve endpoint
+      let accessToken: string;
+      let refreshToken: string;
+      try {
+        accessToken = decryptToken(consumed.access_token);
+        refreshToken = decryptToken(consumed.refresh_token);
+      } catch (decryptError) {
+        logger.error(
+          {
+            error: decryptError instanceof Error ? decryptError.message : String(decryptError),
+            deviceId: device_id,
+          },
+          'Failed to decrypt device tokens — they may have been stored before encryption was enabled',
+        );
+        throw createError.internal('Failed to decrypt device authorization tokens');
+      }
+
       return NextResponse.json(
         {
           status: 'approved',
-          access_token: consumed.access_token,
-          refresh_token: consumed.refresh_token,
+          access_token: accessToken,
+          refresh_token: refreshToken,
           user: {
             id: consumed.user_id,
             email: consumed.user_email,
@@ -167,21 +179,12 @@ async function handleDevicePoll(request: NextRequest) {
         { headers: { 'Cache-Control': 'no-store' } },
       );
     } else if (data.status === 'denied') {
-      return NextResponse.json(
-        { status: 'denied' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'denied' }, { headers: { 'Cache-Control': 'no-store' } });
     } else if (data.status === 'revoked') {
-      return NextResponse.json(
-        { status: 'denied' },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return NextResponse.json({ status: 'denied' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    return NextResponse.json(
-      { status: 'pending' },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ status: 'pending' }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     logger.error(
       {
