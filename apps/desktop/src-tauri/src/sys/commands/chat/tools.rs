@@ -109,9 +109,12 @@ pub fn filter_tools_by_capabilities(
                 return capabilities.search;
             }
 
-            // Image/video generation tools require image generation capability
+            // Image/video generation tools: available to any function-calling model.
+            // The actual generation is done via the web API (MediaExecutor), not natively
+            // by the LLM. Models with native image gen (imageGen: true) have tools: false
+            // and never reach this filter, so this gate would always exclude the tool.
             if name == "image_generate" || name == "video_generate" {
-                return capabilities.image_gen;
+                return true;
             }
 
             // Terminal execution is an app-side tool. It should remain available
@@ -1186,7 +1189,9 @@ mod tests {
     }
 
     #[test]
-    fn filter_hides_media_generation_when_image_capability_is_disabled() {
+    fn filter_keeps_media_generation_for_any_tool_calling_model() {
+        // image_generate/video_generate are available to any model with tools: true.
+        // The actual image is generated via the external media API, not natively by the LLM.
         let tools = vec![test_tool("image_generate"), test_tool("video_generate")];
         let caps = ModelCapabilitiesDto {
             tools: true,
@@ -1195,7 +1200,9 @@ mod tests {
         };
 
         let filtered = filter_tools_by_capabilities(tools, &caps);
-        assert!(filtered.is_empty());
+        let names: HashSet<&str> = filtered.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains("image_generate"));
+        assert!(names.contains("video_generate"));
     }
 
     #[test]

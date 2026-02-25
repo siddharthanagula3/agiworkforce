@@ -19,14 +19,11 @@ FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-# Copy package files
-# Note: This service can be built standalone without the monorepo lockfile
-# npm will generate a fresh package-lock.json if pnpm-lock.yaml is not available
-COPY package.json ./
+# Copy package files and lockfile for reproducible installs
+COPY package.json package-lock.json ./
 
 # Install all dependencies (including devDependencies for build)
-# Using npm for standalone builds since this service doesn't have its own lockfile
-RUN npm install
+RUN npm ci
 
 # =============================================================================
 # Stage 2: Build
@@ -53,10 +50,10 @@ FROM node:22-alpine AS prod-deps
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 
 # Install only production dependencies
-RUN npm install --omit=dev && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # =============================================================================

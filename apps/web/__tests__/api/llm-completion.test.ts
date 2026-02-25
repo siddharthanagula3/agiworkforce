@@ -635,7 +635,7 @@ describe('POST /api/llm/completion', () => {
 
       await POST(request);
 
-      expect(withRateLimit).toHaveBeenCalledWith(expect.any(NextRequest), 'default');
+      expect(withRateLimit).toHaveBeenCalledWith(expect.any(NextRequest), 'llm-completion');
     });
 
     it('should return 429 when rate limited', async () => {

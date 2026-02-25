@@ -500,4 +500,173 @@ describe('CreditService', () => {
       expect(result.available).toBe(5000);
     });
   });
+
+  // =========================================================================
+  // checkAvailable — fallback path via getBalance (H13)
+  // =========================================================================
+  describe('checkAvailable — fallback via getBalance when RPC fails', () => {
+    it('falls back and returns true when monthly+daily credits are available', async () => {
+      mockRpc.mockRejectedValueOnce(new Error('RPC network error')).mockResolvedValueOnce({
+        data: [
+          {
+            account_id: 'acc_123',
+            period_start: '2025-01-01T00:00:00Z',
+            period_end: '2025-02-01T00:00:00Z',
+            credits_allocated_cents: 5000,
+            credits_used_cents: 1000,
+            credits_remaining_cents: 4000,
+            daily_remaining_cents: 3000,
+          },
+        ],
+        error: null,
+      });
+
+      const result = await CreditService.checkAvailable('user-123', 100);
+      expect(result).toBe(true);
+    });
+
+    it('falls back and returns false when monthly credits are insufficient', async () => {
+      mockRpc
+        .mockResolvedValueOnce({ data: null, error: { message: 'RPC function error' } })
+        .mockResolvedValueOnce({
+          data: [
+            {
+              account_id: 'acc_123',
+              period_start: '2025-01-01T00:00:00Z',
+              period_end: '2025-02-01T00:00:00Z',
+              credits_allocated_cents: 500,
+              credits_used_cents: 490,
+              credits_remaining_cents: 10,
+              daily_remaining_cents: 10,
+            },
+          ],
+          error: null,
+        });
+
+      const result = await CreditService.checkAvailable('user-123', 100);
+      expect(result).toBe(false);
+    });
+
+    it('falls back and returns false when daily credits are insufficient', async () => {
+      mockRpc.mockRejectedValueOnce(new Error('RPC error')).mockResolvedValueOnce({
+        data: [
+          {
+            account_id: 'acc_123',
+            period_start: '2025-01-01T00:00:00Z',
+            period_end: '2025-02-01T00:00:00Z',
+            credits_allocated_cents: 5000,
+            credits_used_cents: 1000,
+            credits_remaining_cents: 4000,
+            daily_remaining_cents: 5,
+          },
+        ],
+        error: null,
+      });
+
+      const result = await CreditService.checkAvailable('user-123', 100);
+      expect(result).toBe(false);
+    });
+
+    it('falls back and returns false when getBalance returns null (no account)', async () => {
+      mockRpc
+        .mockRejectedValueOnce(new Error('RPC error'))
+        .mockResolvedValueOnce({ data: null, error: null });
+
+      const result = await CreditService.checkAvailable('user-123', 100);
+      expect(result).toBe(false);
+    });
+
+    it('falls back and returns false when getBalance also throws', async () => {
+      mockRpc
+        .mockRejectedValueOnce(new Error('RPC error'))
+        .mockRejectedValueOnce(new Error('DB connection lost'));
+
+      const result = await CreditService.checkAvailable('user-123', 100);
+      expect(result).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // checkAvailable — PostgreSQL boolean normalization (H13)
+  // =========================================================================
+  describe('checkAvailable — PostgreSQL boolean normalization', () => {
+    it('normalizes "t" string to true', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 't', error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(true);
+    });
+
+    it('normalizes "true" string to true', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 'true', error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(true);
+    });
+
+    it('normalizes number 1 to true', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 1, error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(true);
+    });
+
+    it('normalizes boolean false to false', async () => {
+      mockRpc.mockResolvedValueOnce({ data: false, error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(false);
+    });
+
+    it('normalizes "f" string to false', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 'f', error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(false);
+    });
+
+    it('normalizes number 0 to false', async () => {
+      mockRpc.mockResolvedValueOnce({ data: 0, error: null });
+      expect(await CreditService.checkAvailable('user-123', 100)).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // generateIdempotencyKey (M26)
+  // =========================================================================
+  describe('generateIdempotencyKey', () => {
+    it('formats key as userId:operationType:requestId', () => {
+      const key = CreditService.generateIdempotencyKey('user-123', 'reservation', 'req-abc');
+      expect(key).toBe('user-123:reservation:req-abc');
+    });
+
+    it('generates distinct keys for different operation types', () => {
+      const k1 = CreditService.generateIdempotencyKey('u', 'reservation', 'r');
+      const k2 = CreditService.generateIdempotencyKey('u', 'reconciliation', 'r');
+      expect(k1).not.toBe(k2);
+    });
+
+    it('generates distinct keys for different users', () => {
+      const k1 = CreditService.generateIdempotencyKey('user-A', 'reservation', 'req-1');
+      const k2 = CreditService.generateIdempotencyKey('user-B', 'reservation', 'req-1');
+      expect(k1).not.toBe(k2);
+    });
+
+    it('generates distinct keys for different requestIds', () => {
+      const k1 = CreditService.generateIdempotencyKey('user-1', 'reservation', 'req-A');
+      const k2 = CreditService.generateIdempotencyKey('user-1', 'reservation', 'req-B');
+      expect(k1).not.toBe(k2);
+    });
+  });
+
+  // =========================================================================
+  // deductCredits with idempotency key (M26)
+  // =========================================================================
+  describe('deductCredits — with idempotency key', () => {
+    it('passes non-null idempotency key to the RPC', async () => {
+      const mockResult = { success: true, account_id: 'acc_123', remaining_cents: 4900 };
+      mockRpc.mockResolvedValueOnce({ data: mockResult, error: null });
+
+      const key = CreditService.generateIdempotencyKey('user-123', 'reservation', 'req-xyz');
+      await CreditService.deductCredits('user-123', 100, 'API call', {}, key);
+
+      expect(mockRpc).toHaveBeenCalledWith('deduct_credits', {
+        p_user_id: 'user-123',
+        p_amount_cents: 100,
+        p_description: 'API call',
+        p_metadata: {},
+        p_idempotency_key: 'user-123:reservation:req-xyz',
+      });
+    });
+  });
 });

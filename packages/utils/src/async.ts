@@ -54,10 +54,18 @@ export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> 
       return;
     }
 
-    const timer = setTimeout(resolve, ms);
+    // Declare abortHandler before the timer so the timer callback can reference it.
+    let abortHandler: (() => void) | undefined;
+
+    const timer = setTimeout(() => {
+      // Remove the abort listener when the timer fires naturally to prevent
+      // listener accumulation when an AbortController is reused across multiple calls.
+      if (abortHandler) signal!.removeEventListener('abort', abortHandler);
+      resolve();
+    }, ms);
 
     if (signal) {
-      const abortHandler = () => {
+      abortHandler = () => {
         clearTimeout(timer);
         reject(new AbortError());
       };
@@ -153,8 +161,11 @@ export interface RetryOptions {
   maxDelay?: number;
   /** Multiplier for exponential backoff (default: 2) */
   backoffMultiplier?: number;
-  /** Error types that should abort retries immediately */
-  abortOnErrors?: string[];
+  /**
+   * Error message substrings that should abort retries immediately.
+   * Each entry is matched against `error.message` via `String.includes()`.
+   */
+  abortOnErrorMessages?: string[];
   /** Callback invoked on each retry attempt */
   onRetry?: (attempt: number, error: Error) => void;
   /** Custom function to determine if error is retryable */
@@ -224,7 +235,7 @@ export async function retry<T>(
     initialDelay = 1000,
     maxDelay = 30000,
     backoffMultiplier = 2,
-    abortOnErrors = [],
+    abortOnErrorMessages = [],
     onRetry,
     shouldRetry,
   } = options;
@@ -238,7 +249,7 @@ export async function retry<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Check if error should abort retries
-      if (abortOnErrors.some((errorType) => lastError.message.includes(errorType))) {
+      if (abortOnErrorMessages.some((msg) => lastError.message.includes(msg))) {
         throw lastError;
       }
 
@@ -279,7 +290,7 @@ export const retryStrategies = {
     initialDelay: 1000,
     maxDelay: 10000,
     backoffMultiplier: 2,
-    abortOnErrors: ['404', 'Not Found', 'Unauthorized', 'Forbidden'],
+    abortOnErrorMessages: ['404', 'Not Found', 'Unauthorized', 'Forbidden'],
   } satisfies RetryOptions,
 
   /** Database operation retry strategy */
@@ -288,7 +299,7 @@ export const retryStrategies = {
     initialDelay: 500,
     maxDelay: 5000,
     backoffMultiplier: 1.5,
-    abortOnErrors: ['SQLITE_CORRUPT', 'corrupted'],
+    abortOnErrorMessages: ['SQLITE_CORRUPT', 'corrupted'],
   } satisfies RetryOptions,
 
   /** API call retry strategy */
@@ -314,7 +325,7 @@ export const retryStrategies = {
     initialDelay: 500,
     maxDelay: 3000,
     backoffMultiplier: 2,
-    abortOnErrors: ['ENOENT', 'EACCES', 'Permission denied'],
+    abortOnErrorMessages: ['ENOENT', 'EACCES', 'Permission denied'],
   } satisfies RetryOptions,
 };
 

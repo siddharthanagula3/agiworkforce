@@ -35,14 +35,13 @@
     <true/>
 
     <!-- Hardened Runtime Options for Developer ID distribution -->
+    <!-- allow-jit is required for WKWebView JavaScript JIT compilation -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <true/>
+    <!-- allow-unsigned-executable-memory, disable-library-validation, and
+         allow-dyld-environment-variables have been removed: they disable W^X
+         memory protection, allow unsigned dylib injection, and enable DYLD_INSERT_LIBRARIES
+         attacks respectively. None are required for normal app operation. -->
 
     <!-- Accessibility (for UI automation - requires approval) -->
     <key>com.apple.security.temporary-exception.apple-events</key>

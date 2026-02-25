@@ -32,11 +32,12 @@ const DEFAULT_CONVERSATION_LIST_LIMIT: i64 = 1000;
 /// Maximum length for pending user messages
 const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
 /// Max idle wait for next streaming chunk before failing the stream.
-const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 20;
-/// Max wait per follow-up model invocation in tool loop.
-const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 20;
+/// 60s to accommodate slow models, image-generation tool calls, and high-latency networks.
+const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 60;
+/// Max wait per follow-up model invocation in tool loop (e.g. after image generation).
+const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 60;
 /// Max total wait across all candidate retries for a single follow-up call.
-const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 40;
+const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 120;
 /// Fast metadata follow-ups should still allow for MCP startup and remote latency.
 const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 15;
 /// Fast metadata follow-ups should have a bounded but realistic retry budget.
@@ -1252,6 +1253,114 @@ pub fn clear_local_database(db: State<'_, AppDatabase>) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// A single result row returned by `search_chat_history`.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct ChatSearchResult {
+    /// Row ID of the matching message in the `messages` table.
+    pub message_id: i64,
+    /// Row ID of the conversation that owns this message.
+    pub conversation_id: i64,
+    /// Human-readable title of the conversation, if available.
+    pub conversation_title: Option<String>,
+    /// A short excerpt of the message content with the match context.
+    /// Up to ~160 characters, surrounded by the query terms.
+    pub content_snippet: String,
+    /// Role of the message sender: "user", "assistant", or "system".
+    pub role: String,
+    /// ISO-8601 creation timestamp of the message.
+    pub created_at: String,
+    /// BM25 relevance rank (lower is more relevant in SQLite FTS5 convention).
+    pub rank: f64,
+}
+
+/// Full-text search across all chat messages using the FTS5 index.
+///
+/// The query string is passed directly to FTS5 MATCH, so standard FTS5 query
+/// syntax is supported (phrase search with quotes, prefix search with `*`,
+/// boolean `AND`/`OR`/`NOT`).  Results are ordered by BM25 relevance (most
+/// relevant first) and limited to `limit` rows (default 20, max 100).
+///
+/// Returns an empty list when the FTS5 table is not available (e.g. on an
+/// SQLite build without the FTS5 extension), rather than surfacing an error.
+#[tauri::command]
+pub fn search_chat_history(
+    query: String,
+    limit: Option<i64>,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<ChatSearchResult>, String> {
+    // Validate that the query is not empty to avoid FTS5 syntax errors.
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Err("Search query cannot be empty".to_string());
+    }
+
+    // Clamp limit: default 20, maximum 100.
+    let effective_limit = limit.unwrap_or(20).clamp(1, 100);
+
+    let conn = db.connection()?;
+
+    // Check that the FTS table exists before querying it.
+    // It may be absent on SQLite builds without the FTS5 module.
+    let fts_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='messages_fts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    if !fts_exists {
+        tracing::warn!(
+            "search_chat_history: messages_fts table not found; \
+             returning empty results (FTS5 may be unavailable)"
+        );
+        return Ok(Vec::new());
+    }
+
+    // Join messages_fts with messages (for created_at) and conversations (for
+    // title).  The FTS table stores message_id as TEXT (CAST from INTEGER).
+    // bm25(messages_fts) returns a negative score; ORDER BY rank ASC puts the
+    // most relevant results first.
+    let sql = "
+        SELECT
+            CAST(f.message_id AS INTEGER)        AS message_id,
+            CAST(f.conversation_id AS INTEGER)   AS conversation_id,
+            c.title                              AS conversation_title,
+            snippet(messages_fts, 2, '[', ']', '...', 24) AS content_snippet,
+            f.sender                             AS role,
+            m.created_at                         AS created_at,
+            bm25(messages_fts)                   AS rank
+        FROM messages_fts f
+        JOIN messages     m ON m.id             = CAST(f.message_id      AS INTEGER)
+        JOIN conversations c ON c.id            = CAST(f.conversation_id AS INTEGER)
+        WHERE messages_fts MATCH ?1
+        ORDER BY rank
+        LIMIT ?2
+    ";
+
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        format!("Failed to prepare FTS search statement: {e}")
+    })?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![trimmed, effective_limit], |row| {
+            Ok(ChatSearchResult {
+                message_id: row.get(0)?,
+                conversation_id: row.get(1)?,
+                conversation_title: row.get(2)?,
+                content_snippet: row.get(3)?,
+                role: row.get(4)?,
+                created_at: row.get(5)?,
+                rank: row.get(6)?,
+            })
+        })
+        .map_err(|e| format!("Failed to execute FTS search: {e}"))?;
+
+    let results: Result<Vec<ChatSearchResult>, _> = rows.collect();
+    results.map_err(|e| format!("Failed to collect FTS search results: {e}"))
 }
 
 #[tauri::command]

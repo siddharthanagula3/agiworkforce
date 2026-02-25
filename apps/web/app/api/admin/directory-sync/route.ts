@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { requireCsrfToken } from '@/lib/csrf';
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -157,6 +158,9 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
+
   try {
     const { isAdmin, userId, organizationId, error: authError } = await verifyAdminAccess(request);
 
@@ -265,6 +269,9 @@ export async function DELETE(request: NextRequest) {
   // Rate limit
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
 
   try {
     const { isAdmin, userId, organizationId, error: authError } = await verifyAdminAccess(request);

@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
+  Brain,
   Calendar,
   ChevronDown,
   ChevronLeft,
@@ -70,6 +71,7 @@ interface SidebarProps {
   onNewChat?: () => void | Promise<void>;
   onToggleArtifactPanel?: () => void;
   onToggleMediaLab?: () => void;
+  onOpenMemory?: () => void;
   canAccessMediaLab?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -311,6 +313,7 @@ export function Sidebar({
   onNewChat,
   onToggleArtifactPanel,
   onToggleMediaLab,
+  onOpenMemory,
   canAccessMediaLab = false,
   collapsed = false,
   onToggleCollapse,
@@ -867,6 +870,17 @@ export function Sidebar({
               Projects
             </button>
 
+            {/* Memory button */}
+            <button
+              onClick={onOpenMemory}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
+                <Brain className="w-3.5 h-3.5" />
+              </span>
+              Memory
+            </button>
+
             {/* Project filter dropdown */}
             {projects.length > 0 && (
               <DropdownMenu>
@@ -1082,6 +1096,19 @@ export function Sidebar({
                 <Layers className="h-4 w-4" />
                 <span>Artifacts</span>
               </div>
+            </button>
+          </div>
+        )}
+
+        {/* Memory Panel */}
+        {!collapsed && onOpenMemory && (
+          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+            <button
+              onClick={onOpenMemory}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <Brain className="h-4 w-4" />
+              <span>Memory</span>
             </button>
           </div>
         )}

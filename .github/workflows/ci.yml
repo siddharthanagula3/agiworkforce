@@ -43,6 +43,9 @@ jobs:
           echo "VITE_SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
           echo "VITE_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
 
+      - name: Dependency audit (JS)
+        run: pnpm audit --audit-level=high
+
       - name: Lint
         run: pnpm lint
 
@@ -71,6 +74,9 @@ jobs:
         with:
           workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
+
+      - name: Dependency audit (Rust)
+        run: cargo install cargo-audit --locked --quiet && cargo audit
 
       - name: Test (Rust workspace, default features)
         run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip enigo --skip AutomationService --skip automation

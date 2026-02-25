@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import crypto from 'node:crypto';
+
+const { createCipheriv, createDecipheriv, randomBytes, hkdfSync } = crypto;
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV for GCM
@@ -10,26 +12,39 @@ const AUTH_TAG_LENGTH = 16; // 128-bit auth tag
  * Derives a 32-byte AES-256 key for device token encryption.
  *
  * Prefers `DEVICE_TOKEN_ENCRYPTION_KEY` (hex-encoded 32-byte key).
- * Falls back to SHA-256 of `SUPABASE_SERVICE_ROLE_KEY` (deterministic but
- * unique per deployment).
+ * In production, DEVICE_TOKEN_ENCRYPTION_KEY is REQUIRED.
+ * In development, falls back to HKDF derivation from SUPABASE_SERVICE_ROLE_KEY.
+ *
+ * BREAKING CHANGE (2026-02-24): The development fallback was changed from
+ * SHA-256(SUPABASE_SERVICE_ROLE_KEY) to HKDF-SHA256. Any device tokens
+ * encrypted with the old SHA-256 fallback will fail to decrypt. This only
+ * affects development environments; production must use DEVICE_TOKEN_ENCRYPTION_KEY.
  */
 function getEncryptionKey(): Buffer {
-  const explicit = process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
-  if (explicit) {
-    const buf = Buffer.from(explicit, 'hex');
-    if (buf.length !== 32) {
+  const keyEnv = process.env.DEVICE_TOKEN_ENCRYPTION_KEY;
+  if (keyEnv) {
+    if (keyEnv.length !== 64) {
       throw new Error('DEVICE_TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
     }
-    return buf;
+    return Buffer.from(keyEnv, 'hex');
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'DEVICE_TOKEN_ENCRYPTION_KEY must be set in production. ' +
+        "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    );
+  }
+
+  // Development fallback: HKDF from SUPABASE_SERVICE_ROLE_KEY
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRole) {
     throw new Error('Neither DEVICE_TOKEN_ENCRYPTION_KEY nor SUPABASE_SERVICE_ROLE_KEY is set');
   }
-
-  // Derive a deterministic 32-byte key from the service role key
-  return createHash('sha256').update(serviceRole).digest();
+  const salt = Buffer.from('device-token-salt-v1');
+  return Buffer.from(
+    hkdfSync('sha256', Buffer.from(serviceRole), salt, 'device-token-encryption', 32),
+  );
 }
 
 /**
