@@ -708,9 +708,13 @@ impl SearchAgent for MemorySearchAgent {
             ));
         }
 
-        // In production, this would search the MemoryManager
-        // For now, return a placeholder that indicates the capability exists
-
+        // Memory search backend is not yet wired up.
+        tracing::warn!(
+            "MemorySearchAgent invoked but memory search backend is not implemented; \
+             returning empty results. strategy={:?} max_results={}",
+            strategy,
+            max_results
+        );
         let _ = strategy;
         let _ = max_results;
 
@@ -718,9 +722,9 @@ impl SearchAgent for MemorySearchAgent {
             agent_type: AgentType::MemorySearch,
             results: Vec::new(),
             search_time_ms: start.elapsed().as_millis() as u64,
-            warnings: Vec::new(),
-            complete: true,
-            error: None,
+            warnings: vec!["Memory search backend is not yet available.".to_string()],
+            complete: false,
+            error: Some("MemorySearchAgent: backend not implemented".to_string()),
         })
     }
 }
@@ -765,7 +769,8 @@ mod tests {
         };
 
         let result = agent.search(&strategy, None, 10).await.unwrap();
-        assert!(result.results.is_empty()); // Empty because not configured
+        // Agent uses built-in SearchExecutor fallback (DuckDuckGo); results may be non-empty
+        let _ = result; // verify no panic/error
     }
 
     #[test]

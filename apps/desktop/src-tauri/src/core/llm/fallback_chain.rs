@@ -828,6 +828,20 @@ pub fn is_rate_limit_error(error: &str) -> bool {
 pub fn is_retryable_error(error: &str) -> bool {
     let error_lower = error.to_lowercase();
 
+    // Non-retryable: credit/billing/quota exhaustion errors (must be checked FIRST
+    // to prevent false positives from substring matches like "connection" in
+    // "connection to billing" or "try again" in "try again with a different payment")
+    if error_lower.contains("402")
+        || error_lower.contains("insufficient_quota")
+        || error_lower.contains("insufficient credits")
+        || error_lower.contains("billing")
+        || error_lower.contains("payment_required")
+        || error_lower.contains("quota_exceeded")
+        || (error_lower.contains("credit") && error_lower.contains("exhaust"))
+    {
+        return false;
+    }
+
     // Rate limiting - retryable but with cooldown
     if is_rate_limit_error(error) {
         return true;

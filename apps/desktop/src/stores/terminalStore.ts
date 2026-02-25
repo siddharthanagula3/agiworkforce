@@ -4,16 +4,7 @@ import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface TerminalSession {
   id: string;
-  shellType:
-    | 'powershell'
-    | 'cmd'
-    | 'wsl'
-    | 'gitbash'
-    | 'zsh'
-    | 'bash'
-    | 'fish'
-    | 'sh'
-    | 'default';
+  shellType: 'powershell' | 'cmd' | 'wsl' | 'gitbash' | 'zsh' | 'bash' | 'fish' | 'sh' | 'default';
   title: string;
   cwd?: string;
   active: boolean;
@@ -236,17 +227,24 @@ export const useTerminalStore = create<TerminalState>()(
           get().removeOutputListener(sessionId);
 
           // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
-          const outputUnlisten = await listen<string | { stream: string; data: string }>(outputEvent, (event) => {
-            let data: string;
-            if (typeof event.payload === 'string') {
-              data = event.payload;
-            } else if (event.payload && typeof event.payload === 'object' && 'data' in event.payload) {
-              data = event.payload.data;
-            } else {
-              data = String(event.payload);
-            }
-            callback(data);
-          });
+          const outputUnlisten = await listen<string | { stream: string; data: string }>(
+            outputEvent,
+            (event) => {
+              let data: string;
+              if (typeof event.payload === 'string') {
+                data = event.payload;
+              } else if (
+                event.payload &&
+                typeof event.payload === 'object' &&
+                'data' in event.payload
+              ) {
+                data = event.payload.data;
+              } else {
+                data = String(event.payload);
+              }
+              callback(data);
+            },
+          );
 
           const exitUnlisten = await listen(exitEvent, () => {
             get().removeOutputListener(sessionId);

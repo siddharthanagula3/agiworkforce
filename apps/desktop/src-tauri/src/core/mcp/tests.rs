@@ -811,17 +811,17 @@ mod malformed_message_tests {
     /// Test parsing error response with invalid error object
     #[test]
     fn test_error_response_invalid_error_object() {
-        // Error without code
+        // Error without code — ErrorObject.code is i32 (required), so serde
+        // deserialization should fail when the field is absent.
         let missing_code = r#"{"jsonrpc":"2.0","error":{"message":"error"},"id":1}"#;
         let result = McpMessage::from_str(missing_code);
-        // This should fail or produce an error with default code
-        assert!(result.is_ok() || result.is_err());
+        assert!(result.is_err(), "expected parse to fail when 'code' is missing from error object");
 
-        // Error without message
+        // Error without message — ErrorObject.message is String (required), so
+        // deserialization should also fail when the field is absent.
         let missing_message = r#"{"jsonrpc":"2.0","error":{"code":-32600},"id":1}"#;
         let result = McpMessage::from_str(missing_message);
-        // This should fail or produce an error with default message
-        assert!(result.is_ok() || result.is_err());
+        assert!(result.is_err(), "expected parse to fail when 'message' is missing from error object");
     }
 
     /// Test standard JSON-RPC error codes
@@ -1003,14 +1003,19 @@ mod malformed_message_tests {
     /// Test response ambiguity (result vs error)
     #[test]
     fn test_response_with_both_result_and_error() {
-        // Per spec, a response should have either result OR error, not both
+        // Per JSON-RPC 2.0 spec, a response MUST have either result OR error,
+        // not both. When both are present, the parser should prefer the result
+        // field (common interpretation) and successfully parse as a Response.
         let both =
             r#"{"jsonrpc":"2.0","result":{},"error":{"code":-32600,"message":"test"},"id":1}"#;
         let result = McpMessage::from_str(both);
 
-        // Parser might accept this, preferring one over the other
-        // The behavior depends on parsing priority (result or error first)
-        assert!(result.is_ok() || result.is_err());
+        // Expect successful parse; the ambiguous message is still parseable.
+        assert!(result.is_ok(), "expected parse to succeed when both result and error are present");
+        if let Ok(McpMessage::Response(resp)) = result {
+            // The result field should take precedence.
+            assert!(resp.result.is_some(), "expected result field to be set");
+        }
     }
 
     /// Test McpMessage to_string and back

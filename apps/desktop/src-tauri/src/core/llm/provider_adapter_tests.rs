@@ -48,7 +48,9 @@ mod tests {
 
         let adapted = result.unwrap();
         assert_eq!(adapted["model"], "gpt-4.1");
-        assert_eq!(adapted["temperature"], 0.7);
+        // f32 temperature (0.7f32) serialized to JSON may lose precision vs f64 literal
+        let temp = adapted["temperature"].as_f64().unwrap();
+        assert!((temp - 0.7_f64).abs() < 1e-5, "temperature should be ~0.7, got {temp}");
         assert_eq!(adapted["max_tokens"], 100);
     }
 
@@ -680,17 +682,15 @@ mod tests {
     fn test_openai_vision_chat_completions() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
-        // Create a small 1x1 PNG image (smallest valid PNG)
-        let png_data = vec![
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1 dimensions
-            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, // IHDR data
-            0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, // IDAT chunk
-            0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD,
-            0x8D, 0xB4, // IDAT data + CRC
-            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82, // IEND
-        ];
+        // Generate a valid 1x1 white PNG using the image crate (handcrafted bytes fail CRC checks)
+        let png_data = {
+            use image::{ImageBuffer, Rgb};
+            let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                ImageBuffer::from_fn(1, 1, |_, _| Rgb([255u8, 255u8, 255u8]));
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+            buf.into_inner()
+        };
 
         let request = LLMRequest {
             messages: vec![ChatMessage {
@@ -766,14 +766,15 @@ mod tests {
     fn test_openai_vision_responses_api() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
-        // Create a small test image
-        let png_data = vec![
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
-            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
-            0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D,
-            0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-        ];
+        // Generate a valid 1x1 white PNG using the image crate (handcrafted bytes fail CRC checks)
+        let png_data = {
+            use image::{ImageBuffer, Rgb};
+            let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                ImageBuffer::from_fn(1, 1, |_, _| Rgb([255u8, 255u8, 255u8]));
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+            buf.into_inner()
+        };
 
         let request = LLMRequest {
             messages: vec![ChatMessage {
