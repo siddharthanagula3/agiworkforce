@@ -1014,7 +1014,7 @@ mod malformed_message_tests {
         assert!(result.is_ok(), "expected parse to succeed when both result and error are present");
         if let Ok(McpMessage::Response(resp)) = result {
             // The result field should take precedence.
-            assert!(resp.result.is_some(), "expected result field to be set");
+            assert!(!resp.result.is_null(), "expected result field to be set");
         }
     }
 

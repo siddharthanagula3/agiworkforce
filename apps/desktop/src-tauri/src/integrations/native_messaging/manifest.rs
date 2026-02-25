@@ -412,6 +412,10 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         }
     }
 
+    // Consume on non-macOS to satisfy dead-code lints; only macOS uses these paths.
+    #[cfg(not(target_os = "macos"))]
+    let _ = (chrome_manifest_path, edge_manifest_path);
+
     #[cfg(target_os = "macos")]
     {
         let chrome_missing = chrome_manifest_path
