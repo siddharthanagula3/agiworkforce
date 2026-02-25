@@ -1,57 +1,53 @@
-import * as React from 'react';
-import { cn } from '../../utils/cn';
+'use client';
 
-// React 19: ref is now a regular prop - forwardRef is deprecated
-// https://react.dev/blog/2024/12/05/react-19#ref-as-a-prop
+/**
+ * UI Component Library
+ *
+ * This index exports all UI components for easier importing throughout the application.
+ * Components follow these design principles:
+ * - Accessibility (WCAG 2.1 AA compliance)
+ * - Responsive design (mobile-first approach)
+ * - Consistent styling (Tailwind CSS)
+ * - TypeScript support (full type safety)
+ */
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
-  ref?: React.Ref<HTMLButtonElement>;
-}
-
-export function Button({
-  className,
-  variant = 'primary',
-  size = 'md',
-  ref,
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      ref={ref}
-      className={cn(
-        'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
-        variant === 'primary' && 'bg-white text-black hover:bg-zinc-200',
-        variant === 'outline' &&
-          'border border-zinc-800 bg-transparent hover:bg-zinc-900 text-white',
-        variant === 'ghost' && 'hover:bg-zinc-900 text-zinc-400 hover:text-white',
-        size === 'sm' && 'h-9 px-3 text-xs',
-        size === 'md' && 'h-10 px-4 py-2',
-        size === 'lg' && 'h-12 px-8 text-lg',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  ref?: React.Ref<HTMLInputElement>;
-}
-
-export function Input({ className, type, ref, ...props }: InputProps) {
-  return (
-    <input
-      type={type}
-      className={cn(
-        'flex h-10 w-full rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm text-white ring-offset-black file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50',
-        className,
-      )}
-      ref={ref}
-      {...props}
-    />
-  );
-}
-
+// Core Components
+export * from './Accordion';
+export * from './Alert';
+export * from './AlertDialog';
+export * from './Badge';
+export * from './Button';
 export * from './card';
+export * from './Checkbox';
+export * from './Collapsible';
+export * from './Dialog';
+export * from './DropdownMenu';
+export * from './HoverCard';
+export * from './Input';
+export * from './Label';
+export * from './Popover';
+export * from './Progress';
+export * from './ScrollArea';
+export * from './Select';
+export * from './Separator';
+export * from './Slider';
+export * from './Spinner';
+export * from './Switch';
+export * from './Table';
+export * from './Tabs';
+export * from './Textarea';
+export * from './Toast';
+export * from './Toaster';
+export * from './Tooltip';
+
+// Enhanced Components (Accessibility & UX Improvements)
+export * from './AccessibleDialog';
+export * from './ConfirmDialog';
+export * from './FormField';
+export * from './LoadingButton';
+export * from './PromptDialog';
+export * from './ResizeHandle';
+export * from './ResponsiveContainer';
+export * from './SectionErrorBoundary';
+export * from './Skeleton';
+export * from './ContextMenu';

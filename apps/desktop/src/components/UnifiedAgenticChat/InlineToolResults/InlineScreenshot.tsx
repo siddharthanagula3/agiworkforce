@@ -1,4 +1,13 @@
-import { Camera, Copy, ChevronUp, Download, ScanText, Maximize2, Check, Loader2 } from 'lucide-react';
+import {
+  Camera,
+  Copy,
+  ChevronUp,
+  Download,
+  ScanText,
+  Maximize2,
+  Check,
+  Loader2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { ToolResultProps } from './index';

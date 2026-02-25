@@ -203,19 +203,6 @@ interface ExtensionStatusDiagnosticsPayload {
   };
 }
 
-type AgentStatusPayloadLike = Partial<AgentStatus> & {
-  id?: string;
-  status?: string;
-  current_goal?: string;
-  current_step?: string;
-  started_at?: number | string | Date;
-  completed_at?: number | string | Date;
-  resource_usage?: {
-    cpu?: number;
-    memory?: number;
-  };
-};
-
 export function useAgenticEvents() {
   const unlistenFns = useRef<UnlistenFn[]>([]);
   const isMountedRef = useRef(false);
@@ -268,63 +255,6 @@ export function useAgenticEvents() {
     if (normalized === 'critical' || normalized === 'high') return 'high';
     if (normalized === 'medium') return 'medium';
     return 'low';
-  };
-
-  const normalizeAgentLifecycleStatus = (status?: string): AgentStatus['status'] => {
-    if (!status) return 'idle';
-    const normalized = status.toLowerCase();
-    if (normalized === 'awaiting_confirmation' || normalized === 'awaiting_approval') {
-      return 'paused';
-    }
-    if (normalized === 'error') return 'failed';
-    if (normalized === 'success') return 'completed';
-    if (
-      normalized === 'idle' ||
-      normalized === 'running' ||
-      normalized === 'paused' ||
-      normalized === 'completed' ||
-      normalized === 'failed'
-    ) {
-      return normalized;
-    }
-    return 'running';
-  };
-
-  const normalizeAgentProgress = (value: unknown): number => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.min(100, Math.max(0, value));
-    }
-    if (typeof value === 'string') {
-      const parsed = Number.parseFloat(value);
-      if (Number.isFinite(parsed)) {
-        return Math.min(100, Math.max(0, parsed));
-      }
-    }
-    return 0;
-  };
-
-  const parseAgentTimestamp = (value: unknown): Date | undefined => {
-    if (value === null || value === undefined) return undefined;
-    if (value instanceof Date) return value;
-
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (/^\d+$/.test(trimmed)) {
-        const numeric = Number.parseInt(trimmed, 10);
-        return new Date(numeric > 1_000_000_000_000 ? numeric : numeric * 1000);
-      }
-      const isoDate = new Date(trimmed);
-      if (!Number.isNaN(isoDate.getTime())) {
-        return isoDate;
-      }
-      return undefined;
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return new Date(value > 1_000_000_000_000 ? value : value * 1000);
-    }
-
-    return undefined;
   };
 
   const mapActionType = (type?: string): ActionLogEntryType => {
@@ -1207,98 +1137,6 @@ export function useAgenticEvents() {
         });
       });
       push(unlistenMetrics);
-
-      // AUDIT-EVENT-057 fix: Listen to agent:status:update (matching backend emission)
-      const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status:update', (event) => {
-        if (!isMountedRef.current) return;
-        const rawPayload = event.payload as unknown as
-          | { agent?: AgentStatusPayloadLike }
-          | AgentStatusPayloadLike
-          | null
-          | undefined;
-        if (!rawPayload || typeof rawPayload !== 'object') {
-          console.warn('[useAgenticEvents] agent:status:update received invalid payload');
-          return;
-        }
-
-        const candidatePayload =
-          'agent' in rawPayload &&
-          rawPayload.agent &&
-          typeof rawPayload.agent === 'object' &&
-          !Array.isArray(rawPayload.agent)
-            ? (rawPayload.agent as AgentStatusPayloadLike)
-            : (rawPayload as AgentStatusPayloadLike);
-
-        const id = typeof candidatePayload.id === 'string' ? candidatePayload.id : '';
-        if (!id) {
-          console.warn('[useAgenticEvents] agent:status:update received without agent id');
-          return;
-        }
-
-        const resourceUsage =
-          candidatePayload.resourceUsage && typeof candidatePayload.resourceUsage === 'object'
-            ? candidatePayload.resourceUsage
-            : candidatePayload.resource_usage && typeof candidatePayload.resource_usage === 'object'
-              ? {
-                  cpu: (candidatePayload.resource_usage as Record<string, unknown>)['cpu'] as
-                    | number
-                    | undefined,
-                  memory: (candidatePayload.resource_usage as Record<string, unknown>)['memory'] as
-                    | number
-                    | undefined,
-                }
-              : undefined;
-        const resourceCpu = resourceUsage
-          ? (resourceUsage as Record<string, unknown>)['cpu']
-          : undefined;
-        const resourceMemory = resourceUsage
-          ? (resourceUsage as Record<string, unknown>)['memory']
-          : undefined;
-
-        const normalizedAgent: AgentStatus = {
-          id,
-          name:
-            typeof candidatePayload.name === 'string' && candidatePayload.name.trim().length > 0
-              ? candidatePayload.name
-              : 'AGI Workforce Agent',
-          status: normalizeAgentLifecycleStatus(candidatePayload.status),
-          progress: normalizeAgentProgress(candidatePayload.progress),
-          currentGoal:
-            (typeof candidatePayload.currentGoal === 'string'
-              ? candidatePayload.currentGoal
-              : undefined) ??
-            (typeof candidatePayload.current_goal === 'string'
-              ? candidatePayload.current_goal
-              : undefined),
-          currentStep:
-            (typeof candidatePayload.currentStep === 'string'
-              ? candidatePayload.currentStep
-              : undefined) ??
-            (typeof candidatePayload.current_step === 'string'
-              ? candidatePayload.current_step
-              : undefined),
-          resourceUsage:
-            resourceUsage && typeof resourceCpu === 'number' && typeof resourceMemory === 'number'
-              ? { cpu: resourceCpu, memory: resourceMemory }
-              : undefined,
-          startedAt: parseAgentTimestamp(candidatePayload.startedAt ?? candidatePayload.started_at),
-          completedAt: parseAgentTimestamp(
-            candidatePayload.completedAt ?? candidatePayload.completed_at,
-          ),
-          error: typeof candidatePayload.error === 'string' ? candidatePayload.error : undefined,
-        };
-
-        const existingAgents = useUnifiedChatStore.getState().agents ?? [];
-        const agentExists = existingAgents.some((a) => a.id === normalizedAgent.id);
-
-        if (agentExists) {
-          handlersRef.current.updateAgentStatus(normalizedAgent.id, normalizedAgent);
-        } else {
-          handlersRef.current.addAgent(normalizedAgent);
-        }
-        handlersRef.current.setAgentStatus(normalizedAgent);
-      });
-      push(unlistenAgentStatus);
 
       const unlistenAgentSpawned = await listen<AgentSpawnedEvent>('agent:spawned', (event) => {
         if (!isMountedRef.current) return;

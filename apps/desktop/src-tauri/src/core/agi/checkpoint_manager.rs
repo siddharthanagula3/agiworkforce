@@ -309,19 +309,21 @@ impl CheckpointedExecution {
         total_steps: usize,
         reason: CheckpointReason,
     ) -> Result<Option<Checkpoint>> {
-        let metrics = self.metrics.lock().await;
-        let steps_since = *self.steps_since_checkpoint.lock().await;
+        // Acquire both locks in a single block and release before the async call
+        // to prevent deadlock from inconsistent lock ordering across tasks.
+        let (should_create, metrics_snapshot) = {
+            let steps_since = *self.steps_since_checkpoint.lock().await;
+            let metrics = self.metrics.lock().await;
+            let should = self
+                .manager
+                .should_create_checkpoint(steps_since, &metrics, reason);
+            (should, metrics.clone())
+        };
 
-        if !self
-            .manager
-            .should_create_checkpoint(steps_since, &metrics, reason)
-        {
+        if !should_create {
             return Ok(None);
         }
 
-        drop(metrics); // Release the lock before creating checkpoint
-
-        let metrics_guard = self.metrics.lock().await;
         let checkpoint = self
             .manager
             .create_checkpoint(
@@ -331,7 +333,7 @@ impl CheckpointedExecution {
                 completed_steps,
                 reason,
                 total_steps,
-                &metrics_guard,
+                &metrics_snapshot,
                 None,
             )
             .await?;

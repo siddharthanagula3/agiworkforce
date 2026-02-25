@@ -71,6 +71,9 @@ export async function respondToolConfirmation(
   rememberChoice: boolean = false,
   reason?: string,
 ): Promise<void> {
+  if (!requestId || requestId.trim().length === 0) {
+    throw new Error('[toolConfirmation] requestId is required');
+  }
   if (!isTauri) {
     console.info('[toolConfirmation] respondToolConfirmation (mock)', {
       requestId,
@@ -208,6 +211,9 @@ export async function getPendingConfirmationCount(): Promise<number> {
  * @param requestId - The unique ID of the confirmation request to cancel
  */
 export async function cancelToolConfirmation(requestId: string): Promise<void> {
+  if (!requestId || requestId.trim().length === 0) {
+    throw new Error('[toolConfirmation] requestId is required');
+  }
   if (!isTauri) {
     console.info('[toolConfirmation] cancelToolConfirmation (mock)', requestId);
     return;

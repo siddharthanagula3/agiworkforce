@@ -61,12 +61,9 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     return formatFolderPath(currentFolder);
   }, [currentFolder]);
 
-  const syncFolderContext = useCallback(
-    async (path: string | null) => {
-      await invoke('project_context_set_folder', { path });
-    },
-    [],
-  );
+  const syncFolderContext = useCallback(async (path: string | null) => {
+    await invoke('project_context_set_folder', { path });
+  }, []);
 
   // Handle folder selection via native dialog
   const handleSelectFolder = useCallback(async () => {
@@ -76,28 +73,18 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     setIsOpen(false);
 
     try {
-      console.log('[FolderSelector] Opening folder picker dialog...');
       const selected = await open({
         directory: true,
         multiple: false,
         title: 'Select Project Folder',
       });
 
-      console.log('[FolderSelector] Dialog returned:', selected);
-
       if (selected && typeof selected === 'string') {
-        console.log('[FolderSelector] Setting folder to:', selected);
         await syncFolderContext(selected);
         setCurrentFolder(selected);
-      } else {
-        console.log('[FolderSelector] Dialog cancelled or no selection');
       }
-    } catch (error) {
-      console.error('[FolderSelector] Failed to open folder picker:', error);
-      // Show error to user
-      alert(
-        `Failed to open folder picker: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    } catch {
+      // Error is non-fatal; the user can try again
     } finally {
       setIsSelecting(false);
     }
@@ -110,11 +97,8 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
         await syncFolderContext(path);
         setCurrentFolder(path);
         setIsOpen(false);
-      } catch (error) {
-        console.error('[FolderSelector] Failed to set recent folder context:', error);
-        alert(
-          `Failed to select folder: ${error instanceof Error ? error.message : String(error)}`,
-        );
+      } catch {
+        // Error is non-fatal; the user can try again
       }
     },
     [setCurrentFolder, syncFolderContext],

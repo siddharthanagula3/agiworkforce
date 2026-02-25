@@ -56,6 +56,16 @@ impl ApprovalManager {
             return Ok(true);
         }
 
+        // AlwaysRequire is an unconditional deny — short-circuit before any other
+        // rule can grant approval, preventing PatternMatch from bypassing it.
+        if self
+            .approval_rules
+            .iter()
+            .any(|r| matches!(r, ApprovalRule::AlwaysRequire))
+        {
+            return Ok(false);
+        }
+
         for rule in &self.approval_rules {
             if self.matches_rule(rule, task)? {
                 return Ok(true);
