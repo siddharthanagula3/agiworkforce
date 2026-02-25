@@ -25,10 +25,10 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
     normalized === 'image_generate' ||
     normalized === 'media_generate_image' ||
     normalized === 'text_to_image' ||
-    normalized.includes('generate_image') ||
-    normalized.includes('image_generation') ||
-    normalized.includes('generate_video') ||
-    normalized.includes('video_generation')
+    normalized.startsWith('generate_image') ||
+    normalized.startsWith('image_generation') ||
+    normalized.startsWith('generate_video') ||
+    normalized.startsWith('video_generation')
   ) {
     return LONG_RUNNING_TOOL_TIMEOUT_MS;
   }
