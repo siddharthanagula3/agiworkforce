@@ -266,7 +266,7 @@ tempfile = "3.10"
 mockall = "0.12"
 serial_test = "3.0"
 tauri = { version = "2.9.3", features = ["test"] }
-criterion = "0.5"
+criterion = "0.8"
 proptest = "1.4"
 
 
