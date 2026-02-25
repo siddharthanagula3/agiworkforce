@@ -74,6 +74,20 @@ impl OllamaProvider {
         })
     }
 
+    /// Checks whether the Ollama server is reachable by hitting the `/api/version` endpoint.
+    /// Returns `true` when the server responds with a success status, `false` otherwise.
+    /// This is intentionally a lightweight probe (no model load) suitable for pre-routing checks.
+    pub async fn is_available(&self) -> bool {
+        let url = format!("{}/api/version", self.base_url);
+        self.client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false)
+    }
+
     fn extract_images(multimodal: Option<&Vec<ContentPart>>) -> Option<Vec<String>> {
         multimodal.and_then(|parts| {
             let images: Vec<String> = parts
@@ -285,6 +299,12 @@ impl LLMProvider for OllamaProvider {
 
     fn is_configured(&self) -> bool {
         !self.base_url.is_empty()
+    }
+
+    /// Delegates to the struct-level health-ping so the router can pre-filter Ollama
+    /// from the candidate list when the local server is unreachable.
+    async fn is_available(&self) -> bool {
+        OllamaProvider::is_available(self).await
     }
 
     fn name(&self) -> &str {

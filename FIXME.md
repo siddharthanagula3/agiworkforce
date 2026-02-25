@@ -34,19 +34,17 @@ This file tracks implementation blockers that can cause user-visible failures or
 
 ## 3) Model/Router Source-Of-Truth Drift (TS vs Rust)
 
-- Severity: High
+- Severity: ~~High~~ **RESOLVED** (2026-02-25)
 - Files:
   - `apps/desktop/src/constants/llm.ts`
   - `apps/desktop/src/lib/modelRouter.ts`
-  - `apps/desktop/src-tauri/src/core/llm/llm_router.rs`
-  - `apps/desktop/src-tauri/src/sys/commands/llm.rs`
-- Problem:
-  - Model IDs and fallback defaults are duplicated across layers.
-  - Drift risk causes invalid/stale IDs and inconsistent routing.
-- Impact:
-  - Wrong model selection, incompatible capabilities, hidden runtime failures.
-- Required fix:
-  - Add canonical model-ID resolver and remove hardcoded literals in routing paths.
+  - `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs`
+- Resolution:
+  - `AnthropicAdapter::canonicalize_model()` (provider_adapter.rs:1706-1714) explicitly normalizes dot-notation TS IDs (e.g. `claude-opus-4.6`) to hyphen API IDs (e.g. `claude-opus-4-6`) before sending to the API. No functional mismatch.
+  - Anthropic server tool names updated to canonical forms (server_tools.rs:84-95).
+  - Thinking model gating is family-based substring matching — not hardcoded exact names.
+  - MODEL_POOLS (modelRouter.ts) and MODEL_METADATA (llm.ts) are consistent.
+- Remaining: TODO #1 (refresh catalog for gpt-5.3-codex, gemini-3.1-pro etc.) is still open.
 
 ## 4) Tool Event/Execution Parity Needs Continuous Audit
 
@@ -63,7 +61,66 @@ This file tracks implementation blockers that can cause user-visible failures or
 - Required fix:
   - Add parity tests and matrix checks per tool family/provider.
 
-## Recently Fixed In This Audit Pass
+## 5) Prompt Injection via Unsanitized Tool Results
+
+- Severity: ~~High~~ **RESOLVED** (2026-02-25)
+- Files:
+  - `apps/desktop/src-tauri/src/sys/commands/chat/tools.rs`
+  - `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs`
+- Resolution:
+  - `ChatToolResult.to_message_content()` now calls `super::escape_xml()` on both the success content and the error string, blocking XML/tag injection from attacker-controlled tool results.
+  - The agent execution summary in `mod.rs` is now passed through `sanitize_multiline_for_prompt(&summary, 4096)` before being embedded in the system message.
+
+## 6) Streaming Path Has No Circuit Breaker
+
+- Severity: ~~Medium~~ **RESOLVED** (2026-02-25)
+- Files:
+  - `apps/desktop/src-tauri/src/core/llm/llm_router.rs` (`invoke_streaming_with_retry()`)
+- Resolution:
+  - `invoke_streaming_with_retry()` now calls `tracker.record_success()` on successful stream connection and `tracker.record_server_error()` on final non-retryable 5xx failures.
+  - Circuit breaker state is now consistent between streaming and non-streaming paths.
+
+## 7) Cost Cap Not Enforced in LLMRouter Hot Path
+
+- Severity: ~~Medium~~ **RESOLVED** (2026-02-25)
+- Files:
+  - `apps/desktop/src-tauri/src/core/llm/llm_router.rs` (`invoke_candidate()`)
+- Resolution:
+  - Added `SESSION_COST_SAFETY_CAP = 50.0` constant.
+  - `invoke_candidate()` now returns an error when accumulated session cost exceeds `$50`, providing defense-in-depth for all callers that bypass `AutonomousAgent`.
+
+## 8) Ollama `is_available()` Not Wired Into Routing
+
+- Severity: ~~Low~~ **RESOLVED** (2026-02-25)
+- Files:
+  - `apps/desktop/src-tauri/src/core/llm/mod.rs` (`LLMProvider` trait)
+  - `apps/desktop/src-tauri/src/core/llm/providers/ollama.rs`
+  - `apps/desktop/src-tauri/src/core/llm/llm_router.rs`
+- Resolution:
+  - Added `async fn is_available(&self) -> bool { true }` default method to the `LLMProvider` trait.
+  - `OllamaProvider` overrides it via `impl LLMProvider`, delegating to its struct-level health-ping.
+  - Both `route_with_retry()` and `send_message_streaming_with_retry()` now pre-filter candidates using `is_available()`, skipping unreachable providers immediately.
+
+## Recently Fixed In This Audit Pass (2026-02-25 Release Readiness Audit)
+
+- **FIXME #5 RESOLVED**: Applied `escape_xml()` to `ChatToolResult.to_message_content()` and `sanitize_multiline_for_prompt()` to agent summary injection (tools.rs, mod.rs)
+- **FIXME #6 RESOLVED**: Wired `RateLimitTracker.record_success()` / `record_server_error()` into `invoke_streaming_with_retry()` (llm_router.rs)
+- **FIXME #7 RESOLVED**: Added `SESSION_COST_SAFETY_CAP = $50` enforcement in `invoke_candidate()` as defense-in-depth (llm_router.rs)
+- **FIXME #8 RESOLVED**: Added `is_available()` to `LLMProvider` trait; `OllamaProvider` implements it; both routing entry-points pre-filter unreachable providers (mod.rs, ollama.rs, llm_router.rs)
+- Added Ollama health check `is_available()` method (ollama.rs) — pings localhost:11434 before routing can use it
+- Added 402/billing/credit non-retryable guard to both `is_retryable_error()` functions (llm_router.rs, fallback_chain.rs) — prevents retry loops on credit exhaustion
+- Added tilde expansion unit test for `expand_tilde_in_args()` (tool_executor.rs)
+- Added 503 Supabase outage guards to 8 catch blocks across admin routes (security/route.ts, sso/route.ts, directory-sync/route.ts)
+- Auto-formatted 13 files with Prettier (pnpm format)
+- Verified FIXME #3 resolved: Rust `canonicalize_model()` handles dot-to-hyphen normalization
+- Verified FIXME #4 tool stream lifecycle: all paths emit started/completed/error correctly (9 error points, 0 silent exits)
+- Verified TOOLCHAIN Bug #1 (requestId camelCase) confirmed fixed
+- Verified TOOLCHAIN Bug #2 (tilde expansion) confirmed fixed + unit test added
+- Verified H8 (CSRF anon session regeneration) appears fixed via `getOrCreateAnonSession()` + cookie
+- Verified H10 (credit double-spend) appears fixed via `SELECT ... FOR UPDATE` + idempotency keys
+- Confirmed remaining NEEDS_HUMAN: H9 (device poll legacy no-fingerprint path open at device/poll/route.ts:97-103)
+
+## Previously Fixed
 
 - Patched GPT-5 reasoning support detection mismatch:
   - `apps/desktop/src-tauri/src/core/llm/thinking.rs`
