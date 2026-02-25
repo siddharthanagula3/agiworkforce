@@ -630,62 +630,69 @@ impl AgentOrchestrator {
         let agent_id = self.spawn_agent(goal.clone()).await?;
 
         let max_attempts = 1200; // 1200 * 100ms = 120 seconds (matches frontend default)
-        for _ in 0..max_attempts {
+        let mut result = OrchestratorResult {
+            success: false,
+            summary: "Task execution timed out after 120 seconds.".to_string(),
+        };
+
+        'poll: for _ in 0..max_attempts {
             if let Some(status) = self.get_agent_status(&agent_id).await {
                 if status.status == AgentState::Completed {
-                    // Get execution context to extract actual results
-                    let agents = self.agents.lock().await;
-                    if let Some(agent) = agents.get(&agent_id) {
-                        if let Some(goal_context) = agent.core.get_goal_status(&goal.id) {
-                            // Build a comprehensive summary from tool results and context
-                            let mut summary_parts = Vec::new();
-
-                            // Add successful tool results
-                            for tool_result in &goal_context.tool_results {
-                                if tool_result.success {
-                                    if let Some(result_str) = tool_result.result.as_str() {
-                                        if !result_str.is_empty() {
-                                            summary_parts.push(result_str.to_string());
+                    // Build summary from tool results — drop the lock before breaking
+                    let summary = {
+                        let agents = self.agents.lock().await;
+                        if let Some(agent) = agents.get(&agent_id) {
+                            if let Some(goal_context) = agent.core.get_goal_status(&goal.id) {
+                                let mut summary_parts = Vec::new();
+                                for tool_result in &goal_context.tool_results {
+                                    if tool_result.success {
+                                        if let Some(result_str) = tool_result.result.as_str() {
+                                            if !result_str.is_empty() {
+                                                summary_parts.push(result_str.to_string());
+                                            }
+                                        } else {
+                                            summary_parts.push(format!(
+                                                "Completed: {}",
+                                                tool_result.tool_id
+                                            ));
                                         }
-                                    } else {
-                                        summary_parts
-                                            .push(format!("Completed: {}", tool_result.tool_id));
                                     }
                                 }
-                            }
-
-                            let summary = if summary_parts.is_empty() {
-                                "Task completed successfully.".to_string()
+                                if summary_parts.is_empty() {
+                                    "Task completed successfully.".to_string()
+                                } else {
+                                    summary_parts.join("\n\n")
+                                }
                             } else {
-                                summary_parts.join("\n\n")
-                            };
-
-                            return Ok(OrchestratorResult {
-                                success: true,
-                                summary,
-                            });
+                                "Task completed successfully.".to_string()
+                            }
+                        } else {
+                            "Task completed successfully.".to_string()
                         }
-                    }
-
-                    return Ok(OrchestratorResult {
+                        // MutexGuard dropped here — safe to remove agent below
+                    };
+                    result = OrchestratorResult {
                         success: true,
-                        summary: "Task completed successfully.".to_string(),
-                    });
+                        summary,
+                    };
+                    break 'poll;
                 }
                 if status.status == AgentState::Failed {
-                    return Ok(OrchestratorResult {
+                    result = OrchestratorResult {
                         success: false,
                         summary: format!("Task failed: {}", status.error.unwrap_or_default()),
-                    });
+                    };
+                    break 'poll;
                 }
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 
-        Ok(OrchestratorResult {
-            success: false,
-            summary: "Task execution timed out after 120 seconds.".to_string(),
-        })
+        // Always remove the agent from the pool so the capacity slot is freed,
+        // regardless of whether it completed, failed, or timed out.
+        self.agents.lock().await.remove(&agent_id);
+
+        Ok(result)
     }
 }
 
