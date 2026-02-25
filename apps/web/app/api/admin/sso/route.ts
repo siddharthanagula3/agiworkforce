@@ -130,7 +130,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const { userId, error: authError } = await verifyAuth(request);
   if (!userId) {
     logger.warn({ error: authError }, 'Unauthorized SSO list attempt');
-    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let supabase: SupabaseClient;
@@ -207,6 +207,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ connections: (data ?? []) as SSOConnection[] });
   } catch (error) {
     logger.error({ error, userId }, 'Unexpected error in SSO GET');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -231,7 +234,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const { userId, error: authError } = await verifyAuth(request);
   if (!userId) {
     logger.warn({ error: authError }, 'Unauthorized SSO create attempt');
-    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let body: CreateSSOConnectionBody;
@@ -351,6 +354,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ connection: data as SSOConnection }, { status: 201 });
   } catch (error) {
     logger.error({ error, userId, organization_id }, 'Unexpected error in SSO POST');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -377,7 +383,7 @@ export async function DELETE(request: NextRequest): Promise<Response> {
   const { userId, error: authError } = await verifyAuth(request);
   if (!userId) {
     logger.warn({ error: authError }, 'Unauthorized SSO delete attempt');
-    return NextResponse.json({ error: authError ?? 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -488,6 +494,9 @@ export async function DELETE(request: NextRequest): Promise<Response> {
     });
   } catch (error) {
     logger.error({ error, userId, connectionId }, 'Unexpected error in SSO DELETE');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

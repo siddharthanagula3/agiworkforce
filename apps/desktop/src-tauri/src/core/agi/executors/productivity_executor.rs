@@ -737,7 +737,10 @@ mod tests {
         assert!(names.contains(&"productivity_create_task"));
         assert!(names.contains(&"document_read"));
         assert!(names.contains(&"document_search"));
-        assert_eq!(names.len(), 3);
+        assert!(names.contains(&"document_create_word"));
+        assert!(names.contains(&"document_create_pdf"));
+        assert!(names.contains(&"document_create_excel"));
+        assert_eq!(names.len(), 6);
     }
 
     #[test]
@@ -753,7 +756,7 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let executor = ProductivityExecutor::default();
-        assert_eq!(executor.tool_names().len(), 3);
+        assert_eq!(executor.tool_names().len(), 6);
     }
 
     #[test]

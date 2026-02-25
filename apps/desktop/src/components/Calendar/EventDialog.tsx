@@ -130,16 +130,14 @@ export function EventDialog({
   const handleDelete = async () => {
     if (!existingEvent || !onDelete) return;
 
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      setLoading(true);
-      try {
-        await onDelete(existingEvent.id);
-        onOpenChange(false);
-      } catch (error) {
-        console.error('Failed to delete event:', error);
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    try {
+      await onDelete(existingEvent.id);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+    } finally {
+      setLoading(false);
     }
   };
 

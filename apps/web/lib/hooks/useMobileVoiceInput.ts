@@ -75,9 +75,10 @@ export function useMobileVoiceInput({
           body: formData,
         });
 
-        const payload = (await response.json().catch(() => null)) as
-          | { text?: string; error?: { message?: string } }
-          | null;
+        const payload = (await response.json().catch(() => null)) as {
+          text?: string;
+          error?: { message?: string };
+        } | null;
 
         if (!response.ok) {
           throw new Error(payload?.error?.message || 'Transcription failed');
