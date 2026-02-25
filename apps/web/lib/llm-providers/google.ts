@@ -91,6 +91,12 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
       // since Gemini validates the name matches a prior functionCall part.
       const functionName =
         (msg.tool_call_id && toolCallIdToName.get(msg.tool_call_id)) || 'unknown_tool';
+      if (functionName === 'unknown_tool') {
+        logger.warn(
+          { tool_call_id: msg.tool_call_id },
+          'Could not resolve function name for tool_call_id; falling back to "unknown_tool" which Gemini may reject',
+        );
+      }
 
       const functionResponse = {
         role: 'user',

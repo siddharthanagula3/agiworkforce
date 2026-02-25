@@ -169,7 +169,7 @@ export function getOrCreateAnonSession(request: Request): { id: string; newCooki
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    newCookie: `anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`,
+    newCookie: `anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
 }
 
