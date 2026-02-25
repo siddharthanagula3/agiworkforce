@@ -69,10 +69,11 @@ export function formatRelativeTime(date: string | number | Date): string {
   const now = Date.now();
   const then = new Date(date).getTime();
   const diffMs = then - now;
+  // Derive each unit independently from diffMs to avoid compounding rounding errors.
   const diffSecs = Math.round(diffMs / 1000);
-  const diffMins = Math.round(diffSecs / 60);
-  const diffHours = Math.round(diffMins / 60);
-  const diffDays = Math.round(diffHours / 24);
+  const diffMins = Math.round(diffMs / 60_000);
+  const diffHours = Math.round(diffMs / 3_600_000);
+  const diffDays = Math.round(diffMs / 86_400_000);
 
   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
@@ -142,6 +143,7 @@ export function formatNumber(num: number, options?: Intl.NumberFormatOptions): s
  */
 export function formatBytes(bytes: number, decimals = 2): string {
   if (bytes === 0) return '0 Bytes';
+  if (bytes < 0) return `-${formatBytes(-bytes, decimals)}`;
 
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;

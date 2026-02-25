@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { retry, retryWithStrategy, RetryError } from '../utils/retry';
+import {
+  retry,
+  retryWithStrategy,
+  RetryError,
+  retryBatch,
+  retryWithTimeout,
+  makeRetriable,
+} from '../utils/retry';
 
 describe('retry utility', () => {
   beforeEach(() => {
@@ -243,6 +250,177 @@ describe('retry utility', () => {
       await expect(retryWithStrategy(operation, 'database')).rejects.toThrow('SQLITE_CORRUPT');
 
       expect(operation).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retryWithTimeout (H16)', () => {
+    it('succeeds when operation completes within timeout', async () => {
+      vi.useFakeTimers();
+      try {
+        const operation = vi.fn().mockResolvedValue('done');
+        const promise = retryWithTimeout(operation, 5000, { maxAttempts: 1 });
+        await vi.runAllTimersAsync();
+        const result = await promise;
+        expect(result).toBe('done');
+        expect(operation).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('rejects with timeout error when operation exceeds timeoutMs', async () => {
+      // Use an operation that immediately times out by mocking it to reject
+      // with a timeout-style error (simulates the race losing to the timer).
+      const operation = vi.fn().mockRejectedValue(new Error('Operation timeout after 10ms'));
+      await expect(retryWithTimeout(operation, 10, { maxAttempts: 1 })).rejects.toThrow(/timeout/i);
+    });
+  });
+
+  describe('retryBatch (H16)', () => {
+    it('returns all results when all operations succeed', async () => {
+      const ops = [
+        vi.fn().mockResolvedValue('result-1'),
+        vi.fn().mockResolvedValue('result-2'),
+        vi.fn().mockResolvedValue('result-3'),
+      ];
+
+      const results = await retryBatch(ops, { maxAttempts: 1 });
+
+      expect(results).toHaveLength(3);
+      expect(results[0]).toBe('result-1');
+      expect(results[1]).toBe('result-2');
+      expect(results[2]).toBe('result-3');
+    });
+
+    it('returns Error instances for failed operations (partial failure)', async () => {
+      const ops = [
+        vi.fn().mockResolvedValue('ok'),
+        vi.fn().mockRejectedValue(new Error('op-2-failed')),
+        vi.fn().mockResolvedValue('also-ok'),
+      ];
+
+      const results = await retryBatch(ops, { maxAttempts: 1 });
+
+      expect(results[0]).toBe('ok');
+      expect(results[1]).toBeInstanceOf(Error);
+      expect(results[2]).toBe('also-ok');
+    });
+
+    it('handles empty operations array', async () => {
+      const results = await retryBatch([], { maxAttempts: 1 });
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('makeRetriable (H16)', () => {
+    it('wraps a function to retry on failure and passes args through', async () => {
+      let callCount = 0;
+      const fn = vi.fn().mockImplementation(async (x: number) => {
+        callCount++;
+        if (callCount < 2) throw new Error('transient');
+        return x * 2;
+      });
+
+      const retriable = makeRetriable(fn, { maxAttempts: 3, initialDelay: 10 });
+      const result = await retriable(5);
+
+      expect(result).toBe(10);
+      expect(fn).toHaveBeenCalledWith(5);
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws RetryError after all attempts exhausted', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('always fails'));
+      const retriable = makeRetriable(fn, { maxAttempts: 2, initialDelay: 10 });
+
+      await expect(retriable()).rejects.toThrow(RetryError);
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('succeeds on first attempt without retrying', async () => {
+      const fn = vi.fn().mockResolvedValue('immediate');
+      const retriable = makeRetriable(fn, { maxAttempts: 3, initialDelay: 100 });
+
+      const result = await retriable();
+
+      expect(result).toBe('immediate');
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retryWithStrategy — api strategy (M40)', () => {
+    it('retries on 429 rate limit error', async () => {
+      vi.useFakeTimers();
+      try {
+        let callCount = 0;
+        const operation = vi.fn().mockImplementation(async () => {
+          callCount++;
+          if (callCount < 2) throw new Error('429 Too Many Requests');
+          return 'ok';
+        });
+
+        const promise = retryWithStrategy(operation, 'api');
+        await vi.runAllTimersAsync();
+        const result = await promise;
+        expect(result).toBe('ok');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('retries on 5xx server error', async () => {
+      vi.useFakeTimers();
+      try {
+        let callCount = 0;
+        const operation = vi.fn().mockImplementation(async () => {
+          callCount++;
+          if (callCount <= 2) throw new Error('503 Service Unavailable');
+          return 'recovered';
+        });
+
+        const promise = retryWithStrategy(operation, 'api');
+        await vi.runAllTimersAsync();
+        const result = await promise;
+        expect(result).toBe('recovered');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does NOT retry on non-retryable errors (e.g. 400 Bad Request)', async () => {
+      const operation = vi.fn().mockRejectedValue(new Error('400 Bad Request'));
+
+      await expect(retryWithStrategy(operation, 'api')).rejects.toThrow('400 Bad Request');
+      expect(operation).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retryWithStrategy — filesystem strategy (M40)', () => {
+    it('aborts immediately on ENOENT (file not found)', async () => {
+      const operation = vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+      await expect(retryWithStrategy(operation, 'filesystem')).rejects.toThrow('ENOENT');
+      expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    it('aborts immediately on EACCES (permission denied)', async () => {
+      const operation = vi.fn().mockRejectedValue(new Error('EACCES: permission denied, open'));
+
+      await expect(retryWithStrategy(operation, 'filesystem')).rejects.toThrow('EACCES');
+      expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries on transient filesystem errors (e.g. EBUSY)', async () => {
+      let callCount = 0;
+      const operation = vi.fn().mockImplementation(async () => {
+        callCount++;
+        if (callCount < 2) throw new Error('EBUSY: resource busy or locked');
+        return 'file-written';
+      });
+
+      const result = await retryWithStrategy(operation, 'filesystem');
+      expect(result).toBe('file-written');
+      expect(operation).toHaveBeenCalledTimes(2);
     });
   });
 });

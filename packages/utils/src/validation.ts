@@ -137,7 +137,11 @@ export function validateFilePath(path: string): ValidationResult {
   const blockedUnixPaths = ['/etc', '/sys', '/proc', '/dev', '/boot', '/root'];
 
   for (const blocked of blockedUnixPaths) {
-    if (path.startsWith(blocked)) {
+    // Use case-insensitive exact match or prefix+separator to avoid false positives (e.g. /etc_config)
+    if (
+      path.toLowerCase() === blocked.toLowerCase() ||
+      path.toLowerCase().startsWith(blocked.toLowerCase() + '/')
+    ) {
       return { valid: false, error: `Access to system directory ${blocked} is not allowed` };
     }
   }
@@ -307,16 +311,11 @@ export function validateSqlQuery(query: string): ValidationResult {
  * ```
  */
 export function sanitizeCommandArgs(args: string[]): string[] {
-  const dangerousChars = ['|', '&', ';', '>', '<', '`', '$', '(', ')', '\n', '\r'];
-
-  return args.map((arg) => {
-    let sanitized = arg;
-    for (const char of dangerousChars) {
-      // Use replace with global regex for ES2020 compatibility
-      sanitized = sanitized.replace(new RegExp(`\\${char}`, 'g'), '');
-    }
-    return sanitized;
-  });
+  // Strip shell metacharacters via a single denylist regex.
+  // Covers: pipe, background/and, command separator, redirects, backtick, variable
+  // expansion, subshell, newlines, history expansion, tilde, backslash, brace
+  // expansion, and glob wildcards.
+  return args.map((arg) => arg.replace(/[|&;<>`$()\n\r!~\\{}*?[\]]/g, ''));
 }
 
 /**

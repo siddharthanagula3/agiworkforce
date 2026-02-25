@@ -37,11 +37,14 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 
   try {
     const supabase = await createSupabaseServerClient();
+    // Use getUser() for server-side JWT validation — getSession() reads from
+    // the cookie without server verification and must not be trusted for auth.
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!user || userError) {
       throw createError.unauthorized('Please sign in to continue');
     }
 
@@ -95,16 +98,16 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
         .from('device_authorization_codes')
         .update({
           status: 'denied',
-          user_id: session.user.id,
+          user_id: user.id,
           denied_at: nowIso,
           updated_at: nowIso,
           // Ensure no tokens remain
           access_token: null,
           refresh_token: null,
-          user_email: session.user.email ?? null,
+          user_email: user.email ?? null,
           user_name:
-            (session.user.user_metadata?.['full_name'] as string | undefined) ||
-            session.user.email?.split('@')[0] ||
+            (user.user_metadata?.['full_name'] as string | undefined) ||
+            user.email?.split('@')[0] ||
             null,
         })
         .eq('device_id', record.device_id)
@@ -123,8 +126,13 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     }
 
     // Approve: store the current session tokens (encrypted) for the device to retrieve exactly once.
-    const accessToken = session.access_token;
-    const refreshToken = session.refresh_token;
+    // Identity was already verified via getUser() above; getSession() is used only to retrieve
+    // the raw token strings that the device needs to authenticate.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    const refreshToken = session?.refresh_token;
 
     if (!accessToken || !refreshToken) {
       throw createError.internal('Missing session tokens');
@@ -134,17 +142,15 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     const encryptedAccessToken = encryptToken(accessToken);
     const encryptedRefreshToken = encryptToken(refreshToken);
 
-    const userEmail = session.user.email ?? null;
+    const userEmail = user.email ?? null;
     const userName =
-      (session.user.user_metadata?.['full_name'] as string | undefined) ||
-      userEmail?.split('@')[0] ||
-      null;
+      (user.user_metadata?.['full_name'] as string | undefined) || userEmail?.split('@')[0] || null;
 
     const { error: updateError, data: updated } = await admin
       .from('device_authorization_codes')
       .update({
         status: 'approved',
-        user_id: session.user.id,
+        user_id: user.id,
         user_email: userEmail,
         user_name: userName,
         access_token: encryptedAccessToken,

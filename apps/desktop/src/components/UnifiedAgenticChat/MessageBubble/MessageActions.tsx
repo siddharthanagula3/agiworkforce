@@ -14,7 +14,9 @@ import {
   Edit2,
   RotateCw,
   SmilePlus,
+  Square,
   Trash2,
+  Volume2,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { MessageReaction } from '../../../stores/unifiedChatStore';
@@ -44,10 +46,13 @@ export interface MessageActionsProps {
   onRetry?: () => void;
   onStartEdit?: () => void;
   onDelete?: () => void;
+  onSpeak?: () => void;
 
   // Conditional rendering
   canEdit: boolean;
   canRegenerate: boolean;
+  isSpeaking?: boolean;
+  ttsSupported?: boolean;
 }
 
 const MessageActionsComponent: React.FC<MessageActionsProps> = ({
@@ -69,8 +74,11 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
   onRetry,
   onStartEdit,
   onDelete,
+  onSpeak,
   canEdit,
   canRegenerate,
+  isSpeaking,
+  ttsSupported,
 }) => {
   return (
     <div
@@ -93,6 +101,27 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
         )}
       </button>
+
+      {/* Speak button — assistant only, requires browser TTS */}
+      {isAssistant && ttsSupported && onSpeak && (
+        <button
+          onClick={onSpeak}
+          className={cn(
+            'p-1.5 rounded transition-colors',
+            isSpeaking
+              ? 'bg-teal-500/20 text-teal-400 hover:bg-teal-500/30'
+              : 'hover:bg-zinc-200 dark:hover:bg-zinc-700',
+          )}
+          title={isSpeaking ? 'Stop speaking' : 'Read aloud'}
+          aria-label={isSpeaking ? 'Stop reading aloud' : 'Read message aloud'}
+        >
+          {isSpeaking ? (
+            <Square size={14} className="text-teal-400" />
+          ) : (
+            <Volume2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+          )}
+        </button>
+      )}
 
       {/* Bookmark button */}
       <button

@@ -339,6 +339,15 @@ function mapMessagesToAnthropic(
         j++;
       }
       if (toolResults.length > 0) {
+        // Re-evaluate whether this batch is the last in the conversation.
+        // isLast was computed before the inner while-loop, so it can be wrong
+        // when a conversation ends with tool-result messages.
+        const batchIsLast = j === messages.length;
+        if (batchIsLast && usePromptCache && toolResults.length > 0) {
+          // Apply cache_control to the last tool_result block in the batch
+          const lastResult = toolResults[toolResults.length - 1]!;
+          (lastResult as Record<string, unknown>).cache_control = { type: 'ephemeral' };
+        }
         result.push({
           role: 'user',
           content: toolResults,
@@ -368,7 +377,7 @@ function mapMessagesToAnthropic(
           input: tc.function?.arguments
             ? (() => {
                 try {
-                  return JSON.parse(tc.function!.arguments!);
+                  return JSON.parse(tc.function.arguments as string);
                 } catch {
                   return {};
                 }

@@ -71,6 +71,7 @@ pub struct DeviceLinkRequest {
     pub device_id: String,
     pub device_name: Option<String>,
     pub device_type: Option<String>,
+    pub device_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +86,7 @@ pub struct DeviceLinkResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DevicePollRequest {
     pub device_id: String,
+    pub device_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,11 +162,31 @@ pub struct PlanInfo {
     pub current_period_end: Option<u64>,
 }
 
+/// Generate a stable device fingerprint by hashing the device_id together with
+/// machine-stable environment signals.  The result is a lowercase hex SHA-256 digest
+/// (64 characters) that is deterministic for the same machine + device_id combination.
+fn generate_device_fingerprint(device_id: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(device_id.as_bytes());
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "unknown-host".to_string());
+    let username = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown-user".to_string());
+    hasher.update(hostname.as_bytes());
+    hasher.update(username.as_bytes());
+    hasher.update(b"agi-workforce-device-v1");
+    hex::encode(hasher.finalize())
+}
+
 #[tauri::command]
 pub async fn device_link_initiate(
-    request: DeviceLinkRequest,
+    mut request: DeviceLinkRequest,
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
+    request.device_fingerprint = Some(generate_device_fingerprint(&request.device_id));
     let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/link", api_base);
@@ -198,9 +220,10 @@ pub async fn device_link_initiate(
 
 #[tauri::command]
 pub async fn device_link_poll(
-    request: DevicePollRequest,
+    mut request: DevicePollRequest,
     state: State<'_, ApiState>,
 ) -> Result<DevicePollResponse, String> {
+    request.device_fingerprint = Some(generate_device_fingerprint(&request.device_id));
     let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/poll", api_base);

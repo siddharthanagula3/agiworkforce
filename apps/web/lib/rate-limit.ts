@@ -269,8 +269,7 @@ function inMemoryRateLimit(
   windowMs: number,
 ): { success: boolean; remaining: number; reset: number } {
   const now = Date.now();
-  const key = id;
-  const entry = inMemoryStore.get(key);
+  const entry = inMemoryStore.get(id);
 
   // Perform periodic cleanup (deterministic, time-based instead of random)
   if (now - lastCleanupTime > IN_MEMORY_CLEANUP_INTERVAL_MS) {
@@ -280,7 +279,7 @@ function inMemoryRateLimit(
   if (!entry || entry.resetTime < now) {
     // First request or window expired
     const resetTime = now + windowMs;
-    inMemoryStore.set(key, { count: 1, resetTime });
+    inMemoryStore.set(id, { count: 1, resetTime });
     return { success: true, remaining: limit - 1, reset: resetTime };
   }
 
@@ -351,15 +350,13 @@ function getRateLimitIdentifier(request: NextRequest, identifier?: string): stri
     return identifier;
   }
 
-  // Try to get user ID from headers (set by middleware)
-  const userId = request.headers.get('x-user-id');
-  if (userId) {
-    return `user:${userId}`;
-  }
+  // NOTE: x-user-id header is not trusted as it can be forged by clients.
+  // User-specific rate limiting requires passing the validated user ID as the
+  // explicit identifier parameter (obtained from supabase.auth.getUser() in the handler).
 
   // Fallback to IP address
   const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0] ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
     'unknown';
   return `ip:${ip}`;

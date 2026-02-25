@@ -91,6 +91,8 @@
         { "path": "$HOME/.kube/**" },
         { "path": "$HOME/.config/gcloud/**" },
         { "path": "$HOME/Library/Keychains/**" },
+        { "path": "/etc/passwd" },
+        { "path": "/etc/shadow" },
         { "path": "$HOME/.docker/**" },
         { "path": "$HOME/.npmrc" },
         { "path": "$HOME/.pypirc" },
@@ -146,6 +148,9 @@
         { "path": "$HOME/.gnupg/**" },
         { "path": "$HOME/.kube/**" },
         { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/Library/Keychains/**" },
+        { "path": "/etc/passwd" },
+        { "path": "/etc/shadow" },
         { "path": "$HOME/.docker/**" },
         { "path": "$HOME/.npmrc" },
         { "path": "$HOME/.pypirc" },
@@ -157,7 +162,35 @@
         { "path": "$HOME/.config/stripe/**" }
       ]
     },
-    "fs:allow-read-text-file-lines-next",
+    {
+      "identifier": "fs:allow-read-text-file-lines-next",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPCONFIG/**" }
+      ],
+      "deny": [
+        { "path": "$HOME/.ssh/**" },
+        { "path": "$HOME/.aws/**" },
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/Library/Keychains/**" },
+        { "path": "/etc/passwd" },
+        { "path": "/etc/shadow" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" }
+      ]
+    },
     {
       "identifier": "fs:allow-write-file",
       "allow": [

@@ -333,8 +333,8 @@ export class SubscriptionService {
           expand: ['data.items.data.price'],
         });
 
-        // Find the most recent valid subscription
-        const validStatusSet = new Set(['active', 'trialing', 'past_due']);
+        // Find the most recent valid subscription (past_due excluded — payment has failed)
+        const validStatusSet = new Set(['active', 'trialing']);
         stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) || null;
       }
 

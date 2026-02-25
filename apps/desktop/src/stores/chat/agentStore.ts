@@ -53,6 +53,27 @@ export interface BackgroundTask {
   error?: string;
 }
 
+/** Number of milliseconds in 24 hours — used for stale background task eviction. */
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;
+
+/** Maximum number of background tasks retained in the store. */
+const BACKGROUND_TASKS_LIMIT = 100;
+
+/**
+ * Removes background tasks that completed or failed more than 24 hours ago.
+ * Pure function — does not mutate the input array.
+ */
+function evictStaleBackgroundTasks(tasks: BackgroundTask[]): BackgroundTask[] {
+  const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
+  return tasks.filter((t) => {
+    if (t.status !== 'completed' && t.status !== 'failed') {
+      return true;
+    }
+    const completedTime = t.completedAt?.getTime() ?? t.createdAt.getTime();
+    return completedTime > cutoff;
+  });
+}
+
 export interface ActionTrailEntry {
   id: string;
   type: 'thinking' | 'searching' | 'coding' | 'running' | 'completed' | 'error';
@@ -180,20 +201,10 @@ export const useAgentStore = create<AgentState>()(
                 return;
               }
               state.backgroundTasks.push({ ...task, createdAt: new Date() });
-              // AUDIT-006-015 fix: Cap backgroundTasks at 100 and auto-remove completed tasks older than 24h
-              const now = Date.now();
-              const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
-              state.backgroundTasks = state.backgroundTasks.filter((t) => {
-                // Keep if not completed/failed, or if completed/failed within last 24h
-                if (t.status !== 'completed' && t.status !== 'failed') {
-                  return true;
-                }
-                const completedTime = t.completedAt?.getTime() ?? t.createdAt.getTime();
-                return completedTime > twentyFourHoursAgo;
-              });
-              // After filtering old completed, cap at 100
-              if (state.backgroundTasks.length > 100) {
-                state.backgroundTasks = state.backgroundTasks.slice(-100);
+              // Evict stale completed/failed tasks, then cap total count
+              state.backgroundTasks = evictStaleBackgroundTasks(state.backgroundTasks);
+              if (state.backgroundTasks.length > BACKGROUND_TASKS_LIMIT) {
+                state.backgroundTasks = state.backgroundTasks.slice(-BACKGROUND_TASKS_LIMIT);
               }
             },
             undefined,
@@ -315,12 +326,12 @@ export const useAgentStore = create<AgentState>()(
 
         // Reset
         resetOnLogout: () => {
-          // Clean up fade timers before resetting
-          const currentFadeTimers = get().fadeTimers;
-          currentFadeTimers.forEach((timerId) => clearTimeout(timerId));
-
           set(
             (state) => {
+              // Clear timers inside the set() callback to avoid a race where a concurrent
+              // addActionTrailEntry() call adds a new timer between the get() read and the
+              // set() commit, which would leak the timer.
+              state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
               state.agents = [];
               state.agentStatus = null;
               state.backgroundTasks = [];

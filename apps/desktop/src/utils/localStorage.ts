@@ -399,3 +399,20 @@ export function cleanupStorage(keysToClean: string[], targetFreeBytes: number): 
 
   return freedBytes;
 }
+
+/**
+ * No-op Storage implementation used as a Zustand persist fallback in SSR and
+ * non-browser environments (Tauri IPC tests, Vitest JSDOM without localStorage).
+ *
+ * Shared here so chatStore and toolStore don't each define an identical copy.
+ */
+export const storageFallback: Storage = {
+  get length() {
+    return 0;
+  },
+  clear: () => undefined,
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
