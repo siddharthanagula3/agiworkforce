@@ -899,6 +899,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              aria-label="Message"
               placeholder={
                 isQueueMode
                   ? isSimpleMode
