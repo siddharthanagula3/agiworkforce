@@ -228,7 +228,7 @@ windows = { version = "0.56", features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 accessibility-sys = "0.1.2"
 core-foundation = "0.9"
-core-graphics = "0.24"
+core-graphics = "0.25"
 objc = "0.2"
 cocoa = "0.25"
 
