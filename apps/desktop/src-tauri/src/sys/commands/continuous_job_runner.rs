@@ -1460,8 +1460,7 @@ fn normalize_action_name(action: &str) -> String {
     action
         .trim()
         .to_ascii_lowercase()
-        .replace('-', "_")
-        .replace(' ', "_")
+        .replace(['-', ' '], "_")
 }
 
 fn extract_json_like_payload(response: &str) -> Result<String, String> {

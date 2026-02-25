@@ -67,7 +67,7 @@ impl OllamaProvider {
         config: HttpClientConfig,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = create_http_client(&config)
-            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
+            .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
         Ok(Self {
             client,
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
