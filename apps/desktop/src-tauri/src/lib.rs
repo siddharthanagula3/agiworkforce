@@ -38,6 +38,16 @@ use std::sync::{Arc, Mutex};
 use tauri::{async_runtime, Manager};
 use tokio::sync::Mutex as TokioMutex;
 
+/// Returns `true` when this process already holds macOS Accessibility permission.
+/// Uses `AXIsProcessTrusted()` which **never prompts** — it only reads the TCC database.
+/// Call this before any API that would trigger the "control this computer" dialog.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn accessibility_is_trusted() -> bool {
+    use accessibility_sys::AXIsProcessTrusted;
+    unsafe { AXIsProcessTrusted() }
+}
+
 pub mod automation;
 pub mod core;
 pub mod data;
@@ -408,14 +418,40 @@ pub fn run() {
                 }
             }
 
-            match crate::automation::AutomationService::new() {
-                Ok(automation_service) => {
-                    app.manage(Some(std::sync::Arc::new(automation_service)));
-                    tracing::info!("Automation service initialized");
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to initialize automation service: {}. Automation features may be degraded.", e);
+            // On macOS, only initialize AutomationService when accessibility
+            // permission is already granted.  Calling AutomationService::new()
+            // without the grant triggers AXUIElementCreateSystemWide / CGEventTap
+            // which causes the OS to show the "would like to control this computer"
+            // dialog on every launch.
+            #[cfg(target_os = "macos")]
+            {
+                if accessibility_is_trusted() {
+                    match crate::automation::AutomationService::new() {
+                        Ok(automation_service) => {
+                            app.manage(Some(std::sync::Arc::new(automation_service)));
+                            tracing::info!("Automation service initialized");
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to initialize automation service: {}. Automation features may be degraded.", e);
+                            app.manage(None::<std::sync::Arc<crate::automation::AutomationService>>);
+                        }
+                    }
+                } else {
+                    tracing::info!("Accessibility permission not yet granted; AutomationService deferred until permission is obtained");
                     app.manage(None::<std::sync::Arc<crate::automation::AutomationService>>);
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                match crate::automation::AutomationService::new() {
+                    Ok(automation_service) => {
+                        app.manage(Some(std::sync::Arc::new(automation_service)));
+                        tracing::info!("Automation service initialized");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to initialize automation service: {}. Automation features may be degraded.", e);
+                        app.manage(None::<std::sync::Arc<crate::automation::AutomationService>>);
+                    }
                 }
             }
 
@@ -739,8 +775,25 @@ pub fn run() {
             }
 
             // Initialize global shortcuts (Option+Space, etc.)
-            if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
-                eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+            // On macOS, global shortcuts rely on CGEventTap which requires
+            // the Accessibility permission (kTCCServiceAccessibility).  Registering
+            // without the grant triggers the OS permission dialog on every launch.
+            // We defer registration until the user explicitly grants permission.
+            #[cfg(target_os = "macos")]
+            {
+                if accessibility_is_trusted() {
+                    if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
+                        eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+                    }
+                } else {
+                    tracing::info!("Accessibility permission not yet granted; global shortcuts deferred until permission is obtained");
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
+                    eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+                }
             }
 
             if let Some(window) = app.get_webview_window("main") {

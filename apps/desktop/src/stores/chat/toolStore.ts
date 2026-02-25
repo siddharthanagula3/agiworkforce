@@ -787,9 +787,6 @@ export const useToolStore = create<ToolState>()(
 
           // Reset
           resetOnLogout: () => {
-            const activeStreams = get().activeToolStreams;
-            activeStreams.clear();
-
             set(
               (state) => {
                 state.fileOperations = [];
