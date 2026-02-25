@@ -26,6 +26,9 @@ function getEncryptionKey(): Buffer {
     if (keyEnv.length !== 64) {
       throw new Error('DEVICE_TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
     }
+    if (!/^[0-9a-fA-F]{64}$/.test(keyEnv)) {
+      throw new Error('DEVICE_TOKEN_ENCRYPTION_KEY must contain only hexadecimal characters');
+    }
     return Buffer.from(keyEnv, 'hex');
   }
 

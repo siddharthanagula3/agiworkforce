@@ -32,9 +32,10 @@ impl SleepPrevention {
         }
 
         #[cfg(windows)]
+        // SAFETY: SetThreadExecutionState is a safe Win32 API that only affects the
+        // calling thread's execution state flags. It has no memory safety implications.
+        #[allow(unsafe_code)]
         {
-            // SAFETY: SetThreadExecutionState is a safe Win32 API that only affects the
-            // calling thread's execution state flags. It has no memory safety implications.
             use windows::Win32::System::Power::{
                 SetThreadExecutionState, ES_AWAYMODE_REQUIRED, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
             };
@@ -54,9 +55,10 @@ impl SleepPrevention {
 impl Drop for SleepPrevention {
     fn drop(&mut self) {
         #[cfg(windows)]
+        // SAFETY: Resetting the execution state back to ES_CONTINUOUS is safe --
+        // it just re-enables normal system idle behavior for the calling thread.
+        #[allow(unsafe_code)]
         {
-            // SAFETY: Resetting the execution state back to ES_CONTINUOUS is safe --
-            // it just re-enables normal system idle behavior for the calling thread.
             use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS};
             unsafe {
                 SetThreadExecutionState(ES_CONTINUOUS);

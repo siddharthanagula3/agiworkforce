@@ -87,20 +87,25 @@ function LoginForm() {
     setSsoLoading(true);
     setMessage(null);
 
-    const supabase = getSupabaseClient();
+    try {
+      const supabase = getSupabaseClient();
 
-    const { error } = await supabase.auth.signInWithSSO({
-      domain,
-      options: {
-        redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
-      },
-    });
+      const { error } = await supabase.auth.signInWithSSO({
+        domain,
+        options: {
+          redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        },
+      });
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
+      if (error) {
+        setMessage({ type: 'error', text: error.message });
+        setSsoLoading(false);
+      }
+      // On success the browser is redirected to the IdP — no further action needed here.
+    } catch {
+      setMessage({ type: 'error', text: 'Something went wrong. Please try again.' });
       setSsoLoading(false);
     }
-    // On success the browser is redirected to the IdP — no further action needed here.
   };
 
   const handleLogin = async (e: React.FormEvent) => {
