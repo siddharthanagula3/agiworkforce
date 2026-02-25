@@ -1067,14 +1067,18 @@ impl ChatToolResult {
         }
     }
 
-    /// Convert to a message content string for the LLM
+    /// Convert to a message content string for the LLM.
+    ///
+    /// Tool results can contain attacker-controlled content (file contents, terminal output,
+    /// web-page data). `escape_xml()` is applied to prevent XML/tag injection into the
+    /// structured prompt that wraps tool results.
     pub fn to_message_content(&self) -> String {
         if self.success {
-            self.content.clone()
+            super::escape_xml(&self.content)
         } else {
             format!(
                 "Error: {}",
-                self.error.as_deref().unwrap_or("Unknown error")
+                super::escape_xml(self.error.as_deref().unwrap_or("Unknown error"))
             )
         }
     }
