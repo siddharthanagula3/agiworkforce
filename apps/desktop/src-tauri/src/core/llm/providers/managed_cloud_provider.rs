@@ -13,7 +13,11 @@ use std::error::Error;
 use std::pin::Pin;
 
 pub struct ManagedCloudProvider {
+    /// HTTP client with a 300s overall timeout, used for non-streaming requests.
     client: Client,
+    /// HTTP client with no overall timeout, used for SSE streaming to avoid
+    /// premature disconnection during long-running agentic sessions.
+    streaming_client: Client,
 }
 
 fn managed_cloud_base_url() -> String {
@@ -48,8 +52,10 @@ impl Default for ManagedCloudProvider {
                 e
             );
             // Fallback to default client which cannot fail
+            let fallback = Client::new();
             Self {
-                client: Client::new(),
+                client: fallback.clone(),
+                streaming_client: fallback,
             }
         })
     }
@@ -130,12 +136,33 @@ impl ManagedCloudProvider {
     }
 
     /// Create a new provider with explicit proxy / CA certificate configuration.
+    ///
+    /// Builds two HTTP clients from the same config: one with the configured
+    /// overall timeout (used for non-streaming requests) and one with no overall
+    /// timeout (used for SSE streaming so that long-running agentic sessions are
+    /// not killed mid-stream). Both clients share the same proxy/CA/connect-timeout
+    /// settings.
     pub fn with_config(
         config: HttpClientConfig,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = create_http_client(&config)
             .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
-        Ok(Self { client })
+
+        // Streaming client: same proxy/CA settings but no overall timeout
+        // (connect timeout still applies so unreachable hosts fail fast)
+        let streaming_config = HttpClientConfig {
+            proxy_url: config.proxy_url.clone(),
+            ca_cert_path: config.ca_cert_path.clone(),
+            connect_timeout_secs: config.connect_timeout_secs,
+            read_timeout_secs: None,
+        };
+        let streaming_client = create_http_client(&streaming_config)
+            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
+
+        Ok(Self {
+            client,
+            streaming_client,
+        })
     }
 
     /// Transform tools from desktop's flat format to OpenAI's nested format
@@ -674,7 +701,7 @@ impl LLMProvider for ManagedCloudProvider {
         let transformed_request = self.transform_request(&streaming_request);
 
         let res = self
-            .client
+            .streaming_client
             .post(url)
             .bearer_auth(&token)
             .json(&transformed_request)

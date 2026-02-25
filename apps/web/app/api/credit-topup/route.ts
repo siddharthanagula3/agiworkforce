@@ -83,8 +83,14 @@ async function handleCreditTopup(request: NextRequest) {
 
   // Create or retrieve Stripe customer
   if (!customerId) {
+    // user.email may be undefined for phone/SSO/anonymous auth users
+    if (!user.email) {
+      throw createError.validation(
+        'An email address is required for billing. Please add an email to your account.',
+      );
+    }
     const customer = await stripe.customers.create({
-      email: user.email!,
+      email: user.email,
       metadata: {
         supabase_user_id: user.id,
       },

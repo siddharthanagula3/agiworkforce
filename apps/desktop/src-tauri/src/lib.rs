@@ -896,6 +896,7 @@ pub fn run() {
             crate::sys::commands::chat_handle_stop,
             crate::sys::commands::chat_compact_context,
             crate::sys::commands::chat::clear_local_database,
+            crate::sys::commands::search_chat_history,
 
 
             crate::sys::commands::checkpoint_create,
@@ -1982,6 +1983,10 @@ pub fn run() {
             crate::sys::commands::bg_get_task_status,
             crate::sys::commands::bg_list_tasks,
             crate::sys::commands::bg_get_task_stats,
+            // Frontend-facing aliases (used by useBackgroundTasks hook)
+            crate::sys::commands::background_task_list,
+            crate::sys::commands::background_task_cancel,
+            crate::sys::commands::background_task_status,
 
 
             crate::sys::commands::hooks_initialize,

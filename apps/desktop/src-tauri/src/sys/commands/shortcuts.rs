@@ -58,8 +58,8 @@ impl ShortcutsState {
             Shortcut {
                 id: "toggle_window".to_string(),
                 key: "CommandOrControl+Shift+Space".to_string(),
-                description: "Toggle main window".to_string(),
-                action: "toggle_window".to_string(),
+                description: "Quick Query — ask anything from any app".to_string(),
+                action: "quick_query".to_string(),
                 enabled: true,
                 is_global: true,
             },
@@ -148,6 +148,18 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
                                     tracing::error!("Failed to check window visibility: {}", e);
                                 }
                             }
+                        }
+                    }
+                    "quick_query" => {
+                        // Always show and focus the main window, then emit
+                        // `global-hotkey-triggered` so the frontend opens the
+                        // Quick Query overlay on top of it.
+                        if let Some(window) = _app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                        if let Err(e) = _app.emit("global-hotkey-triggered", "quick_query") {
+                            tracing::error!("Failed to emit global-hotkey-triggered: {}", e);
                         }
                     }
                     "floating_window" => {

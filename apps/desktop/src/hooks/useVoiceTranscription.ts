@@ -754,7 +754,6 @@ export function useVoiceTranscription(
  * Get a user-friendly error message for media errors
  */
 function getMediaErrorMessage(err: unknown): string {
-  // eslint-disable-next-line no-undef
   if (err instanceof DOMException) {
     switch (err.name) {
       case 'NotAllowedError':

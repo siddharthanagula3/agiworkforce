@@ -219,7 +219,7 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Rate limiting
-  const rateLimitResponse = await withRateLimit(request, 'default');
+  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
   // Authentication

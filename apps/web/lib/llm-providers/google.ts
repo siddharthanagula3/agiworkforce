@@ -86,11 +86,11 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
         responseContent = { result: msg.content };
       }
 
-      // Look up the actual function name from the tool_call_id
+      // Look up the actual function name from the tool_call_id.
+      // Fall back to 'unknown_tool' — never use the raw UUID as function name
+      // since Gemini validates the name matches a prior functionCall part.
       const functionName =
-        (msg.tool_call_id && toolCallIdToName.get(msg.tool_call_id)) ||
-        msg.tool_call_id ||
-        'unknown_tool';
+        (msg.tool_call_id && toolCallIdToName.get(msg.tool_call_id)) || 'unknown_tool';
 
       const functionResponse = {
         role: 'user',
@@ -169,11 +169,12 @@ export class GoogleProvider extends BaseLLMProvider {
   protected getHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
+      'x-goog-api-key': this.apiKey,
     };
   }
 
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
-    const url = `${this.baseUrl}/models/${request.model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${request.model}:generateContent`;
 
     // Convert messages format for Google Gemini (including tool call/result messages)
     const { contents, systemInstruction } = transformMessagesForGoogle(request.messages);
@@ -303,7 +304,7 @@ export class GoogleProvider extends BaseLLMProvider {
       const toolCalls = parts
         .filter((part: any) => part.functionCall)
         .map((part: any, idx: number) => ({
-          id: `call_${randomUUID().replace(/-/g, '').substring(0, 24)}`,
+          id: `call_${randomUUID().replace(/-/g, '')}`,
           type: 'function' as const,
           function: {
             name: part.functionCall.name,
@@ -353,7 +354,7 @@ export class GoogleProvider extends BaseLLMProvider {
 
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
     // IMPORTANT: alt=sse is required for streaming to work properly
-    const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?alt=sse`;
 
     // Convert messages format for Google Gemini (including tool call/result messages)
     const { contents, systemInstruction } = transformMessagesForGoogle(request.messages);
@@ -487,7 +488,7 @@ export class GoogleProvider extends BaseLLMProvider {
               hasTextContent = true; // Tool calls count as content
               const toolCalls = functionCallParts.map((part: any, idx: number) => ({
                 index: idx,
-                id: `call_${randomUUID().replace(/-/g, '').substring(0, 24)}`,
+                id: `call_${randomUUID().replace(/-/g, '')}`,
                 type: 'function',
                 function: {
                   name: part.functionCall.name,

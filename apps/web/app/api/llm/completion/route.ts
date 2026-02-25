@@ -175,6 +175,22 @@ function findCheaperFallbackModel(
 }
 
 /**
+ * Synthesize a deductResult shape from a balance for the credit-check failure path.
+ * Used when checkAvailable() returns false before any deductCredits() call.
+ */
+function buildCreditErrorFromBalance(balance: CreditBalance | null) {
+  if (balance?.daily_remaining_cents != null && balance.daily_remaining_cents === 0) {
+    return {
+      code: 'DAILY_CREDIT_LIMIT_REACHED',
+      daily_limit: balance.daily_limit_cents ?? 0,
+      daily_used: balance.daily_used_cents ?? 0,
+      daily_remaining: 0,
+    };
+  }
+  return { code: 'MONTHLY_CREDIT_LIMIT_REACHED' };
+}
+
+/**
  * Handle credit error and return appropriate response
  */
 function handleCreditError(
@@ -223,7 +239,7 @@ function handleCreditError(
 
 async function handleLLMCompletion(request: NextRequest) {
   // Rate limiting
-  const rateLimitResponse = await withRateLimit(request, 'default');
+  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
@@ -290,6 +306,8 @@ async function handleLLMCompletion(request: NextRequest) {
   }
 
   const llmRequest = validationResult.data;
+  // Normalize model name to lowercase to prevent case-variation bypass of tier checks
+  llmRequest.model = llmRequest.model.toLowerCase();
 
   // Check if user's subscription tier allows access to the requested model
   if (!checkModelTierAccess(llmRequest.model, subscription.plan_tier)) {
@@ -380,19 +398,11 @@ async function handleLLMCompletion(request: NextRequest) {
   if (!hasCredits) {
     const balance = await CreditService.getBalance(user.id);
 
-    // Try to deduct to get detailed error information
-    const deductResult = await CreditService.deductCredits(
-      user.id,
-      estimatedCostCents,
-      'Credit check',
-    );
-
     logger.warn(
       {
         userId: user.id,
         estimatedCostCents,
         balance,
-        deductResult,
         requestedModel: llmRequest.model,
         requestedProvider: provider,
       },
@@ -438,11 +448,11 @@ async function handleLLMCompletion(request: NextRequest) {
         estimatedCostCents = fallbackCostCents;
       } else {
         // Even fallback model is too expensive, return error
-        return handleCreditError(deductResult, balance);
+        return handleCreditError(buildCreditErrorFromBalance(balance), balance);
       }
     } else {
       // No cheaper alternative available, return error
-      return handleCreditError(deductResult, balance);
+      return handleCreditError(buildCreditErrorFromBalance(balance), balance);
     }
   }
 

@@ -167,6 +167,11 @@ export class OpenAIProvider extends BaseLLMProvider {
 
       const data = await response.json();
 
+      // Guard against empty choices (content-policy / filtered responses)
+      if (!data.choices || data.choices.length === 0) {
+        throw new Error(`OpenAI returned empty choices: ${JSON.stringify(data).substring(0, 200)}`);
+      }
+
       // Check for refusal in response (OpenAI safety system)
       const message = data.choices[0]?.message;
       if (message?.refusal) {

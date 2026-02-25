@@ -13,6 +13,7 @@ import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
+import { MemoryPanel } from '../MemoryPanel';
 import { toast } from 'sonner';
 
 // Lazy load MediaLab for code splitting
@@ -35,6 +36,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   >(undefined);
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
   const openArtifactPanel = useArtifactStore((state) => state.openPanel);
   const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const subscription = useBillingStore((state) => state.subscription);
@@ -230,6 +232,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         onOpenCustomInstructions={handleOpenCustomInstructions}
         onToggleArtifactPanel={handleToggleArtifactPanel}
         onToggleMediaLab={handleToggleMediaLab}
+        onOpenMemory={() => setIsMemoryPanelOpen(true)}
         canAccessMediaLab={canAccessMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
@@ -296,6 +299,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         conversationId={customInstructionsConversationId}
       />
 
+      {/* Memory Panel */}
+      <MemoryPanel isOpen={isMemoryPanelOpen} onClose={() => setIsMemoryPanelOpen(false)} />
+
       {/* Artifact Panel */}
       {isArtifactPanelOpen && (
         <div
@@ -328,6 +334,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
           </Suspense>
         </div>
       )}
+
+      {/* Memory Panel */}
+      <MemoryPanel isOpen={isMemoryPanelOpen} onClose={() => setIsMemoryPanelOpen(false)} />
 
       {/* MediaLab Panel */}
       {isMediaLabOpen && (

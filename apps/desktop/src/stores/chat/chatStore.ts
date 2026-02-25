@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
-import { safeGetJSON, safeSetJSON } from '../../utils/localStorage';
+import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
 import type {
   EnhancedMessage,
   ConversationSummary,
@@ -216,18 +216,6 @@ function generateTitleFromMessage(content: string): string {
 
 // Storage version for migrations
 const STORAGE_VERSION = 1;
-
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
 
 export interface ChatState {
   // Conversation management
@@ -815,11 +803,7 @@ export const useChatStore = create<ChatState>()(
                 };
                 applyConfirmation(state.messages);
 
-                if (
-                  convoId &&
-                  convoId === state.activeConversationId &&
-                  state.messagesByConversation[convoId]
-                ) {
+                if (convoId && state.messagesByConversation[convoId]) {
                   applyConfirmation(state.messagesByConversation[convoId]!);
                 }
               },
@@ -1071,7 +1055,12 @@ export const useChatStore = create<ChatState>()(
                   );
                 }
 
-                if (activeConversationId && state.messagesByConversation[activeConversationId]) {
+                if (activeConversationId) {
+                  // Initialize the key if absent — can happen for a newly created conversation
+                  // before any messages have been loaded into messagesByConversation.
+                  if (!state.messagesByConversation[activeConversationId]) {
+                    state.messagesByConversation[activeConversationId] = [];
+                  }
                   const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
                     (m) => m.id === currentStreamingMessageId,
                   );

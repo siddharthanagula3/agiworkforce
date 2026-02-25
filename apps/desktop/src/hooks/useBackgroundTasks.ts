@@ -186,7 +186,9 @@ export function useBackgroundTasks(
     setError(null);
 
     try {
-      const response = await invoke<BackendTaskResponse[]>('background_task_list');
+      const response = await invoke<BackendTaskResponse[]>('background_task_list', {
+        request: { status: null, priority: null, limit: null },
+      });
 
       if (!isMountedRef.current) return;
 

@@ -28,7 +28,9 @@ pub struct HttpClientConfig {
     pub connect_timeout_secs: u64,
 
     /// Overall request timeout in seconds (default: 300 / 5 minutes).
-    pub read_timeout_secs: u64,
+    /// Use `None` for streaming requests to avoid premature disconnection
+    /// during long-running SSE streams.
+    pub read_timeout_secs: Option<u64>,
 }
 
 impl Default for HttpClientConfig {
@@ -37,7 +39,7 @@ impl Default for HttpClientConfig {
             proxy_url: None,
             ca_cert_path: None,
             connect_timeout_secs: 30,
-            read_timeout_secs: 300,
+            read_timeout_secs: Some(300),
         }
     }
 }
@@ -52,8 +54,11 @@ impl Default for HttpClientConfig {
 /// - The underlying `reqwest::ClientBuilder::build()` call fails.
 pub fn create_http_client(config: &HttpClientConfig) -> Result<Client, String> {
     let mut builder = Client::builder()
-        .connect_timeout(Duration::from_secs(config.connect_timeout_secs))
-        .timeout(Duration::from_secs(config.read_timeout_secs));
+        .connect_timeout(Duration::from_secs(config.connect_timeout_secs));
+
+    if let Some(timeout_secs) = config.read_timeout_secs {
+        builder = builder.timeout(Duration::from_secs(timeout_secs));
+    }
 
     // Apply explicit proxy if configured.
     // Note: even without this, reqwest will honour HTTP_PROXY / HTTPS_PROXY

@@ -78,11 +78,19 @@ export interface ExecutionPreferences {
   enableTimeoutWarnings: boolean;
 }
 
+export interface GlobalHotkeyPreferences {
+  /** Whether the global hotkey is enabled */
+  enabled: boolean;
+  /** The key combo string, e.g. "CommandOrControl+Shift+Space" */
+  combo: string;
+}
+
 interface SettingsState {
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
   chatPreferences: ChatPreferences;
   executionPreferences: ExecutionPreferences;
+  globalHotkeyPreferences: GlobalHotkeyPreferences;
   allowedDirectories: string[];
   loading: boolean;
   error: string | null;
@@ -112,6 +120,9 @@ interface SettingsState {
   setAutoResumeOnRestart: (enabled: boolean) => void;
   setEnableTimeoutWarnings: (enabled: boolean) => void;
 
+  setGlobalHotkeyEnabled: (enabled: boolean) => void;
+  setGlobalHotkeyCombo: (combo: string) => void;
+
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
   setAllowedDirectories: (paths: string[]) => void;
@@ -130,6 +141,7 @@ const defaultSettings: Pick<
   | 'windowPreferences'
   | 'chatPreferences'
   | 'executionPreferences'
+  | 'globalHotkeyPreferences'
   | 'allowedDirectories'
 > = {
   llmConfig: {
@@ -170,6 +182,10 @@ const defaultSettings: Pick<
     autoResumeOnRestart: true,
     enableTimeoutWarnings: true,
   },
+  globalHotkeyPreferences: {
+    enabled: true, // Enabled by default — competitive parity with Claude Desktop / ChatGPT Desktop
+    combo: 'CommandOrControl+Shift+Space',
+  },
   allowedDirectories: [],
 };
 
@@ -201,7 +217,8 @@ const storageFallback: Storage = {
 // v4: Added executionPreferences for extended timeout support
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
 // v6: Added language preference
-const SETTINGS_STORE_VERSION = 8;
+// v9: Added globalHotkeyPreferences for system-wide Quick Query hotkey
+const SETTINGS_STORE_VERSION = 9;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -268,6 +285,26 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setEnableTimeoutWarnings',
+          );
+        },
+
+        setGlobalHotkeyEnabled: (enabled: boolean) => {
+          set(
+            (state) => ({
+              globalHotkeyPreferences: { ...state.globalHotkeyPreferences, enabled },
+            }),
+            undefined,
+            'settings/setGlobalHotkeyEnabled',
+          );
+        },
+
+        setGlobalHotkeyCombo: (combo: string) => {
+          set(
+            (state) => ({
+              globalHotkeyPreferences: { ...state.globalHotkeyPreferences, combo },
+            }),
+            undefined,
+            'settings/setGlobalHotkeyCombo',
           );
         },
 
@@ -736,6 +773,7 @@ export const useSettingsStore = create<SettingsState>()(
           },
           chatPreferences: state.chatPreferences,
           executionPreferences: state.executionPreferences,
+          globalHotkeyPreferences: state.globalHotkeyPreferences,
           allowedDirectories: state.allowedDirectories,
         }),
         merge: (persistedState, currentState) => {
@@ -782,6 +820,11 @@ export const useSettingsStore = create<SettingsState>()(
             ...(persisted?.executionPreferences ?? {}),
           };
 
+          const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
+            ...currentState.globalHotkeyPreferences,
+            ...(persisted?.globalHotkeyPreferences ?? {}),
+          };
+
           return {
             ...currentState,
             ...persisted,
@@ -789,6 +832,7 @@ export const useSettingsStore = create<SettingsState>()(
             windowPreferences: mergedWindowPreferences,
             chatPreferences: mergedChatPreferences,
             executionPreferences: mergedExecutionPreferences,
+            globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
             allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
           };
         },
@@ -884,6 +928,19 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
+          // Migration from v8 to v9: Add globalHotkeyPreferences
+          if (version < 9) {
+            const stateWithHotkey = state as Partial<SettingsState> & {
+              globalHotkeyPreferences?: Partial<GlobalHotkeyPreferences>;
+            };
+            if (!stateWithHotkey.globalHotkeyPreferences) {
+              stateWithHotkey.globalHotkeyPreferences = {
+                enabled: true,
+                combo: 'CommandOrControl+Shift+Space',
+              };
+            }
+          }
+
           return state as SettingsState;
         },
         // Called when rehydration finishes (with or without errors)
@@ -952,6 +1009,13 @@ export const selectAutoResumeOnRestart = (state: SettingsState) =>
   state.executionPreferences.autoResumeOnRestart;
 export const selectEnableTimeoutWarnings = (state: SettingsState) =>
   state.executionPreferences.enableTimeoutWarnings;
+
+export const selectGlobalHotkeyPreferences = (state: SettingsState) =>
+  state.globalHotkeyPreferences;
+export const selectGlobalHotkeyEnabled = (state: SettingsState) =>
+  state.globalHotkeyPreferences.enabled;
+export const selectGlobalHotkeyCombo = (state: SettingsState) =>
+  state.globalHotkeyPreferences.combo;
 
 export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
 export const selectSettingsLoading = (state: SettingsState) => state.loading;

@@ -572,13 +572,7 @@ export function classifyIntentLocally(
 
   // If no matches, default to chat
   if (scores.length === 0) {
-    return {
-      primary: 'chat',
-      confidence: 0.5,
-      keywords: [],
-      requiredCapabilities: [],
-      suggestedTools: [],
-    };
+    return DEFAULT_CHAT_INTENT;
   }
 
   const topResult = scores[0]!;
@@ -704,45 +698,64 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
     primary = 'music';
   }
 
-  // Fallback to local classification
+  // If text parsing found a specific intent (non-default), use it rather than
+  // discarding it in favour of local classification.
+  if (primary !== 'chat') {
+    return {
+      primary,
+      confidence: 0.6,
+      keywords: [],
+      requiredCapabilities: INTENT_CAPABILITIES[primary],
+      suggestedTools: INTENT_TOOLS[primary],
+    };
+  }
+
+  // Fallback to local classification for ambiguous messages
   const localResult = classifyIntentLocally(fallbackMessage, {
     tier: 'hobby',
     hasAttachments: false,
     attachmentTypes: [],
   });
 
-  return (
-    localResult || {
-      primary,
-      confidence: 0.6,
-      keywords: [],
-      requiredCapabilities: INTENT_CAPABILITIES[primary],
-      suggestedTools: INTENT_TOOLS[primary],
-    }
-  );
+  return localResult || DEFAULT_CHAT_INTENT;
 }
+
+/**
+ * All valid intent type values for O(1) lookup.
+ */
+const VALID_INTENT_TYPES = new Set<IntentType>([
+  'chat',
+  'coding',
+  'reasoning',
+  'agentic',
+  'multimodal',
+  'image-gen',
+  'video-gen',
+  'search',
+  'deep-research',
+  'tts',
+  'stt',
+  'music',
+]);
+
+/**
+ * Default chat intent returned when classification is uncertain.
+ */
+const DEFAULT_CHAT_INTENT: ClassifiedIntent = {
+  primary: 'chat',
+  confidence: 0.5,
+  keywords: [],
+  requiredCapabilities: [],
+  suggestedTools: [],
+};
 
 /**
  * Validate and normalize intent type
  */
 function validateIntentType(type: string): IntentType {
   const normalized = type.toLowerCase().trim();
-  const validTypes: IntentType[] = [
-    'chat',
-    'coding',
-    'reasoning',
-    'agentic',
-    'multimodal',
-    'image-gen',
-    'video-gen',
-    'search',
-    'deep-research',
-    'tts',
-    'stt',
-    'music',
-  ];
 
-  if (validTypes.includes(normalized as IntentType)) {
+  if (VALID_INTENT_TYPES.has(normalized as IntentType)) {
     return normalized as IntentType;
   }
 
@@ -787,15 +800,7 @@ export async function classifyIntent(
 
   // For Hobby tier, always use local classification
   if (options.tier === 'hobby') {
-    return (
-      localResult || {
-        primary: 'chat',
-        confidence: 0.5,
-        keywords: [],
-        requiredCapabilities: [],
-        suggestedTools: [],
-      }
-    );
+    return localResult || DEFAULT_CHAT_INTENT;
   }
 
   // For Pro+ tiers, use LLM if local confidence is low or LLM is available
@@ -815,15 +820,7 @@ export async function classifyIntent(
   }
 
   // Return local result or default
-  return (
-    localResult || {
-      primary: 'chat',
-      confidence: 0.5,
-      keywords: [],
-      requiredCapabilities: [],
-      suggestedTools: [],
-    }
-  );
+  return localResult || DEFAULT_CHAT_INTENT;
 }
 
 // ============================================

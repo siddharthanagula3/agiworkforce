@@ -82,8 +82,14 @@ function verifyWorkOSSignature(
     const signedPayload = `${timestamp}.${rawBody}`;
     const computedSig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
 
-    // Constant-time comparison to prevent timing attacks
-    return crypto.timingSafeEqual(Buffer.from(expectedSig, 'hex'), Buffer.from(computedSig, 'hex'));
+    // Constant-time comparison to prevent timing attacks.
+    // Explicit length check required before timingSafeEqual (which throws on length mismatch).
+    const expectedBuf = Buffer.from(expectedSig, 'hex');
+    const computedBuf = Buffer.from(computedSig, 'hex');
+    if (expectedBuf.length !== computedBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(expectedBuf, computedBuf);
   } catch (err) {
     logger.error({ error: err }, 'Error verifying WorkOS webhook signature');
     return false;
@@ -179,11 +185,13 @@ async function resolveOrganization(
 async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): Promise<void> {
   if (!supabaseAdmin) throw new Error('Supabase admin client not initialized');
 
-  const email = getPrimaryEmail(user);
-  if (!email) {
+  const rawEmail = getPrimaryEmail(user);
+  if (!rawEmail) {
     logger.error({ workosUserId: user.id }, 'SCIM user.created missing email — skipping');
     return;
   }
+  // Normalize to lowercase — email local parts are case-insensitive in practice (RFC 5321)
+  const email = rawEmail.toLowerCase();
 
   const displayName = buildDisplayName(user);
   const orgInfo = await resolveOrganization(user.directory_id);

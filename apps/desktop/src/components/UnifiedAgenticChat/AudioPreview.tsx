@@ -32,10 +32,9 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
-  // eslint-disable-next-line no-undef
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  // eslint-disable-next-line no-undef
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  // Stored as a ref because AudioContext is not rendered — avoids stale-closure lint warnings.
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize audio context and analyser for waveform visualization
   useEffect(() => {
@@ -69,7 +68,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
   // Set up audio analyser for visualization
   const setupAudioAnalyser = useCallback(() => {
-    if (!audioRef.current || audioContext) return;
+    if (!audioRef.current || audioContextRef.current) return;
 
     try {
       // Safari fallback for webkitAudioContext
@@ -87,12 +86,12 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
       source.connect(analyserNode);
       analyserNode.connect(ctx.destination);
 
-      setAudioContext(ctx);
+      audioContextRef.current = ctx;
       setAnalyser(analyserNode);
     } catch (err) {
       console.error('[AudioPreview] Failed to create audio analyser:', err);
     }
-  }, [audioContext]);
+  }, []);
 
   // Draw waveform visualization
   const drawWaveform = useCallback(() => {
@@ -197,7 +196,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     if (!audioRef.current) return;
 
     // Set up analyser on first play
-    if (!audioContext) {
+    if (!audioContextRef.current) {
       setupAudioAnalyser();
     }
 
@@ -207,7 +206,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
       audioRef.current.play().catch(console.error);
     }
     setIsPlaying(!isPlaying);
-  }, [isPlaying, audioContext, setupAudioAnalyser]);
+  }, [isPlaying, setupAudioAnalyser]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);

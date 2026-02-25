@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Info, X, XCircle } from 'lucide-react';
+import { isTauri } from '../lib/tauri-mock';
 
 const STATUS_URL: string =
   (typeof import.meta !== 'undefined' &&
@@ -65,6 +66,9 @@ function isExpired(message: StatusMessage): boolean {
 }
 
 async function fetchStatusMessages(): Promise<StatusMessage[]> {
+  // Only fetch in Tauri production builds. In dev mode (tauri dev) the Vite
+  // dev server origin triggers CORS; plain browser has no Tauri at all.
+  if (!isTauri || import.meta.env.DEV) return [];
   try {
     const response = await fetch(STATUS_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
