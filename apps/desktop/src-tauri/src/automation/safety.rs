@@ -125,6 +125,29 @@ impl ComputerUseSafety {
     }
 }
 
+/// Sanitizes tool output before forwarding to LLM context.
+/// Strips patterns that look like secrets to prevent prompt injection leaks.
+pub fn sanitize_tool_output(output: &str) -> String {
+    use once_cell::sync::Lazy;
+    use regex::Regex;
+
+    static SECRET_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
+        vec![
+            Regex::new(r"sk-[A-Za-z0-9_-]{32,}").unwrap(),
+            Regex::new(r"sk_live_[A-Za-z0-9]{24,}").unwrap(),
+            Regex::new(r"sk_test_[A-Za-z0-9]{24,}").unwrap(),
+            Regex::new(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}").unwrap(),
+            Regex::new(r"Bearer\s+[A-Za-z0-9_-]{20,}").unwrap(),
+        ]
+    });
+
+    let mut result = output.to_string();
+    for pattern in SECRET_PATTERNS.iter() {
+        result = pattern.replace_all(&result, "[REDACTED]").to_string();
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,5 +212,65 @@ mod tests {
                 text: "rm -rf /".to_string()
             }) >= 5
         );
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_redacts_openai_key() {
+        let input = "Found key: sk-abc123def456ghi789jkl012mno345pqr678";
+        let result = sanitize_tool_output(input);
+        assert_eq!(result, "Found key: [REDACTED]");
+        assert!(!result.contains("sk-abc123"));
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_redacts_stripe_live_key() {
+        // Construct dynamically so the full pattern never appears as a static literal.
+        let fake_key = format!("sk_live_{}", "abcdefghijklmnopqrstuvwx"); // gitleaks:allow
+        let input = format!("STRIPE_KEY={fake_key}");
+        let result = sanitize_tool_output(&input);
+        assert_eq!(result, "STRIPE_KEY=[REDACTED]");
+        assert!(!result.contains("sk_live_"));
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_redacts_stripe_test_key() {
+        // Construct dynamically so the full pattern never appears as a static literal.
+        let fake_key = format!("sk_test_{}", "abcdefghijklmnopqrstuvwx"); // gitleaks:allow
+        let input = format!("key: {fake_key}");
+        let result = sanitize_tool_output(&input);
+        assert_eq!(result, "key: [REDACTED]");
+        assert!(!result.contains("sk_test_"));
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_redacts_jwt() {
+        let input = "Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0";
+        let result = sanitize_tool_output(input);
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"));
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_redacts_bearer_token() {
+        let input = "Header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9abc";
+        let result = sanitize_tool_output(input);
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("Bearer eyJ"));
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_preserves_safe_text() {
+        let input = "Hello world, this is normal output with no secrets.";
+        let result = sanitize_tool_output(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_sanitize_tool_output_multiple_secrets() {
+        // Construct dynamically so the full patterns never appear as static literals.
+        let live_key = format!("sk_live_{}", "abcdefghijklmnopqrstuvwx"); // gitleaks:allow
+        let input = format!("key1=sk-abc123def456ghi789jkl012mno345pqr678 key2={live_key}");
+        let result = sanitize_tool_output(&input);
+        assert_eq!(result, "key1=[REDACTED] key2=[REDACTED]");
     }
 }

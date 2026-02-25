@@ -103,16 +103,40 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               return <li>{applyCitations(children)}</li>;
             },
             img({ src, alt }) {
-              if (src && !/^(https?:|data:image\/)/.test(src)) {
+              if (!src || !/^(https?:|data:image\/)/.test(src)) {
                 return null;
               }
+              const handleDownload = () => {
+                const link = document.createElement('a');
+                link.href = src;
+                link.download = alt || `image_${Date.now()}.png`;
+                link.click();
+              };
               return (
-                <img
-                  src={src}
-                  alt={alt || ''}
-                  loading="lazy"
-                  className="max-w-full h-auto rounded-lg"
-                />
+                <span className="group relative inline-block my-2 rounded-xl overflow-hidden shadow-lg border border-zinc-700/50 bg-zinc-900/50">
+                  <img
+                    src={src}
+                    alt={alt || 'Generated image'}
+                    loading="lazy"
+                    className="max-w-full h-auto block rounded-xl"
+                    style={{ maxHeight: '480px' }}
+                  />
+                  <span className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="inline-flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-2 py-1 text-xs text-white hover:bg-black/90 transition-colors"
+                      title="Download image"
+                    >
+                      ↓ Download
+                    </button>
+                  </span>
+                  {alt && (
+                    <span className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 text-xs text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {alt}
+                    </span>
+                  )}
+                </span>
               );
             },
           }}

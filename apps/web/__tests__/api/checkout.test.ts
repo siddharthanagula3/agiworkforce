@@ -102,7 +102,7 @@ describe('POST /api/checkout', () => {
   });
 
   it('should return 401 if user is not authenticated', async () => {
-    const { createSupabaseServerClient } = await import('../../services/supabase-server');
+    const { createSupabaseServerClient } = await import('@/services/supabase-server');
     vi.mocked(createSupabaseServerClient).mockResolvedValueOnce({
       auth: {
         getUser: vi.fn(() => ({

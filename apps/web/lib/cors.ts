@@ -76,7 +76,8 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
 
   // Check for Tauri desktop app (tauri:// or tauri.localhost)
   // SECURITY: Strict regex to prevent bypass via tauri://evil.example.com
-  const tauriSchemePattern = /^tauri:\/\/[a-zA-Z0-9._-]+$/;
+  // Dots are intentionally excluded from the character class to prevent subdomain bypass.
+  const tauriSchemePattern = /^tauri:\/\/[a-zA-Z0-9_-]+$/;
   if (tauriSchemePattern.test(origin)) {
     return true;
   }

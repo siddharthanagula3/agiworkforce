@@ -39,11 +39,14 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const supabase = await createSupabaseServerClient();
+  // Use getUser() for server-side JWT validation — getSession() reads from
+  // the cookie without server verification and must not be trusted for auth.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user || userError) {
     throw createError.unauthorized('Please sign in to continue');
   }
 
@@ -86,7 +89,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const { data: existingSubscription } = await supabase
     .from('subscriptions')
     .select('status, plan_tier, stripe_customer_id, stripe_subscription_id')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .maybeSingle();
 
   const activeStatuses = new Set(['active', 'trialing', 'past_due']);
@@ -99,28 +102,28 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const { data: profile } = await supabase
     .from('profiles')
     .select('stripe_customer_id')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .maybeSingle();
 
   if (profile?.stripe_customer_id) {
     stripeCustomerId = profile.stripe_customer_id;
     logger.info(
-      { userId: session.user.id, customerId: stripeCustomerId },
+      { userId: user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from profile',
     );
   } else if (existingSubscription?.stripe_customer_id) {
     stripeCustomerId = existingSubscription.stripe_customer_id;
     logger.info(
-      { userId: session.user.id, customerId: stripeCustomerId },
+      { userId: user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from subscription',
     );
   } else {
     // No customer ID stored - create a new Stripe customer
     try {
       const customer = await stripe.customers.create({
-        email: session.user.email,
+        email: user.email,
         metadata: {
-          supabase_user_id: session.user.id,
+          supabase_user_id: user.id,
         },
       });
       stripeCustomerId = customer.id;
@@ -129,15 +132,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       await supabase
         .from('profiles')
         .update({ stripe_customer_id: stripeCustomerId })
-        .eq('id', session.user.id);
+        .eq('id', user.id);
 
       logger.info(
-        { userId: session.user.id, customerId: stripeCustomerId },
+        { userId: user.id, customerId: stripeCustomerId },
         'Created new Stripe customer and stored in profile',
       );
     } catch (err) {
       logger.error(
-        { error: err, userId: session.user.id },
+        { error: err, userId: user.id },
         'Failed to create Stripe customer, proceeding without customer ID',
       );
       // Continue without customer ID - Stripe will create one during checkout
@@ -148,14 +151,14 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   if (hasActiveSubscription) {
     try {
       // As a resilience fallback, try to discover the customer by email if still missing.
-      if (!stripeCustomerId && session.user.email) {
-        const customers = await stripe.customers.list({ email: session.user.email, limit: 1 });
+      if (!stripeCustomerId && user.email) {
+        const customers = await stripe.customers.list({ email: user.email, limit: 1 });
         if (customers.data.length > 0) {
           stripeCustomerId = customers.data[0].id;
           await supabase
             .from('profiles')
             .update({ stripe_customer_id: stripeCustomerId })
-            .eq('id', session.user.id);
+            .eq('id', user.id);
         }
       }
 
@@ -171,7 +174,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ url: portalSession.url });
     } catch (error) {
       logger.error(
-        { error, userId: session.user.id },
+        { error, userId: user.id },
         'Failed to create billing portal session for existing subscriber',
       );
       throw createError.internal('Failed to open billing portal');
@@ -185,7 +188,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       payment_method_types: ['card'],
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
       customer: stripeCustomerId || undefined, // Use existing customer if available
-      customer_email: stripeCustomerId ? undefined : session.user.email, // Only set if no customer
+      customer_email: stripeCustomerId ? undefined : user.email, // Only set if no customer
       line_items: [
         {
           price: priceId,
@@ -194,10 +197,10 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       ],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
-      client_reference_id: session.user.id, // Primary identifier for webhook
+      client_reference_id: user.id, // Primary identifier for webhook
       metadata: {
-        supabase_user_id: session.user.id, // Canonical key for webhook handler
-        userId: session.user.id, // Legacy key for backwards compatibility
+        supabase_user_id: user.id, // Canonical key for webhook handler
+        userId: user.id, // Legacy key for backwards compatibility
         plan_tier: plan, // Useful for the webhook
       },
       allow_promotion_codes: true,

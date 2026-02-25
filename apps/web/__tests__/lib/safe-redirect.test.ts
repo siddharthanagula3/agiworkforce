@@ -193,6 +193,13 @@ describe('Safe Redirect', () => {
         expect(isRedirectSafe('http://attacker.com/path', origin)).toBe(false);
       });
 
+      it('should not return a cross-origin URL for space-prefixed absolute URL (M29)', () => {
+        // "https://evil.com some path" — ensure implementation does not return an evil.com URL
+        const result = getSafeRedirectUrl('https://evil.com some path', origin);
+        expect(result.startsWith('https://evil.com')).toBe(false);
+        expect(result.startsWith('http://evil.com')).toBe(false);
+      });
+
       it('should handle space-containing text as same-origin path', () => {
         // Text with spaces gets parsed as relative URL by URL constructor with base
         // This makes it a same-origin path, which is considered safe

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/services/supabase-server';
-import { generateCsrfToken, getSessionIdFromRequest } from '@/lib/csrf';
+import { generateCsrfToken, getOrCreateAnonSession } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -24,7 +24,9 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
 
     // Use cookie-derived session binding so all endpoints that call requireCsrfToken(request)
     // validate against the same session identifier.
-    const sessionId = getSessionIdFromRequest(request);
+    // getOrCreateAnonSession() returns a stable session ID and a Set-Cookie value when a new
+    // anonymous session has been created, ensuring CSRF tokens are usable across requests.
+    const { id: sessionId, newCookie } = getOrCreateAnonSession(request);
 
     // Generate CSRF token
     const token = generateCsrfToken(sessionId);
@@ -37,10 +39,18 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
       'CSRF token generated',
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       token,
       expiresIn: 3600000, // 1 hour in milliseconds
     });
+
+    // If a new anonymous session cookie was generated, set it on the response so
+    // subsequent CSRF validation calls can retrieve the same session ID.
+    if (newCookie) {
+      response.headers.set('Set-Cookie', newCookie);
+    }
+
+    return response;
   } catch (error) {
     logger.error({ error }, 'Failed to generate CSRF token');
     // Return a generic error without exposing internal details

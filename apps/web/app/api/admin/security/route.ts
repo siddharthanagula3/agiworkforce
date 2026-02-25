@@ -4,9 +4,20 @@ import { SecurityMonitoringService } from '@/lib/services/security-monitoring-se
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Module-level admin client — created once and reused across requests.
+// Returns null when environment variables are missing so callers can
+// return a 500 without crashing at import time.
+const supabaseAdmin =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : null;
 
 /**
  * Security Monitoring API
@@ -25,7 +36,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 async function verifyAdminAccess(
   request: NextRequest,
 ): Promise<{ isAdmin: boolean; userId?: string; error?: string }> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!supabaseAdmin) {
     return { isAdmin: false, error: 'Server configuration error' };
   }
 
@@ -35,15 +46,12 @@ async function verifyAdminAccess(
   }
 
   const token = authHeader.slice(7);
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
 
   // Verify the JWT and check if user has admin role
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser(token);
+  } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
     return { isAdmin: false, error: 'Invalid or expired token' };
@@ -149,12 +157,22 @@ export async function POST(request: NextRequest) {
     const rateLimitResponse = await withRateLimit(request, 'admin-security');
     if (rateLimitResponse) return rateLimitResponse;
 
+    // CSRF protection
+    const csrfError = await requireCsrfToken(request);
+    if (csrfError) return csrfError;
+
     // Verify admin access
     const { isAdmin, userId: adminUserId, error: authError } = await verifyAdminAccess(request);
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
+
+    // Body size guard: cap admin payloads to prevent memory exhaustion from oversized JSON
+    const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
+    if (contentLength > 8192) {
+      return NextResponse.json({ error: { code: 'PAYLOAD_TOO_LARGE' } }, { status: 413 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -181,9 +199,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
         }
 
-        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
-          auth: { persistSession: false },
-        });
+        if (targetUserId === adminUserId) {
+          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+        }
+
+        if (!supabaseAdmin) {
+          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
 
         const { error: updateError } = await supabaseAdmin
           .from('profiles')
@@ -201,7 +223,7 @@ export async function POST(request: NextRequest) {
         // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
-          eventType: 'suspicious_activity',
+          eventType: 'admin_action',
           severity: 'high',
           endpoint: '/api/admin/security?action=suspend-user',
           details: { action: 'suspend-user', targetUserId, reason },
@@ -227,9 +249,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
         }
 
-        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
-          auth: { persistSession: false },
-        });
+        if (targetUserId === adminUserId) {
+          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+        }
+
+        if (!supabaseAdmin) {
+          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
 
         const { error: updateError } = await supabaseAdmin
           .from('profiles')
@@ -256,7 +282,7 @@ export async function POST(request: NextRequest) {
         // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
-          eventType: 'suspicious_activity',
+          eventType: 'admin_action',
           severity: 'critical',
           endpoint: '/api/admin/security?action=ban-user',
           details: { action: 'ban-user', targetUserId, reason },
@@ -282,9 +308,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'userId and reason are required' }, { status: 400 });
         }
 
-        const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
-          auth: { persistSession: false },
-        });
+        if (targetUserId === adminUserId) {
+          return NextResponse.json({ error: 'Cannot modify your own account' }, { status: 400 });
+        }
+
+        if (!supabaseAdmin) {
+          return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
 
         const { error: updateError } = await supabaseAdmin
           .from('profiles')
@@ -308,7 +338,7 @@ export async function POST(request: NextRequest) {
         // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
-          eventType: 'suspicious_activity',
+          eventType: 'admin_action',
           severity: 'high',
           endpoint: '/api/admin/security?action=reactivate-user',
           details: { action: 'reactivate-user', targetUserId, reason },

@@ -22,9 +22,9 @@ const mockRateLimitInstance = {
 };
 
 vi.mock('@upstash/ratelimit', () => {
-  const MockRatelimit = vi.fn().mockImplementation(() => mockRateLimitInstance) as ReturnType<
-    typeof vi.fn
-  > & { slidingWindow: ReturnType<typeof vi.fn> };
+  const MockRatelimit = vi.fn().mockImplementation(function () {
+    return mockRateLimitInstance;
+  }) as ReturnType<typeof vi.fn> & { slidingWindow: ReturnType<typeof vi.fn> };
   // Add static methods
   MockRatelimit.slidingWindow = vi.fn().mockReturnValue({});
   return {
@@ -228,11 +228,12 @@ describe('Rate Limiting', () => {
     it('should block request when rate limit exceeded', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
-      // Simulate many requests from same IP
+      // Use a unique IP per test run to avoid cross-test in-memory store pollution
+      const uniqueIp = `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-forwarded-for': '192.168.1.100', // Different IP to avoid collision
+          'x-forwarded-for': uniqueIp,
         },
       });
 
@@ -591,28 +592,26 @@ describe('Rate Limiting', () => {
       vi.resetModules();
     });
 
-    it('should prefer user ID over IP address', async () => {
+    it('should use separate buckets for different IP addresses', async () => {
       const { checkRateLimit } = await import('@/lib/rate-limit');
 
+      // First IP makes 50 requests
       const request = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-user-id': 'authenticated-user',
           'x-forwarded-for': '10.5.0.1',
         },
       });
 
-      // Make many requests as authenticated user
       for (let i = 0; i < 50; i++) {
         await checkRateLimit(request, 'default');
       }
 
-      // Same IP but different user should have full limit
+      // Different IP should have its own full limit (not affected by first IP's usage)
       const request2 = new NextRequest('http://localhost/api/test', {
         method: 'GET',
         headers: {
-          'x-user-id': 'different-user',
-          'x-forwarded-for': '10.5.0.1', // Same IP
+          'x-forwarded-for': '10.5.0.2',
         },
       });
 
@@ -662,6 +661,238 @@ describe('Rate Limiting', () => {
       const result = await checkRateLimit(request, 'default');
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Redis-backed rate limiting (Upstash)
+  // =========================================================================
+  describe('Redis-backed Rate Limiting (Upstash)', () => {
+    beforeEach(() => {
+      // Set Redis env vars so the module initialises the Redis client path
+      process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
+      process.env.UPSTASH_REDIS_REST_TOKEN = 'test-redis-token';
+      vi.resetModules();
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    });
+
+    it('delegates to rateLimiter.limit() when Redis is configured and allows request', async () => {
+      mockRateLimitInstance.limit.mockResolvedValueOnce({
+        success: true,
+        limit: 100,
+        remaining: 99,
+        reset: Date.now() + 60000,
+      });
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.1' },
+      });
+
+      const result = await checkRateLimit(request, 'default');
+
+      expect(mockRateLimitInstance.limit).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.limit).toBe(100);
+      expect(result.remaining).toBe(99);
+    });
+
+    it('returns 429 semantics when Redis limit is exceeded', async () => {
+      const resetAt = Date.now() + 30000;
+      mockRateLimitInstance.limit.mockResolvedValueOnce({
+        success: false,
+        limit: 10,
+        remaining: 0,
+        reset: resetAt,
+      });
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.2' },
+      });
+
+      const result = await checkRateLimit(request, 'device-poll');
+
+      expect(result.success).toBe(false);
+      expect(result.remaining).toBe(0);
+      // Retry-After header should be present
+      expect(result.headers['Retry-After']).toBeDefined();
+    });
+
+    it('propagates the correct identifier to rateLimiter.limit()', async () => {
+      mockRateLimitInstance.limit.mockResolvedValueOnce({
+        success: true,
+        limit: 60,
+        remaining: 59,
+        reset: Date.now() + 60000,
+      });
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.99' },
+      });
+
+      await checkRateLimit(request, 'me');
+
+      expect(mockRateLimitInstance.limit).toHaveBeenCalledWith('ip:11.0.0.99');
+    });
+
+    it('uses custom identifier when provided', async () => {
+      mockRateLimitInstance.limit.mockResolvedValueOnce({
+        success: true,
+        limit: 100,
+        remaining: 99,
+        reset: Date.now() + 60000,
+      });
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.3' },
+      });
+
+      await checkRateLimit(request, 'default', 'custom-id-xyz');
+
+      expect(mockRateLimitInstance.limit).toHaveBeenCalledWith('custom-id-xyz');
+    });
+
+    it('fails closed (blocks request) when rateLimiter.limit() throws on a failClosed endpoint', async () => {
+      mockRateLimitInstance.limit.mockRejectedValueOnce(new Error('Redis connection error'));
+
+      const { checkRateLimit, rateLimitConfigs } = await import('@/lib/rate-limit');
+
+      // Guard against config drift: verify 'device-link' is still failClosed before testing
+      expect(rateLimitConfigs['device-link'].failClosed).toBe(true);
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.4' },
+      });
+
+      // 'device-link' has failClosed: true
+      const result = await checkRateLimit(request, 'device-link');
+
+      expect(result.success).toBe(false);
+      expect(result.remaining).toBe(0);
+      expect(result.headers['Retry-After']).toBeDefined();
+    });
+
+    it('fails open (allows request) when rateLimiter.limit() throws on a non-failClosed endpoint', async () => {
+      mockRateLimitInstance.limit.mockRejectedValueOnce(new Error('Redis connection error'));
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.5' },
+      });
+
+      // 'default' has failClosed: false
+      const result = await checkRateLimit(request, 'default');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('reuses cached rate limiter instances (getRateLimiter caches)', async () => {
+      mockRateLimitInstance.limit.mockResolvedValue({
+        success: true,
+        limit: 100,
+        remaining: 99,
+        reset: Date.now() + 60000,
+      });
+
+      const { checkRateLimit } = await import('@/lib/rate-limit');
+      const { Ratelimit } = await import('@upstash/ratelimit');
+
+      const request = new NextRequest('http://localhost/api/test', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '11.0.0.6' },
+      });
+
+      // Call twice with the same key
+      await checkRateLimit(request, 'default');
+      await checkRateLimit(request, 'default');
+
+      // Ratelimit constructor should only have been called once (cached on second call)
+      expect(Ratelimit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // =========================================================================
+  // failClosed configuration for security-sensitive endpoints (L25)
+  // =========================================================================
+  describe('failClosed configuration for all endpoints (L25)', () => {
+    it('all security-sensitive endpoints have failClosed=true', async () => {
+      const { rateLimitConfigs } = await import('@/lib/rate-limit');
+      const failClosedEndpoints = [
+        'device-link',
+        'claim-offer',
+        'auth-login',
+        'auth-signup',
+        'auth-password-reset',
+        'auth-verify',
+        'api-key-create',
+        'api-key-revoke',
+        'user-data-delete',
+        'user-data-export',
+        'llm-completion',
+        'llm-streaming',
+        'image-generation',
+        'video-generation',
+        'admin-security',
+      ] as const;
+
+      for (const endpoint of failClosedEndpoints) {
+        expect(
+          rateLimitConfigs[endpoint].failClosed,
+          `${endpoint} should have failClosed=true`,
+        ).toBe(true);
+      }
+    });
+
+    it('business-critical endpoints have failClosed=false', async () => {
+      const { rateLimitConfigs } = await import('@/lib/rate-limit');
+      const failOpenEndpoints = [
+        'checkout',
+        'credit-topup',
+        'device-poll',
+        'me',
+        'credits-balance',
+        'sync-subscription',
+        'portal',
+        'health-check',
+        'download',
+        'default',
+      ] as const;
+
+      for (const endpoint of failOpenEndpoints) {
+        expect(
+          rateLimitConfigs[endpoint].failClosed,
+          `${endpoint} should have failClosed=false`,
+        ).toBe(false);
+      }
+    });
+
+    it('every endpoint config has required shape (limit, window, failClosed)', async () => {
+      const { rateLimitConfigs } = await import('@/lib/rate-limit');
+      for (const [key, cfg] of Object.entries(rateLimitConfigs)) {
+        expect(typeof cfg.limit, `${key}.limit must be number`).toBe('number');
+        expect(cfg.limit, `${key}.limit must be > 0`).toBeGreaterThan(0);
+        expect(typeof cfg.window, `${key}.window must be string`).toBe('string');
+        expect(typeof cfg.failClosed, `${key}.failClosed must be boolean`).toBe('boolean');
+      }
     });
   });
 });

@@ -284,4 +284,92 @@ describe('CSRF', () => {
       expect(isValid).toBe(true);
     });
   });
+
+  // =========================================================================
+  // requireCsrfToken Tests (M38)
+  // Note: setup.ts mocks requireCsrfToken globally; use vi.importActual to test real impl.
+  // =========================================================================
+  describe('requireCsrfToken', () => {
+    type CsrfModule = typeof import('@/lib/csrf');
+
+    it('returns null for GET requests (no CSRF check needed)', async () => {
+      const { requireCsrfToken, resetCsrfCache } = await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const request = new Request('https://example.com', { method: 'GET' });
+      const result = await requireCsrfToken(request);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when valid token is present on POST', async () => {
+      const { generateCsrfToken, requireCsrfToken, resetCsrfCache } =
+        await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const sessionId = 'session-require-test';
+      const token = generateCsrfToken(sessionId);
+      const request = new Request('https://example.com', {
+        method: 'POST',
+        headers: {
+          'x-csrf-token': token,
+          cookie: `session-id=${sessionId}`,
+        },
+      });
+      const result = await requireCsrfToken(request);
+      expect(result).toBeNull();
+    });
+
+    it('returns 403 Response when x-csrf-token header is absent on POST', async () => {
+      const { requireCsrfToken, resetCsrfCache } = await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const request = new Request('https://example.com', {
+        method: 'POST',
+        headers: { cookie: 'session-id=some-session' },
+      });
+      const result = await requireCsrfToken(request);
+      expect(result).toBeInstanceOf(Response);
+      expect(result?.status).toBe(403);
+      const body = await result!.json();
+      expect(body.code).toBe('CSRF_VALIDATION_FAILED');
+    });
+
+    it('returns 403 Response when token is for a different session', async () => {
+      const { generateCsrfToken, requireCsrfToken, resetCsrfCache } =
+        await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const token = generateCsrfToken('session-A');
+      const request = new Request('https://example.com', {
+        method: 'POST',
+        headers: {
+          'x-csrf-token': token,
+          cookie: 'session-id=session-B',
+        },
+      });
+      const result = await requireCsrfToken(request);
+      expect(result).toBeInstanceOf(Response);
+      expect(result?.status).toBe(403);
+    });
+
+    it('accepts externally supplied sessionId, bypassing cookie extraction', async () => {
+      const { generateCsrfToken, requireCsrfToken, resetCsrfCache } =
+        await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const sessionId = 'explicit-session-id';
+      const token = generateCsrfToken(sessionId);
+      const request = new Request('https://example.com', {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': token },
+      });
+      const result = await requireCsrfToken(request, sessionId);
+      expect(result).toBeNull();
+    });
+
+    it('403 response has correct Content-Type and X-Content-Type-Options headers', async () => {
+      const { requireCsrfToken, resetCsrfCache } = await vi.importActual<CsrfModule>('@/lib/csrf');
+      resetCsrfCache();
+      const request = new Request('https://example.com', { method: 'POST' });
+      const result = await requireCsrfToken(request);
+      expect(result).toBeInstanceOf(Response);
+      expect(result?.headers.get('Content-Type')).toContain('application/json');
+      expect(result?.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    });
+  });
 });

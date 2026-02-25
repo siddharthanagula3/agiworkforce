@@ -1789,7 +1789,7 @@ export const UnifiedAgenticChat: React.FC<{
       registerListener(
         listen<{
           event: {
-            type: 'cancelled';
+            type: string;
             tool_id: string;
             reason?: string;
             duration_ms: number;
@@ -1799,7 +1799,11 @@ export const UnifiedAgenticChat: React.FC<{
           if (!isMountedRef.current) return;
           const { event: streamEvent, timestamp } = event.payload;
 
-          // Only handle cancelled events
+          // Mark activity on every AGI tool stream event so the watchdog
+          // doesn't fire during long-running tools (e.g. image generation 30-90s)
+          markStreamActivity();
+
+          // Only handle cancelled events for cancellation cleanup
           if (streamEvent.type !== 'cancelled') return;
 
           const cancelledEvent = streamEvent as {
@@ -2581,7 +2585,7 @@ export const UnifiedAgenticChat: React.FC<{
       // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
       // The watchdog now tracks inactivity (not absolute wall time), so long
       // generations stay alive while chunks/tool events are still flowing.
-      const WATCHDOG_TIMEOUT_MS = 20 * 1000; // 20 seconds of inactivity
+      const WATCHDOG_TIMEOUT_MS = 60 * 1000; // 60 seconds of inactivity (accommodates image generation 30-90s)
       markStreamActivity();
 
       const scheduleWatchdog = () => {
@@ -2594,6 +2598,14 @@ export const UnifiedAgenticChat: React.FC<{
 
           // If there was recent activity, extend watchdog instead of forcing cleanup.
           if (idleMs < WATCHDOG_TIMEOUT_MS) {
+            scheduleWatchdog();
+            return;
+          }
+
+          // If there are active tool executions (e.g. image/video generation that takes 30-90s),
+          // keep extending the watchdog rather than killing the stream prematurely.
+          // Covers both: chat-path tools (toolExecutionTimeoutsRef) and AGI-path tools (activeToolStreams).
+          if (toolExecutionTimeoutsRef.current.size > 0 || state.activeToolStreams.size > 0) {
             scheduleWatchdog();
             return;
           }

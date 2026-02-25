@@ -49,6 +49,7 @@ const mockSession = {
 vi.mock('@/services/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(() => ({
     auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: mockSession.user }, error: null }),
       getSession: vi.fn().mockResolvedValue({ data: { session: mockSession } }),
     },
   })),
@@ -77,10 +78,11 @@ describe('Device Approve API', () => {
   describe('POST /api/device/approve', () => {
     describe('Authentication', () => {
       it('should return 401 for unauthenticated request', async () => {
-        // Override mock to return no session
+        // Override mock to return no user (getUser is the server-side JWT validation path)
         const { createSupabaseServerClient } = await import('@/services/supabase-server');
         vi.mocked(createSupabaseServerClient).mockResolvedValueOnce({
           auth: {
+            getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
             getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
           },
         } as never);

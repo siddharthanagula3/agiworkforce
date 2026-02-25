@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
+import { requireCsrfToken } from '@/lib/csrf';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -120,7 +121,7 @@ async function getOrgRole(
  *
  * List SSO connections for the caller's organization (or a specific org when ?orgId= is given).
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -217,12 +218,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  *
  * Body: CreateSSOConnectionBody
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<Response> {
   // Strict rate limit — creating SSO connections is a high-privilege admin action
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
 
   const { userId, error: authError } = await verifyAuth(request);
   if (!userId) {
@@ -361,11 +365,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  *   id    — UUID of the SSO connection to remove (required)
  *   hard  — Set to "true" for a permanent hard delete (default: soft deactivate)
  */
-export async function DELETE(request: NextRequest): Promise<NextResponse> {
+export async function DELETE(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-revoke');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError;
 
   const { userId, error: authError } = await verifyAuth(request);
   if (!userId) {
