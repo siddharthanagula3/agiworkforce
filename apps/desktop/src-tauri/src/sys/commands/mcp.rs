@@ -703,7 +703,7 @@ pub async fn mcp_call_tool(
     // Use double underscore delimiter to match registry format
     let server_name = tool_id
         .strip_prefix("mcp__")
-        .and_then(|s| s.splitn(2, "__").next())
+        .and_then(|s| s.split("__").next())
         .map(decode_component)
         .unwrap_or_else(|| "unknown".to_string());
 
