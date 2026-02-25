@@ -300,7 +300,7 @@ impl ExtensionInstaller {
 
             // Guard against ZIP path traversal attacks: reject entries with absolute
             // paths or components that escape the install directory (e.g. "../").
-            let output_path = install_path.join(&entry_path);
+            let _output_path = install_path.join(&entry_path);
             let canonical_install = install_path
                 .canonicalize()
                 .unwrap_or_else(|_| install_path.to_path_buf());
