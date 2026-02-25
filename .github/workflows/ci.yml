@@ -77,6 +77,9 @@ jobs:
           workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
 
+      - name: Ensure clippy is available
+        run: rustup component add clippy --toolchain 1.90.0
+
       - name: Dependency audit (Rust)
         run: cargo install cargo-audit --locked --quiet && cargo audit
 
@@ -198,6 +201,9 @@ jobs:
           cache-on-failure: true
           # Use separate cache key for all-features build
           key: all-features
+
+      - name: Ensure clippy is available
+        run: rustup component add clippy --toolchain 1.90.0
 
       - name: Clippy (all features, includes optional OCR/vision)
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
