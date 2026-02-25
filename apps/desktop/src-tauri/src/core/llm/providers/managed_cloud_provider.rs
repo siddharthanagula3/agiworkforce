@@ -146,7 +146,7 @@ impl ManagedCloudProvider {
         config: HttpClientConfig,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let client = create_http_client(&config)
-            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
+            .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
 
         // Streaming client: same proxy/CA settings but no overall timeout
         // (connect timeout still applies so unreachable hosts fail fast)
@@ -157,7 +157,7 @@ impl ManagedCloudProvider {
             read_timeout_secs: None,
         };
         let streaming_client = create_http_client(&streaming_config)
-            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
+            .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
 
         Ok(Self {
             client,
@@ -293,7 +293,7 @@ impl ManagedCloudProvider {
             if transformed
                 .get("effort")
                 .and_then(Value::as_str)
-                .map_or(true, |current| current.trim().is_empty())
+                .is_none_or(|current| current.trim().is_empty())
             {
                 transformed["effort"] = serde_json::json!(effort);
             }
@@ -756,7 +756,7 @@ impl LLMProvider for ManagedCloudProvider {
                     message.push_str(": ");
                     message.push_str(&detail);
                 }
-                return Err(Box::new(std::io::Error::other(format!("{}", message))));
+                return Err(Box::new(std::io::Error::other(message)));
             }
         }
 
