@@ -43,7 +43,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
   }, []);
 
   const withTimeout = useCallback(
-    async <T,>(label: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> => {
+    async <T>(label: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> => {
       let timeoutId: number | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = window.setTimeout(() => {
@@ -61,36 +61,39 @@ export function useScreenCapture(): UseScreenCaptureReturn {
     [],
   );
 
-  const captureFullScreen = useCallback(async (conversationId?: number): Promise<CaptureResult> => {
-    // AUDIT-007-005 fix: Check isMounted before setState calls
-    if (isMountedRef.current) {
-      setIsCapturing(true);
-      setError(null);
-    }
+  const captureFullScreen = useCallback(
+    async (conversationId?: number): Promise<CaptureResult> => {
+      // AUDIT-007-005 fix: Check isMounted before setState calls
+      if (isMountedRef.current) {
+        setIsCapturing(true);
+        setError(null);
+      }
 
-    try {
-      const params: Record<string, unknown> = {};
-      if (conversationId != null) {
-        params['conversation_id'] = conversationId;
+      try {
+        const params: Record<string, unknown> = {};
+        if (conversationId != null) {
+          params['conversation_id'] = conversationId;
+        }
+        const result = await withTimeout(
+          'capture_screen_full',
+          () => invoke<RawCaptureResult>('capture_screen_full', params),
+          CAPTURE_TIMEOUTS_MS.full,
+        );
+        return normalizeCaptureResult(result);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (isMountedRef.current) {
+          setError(errorMessage);
+        }
+        throw new Error(errorMessage);
+      } finally {
+        if (isMountedRef.current) {
+          setIsCapturing(false);
+        }
       }
-      const result = await withTimeout(
-        'capture_screen_full',
-        () => invoke<RawCaptureResult>('capture_screen_full', params),
-        CAPTURE_TIMEOUTS_MS.full,
-      );
-      return normalizeCaptureResult(result);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      if (isMountedRef.current) {
-        setError(errorMessage);
-      }
-      throw new Error(errorMessage);
-    } finally {
-      if (isMountedRef.current) {
-        setIsCapturing(false);
-      }
-    }
-  }, [withTimeout]);
+    },
+    [withTimeout],
+  );
 
   const captureRegion = useCallback(
     async (region: Region, conversationId?: number): Promise<CaptureResult> => {

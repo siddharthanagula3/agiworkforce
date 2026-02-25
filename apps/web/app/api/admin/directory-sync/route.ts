@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized directory sync access attempt');
-      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!organizationId) {
@@ -145,6 +145,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error({ error }, 'Error in directory sync GET');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -166,7 +169,7 @@ export async function POST(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized directory sync creation attempt');
-      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!organizationId) {
@@ -257,6 +260,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ connection }, { status: 201 });
   } catch (error) {
     logger.error({ error }, 'Error in directory sync POST');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -278,7 +284,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized directory sync deletion attempt');
-      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!organizationId) {
@@ -361,6 +367,9 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     logger.error({ error }, 'Error in directory sync DELETE');
+    if (error instanceof Error && error.message.includes('fetch failed')) {
+      return NextResponse.json({ error: 'Database temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

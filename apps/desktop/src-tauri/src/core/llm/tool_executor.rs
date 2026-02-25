@@ -7999,4 +7999,29 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_tilde_expansion() {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("path".to_string(), json!("~/Documents/test.txt"));
+
+        ToolExecutor::expand_tilde_in_args(&mut args);
+
+        let expanded = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .expect("path should be present");
+        assert!(
+            expanded.starts_with('/'),
+            "expanded path should be absolute, got: {expanded}"
+        );
+        assert!(
+            !expanded.contains('~'),
+            "expanded path should not contain tilde, got: {expanded}"
+        );
+        assert!(
+            expanded.ends_with("/Documents/test.txt"),
+            "expanded path should preserve relative portion, got: {expanded}"
+        );
+    }
 }

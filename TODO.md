@@ -341,3 +341,34 @@
 - `apps/desktop/src-tauri/src/core/llm/llm_router.rs`
 - `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs`
 - `apps/desktop/src/components/UnifiedAgenticChat/*`
+
+## 15. Synchronize Model Catalog (TS/Rust Mismatch)
+
+- [ ] Audit and synchronize model ID mappings across all layers (Phase 9 findings):
+  - Anthropic: `claude-opus-4.6` vs `claude-opus-4-6`, `claude-sonnet-4.6` vs `claude-sonnet-4-6`
+  - OpenAI: Router references `gpt-5.2` (missing gpt-5.3-codex, gpt-5.2-pro variants)
+  - Google: Router references `gemini-2.0` (missing gemini-3.1-pro, gemini-3.1-flash)
+  - Rust `MODEL_METADATA` missing entries for latest models
+  - TS `MODEL_POOLS` and Rust `provider_adapter.rs` capability mismatches (6 mismatches found)
+- [ ] Update source files against live provider APIs to verify latest model IDs
+- [ ] Add model ID canonicalization tests to prevent future drift
+
+### Target files
+
+- `apps/desktop/src/constants/llm.ts` (6 TS model ID mismatches)
+- `apps/desktop/src/lib/modelRouter.ts`
+- `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs` (6 Rust mismatches)
+- `apps/desktop/src-tauri/src/core/llm/llm_router.rs`
+
+## 16. Security: Expand Tauri Filesystem Deny List
+
+- [ ] Add `.env` files to Tauri filesystem deny list:
+  - Current: `.docker`, `.npmrc`, `.pypirc`, `.netrc`, `.azure`, `.config/gh`, `.config/heroku`, `.config/op`, `.config/stripe`
+  - Add: `.env`, `.env.local`, `.env.*.local` (MEDIUM security gap per Phase 7)
+- [ ] Audit write deny list for parity with read deny list (write list is weaker)
+- [ ] Document rationale for each denied path
+
+### Target files
+
+- `apps/desktop/src-tauri/capabilities/default.json`
+- `CLAUDE.md` (security section)

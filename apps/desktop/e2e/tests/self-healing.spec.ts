@@ -36,6 +36,8 @@ test.describe('Self-Healing Agent', () => {
 
     const assistantMessage = page.locator('[data-role="assistant"]').last();
     await expect(assistantMessage).toBeVisible({ timeout: 20000 });
-    await expect(assistantMessage).toContainText(/self-healing|recovery|fallback|resumed execution/i);
+    await expect(assistantMessage).toContainText(
+      /self-healing|recovery|fallback|resumed execution/i,
+    );
   });
 });

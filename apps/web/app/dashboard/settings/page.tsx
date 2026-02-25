@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import { DashboardLayout } from '../../../components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Button } from '@/components/ui';
 import Link from 'next/link';
-import { User, CreditCard } from 'lucide-react';
+import { User, CreditCard, Palette, MessageSquare } from 'lucide-react';
+import { AppearanceSettings } from '@/components/settings/AppearanceSettings';
+import { ChatSettings } from '@/components/settings/ChatSettings';
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
@@ -69,6 +71,38 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Appearance settings */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-zinc-200 flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              Appearance
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Customize the look and feel.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AppearanceSettings />
+          </CardContent>
+        </Card>
+
+        {/* Chat settings */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-zinc-200 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Chat
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Configure your default model and chat behavior.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChatSettings />
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

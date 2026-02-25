@@ -44,11 +44,7 @@ export function I18nProvider({ children }: I18nProviderProps) {
     isLoading,
   };
 
-  return (
-    <I18nProviderContext.Provider value={value}>
-      {children}
-    </I18nProviderContext.Provider>
-  );
+  return <I18nProviderContext.Provider value={value}>{children}</I18nProviderContext.Provider>;
 }
 
 export const useI18nContext = () => {

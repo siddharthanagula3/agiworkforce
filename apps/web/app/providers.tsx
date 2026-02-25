@@ -3,6 +3,7 @@
 import { I18nextProvider } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import i18n from './i18n';
+import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPaletteProvider';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
@@ -22,5 +23,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>;
+  return (
+    <I18nextProvider i18n={i18n}>
+      {children}
+      <CommandPaletteProvider />
+    </I18nextProvider>
+  );
 }
