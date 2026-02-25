@@ -1,32 +1,266 @@
 version: 2
 updates:
+  # ─── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
       day: 'monday'
+    open-pull-requests-limit: 10
     labels:
       - 'dependencies'
       - 'github-actions'
+    groups:
+      actions-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      actions-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
 
-  - package-ecosystem: 'npm'
-    directory: '/'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    labels:
-      - 'dependencies'
-      - 'javascript'
-    ignore:
-      # Major version bumps require manual review
-      - dependency-name: '*'
-        update-types: ['version-update:semver-major']
-
+  # ─── Cargo (Rust) ────────────────────────────────────────────────────────────
   - package-ecosystem: 'cargo'
     directory: '/apps/desktop/src-tauri'
     schedule:
       interval: 'weekly'
       day: 'monday'
+    open-pull-requests-limit: 10
     labels:
       - 'dependencies'
       - 'rust'
+    groups:
+      # Group all Tauri crates together — they must be upgraded as a set
+      tauri-ecosystem:
+        applies-to: version-updates
+        patterns:
+          - 'tauri'
+          - 'tauri-*'
+      rust-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      rust-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      # Tauri major bumps require coordinated upgrade with tauri-plugin-* and tauri-build.
+      # Managed via the tauri-ecosystem group above; block individual major bumps here.
+      - dependency-name: 'tauri'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'tauri-build'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'tauri-plugin-*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — root workspace ────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    groups:
+      js-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      js-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      # Major bumps for the entire JS ecosystem require manual review
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — apps/desktop ──────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/apps/desktop'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'desktop'
+    groups:
+      # All @tauri-apps/* JS packages must move together with the Rust crates
+      tauri-js-ecosystem:
+        applies-to: version-updates
+        patterns:
+          - '@tauri-apps/*'
+      desktop-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      desktop-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      # @tauri-apps major bumps must be coordinated with Cargo tauri upgrade
+      - dependency-name: '@tauri-apps/*'
+        update-types: ['version-update:semver-major']
+      # Vite and React major bumps require manual review
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — apps/web ──────────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/apps/web'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'web'
+    groups:
+      web-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      web-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      # Next.js major upgrades require App Router migration review
+      - dependency-name: 'next'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — apps/extension ────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/apps/extension'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'extension'
+    groups:
+      extension-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      extension-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — packages/types ────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/packages/types'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    groups:
+      types-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — packages/utils ────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/packages/utils'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    groups:
+      utils-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — services/api-gateway ──────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/services/api-gateway'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'services'
+    groups:
+      api-gateway-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      api-gateway-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — services/signaling-server ─────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/services/signaling-server'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'services'
+    groups:
+      signaling-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      signaling-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
