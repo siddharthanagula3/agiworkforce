@@ -2728,11 +2728,16 @@ pub async fn chat_send_message(
 
                         if success {
                             let mut messages = llm_messages_clone.clone();
+                            // Sanitize the orchestrator summary before injecting it into the
+                            // system prompt — the summary may contain tool-result content from
+                            // attacker-controlled sources (files, web pages, terminal output).
+                            let sanitized_summary =
+                                sanitize_multiline_for_prompt(&summary, 4096);
                             messages.push(crate::core::llm::ChatMessage {
                                 role: "system".to_string(),
                                 content: format!(
                                     "Agent execution summary:\n{}\n\nProvide a clear final response to the user using this summary.",
-                                    summary
+                                    sanitized_summary
                                 ),
                                 tool_calls: None,
                                 tool_call_id: None,
