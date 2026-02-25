@@ -72,8 +72,9 @@ async function handleDevicePoll(request: NextRequest) {
       return NextResponse.json({ status: 'expired' }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    // Device ownership verification: if a fingerprint was recorded, require a matching fingerprint.
+    // Device ownership verification with backfill for legacy sessions.
     if (data.device_fingerprint) {
+      // Fingerprint was recorded on link — enforce strict match on every poll.
       if (!device_fingerprint || data.device_fingerprint !== device_fingerprint) {
         logger.warn(
           {
@@ -85,6 +86,21 @@ async function handleDevicePoll(request: NextRequest) {
         );
         throw createError.forbidden('Device fingerprint does not match');
       }
+    } else if (device_fingerprint) {
+      // Legacy session (no fingerprint stored) but client IS sending one now — backfill it.
+      // This secures the session from this point forward without locking out existing users.
+      await supabase
+        .from('device_authorization_codes')
+        .update({ device_fingerprint, updated_at: new Date().toISOString() })
+        .eq('device_id', device_id);
+      logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
+    } else {
+      // Legacy session with no fingerprint stored and none provided.
+      // Allow through for backward compatibility but warn — these sessions are being phased out.
+      logger.warn(
+        { deviceId: device_id },
+        'Device poll without fingerprint (legacy session) — consider re-authenticating',
+      );
     }
 
     if (data.status === 'approved' && data.user_id) {

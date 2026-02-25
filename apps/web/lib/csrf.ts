@@ -72,11 +72,8 @@ export function verifyCsrfToken(
   const data = `${tokenSessionId}:${timestamp}`;
   const expectedSignature = createHmac('sha256', getCsrfSecret()).update(data).digest('hex');
 
-  // Both signatures should be same length (hex of SHA256 = 64 chars)
-  if (signature.length !== expectedSignature.length) {
-    return false;
-  }
-
+  // Do NOT length-check before timingSafeEqual — a pre-check creates a timing side channel.
+  // timingSafeEqual throws for unequal-length buffers, which the catch below handles.
   try {
     return timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
   } catch {
@@ -91,6 +88,12 @@ export function verifyCsrfToken(
  * JWT verification must happen through proper auth middleware (Supabase Auth).
  * Callers with authenticated users should pass the verified user ID directly
  * to validateCsrfFromRequest() instead of relying on this fallback.
+ *
+ * NOTE: For anonymous users this now reads the `anon-session-id` cookie before
+ * generating a new UUID. This ensures CSRF tokens generated on one request can
+ * be verified on subsequent requests for the same anonymous session.
+ * Use `getOrCreateAnonSession(request)` in route handlers that need to set the
+ * cookie when one does not already exist.
  */
 export function getSessionIdFromRequest(request: Request): string {
   // Option 1: Get from session cookie
@@ -112,10 +115,62 @@ export function getSessionIdFromRequest(request: Request): string {
     return `session-${tokenHash}`;
   }
 
+  // Option 2.5: Use an existing anonymous session ID cookie to preserve CSRF binding.
+  // This is the key fix for anonymous users: reuse the same session ID across requests
+  // instead of generating a new one per-request (which broke CSRF validation).
+  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
+  if (anonMatch) {
+    return anonMatch[1];
+  }
+
   // Option 3: Generate unique anonymous session ID
-  // NOTE: Each request without session gets a new ID, which means
-  // anonymous users need to use cookies for CSRF to work properly
+  // NOTE: Each request without any session gets a new ID.
+  // Use getOrCreateAnonSession() in route handlers to persist this via cookie.
   return `anon-${crypto.randomUUID()}`;
+}
+
+/**
+ * Get or create an anonymous session ID for the request.
+ *
+ * Returns `{ id }` when an existing session is found, or `{ id, newCookie }`
+ * when a new anonymous session ID has been generated and should be persisted.
+ * Route handlers should set `Set-Cookie: newCookie` on their response when present.
+ *
+ * This is the preferred function to use in route handlers that need to generate
+ * CSRF tokens for anonymous users — it ensures the session ID is stable across
+ * the token-generation request and subsequent validation requests.
+ */
+export function getOrCreateAnonSession(request: Request): { id: string; newCookie?: string } {
+  const cookies = request.headers.get('cookie') || '';
+
+  // Option 1: Prefer authenticated session cookies (no new cookie needed)
+  const sessionMatch = cookies.match(/session-id=([^;]+)/);
+  if (sessionMatch) {
+    return { id: sessionMatch[1] };
+  }
+
+  // Option 2: Supabase auth cookie (no new cookie needed)
+  const supabaseAuthMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/);
+  if (supabaseAuthMatch) {
+    const tokenHash = createHmac('sha256', getCsrfSecret())
+      .update(supabaseAuthMatch[1])
+      .digest('hex')
+      .substring(0, 32);
+    return { id: `session-${tokenHash}` };
+  }
+
+  // Option 3: Existing anonymous session cookie
+  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
+  if (anonMatch) {
+    return { id: anonMatch[1] };
+  }
+
+  // Option 4: Generate a new anonymous session ID and request it be stored in a cookie
+  const anonId = `anon-${crypto.randomUUID()}`;
+  return {
+    id: anonId,
+    newCookie: `anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`,
+  };
 }
 
 /**

@@ -138,8 +138,16 @@ export class CreditService {
         return false;
       }
 
-      // Check daily limit
-      const dailyRemaining = balance.daily_remaining_cents ?? balance.credits_remaining_cents;
+      // Check daily limit — fail closed if daily data is unavailable.
+      // Substituting monthly remaining as daily remaining would silently bypass the daily cap.
+      const dailyRemaining = balance.daily_remaining_cents;
+      if (dailyRemaining == null) {
+        logger.warn(
+          { userId },
+          'daily_remaining_cents unavailable in fallback credit check; failing closed',
+        );
+        return false;
+      }
       if (dailyRemaining < amountCents) {
         logger.debug(
           { userId, dailyRemaining, required: amountCents },

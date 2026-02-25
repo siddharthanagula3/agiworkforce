@@ -290,4 +290,131 @@ describe('Device Poll API', () => {
       expect(response.status).toBe(204);
     });
   });
+
+  // =========================================================================
+  // Status branches: denied, revoked (H15)
+  // =========================================================================
+  describe('Status branches: denied, revoked (H15)', () => {
+    it('returns {status:"denied"} when device record status is "denied"', async () => {
+      vi.mocked(createClient).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  device_id: 'device-123',
+                  device_fingerprint: 'abc123def456',
+                  status: 'denied',
+                  user_id: null,
+                  expires_at: new Date(Date.now() + 60000).toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                error: null,
+              }),
+            })),
+          })),
+          update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+        })),
+        rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as never);
+
+      const request = new NextRequest('http://localhost/api/device/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validRequest),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.status).toBe('denied');
+    });
+
+    it('returns {status:"denied"} when device record status is "revoked"', async () => {
+      vi.mocked(createClient).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  device_id: 'device-123',
+                  device_fingerprint: 'abc123def456',
+                  status: 'revoked',
+                  user_id: null,
+                  expires_at: new Date(Date.now() + 60000).toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                error: null,
+              }),
+            })),
+          })),
+          update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+        })),
+        rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as never);
+
+      const request = new NextRequest('http://localhost/api/device/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validRequest),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.status).toBe('denied');
+    });
+  });
+
+  // =========================================================================
+  // approved-but-missing-tokens (M28)
+  // =========================================================================
+  describe('approved-but-missing-tokens (M28)', () => {
+    it('returns {status:"pending"} when consumed row is approved but access_token is null', async () => {
+      vi.mocked(createClient).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  device_id: 'device-123',
+                  device_fingerprint: 'abc123def456',
+                  status: 'approved',
+                  user_id: 'user-456',
+                  expires_at: new Date(Date.now() + 60000).toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                error: null,
+              }),
+            })),
+          })),
+          update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+        })),
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            {
+              status: 'approved',
+              user_id: 'user-456',
+              user_email: 'test@example.com',
+              user_name: 'Test User',
+              access_token: null,
+              refresh_token: 'some-refresh',
+            },
+          ],
+          error: null,
+        }),
+      } as never);
+
+      const request = new NextRequest('http://localhost/api/device/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validRequest),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.status).toBe('pending');
+    });
+  });
 });

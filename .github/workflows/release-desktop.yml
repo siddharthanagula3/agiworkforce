@@ -174,11 +174,37 @@ jobs:
             return data.id;
 
   # ==========================================================================
+  # Validate - Lint, type check, and test before build
+  # ==========================================================================
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+
+  # ==========================================================================
   # Build macOS - Universal binary (aarch64 + x86_64)
   # ==========================================================================
   build-macos:
     name: Build macOS
-    needs: prepare-release
+    needs: [prepare-release, validate]
     runs-on: macos-latest
     timeout-minutes: 60
     strategy:
@@ -254,7 +280,7 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -285,7 +311,7 @@ jobs:
   # ==========================================================================
   build-windows:
     name: Build Windows
-    needs: prepare-release
+    needs: [prepare-release, validate]
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -321,7 +347,7 @@ jobs:
         run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -345,7 +371,7 @@ jobs:
   # ==========================================================================
   build-linux:
     name: Build Linux
-    needs: prepare-release
+    needs: [prepare-release, validate]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
@@ -404,7 +430,7 @@ jobs:
         run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

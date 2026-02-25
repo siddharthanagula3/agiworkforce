@@ -39,7 +39,7 @@ export const DeviceLinkRequestSchema = z.object({
   device_id: DeviceIdSchema,
   device_name: DeviceNameSchema,
   device_type: DeviceTypeSchema.optional(),
-  device_fingerprint: DeviceFingerprintSchema.optional(),
+  device_fingerprint: DeviceFingerprintSchema,
 });
 
 export const DevicePollRequestSchema = z.object({

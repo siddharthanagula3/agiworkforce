@@ -35,6 +35,7 @@ import { WidgetList, WidgetData } from './WidgetList';
 // Hooks
 import { useMessageActions } from './useMessageActions';
 import { useMessageReactions } from './useMessageReactions';
+import { useTTS } from '../../../hooks/useTTS';
 
 // Types
 import { MessageBubbleProps, ThinkingMatch, LightboxImage, ContextMenuPosition } from './types';
@@ -277,6 +278,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     setShowReactionPicker,
     handleReaction,
   } = useMessageReactions({ messageId: message.id });
+
+  const { isSpeaking, isSupported: ttsSupported, speak: ttsSpeak } = useTTS();
+  const handleSpeak = useCallback(() => {
+    ttsSpeak(message.content);
+  }, [ttsSpeak, message.content]);
 
   // Memoized values
   const formattedTime = useMemo(() => formatTimestamp(message.timestamp), [message.timestamp]);
@@ -592,12 +598,53 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
               const errorData = toolState.error;
 
+              // Detect image generation tool results and render them inline
+              const isImageTool = (() => {
+                const n = (toolName || '').toString().toLowerCase();
+                return (
+                  n === 'image_generate' ||
+                  n === 'media_generate_image' ||
+                  n === 'text_to_image' ||
+                  n.includes('generate_image') ||
+                  n.includes('image_generation')
+                );
+              })();
+
+              const imageArtifacts = (() => {
+                if (!isImageTool || !resultData) return undefined;
+                try {
+                  const parsed =
+                    typeof resultData === 'string' ? JSON.parse(resultData) : resultData;
+                  const images: Array<{ url?: string; b64_json?: string }> = Array.isArray(
+                    parsed?.images,
+                  )
+                    ? parsed.images
+                    : [];
+                  if (images.length === 0) return undefined;
+                  return images.map((img, idx) => ({
+                    id: `gen-img-${idx}`,
+                    type: 'image' as const,
+                    name: `generated-image-${idx + 1}.png`,
+                    url: img.url,
+                    data: img.b64_json,
+                    mime_type: 'image/png',
+                  }));
+                } catch {
+                  return undefined;
+                }
+              })();
+
               const resultUI: ToolResultUI = {
                 tool_call_id: actionId || 'unknown', // Should exist if toolState exists
                 success: success,
                 data: resultData || errorData || 'No output',
                 error: errorData,
-                output_type: typeof resultData === 'object' ? 'json' : 'text',
+                output_type: imageArtifacts
+                  ? 'image'
+                  : typeof resultData === 'object'
+                    ? 'json'
+                    : 'text',
+                artifacts: imageArtifacts,
               };
 
               return (
@@ -771,8 +818,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               onRetry={handleRetry}
               onStartEdit={handleStartEdit}
               onDelete={onDelete}
+              onSpeak={isAssistant ? handleSpeak : undefined}
               canEdit={!!(onEdit || onEditSave)}
               canRegenerate={!!onRegenerate}
+              isSpeaking={isSpeaking}
+              ttsSupported={ttsSupported}
             />
           )}
         </div>
