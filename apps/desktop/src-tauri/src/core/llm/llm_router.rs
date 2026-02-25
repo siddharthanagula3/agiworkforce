@@ -42,9 +42,30 @@ impl Default for RetryConfig {
     }
 }
 
+/// Defense-in-depth session cost safety cap (USD).
+///
+/// Primary enforcement is in `AutonomousAgent` (`max_session_cost` from config, default $50).
+/// This constant guards direct `route_with_retry()` callers (chat commands, background tasks)
+/// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
+const SESSION_COST_SAFETY_CAP: f64 = 50.0;
+
 /// Determines if an error is retryable (transient) or permanent
 fn is_retryable_error(error: &str) -> bool {
     let error_lower = error.to_lowercase();
+
+    // Non-retryable: credit/billing/quota exhaustion errors (must be checked FIRST
+    // to prevent false positives from substring matches like "connection" in
+    // "connection to billing" or "try again" in "try again with a different payment")
+    if error_lower.contains("402")
+        || error_lower.contains("insufficient_quota")
+        || error_lower.contains("insufficient credits")
+        || error_lower.contains("billing")
+        || error_lower.contains("payment_required")
+        || error_lower.contains("quota_exceeded")
+        || (error_lower.contains("credit") && error_lower.contains("exhaust"))
+    {
+        return false;
+    }
 
     // Rate limiting errors - should retry with backoff
     if error_lower.contains("rate limit")
@@ -1052,7 +1073,22 @@ impl LLMRouter {
         };
 
         // Accumulate cost for session-level cost cap enforcement
-        *self.cumulative_cost.lock() += outcome.cost;
+        let new_session_total = {
+            let mut cost = self.cumulative_cost.lock();
+            *cost += outcome.cost;
+            *cost
+        };
+
+        // Defense-in-depth: hard-stop if the session cost safety cap is exceeded.
+        // AutonomousAgent enforces configurable caps; this catches all other callers.
+        if new_session_total > SESSION_COST_SAFETY_CAP {
+            return Err(anyhow!(
+                "Session cost safety cap exceeded: ${:.4} > ${:.2} limit. \
+                 Reset the router to continue.",
+                new_session_total,
+                SESSION_COST_SAFETY_CAP
+            ));
+        }
 
         Ok(outcome)
     }
@@ -1126,7 +1162,25 @@ impl LLMRouter {
         retry_config: Option<RetryConfig>,
     ) -> Result<RouteOutcome> {
         let config = retry_config.unwrap_or_default();
-        let candidates = self.candidates(request, preferences);
+        let raw_candidates = self.candidates(request, preferences);
+
+        // Pre-filter: skip any provider whose is_available() returns false (e.g. Ollama when
+        // the local server is unreachable), avoiding burning the full retry budget before falling
+        // through to cloud providers.
+        let mut candidates = Vec::with_capacity(raw_candidates.len());
+        for c in raw_candidates {
+            if let Some(provider) = self.providers.get(&c.provider) {
+                if !provider.is_available().await {
+                    tracing::info!(
+                        provider = %c.provider.as_string(),
+                        model = %c.model,
+                        "Provider not reachable, removing from candidate list"
+                    );
+                    continue;
+                }
+            }
+            candidates.push(c);
+        }
 
         if candidates.is_empty() {
             return Err(anyhow!("No LLM providers configured"));
@@ -1957,7 +2011,24 @@ impl LLMRouter {
         >,
     > {
         let config = retry_config.unwrap_or_default();
-        let candidates = self.candidates(request, preferences);
+        let raw_candidates = self.candidates(request, preferences);
+
+        // Pre-filter: skip any provider whose is_available() returns false (mirrors
+        // route_with_retry behavior for consistency).
+        let mut candidates = Vec::with_capacity(raw_candidates.len());
+        for c in raw_candidates {
+            if let Some(provider) = self.providers.get(&c.provider) {
+                if !provider.is_available().await {
+                    tracing::info!(
+                        provider = %c.provider.as_string(),
+                        model = %c.model,
+                        "Provider not reachable, removing from streaming candidate list"
+                    );
+                    continue;
+                }
+            }
+            candidates.push(c);
+        }
 
         if candidates.is_empty() {
             return Err(anyhow!("No LLM providers configured"));
@@ -2106,7 +2177,17 @@ impl LLMRouter {
             .await;
 
             match stream_result {
-                Ok(Ok(stream)) => return Ok(stream),
+                Ok(Ok(stream)) => {
+                    // Record the streaming success in the circuit breaker so that
+                    // non-streaming and streaming paths share consistent state.
+                    if let Some(ref tracker) = self.rate_limit_tracker {
+                        tracker.record_success(
+                            candidate.provider,
+                            Some(&candidate.model),
+                        );
+                    }
+                    return Ok(stream);
+                }
                 Ok(Err(e)) => {
                     let error_str = e.to_string();
                     let is_retryable = is_retryable_error(&error_str);
@@ -2122,6 +2203,16 @@ impl LLMRouter {
                     );
 
                     if !is_retryable || attempt == retry_config.max_retries {
+                        // Mirror the non-streaming path: record 5xx server errors so the
+                        // circuit breaker activates cooldown for the affected provider.
+                        if is_server_error(&error_str) {
+                            if let Some(ref tracker) = self.rate_limit_tracker {
+                                tracker.record_server_error(
+                                    candidate.provider,
+                                    Some(&candidate.model),
+                                );
+                            }
+                        }
                         last_error = Some(anyhow!(error_str));
                         break;
                     }

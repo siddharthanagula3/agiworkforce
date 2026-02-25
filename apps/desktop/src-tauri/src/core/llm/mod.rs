@@ -685,6 +685,15 @@ pub trait LLMProvider: Send + Sync {
 
     fn name(&self) -> &str;
 
+    /// Whether this provider is currently reachable.
+    ///
+    /// The default returns `true` (cloud providers are assumed reachable until a network error).
+    /// Local providers such as `OllamaProvider` override this with a lightweight health-ping so
+    /// the router can skip them immediately when unreachable instead of burning retry budget.
+    async fn is_available(&self) -> bool {
+        true
+    }
+
     fn supports_vision(&self) -> bool {
         false
     }
