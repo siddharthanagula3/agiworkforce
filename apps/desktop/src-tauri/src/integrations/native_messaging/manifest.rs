@@ -546,10 +546,12 @@ pub fn is_native_messaging_installed() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "macos")]
     use std::sync::Mutex;
 
     /// Guards tests that mutate process-global environment variables so they
     /// don't race each other when `cargo test` runs them in parallel.
+    #[cfg(target_os = "macos")]
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
