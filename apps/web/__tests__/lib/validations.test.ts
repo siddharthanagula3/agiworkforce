@@ -43,6 +43,7 @@ describe('Validation Schemas', () => {
         device_id: 'test-device-123',
         device_name: 'My Device',
         device_type: 'desktop',
+        device_fingerprint: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
       });
 
       expect(result.success).toBe(true);
@@ -57,9 +58,10 @@ describe('Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should accept optional fields', () => {
+    it('should accept request with only required fields', () => {
       const result = DeviceLinkRequestSchema.safeParse({
         device_id: 'test-device-123',
+        device_fingerprint: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
       });
 
       expect(result.success).toBe(true);

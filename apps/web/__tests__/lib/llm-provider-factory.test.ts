@@ -1,10 +1,13 @@
 /**
  * LLM Provider Factory Tests
  *
- * Tests for the LLM provider routing and factory functionality
+ * Tests the real LLMProviderFactory methods using mocked provider classes.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// server-only must be mocked before any other imports that trigger it
+vi.mock('server-only', () => ({}));
 
 // Mock logger before importing factory
 vi.mock('@/lib/logger', () => ({
@@ -68,348 +71,307 @@ const mockPerplexityProvider = {
   streamRequest: vi.fn(),
 };
 
+const mockZhipuProvider = {
+  sendRequest: vi.fn(),
+  streamRequest: vi.fn(),
+};
+
 vi.mock('@/lib/llm-providers/openai', () => ({
-  OpenAIProvider: vi.fn(() => mockOpenAIProvider),
+  OpenAIProvider: vi.fn().mockImplementation(function () {
+    return mockOpenAIProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/anthropic', () => ({
-  AnthropicProvider: vi.fn(() => mockAnthropicProvider),
+  AnthropicProvider: vi.fn().mockImplementation(function () {
+    return mockAnthropicProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/google', () => ({
-  GoogleProvider: vi.fn(() => mockGoogleProvider),
+  GoogleProvider: vi.fn().mockImplementation(function () {
+    return mockGoogleProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/xai', () => ({
-  XAIProvider: vi.fn(() => mockXAIProvider),
+  XAIProvider: vi.fn().mockImplementation(function () {
+    return mockXAIProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/qwen', () => ({
-  QwenProvider: vi.fn(() => mockQwenProvider),
+  QwenProvider: vi.fn().mockImplementation(function () {
+    return mockQwenProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/moonshot', () => ({
-  MoonshotProvider: vi.fn(() => mockMoonshotProvider),
+  MoonshotProvider: vi.fn().mockImplementation(function () {
+    return mockMoonshotProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/deepseek', () => ({
-  DeepSeekProvider: vi.fn(() => mockDeepSeekProvider),
+  DeepSeekProvider: vi.fn().mockImplementation(function () {
+    return mockDeepSeekProvider;
+  }),
 }));
 
 vi.mock('@/lib/llm-providers/perplexity', () => ({
-  PerplexityProvider: vi.fn(() => mockPerplexityProvider),
+  PerplexityProvider: vi.fn().mockImplementation(function () {
+    return mockPerplexityProvider;
+  }),
 }));
 
-// We need to use dynamic import for server-only module
-// For testing purposes, we'll test the logic directly
-describe('LLM Provider Factory', () => {
+vi.mock('@/lib/llm-providers/zhipu', () => ({
+  ZhipuProvider: vi.fn().mockImplementation(function () {
+    return mockZhipuProvider;
+  }),
+}));
+
+import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { AnthropicProvider } from '@/lib/llm-providers/anthropic';
+import { OpenAIProvider } from '@/lib/llm-providers/openai';
+import { GoogleProvider } from '@/lib/llm-providers/google';
+
+describe('LLMProviderFactory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Clear env values
     Object.keys(mockEnvValues).forEach((key) => delete mockEnvValues[key]);
   });
 
+  // =========================================================================
+  // createProvider
+  // =========================================================================
+  describe('createProvider', () => {
+    it('returns an AnthropicProvider instance when apiKey is passed', () => {
+      const provider = LLMProviderFactory.createProvider('anthropic', 'sk-ant-test');
+      expect(provider).toBe(mockAnthropicProvider);
+      expect(AnthropicProvider).toHaveBeenCalledWith('sk-ant-test', undefined);
+    });
+
+    it('returns an OpenAIProvider instance when apiKey is passed', () => {
+      const provider = LLMProviderFactory.createProvider('openai', 'sk-openai-test');
+      expect(provider).toBe(mockOpenAIProvider);
+      expect(OpenAIProvider).toHaveBeenCalledWith('sk-openai-test', undefined);
+    });
+
+    it('returns a GoogleProvider instance when apiKey is passed', () => {
+      const provider = LLMProviderFactory.createProvider('google', 'google-api-key');
+      expect(provider).toBe(mockGoogleProvider);
+      expect(GoogleProvider).toHaveBeenCalledWith('google-api-key', undefined);
+    });
+
+    it('returns null for an unknown provider', () => {
+      const provider = LLMProviderFactory.createProvider('unknown-xyz', 'some-key');
+      expect(provider).toBeNull();
+    });
+
+    it('returns null when no API key is configured', () => {
+      // No apiKey argument and no env var set
+      const provider = LLMProviderFactory.createProvider('anthropic');
+      expect(provider).toBeNull();
+    });
+
+    it('picks up API key from environment via getOptionalEnv', () => {
+      mockEnvValues['ANTHROPIC_API_KEY'] = 'env-anthropic-key';
+      const provider = LLMProviderFactory.createProvider('anthropic');
+      expect(provider).toBe(mockAnthropicProvider);
+    });
+
+    it('is case-insensitive for provider names', () => {
+      const provider = LLMProviderFactory.createProvider('ANTHROPIC', 'sk-ant-test');
+      expect(provider).toBe(mockAnthropicProvider);
+    });
+  });
+
+  // =========================================================================
+  // getProviderFromModel
+  // =========================================================================
   describe('getProviderFromModel', () => {
-    // Test the model-to-provider routing logic
     const testCases = [
-      // OpenAI models
+      // OpenAI
       { model: 'gpt-4', expected: 'openai' },
       { model: 'gpt-4-turbo', expected: 'openai' },
       { model: 'gpt-3.5-turbo', expected: 'openai' },
       { model: 'GPT-4', expected: 'openai' },
 
-      // Anthropic models
+      // Anthropic
+      { model: 'claude-3-5-sonnet-20241022', expected: 'anthropic' },
       { model: 'claude-3-opus', expected: 'anthropic' },
       { model: 'claude-3-sonnet', expected: 'anthropic' },
-      { model: 'claude-3-haiku', expected: 'anthropic' },
       { model: 'claude-2.1', expected: 'anthropic' },
       { model: 'CLAUDE-3-opus', expected: 'anthropic' },
 
-      // Google models
+      // Google
       { model: 'gemini-pro', expected: 'google' },
       { model: 'gemini-1.5-pro', expected: 'google' },
-      { model: 'gemini-ultra', expected: 'google' },
       { model: 'GEMINI-PRO', expected: 'google' },
 
-      // xAI models
+      // xAI
       { model: 'grok-1', expected: 'xai' },
-      { model: 'grok-2', expected: 'xai' },
-      { model: 'GROK-1', expected: 'xai' },
+      { model: 'grok-4', expected: 'xai' },
 
-      // Qwen models
-      { model: 'qwen-turbo', expected: 'qwen' },
-      { model: 'qwen-plus', expected: 'qwen' },
+      // Qwen
       { model: 'qwen-max', expected: 'qwen' },
-      { model: 'QWEN-turbo', expected: 'qwen' },
+      { model: 'qwen-turbo', expected: 'qwen' },
 
-      // Moonshot models
+      // Moonshot
+      { model: 'kimi-k2.5', expected: 'moonshot' },
       { model: 'kimi-chat', expected: 'moonshot' },
-      { model: 'kimi-pro', expected: 'moonshot' },
-      { model: 'KIMI-chat', expected: 'moonshot' },
 
-      // DeepSeek models
+      // DeepSeek
       { model: 'deepseek-chat', expected: 'deepseek' },
-      { model: 'deepseek-chat', expected: 'deepseek' },
-      { model: 'DEEPSEEK-chat', expected: 'deepseek' },
+      { model: 'deepseek-r1', expected: 'deepseek' },
 
-      // Perplexity models
-      { model: 'sonar-small', expected: 'perplexity' },
-      { model: 'sonar-medium', expected: 'perplexity' },
-      { model: 'sonar-large', expected: 'perplexity' },
-      { model: 'SONAR-small', expected: 'perplexity' },
+      // Perplexity
+      { model: 'sonar', expected: 'perplexity' },
+      { model: 'sonar-pro', expected: 'perplexity' },
 
-      // Unknown models default to OpenAI
+      // Unknown defaults to openai
       { model: 'unknown-model', expected: 'openai' },
-      { model: 'custom-model', expected: 'openai' },
       { model: '', expected: 'openai' },
     ];
 
-    // Since LLMProviderFactory uses 'server-only', we'll test the logic pattern
-    it.each(testCases)('should route $model to $expected provider', ({ model, expected }) => {
-      // Test the routing logic directly
-      const getProviderFromModel = (modelName: string): string => {
-        const modelLower = modelName.toLowerCase();
-
-        if (modelLower.includes('gpt-')) return 'openai';
-        if (modelLower.includes('claude-')) return 'anthropic';
-        if (modelLower.includes('gemini-')) return 'google';
-        if (modelLower.includes('grok-')) return 'xai';
-        if (modelLower.includes('qwen')) return 'qwen';
-        if (modelLower.includes('kimi')) return 'moonshot';
-        if (modelLower.includes('deepseek')) return 'deepseek';
-        if (modelLower.includes('sonar')) return 'perplexity';
-
-        return 'openai';
-      };
-
-      expect(getProviderFromModel(model)).toBe(expected);
+    it.each(testCases)('routes $model to $expected', ({ model, expected }) => {
+      expect(LLMProviderFactory.getProviderFromModel(model)).toBe(expected);
     });
   });
 
-  describe('Provider API Key Mapping', () => {
-    const providerEnvKeys = [
-      { provider: 'openai', envKey: 'OPENAI_API_KEY' },
-      { provider: 'anthropic', envKey: 'ANTHROPIC_API_KEY' },
-      { provider: 'google', envKey: 'GOOGLE_API_KEY' },
-      { provider: 'xai', envKey: 'XAI_API_KEY' },
-      { provider: 'qwen', envKey: 'QWEN_API_KEY' },
-      { provider: 'moonshot', envKey: 'MOONSHOT_API_KEY' },
-      { provider: 'deepseek', envKey: 'DEEPSEEK_API_KEY' },
-      { provider: 'perplexity', envKey: 'PERPLEXITY_API_KEY' },
-    ];
-
-    it.each(providerEnvKeys)(
-      'should look for $envKey for $provider provider',
-      ({ provider, envKey }) => {
-        // Test the env key mapping logic
-        const getProviderApiKey = (providerName: string): string | undefined => {
-          const envKeyMap: Record<string, string> = {
-            openai: 'OPENAI_API_KEY',
-            anthropic: 'ANTHROPIC_API_KEY',
-            google: 'GOOGLE_API_KEY',
-            xai: 'XAI_API_KEY',
-            qwen: 'QWEN_API_KEY',
-            moonshot: 'MOONSHOT_API_KEY',
-            deepseek: 'DEEPSEEK_API_KEY',
-            perplexity: 'PERPLEXITY_API_KEY',
-          };
-
-          return envKeyMap[providerName.toLowerCase()];
-        };
-
-        expect(getProviderApiKey(provider)).toBe(envKey);
-      },
-    );
-  });
-
-  describe('Provider Base URL Mapping', () => {
-    const providerBaseUrls = [
-      { provider: 'openai', envKey: 'OPENAI_BASE_URL' },
-      { provider: 'anthropic', envKey: 'ANTHROPIC_BASE_URL' },
-      { provider: 'google', envKey: 'GOOGLE_BASE_URL' },
-      { provider: 'xai', envKey: 'XAI_BASE_URL' },
-      { provider: 'qwen', envKey: 'QWEN_BASE_URL' },
-      { provider: 'moonshot', envKey: 'MOONSHOT_BASE_URL' },
-      { provider: 'deepseek', envKey: 'DEEPSEEK_BASE_URL' },
-      { provider: 'perplexity', envKey: 'PERPLEXITY_BASE_URL' },
-    ];
-
-    it.each(providerBaseUrls)(
-      'should look for $envKey for $provider provider base URL',
-      ({ provider, envKey }) => {
-        const getProviderBaseUrl = (providerName: string): string | undefined => {
-          const envKeyMap: Record<string, string> = {
-            qwen: 'QWEN_BASE_URL',
-            openai: 'OPENAI_BASE_URL',
-            anthropic: 'ANTHROPIC_BASE_URL',
-            google: 'GOOGLE_BASE_URL',
-            xai: 'XAI_BASE_URL',
-            moonshot: 'MOONSHOT_BASE_URL',
-            deepseek: 'DEEPSEEK_BASE_URL',
-            perplexity: 'PERPLEXITY_BASE_URL',
-          };
-
-          return envKeyMap[providerName.toLowerCase()];
-        };
-
-        expect(getProviderBaseUrl(provider)).toBe(envKey);
-      },
-    );
-  });
-
-  describe('Provider Creation Logic', () => {
-    const supportedProviders = [
-      'openai',
-      'anthropic',
-      'google',
-      'xai',
-      'qwen',
-      'moonshot',
-      'deepseek',
-      'perplexity',
-    ];
-
-    it('should support all expected providers', () => {
-      const isValidProvider = (provider: string): boolean => {
-        return supportedProviders.includes(provider.toLowerCase());
-      };
-
-      supportedProviders.forEach((provider) => {
-        expect(isValidProvider(provider)).toBe(true);
-      });
-    });
-
-    it('should return null for unknown providers', () => {
-      const createProviderLogic = (provider: string): string | null => {
-        const validProviders = [
-          'openai',
-          'anthropic',
-          'google',
-          'xai',
-          'qwen',
-          'moonshot',
-          'deepseek',
-          'perplexity',
-        ];
-
-        if (validProviders.includes(provider.toLowerCase())) {
-          return provider;
-        }
-        return null;
-      };
-
-      expect(createProviderLogic('unknown')).toBeNull();
-      expect(createProviderLogic('invalid-provider')).toBeNull();
-    });
-
-    it('should handle case-insensitive provider names', () => {
-      const normalizeProvider = (provider: string): string => {
-        return provider.toLowerCase();
-      };
-
-      expect(normalizeProvider('OpenAI')).toBe('openai');
-      expect(normalizeProvider('ANTHROPIC')).toBe('anthropic');
-      expect(normalizeProvider('Google')).toBe('google');
-    });
-  });
-
-  describe('Request Handling', () => {
-    it('should throw error if provider is not configured', async () => {
-      // Simulate the error that would be thrown
-      const sendRequestLogic = async (provider: string, hasApiKey: boolean) => {
-        if (!hasApiKey) {
-          throw new Error(`Provider ${provider} not available or not configured`);
-        }
-        return { success: true };
-      };
-
-      await expect(sendRequestLogic('openai', false)).rejects.toThrow(
-        'Provider openai not available or not configured',
+  // =========================================================================
+  // mapModelIdToApiId
+  // =========================================================================
+  describe('mapModelIdToApiId', () => {
+    it('maps claude-opus-4.6 to claude-opus-4-6-20251101', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-opus-4.6')).toBe(
+        'claude-opus-4-6-20251101',
       );
     });
 
-    it('should pass API key to provider if provided', async () => {
-      let passedApiKey: string | undefined;
+    it('maps claude-opus-4-6 (hyphen alias) to claude-opus-4-6-20251101', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-opus-4-6')).toBe(
+        'claude-opus-4-6-20251101',
+      );
+    });
 
-      const sendRequestWithKey = (apiKey?: string) => {
-        passedApiKey = apiKey;
-        return { success: true };
-      };
+    it('maps claude-sonnet-4.5 to claude-sonnet-4-5-20250929', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-sonnet-4.5')).toBe(
+        'claude-sonnet-4-5-20250929',
+      );
+    });
 
-      sendRequestWithKey('custom-api-key');
-      expect(passedApiKey).toBe('custom-api-key');
+    it('maps claude-haiku-4.5 to claude-haiku-4-5-20251001', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-haiku-4.5')).toBe(
+        'claude-haiku-4-5-20251001',
+      );
+    });
+
+    it('maps gpt-5-pro to gpt-5-pro-2025-10-06', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('gpt-5-pro')).toBe('gpt-5-pro-2025-10-06');
+    });
+
+    it('maps o3 to o3-2025-04-16', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('o3')).toBe('o3-2025-04-16');
+    });
+
+    it('returns the original model ID when no mapping exists', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('some-custom-model')).toBe('some-custom-model');
+    });
+
+    it('is case-insensitive for model ID lookup', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('CLAUDE-OPUS-4.6')).toBe(
+        'claude-opus-4-6-20251101',
+      );
     });
   });
 
-  describe('Prompt Caching', () => {
-    it('should enable prompt caching when shouldEnablePromptCache returns true', () => {
-      const prepareRequest = (
-        request: { usePromptCache?: boolean },
-        shouldCache: boolean,
-      ): { usePromptCache: boolean } => {
-        return {
-          ...request,
-          usePromptCache: request.usePromptCache !== false && shouldCache,
-        };
+  // =========================================================================
+  // sendRequest
+  // =========================================================================
+  describe('sendRequest', () => {
+    it('calls provider.sendRequest and returns its response', async () => {
+      const fakeResponse = {
+        content: 'Hello',
+        model: 'claude-opus-4-6-20251101',
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
       };
+      mockAnthropicProvider.sendRequest.mockResolvedValueOnce(fakeResponse);
 
-      // Should enable when helper says yes and not explicitly disabled
-      expect(prepareRequest({}, true).usePromptCache).toBe(true);
+      const result = await LLMProviderFactory.sendRequest(
+        'anthropic',
+        {
+          model: 'claude-opus-4.6',
+          messages: [{ role: 'user', content: 'Hello' }],
+        },
+        'sk-ant-test',
+      );
 
-      // Should not enable when helper says no
-      expect(prepareRequest({}, false).usePromptCache).toBe(false);
+      expect(result).toEqual(fakeResponse);
+      expect(mockAnthropicProvider.sendRequest).toHaveBeenCalled();
+    });
 
-      // Should respect explicit false
-      expect(prepareRequest({ usePromptCache: false }, true).usePromptCache).toBe(false);
+    it('throws when provider is not configured', async () => {
+      await expect(
+        LLMProviderFactory.sendRequest('anthropic', {
+          model: 'claude-opus-4.6',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      ).rejects.toThrow(/not configured/i);
+    });
+
+    it('maps internal model ID to API model ID before calling provider', async () => {
+      mockAnthropicProvider.sendRequest.mockResolvedValueOnce({
+        content: '',
+        model: 'claude-opus-4-6-20251101',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+
+      await LLMProviderFactory.sendRequest(
+        'anthropic',
+        {
+          model: 'claude-opus-4.6',
+          messages: [{ role: 'user', content: 'Hi' }],
+        },
+        'sk-ant-test',
+      );
+
+      const calledRequest = mockAnthropicProvider.sendRequest.mock.calls[0]?.[0];
+      expect(calledRequest?.model).toBe('claude-opus-4-6-20251101');
     });
   });
 
-  describe('Model Name Edge Cases', () => {
-    it('should handle model names with version numbers', () => {
-      const getProvider = (model: string): string => {
-        const modelLower = model.toLowerCase();
-        if (modelLower.includes('gpt-')) return 'openai';
-        if (modelLower.includes('claude-')) return 'anthropic';
-        return 'openai';
-      };
+  // =========================================================================
+  // streamRequest
+  // =========================================================================
+  describe('streamRequest', () => {
+    it('calls provider.streamRequest and returns a stream', async () => {
+      const fakeStream = new ReadableStream();
+      mockAnthropicProvider.streamRequest.mockResolvedValueOnce(fakeStream);
 
-      expect(getProvider('gpt-4-0125-preview')).toBe('openai');
-      expect(getProvider('gpt-4-turbo-2024-04-09')).toBe('openai');
-      expect(getProvider('claude-3-5-sonnet-20241022')).toBe('anthropic');
+      const result = await LLMProviderFactory.streamRequest(
+        'anthropic',
+        {
+          model: 'claude-opus-4.6',
+          messages: [{ role: 'user', content: 'Hi' }],
+        },
+        'sk-ant-test',
+      );
+
+      expect(result).toBe(fakeStream);
     });
 
-    it('should handle model names with special characters', () => {
-      const getProvider = (model: string): string => {
-        const modelLower = model.toLowerCase();
-        if (modelLower.includes('gpt-')) return 'openai';
-        if (modelLower.includes('claude-')) return 'anthropic';
-        return 'openai';
-      };
-
-      expect(getProvider('gpt-4.0')).toBe('openai');
-      expect(getProvider('claude-3_opus')).toBe('anthropic');
-    });
-
-    it('should handle partial model name matches correctly', () => {
-      const getProvider = (model: string): string => {
-        const modelLower = model.toLowerCase();
-
-        // Order matters for these checks
-        if (modelLower.includes('gpt-')) return 'openai';
-        if (modelLower.includes('claude-')) return 'anthropic';
-        if (modelLower.includes('gemini-')) return 'google';
-        if (modelLower.includes('grok-')) return 'xai';
-        if (modelLower.includes('qwen')) return 'qwen';
-        if (modelLower.includes('kimi')) return 'moonshot';
-        if (modelLower.includes('deepseek')) return 'deepseek';
-        if (modelLower.includes('sonar')) return 'perplexity';
-
-        return 'openai';
-      };
-
-      // These should not match incorrectly
-      expect(getProvider('my-gpt-clone')).toBe('openai'); // Contains 'gpt-'
-      expect(getProvider('not-a-claude-model')).toBe('anthropic'); // Contains 'claude-'
+    it('throws when provider is not configured for streaming', async () => {
+      await expect(
+        LLMProviderFactory.streamRequest('anthropic', {
+          model: 'claude-opus-4.6',
+          messages: [{ role: 'user', content: 'Hi' }],
+        }),
+      ).rejects.toThrow(/not configured/i);
     });
   });
 });

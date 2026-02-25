@@ -3,6 +3,7 @@ import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { API_BASE_URL } from './api/client';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
+import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
@@ -72,6 +73,7 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [quickQueryOpen, setQuickQueryOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
@@ -319,6 +321,64 @@ const DesktopShell = () => {
     clearHistory();
   }, [clearHistory]);
 
+  // Listen for global hotkey (Cmd+Shift+Space / Ctrl+Shift+Space) to open Quick Query overlay
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    const setupHotkeyListener = async () => {
+      try {
+        const unlisten = await listen<string>('global-hotkey-triggered', () => {
+          if (!isMounted) return;
+          setQuickQueryOpen(true);
+        });
+
+        if (isMounted) {
+          unlistenFn = unlisten;
+        } else {
+          unlisten();
+        }
+      } catch (error) {
+        console.error('[App] Failed to setup global hotkey listener:', error);
+      }
+    };
+
+    void setupHotkeyListener();
+
+    return () => {
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+        unlistenFn = null;
+      }
+    };
+  }, []);
+
+  // Handle Quick Query submission: add user message and route to main chat
+  const handleQuickQuerySubmit = useCallback(
+    (query: string, _model: string) => {
+      // Ensure there's an active conversation, then add the user message
+      ensureActiveConversation();
+
+      // Import dynamically to avoid circular dependency
+      void (async () => {
+        try {
+          const { useChatStore } = await import('./stores/chat/chatStore');
+          useChatStore.getState().addPendingMessage({
+            id: crypto.randomUUID(),
+            content: query,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error) {
+          console.error('[QuickQuery] Failed to submit message:', error);
+        }
+      })();
+    },
+    [ensureActiveConversation],
+  );
+
   // Listen for global shortcut actions
   useEffect(() => {
     if (!isTauri) return;
@@ -340,6 +400,9 @@ const DesktopShell = () => {
               break;
             case 'open_chat':
               setCommandPaletteOpen(true);
+              break;
+            case 'quick_query':
+              setQuickQueryOpen(true);
               break;
             case 'voice_input':
               // Handle voice input
@@ -544,6 +607,11 @@ const DesktopShell = () => {
           warning={timeoutWarning}
           onDismiss={handleDismissTimeoutWarning}
           isOpen={isTimeoutWarningOpen}
+        />
+        <QuickQuery
+          open={quickQueryOpen}
+          onClose={() => setQuickQueryOpen(false)}
+          onSubmit={handleQuickQuerySubmit}
         />
       </div>
     </Suspense>

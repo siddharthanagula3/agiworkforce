@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 53;
+const CURRENT_VERSION: i32 = 55;
 
 /// FIX-002: Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
@@ -518,6 +518,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 54 {
         run_migration_in_transaction(conn, 54, apply_migration_v54)?;
+    }
+
+    if current_version < 55 {
+        run_migration_in_transaction(conn, 55, apply_migration_v55)?;
     }
 
     Ok(())
@@ -4654,6 +4658,70 @@ fn apply_migration_v54(conn: &Connection) -> Result<()> {
             "Applied migration v54: Added session_id column to command_history for session-scoped history"
         );
     }
+
+    Ok(())
+}
+
+/// Migration v55: Backfill existing messages into the FTS index.
+///
+/// Migration v45 created the `messages_fts` virtual table and installed
+/// INSERT/UPDATE/DELETE triggers so that all *new* messages are indexed
+/// automatically.  However, any messages that were written before v45 were
+/// never inserted into `messages_fts`.  This migration performs a one-time
+/// backfill: it inserts every row from `messages` that is not already present
+/// in `messages_fts`, using the same column mapping the v45 triggers use.
+///
+/// The operation is idempotent: rows that were already indexed by the v45
+/// triggers (because they were written after that migration ran) are skipped
+/// via the `NOT EXISTS` sub-query so no duplicates are created.
+///
+/// FTS5 availability is checked first.  When FTS5 is not compiled into the
+/// SQLite build (e.g. certain embedded or sandboxed builds) the backfill is
+/// silently skipped — the same graceful-degradation behaviour applied in v45.
+fn apply_migration_v55(conn: &Connection) -> Result<()> {
+    // Check whether FTS5 is available by probing the virtual table.
+    let fts_available: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='messages_fts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    if !fts_available {
+        tracing::info!(
+            "Migration v55: messages_fts table not found (FTS5 unavailable). \
+             Skipping chat history backfill."
+        );
+        return Ok(());
+    }
+
+    // Insert every message that is not yet present in the FTS index.
+    // The v45 triggers stored message_id as CAST(id AS TEXT) and
+    // conversation_id as CAST(conversation_id AS TEXT), so we use the same
+    // casting here for consistency.
+    let rows_inserted = conn.execute(
+        "INSERT INTO messages_fts (message_id, conversation_id, content, sender, message_type, timestamp)
+         SELECT
+             CAST(m.id AS TEXT),
+             CAST(m.conversation_id AS TEXT),
+             m.content,
+             m.role,
+             'text',
+             m.created_at
+         FROM messages m
+         WHERE NOT EXISTS (
+             SELECT 1 FROM messages_fts f
+             WHERE f.message_id = CAST(m.id AS TEXT)
+         )",
+        [],
+    )?;
+
+    tracing::info!(
+        rows_inserted = rows_inserted,
+        "Migration v55: Backfilled existing messages into messages_fts FTS index"
+    );
 
     Ok(())
 }

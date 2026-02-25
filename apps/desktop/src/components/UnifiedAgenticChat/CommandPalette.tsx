@@ -1,13 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Clock, MessageSquare, FileText, Globe, X } from 'lucide-react';
+import { Search, Clock, MessageSquare, FileText, Globe, X, Loader2 } from 'lucide-react';
 import Fuse from 'fuse.js';
-import {
-  useUnifiedChatStore,
-  type EnhancedMessage,
-  type ConversationSummary,
-} from '../../stores/unifiedChatStore';
+import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface CommandPaletteProps {
@@ -15,10 +12,21 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
+interface ChatSearchResult {
+  message_id: number;
+  conversation_id: number;
+  conversation_title: string | null;
+  content_snippet: string;
+  role: string;
+  created_at: string;
+  rank: number;
+}
+
 type SearchResult = {
   type: 'conversation' | 'message';
   conversation?: ConversationSummary;
-  message?: EnhancedMessage;
+  // FTS5 backend result fields
+  ftsResult?: ChatSearchResult;
   score: number;
   snippet?: string;
 };
@@ -26,22 +34,63 @@ type SearchResult = {
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [ftsResults, setFtsResults] = useState<ChatSearchResult[]>([]);
+  const [ftsLoading, setFtsLoading] = useState(false);
+  const ftsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
 
+  // Debounced FTS5 backend search for message content
+  useEffect(() => {
+    if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
+    if (!query.trim() || query.trim().length < 3 || !isTauri) {
+      setFtsResults([]);
+      return;
+    }
+    ftsDebounceRef.current = setTimeout(async () => {
+      setFtsLoading(true);
+      try {
+        const results = await invoke<ChatSearchResult[]>('search_chat_history', {
+          query: query.trim(),
+          limit: 8,
+        });
+        setFtsResults(results);
+      } catch {
+        setFtsResults([]);
+      } finally {
+        setFtsLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
+    };
+  }, [query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setFtsResults([]);
+      setFtsLoading(false);
+    }
+  }, [isOpen]);
+
   const handleSelect = useCallback(
     (result: SearchResult) => {
-      if (result.type === 'conversation' && result.conversation) {
+      if (result.ftsResult) {
+        // Navigate to the conversation containing the matched message
+        const convIdStr = String(result.ftsResult.conversation_id);
+        const conv = conversations.find((c) => c.id === convIdStr);
+        if (conv) selectConversation(conv.id);
+      } else if (result.type === 'conversation' && result.conversation) {
         selectConversation(result.conversation.id);
       }
       onClose();
     },
-    [selectConversation, onClose],
+    [selectConversation, onClose, conversations],
   );
 
-  const searchResults = useMemo(() => {
+  const searchResults = useMemo((): SearchResult[] => {
     if (!query.trim()) {
       return conversations
         .slice(0, 10)
@@ -65,8 +114,20 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       score: result.score ?? 0,
     }));
 
-    return conversationResults.slice(0, 10);
-  }, [query, conversations]);
+    const convResults: SearchResult[] = conversationResults.slice(0, 5);
+
+    // Merge FTS5 message results.
+    // FTS5 rank is a negative float (more negative = better match).
+    // Normalize to [0, 1] where lower = better, matching Fuse.score convention.
+    const msgResults: SearchResult[] = ftsResults.map((r) => ({
+      type: 'message' as const,
+      ftsResult: r,
+      score: r.rank < 0 ? 1 / (1 - r.rank) : 1,
+      snippet: r.content_snippet,
+    }));
+
+    return [...convResults, ...msgResults].slice(0, 12);
+  }, [query, conversations, ftsResults]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,11 +171,9 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   }, [isOpen]);
 
   const getResultIcon = (result: SearchResult) => {
-    if (result.type === 'conversation') {
-      return <MessageSquare className="h-4 w-4" />;
-    } else {
-      return <FileText className="h-4 w-4" />;
-    }
+    if (result.ftsResult) return <FileText className="h-4 w-4" />;
+    if (result.type === 'conversation') return <MessageSquare className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
   };
 
   if (!isOpen) return null;
@@ -156,7 +215,11 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         >
           {}
           <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
-            <Search className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden="true" />
+            {ftsLoading ? (
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-teal-400" aria-hidden="true" />
+            ) : (
+              <Search className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden="true" />
+            )}
             <input
               type="text"
               value={query}
@@ -223,20 +286,38 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
                     {}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-zinc-100">
-                          {result.conversation?.title || 'Untitled'}
-                        </span>
-                        {result.conversation?.updatedAt && (
-                          <span className="flex items-center gap-1 text-xs text-zinc-500">
-                            <Clock className="h-3 w-3" />
-                            {formatRelativeTime(result.conversation.updatedAt)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 truncate text-xs text-zinc-500">
-                        {result.conversation?.lastMessage || 'No activity'}
-                      </p>
+                      {result.ftsResult ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-zinc-100">
+                              {result.ftsResult.conversation_title || 'Untitled conversation'}
+                            </span>
+                            <span className="shrink-0 rounded-full bg-teal/20 px-1.5 py-0.5 text-[10px] font-medium text-teal-300">
+                              {result.ftsResult.role}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+                            {result.ftsResult.content_snippet}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-zinc-100">
+                              {result.conversation?.title || 'Untitled'}
+                            </span>
+                            {result.conversation?.updatedAt && (
+                              <span className="flex items-center gap-1 text-xs text-zinc-500">
+                                <Clock className="h-3 w-3" />
+                                {formatRelativeTime(result.conversation.updatedAt)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 truncate text-xs text-zinc-500">
+                            {result.conversation?.lastMessage || 'No activity'}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     {}

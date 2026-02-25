@@ -87,11 +87,14 @@ describe('Device Link API', () => {
         expect(response.status).toBe(400);
       });
 
-      it('should accept request with only device_id', async () => {
+      it('should accept request with only required fields', async () => {
         const request = new NextRequest('http://localhost/api/device/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_id: 'device-123' }),
+          body: JSON.stringify({
+            device_id: 'device-123',
+            device_fingerprint: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+          }),
         });
 
         const response = await POST(request);

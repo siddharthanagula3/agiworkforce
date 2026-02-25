@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri } from '../../lib/tauri-mock';
+import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
@@ -194,17 +195,10 @@ function capArray<T>(arr: T[], limit: number): T[] {
   return arr.length > limit ? arr.slice(-limit) : arr;
 }
 
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
+// Named cap limits — single source of truth for all array size guards in this store.
+const FILE_OPS_LIMIT = 200; // fileOperations, terminalCommands, toolExecutions, screenshots
+const ACTION_LOG_LIMIT = 500; // actionLog entries (newest-first via unshift + slice)
+const PENDING_APPROVALS_LIMIT = 50; // pendingApprovals queue depth
 
 const STORAGE_VERSION = 1;
 
@@ -328,7 +322,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.fileOperations.push({ ...op, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap fileOperations at 200 entries
-                state.fileOperations = capArray(state.fileOperations, 200);
+                state.fileOperations = capArray(state.fileOperations, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addFileOperation',
@@ -340,7 +334,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.terminalCommands.push({ ...cmd, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap terminalCommands at 200 entries
-                state.terminalCommands = capArray(state.terminalCommands, 200);
+                state.terminalCommands = capArray(state.terminalCommands, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addTerminalCommand',
@@ -369,7 +363,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.toolExecutions.push({ ...exec, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap toolExecutions at 200 entries
-                state.toolExecutions = capArray(state.toolExecutions, 200);
+                state.toolExecutions = capArray(state.toolExecutions, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addToolExecution',
@@ -381,7 +375,7 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.screenshots.push({ ...screenshot, timestamp: new Date() });
                 // AUDIT-006-017 fix: Cap screenshots at 200 entries
-                state.screenshots = capArray(state.screenshots, 200);
+                state.screenshots = capArray(state.screenshots, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addScreenshot',
@@ -397,8 +391,10 @@ export const useToolStore = create<ToolState>()(
                   createdAt: now,
                   updatedAt: now,
                 });
-                state.actionLog =
-                  state.actionLog.length > 500 ? state.actionLog.slice(0, 500) : state.actionLog;
+                // Cap at 500 entries — unshift prepends, so slice from the front keeps newest entries.
+                if (state.actionLog.length > ACTION_LOG_LIMIT) {
+                  state.actionLog = state.actionLog.slice(0, ACTION_LOG_LIMIT);
+                }
               },
               undefined,
               'tool/addActionLogEntry',
@@ -532,8 +528,8 @@ export const useToolStore = create<ToolState>()(
                 } else {
                   state.pendingApprovals.push(normalized);
                   // AUDIT-006-018 fix: Cap pendingApprovals at 50 entries
-                  if (state.pendingApprovals.length > 50) {
-                    state.pendingApprovals = state.pendingApprovals.slice(-50);
+                  if (state.pendingApprovals.length > PENDING_APPROVALS_LIMIT) {
+                    state.pendingApprovals = state.pendingApprovals.slice(-PENDING_APPROVALS_LIMIT);
                   }
                 }
               },
@@ -554,12 +550,15 @@ export const useToolStore = create<ToolState>()(
               'tool/approveOperation',
             ),
 
-          rejectOperation: (id, _reason) =>
+          rejectOperation: (id, reason) =>
             set(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
-                  // Remove directly - mutations before splice are discarded by Immer
+                  // Record rejection details before removing (preserves audit trail)
+                  state.pendingApprovals[index]!.status = 'rejected';
+                  state.pendingApprovals[index]!.rejectedAt = new Date();
+                  if (reason) state.pendingApprovals[index]!.rejectionReason = reason;
                   state.pendingApprovals.splice(index, 1);
                 }
               },

@@ -81,6 +81,28 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Kill-switch: reject suspended/banned/disabled users on protected paths.
+  // This enforces account_status immediately without waiting for token expiry.
+  if (user && isProtectedPath && !isPublicPath) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('account_status')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.account_status && profile.account_status !== 'active') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('reason', profile.account_status);
+      const redirectResponse = NextResponse.redirect(url);
+      // Copy Supabase cookies to maintain cookie state
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie);
+      });
+      return redirectResponse;
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new Response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:
