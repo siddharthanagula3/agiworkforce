@@ -62,7 +62,7 @@ export default async function DiagnosePage() {
   if (process.env.STRIPE_SECRET_KEY) {
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: '2026-01-28.clover' as Stripe.LatestApiVersion,
+        apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
       });
       checks.stripe.connected = true;
 
