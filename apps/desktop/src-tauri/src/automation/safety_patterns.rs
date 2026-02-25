@@ -23,10 +23,10 @@ pub fn dangerous_command_patterns() -> &'static Vec<Regex> {
     DANGEROUS_COMMAND_PATTERNS.get_or_init(|| {
         vec![
             // Destructive file-system commands
-            Regex::new(r"(?i)rm\s+-rf").unwrap(),
+            Regex::new(r"(?i)rm\s+-(?:rf|fr)").unwrap(),
             Regex::new(r"(?i)format\s+[a-z]:").unwrap(),
             Regex::new(r"(?i)del\s+/[fqs]").unwrap(),
-            Regex::new(r"(?i)deltree").unwrap(),
+            Regex::new(r"(?i)\bdeltree\b").unwrap(),
             Regex::new(r"(?i)mkfs").unwrap(),
             // Sensitive system paths
             Regex::new(r"(?i)system32").unwrap(),

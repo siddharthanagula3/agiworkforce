@@ -551,7 +551,13 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{awaitingOutput ? 'Waiting for tool output' : copied ? 'Copied!' : 'Copy to clipboard'}</p>
+                <p>
+                  {awaitingOutput
+                    ? 'Waiting for tool output'
+                    : copied
+                      ? 'Copied!'
+                      : 'Copy to clipboard'}
+                </p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenu>

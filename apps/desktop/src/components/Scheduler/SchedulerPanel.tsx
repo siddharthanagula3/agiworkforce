@@ -169,9 +169,6 @@ function JobCard({ job, onEdit, onToggle, onDelete, onRunNow }: JobCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete "${job.name}"?`)) {
-      return;
-    }
     setIsDeleting(true);
     try {
       await onDelete(job.id);

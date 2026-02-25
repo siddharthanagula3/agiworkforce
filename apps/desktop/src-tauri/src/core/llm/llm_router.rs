@@ -1971,12 +1971,9 @@ impl LLMRouter {
             ..Default::default()
         };
 
-        let candidates = self.candidates(&request, &prefs);
-        if candidates.is_empty() {
-            return Err(anyhow!("No LLM providers configured"));
-        }
-
-        let outcome = self.invoke_candidate(&candidates[0], &request).await?;
+        // Delegate to route_with_retry so all configured providers are tried
+        // with exponential backoff — consistent with send_message_streaming_with_retry.
+        let outcome = self.route_with_retry(&request, &prefs, None).await?;
         Ok(outcome.response.content)
     }
 

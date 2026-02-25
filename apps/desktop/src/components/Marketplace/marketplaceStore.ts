@@ -181,7 +181,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchMyWorkflows: async (userId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const workflows = await invoke<PublishedWorkflow[]>('get_my_published_workflows', { user_id: userId });
+      const workflows = await invoke<PublishedWorkflow[]>('get_my_published_workflows', {
+        user_id: userId,
+      });
       set({ myPublishedWorkflows: workflows, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch my workflows:', error);
@@ -192,7 +194,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   fetchWorkflowById: async (workflowId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const workflow = await invoke<PublishedWorkflow>('get_workflow_by_id', { workflow_id: workflowId });
+      const workflow = await invoke<PublishedWorkflow>('get_workflow_by_id', {
+        workflow_id: workflowId,
+      });
       set({ selectedWorkflow: workflow, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch workflow:', error);
@@ -202,7 +206,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowReviews: async (workflowId: string) => {
     try {
-      const reviews = await invoke<WorkflowReview[]>('get_workflow_reviews', { workflow_id: workflowId });
+      const reviews = await invoke<WorkflowReview[]>('get_workflow_reviews', {
+        workflow_id: workflowId,
+      });
       set({ workflowReviews: reviews });
     } catch (error) {
       console.error('Failed to fetch reviews:', error);
@@ -211,7 +217,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowComments: async (workflowId: string) => {
     try {
-      const comments = await invoke<WorkflowComment[]>('get_workflow_comments', { workflow_id: workflowId });
+      const comments = await invoke<WorkflowComment[]>('get_workflow_comments', {
+        workflow_id: workflowId,
+      });
       set({ workflowComments: comments });
     } catch (error) {
       console.error('Failed to fetch comments:', error);
@@ -220,7 +228,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchWorkflowAnalytics: async (workflowId: string) => {
     try {
-      const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', { workflow_id: workflowId });
+      const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', {
+        workflow_id: workflowId,
+      });
       set({ workflowAnalytics: analytics });
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
@@ -408,7 +418,10 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   isFavorited: async (workflowId: string, userId: string) => {
     try {
-      const favorited = await invoke<boolean>('is_workflow_favorited', { workflow_id: workflowId, user_id: userId });
+      const favorited = await invoke<boolean>('is_workflow_favorited', {
+        workflow_id: workflowId,
+        user_id: userId,
+      });
       return favorited;
     } catch (error) {
       console.error('Failed to check favorite status:', error);
@@ -436,7 +449,12 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     comment: string,
   ) => {
     try {
-      await invoke('comment_on_workflow', { workflow_id: workflowId, user_id: userId, user_name: userName, comment });
+      await invoke('comment_on_workflow', {
+        workflow_id: workflowId,
+        user_id: userId,
+        user_name: userName,
+        comment,
+      });
 
       await get().fetchWorkflowComments(workflowId);
     } catch (error) {
@@ -480,7 +498,9 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   getEmbedCode: async (workflowId: string) => {
     try {
-      const embedCode = await invoke<string>('get_workflow_embed_code', { workflow_id: workflowId });
+      const embedCode = await invoke<string>('get_workflow_embed_code', {
+        workflow_id: workflowId,
+      });
       return embedCode;
     } catch (error) {
       console.error('Failed to get embed code:', error);

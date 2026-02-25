@@ -688,9 +688,7 @@ async function handleLLMCompletion(request: NextRequest) {
       },
       'LLM request failed',
     );
-    throw createError.internal(
-      `LLM request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    );
+    throw createError.internal('LLM request failed. Please try again.');
   }
 
   // Calculate actual cost
