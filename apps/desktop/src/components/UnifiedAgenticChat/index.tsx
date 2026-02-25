@@ -2585,6 +2585,12 @@ export const UnifiedAgenticChat: React.FC<{
       // AUDIT-STREAM-059 fix: Add finally block with watchdog timeout to prevent stuck loading states
       // The watchdog now tracks inactivity (not absolute wall time), so long
       // generations stay alive while chunks/tool events are still flowing.
+      // Bug 3 note: stream_watchdog_timeout in agent mode was a downstream symptom of
+      // Bug 2 (missing VITE_SUPABASE_URL in production → Supabase module threw at load
+      // → auth never initialized → LLM streaming never started → watchdog fired).
+      // Fix 2 (supabase.ts graceful degradation + .env.production) resolves Bug 3.
+      // If stream_watchdog_timeout recurs without Bug 2 present, check the Rust-side
+      // 30-second stream connection timeout in llm_router.rs (stream_timeout variable).
       const WATCHDOG_TIMEOUT_MS = 60 * 1000; // 60 seconds of inactivity (accommodates image generation 30-90s)
       markStreamActivity();
 

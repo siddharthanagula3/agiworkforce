@@ -13,7 +13,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
     'VITE_SUPABASE_ANON_KEY=your-anon-key-here';
 
   console.error(errorMessage);
-  throw new Error(errorMessage);
+  // Supabase features will be unavailable — do NOT throw here because the
+  // desktop app uses device-link OAuth (not Supabase JS) for core auth, and
+  // throwing at module load time crashes auth.ts / authOrchestrator.ts which
+  // import this module, preventing any LLM streaming from ever starting.
 }
 
 // Simple localStorage-based storage adapter for Supabase auth

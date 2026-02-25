@@ -238,7 +238,7 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error('[refreshCreditsAfterMessage] Error:', error);
+    console.warn('[refreshCreditsAfterMessage] Credit balance unavailable (non-blocking):', error);
   }
 }
 
