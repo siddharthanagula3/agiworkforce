@@ -52,7 +52,7 @@ function PricingContent() {
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : 'An error occurred during checkout. Please try again.';
-      alert(errorMessage);
+      toast.error(errorMessage);
       setLoadingPlan(null);
     }
   };
@@ -192,7 +192,7 @@ function PricingContent() {
       }
       if (data.url) window.location.href = data.url;
     } catch {
-      alert('Failed to load billing portal');
+      toast.error('Failed to load billing portal');
     } finally {
       setLoadingPlan(null);
     }

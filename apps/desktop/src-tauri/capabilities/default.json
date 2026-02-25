@@ -72,7 +72,9 @@
         { "path": "$HOME/.config/gh/**" },
         { "path": "$HOME/.config/heroku/**" },
         { "path": "$HOME/.config/op/**" },
-        { "path": "$HOME/.config/stripe/**" }
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -101,7 +103,9 @@
         { "path": "$HOME/.config/gh/**" },
         { "path": "$HOME/.config/heroku/**" },
         { "path": "$HOME/.config/op/**" },
-        { "path": "$HOME/.config/stripe/**" }
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -130,7 +134,9 @@
         { "path": "$HOME/.config/gh/**" },
         { "path": "$HOME/.config/heroku/**" },
         { "path": "$HOME/.config/op/**" },
-        { "path": "$HOME/.config/stripe/**" }
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -159,7 +165,9 @@
         { "path": "$HOME/.config/gh/**" },
         { "path": "$HOME/.config/heroku/**" },
         { "path": "$HOME/.config/op/**" },
-        { "path": "$HOME/.config/stripe/**" }
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -188,7 +196,9 @@
         { "path": "$HOME/.config/gh/**" },
         { "path": "$HOME/.config/heroku/**" },
         { "path": "$HOME/.config/op/**" },
-        { "path": "$HOME/.config/stripe/**" }
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -202,7 +212,17 @@
       "deny": [
         { "path": "$HOME/.ssh/**" },
         { "path": "$HOME/.aws/**" },
-        { "path": "$HOME/.gnupg/**" }
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -216,7 +236,17 @@
       "deny": [
         { "path": "$HOME/.ssh/**" },
         { "path": "$HOME/.aws/**" },
-        { "path": "$HOME/.gnupg/**" }
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -230,7 +260,17 @@
       "deny": [
         { "path": "$HOME/.ssh/**" },
         { "path": "$HOME/.aws/**" },
-        { "path": "$HOME/.gnupg/**" }
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -250,7 +290,18 @@
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
-        { "path": "$HOME/.aws/**" }
+        { "path": "$HOME/.aws/**" },
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -262,7 +313,18 @@
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
-        { "path": "$HOME/.aws/**" }
+        { "path": "$HOME/.aws/**" },
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {
@@ -273,6 +335,27 @@
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPCONFIG/**" }
+      ],
+      "deny": [
+        { "path": "$HOME/.ssh/**" },
+        { "path": "$HOME/.aws/**" },
+        { "path": "$HOME/.gnupg/**" },
+        { "path": "$HOME/.kube/**" },
+        { "path": "$HOME/.config/gcloud/**" },
+        { "path": "$HOME/Library/Keychains/**" },
+        { "path": "/etc/passwd" },
+        { "path": "/etc/shadow" },
+        { "path": "$HOME/.docker/**" },
+        { "path": "$HOME/.npmrc" },
+        { "path": "$HOME/.pypirc" },
+        { "path": "$HOME/.netrc" },
+        { "path": "$HOME/.azure/**" },
+        { "path": "$HOME/.config/gh/**" },
+        { "path": "$HOME/.config/heroku/**" },
+        { "path": "$HOME/.config/op/**" },
+        { "path": "$HOME/.config/stripe/**" },
+        { "path": "$HOME/.env" },
+        { "path": "$HOME/**/.env" }
       ]
     },
     {

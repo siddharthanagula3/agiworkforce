@@ -132,9 +132,7 @@ export function ReminderList({
 
   const handleDelete = useCallback(
     async (jobId: string) => {
-      if (window.confirm('Are you sure you want to delete this reminder?')) {
-        await removeJob(jobId);
-      }
+      await removeJob(jobId);
     },
     [removeJob],
   );

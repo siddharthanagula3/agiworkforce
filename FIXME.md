@@ -4,7 +4,7 @@ This file tracks implementation blockers that can cause user-visible failures or
 
 ## 1) Extension Bridge Runtime Dependency Risk
 
-- Severity: Low
+- Severity: **RESOLVED** (2026-02-25) / Low (residual)
 - Files:
   - `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs`
 - Problem:
@@ -13,8 +13,12 @@ This file tracks implementation blockers that can cause user-visible failures or
 - Impact:
   - Tool calls no longer return false success, and broken token/auth setup now returns actionable errors.
   - UX can still degrade during prolonged local realtime-server outages.
-- Required fix:
-  - Keep retry/backoff + remediation and extend preflight diagnostics to non-tool-stream entrypoints (for example direct extension command invocations outside `agi:tool_stream` lifecycle).
+- Resolution:
+  - Authenticated realtime native-message transport implemented with bounded retries, explicit auth ACK/failure protocol, and remediation-oriented error messages.
+  - Preflight diagnostics (`extension_status`) report token validity, native connection state, and remediation recommendations.
+  - Auto-run preflight on first extension-native tool-stream start.
+- Residual gap:
+  - Preflight diagnostics for non-tool-stream extension entrypoints (e.g., direct command invocations) still missing.
 
 ## 2) Extension Orchestration Is Partial
 

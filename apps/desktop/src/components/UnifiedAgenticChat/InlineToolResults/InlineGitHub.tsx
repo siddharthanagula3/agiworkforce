@@ -80,9 +80,7 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) =>
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
-            {result?.error && (
-              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
-            )}
+            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
           </div>
         </div>
       </div>
@@ -155,9 +153,7 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status })
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
-            {result?.error && (
-              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
-            )}
+            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
           </div>
         </div>
       </div>
@@ -240,9 +236,7 @@ export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result, status }
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">GitHub operation failed</p>
-            {result?.error && (
-              <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
-            )}
+            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
           </div>
         </div>
       </div>

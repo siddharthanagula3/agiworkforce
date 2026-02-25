@@ -5,6 +5,7 @@ import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
+import { isDbUnavailableError } from '@/lib/db-error';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security dashboard access attempt');
-      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -147,6 +148,12 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     logger.error({ error }, 'Error in security monitoring API');
+    if (isDbUnavailableError(error)) {
+      return NextResponse.json(
+        { error: 'Database temporarily unavailable' },
+        { status: 503, headers: { 'Retry-After': '30' } },
+      );
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -166,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     if (!isAdmin) {
       logger.warn({ error: authError }, 'Unauthorized security admin action attempt');
-      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Body size guard: cap admin payloads to prevent memory exhaustion from oversized JSON
@@ -363,6 +370,12 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     logger.error({ error }, 'Error in security admin action');
+    if (isDbUnavailableError(error)) {
+      return NextResponse.json(
+        { error: 'Database temporarily unavailable' },
+        { status: 503, headers: { 'Retry-After': '30' } },
+      );
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

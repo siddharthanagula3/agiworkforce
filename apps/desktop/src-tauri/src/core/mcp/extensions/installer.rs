@@ -298,8 +298,44 @@ impl ExtensionInstaller {
             let mut entry = archive.by_index(i)?;
             let entry_path = entry.name().to_string();
 
-            // Construct the output path
+            // Guard against ZIP path traversal attacks: reject entries with absolute
+            // paths or components that escape the install directory (e.g. "../").
             let output_path = install_path.join(&entry_path);
+            let canonical_install = install_path
+                .canonicalize()
+                .unwrap_or_else(|_| install_path.to_path_buf());
+            // For new (not-yet-created) paths we check the normalized join result.
+            let normalized = {
+                // Strip any ".." components by resolving against the install root.
+                let mut base = canonical_install.clone();
+                for component in std::path::Path::new(&entry_path).components() {
+                    match component {
+                        std::path::Component::ParentDir => {
+                            return Err(ExtensionError::ExtractionFailed(format!(
+                                "Rejected ZIP entry with path traversal: {}",
+                                entry_path
+                            )));
+                        }
+                        std::path::Component::RootDir
+                        | std::path::Component::Prefix(_) => {
+                            return Err(ExtensionError::ExtractionFailed(format!(
+                                "Rejected ZIP entry with absolute path: {}",
+                                entry_path
+                            )));
+                        }
+                        std::path::Component::Normal(c) => base.push(c),
+                        std::path::Component::CurDir => {}
+                    }
+                }
+                base
+            };
+            if !normalized.starts_with(&canonical_install) {
+                return Err(ExtensionError::ExtractionFailed(format!(
+                    "Rejected ZIP entry that escapes install directory: {}",
+                    entry_path
+                )));
+            }
+            let output_path = normalized;
 
             if entry.is_dir() {
                 std::fs::create_dir_all(&output_path).map_err(|e| {
@@ -505,7 +541,7 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::tempdir;
-    use zip::write::FileOptions;
+    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
 
     fn create_test_package(dir: &Path) -> PathBuf {
@@ -522,7 +558,7 @@ mod tests {
             "command": "node",
             "args": ["server/index.js"]
         }"#;
-        let options = FileOptions::default();
+        let options = SimpleFileOptions::default();
         zip.start_file("manifest.json", options).unwrap();
         zip.write_all(manifest.as_bytes()).unwrap();
 

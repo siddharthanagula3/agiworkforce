@@ -1,5 +1,4 @@
 import { Download, Loader2, Image as ImageIcon, Video } from 'lucide-react';
-import { useState } from 'react';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
 
@@ -61,7 +60,9 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
           <ImageIcon className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">Image generation failed</p>
-            {errorData?.error && <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>}
+            {errorData?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>
+            )}
             {!errorData?.error && result?.error && (
               <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
             )}
@@ -151,8 +152,6 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
 };
 
 export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, status }) => {
-  const [_playing, _setPlaying] = useState(false);
-
   const data = result?.data as VideoGenerationData | undefined;
 
   // Show running state first - this needs to be checked before the null check
@@ -180,7 +179,9 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
           <Video className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">Video generation failed</p>
-            {errorData?.error && <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>}
+            {errorData?.error && (
+              <p className="text-xs text-muted-foreground mt-1">{errorData.error}</p>
+            )}
             {!errorData?.error && result?.error && (
               <p className="text-xs text-muted-foreground mt-1">{result.error}</p>
             )}

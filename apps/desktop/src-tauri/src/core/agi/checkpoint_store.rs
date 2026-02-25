@@ -38,7 +38,20 @@ impl CheckpointStore {
             // (tables may reference each other or other tables that don't exist yet)
             conn.execute_batch("PRAGMA foreign_keys = OFF")?;
 
-            // Create agi_task_checkpoints table
+            // Create agi_tasks first — agi_task_checkpoints references it via FK.
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS agi_tasks (
+                    id TEXT PRIMARY KEY,
+                    goal_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at_ms INTEGER NOT NULL,
+                    completed_at_ms INTEGER,
+                    created_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+
+            // Create agi_task_checkpoints table (references agi_tasks)
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS agi_task_checkpoints (
                     id TEXT PRIMARY KEY,
@@ -117,19 +130,6 @@ impl CheckpointStore {
                 [],
             )?;
 
-            // Create agi_tasks table (if not exists)
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS agi_tasks (
-                    id TEXT PRIMARY KEY,
-                    goal_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at_ms INTEGER NOT NULL,
-                    completed_at_ms INTEGER,
-                    created_at TEXT NOT NULL
-                )",
-                [],
-            )?;
-
             info!("AGI checkpoint store initialized");
             Ok::<_, rusqlite::Error>(())
         })
@@ -187,17 +187,18 @@ impl CheckpointStore {
         let checkpoint_clone = checkpoint.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let mut conn = Connection::open(&db_path)?;
+            let tx = conn.transaction()?;
 
             // Mark previous latest checkpoints as non-latest
-            conn.execute(
+            tx.execute(
                 "UPDATE agi_task_checkpoints SET is_latest = 0
                  WHERE task_id = ?1 AND is_latest = 1",
                 params![checkpoint_clone.task_id],
             )?;
 
             // Insert new checkpoint
-            conn.execute(
+            tx.execute(
                 "INSERT INTO agi_task_checkpoints (
                     id, task_id, goal_json, current_step, completed_steps_json,
                     current_state_json, tool_results_json, context_memory_json,
@@ -230,6 +231,8 @@ impl CheckpointStore {
                     &created_at,
                 ],
             )?;
+
+            tx.commit()?;
 
             debug!("Saved checkpoint {} for task {}", checkpoint_clone.id, checkpoint_clone.task_id);
             Ok::<_, anyhow::Error>(())
