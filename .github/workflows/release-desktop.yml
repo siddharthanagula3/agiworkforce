@@ -112,7 +112,7 @@ jobs:
 
       - name: Create draft release
         id: create-release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           VERSION: ${{ steps.get-version.outputs.version }}
           TAG: ${{ steps.get-version.outputs.tag }}
@@ -595,7 +595,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await github.rest.repos.updateRelease({
@@ -624,7 +624,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete draft release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const releaseId = ${{ needs.prepare-release.outputs.release_id }};
