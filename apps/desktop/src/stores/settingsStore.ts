@@ -508,6 +508,13 @@ export const useSettingsStore = create<SettingsState>()(
             } catch (error) {
               console.error('Failed to sync auto-approve-all to backend:', error);
             }
+            // Persist chatPreferences to Rust disk so loadSettings reads the correct
+            // value after restart (loadSettings overwrites Zustand state with disk state).
+            void get()
+              .saveSettings()
+              .catch((e: unknown) => {
+                console.error('Failed to persist auto-approve setting to disk:', e);
+              });
           }
         },
 

@@ -74,7 +74,18 @@ export async function updateSession(request: NextRequest) {
   );
 
   if (!user && isProtectedPath && !isPublicPath) {
-    // Redirect unauthenticated users to login
+    // API routes that use Bearer token auth (e.g. desktop app, CLI) must NOT be
+    // redirected to /login — they send Authorization: Bearer <JWT> and the route
+    // handler validates it directly.  A redirect returns HTML which breaks JSON
+    // clients.  Pass through; the route handler will return 401 if the token is
+    // missing or invalid.
+    const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
+    const hasBearer = request.headers.get('authorization')?.startsWith('Bearer ');
+    if (isApiRoute && hasBearer) {
+      return supabaseResponse;
+    }
+
+    // Browser navigation to protected pages: redirect to login
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirectTo', request.nextUrl.pathname);
