@@ -19,7 +19,7 @@ let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
     stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
-      apiVersion: '2026-01-28.clover',
+      apiVersion: '2026-02-25.clover',
     });
   }
   return stripeClient;
