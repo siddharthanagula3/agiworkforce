@@ -10,6 +10,7 @@ use crate::core::artifacts::{
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tracing::debug;
 
 /// State wrapper for artifact store
 pub struct ArtifactState(pub SharedArtifactStore);
@@ -50,6 +51,18 @@ impl<T> ArtifactResponse<T> {
             error: Some(error),
         }
     }
+}
+
+/// A single hunk in a diff-based artifact update.
+///
+/// Each hunk describes a contiguous range of lines to replace.
+/// `start_line` is 0-indexed and `end_line` is exclusive.
+#[derive(Debug, Deserialize)]
+pub struct ArtifactDiffHunk {
+    pub start_line: usize,
+    pub end_line: usize,
+    pub original_content: String,
+    pub new_content: String,
 }
 
 /// Create a new artifact
@@ -173,6 +186,122 @@ pub async fn artifact_update(
     };
 
     match state.0.update(request) {
+        Ok(artifact) => Ok(ArtifactResponse::ok(artifact)),
+        Err(e) => Ok(ArtifactResponse::err(e)),
+    }
+}
+
+/// Apply a diff (set of hunks) to an artifact, creating a new version.
+///
+/// Each hunk specifies a range of lines (`start_line..end_line`, 0-indexed,
+/// end exclusive) together with the expected original content and the
+/// replacement content.  Hunks are applied in reverse line-order so that
+/// earlier hunks do not shift the offsets of later ones.
+///
+/// The command validates that the original content of each hunk matches the
+/// current artifact content (using a trimmed comparison to tolerate trailing
+/// whitespace differences).  If any hunk fails validation, the entire
+/// operation is rejected and no changes are made.
+#[tauri::command]
+pub async fn artifact_apply_diff(
+    id: String,
+    hunks: Vec<ArtifactDiffHunk>,
+    change_description: Option<String>,
+    state: State<'_, ArtifactState>,
+) -> Result<ArtifactResponse<Artifact>, String> {
+    // 1. Load the current artifact
+    let artifact = match state.0.get(&id) {
+        Some(a) => a,
+        None => return Ok(ArtifactResponse::err(format!("Artifact not found: {}", id))),
+    };
+
+    if hunks.is_empty() {
+        return Ok(ArtifactResponse::err(
+            "No diff hunks provided".to_string(),
+        ));
+    }
+
+    // 2. Split current content into lines
+    let mut lines: Vec<String> = artifact.content.lines().map(String::from).collect();
+    // If the content ends with a newline, lines() will NOT produce a trailing empty
+    // element, but we need to preserve the trailing newline when we rejoin later.
+    let trailing_newline = artifact.content.ends_with('\n');
+
+    // 3. Sort hunks by start_line descending so we can apply from bottom to top
+    let mut sorted_hunks: Vec<&ArtifactDiffHunk> = hunks.iter().collect();
+    sorted_hunks.sort_by(|a, b| b.start_line.cmp(&a.start_line));
+
+    // 4. Validate all hunks before applying any
+    for hunk in &sorted_hunks {
+        if hunk.start_line > hunk.end_line {
+            return Ok(ArtifactResponse::err(format!(
+                "Invalid hunk: start_line ({}) > end_line ({})",
+                hunk.start_line, hunk.end_line
+            )));
+        }
+        if hunk.end_line > lines.len() {
+            return Ok(ArtifactResponse::err(format!(
+                "Hunk end_line ({}) exceeds artifact line count ({})",
+                hunk.end_line,
+                lines.len()
+            )));
+        }
+
+        // Validate that original_content matches the targeted lines (trimmed comparison)
+        let actual_lines: Vec<&str> = lines[hunk.start_line..hunk.end_line]
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        let actual_joined = actual_lines.join("\n");
+        if actual_joined.trim() != hunk.original_content.trim() {
+            return Ok(ArtifactResponse::err(format!(
+                "Hunk content mismatch at lines {}-{}: expected '{}', found '{}'",
+                hunk.start_line,
+                hunk.end_line,
+                hunk.original_content.chars().take(80).collect::<String>(),
+                actual_joined.chars().take(80).collect::<String>(),
+            )));
+        }
+    }
+
+    // 5. Apply hunks in reverse order (highest line numbers first)
+    for hunk in &sorted_hunks {
+        let new_lines: Vec<String> = if hunk.new_content.is_empty() {
+            Vec::new()
+        } else {
+            hunk.new_content.lines().map(String::from).collect()
+        };
+
+        // Replace the range with new lines
+        lines.splice(hunk.start_line..hunk.end_line, new_lines);
+
+        debug!(
+            "[Artifact] Applied diff hunk at lines {}-{} for artifact {}",
+            hunk.start_line, hunk.end_line, id
+        );
+    }
+
+    // 6. Rejoin lines
+    let mut new_content = lines.join("\n");
+    if trailing_newline && !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+
+    // 7. Delegate to the existing update path to save as a new version
+    let description = change_description.unwrap_or_else(|| {
+        format!("Applied {} diff hunk(s)", hunks.len())
+    });
+
+    let update_request = UpdateArtifactRequest {
+        id,
+        content: new_content,
+        change_description: Some(description),
+        title: None,
+        metadata: None,
+        tags: None,
+    };
+
+    match state.0.update(update_request) {
         Ok(artifact) => Ok(ArtifactResponse::ok(artifact)),
         Err(e) => Ok(ArtifactResponse::err(e)),
     }

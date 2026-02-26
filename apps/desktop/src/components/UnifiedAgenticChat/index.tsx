@@ -12,6 +12,7 @@
 import { listen, isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
 import React, { useEffect, useRef, useCallback } from 'react';
+import { EyeOff } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -475,6 +476,12 @@ export const UnifiedAgenticChat: React.FC<{
   );
 
   // Budget tracking moved to sub-component BudgetTracker
+
+  // Incognito mode indicator — read active conversation's flag
+  const isActiveConversationIncognito = useUnifiedChatStore((state) => {
+    const active = state.conversations.find((c) => c.id === state.activeConversationId);
+    return active?.incognito ?? false;
+  });
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // Ref to store unlisten functions for synchronous cleanup
@@ -1871,6 +1878,33 @@ export const UnifiedAgenticChat: React.FC<{
           }
         }),
       );
+
+      // Tool progress events — show subtle progress indicators when media tools are processing
+      registerListener(
+        listen<{
+          conversation_id: number;
+          tool_name: string;
+          status: string;
+          message?: string;
+        }>('chat:tool-progress', ({ payload }) => {
+          if (payload.status !== 'processing_result') return;
+
+          // Find the streaming message for this conversation and surface the progress hint
+          const state = useUnifiedChatStore.getState();
+          const currentId = state.currentStreamingMessageId;
+          if (!currentId) return;
+
+          const progressText = payload.message ?? `Processing ${payload.tool_name.replace(/_/g, ' ')}...`;
+
+          state.updateMessage(currentId, {
+            metadata: {
+              status: 'tool_progress',
+              label: progressText,
+              streaming: true,
+            },
+          });
+        }),
+      );
     };
 
     // Start setting up listeners
@@ -2294,6 +2328,13 @@ export const UnifiedAgenticChat: React.FC<{
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
 
+        // Check if this conversation is in incognito mode
+        const chatStoreState = useUnifiedChatStore.getState();
+        const activeConvo = chatStoreState.conversations.find(
+          (c) => c.id === activeConversationId,
+        );
+        const isIncognito = activeConvo?.incognito ?? false;
+
         // Get current project folder for scoped file operations
         const currentProjectFolder = useProjectStore.getState().currentFolder;
 
@@ -2358,6 +2399,8 @@ export const UnifiedAgenticChat: React.FC<{
             projectFolder: currentProjectFolder || undefined,
             // Model capabilities for tool filtering (Phase 6)
             modelCapabilities: modelCapabilities || undefined,
+            // Incognito mode: skip persistence in backend
+            incognito: isIncognito ? true : undefined,
           },
         });
 
@@ -2575,12 +2618,21 @@ export const UnifiedAgenticChat: React.FC<{
           {activeView === 'chat' ? (
             <>
               {/* Header bar with background task indicator */}
-              <div className="flex items-center justify-end px-4 py-2 border-b border-gray-800/50">
-                <BackgroundTaskIndicator
-                  popoverSide="bottom"
-                  popoverAlign="end"
-                  panelMaxHeight="350px"
-                />
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/50">
+                {/* Incognito mode indicator */}
+                {isActiveConversationIncognito && (
+                  <div className="flex items-center gap-1.5 text-violet-400 text-xs font-medium">
+                    <EyeOff className="h-3.5 w-3.5" />
+                    <span>Incognito — not saved to disk</span>
+                  </div>
+                )}
+                <div className={!isActiveConversationIncognito ? 'ml-auto' : ''}>
+                  <BackgroundTaskIndicator
+                    popoverSide="bottom"
+                    popoverAlign="end"
+                    panelMaxHeight="350px"
+                  />
+                </div>
               </div>
               <BudgetAlertsPanel />
               <BudgetTracker />

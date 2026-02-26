@@ -205,6 +205,11 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
 }
 
+/// Returns a set of permissive fallback directories (home, cwd, temp).
+/// IMPORTANT: This function is intentionally NOT used by `check_file_permission`
+/// (M9 fix — fail closed). It is retained here for potential future use in
+/// explicit opt-in contexts only.
+#[allow(dead_code)]
 fn default_allowed_directories() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
@@ -290,10 +295,18 @@ async fn check_file_permission(
                 .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
                 .collect::<Vec<_>>()
         } else {
-            default_allowed_directories()
+            // M9: SettingsState is unavailable — fail closed rather than
+            // falling back to the entire home directory. Returning false here
+            // ensures no file operation is permitted without explicit configuration.
+            tracing::warn!(
+                "SettingsState unavailable for AppHandle — denying file operation as fail-safe"
+            );
+            return Ok(false);
         }
     } else {
-        default_allowed_directories()
+        // M9: No AppHandle at all — same fail-closed policy.
+        tracing::warn!("No AppHandle provided — denying file operation as fail-safe");
+        return Ok(false);
     };
     if !is_path_allowed(&canonical_path, &allowed_dirs) {
         warn!(
