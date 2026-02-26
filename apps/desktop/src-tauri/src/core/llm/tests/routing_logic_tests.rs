@@ -1,22 +1,79 @@
 // C6 — LLMRouter routing logic tests.
 //
-// Tests that CAN run without configured providers (no API keys, no network):
-//  • `Provider::from_string` — all variant names, aliases, case-insensitivity
-//  • `Provider::as_string` — all variants produce the expected string
-//  • `Provider::default_model` — all variants return a non-empty model name
-//  • `Provider::get_model_for_task` — spot-checks for key (provider, task) pairs
-//  • `RouterContext::default` — sensible zero values
-//  • `CostPriority::default` — Balanced is the default
-//  • `RoutingStrategy::default` — Auto is the default
-//  • `suggest_for_context` (vision / creative / low-cost paths) — these branches
-//    set provider=Google/DeepSeek BEFORE calling `has_provider`, so the suggestion
-//    falls through to `prepare_context_suggestion` which returns the preferred
-//    provider even when no providers are registered.
+// ALL tests run in CI without API keys or network access.
 //
-// Tests that REQUIRE configured providers (real API keys) are marked #[ignore].
+// Tests that exercise `suggest_for_context` with no registered providers
+// (legacy paths that fall through to preferred-provider defaults) use
+// `LLMRouter::new()`.
+//
+// Tests that exercise the *intelligent* routing paths -- where the router
+// needs `has_provider()` to return `true` in order to confirm a provider --
+// use `router_with_all_providers()` which registers a lightweight
+// `MockProvider` for every `Provider` variant.  The mock is `is_configured`
+// but never makes network calls; `suggest_for_context` only checks
+// `has_provider` (which delegates to `is_configured`), so no real API keys
+// are required.
+//
+// [H20] fix: removed permanent `#[ignore]` from 17 routing-decision tests.
 #[cfg(test)]
 mod tests {
-    use crate::core::llm::{CostPriority, LLMRouter, Provider, RouterContext, RoutingStrategy, TaskType};
+    use std::error::Error;
+
+    use crate::core::llm::{
+        CostPriority, LLMProvider, LLMRequest, LLMResponse, LLMRouter, Provider, RouterContext,
+        RoutingStrategy, TaskType,
+    };
+
+    // ------------------------------------------------------------------
+    // MockProvider -- a zero-cost stub that satisfies `has_provider` checks
+    // without requiring API keys or network access.
+    // ------------------------------------------------------------------
+
+    struct MockProvider {
+        provider_name: &'static str,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for MockProvider {
+        async fn send_message(
+            &self,
+            _request: &LLMRequest,
+        ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+            Err(format!("MockProvider({}) does not send real requests", self.provider_name).into())
+        }
+
+        fn is_configured(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            self.provider_name
+        }
+    }
+
+    /// Build an `LLMRouter` with a `MockProvider` registered for every
+    /// `Provider` variant so that `has_provider()` returns `true` for all
+    /// of them.  This lets us test routing *decisions* without real API keys.
+    fn router_with_all_providers() -> LLMRouter {
+        let mut router = LLMRouter::new();
+        let all_providers: &[(Provider, &str)] = &[
+            (Provider::OpenAI, "openai"),
+            (Provider::Anthropic, "anthropic"),
+            (Provider::Google, "google"),
+            (Provider::Ollama, "ollama"),
+            (Provider::Perplexity, "perplexity"),
+            (Provider::XAI, "xai"),
+            (Provider::DeepSeek, "deepseek"),
+            (Provider::Qwen, "qwen"),
+            (Provider::Moonshot, "moonshot"),
+            (Provider::Zhipu, "zhipu"),
+            (Provider::ManagedCloud, "managed_cloud"),
+        ];
+        for &(provider, name) in all_providers {
+            router.set_provider(provider, Box::new(MockProvider { provider_name: name }));
+        }
+        router
+    }
 
     // ------------------------------------------------------------------
     // Provider::from_string — all variants + aliases
@@ -744,13 +801,16 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // Tests that require configured providers — marked #[ignore]
+    // [H20] Previously-ignored tests -- now use `router_with_all_providers()`
+    // so `has_provider()` returns true and routing decisions are testable
+    // without API keys or network access.
     // ------------------------------------------------------------------
 
+    // --- Legacy routing with mock providers ---
+
     #[test]
-    #[ignore] // Requires DeepSeek provider to be configured
     fn test_routing_logic_simple_context() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = legacy_context(
             vec!["chat".to_string()],
             false,
@@ -764,9 +824,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires DeepSeek provider to be configured
     fn test_routing_logic_complex_coding() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = legacy_context(
             vec!["code".to_string(), "devops".to_string()],
             false,
@@ -780,9 +839,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires Google provider to be configured
     fn test_routing_logic_writing_research() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = legacy_context(
             vec!["writing".to_string(), "research".to_string()],
             false,
@@ -791,14 +849,16 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
+        // hobby + writing/research -> Google (Gemini Flash)
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
+    // --- Intelligent routing: selected_model -> provider inference ---
+
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_selected_model_priority() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context(
             "pro",
             Some("coding"),
@@ -811,9 +871,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_infer_openai_provider() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.2"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -821,9 +880,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_infer_google_provider() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context(
             "hobby",
             Some("multimodal"),
@@ -836,9 +894,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_infer_deepseek_provider() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context =
             intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
         let suggestion = router.suggest_for_context(&context);
@@ -847,9 +904,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_infer_perplexity_provider() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("search"), Some("search"), Some("sonar"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
@@ -857,9 +913,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_infer_xai_provider() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context(
             "hobby",
             Some("reasoning"),
@@ -871,10 +926,11 @@ mod tests {
         assert_eq!(suggestion.model, "grok-4-fast-reasoning");
     }
 
+    // --- Intelligent routing: intent_type-based (no selected_model) ---
+
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_coding_hobby() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::DeepSeek);
@@ -882,9 +938,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_coding_pro() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
@@ -892,9 +947,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_search() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("search"), Some("search"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
@@ -902,9 +956,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_deep_research() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("deep-research"), Some("search"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Perplexity);
@@ -912,9 +965,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_reasoning_hobby() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
@@ -922,9 +974,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_reasoning_pro() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -932,9 +983,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_agentic_hobby() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
@@ -942,9 +992,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_agentic_pro() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
@@ -952,9 +1001,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_multimodal() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("multimodal"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
@@ -962,9 +1010,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_chat_hobby() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
@@ -972,19 +1019,19 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_intent_type_chat_pro() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context("pro", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(suggestion.model, "gemini-3-pro-preview");
     }
 
+    // --- Large-context and edge cases ---
+
     #[test]
-    #[ignore] // Requires Google provider configured for large-context routing
     fn test_routing_logic_large_context_upgrade() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = legacy_context(
             vec!["writing".to_string()],
             false,
@@ -993,14 +1040,14 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
+        // hobby + writing -> Google (Flash), large context doesn't change hobby routing
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(suggestion.model, "gemini-3-flash-preview");
     }
 
     #[test]
-    #[ignore] // Requires providers to be configured
     fn test_intelligent_routing_unknown_model_defaults_to_managed_cloud() {
-        let router = LLMRouter::new();
+        let router = router_with_all_providers();
         let context = intelligent_context(
             "pro",
             Some("image-gen"),

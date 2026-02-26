@@ -405,15 +405,27 @@ impl BackgroundAgentManager {
             agents.insert(agent_id.clone(), agent.clone());
         }
 
-        // Add to queue
+        // Snapshot agent priorities while holding only the agents read-lock.
+        // This avoids a deadlock: we must never hold queue(W) while acquiring
+        // agents(R), because other code paths acquire agents first then queue
+        // (lock-order inversion -> deadlock under async contention).
+        let priority_snapshot: HashMap<String, u8> = {
+            let agents = self.agents.read().await;
+            agents
+                .iter()
+                .map(|(id, agent)| (id.clone(), agent.priority))
+                .collect()
+        };
+        // agents read-lock is dropped here
+
+        // Now acquire queue write-lock (no other lock held).
         {
             let mut queue = self.queue.write().await;
             queue.push(agent_id.clone());
-            // Sort by priority (higher priority first)
-            let agents = self.agents.read().await;
+            // Sort by priority (higher priority first) using the snapshot
             queue.sort_by(|a, b| {
-                let a_priority = agents.get(a).map(|agent| agent.priority).unwrap_or(0);
-                let b_priority = agents.get(b).map(|agent| agent.priority).unwrap_or(0);
+                let a_priority = priority_snapshot.get(a).copied().unwrap_or(0);
+                let b_priority = priority_snapshot.get(b).copied().unwrap_or(0);
                 b_priority.cmp(&a_priority)
             });
         }
@@ -851,69 +863,88 @@ impl BackgroundAgentManager {
             rows.collect::<Result<Vec<_>, _>>()?
         };
 
-        let mut agents = self.agents.write().await;
-        let mut queue = self.queue.write().await;
+        // Collect IDs that need to be queued while populating the agents map.
+        // Hold agents(W) and queue(W) in separate scopes to prevent holding
+        // both locks simultaneously (consistent lock ordering: never nest).
+        let mut queued_ids: Vec<String> = Vec::new();
+        let agents_count;
 
-        for (
-            id,
-            conversation_id,
-            goal,
-            status,
-            progress_json,
-            summary_json,
-            error,
-            created_at,
-            started_at,
-            completed_at,
-            context_json,
-            priority,
-            timeout_secs,
-        ) in agents_data
         {
-            let progress: AgentProgress = serde_json::from_str(&progress_json).unwrap_or_default();
-            let summary: Option<AgentSummary> =
-                summary_json.and_then(|s| serde_json::from_str(&s).ok());
-            let context: BackgroundAgentContext =
-                serde_json::from_str(&context_json).unwrap_or_default();
+            let mut agents = self.agents.write().await;
 
-            let agent = BackgroundAgent {
-                id: id.clone(),
+            for (
+                id,
                 conversation_id,
                 goal,
-                status: BackgroundAgentStatus::from(status.as_str()),
-                progress,
-                summary,
+                status,
+                progress_json,
+                summary_json,
                 error,
-                created_at: DateTime::parse_from_rfc3339(&created_at)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-                started_at: started_at.and_then(|s| {
-                    DateTime::parse_from_rfc3339(&s)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .ok()
-                }),
-                completed_at: completed_at.and_then(|s| {
-                    DateTime::parse_from_rfc3339(&s)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .ok()
-                }),
-                context,
+                created_at,
+                started_at,
+                completed_at,
+                context_json,
                 priority,
                 timeout_secs,
-            };
+            ) in agents_data
+            {
+                let progress: AgentProgress =
+                    serde_json::from_str(&progress_json).unwrap_or_default();
+                let summary: Option<AgentSummary> =
+                    summary_json.and_then(|s| serde_json::from_str(&s).ok());
+                let context: BackgroundAgentContext =
+                    serde_json::from_str(&context_json).unwrap_or_default();
 
-            // Add non-terminal agents back to queue
-            if !agent.is_terminal() && agent.status != BackgroundAgentStatus::Running {
-                queue.push(id.clone());
+                let agent = BackgroundAgent {
+                    id: id.clone(),
+                    conversation_id,
+                    goal,
+                    status: BackgroundAgentStatus::from(status.as_str()),
+                    progress,
+                    summary,
+                    error,
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    started_at: started_at.and_then(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .ok()
+                    }),
+                    completed_at: completed_at.and_then(|s| {
+                        DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .ok()
+                    }),
+                    context,
+                    priority,
+                    timeout_secs,
+                };
+
+                // Collect non-terminal agents to be queued
+                if !agent.is_terminal() && agent.status != BackgroundAgentStatus::Running {
+                    queued_ids.push(id.clone());
+                }
+
+                agents.insert(id, agent);
             }
 
-            agents.insert(id, agent);
+            agents_count = agents.len();
         }
+        // agents write-lock dropped here
+
+        {
+            let mut queue = self.queue.write().await;
+            for id in &queued_ids {
+                queue.push(id.clone());
+            }
+        }
+        // queue write-lock dropped here
 
         tracing::info!(
             "[BackgroundAgent] Loaded {} agents from database, {} in queue",
-            agents.len(),
-            queue.len()
+            agents_count,
+            queued_ids.len()
         );
 
         Ok(())
