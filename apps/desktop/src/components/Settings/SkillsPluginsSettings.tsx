@@ -257,6 +257,10 @@ export function SkillsPluginsSettings() {
   const [agentsExpanded, setAgentsExpanded] = useState(false);
 
   const isNonTauri = !isTauriContext();
+  // Use the string primitive (not the array reference) as the dependency so
+  // useCallback doesn't re-create load on every render when the selector
+  // returns a new array instance with the same value.
+  const projectRoot = allowedDirectories[0];
 
   const load = useCallback(async () => {
     if (isNonTauri) {
@@ -268,66 +272,66 @@ export function SkillsPluginsSettings() {
     setError(null);
 
     try {
-      // 1. Get home directory
-      let homeDir = '~';
+      // 1. Get home directory — skip user-level plugins if unavailable
+      let homeDir: string | null = null;
       try {
         homeDir = await invoke<string>('get_home_directory');
       } catch {
-        // keep default
+        console.warn('[SkillsPluginsSettings] Could not determine home directory');
       }
 
       // 2. Load installed plugins from ~/.claude/plugins/installed_plugins.json
       const resolvedPlugins: ResolvedPlugin[] = [];
-      try {
-        const raw = await invoke<string>('file_read', {
-          path: `${homeDir}/.claude/plugins/installed_plugins.json`,
-        });
-        const data = JSON.parse(raw) as {
-          version: number;
-          plugins: Record<string, InstalledPluginRecord[]>;
-        };
+      if (homeDir) {
+        try {
+          const raw = await invoke<string>('file_read', {
+            path: `${homeDir}/.claude/plugins/installed_plugins.json`,
+          });
+          const data = JSON.parse(raw) as {
+            version: number;
+            plugins: Record<string, InstalledPluginRecord[]>;
+          };
 
-        for (const [key, records] of Object.entries(data.plugins ?? {})) {
-          const { name, marketplace } = pluginIdFromKey(key);
-          const latestRecord = records.sort(
-            (a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
-          )[0];
-          if (!latestRecord) continue;
+          for (const [key, records] of Object.entries(data.plugins ?? {})) {
+            const { name, marketplace } = pluginIdFromKey(key);
+            const latestRecord = records.sort(
+              (a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
+            )[0];
+            if (!latestRecord) continue;
 
-          // Try to read plugin.json manifest from installPath
-          let manifest: PluginManifest | null = null;
-          try {
-            const manifestRaw = await invoke<string>('file_read', {
-              path: `${latestRecord.installPath}/plugin.json`,
+            // Try to read plugin.json manifest from installPath
+            let manifest: PluginManifest | null = null;
+            try {
+              const manifestRaw = await invoke<string>('file_read', {
+                path: `${latestRecord.installPath}/plugin.json`,
+              });
+              manifest = JSON.parse(manifestRaw) as PluginManifest;
+            } catch {
+              // no manifest, use defaults
+            }
+
+            resolvedPlugins.push({
+              id: key,
+              marketplaceId: marketplace,
+              displayName: manifest?.name ?? humanizeId(name),
+              description: manifest?.description ?? '',
+              version: manifest?.version ?? latestRecord.version,
+              scope: latestRecord.scope,
+              installPath: latestRecord.installPath,
+              skills: manifest?.skills?.map((s) => s.name) ?? [],
+              agents: manifest?.agents?.map((a) => a.name) ?? [],
+              installedAt: latestRecord.installedAt,
             });
-            manifest = JSON.parse(manifestRaw) as PluginManifest;
-          } catch {
-            // no manifest, use defaults
           }
 
-          resolvedPlugins.push({
-            id: key,
-            marketplaceId: marketplace,
-            displayName: manifest?.name ?? humanizeId(name),
-            description: manifest?.description ?? '',
-            version: manifest?.version ?? latestRecord.version,
-            scope: latestRecord.scope,
-            installPath: latestRecord.installPath,
-            skills: manifest?.skills?.map((s) => s.name) ?? [],
-            agents: manifest?.agents?.map((a) => a.name) ?? [],
-            installedAt: latestRecord.installedAt,
-          });
+          resolvedPlugins.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        } catch {
+          // plugin registry not available
         }
-
-        resolvedPlugins.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      } catch {
-        // plugin registry not available
-      }
+      } // end if (homeDir)
       setPlugins(resolvedPlugins);
 
       // 3. Load project-level resources from .claude/ subdirectories
-      // Try each allowed directory as a project root
-      const projectRoot = allowedDirectories[0];
       if (projectRoot) {
         const claudeDir = `${projectRoot}/.claude`;
 
@@ -366,7 +370,7 @@ export function SkillsPluginsSettings() {
     } finally {
       setLoading(false);
     }
-  }, [allowedDirectories, isNonTauri]);
+  }, [isNonTauri, projectRoot]);
 
   useEffect(() => {
     void load();
