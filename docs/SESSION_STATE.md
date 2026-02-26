@@ -1,107 +1,87 @@
-# Session State — Last Updated: 2026-02-25
+# Session State — Last Updated: 2026-02-26
 
 ## Current Sprint Goal
 
-COMPLETE: CodeRabbit fix loop (Pass 1) + Settings UI (6 tabs). Next: config fixes + commit all changes.
+COMPLETE: CodeRabbit full codebase review (Pass 2) — 15 security/logic/quality fixes applied and committed.
 
-## What's Done (This Session)
+## What's Done (This Session + Previous Sessions)
 
-### CodeRabbit Fix Loop — COMPLETE (35 fixes total)
+### CodeRabbit Full Review — COMPLETE (Pass 2 of 2)
 
-**Batch 1 (13 fixes)**: lib.rs C9, websocket_server.rs H30/H31, media_executor.rs H7, agent_spawner.rs+orchestrator.rs H4, sse_parser.rs M2, extension_bridge.rs L1/H6, video/status/route.ts H33(partial), useChatSubmit.ts H16, chatStore.ts M6/M8, package.json L24
+**Security fixes committed** (`fix(security): apply 15 CodeRabbit audit fixes across 14 files`):
 
-**Batch 2 (11 fixes)**: browser.rs C19/C20/C21, query_builder.rs C16/H28/H29, database.rs H26, media.rs H34, cost_calculator.rs H2, task_decomposer.rs H3, orchestrator.rs H5, lib.rs pre-existing shadowing fix
+- `device/poll/route.ts` — device_id format validation before rate-limit key ([H2])
+- `device/poll/route.ts` — fingerprint backfill race condition fixed with WHERE IS NULL ([H3])
+- `webhooks/directory-sync/route.ts` — HMAC timestamp NaN bypass (parseInt guard) ([H6])
+- `core/agent/executor.rs` — infinite loop at filesystem root (match breaks on None) ([H8])
+- `chatStore.ts` — debounce localStorage persist to 300ms ([H17])
+- `constants/llm.ts` — TIER_ALLOWED_MODELS deduplication via ECONOMY/PRO/FLAGSHIP arrays ([H19])
+- `admin/directory-sync/route.ts` — privilege escalation via profiles.is_admin removed ([M1])
+- `admin/security/route.ts` — severity enum validated at runtime ([M3])
+- `webhooks/directory-sync/route.ts` — group name special-char injection guard ([M4])
+- `media/image/generate/route.ts` — size string split validation ([M6])
+- `llm/v1/chat/completions/route.ts` — logit_bias keys enforced as numeric strings ([M7])
+- `core/agi/executors/media_executor.rs` — .expect() panic replaced with fallback ([M8])
+- `core/llm/llm_router.rs` — 5xx check deduplicated in should_retry ([M9])
+- `sys/commands/chat/mod.rs` — duplicate AUDIT comment removed ([M11])
+- `apps/web/next.config.ts` — X-DNS-Prefetch-Control set to off ([M27])
 
-**Batch 3 (6 fixes)**: index.tsx H9(37 console.logs)/H19(finalizeStream), CacheManagement.tsx H17/H18, storageFallback.ts C4, useAgenticEvents.ts H8(N/A already correct)
+### Settings UI — COMPLETE (committed in previous session)
 
-### Settings UI — COMPLETE (typecheck passes)
+All 6 settings tabs implemented and wired:
 
-New files created:
+- `types/customModel.ts` — CustomModelConfig type
+- `components/Settings/CustomModelsSettings.tsx` — provider presets, test connection
+- `components/Settings/AgentsSettings.tsx` — approval mode, sub-agents toggles
+- `components/Settings/InstructionFilesSettings.tsx` — auto-discover CLAUDE.md/GEMINI.md/.cursorrules/etc
+- `components/Settings/ExtensionsSettings.tsx` — MCPWorkspace wired in
+- `stores/settingsStore.ts` — customModels state, v10 migration
+- `components/Settings/SettingsPanel.tsx` — 8 tabs, all wired
 
-- `apps/desktop/src/types/customModel.ts` — CustomModelConfig type
-- `apps/desktop/src/components/Settings/CustomModelsSettings.tsx` — custom endpoint manager (Groq/Ollama/OpenRouter/etc), test connection, provider presets
-- `apps/desktop/src/components/Settings/AgentsSettings.tsx` — agent behavior config (approval mode, sub-agents toggle, execution prefs)
-- `apps/desktop/src/components/Settings/InstructionFilesSettings.tsx` — discover CLAUDE.md/AGENTS.md/.cursorrules/GEMINI.md/etc, view/edit/create
+### Previous Stabilization Sprint (committed)
 
-Existing files modified:
+35 fixes across Rust backend + TypeScript frontend:
 
-- `apps/desktop/src/components/Settings/ExtensionsSettings.tsx` — replaced "Coming Soon" with MCPWorkspace
-- `apps/desktop/src/stores/settingsStore.ts` — added customModels state, actions, v10 migration
-- `apps/desktop/src/components/Settings/SettingsPanel.tsx` — grid-cols-7→8, new Agents tab, wired all 4 new components
+- LLM streaming, agent runtime, MCP, automation, UI error handling, browser fixes
 
-## What's Blocked
+## What's Blocked / Requires Human Attention
 
-- [H33] video/status/route.ts — IDOR fix needs Redis task_id→user_id mapping (NEEDS_HUMAN)
-- [C8] Decompose 3124-line chat_send_message — architectural, NEEDS_HUMAN
-- Test suites — not in scope this session
+Per CODERABBIT_REVIEW.md Final Status:
+
+- **[C2]**: Exponential backoff test missing delay assertions
+- **[C4]**: Stripe webhook HMAC test mocks signature verification
+- **[H4]**: SQL procedure name allows dots/keywords through
 
 ## Key Decisions Made
 
-- Superpowers principles applied: systematic-debugging, verification-before-completion, code-review
-- Settings: ADAPT existing components (MCPWorkspace, MemoryManager already exist), don't replace
-- ExtensionsSettings "Coming Soon" → wired MCPWorkspace (all infrastructure already existed)
-- Custom models stored in settingsStore.ts (Zustand persist v10) + type in types/customModel.ts
-- Instruction file discovery: hardcoded pattern list (CLAUDE.md, GEMINI.md, .cursorrules, etc.) with file_exists invoke check
+- Settings: ADAPT existing components, don't duplicate (ExtensionsSettings → wired MCPWorkspace)
+- CodeRabbit review: profiles.is_admin fallback removed — only app_metadata.role grants global admin
+- TIER_ALLOWED_MODELS: extracted 3 const arrays to eliminate 80 lines of duplication
+- debounce pattern: 300ms clearTimeout debounce for localStorage writes during streaming
 
-## Files Modified This Session — Full List
+## Files Modified This Session
 
-### Rust (src-tauri)
+**Rust:**
 
-- `src/sys/commands/browser.rs` — C19, C20, C21 (approval gates + path validation)
-- `src/data/database/query_builder.rs` — C16, H28, H29
-- `src/sys/commands/database.rs` — H26
-- `src/sys/commands/media.rs` — H34
-- `src/core/llm/cost_calculator.rs` — H2 (MediaType enum)
-- `src/core/swarm/task_decomposer.rs` — H3 (topological DP)
-- `src/core/swarm/orchestrator.rs` — H5 (TOCTOU atomic fix), H4
-- `src/core/swarm/agent_spawner.rs` — H4 (agent_id field)
-- `src/integrations/realtime/websocket_server.rs` — H30, H31
-- `src/core/agi/executors/media_executor.rs` — H7 (tokio::fs)
-- `src/core/llm/sse_parser.rs` — M2 (VecDeque)
-- `src/automation/browser/extension_bridge.rs` — H6, L1
-- `src/lib.rs` — C9 + pre-existing shadowing fix
-- `Cargo.toml` — subtle crate added
+- `apps/desktop/src-tauri/src/core/agent/executor.rs` — infinite loop fix
+- `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs` — expect() → unwrap_or_else()
+- `apps/desktop/src-tauri/src/core/llm/llm_router.rs` — should_retry calls is_server_error()
+- `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs` — duplicate comment removed
 
-### TypeScript/React (apps/desktop/src)
+**TypeScript/Web:**
 
-- `types/customModel.ts` — NEW
-- `components/Settings/CustomModelsSettings.tsx` — NEW
-- `components/Settings/AgentsSettings.tsx` — NEW
-- `components/Settings/InstructionFilesSettings.tsx` — NEW
-- `components/Settings/ExtensionsSettings.tsx` — MCPWorkspace wired in
-- `components/Settings/SettingsPanel.tsx` — 8 tabs, all wired
-- `stores/settingsStore.ts` — customModels + v10 migration
-- `components/UnifiedAgenticChat/index.tsx` — H9, H19
-- `components/Settings/CacheManagement.tsx` — H17, H18
-- `components/UnifiedAgenticChat/hooks/useChatSubmit.ts` — H16
-- `stores/chat/chatStore.ts` — M6, M8
-- `lib/storageFallback.ts` — NEW shared utility
-- `stores/settingsStore.ts` — storageFallback migrated (C4)
-- `stores/auth.ts` — storageFallback migrated
-- `stores/modelStore.ts` — storageFallback migrated
-
-### Web (apps/web)
-
-- `app/api/media/video/status/route.ts` — H33 partial
-- `app/api/media/video/generate/route.ts` — H33 annotation
-
-### Other
-
-- `apps/desktop/package.json` — v1.1.5
-
-## Errors Encountered & Solutions
-
-- Pre-existing lib.rs app_data_dir shadowing (lines 610/682/724) — fixed as Batch 2 side effect
-- tool_executor.rs cascading fix from H34 — Batch 2 agent handled it
+- `apps/desktop/src/constants/llm.ts` — TIER_ALLOWED_MODELS deduplication
+- `apps/desktop/src/stores/chat/chatStore.ts` — debounce persistIdMappings
+- `apps/web/app/api/admin/directory-sync/route.ts` — privilege escalation fix
+- `apps/web/app/api/admin/security/route.ts` — severity enum validation
+- `apps/web/app/api/device/poll/route.ts` — device_id validation + fingerprint race fix
+- `apps/web/app/api/llm/v1/chat/completions/route.ts` — logit_bias key validation
+- `apps/web/app/api/media/image/generate/route.ts` — size parsing validation
+- `apps/web/app/api/webhooks/directory-sync/route.ts` — HMAC NaN fix + group name guard
+- `apps/web/next.config.ts` — X-DNS-Prefetch-Control off
 
 ## Next Steps (Priority Order)
 
-1. **Config fixes** (remaining from CODERABBIT_REVIEW.md):
-   - docker-compose.yml — bind pgAdmin to 127.0.0.1 (H20)
-   - capabilities/default.json — restrict shell:allow-open + add gitconfig to deny list (H21/H22)
-   - docker-compose.yml — parameterize postgres password (C10)
-   - encryption.rs:47 — pragma_update API for SQLCipher key (M24)
-   - encryption.rs:112 — delete plaintext backup after migration (M25)
-2. **Mark fixes in CODERABBIT_REVIEW.md** as FIXED
-3. **Commit all changes** with conventional commits per batch
-4. **Config: Compact instructions** — add to CLAUDE.md per Never-Forget prompt
+1. **[C2] Exponential backoff test** — add explicit delay interval assertions to retry.test.ts
+2. **[C4] Stripe webhook** — add HMAC verification tests using Stripe test signing secret
+3. **Settings enhancement** — review existing 6-tab Settings implementation vs. full spec and add missing pieces
