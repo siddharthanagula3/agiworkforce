@@ -15,12 +15,17 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  * Endpoint: POST /api/media/image/generate
  *
  * This provides a unified interface for image generation using multiple providers:
- * - Google Imagen 3 (default if GOOGLE_API_KEY is set)
+ * - Google Imagen 4 (default if GOOGLE_API_KEY is set)
  * - OpenAI DALL-E 3
- * - Stability AI Stable Diffusion XL
+ * - Stability AI Stable Image Core (v2beta)
  *
  * Users authenticate with their Supabase JWT and must have an active subscription.
  */
+
+// Next.js route configuration — image generation takes 10–30s, so we extend to 60s.
+// Without this the serverless function would time out at the default (10s on Vercel).
+export const maxDuration = 60;
+export const runtime = 'nodejs';
 
 // Supported providers
 type ImageProvider = 'google' | 'openai' | 'stability';
@@ -65,6 +70,7 @@ interface ImageGenerationResponse {
   provider: ImageProvider;
   model: string;
   cost_estimate: number;
+  latency_ms: number;
   error?: string;
 }
 
@@ -75,10 +81,15 @@ const COST_ESTIMATES: Record<ImageProvider, Record<string, number>> = {
     'dall-e-3-hd': 8, // $0.08 per image (1024x1024 HD)
   },
   google: {
-    'imagen-3.0-generate-001': 3, // $0.03 per image (estimated)
+    // Imagen 4 pricing (estimated, similar to Imagen 3)
+    'imagen-4.0-generate-001': 3, // $0.03 per image (estimated)
+    'imagen-4.0-fast-generate-001': 2, // $0.02 per image (estimated, fast variant)
   },
   stability: {
-    'stable-diffusion-xl-1024-v1-0': 2, // $0.02 per image (estimated)
+    // Stable Image Core: 3 credits = ~$0.03
+    'stable-image-core': 3,
+    // Stable Image Ultra: 8 credits = ~$0.08
+    'stable-image-ultra': 8,
   },
 };
 
@@ -128,6 +139,8 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 
 /**
  * Generate image using OpenAI DALL-E 3
+ * Endpoint: POST https://api.openai.com/v1/images/generations
+ * DALL-E 3 only supports n=1 per call; we loop for multiple images.
  */
 async function generateWithDallE(
   prompt: string,
@@ -142,7 +155,7 @@ async function generateWithDallE(
   const validSizes = ['1024x1024', '1792x1024', '1024x1792'];
   const dalleSize = validSizes.includes(size) ? size : '1024x1024';
 
-  // DALL-E 3 only supports n=1, need to make multiple requests for more
+  // DALL-E 3 only supports n=1 per request; loop for more images
   const images: GeneratedImage[] = [];
   const requestCount = Math.min(n, 4);
 
@@ -162,16 +175,20 @@ async function generateWithDallE(
         n: 1,
         response_format: 'url',
       }),
+      // Node.js fetch signal for per-request timeout (55s to stay inside maxDuration)
+      signal: AbortSignal.timeout(55_000),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const errorObj = errorData.error as Record<string, unknown> | undefined;
       const errorMessage =
-        errorData.error?.message || `DALL-E API error: ${response.status} ${response.statusText}`;
+        (errorObj?.message as string) ||
+        `DALL-E API error: ${response.status} ${response.statusText}`;
       throw new Error(errorMessage);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { data?: Array<{ url?: string }> };
     if (data.data && data.data.length > 0) {
       images.push({ url: data.data[0].url });
     }
@@ -184,7 +201,11 @@ async function generateWithDallE(
 }
 
 /**
- * Generate image using Google Imagen 3
+ * Generate image using Google Imagen 4
+ * Endpoint: POST https://generativelanguage.googleapis.com/v1beta/models/{model}:predict
+ *
+ * Imagen 3 (imagen-3.0-generate-001) was shut down; now using Imagen 4.
+ * Model: imagen-4.0-generate-001 (GA, released 2025)
  */
 async function generateWithImagen(
   prompt: string,
@@ -194,6 +215,7 @@ async function generateWithImagen(
   negativePrompt?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('google');
+  const model = 'imagen-4.0-generate-001';
 
   // Parse size to aspect ratio
   const [width, height] = size.split('x').map(Number);
@@ -205,7 +227,7 @@ async function generateWithImagen(
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`,
     {
       method: 'POST',
       headers: {
@@ -222,20 +244,22 @@ async function generateWithImagen(
         parameters: {
           sampleCount: Math.min(n, 4),
           aspectRatio,
-          // personGeneration: 'allow_adult', // Uncomment if needed
         },
       }),
+      signal: AbortSignal.timeout(55_000),
     },
   );
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorObj = errorData.error as Record<string, unknown> | undefined;
     const errorMessage =
-      errorData.error?.message || `Imagen API error: ${response.status} ${response.statusText}`;
+      (errorObj?.message as string) ||
+      `Imagen API error: ${response.status} ${response.statusText}`;
     throw new Error(errorMessage);
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as { predictions?: Array<{ bytesBase64Encoded?: string }> };
 
   const images: GeneratedImage[] = [];
   if (data.predictions) {
@@ -248,12 +272,18 @@ async function generateWithImagen(
 
   return {
     images,
-    model: 'imagen-3.0-generate-001',
+    model,
   };
 }
 
 /**
- * Generate image using Stability AI Stable Diffusion XL
+ * Generate image using Stability AI Stable Image Core (v2beta)
+ * Endpoint: POST https://api.stability.ai/v2beta/stable-image/generate/core
+ *
+ * The old v1 SDXL endpoint (stable-diffusion-xl-1024-v1-0) is deprecated.
+ * The v2beta API uses multipart/form-data and returns binary image data.
+ *
+ * Valid aspect_ratio values: 16:9, 1:1, 21:9, 2:3, 3:2, 4:5, 5:4, 9:16, 9:21
  */
 async function generateWithStability(
   prompt: string,
@@ -264,13 +294,34 @@ async function generateWithStability(
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('stability');
 
-  // Parse size
+  // Map size to closest supported aspect_ratio
   const [width, height] = size.split('x').map(Number);
-
-  // Stability supports various sizes, default to 1024x1024 if not supported
-  const supportedDimensions = [512, 768, 1024, 1536];
-  const sdWidth = supportedDimensions.includes(width) ? width : 1024;
-  const sdHeight = supportedDimensions.includes(height) ? height : 1024;
+  let aspectRatio = '1:1';
+  if (width > height) {
+    // landscape
+    const ratio = width / height;
+    if (ratio >= 1.7) {
+      aspectRatio = '16:9';
+    } else if (ratio >= 1.4) {
+      aspectRatio = '3:2';
+    } else if (ratio >= 1.2) {
+      aspectRatio = '5:4';
+    } else {
+      aspectRatio = '4:5';
+    }
+  } else if (height > width) {
+    // portrait
+    const ratio = height / width;
+    if (ratio >= 1.7) {
+      aspectRatio = '9:16';
+    } else if (ratio >= 1.4) {
+      aspectRatio = '2:3';
+    } else if (ratio >= 1.2) {
+      aspectRatio = '4:5';
+    } else {
+      aspectRatio = '5:4';
+    }
+  }
 
   // Map style to Stability style preset
   const stylePresetMap: Record<string, string> = {
@@ -283,61 +334,53 @@ async function generateWithStability(
   };
   const stylePreset = style ? stylePresetMap[style] : undefined;
 
-  const response = await fetch(
-    'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
-    {
+  // The v2beta API uses multipart/form-data and returns binary or base64
+  // We request base64 via Accept: application/json
+  const images: GeneratedImage[] = [];
+  const requestCount = Math.min(n, 4);
+
+  for (let i = 0; i < requestCount; i++) {
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('aspect_ratio', aspectRatio);
+    formData.append('output_format', 'png');
+    if (negativePrompt) {
+      formData.append('negative_prompt', negativePrompt);
+    }
+    if (stylePreset) {
+      formData.append('style_preset', stylePreset);
+    }
+
+    const response = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        // Accept application/json to get base64-encoded image back
         Accept: 'application/json',
       },
-      body: JSON.stringify({
-        text_prompts: [
-          {
-            text: prompt,
-            weight: 1,
-          },
-          ...(negativePrompt
-            ? [
-                {
-                  text: negativePrompt,
-                  weight: -1,
-                },
-              ]
-            : []),
-        ],
-        cfg_scale: 7,
-        width: sdWidth,
-        height: sdHeight,
-        samples: Math.min(n, 4),
-        steps: 30,
-        ...(stylePreset && { style_preset: stylePreset }),
-      }),
-    },
-  );
+      body: formData,
+      signal: AbortSignal.timeout(55_000),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage =
-      errorData.message || `Stability API error: ${response.status} ${response.statusText}`;
-    throw new Error(errorMessage);
-  }
+    if (!response.ok) {
+      // v2beta returns JSON errors
+      const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const errorMessage =
+        (errorData.message as string) ||
+        (errorData.errors as string[] | undefined)?.[0] ||
+        `Stability API error: ${response.status} ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
 
-  const data = await response.json();
-
-  const images: GeneratedImage[] = [];
-  if (data.artifacts) {
-    for (const artifact of data.artifacts) {
-      if (artifact.base64) {
-        images.push({ b64_json: artifact.base64 });
-      }
+    const data = (await response.json()) as { image?: string; finish_reason?: string };
+    if (data.image) {
+      images.push({ b64_json: data.image });
     }
   }
 
   return {
     images,
-    model: 'stable-diffusion-xl-1024-v1-0',
+    model: 'stable-image-core',
   };
 }
 
@@ -345,6 +388,8 @@ async function generateWithStability(
  * Main handler for image generation
  */
 async function handleImageGeneration(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+
   // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
@@ -621,11 +666,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Image generation failed',
     );
 
-    // Return user-friendly error messages
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
 
-    // Check for common error patterns and provide friendly messages
-    let friendlyMessage = errorMessage;
+    // Provide user-friendly messages for common failure patterns
+    let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
     if (errorMessage.includes('content policy') || errorMessage.includes('safety')) {
       friendlyMessage =
         'Your prompt was flagged by our content safety filters. Please try a different prompt.';
@@ -635,8 +679,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     } else if (errorMessage.includes('billing') || errorMessage.includes('payment')) {
       friendlyMessage =
         'There was a billing issue with the image generation service. Please contact support.';
-    } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-      friendlyMessage = 'The image generation request timed out. Please try again.';
+    } else if (
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('TimeoutError')
+    ) {
+      friendlyMessage =
+        'The image generation request timed out. Please try again — image generation can take up to 30 seconds.';
     }
 
     return NextResponse.json(
@@ -647,9 +696,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         provider,
         model: 'unknown',
         cost_estimate: 0,
+        latency_ms: Date.now() - startTime,
       } satisfies ImageGenerationResponse,
       {
-        status: 500,
+        status: 422,
         headers: {
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
@@ -660,7 +710,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   // Calculate cost estimate
   const providerCosts = COST_ESTIMATES[provider];
-  const baseCost = providerCosts[result.model] || 3; // Default 3 cents
+  const baseCost = providerCosts[result.model] ?? 3; // Default 3 cents
   const costEstimate = baseCost * result.images.length;
 
   const response: ImageGenerationResponse = {
@@ -669,6 +719,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     provider,
     model: result.model,
     cost_estimate: costEstimate,
+    latency_ms: Date.now() - startTime,
   };
 
   return NextResponse.json(response, {
