@@ -266,4 +266,72 @@ describe('settingsStore', () => {
     expect(taskRouting.image.provider).toBe('managed_cloud');
     expect(taskRouting.video.provider).toBe('managed_cloud');
   });
+
+  // M34 — factory function cross-checks
+  // Ensures store default values exactly match the factory function output,
+  // not hardcoded literals.  When factory defaults change, these tests catch
+  // any drift between what the factory produces and what the store initialises.
+  describe('factory function parity (M34)', () => {
+    it('initial llmConfig matches createDefaultLLMConfig() output exactly', () => {
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig).toEqual(createDefaultLLMConfig());
+    });
+
+    it('initial windowPreferences matches createDefaultWindowPreferences() output exactly', () => {
+      const state = useSettingsStore.getState();
+      expect(state.windowPreferences).toEqual(createDefaultWindowPreferences());
+    });
+
+    it('default llmConfig.defaultProvider equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultLLMConfig();
+      expect(state.llmConfig.defaultProvider).toBe(factory.defaultProvider);
+    });
+
+    it('default llmConfig.temperature equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultLLMConfig();
+      expect(state.llmConfig.temperature).toBe(factory.temperature);
+    });
+
+    it('default llmConfig.maxTokens equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultLLMConfig();
+      expect(state.llmConfig.maxTokens).toBe(factory.maxTokens);
+    });
+
+    it('default windowPreferences.theme equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultWindowPreferences();
+      expect(state.windowPreferences.theme).toBe(factory.theme);
+    });
+
+    it('default windowPreferences.startupPosition equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultWindowPreferences();
+      expect(state.windowPreferences.startupPosition).toBe(factory.startupPosition);
+    });
+
+    it('default windowPreferences.dockOnStartup equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultWindowPreferences();
+      expect(state.windowPreferences.dockOnStartup).toBe(factory.dockOnStartup);
+    });
+
+    it('default defaultModels equals the factory value', () => {
+      const state = useSettingsStore.getState();
+      const factory = createDefaultLLMConfig();
+      expect(state.llmConfig.defaultModels).toEqual(factory.defaultModels);
+    });
+
+    it('after setState with factory output, values still equal factory', () => {
+      useSettingsStore.setState({
+        llmConfig: createDefaultLLMConfig(),
+        windowPreferences: createDefaultWindowPreferences(),
+      });
+      const state = useSettingsStore.getState();
+      expect(state.llmConfig).toEqual(createDefaultLLMConfig());
+      expect(state.windowPreferences).toEqual(createDefaultWindowPreferences());
+    });
+  });
 });

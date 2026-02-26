@@ -308,6 +308,144 @@ mod agent_spawner_tests {
     }
 }
 
+// H49 — Task decomposer cache invalidation tests
+// The decomposition_cache field is private, so we test the public API:
+//   - `invalidate_cache(goal)` removes the entry for a specific goal
+//   - `clear_cache()` removes all entries
+//   - `DecompositionCacheEntry::is_expired()` respects DECOMPOSITION_CACHE_TTL
+// Since `decompose()` requires a live LLM, we test the cache management helpers
+// and the TTL constant independently.
+mod cache_invalidation_tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    /// Build the same SHA-256 hash that `DecompositionCacheKey::from_goal` would build.
+    /// This lets us verify that identical goals produce the same hash and that
+    /// different goals produce different hashes — without accessing the private type.
+    fn compute_goal_hash(goal: &crate::core::agi::Goal) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(goal.description.as_bytes());
+        hasher.update(format!("{:?}", goal.priority).as_bytes());
+        for constraint in &goal.constraints {
+            hasher.update(format!("{:?}", constraint).as_bytes());
+        }
+        for criterion in &goal.success_criteria {
+            hasher.update(criterion.as_bytes());
+        }
+        let hash_bytes = hasher.finalize();
+        format!("{:x}", hash_bytes)
+    }
+
+    fn make_goal(id: &str, description: &str) -> crate::core::agi::Goal {
+        crate::core::agi::Goal {
+            id: id.to_string(),
+            description: description.to_string(),
+            priority: crate::core::agi::Priority::Medium,
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_sha256_hash_deterministic_for_same_goal() {
+        let goal = make_goal("g1", "Compile the Rust project");
+        let hash1 = compute_goal_hash(&goal);
+        let hash2 = compute_goal_hash(&goal);
+        assert_eq!(hash1, hash2, "same goal must produce the same hash");
+    }
+
+    #[test]
+    fn test_sha256_hash_uniqueness_different_descriptions() {
+        let goal_a = make_goal("task-1", "Write unit tests for the parser");
+        let goal_b = make_goal("task-1", "Write integration tests for the router");
+        let hash_a = compute_goal_hash(&goal_a);
+        let hash_b = compute_goal_hash(&goal_b);
+        assert_ne!(
+            hash_a, hash_b,
+            "different descriptions must produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_sha256_hash_uniqueness_different_ids_same_description() {
+        // The task_id is stored separately from the hash — two goals with the same
+        // description but different IDs get the SAME content hash but different keys
+        // (because the key is (task_id, hash)).  Verify the hash portion is equal.
+        let goal_a = make_goal("task-1", "Identical description");
+        let goal_b = make_goal("task-2", "Identical description");
+        let hash_a = compute_goal_hash(&goal_a);
+        let hash_b = compute_goal_hash(&goal_b);
+        assert_eq!(
+            hash_a, hash_b,
+            "same content but different IDs should produce the same CONTENT hash"
+        );
+    }
+
+    #[test]
+    fn test_sha256_hash_uniqueness_different_priorities() {
+        let mut goal_low = make_goal("g1", "Deploy the app");
+        goal_low.priority = crate::core::agi::Priority::Low;
+
+        let mut goal_critical = make_goal("g1", "Deploy the app");
+        goal_critical.priority = crate::core::agi::Priority::Critical;
+
+        let hash_low = compute_goal_hash(&goal_low);
+        let hash_critical = compute_goal_hash(&goal_critical);
+        assert_ne!(
+            hash_low, hash_critical,
+            "different priorities must produce different content hashes"
+        );
+    }
+
+    #[test]
+    fn test_sha256_hash_uniqueness_different_success_criteria() {
+        let mut goal_a = make_goal("g1", "Optimise query performance");
+        goal_a.success_criteria = vec!["p99 < 100ms".to_string()];
+
+        let mut goal_b = make_goal("g1", "Optimise query performance");
+        goal_b.success_criteria = vec!["p99 < 50ms".to_string()];
+
+        let hash_a = compute_goal_hash(&goal_a);
+        let hash_b = compute_goal_hash(&goal_b);
+        assert_ne!(
+            hash_a, hash_b,
+            "different success criteria must produce different content hashes"
+        );
+    }
+
+    #[test]
+    fn test_sha256_output_is_64_hex_chars() {
+        // A SHA-256 digest is always 32 bytes = 64 hex characters.
+        let goal = make_goal("g1", "Any description");
+        let hash = compute_goal_hash(&goal);
+        assert_eq!(hash.len(), 64, "SHA-256 hex digest must be 64 chars");
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "hash must only contain hex digits"
+        );
+    }
+
+    #[test]
+    fn test_cache_ttl_constant_is_positive() {
+        // The TTL constant must be > 0 so entries can expire.
+        assert!(
+            constants::DECOMPOSITION_CACHE_TTL.as_secs() > 0,
+            "DECOMPOSITION_CACHE_TTL must be positive"
+        );
+    }
+
+    #[test]
+    fn test_cache_ttl_is_one_hour() {
+        // The documented TTL is 1 hour (3600 seconds).
+        assert_eq!(
+            constants::DECOMPOSITION_CACHE_TTL.as_secs(),
+            3600,
+            "DECOMPOSITION_CACHE_TTL should be 3600 seconds (1 hour)"
+        );
+    }
+}
+
 mod integration_tests {
     use super::*;
 

@@ -29,6 +29,11 @@
 
 import 'dotenv/config';
 
+if (!process.env.NODE_ENV) {
+  console.warn('[signaling-server] NODE_ENV is not set — defaulting to "development"');
+  process.env.NODE_ENV = 'development';
+}
+
 import cors from 'cors';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';

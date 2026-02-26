@@ -4,6 +4,7 @@
 //! various LLM providers (OpenAI, Anthropic, Google, DeepSeek, etc.).
 
 use super::{LLMRequest, LLMResponse, Provider, ToolCall};
+use anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
@@ -1901,6 +1902,7 @@ impl ProviderAdapter for OllamaAdapter {
         response: &Value,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         // Ollama uses similar response format to OpenAI
+        // content is optional: empty when the response contains only tool_calls.
         let content = response["message"]["content"]
             .as_str()
             .unwrap_or("")
@@ -1957,12 +1959,19 @@ impl ProviderAdapter for OllamaAdapter {
                 }
             });
 
+        // L5 fix: "model" is a required field in every Ollama response; fail with a
+        // descriptive error instead of silently substituting an empty string.
+        let model = response["model"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required field: model"))?
+            .to_string();
+
         Ok(LLMResponse {
             content,
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
-            model: response["model"].as_str().unwrap_or("").to_string(),
+            model,
             tool_calls,
             finish_reason,
             ..LLMResponse::default()

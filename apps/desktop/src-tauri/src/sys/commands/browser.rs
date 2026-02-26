@@ -16,6 +16,18 @@ use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolS
 // SECURITY: Input sanitization for CDP JavaScript injection prevention
 // =============================================================================
 
+/// Validate a CSS selector against a whitelist of safe characters.
+/// Rejects selectors that contain characters outside the expected set for
+/// standard CSS selectors, preventing injection of arbitrary JavaScript.
+///
+/// Allowed characters cover: alphanumerics, whitespace, `.`, `#`, `_`, `-`,
+/// `>`, `+`, `~`, `:`, `[`, `]`, `=`, `^`, `$`, `*`, `|`, `"`, `'`, `(`, `)`.
+fn is_valid_css_selector(selector: &str) -> bool {
+    selector
+        .chars()
+        .all(|c| c.is_alphanumeric() || " .#_->+~:[]=^$*|\"'()".contains(c))
+}
+
 /// Sanitize a CSS selector before embedding it in a JavaScript string literal.
 /// Escapes backslashes, single quotes, and double quotes to prevent breaking out of
 /// `document.querySelector('...')` or CSS attribute selectors like `[name="..."]`.
@@ -466,6 +478,10 @@ pub async fn browser_click(
     selector: String,
     tab_id: Option<String>,
 ) -> Result<(), String> {
+    // L3 fix: reject selectors containing characters outside the CSS safe-list.
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::click(&client, &selector, ClickOptions::default())
         .await
@@ -479,6 +495,9 @@ pub async fn browser_type(
     text: String,
     tab_id: Option<String>,
 ) -> Result<(), String> {
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::type_text(&client, &selector, &text, TypeOptions::default())
         .await
@@ -491,6 +510,9 @@ pub async fn browser_get_text(
     selector: String,
     tab_id: Option<String>,
 ) -> Result<String, String> {
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::get_text(&client, &selector)
         .await
@@ -504,6 +526,9 @@ pub async fn browser_get_attribute(
     attribute: String,
     tab_id: Option<String>,
 ) -> Result<Option<String>, String> {
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::get_attribute(&client, &selector, &attribute)
         .await
@@ -517,6 +542,9 @@ pub async fn browser_wait_for_selector(
     timeout: Option<u64>,
     tab_id: Option<String>,
 ) -> Result<(), String> {
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::wait_for_selector(&client, &selector, timeout.unwrap_or(30000))
         .await
@@ -530,6 +558,9 @@ pub async fn browser_select_option(
     value: String,
     tab_id: Option<String>,
 ) -> Result<(), String> {
+    if !is_valid_css_selector(&selector) {
+        return Err(format!("Invalid CSS selector: '{}'", selector));
+    }
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     DomOperations::select_option(&client, &selector, &value)
         .await
