@@ -101,6 +101,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   ],
   anthropic: [
     { value: 'claude-opus-4.6', label: 'Claude 4.6 Opus' },
+    { value: 'claude-sonnet-4.6', label: 'Claude 4.6 Sonnet' },
     { value: 'claude-sonnet-4.5', label: 'Claude 4.5 Sonnet' },
     { value: 'claude-haiku-4.5', label: 'Claude 4.5 Haiku' },
   ],
@@ -192,6 +193,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     // Pro-tier additions
     'gpt-5.2',
     'gpt-5.2-codex-medium',
+    'claude-sonnet-4.6',
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
@@ -228,6 +230,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'gpt-5.2-codex-xhigh',
     'gpt-5.2-codex-high',
     'gpt-5.2-codex-medium',
+    'claude-sonnet-4.6',
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
@@ -261,6 +264,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
     'gpt-5.2-codex-xhigh',
     'gpt-5.2-codex-high',
     'gpt-5.2-codex-medium',
+    'claude-sonnet-4.6',
     'claude-sonnet-4.5',
     'gemini-3-pro-preview',
     'qwen-max',
@@ -329,6 +333,7 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'gpt-5-nano': 128_000, // GPT-5 Nano - cheapest OpenAI model
   // Anthropic
   'claude-opus-4.6': 200_000,
+  'claude-sonnet-4.6': 200_000,
   'claude-sonnet-4.5': 200_000,
   'claude-haiku-4.5': 200_000, // Claude Haiku 4.5 - cheapest Anthropic
   // Google (no Ultra tier exists in Gemini 3 API)
@@ -624,7 +629,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5.2-codex-low': {
     id: 'gpt-5.2-codex-low',
-    apiModelId: 'gpt-5-codex',
+    apiModelId: 'gpt-5.2-codex-low',
     name: 'GPT-5.2 Codex (Low)',
     provider: 'openai',
     modelType: 'code',
@@ -663,7 +668,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5.2-codex-medium': {
     id: 'gpt-5.2-codex-medium',
-    apiModelId: 'gpt-5-codex',
+    apiModelId: 'gpt-5.2-codex-medium',
     name: 'GPT-5.2 Codex (Medium)',
     provider: 'openai',
     modelType: 'code',
@@ -701,7 +706,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5.2-codex-high': {
     id: 'gpt-5.2-codex-high',
-    apiModelId: 'gpt-5-codex',
+    apiModelId: 'gpt-5.2-codex-high',
     name: 'GPT-5.2 Codex (High)',
     provider: 'openai',
     modelType: 'code',
@@ -739,7 +744,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5.2-codex-xhigh': {
     id: 'gpt-5.2-codex-xhigh',
-    apiModelId: 'gpt-5-codex',
+    apiModelId: 'gpt-5.2-codex-xhigh',
     name: 'GPT-5.2 Codex (XHigh)',
     provider: 'openai',
     modelType: 'code',
@@ -777,7 +782,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'gpt-5-pro': {
     id: 'gpt-5-pro',
-    apiModelId: 'gpt-5-pro-2026-01',
+    apiModelId: 'gpt-5.2-pro',
     name: 'GPT-5 Pro',
     provider: 'openai',
     modelType: 'reasoning',
@@ -889,9 +894,45 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['Coding', 'Complex Analysis', 'Computer Use', 'Long Documents'],
     released: 'November 2025',
   },
+  'claude-sonnet-4.6': {
+    id: 'claude-sonnet-4.6',
+    apiModelId: 'claude-sonnet-4-6',
+    name: 'Claude 4.6 Sonnet',
+    provider: 'anthropic',
+    modelType: 'code',
+    contextWindow: 200_000,
+    inputCost: 3.0, // $3/1M input
+    outputCost: 15.0, // $15/1M output
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true, // Extended thinking + adaptive thinking
+      computerUse: true,
+      agentic: true,
+      imageGen: false,
+      videoGen: false,
+      search: false,
+      research: false,
+      codeExecution: false,
+    },
+    benchmarks: {
+      swebench: 78.5,
+      humaneval: 96.2,
+      mmlu: 89.5,
+      gpqa: 76.0,
+      aime: 88.0,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'balanced',
+    bestFor: ['Coding', 'Tool Use', 'Computer Use', 'Agentic Tasks'],
+    released: 'February 2026',
+  },
   'claude-sonnet-4.5': {
     id: 'claude-sonnet-4.5',
-    apiModelId: 'claude-sonnet-4-5-20251022',
+    apiModelId: 'claude-sonnet-4-5-20250929',
     name: 'Claude 4.5 Sonnet',
     provider: 'anthropic',
     modelType: 'code',
@@ -1049,7 +1090,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // ============================================
   'grok-4': {
     id: 'grok-4',
-    apiModelId: 'grok-4',
+    apiModelId: 'grok-4-0709',
     name: 'Grok 4',
     provider: 'xai',
     modelType: 'reasoning',
