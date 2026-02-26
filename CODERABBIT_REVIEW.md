@@ -22,7 +22,7 @@ Total issues: 109 (Critical: 4 | High: 57 | Medium: 38 | Low: 10)
 - **Category**: test
 - **Description**: Test at lines 116–172 uses fake timers to record delays but verifies elapsed time _after_ operations rather than the delay intervals between them. Exponential growth (100ms→200ms→400ms) is never explicitly asserted. A regression flattening all delays to 0ms would still pass.
 - **Suggested Fix**: Use `vi.advanceTimersByTime()` per retry and assert delay doubles: `expect(delays[0]).toBe(100); expect(delays[1]).toBe(200); expect(delays[2]).toBe(400);`
-- **Status**: PENDING
+- **Status**: FIXED — Test already contains explicit delay assertions at lines 164-168: `expect(observedDelays[1]).toBe(100); expect(observedDelays[2]).toBe(200); expect(observedDelays[3]).toBe(400)`. All 26 retry tests pass.
 
 ### [C3] features.test.ts (64 KB) is a monolithic file with unclear intent
 
@@ -38,7 +38,7 @@ Total issues: 109 (Critical: 4 | High: 57 | Medium: 38 | Low: 10)
 - **Category**: test
 - **Description**: If signature verification is mocked, forged webhook payloads would not be caught by tests. The primary security guarantee of webhooks — HMAC-SHA256 verification — becomes invisible to the test suite.
 - **Suggested Fix**: Use Stripe's test signing secret to construct real HMAC signatures. Test rejection of: unsigned payloads, tampered signatures, replayed events (timestamp too old).
-- **Status**: PENDING
+- **Status**: FIXED — `generateStripeSignature()` helper uses real `crypto.createHmac('sha256', secret)`; `MockStripe.webhooks.constructEvent` performs actual HMAC verification including timestamp tolerance. Tests cover: missing signature (400), wrong-secret signature (400), valid signature (200), replayed event with 10-min-old timestamp (400), malformed format (400), security audit logging. All 14 tests pass.
 
 ---
 
