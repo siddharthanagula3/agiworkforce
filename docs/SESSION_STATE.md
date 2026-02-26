@@ -48,9 +48,8 @@ All 6 settings tabs implemented and wired:
 
 Per CODERABBIT_REVIEW.md Final Status:
 
-- **[C2]**: Exponential backoff test missing delay assertions
-- **[C4]**: Stripe webhook HMAC test mocks signature verification
-- **[H4]**: SQL procedure name allows dots/keywords through
+- **[C3]**: `features.test.ts` (64 KB monolith) needs to be split — large refactor, requires human audit
+- **[H4]**: SQL procedure name allows dots/keywords through — keyword blocking is substring-only
 
 ## Key Decisions Made
 
@@ -59,7 +58,18 @@ Per CODERABBIT_REVIEW.md Final Status:
 - TIER_ALLOWED_MODELS: extracted 3 const arrays to eliminate 80 lines of duplication
 - debounce pattern: 300ms clearTimeout debounce for localStorage writes during streaming
 
-## Files Modified This Session
+## Files Modified This Session (Continuation)
+
+**Tests:**
+
+- `apps/desktop/src/components/Settings/__tests__/SkillsPluginsSettings.test.tsx` — 14 new tests
+- Fixed infinite re-render in SkillsPluginsSettings: useCallback dep → `allowedDirectories[0]`
+- Fixed homeDir fallback: `null` instead of `~` (CodeRabbit CLI finding)
+- Verified [C2] (retry delays) and [C4] (Stripe HMAC) were already implemented
+
+---
+
+## Files Modified (Previous Session)
 
 **Rust:**
 
@@ -82,6 +92,12 @@ Per CODERABBIT_REVIEW.md Final Status:
 
 ## Next Steps (Priority Order)
 
-1. **[C2] Exponential backoff test** — add explicit delay interval assertions to retry.test.ts
-2. **[C4] Stripe webhook** — add HMAC verification tests using Stripe test signing secret
-3. Settings is at 9 tabs now (added Skills & Plugins). All core sections complete.
+1. **[H4] SQL keyword blocking** — add regex word-boundary matching + reject semicolons in SELECT-only mode
+2. **[C3] features.test.ts refactor** — large task, human review needed first
+3. Settings is complete at 9 tabs. All spec sections implemented:
+   - llm-config: CustomModelsSettings (custom endpoints, Ollama, Groq, etc.)
+   - instructions: InstructionFilesSettings (CLAUDE.md, GEMINI.md, .cursorrules, etc.)
+   - agents: AgentsSettings (approval mode, sub-agents, parallel config)
+   - integrations: ExtensionsSettings (MCP servers, tools)
+   - skills-plugins: SkillsPluginsSettings (installed plugins + project resources)
+   - window, data-privacy, system: preferences, encryption, resource monitor
