@@ -15,6 +15,13 @@ pub struct StreamChunk {
     /// Tool calls received in this chunk (for streaming tool use)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<StreamingToolCall>>,
+    /// When true, this chunk is a keepalive/heartbeat signal from the provider
+    /// (e.g. SSE comment lines like `: keep-alive`, Anthropic `ping` events).
+    /// The chunk carries no content but keeps the stream alive so idle-timeout
+    /// watchdogs do not fire prematurely during long-running operations like
+    /// image generation or extended thinking.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keepalive: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -44,7 +51,7 @@ struct SseStreamParser {
     inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
     buffer: Vec<u8>,
     provider: crate::core::llm::Provider,
-    pending_chunks: Vec<Result<StreamChunk, Box<dyn Error + Send + Sync>>>,
+    pending_chunks: std::collections::VecDeque<Result<StreamChunk, Box<dyn Error + Send + Sync>>>,
 }
 
 impl Unpin for SseStreamParser {}
@@ -55,8 +62,24 @@ impl SseStreamParser {
             inner: Box::pin(response.bytes_stream()),
             buffer: Vec::new(),
             provider,
-            pending_chunks: Vec::new(),
+            pending_chunks: std::collections::VecDeque::new(),
         }
+    }
+
+    /// Check if an SSE event is a keepalive/comment that carries no data.
+    /// SSE spec: lines starting with `:` are comments (used as keepalives).
+    /// Also matches Anthropic `event: ping` and similar heartbeat patterns.
+    fn is_keepalive_event(event: &str) -> bool {
+        let trimmed = event.trim();
+        // Pure SSE comment lines (`: keep-alive`, `: ping`, `: ok`, etc.)
+        if trimmed.starts_with(':') {
+            return true;
+        }
+        // Anthropic sends `event: ping\ndata: {}` as keepalive
+        trimmed.lines().any(|line| {
+            let l = line.trim();
+            l == "event: ping" || l == "event:ping"
+        })
     }
 
     fn process_buffer(&mut self) {
@@ -79,9 +102,29 @@ impl SseStreamParser {
                 continue;
             }
 
+            // Emit an empty keepalive chunk for SSE comments and ping events.
+            // This is critical: without it, provider keepalives (`: keep-alive`,
+            // `event: ping`) are silently dropped and `stream.next()` never
+            // yields, causing the Rust-side idle timeout to fire even though
+            // the TCP connection is alive and the provider is still working.
+            if Self::is_keepalive_event(&event) {
+                tracing::debug!("SSE keepalive received: {}", event.trim());
+                self.pending_chunks.push_back(Ok(StreamChunk {
+                    content: String::new(),
+                    done: false,
+                    finish_reason: None,
+                    model: None,
+                    usage: None,
+                    credits: None,
+                    tool_calls: None,
+                    keepalive: true,
+                }));
+                continue;
+            }
+
             match parse_sse_event(&event, self.provider) {
                 Ok(chunk) => {
-                    self.pending_chunks.push(Ok(chunk));
+                    self.pending_chunks.push_back(Ok(chunk));
                 }
                 Err(e) => {
                     let error_str = e.to_string();
@@ -107,11 +150,25 @@ impl SseStreamParser {
                         || error_str.contains("504")
                     {
                         tracing::error!("Critical stream error: {}", e);
-                        self.pending_chunks.push(Err(e));
+                        self.pending_chunks.push_back(Err(e));
                     } else {
                         // Non-critical parsing errors (e.g., partial data, comments, empty data fields)
-                        // Use WARN level for better debugging visibility (upgraded from DEBUG)
-                        tracing::warn!("Non-critical stream parse issue (ignored): {}", e);
+                        // Emit a keepalive chunk instead of silently dropping, so the idle
+                        // timeout in chat/mod.rs gets reset by the yielded stream item.
+                        tracing::debug!(
+                            "Non-critical stream parse issue (emitting keepalive): {}",
+                            e
+                        );
+                        self.pending_chunks.push_back(Ok(StreamChunk {
+                            content: String::new(),
+                            done: false,
+                            finish_reason: None,
+                            model: None,
+                            usage: None,
+                            credits: None,
+                            tool_calls: None,
+                            keepalive: true,
+                        }));
                     }
                 }
             }
@@ -124,7 +181,11 @@ impl Stream for SseStreamParser {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if !self.pending_chunks.is_empty() {
-            return Poll::Ready(Some(self.pending_chunks.remove(0)));
+            return Poll::Ready(Some(
+                self.pending_chunks
+                    .pop_front()
+                    .expect("pending_chunks was checked non-empty"),
+            ));
         }
 
         match self.inner.as_mut().poll_next(cx) {
@@ -142,7 +203,11 @@ impl Stream for SseStreamParser {
                 self.process_buffer();
 
                 if !self.pending_chunks.is_empty() {
-                    return Poll::Ready(Some(self.pending_chunks.remove(0)));
+                    return Poll::Ready(Some(
+                        self.pending_chunks
+                            .pop_front()
+                            .expect("pending_chunks was checked non-empty"),
+                    ));
                 }
 
                 cx.waker().wake_by_ref();
@@ -357,6 +422,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        keepalive: false,
     })
 }
 
@@ -598,6 +664,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         } else {
             Some(tool_calls)
         },
+        keepalive: false,
     })
 }
 
@@ -720,6 +787,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        keepalive: false,
     })
 }
 
@@ -834,6 +902,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         } else {
             Some(tool_calls)
         },
+        keepalive: false,
     })
 }
 
@@ -859,7 +928,7 @@ mod stream_tests {
             })),
             buffer: Vec::new(),
             provider: crate::core::llm::Provider::OpenAI,
-            pending_chunks: Vec::new(),
+            pending_chunks: std::collections::VecDeque::new(),
         };
 
         let mut full_content = String::new();

@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
+use subtle::ConstantTimeEq;
 use tauri::Emitter;
 use tauri::Manager;
 use tokio::net::{TcpListener, TcpStream};
@@ -129,7 +130,9 @@ impl RealtimeServer {
             }) = serde_json::from_str::<RealtimeEvent>(&text)
             {
                 if let Some(sent_token) = auth_token {
-                    if sent_token == token {
+                    if sent_token.len() == token.len()
+                        && bool::from(sent_token.as_bytes().ct_eq(token.as_bytes()))
+                    {
                         user_id_from_auth = Some(user_id);
                         team_id_from_auth = team_id;
                         tracing::info!(
@@ -257,6 +260,19 @@ impl RealtimeServer {
             RealtimeEvent::Authenticate {
                 user_id, team_id, ..
             } => {
+                // Block re-authentication for already-authenticated clients
+                {
+                    let clients_lock = clients.lock().await;
+                    if let Some(client) = clients_lock.get(client_id) {
+                        if client.user_id.is_some() {
+                            tracing::warn!(
+                                "Ignoring re-authentication attempt for already-authenticated client: {}",
+                                client_id
+                            );
+                            return;
+                        }
+                    }
+                }
                 {
                     let mut clients_lock = clients.lock().await;
                     if let Some(client) = clients_lock.get_mut(client_id) {
@@ -1146,6 +1162,116 @@ impl RealtimeServer {
                 Ok(json!({
                     "tab_id": resolved_tab_id,
                     "result": result
+                }))
+            }
+
+            NativeMessage::Hover { selector, tab_id } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                client
+                    .hover_element(&selector)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "hovered": true,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector
+                }))
+            }
+
+            NativeMessage::WaitForSelector {
+                selector,
+                timeout_ms,
+                tab_id,
+            } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                let timeout = timeout_ms.unwrap_or(30_000);
+                client
+                    .wait_for_selector(&selector, timeout)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "found": true,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector
+                }))
+            }
+
+            NativeMessage::SelectOption {
+                selector,
+                value,
+                tab_id,
+            } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                client
+                    .select_option(&selector, &value)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "selected": true,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector,
+                    "value": value
+                }))
+            }
+
+            NativeMessage::SetChecked {
+                selector,
+                checked,
+                tab_id,
+            } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                client
+                    .set_checked(&selector, checked)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "checked": checked,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector
+                }))
+            }
+
+            NativeMessage::Focus { selector, tab_id } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                client
+                    .focus_element(&selector)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "focused": true,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector
+                }))
+            }
+
+            NativeMessage::ScrollIntoView { selector, tab_id } => {
+                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let (client, resolved_tab_id) =
+                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                client
+                    .scroll_into_view(&selector)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(json!({
+                    "scrolled": true,
+                    "tab_id": resolved_tab_id,
+                    "selector": selector
                 }))
             }
 
