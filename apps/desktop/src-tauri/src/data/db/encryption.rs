@@ -44,8 +44,10 @@ pub fn apply_encryption_key(conn: &Connection, key: &[u8]) -> Result<(), String>
 
     // Set the encryption key -- must be the first operation after opening.
     // The x'...' syntax tells SQLCipher to interpret the value as raw hex bytes.
+    // [M24] Error message is redacted to avoid leaking the hex key into rusqlite
+    // error logs or tracing output in the event of a failure.
     conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", hex_key))
-        .map_err(|e| format!("Failed to set database encryption key: {}", e))?;
+        .map_err(|_| "Failed to set database encryption key (key redacted from logs)".to_string())?;
 
     // Configure cipher page size for optimal security/performance balance
     conn.execute_batch("PRAGMA cipher_page_size = 4096;")
@@ -91,9 +93,9 @@ pub fn open_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, S
 ///
 /// This function checks whether the database at `db_path` is currently
 /// readable without encryption. If so, it uses the SQLCipher
-/// `sqlcipher_export()` function to create an encrypted copy and replaces
-/// the original file. A backup of the unencrypted database is preserved
-/// with a `.unencrypted.bak` suffix.
+/// `sqlcipher_export()` function to create an encrypted copy, replaces
+/// the original file, and then deletes the plaintext backup. If the backup
+/// cannot be deleted a warning is logged but the migration still succeeds.
 ///
 /// If the database is already encrypted (i.e., cannot be read without a key),
 /// this function returns `Ok(())` without making changes.
@@ -124,25 +126,22 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
     };
 
     if !is_unencrypted {
-        tracing::info!(
-            "Database appears to already be encrypted or empty, skipping migration"
-        );
+        tracing::info!("Database appears to already be encrypted or empty, skipping migration");
         return Ok(());
     }
 
     tracing::info!("Migrating unencrypted database to SQLCipher...");
 
     // Step 2: Create a backup of the original unencrypted file
-    std::fs::copy(db_path, &backup_path)
-        .map_err(|e| format!("Failed to create backup: {}", e))?;
+    std::fs::copy(db_path, &backup_path).map_err(|e| format!("Failed to create backup: {}", e))?;
 
     // Steps 3-5 are wrapped in a block so the source connection is dropped
     // before Step 6's file rename. On Windows, the rename would fail if the
     // source file is still locked by an open connection.
     {
         // Step 3: Open the unencrypted source database
-        let source = Connection::open(db_path)
-            .map_err(|e| format!("Failed to open source DB: {}", e))?;
+        let source =
+            Connection::open(db_path).map_err(|e| format!("Failed to open source DB: {}", e))?;
 
         // Step 4: Use ATTACH with KEY to create an encrypted copy via sqlcipher_export
         let hex_key = hex::encode(key);
@@ -169,14 +168,24 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
     }
 
     // Step 6: Replace the original with the encrypted version
-    std::fs::rename(&temp_encrypted_path, db_path).map_err(|e| {
-        format!("Failed to replace DB with encrypted version: {}", e)
-    })?;
+    std::fs::rename(&temp_encrypted_path, db_path)
+        .map_err(|e| format!("Failed to replace DB with encrypted version: {}", e))?;
 
-    tracing::info!(
-        "Database migration to SQLCipher complete. Backup at: {}",
-        backup_path
-    );
+    // Step 7: [M25] Delete the plaintext backup to avoid leaving sensitive data on disk.
+    // Log a warning if deletion fails (e.g., read-only fs) but do not fail the migration —
+    // the encrypted database is already in place and the migration succeeded.
+    if let Err(e) = std::fs::remove_file(&backup_path) {
+        tracing::warn!(
+            "SQLCipher migration succeeded but failed to delete plaintext backup at '{}': {}. \
+             Delete it manually to avoid leaving unencrypted data on disk.",
+            backup_path,
+            e
+        );
+    } else {
+        tracing::info!("Plaintext backup deleted after successful encryption migration.");
+    }
+
+    tracing::info!("Database migration to SQLCipher complete.");
 
     Ok(())
 }
