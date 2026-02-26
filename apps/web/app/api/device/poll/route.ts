@@ -18,8 +18,14 @@ async function handleDevicePoll(request: NextRequest) {
     throw createError.validation('Invalid JSON in request body');
   }
 
-  // Rate limiting - use device_id as identifier
-  const deviceId = (parsedBody as Record<string, unknown>)?.device_id as string | undefined;
+  // Rate limiting - use device_id as identifier.
+  // Validate device_id length and format BEFORE using it as a rate-limit key
+  // to prevent memory exhaustion via arbitrarily long or crafted identifiers.
+  const rawDeviceId = (parsedBody as Record<string, unknown>)?.device_id;
+  const deviceId =
+    typeof rawDeviceId === 'string' && /^[a-zA-Z0-9-_]{1,128}$/.test(rawDeviceId)
+      ? rawDeviceId
+      : undefined;
 
   const rateLimitResponse = await withRateLimit(
     request,
@@ -88,11 +94,13 @@ async function handleDevicePoll(request: NextRequest) {
       }
     } else if (device_fingerprint) {
       // Legacy session (no fingerprint stored) but client IS sending one now — backfill it.
-      // This secures the session from this point forward without locking out existing users.
+      // Use WHERE device_fingerprint IS NULL to prevent race conditions: if two concurrent
+      // polls both reach this branch, only the first UPDATE wins; the second is a no-op.
       await supabase
         .from('device_authorization_codes')
         .update({ device_fingerprint, updated_at: new Date().toISOString() })
-        .eq('device_id', device_id);
+        .eq('device_id', device_id)
+        .is('device_fingerprint', null);
       logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
     } else {
       // SECURITY: Legacy no-fingerprint path is now deprecated (CodeRabbit H9 / stabilization fix)
