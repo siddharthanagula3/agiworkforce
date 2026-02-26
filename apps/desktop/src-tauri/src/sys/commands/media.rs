@@ -61,8 +61,9 @@ pub struct MediaVideoRequest {
     pub style: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
-    #[serde(default)]
-    pub plan: Option<String>,
+    // SECURITY: `plan` field removed — clients must NOT be able to self-upgrade
+    // their subscription tier. The plan tier is determined server-side by the
+    // web API based on authenticated user session / BillingState.
     /// Video provider: "runway" or "veo3" (default: "runway")
     #[serde(default)]
     pub provider: Option<String>,
@@ -122,8 +123,10 @@ pub async fn media_generate_image(
     });
 
     let started = Instant::now();
+    // 90s timeout: the web API route has maxDuration=60 and a 55s AbortSignal per provider
+    // call, so 90s on our side gives generous headroom without hanging forever.
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(90))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
@@ -206,11 +209,9 @@ pub async fn media_generate_video(
     app: tauri::AppHandle,
     request: MediaVideoRequest,
 ) -> Result<MediaVideoResponse, String> {
-    if let Some(plan) = request.plan.as_deref() {
-        if !plan_allows_video(plan) {
-            return Err("Video generation requires Pro or Max subscription".to_string());
-        }
-    }
+    // Plan tier validation is performed server-side by the web API route
+    // based on the authenticated user's subscription. The desktop client
+    // does not have access to the plan tier and must not accept it as input.
 
     let token = get_access_token().map_err(|e| format!("Authentication required: {}", e))?;
     let base_url = get_api_base_url();
@@ -225,8 +226,10 @@ pub async fn media_generate_video(
     });
 
     let started = Instant::now();
+    // Task-creation call: the web route has maxDuration=60 and a 30s AbortSignal,
+    // so 90s here gives headroom without hanging indefinitely.
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_secs(90))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
@@ -263,15 +266,18 @@ pub async fn media_generate_video(
     let mut thumbnail_url = None;
     let mut final_status = "processing".to_string();
     let mut attempts = 0u32;
-    let max_attempts = 100; // ~5 minutes at 3s interval
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+    // Poll for up to 5 minutes: 100 attempts × 3s sleep = 300s maximum wait.
+    let max_attempts = 100;
+    // Reuse a single client for all status polls; each call has a 45s timeout
+    // (the status route has maxDuration=30 and a 20s AbortSignal per provider call).
+    let poll_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     while attempts < max_attempts {
         attempts += 1;
-        let status_response = client
+        let status_response = poll_client
             .get(&status_url)
             .bearer_auth(&token)
             .send()
@@ -377,16 +383,5 @@ fn save_history(app: &tauri::AppHandle, history: &[MediaHistoryItem]) -> anyhow:
     Ok(())
 }
 
-fn plan_allows_video(plan: &str) -> bool {
-    let plan_lc = plan.to_lowercase();
-    let allowed = [
-        "pro",
-        "proplus",
-        "max",
-        "team",
-        "enterprise",
-        "pro+",
-        "premium",
-    ];
-    allowed.iter().any(|p| plan_lc.contains(p))
-}
+// plan_allows_video removed: plan tier validation is now performed server-side
+// by the web API based on authenticated user subscription state.
