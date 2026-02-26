@@ -84,4 +84,4 @@ Per CODERABBIT_REVIEW.md Final Status:
 
 1. **[C2] Exponential backoff test** — add explicit delay interval assertions to retry.test.ts
 2. **[C4] Stripe webhook** — add HMAC verification tests using Stripe test signing secret
-3. **Settings enhancement** — review existing 6-tab Settings implementation vs. full spec and add missing pieces
+3. Settings is at 9 tabs now (added Skills & Plugins). All core sections complete.

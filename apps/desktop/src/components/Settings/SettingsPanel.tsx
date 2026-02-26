@@ -10,6 +10,7 @@ import {
   Github,
   Loader2,
   Monitor,
+  Puzzle,
   Server,
   Settings2,
   Shield,
@@ -44,6 +45,7 @@ import { ExtensionsSettings } from './ExtensionsSettings';
 import { AgentsSettings } from './AgentsSettings';
 import { InstructionFilesSettings } from './InstructionFilesSettings';
 import { CustomModelsSettings } from './CustomModelsSettings';
+import { SkillsPluginsSettings } from './SkillsPluginsSettings';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -255,6 +257,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <Github className="h-4 w-4" />
                   Integrations
                 </TabsTrigger>
+                <TabsTrigger value="skills-plugins" className="flex items-center gap-2">
+                  <Puzzle className="h-4 w-4" />
+                  Skills
+                </TabsTrigger>
                 <TabsTrigger value="window" className="flex items-center gap-2">
                   <Monitor className="h-4 w-4" />
                   Window
@@ -458,6 +464,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="integrations" className="space-y-6 pt-6">
                 <ExtensionsSettings />
+              </TabsContent>
+
+              <TabsContent value="skills-plugins" className="space-y-6 pt-6">
+                <SkillsPluginsSettings />
               </TabsContent>
 
               <TabsContent value="window" className="space-y-6 pt-6">
