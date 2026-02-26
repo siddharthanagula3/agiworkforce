@@ -179,6 +179,7 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
   'auto-balanced': [
     // === TOP BENCHMARK (Pro-tier additions first) ===
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
+    'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
     'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
     'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
@@ -208,6 +209,7 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
     // === FLAGSHIP BENCHMARK (Best of the best) ===
     'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU, 100% AIME - BEST REASONING
+    'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - CURRENT SONNET
     'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU
     'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality + A✓
     'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
