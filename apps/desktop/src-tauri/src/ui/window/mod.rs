@@ -185,9 +185,7 @@ pub fn apply_dock(
 /// no-op if the window is already at `DockPosition::Right`.
 pub fn auto_tile_for_browser(app: &tauri::AppHandle) -> Result<()> {
     if let Some(window) = app.get_webview_window("main") {
-        let app_state = window
-            .state::<AppState>()
-            .clone();
+        let app_state = window.state::<AppState>().clone();
         // Only tile if not already docked right
         if app_state.snapshot().dock != Some(DockPosition::Right) {
             apply_dock(&window, &app_state, DockPosition::Right)?;

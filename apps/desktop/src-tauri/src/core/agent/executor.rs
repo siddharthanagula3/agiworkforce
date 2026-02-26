@@ -93,8 +93,8 @@ impl TaskExecutor {
                 // Full CDP-controlled navigation requires wiring PlaywrightBridge
                 // into the executor (architectural TODO); OS-level open is the
                 // current fallback and must at least be sanitised.
-                let parsed = url::Url::parse(url)
-                    .map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
+                let parsed =
+                    url::Url::parse(url).map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
                 if !matches!(parsed.scheme(), "http" | "https") {
                     return Err(anyhow::anyhow!(
                         "Blocked URL scheme '{}': only http/https are permitted",
@@ -205,13 +205,21 @@ impl TaskExecutor {
                 // BUG-01 fix: canonicalize and reject sensitive system paths
                 let canonical = Self::validate_file_path(path)?;
                 let content = std::fs::read_to_string(&canonical)?;
-                Ok(format!("Read {} bytes from {}", content.len(), canonical.display()))
+                Ok(format!(
+                    "Read {} bytes from {}",
+                    content.len(),
+                    canonical.display()
+                ))
             }
             Action::WriteFile { path, content } => {
                 // BUG-01 fix: validate destination before writing
                 let canonical = Self::validate_write_path(path)?;
                 std::fs::write(&canonical, content)?;
-                Ok(format!("Wrote {} bytes to {}", content.len(), canonical.display()))
+                Ok(format!(
+                    "Wrote {} bytes to {}",
+                    content.len(),
+                    canonical.display()
+                ))
             }
             Action::SearchText { query } => {
                 let elements = vision.search_text(query).await?;
@@ -240,7 +248,10 @@ impl TaskExecutor {
                 let perm_msg = "Mouse automation requires input automation permission. \
                     Please grant the necessary permissions in your system settings.";
 
-                self.automation.mouse.lock().await
+                self.automation
+                    .mouse
+                    .lock()
+                    .await
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("{}", perm_msg))?
                     .scroll(delta)?;
@@ -359,8 +370,8 @@ impl TaskExecutor {
         if path.contains('\0') {
             return Err(anyhow::anyhow!("Invalid path: contains null bytes"));
         }
-        let canonical = std::fs::canonicalize(path)
-            .map_err(|e| anyhow::anyhow!("Path inaccessible: {}", e))?;
+        let canonical =
+            std::fs::canonicalize(path).map_err(|e| anyhow::anyhow!("Path inaccessible: {}", e))?;
         Self::check_blocked_prefix(&canonical)?;
         Ok(canonical)
     }
@@ -416,8 +427,7 @@ impl TaskExecutor {
     fn check_blocked_prefix(path: &std::path::Path) -> Result<()> {
         #[cfg(not(target_os = "windows"))]
         const BLOCKED: &[&str] = &[
-            "/etc", "/proc", "/sys", "/dev", "/boot", "/root",
-            "/usr", "/var", "/sbin", "/bin",
+            "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/usr", "/var", "/sbin", "/bin",
         ];
 
         #[cfg(target_os = "windows")]
@@ -440,11 +450,7 @@ impl TaskExecutor {
 
         // Block sensitive directories under the user's home directory
         if let Some(home) = dirs::home_dir() {
-            let home_blocked = vec![
-                home.join(".ssh"),
-                home.join(".gnupg"),
-                home.join(".config"),
-            ];
+            let home_blocked = vec![home.join(".ssh"), home.join(".gnupg"), home.join(".config")];
 
             #[cfg(target_os = "macos")]
             let home_blocked = {
@@ -481,17 +487,11 @@ impl TaskExecutor {
             // BUG-06 fix: Insert is only available on Windows/Linux in enigo 0.6;
             // macOS has no hardware Insert key so return an error on that platform.
             "insert" | "ins" => {
-                #[cfg(any(
-                    target_os = "windows",
-                    all(unix, not(target_os = "macos"))
-                ))]
+                #[cfg(any(target_os = "windows", all(unix, not(target_os = "macos"))))]
                 {
                     Key::Insert
                 }
-                #[cfg(not(any(
-                    target_os = "windows",
-                    all(unix, not(target_os = "macos"))
-                )))]
+                #[cfg(not(any(target_os = "windows", all(unix, not(target_os = "macos")))))]
                 {
                     return Err(anyhow::anyhow!(
                         "Insert key is not supported on this platform"

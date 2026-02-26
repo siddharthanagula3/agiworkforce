@@ -4676,7 +4676,6 @@ impl ToolExecutor {
                         resolution: resolution.clone(),
                         style: None,
                         model: None,
-                        plan: None,
                         provider: provider.clone(),
                         input_image_url,
                     };

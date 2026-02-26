@@ -874,11 +874,7 @@ impl UndoManager {
             let config = git2::Config::open_default()
                 .or_else(|_| git2::Config::new())
                 .map_err(|e| git2::Error::from_str(&format!("Failed to open git config: {}", e)))?;
-            return git2::Cred::credential_helper(
-                &config,
-                url,
-                username_from_url,
-            );
+            return git2::Cred::credential_helper(&config, url, username_from_url);
         }
 
         Err(git2::Error::from_str("No valid credentials found"))
