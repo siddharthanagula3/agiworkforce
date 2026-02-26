@@ -412,10 +412,14 @@ mod tests {
 
     #[test]
     fn test_pending_task_approvals_starts_empty() {
-        // The DashMap should start empty at test time (no active agents)
-        // We just assert that the static is accessible — the len() call
-        // returns 0 unless another concurrent test inserted an entry.
-        let _ = PENDING_TASK_APPROVALS.len(); // must compile and not panic
+        // The DashMap should start empty at test time (no active agents).
+        // Previously this was `let _ = …` which silently discarded the result,
+        // making the test always pass regardless of actual state.
+        assert_eq!(
+            PENDING_TASK_APPROVALS.len(),
+            0,
+            "PENDING_TASK_APPROVALS should be empty when no agents are running"
+        );
     }
 
     // ------------------------------------------------------------------
