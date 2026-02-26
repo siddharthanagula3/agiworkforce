@@ -66,12 +66,12 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
                 </span>
               )}
             </h4>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{error.message}</p>
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{errorDef.message}</p>
 
-            {error.details && (
+            {import.meta.env.DEV && error.details && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
-                  Show details
+                  Show details (development only)
                 </summary>
                 <p className="mt-1 text-xs font-mono text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
                   {error.details}

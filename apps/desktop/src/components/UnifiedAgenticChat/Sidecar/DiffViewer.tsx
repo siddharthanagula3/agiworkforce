@@ -127,7 +127,8 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
         description: 'Changes applied successfully!',
       });
     } catch (err) {
-      setError(`Failed to apply changes: ${err}`);
+      console.error('[DiffViewer] Failed to apply changes:', err);
+      setError('Failed to apply changes. Please try again.');
     } finally {
       setIsSaving(false);
     }

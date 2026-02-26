@@ -238,7 +238,7 @@ export function BrowserActionLog({ className, onActionClick }: BrowserActionLogP
 
                       {action.details.error && (
                         <div className="text-xs text-red-600 mt-1 truncate">
-                          Error: {action.details.error}
+                          Action failed. Please retry.
                         </div>
                       )}
 
