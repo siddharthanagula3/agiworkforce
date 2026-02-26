@@ -144,36 +144,28 @@ impl SseStreamParser {
                     self.pending_chunks.push_back(Ok(chunk));
                 }
                 Err(e) => {
-                    let error_str = e.to_string();
-                    let error_str_lower = error_str.to_lowercase();
-                    // Check if this is a critical error that should be propagated
-                    // Critical errors include: API errors, authentication failures, rate limits, JSON errors
-                    if error_str_lower.contains("error")
-                        || error_str_lower.contains("api")
-                        || error_str_lower.contains("authentication")
-                        || error_str_lower.contains("rate limit")
-                        || error_str_lower.contains("unauthorized")
-                        || error_str_lower.contains("forbidden")
-                        || error_str_lower.contains("invalid")
-                        || error_str_lower.contains("failed")
-                        || error_str_lower.contains("timeout")
-                        || error_str_lower.contains("connection")
-                        || error_str.contains("401")
-                        || error_str.contains("403")
-                        || error_str.contains("429")
-                        || error_str.contains("500")
-                        || error_str.contains("502")
-                        || error_str.contains("503")
-                        || error_str.contains("504")
-                    {
-                        tracing::error!("Critical stream error: {}", e);
-                        self.pending_chunks.push_back(Err(e));
-                    } else {
-                        // Non-critical parsing errors (e.g., partial data, comments, empty data fields)
-                        // Emit a keepalive chunk instead of silently dropping, so the idle
-                        // timeout in chat/mod.rs gets reset by the yielded stream item.
-                        tracing::debug!(
-                            "Non-critical stream parse issue (emitting keepalive): {}",
+                    // Classify errors by their concrete type rather than fragile
+                    // string matching.  There are three categories:
+                    //
+                    // 1. serde_json::Error  -- JSON parse failure on a partial SSE
+                    //    chunk.  This is *expected* during streaming when a chunk
+                    //    boundary splits a JSON payload.  Non-terminal: log a
+                    //    warning and emit a keepalive so the idle-timeout resets.
+                    //
+                    // 2. Structured provider API errors -- the provider-specific
+                    //    parsers (parse_openai_sse, parse_anthropic_sse, etc.)
+                    //    detect `{"error": {...}}` in the response and return a
+                    //    descriptive String error.  These are terminal.
+                    //
+                    // 3. Any other error (network, I/O, etc.) -- terminal.
+                    let is_json_parse_error = e.downcast_ref::<serde_json::Error>().is_some();
+
+                    if is_json_parse_error {
+                        // Non-terminal: partial JSON chunk will be completed by
+                        // the next bytes arriving on the stream.  Emit a keepalive
+                        // so the idle timeout in chat/mod.rs gets reset.
+                        tracing::warn!(
+                            "JSON parse error on partial SSE chunk (continuing stream): {}",
                             e
                         );
                         self.pending_chunks.push_back(Ok(StreamChunk {
@@ -186,6 +178,11 @@ impl SseStreamParser {
                             tool_calls: None,
                             keepalive: true,
                         }));
+                    } else {
+                        // Terminal: provider API error, network error, or other
+                        // unrecoverable failure.  Propagate to the caller.
+                        tracing::error!("Terminal stream error: {}", e);
+                        self.pending_chunks.push_back(Err(e));
                     }
                 }
             }

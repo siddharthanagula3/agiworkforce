@@ -89,6 +89,7 @@ impl From<rusqlite::Error> for AGIError {
     }
 }
 
+#[cfg(feature = "remote-databases")]
 impl From<tokio_postgres::Error> for AGIError {
     fn from(err: tokio_postgres::Error) -> Self {
         AGIError::Database(err.to_string())

@@ -106,8 +106,14 @@ impl AuditLogger {
 
         #[cfg(debug_assertions)]
         {
-            tracing::warn!("SECURITY WARNING: Using hardcoded HMAC key for audit logging. This is unsafe for production.");
-            Ok(b"agiworkforce-audit-hmac-key-v1".to_vec())
+            use rand::Rng;
+            let ephemeral_key: [u8; 32] = rand::thread_rng().gen();
+            tracing::warn!(
+                "AUDIT HMAC KEY NOT SET: Generated ephemeral random HMAC key. \
+                 Audit log signatures CANNOT be verified across restarts. \
+                 Set the AUDIT_HMAC_KEY environment variable for persistent HMAC verification."
+            );
+            Ok(ephemeral_key.to_vec())
         }
 
         #[cfg(not(debug_assertions))]
