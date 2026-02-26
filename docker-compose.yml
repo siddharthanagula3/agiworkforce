@@ -18,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: agiworkforce_dev
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       # Tune for local dev (not production-safe)
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     volumes:
@@ -47,10 +47,11 @@ services:
     container_name: agiworkforce-pgadmin
     restart: unless-stopped
     ports:
-      - '5050:80'
+      # Bound to 127.0.0.1 only — prevents exposure on shared networks/VPNs [H20]
+      - '127.0.0.1:5050:80'
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
       # Suppress the pgAdmin master password prompt in local dev
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
       PGADMIN_CONFIG_SERVER_MODE: 'False'
