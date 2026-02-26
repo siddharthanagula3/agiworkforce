@@ -324,12 +324,115 @@ pub async fn design_tokens_to_css(tokens: DesignTokens) -> Result<String, String
     Ok(css)
 }
 
+/// Calculate WCAG relative luminance of an sRGB color value (0-255 per channel).
+/// Formula: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+fn srgb_channel_to_linear(c: f64) -> f64 {
+    let c = c / 255.0;
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
+    let r = srgb_channel_to_linear(r as f64);
+    let g = srgb_channel_to_linear(g as f64);
+    let b = srgb_channel_to_linear(b as f64);
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+fn contrast_ratio(l1: f64, l2: f64) -> f64 {
+    let lighter = l1.max(l2);
+    let darker = l1.min(l2);
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Parse a CSS hex color like #RGB, #RRGGBB into (r, g, b).
+fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8)> {
+    let hex = hex.trim_start_matches('#');
+    match hex.len() {
+        3 => {
+            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).ok()?;
+            Some((r, g, b))
+        }
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some((r, g, b))
+        }
+        _ => None,
+    }
+}
+
+/// Extract all hex color pairs from CSS and compute their contrast ratios.
+/// Returns a list of (color_pair_description, ratio, wcag_aa_normal_pass, wcag_aaa_pass).
+pub fn extract_css_contrast_pairs(css: &str) -> Vec<(String, f64, bool, bool)> {
+    use regex::Regex;
+    static HEX_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b").expect("valid hex color regex")
+    });
+
+    let colors: Vec<(String, u8, u8, u8)> = HEX_RE
+        .find_iter(css)
+        .filter_map(|m| {
+            parse_hex_color(m.as_str()).map(|(r, g, b)| (m.as_str().to_string(), r, g, b))
+        })
+        .collect();
+
+    let mut pairs = Vec::new();
+    // Check all unique pairs (up to 20 colors to avoid explosion)
+    let limit = colors.len().min(20);
+    for i in 0..limit {
+        for j in (i + 1)..limit {
+            let (ref c1, r1, g1, b1) = colors[i];
+            let (ref c2, r2, g2, b2) = colors[j];
+            let l1 = relative_luminance(r1, g1, b1);
+            let l2 = relative_luminance(r2, g2, b2);
+            let ratio = contrast_ratio(l1, l2);
+            // Only include pairs with meaningful contrast (skip near-identical colors)
+            if (ratio - 1.0).abs() > 0.1 {
+                pairs.push((
+                    format!("{} on {}", c1, c2),
+                    ratio,
+                    ratio >= 4.5, // WCAG AA normal text
+                    ratio >= 7.0, // WCAG AAA normal text
+                ));
+            }
+        }
+    }
+    // Sort by ratio ascending (worst first)
+    pairs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    pairs
+}
+
 #[tauri::command]
 pub async fn design_check_accessibility(
     css: String,
     router_state: State<'_, Arc<Mutex<LLMRouter>>>,
 ) -> Result<AccessibilityReport, String> {
     tracing::info!("Checking CSS accessibility");
+
+    // Pre-compute algorithmic contrast ratios from hardcoded hex colors in CSS
+    let contrast_pairs = extract_css_contrast_pairs(&css);
+    let contrast_summary = if contrast_pairs.is_empty() {
+        String::from("No hardcoded hex color pairs found for algorithmic analysis.")
+    } else {
+        let mut s = String::from("Algorithmic contrast analysis (WCAG 2.1):\n");
+        for (pair, ratio, aa_pass, aaa_pass) in &contrast_pairs {
+            s.push_str(&format!(
+                "  {} → ratio {:.2}:1 | AA {} | AAA {}\n",
+                pair,
+                ratio,
+                if *aa_pass { "PASS" } else { "FAIL" },
+                if *aaa_pass { "PASS" } else { "FAIL" }
+            ));
+        }
+        s
+    };
 
     let prompt = format!(
         r#"Analyze this CSS for accessibility issues according to WCAG 2.1 guidelines.
@@ -339,8 +442,11 @@ CSS:
 {}
 ```
 
+Pre-computed contrast ratios (use these exact values — do not recalculate):
+{}
+
 Check for:
-- Color contrast ratios (minimum 4.5:1 for normal text, 3:1 for large text)
+- Color contrast ratios (minimum 4.5:1 for normal text, 3:1 for large text) — use the pre-computed ratios above where available
 - Focus indicators
 - Color as sole indicator
 - Font sizes (minimum 16px for body text)
@@ -361,7 +467,7 @@ Return as JSON:
   "passed_checks": ["List of passed checks"],
   "summary": "Overall assessment"
 }}"#,
-        css
+        css, contrast_summary
     );
 
     let llm_request = LLMRequest {
