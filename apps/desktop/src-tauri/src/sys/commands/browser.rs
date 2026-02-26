@@ -9,6 +9,8 @@ use crate::automation::browser::advanced::{AdvancedBrowserOps, Cookie};
 use crate::automation::browser::dom_operations::{ClickOptions, DomOperations, TypeOptions};
 use crate::automation::browser::playwright_bridge::{BrowserOptions, BrowserType};
 use crate::automation::browser::BrowserState;
+use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 
 // =============================================================================
 // SECURITY: Input sanitization for CDP JavaScript injection prevention
@@ -164,6 +166,21 @@ impl BrowserStateWrapper {
         } else {
             Err("No active browser tab found. Please open a tab first.".to_string())
         }
+    }
+
+    /// Gets the extension bridge, returning an error if browser state is unavailable.
+    ///
+    /// The `ExtensionBridge` communicates with the browser extension through the
+    /// realtime WebSocket transport. Use this when CDP is unavailable or when
+    /// you need to dispatch actions through the installed extension content script
+    /// rather than a remote-debugging port.
+    pub fn get_extension_bridge(
+        &self,
+    ) -> Result<
+        &std::sync::Arc<tokio::sync::Mutex<crate::automation::browser::ExtensionBridge>>,
+        String,
+    > {
+        self.get().map(|state| &state.extension)
     }
 }
 
@@ -567,10 +584,43 @@ pub async fn browser_screenshot(
 
 #[command]
 pub async fn browser_evaluate(
+    app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
+    confirmation_state: State<'_, ToolConfirmationState>,
     script: String,
     tab_id: Option<String>,
 ) -> Result<Value, String> {
+    // SECURITY: Arbitrary JS evaluation requires explicit user approval
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "browser_evaluate".to_string(),
+        tool_description: format!(
+            "Execute JavaScript in the browser: {}",
+            if script.len() > 200 {
+                format!("{}...", &script[..200])
+            } else {
+                script.clone()
+            }
+        ),
+        parameters: serde_json::json!({
+            "script": script,
+            "tab_id": tab_id,
+        }),
+        risk_level: RiskLevel::Critical,
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "Arbitrary JavaScript evaluation can access page data, cookies, and perform actions on behalf of the user.".to_string(),
+        reversible: false,
+        undo_description: None,
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("JavaScript evaluation cancelled by user".to_string());
+    }
+
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     client.evaluate(&script).await.map_err(|e| e.to_string())
 }
@@ -648,17 +698,47 @@ pub async fn browser_get_dom_snapshot(
 
 #[command]
 pub async fn browser_execute_async_js(
+    app: tauri::AppHandle,
     state: State<'_, BrowserStateWrapper>,
+    confirmation_state: State<'_, ToolConfirmationState>,
     script: String,
     tab_id: Option<String>,
 ) -> Result<Value, String> {
+    // SECURITY: Arbitrary async JS evaluation requires explicit user approval
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "browser_execute_async_js".to_string(),
+        tool_description: format!(
+            "Execute async JavaScript in the browser: {}",
+            if script.len() > 200 {
+                format!("{}...", &script[..200])
+            } else {
+                script.clone()
+            }
+        ),
+        parameters: serde_json::json!({
+            "script": script,
+            "tab_id": tab_id,
+        }),
+        risk_level: RiskLevel::Critical,
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "Arbitrary async JavaScript evaluation can access page data, make network requests, and perform actions on behalf of the user.".to_string(),
+        reversible: false,
+        undo_description: None,
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("Async JavaScript evaluation cancelled by user".to_string());
+    }
+
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     // Wrap user script so its return value (including Promises) is captured.
     // Using Promise.resolve() allows both sync and async scripts to work.
-    let wrapped_script = format!(
-        "Promise.resolve().then(async () => {{ {} }})",
-        script
-    );
+    let wrapped_script = format!("Promise.resolve().then(async () => {{ {} }})", script);
     client
         .evaluate(&wrapped_script)
         .await
@@ -872,6 +952,44 @@ pub async fn browser_upload_file(
     paths: Vec<String>,
     tab_id: Option<String>,
 ) -> Result<(), String> {
+    // SECURITY: Validate all file paths before using them
+    for path in &paths {
+        // Reject empty paths
+        if path.is_empty() {
+            return Err("File path cannot be empty".to_string());
+        }
+        // Reject paths with null bytes
+        if path.contains('\0') {
+            return Err("File path contains null bytes which is not allowed".to_string());
+        }
+        // Reject file:// protocol tricks
+        if path.to_lowercase().starts_with("file://") {
+            return Err("File paths must not use file:// protocol prefix".to_string());
+        }
+        // Reject path traversal attacks
+        if path.contains("..") {
+            return Err(format!(
+                "Path traversal detected in '{}': '..' segments are not allowed",
+                path
+            ));
+        }
+        // Reject excessively long paths
+        if path.len() > 4096 {
+            return Err(format!(
+                "File path too long: {} characters. Maximum is 4096",
+                path.len()
+            ));
+        }
+        // Verify the file actually exists
+        let path_obj = std::path::Path::new(path);
+        if !path_obj.exists() {
+            return Err(format!("File not found: {}", path));
+        }
+        if !path_obj.is_file() {
+            return Err(format!("Path is not a file: {}", path));
+        }
+    }
+
     let (client, _) = state.get_client_for_tab(tab_id).await?;
     // Convert file paths to file data URLs using FileReader
     let safe_selector = sanitize_selector(&selector);

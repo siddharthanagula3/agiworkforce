@@ -3,6 +3,44 @@ use std::collections::HashMap;
 
 use crate::sys::error::{Error, Result};
 
+/// Validates a complete SQL string for dangerous patterns.
+/// Returns `Err` if the SQL contains dangerous operations like DROP TABLE,
+/// DELETE without WHERE, TRUNCATE, etc. This is a defense-in-depth measure
+/// beyond the per-component validation performed by other functions.
+fn validate_sql(sql: &str) -> Result<()> {
+    let upper = sql.to_uppercase();
+
+    // Dangerous DDL/DML patterns that should never pass through the query builder
+    let dangerous_patterns = [
+        ("DROP TABLE", "DROP TABLE is not allowed"),
+        ("DROP DATABASE", "DROP DATABASE is not allowed"),
+        ("TRUNCATE", "TRUNCATE is not allowed"),
+        ("ALTER TABLE", "ALTER TABLE is not allowed through the query builder"),
+    ];
+
+    for (pattern, message) in &dangerous_patterns {
+        if upper.contains(pattern) {
+            return Err(Error::Other(format!(
+                "Dangerous SQL rejected: {}",
+                message
+            )));
+        }
+    }
+
+    // Detect DELETE without WHERE clause (dangerous mass deletion)
+    if upper.contains("DELETE") && !upper.contains("WHERE") {
+        // Only flag DELETE FROM ... without WHERE (not substrings in other contexts)
+        let trimmed = upper.trim();
+        if trimmed.starts_with("DELETE") {
+            return Err(Error::Other(
+                "Dangerous SQL rejected: DELETE without WHERE clause is not allowed".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Whitelist of allowed table names for extra safety.
 /// Tables not in this list will still work but trigger a warning log.
 const ALLOWED_TABLES: &[&str] = &[
@@ -75,7 +113,6 @@ fn escape_sql_value(value: &str) -> String {
 }
 
 /// Validates that a value doesn't contain dangerous SQL patterns.
-#[allow(dead_code)]
 fn validate_sql_value(value: &str) -> Result<()> {
     let upper = value.to_uppercase();
 
@@ -113,7 +150,27 @@ fn validate_where_clause(clause: &str) -> Result<()> {
     }
 
     let upper = clause.to_uppercase();
-    let dangerous_patterns = ["--", "EXEC", "EXECUTE"];
+
+    // SECURITY: Comprehensive SQL injection pattern blocking (CodeRabbit H9 fix)
+    // Previous version only blocked "--", "EXEC", "EXECUTE" which was insufficient
+    let dangerous_patterns = [
+        "--",            // SQL comment injection
+        "/*",            // Block comment injection
+        "*/",            // Block comment close
+        "EXEC",          // Execute stored procedure
+        "EXECUTE",       // Execute stored procedure
+        "UNION",         // UNION-based injection
+        "INTO OUTFILE",  // File write injection
+        "INTO DUMPFILE", // File write injection
+        "LOAD_FILE",     // File read injection
+        "SLEEP(",        // Time-based blind injection
+        "BENCHMARK(",    // Time-based blind injection
+        "WAITFOR",       // MSSQL time-based injection
+        ";",             // Statement terminator (stacked queries)
+        "0x",            // Hex-encoded injection
+        "CHAR(",         // Character encoding bypass
+        "CONCAT(",       // String concatenation bypass
+    ];
 
     for pattern in &dangerous_patterns {
         if upper.contains(pattern) {
@@ -122,6 +179,34 @@ fn validate_where_clause(clause: &str) -> Result<()> {
                 pattern
             )));
         }
+    }
+
+    // Check for tautological conditions (OR 1=1, OR 'a'='a', etc.)
+    // These are classic SQL injection patterns
+    let tautology_re = regex::Regex::new(r"(?i)\bOR\b\s+\d+\s*=\s*\d+")
+        .map_err(|e| Error::Other(format!("Regex error: {}", e)))?;
+    if tautology_re.is_match(clause) {
+        return Err(Error::Other(
+            "WHERE clause contains tautological condition (OR n=n)".to_string(),
+        ));
+    }
+
+    // Check for string tautology (OR 'x'='x')
+    let string_tautology_re = regex::Regex::new(r"(?i)\bOR\b\s+'[^']*'\s*=\s*'[^']*'")
+        .map_err(|e| Error::Other(format!("Regex error: {}", e)))?;
+    if string_tautology_re.is_match(clause) {
+        return Err(Error::Other(
+            "WHERE clause contains tautological string condition".to_string(),
+        ));
+    }
+
+    // Check for subquery injection
+    let subquery_re = regex::Regex::new(r"(?i)\(\s*SELECT\b")
+        .map_err(|e| Error::Other(format!("Regex error: {}", e)))?;
+    if subquery_re.is_match(clause) {
+        return Err(Error::Other(
+            "WHERE clause contains subquery which is not allowed".to_string(),
+        ));
     }
 
     Ok(())
@@ -349,12 +434,17 @@ impl QueryBuilder {
     }
 
     pub fn build(&self) -> Result<String> {
-        match &self.query_type {
+        let sql = match &self.query_type {
             QueryType::Select(query) => self.build_select(query),
             QueryType::Insert(query) => self.build_insert(query),
             QueryType::Update(query) => self.build_update(query),
             QueryType::Delete(query) => self.build_delete(query),
-        }
+        }?;
+
+        // Defense-in-depth: validate the final SQL for dangerous patterns
+        validate_sql(&sql)?;
+
+        Ok(sql)
     }
 
     fn build_select(&self, query: &SelectQuery) -> Result<String> {
@@ -429,6 +519,22 @@ impl QueryBuilder {
             validate_sql_identifier(column)?;
         }
 
+        // SECURITY NOTE: This method interpolates escaped values into SQL.
+        // For user-controlled input, callers SHOULD use build_parameterized()
+        // instead, which produces proper placeholder-based queries.
+        // Validate each value to reject dangerous patterns before interpolation.
+        for row in &query.values {
+            for v in row {
+                // Strip surrounding quotes for validation if present
+                let check_val = if v.starts_with('\'') && v.ends_with('\'') && v.len() >= 2 {
+                    &v[1..v.len() - 1]
+                } else {
+                    v.as_str()
+                };
+                validate_sql_value(check_val)?;
+            }
+        }
+
         let columns = query.columns.join(", ");
         let values_list: Vec<String> = query
             .values
@@ -481,6 +587,19 @@ impl QueryBuilder {
 
         validate_sql_identifier(&query.table)?;
         validate_table_whitelist(&query.table);
+
+        // SECURITY NOTE: This method interpolates escaped values into SQL.
+        // For user-controlled input, callers SHOULD use build_parameterized()
+        // instead, which produces proper placeholder-based queries.
+        // Validate each value to reject dangerous patterns before interpolation.
+        for val in query.set_values.values() {
+            let check_val = if val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2 {
+                &val[1..val.len() - 1]
+            } else {
+                val.as_str()
+            };
+            validate_sql_value(check_val)?;
+        }
 
         let set_clauses: Vec<String> = query
             .set_values
@@ -545,9 +664,133 @@ impl QueryBuilder {
         Ok(sql)
     }
 
+    /// Deprecated: This method does not actually extract parameters and returns
+    /// an empty params vec, making it misleading. Use `build_parameterized()`
+    /// instead, which correctly extracts values into parameter placeholders.
+    #[deprecated(
+        note = "build_with_params returns empty params, use build_parameterized() instead"
+    )]
     pub fn build_with_params(&self) -> Result<(String, Vec<String>)> {
-        let sql = self.build()?;
-        Ok((sql, Vec::new()))
+        Err(Error::Other(
+            "build_with_params is deprecated: it does not extract parameters. \
+             Use build_parameterized() instead for safe parameterized queries."
+                .to_string(),
+        ))
+    }
+
+    /// Build a parameterized INSERT query that returns (sql_with_placeholders, param_values).
+    /// This is the SAFE alternative to build() for INSERT/UPDATE/DELETE operations.
+    /// Callers should use execute_prepared() with the returned params instead of execute_query().
+    /// (CodeRabbit C3 fix: QueryBuilder must support parameterized output)
+    pub fn build_parameterized(&self) -> Result<(String, Vec<String>)> {
+        match &self.query_type {
+            QueryType::Select(query) => {
+                // SELECT queries don't have user-provided values to parameterize
+                let sql = self.build_select(query)?;
+                Ok((sql, Vec::new()))
+            }
+            QueryType::Insert(query) => self.build_insert_parameterized(query),
+            QueryType::Update(query) => self.build_update_parameterized(query),
+            QueryType::Delete(query) => {
+                // DELETE queries don't have SET values to parameterize
+                // The where_clause is still validated via validate_where_clause
+                let sql = self.build_delete(query)?;
+                Ok((sql, Vec::new()))
+            }
+        }
+    }
+
+    fn build_insert_parameterized(&self, query: &InsertQuery) -> Result<(String, Vec<String>)> {
+        if query.columns.is_empty() || query.values.is_empty() {
+            return Err(Error::Other(
+                "INSERT requires columns and values".to_string(),
+            ));
+        }
+
+        validate_sql_identifier(&query.table)?;
+        validate_table_whitelist(&query.table);
+
+        for column in &query.columns {
+            validate_sql_identifier(column)?;
+        }
+
+        let columns = query.columns.join(", ");
+        let mut params = Vec::new();
+        let mut param_index = 1;
+
+        let values_list: Vec<String> = query
+            .values
+            .iter()
+            .map(|row| {
+                let placeholders: Vec<String> = row
+                    .iter()
+                    .map(|v| {
+                        let placeholder = format!("${}", param_index);
+                        param_index += 1;
+                        params.push(v.clone());
+                        placeholder
+                    })
+                    .collect();
+                format!("({})", placeholders.join(", "))
+            })
+            .collect();
+
+        let mut sql = format!(
+            "INSERT INTO {} ({}) VALUES {}",
+            query.table,
+            columns,
+            values_list.join(", ")
+        );
+
+        if let Some(ref returning) = query.returning {
+            for col in returning {
+                validate_sql_identifier(col)?;
+            }
+            sql.push_str(&format!(" RETURNING {}", returning.join(", ")));
+        }
+
+        Ok((sql, params))
+    }
+
+    fn build_update_parameterized(&self, query: &UpdateQuery) -> Result<(String, Vec<String>)> {
+        if query.set_values.is_empty() {
+            return Err(Error::Other("UPDATE requires SET values".to_string()));
+        }
+
+        validate_sql_identifier(&query.table)?;
+        validate_table_whitelist(&query.table);
+
+        let mut params = Vec::new();
+        let mut param_index = 1;
+
+        let set_clauses: Vec<String> = query
+            .set_values
+            .iter()
+            .map(|(col, val)| {
+                validate_sql_identifier(col).ok()?;
+                let placeholder = format!("${}", param_index);
+                param_index += 1;
+                params.push(val.clone());
+                Some(format!("{} = {}", col, placeholder))
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| Error::Other("Invalid column name in SET clause".to_string()))?;
+
+        let mut sql = format!("UPDATE {} SET {}", query.table, set_clauses.join(", "));
+
+        if let Some(ref where_clause) = query.where_clause {
+            validate_where_clause(where_clause)?;
+            sql.push_str(&format!(" WHERE {}", where_clause));
+        }
+
+        if let Some(ref returning) = query.returning {
+            for col in returning {
+                validate_sql_identifier(col)?;
+            }
+            sql.push_str(&format!(" RETURNING {}", returning.join(", ")));
+        }
+
+        Ok((sql, params))
     }
 }
 
