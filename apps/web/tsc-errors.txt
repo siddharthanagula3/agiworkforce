@@ -1,0 +1,1360 @@
+components/AGI/ReflectionInsightCard.tsx(11,22): error TS1261: Already included file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/Card.tsx' differs from file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/card.tsx' only in casing.
+  The file is in the program because:
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/AGI/ReflectionInsightCard.tsx'
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/AGI/IterationProgressPanel.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Artifacts/ArtifactRendererView.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Memory/MemoryCard.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/DeepResearchPanel.tsx'
+    Imported via './card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/index.tsx'
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/ArtifactRenderer.tsx'
+    Matched by include pattern '**/*.tsx' in '/Users/siddhartha/Desktop/agiworkforce/apps/web/tsconfig.json'
+components/Artifacts/ArtifactPanel.tsx(49,8): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ArtifactSummary'. Did you mean to use 'import ArtifactSummary from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactPanel.tsx(50,8): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ArtifactType'. Did you mean to use 'import ArtifactType from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactPanel.tsx(51,8): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ArtifactVersion'. Did you mean to use 'import ArtifactVersion from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactPanel.tsx(52,8): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'RenderedArtifact'. Did you mean to use 'import RenderedArtifact from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactPanel.tsx(65,5): error TS2339: Property 'activeArtifactId' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(66,5): error TS2339: Property 'panelOpen' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(67,5): error TS2339: Property 'panelWidth' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(68,5): error TS2339: Property 'isStreaming' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(69,5): error TS2339: Property 'setActiveArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(70,5): error TS2339: Property 'closePanel' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(71,5): error TS2339: Property 'setPanelWidth' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(72,5): error TS2339: Property 'getArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(73,5): error TS2339: Property 'getRenderedArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(74,5): error TS2339: Property 'deleteArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(75,5): error TS2339: Property 'archiveArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(76,5): error TS2339: Property 'pinArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(77,5): error TS2339: Property 'rollbackArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(78,5): error TS2339: Property 'getArtifactsByConversation' does not exist on type '{}'.
+components/Artifacts/ArtifactPanel.tsx(119,44): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/Artifacts/ArtifactRendererView.tsx(29,10): error TS2614: Module '"@/utils/security"' has no exported member 'sanitizeSvg'. Did you mean to use 'import sanitizeSvg from "@/utils/security"' instead?
+components/Artifacts/ArtifactRendererView.tsx(31,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ChartRenderData'. Did you mean to use 'import ChartRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(32,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'CodeRenderData'. Did you mean to use 'import CodeRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(33,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'DiagramRenderData'. Did you mean to use 'import DiagramRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(34,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'DocumentRenderData'. Did you mean to use 'import DocumentRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(35,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ImageRenderData'. Did you mean to use 'import ImageRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(36,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'PresentationRenderData'. Did you mean to use 'import PresentationRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(37,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'RenderedArtifact'. Did you mean to use 'import RenderedArtifact from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(38,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'SpreadsheetRenderData'. Did you mean to use 'import SpreadsheetRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(39,3): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'WebRenderData'. Did you mean to use 'import WebRenderData from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactRendererView.tsx(151,30): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(151,37): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(192,34): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(203,29): error TS7006: Parameter 'row' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(203,34): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(208,36): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(393,33): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(393,36): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(404,33): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(404,36): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(424,33): error TS7006: Parameter '_' implicitly has an 'any' type.
+components/Artifacts/ArtifactRendererView.tsx(424,36): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/Artifacts/ArtifactToolbar.tsx(24,33): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ArtifactType'. Did you mean to use 'import ArtifactType from "@/stores/artifactStore"' instead?
+components/Artifacts/ArtifactToolbar.tsx(41,11): error TS2339: Property 'setActiveArtifact' does not exist on type '{}'.
+components/Artifacts/ArtifactToolbar.tsx(41,30): error TS2339: Property 'openPanel' does not exist on type '{}'.
+components/Artifacts/VersionHistoryDialog.tsx(22,15): error TS2614: Module '"@/stores/artifactStore"' has no exported member 'ArtifactVersion'. Did you mean to use 'import ArtifactVersion from "@/stores/artifactStore"' instead?
+components/BackgroundTasks/BackgroundTasksPanel.tsx(9,14): error TS2305: Module '"@/lib/utils"' has no exported member 'formatDuration'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(33,57): error TS2554: Expected 0 arguments, but got 1.
+components/CustomInstructions/CustomInstructionsDialog.tsx(33,58): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/CustomInstructions/CustomInstructionsDialog.tsx(34,64): error TS2554: Expected 0 arguments, but got 1.
+components/CustomInstructions/CustomInstructionsDialog.tsx(34,65): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/CustomInstructions/CustomInstructionsDialog.tsx(35,60): error TS2554: Expected 0 arguments, but got 1.
+components/CustomInstructions/CustomInstructionsDialog.tsx(35,61): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/CustomInstructions/CustomInstructionsDialog.tsx(55,34): error TS2345: Argument of type '{}' is not assignable to parameter of type 'SetStateAction<string>'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(102,34): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(118,32): error TS2345: Argument of type '{}' is not assignable to parameter of type 'SetStateAction<string>'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(137,33): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+components/CustomInstructions/CustomInstructionsDialog.tsx(138,9): error TS2365: Operator '>=' cannot be applied to types 'number' and '{}'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(197,21): error TS2322: Type '{}' is not assignable to type 'number'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(214,23): error TS2322: Type '{}' is not assignable to type 'boolean | undefined'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(217,28): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(241,21): error TS2322: Type '{}' is not assignable to type 'number'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(260,21): error TS2322: Type '{}' is not assignable to type 'boolean | undefined'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(263,26): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/CustomInstructions/CustomInstructionsDialog.tsx(287,19): error TS2322: Type '{}' is not assignable to type 'number'.
+components/Errors/ErrorToast.tsx(2,30): error TS2614: Module '"@/stores/unified/errorStore"' has no exported member 'AppError'. Did you mean to use 'import AppError from "@/stores/unified/errorStore"' instead?
+components/Errors/ErrorToast.tsx(2,45): error TS2614: Module '"@/stores/unified/errorStore"' has no exported member 'ErrorSeverity'. Did you mean to use 'import ErrorSeverity from "@/stores/unified/errorStore"' instead?
+components/Errors/ErrorToast.tsx(3,10): error TS2614: Module '"@/constants/errorMessages"' has no exported member 'getErrorMessage'. Did you mean to use 'import getErrorMessage from "@/constants/errorMessages"' instead?
+components/Errors/ErrorToast.tsx(71,26): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+components/Errors/ErrorToast.tsx(84,56): error TS7006: Parameter 'suggestion' implicitly has an 'any' type.
+components/Errors/ErrorToast.tsx(84,68): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+components/Errors/ErrorToast.tsx(158,22): error TS7006: Parameter 'toast' implicitly has an 'any' type.
+components/Errors/ErrorToast.tsx(172,35): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/Feedback/FeedbackDialog.tsx(9,30): error TS2307: Cannot find module '@/services/supabaseAuth' or its corresponding type declarations.
+components/layout/__tests__/TitleBar.test.tsx(67,49): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(74,56): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(79,53): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(86,41): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(95,44): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(102,61): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(109,56): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/__tests__/TitleBar.test.tsx(118,55): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/layout/CommandPalette.tsx(9,3): error TS2614: Module '"@/utils/commandHistory"' has no exported member 'formatLastUsed'. Did you mean to use 'import formatLastUsed from "@/utils/commandHistory"' instead?
+components/layout/CommandPalette.tsx(10,3): error TS2614: Module '"@/utils/commandHistory"' has no exported member 'getCommandStats'. Did you mean to use 'import getCommandStats from "@/utils/commandHistory"' instead?
+components/layout/CommandPalette.tsx(11,3): error TS2614: Module '"@/utils/commandHistory"' has no exported member 'getRecentCommandIds'. Did you mean to use 'import getRecentCommandIds from "@/utils/commandHistory"' instead?
+components/layout/CommandPalette.tsx(12,3): error TS2614: Module '"@/utils/commandHistory"' has no exported member 'recordCommandExecution'. Did you mean to use 'import recordCommandExecution from "@/utils/commandHistory"' instead?
+components/layout/Sidebar.tsx(14,29): error TS1149: File name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/layout/UserProfile.tsx' differs from already included file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Layout/UserProfile.tsx' only in casing.
+  The file is in the program because:
+    Imported via '../Layout/UserProfile' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/Sidebar.tsx'
+    Imported via './UserProfile' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/layout/Sidebar.tsx'
+    Matched by include pattern '**/*.tsx' in '/Users/siddhartha/Desktop/agiworkforce/apps/web/tsconfig.json'
+components/layout/StatusBar.tsx(14,10): error TS2614: Module '"@/utils/tokenCount"' has no exported member 'formatTokens'. Did you mean to use 'import formatTokens from "@/utils/tokenCount"' instead?
+components/layout/StatusBar.tsx(15,33): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/layout/StatusBar.tsx(17,15): error TS2614: Module '"@/stores/unified/settingsStore"' has no exported member 'Provider'. Did you mean to use 'import Provider from "@/stores/unified/settingsStore"' instead?
+components/layout/TitleBar.tsx(6,10): error TS2614: Module '"@/stores/unified/auth"' has no exported member 'useAuthStore'. Did you mean to use 'import useAuthStore from "@/stores/unified/auth"' instead?
+components/layout/TitleBar.tsx(30,30): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/layout/TitleBar.tsx(31,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/Layout/UserProfile.tsx(13,27): error TS2614: Module '"@/stores/unified/accountStore"' has no exported member 'selectIsTierLoading'. Did you mean to use 'import selectIsTierLoading from "@/stores/unified/accountStore"' instead?
+components/Layout/UserProfile.tsx(14,10): error TS2614: Module '"@/stores/unified/auth"' has no exported member 'useAuthStore'. Did you mean to use 'import useAuthStore from "@/stores/unified/auth"' instead?
+components/Layout/UserProfile.tsx(15,10): error TS2614: Module '"@/utils/navigation"' has no exported member 'openPricingPage'. Did you mean to use 'import openPricingPage from "@/utils/navigation"' instead?
+components/Layout/UserProfile.tsx(16,10): error TS2614: Module '"@/stores/unified/usageStore"' has no exported member 'getUsagePercentage'. Did you mean to use 'import getUsagePercentage from "@/stores/unified/usageStore"' instead?
+components/Layout/UserProfile.tsx(18,10): error TS2614: Module '"@/utils/credits"' has no exported member 'formatCreditNumber'. Did you mean to use 'import formatCreditNumber from "@/utils/credits"' instead?
+components/Layout/UserProfile.tsx(33,35): error TS2554: Expected 0 arguments, but got 1.
+components/Layout/UserProfile.tsx(33,36): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/Layout/UserProfile.tsx(34,41): error TS2554: Expected 0 arguments, but got 1.
+components/Layout/UserProfile.tsx(36,11): error TS2339: Property 'displayName' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(36,24): error TS2339: Property 'email' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(36,31): error TS2339: Property 'avatar' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(36,39): error TS2339: Property 'planDisplayName' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(36,56): error TS2339: Property 'plan' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(36,62): error TS2339: Property 'credits' does not exist on type '{}'.
+components/Layout/UserProfile.tsx(57,11): error TS7006: Parameter 'n' implicitly has an 'any' type.
+components/Memory/__tests__/MemoryManager.test.ts(8,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/__tests__/MemoryManager.test.ts(13,34): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/Memory/CreateMemoryDialog.tsx(32,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/memoryStore"' instead?
+components/Memory/MemoryCard.tsx(14,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/memoryStore"' instead?
+components/Memory/MemoryCard.tsx(14,31): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/MemoryCard.tsx(17,10): error TS2305: Module '"@/lib/utils"' has no exported member 'formatRelativeTime'.
+components/Memory/MemoryCard.tsx(172,11): error TS2339: Property 'forget' does not exist on type '{}'.
+components/Memory/MemoryCard.tsx(172,19): error TS2339: Property 'remember' does not exist on type '{}'.
+components/Memory/MemoryImportanceIndicator.tsx(15,10): error TS2305: Module '"@/lib/utils"' has no exported member 'formatRelativeTime'.
+components/Memory/MemoryManager.tsx(30,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(30,31): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(33,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectPreferences'. Did you mean to use 'import selectPreferences from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(34,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectFacts'. Did you mean to use 'import selectFacts from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(35,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectDecisions'. Did you mean to use 'import selectDecisions from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(36,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectContextMemories'. Did you mean to use 'import selectContextMemories from "@/stores/memoryStore"' instead?
+components/Memory/MemoryManager.tsx(120,11): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(120,21): error TS2339: Property 'isLoading' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(120,32): error TS2339: Property 'error' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(120,39): error TS2339: Property 'loadAll' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(123,38): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryManager.tsx(124,32): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryManager.tsx(125,36): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryManager.tsx(126,42): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryManager.tsx(139,31): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(140,19): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(141,27): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(142,32): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(144,35): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(144,49): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(144,67): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(144,91): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryManager.tsx(286,18): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ all: any; preference: any; fact: any; decision: any; context: any; }'.
+components/Memory/MemorySearch.tsx(13,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/MemorySearch.tsx(44,11): error TS2339: Property 'search' does not exist on type '{}'.
+components/Memory/MemorySearch.tsx(44,30): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemorySearch.tsx(44,40): error TS2339: Property 'isLoading' does not exist on type '{}'.
+components/Memory/MemorySearch.tsx(74,14): error TS7006: Parameter 'memory' implicitly has an 'any' type.
+components/Memory/MemorySearch.tsx(174,11): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemorySidebar.tsx(14,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/MemorySidebar.tsx(46,11): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemorySidebar.tsx(50,14): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/Memory/MemorySidebar.tsx(51,12): error TS7006: Parameter 'a' implicitly has an 'any' type.
+components/Memory/MemorySidebar.tsx(51,15): error TS7006: Parameter 'b' implicitly has an 'any' type.
+components/Memory/MemorySidebar.tsx(124,41): error TS7006: Parameter 'memory' implicitly has an 'any' type.
+components/Memory/MemorySidebar.tsx(195,11): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemorySidebar.tsx(195,21): error TS2339: Property 'isLoading' does not exist on type '{}'.
+components/Memory/MemorySidebar.tsx(210,43): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/Memory/MemoryViewer.tsx(22,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(22,31): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(25,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectPreferences'. Did you mean to use 'import selectPreferences from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(26,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectFacts'. Did you mean to use 'import selectFacts from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(27,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectDecisions'. Did you mean to use 'import selectDecisions from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(28,3): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'selectContextMemories'. Did you mean to use 'import selectContextMemories from "@/stores/memoryStore"' instead?
+components/Memory/MemoryViewer.tsx(109,11): error TS2339: Property 'memories' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(109,21): error TS2339: Property 'isLoading' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(109,32): error TS2339: Property 'error' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(109,39): error TS2339: Property 'loadAll' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(112,38): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryViewer.tsx(113,32): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryViewer.tsx(114,36): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryViewer.tsx(115,42): error TS2554: Expected 0 arguments, but got 1.
+components/Memory/MemoryViewer.tsx(139,31): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(140,19): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(141,27): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(142,32): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(144,35): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(144,49): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(144,67): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(144,91): error TS2339: Property 'length' does not exist on type '{}'.
+components/Memory/MemoryViewer.tsx(227,18): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ all: any; preference: any; fact: any; decision: any; context: any; }'.
+components/ToolCalling/DiffViewer.tsx(12,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'DiffData'. Did you mean to use 'import DiffData from "@/types/toolCalling"' instead?
+components/ToolCalling/DiffViewer.tsx(29,47): error TS7006: Parameter '_' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(29,50): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(67,46): error TS7006: Parameter '_' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(67,49): error TS7006: Parameter 'i' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(76,6): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(76,11): error TS7006: Parameter 'hunk' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(120,26): error TS7006: Parameter 'hunk' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(120,32): error TS7006: Parameter 'hunkIndex' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(142,36): error TS7006: Parameter 'line' implicitly has an 'any' type.
+components/ToolCalling/DiffViewer.tsx(142,42): error TS7006: Parameter 'lineIndex' implicitly has an 'any' type.
+components/ToolCalling/ImagePreview.tsx(12,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolArtifact'. Did you mean to use 'import ToolArtifact from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(23,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolCall'. Did you mean to use 'import ToolCall from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(24,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolCallUI'. Did you mean to use 'import ToolCallUI from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(25,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolResult'. Did you mean to use 'import ToolResult from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(26,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolResultUI'. Did you mean to use 'import ToolResultUI from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(27,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolExecutionWorkflow'. Did you mean to use 'import ToolExecutionWorkflow from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(28,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolExecutionStep'. Did you mean to use 'import ToolExecutionStep from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(29,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolParameter'. Did you mean to use 'import ToolParameter from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(30,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolDefinition'. Did you mean to use 'import ToolDefinition from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(31,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolCapability'. Did you mean to use 'import ToolCapability from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(32,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolExecutionStatus'. Did you mean to use 'import ToolExecutionStatus from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(33,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolResultType'. Did you mean to use 'import ToolResultType from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(34,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolArtifact'. Did you mean to use 'import ToolArtifact from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(35,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'TableData'. Did you mean to use 'import TableData from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(36,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'DiffData'. Did you mean to use 'import DiffData from "@/types/toolCalling"' instead?
+components/ToolCalling/index.ts(37,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolApprovalRequestPayload'. Did you mean to use 'import ToolApprovalRequestPayload from "@/types/toolCalling"' instead?
+components/ToolCalling/TableViewer.tsx(21,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'TableData'. Did you mean to use 'import TableData from "@/types/toolCalling"' instead?
+components/ToolCalling/TableViewer.tsx(49,30): error TS7006: Parameter 'row' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(113,39): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(115,13): error TS7006: Parameter 'row' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(115,39): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(133,39): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(135,13): error TS7006: Parameter 'row' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(135,39): error TS7006: Parameter 'col' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(210,34): error TS7006: Parameter 'column' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(245,34): error TS7006: Parameter 'row' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(245,39): error TS7006: Parameter 'rowIndex' implicitly has an 'any' type.
+components/ToolCalling/TableViewer.tsx(250,38): error TS7006: Parameter 'column' implicitly has an 'any' type.
+components/ToolCalling/ToolApprovalDialog.tsx(21,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolApprovalRequestPayload'. Did you mean to use 'import ToolApprovalRequestPayload from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolCallCard.tsx(25,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolCallUI'. Did you mean to use 'import ToolCallUI from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolExecutionTimeline.tsx(22,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolExecutionWorkflow'. Did you mean to use 'import ToolExecutionWorkflow from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolExecutionTimeline.tsx(22,38): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolExecutionStep'. Did you mean to use 'import ToolExecutionStep from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolExecutionTimeline.tsx(131,34): error TS7006: Parameter 'child' implicitly has an 'any' type.
+components/ToolCalling/ToolExecutionTimeline.tsx(131,41): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/ToolCalling/ToolExecutionTimeline.tsx(295,31): error TS7006: Parameter 'step' implicitly has an 'any' type.
+components/ToolCalling/ToolExecutionTimeline.tsx(295,37): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/ToolCalling/ToolResultCard.tsx(32,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolResultUI'. Did you mean to use 'import ToolResultUI from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolResultCard.tsx(32,29): error TS2614: Module '"@/types/toolCalling"' has no exported member 'TableData'. Did you mean to use 'import TableData from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolResultCard.tsx(32,40): error TS2614: Module '"@/types/toolCalling"' has no exported member 'DiffData'. Did you mean to use 'import DiffData from "@/types/toolCalling"' instead?
+components/ToolCalling/ToolResultCard.tsx(33,10): error TS2614: Module '"@/utils/security"' has no exported member 'sanitizeMarkdownHtml'. Did you mean to use 'import sanitizeMarkdownHtml from "@/utils/security"' instead?
+components/ToolCalling/ToolResultCard.tsx(105,38): error TS7006: Parameter 'artifact' implicitly has an 'any' type.
+components/ToolCalling/ToolResultCard.tsx(262,40): error TS7006: Parameter 'artifact' implicitly has an 'any' type.
+components/ui/index.tsx(20,15): error TS1149: File name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/card.tsx' differs from already included file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/Card.tsx' only in casing.
+  The file is in the program because:
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/AGI/ReflectionInsightCard.tsx'
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/AGI/IterationProgressPanel.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Artifacts/ArtifactRendererView.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Memory/MemoryCard.tsx'
+    Imported via '@/components/ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/DeepResearchPanel.tsx'
+    Imported via './card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/ui/index.tsx'
+    Imported via '../ui/Card' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/ArtifactRenderer.tsx'
+    Matched by include pattern '**/*.tsx' in '/Users/siddhartha/Desktop/agiworkforce/apps/web/tsconfig.json'
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(614,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(624,21): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(634,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(645,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(656,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(665,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/__tests__/UnifiedAgenticChat.test.tsx(675,25): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<Element | null>'.
+components/UnifiedAgenticChat/AppLayout.tsx(5,10): error TS2724: '"@/stores/unified/auth"' has no exported member named 'useBillingStore'. Did you mean 'useBillingUsageStore'?
+components/UnifiedAgenticChat/AppLayout.tsx(40,46): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/AppLayout.tsx(40,47): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/AppLayout.tsx(41,47): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/AppLayout.tsx(41,48): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/AppLayout.tsx(42,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/AppLayout.tsx(81,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/AppLayout.tsx(93,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/AppLayout.tsx(95,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/AppLayout.tsx(303,20): error TS2322: Type '{ isOpen: boolean; onClose: () => void; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'isOpen' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/AppLayout.tsx(330,17): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/AppLayout.tsx(339,20): error TS2322: Type '{ isOpen: boolean; onClose: () => void; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'isOpen' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/artifact-components/PresentationArtifact.tsx(3,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/artifact-components/PresentationArtifact.tsx(19,44): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/UnifiedAgenticChat/artifact-components/PresentationArtifact.tsx(26,20): error TS7006: Parameter 'line' implicitly has an 'any' type.
+components/UnifiedAgenticChat/artifact-components/SpreadsheetArtifact.tsx(3,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(44,33): error TS2307: Cannot find module '@/providers/ThemeProvider' or its corresponding type declarations.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(47,10): error TS2614: Module '"@/utils/security"' has no exported member 'sanitizeHtml'. Did you mean to use 'import sanitizeHtml from "@/utils/security"' instead?
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(48,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(72,33): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(72,34): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(73,33): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(73,34): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(74,38): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(74,39): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(124,44): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(127,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(128,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(187,15): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(188,18): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(214,15): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ArtifactRenderer.tsx(215,18): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(7,42): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(7,43): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(8,42): error TS2339: Property 'filter' does not exist on type '{}'.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(8,50): error TS7006: Parameter 'a' implicitly has an 'any' type.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(9,45): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(9,46): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(17,20): error TS7006: Parameter 'alert' implicitly has an 'any' type.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(18,29): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ warning: { icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; bg: string; border: string; text: string; }; danger: { ...; }; exceeded: { ...; }; }'.
+components/UnifiedAgenticChat/BudgetAlertsPanel.tsx(58,30): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/Cards/TerminalCommandCard.tsx(34,40): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/Cards/TerminalCommandCard.tsx(34,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(15,15): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureResult'. Did you mean to use 'import CaptureResult from "@/types/capture"' instead?
+components/UnifiedAgenticChat/ChatInputArea.tsx(17,34): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/UnifiedAgenticChat/ChatInputArea.tsx(31,10): error TS2614: Module '"@/utils/subscriptionGate"' has no exported member 'SubscriptionGateResult'. Did you mean to use 'import SubscriptionGateResult from "@/utils/subscriptionGate"' instead?
+components/UnifiedAgenticChat/ChatInputArea.tsx(31,39): error TS2614: Module '"@/utils/subscriptionGate"' has no exported member 'SubscriptionStatus'. Did you mean to use 'import SubscriptionStatus from "@/utils/subscriptionGate"' instead?
+components/UnifiedAgenticChat/ChatInputArea.tsx(32,10): error TS2614: Module '"../Subscription"' has no exported member 'SubscriptionLockDialog'. Did you mean to use 'import SubscriptionLockDialog from "../Subscription"' instead?
+components/UnifiedAgenticChat/ChatInputArea.tsx(34,10): error TS2724: '"@/stores/unified/auth"' has no exported member named 'useBillingStore'. Did you mean 'useBillingUsageStore'?
+components/UnifiedAgenticChat/ChatInputArea.tsx(135,5): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(135,6): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(159,39): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(159,40): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(160,42): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(160,43): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(161,45): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(161,46): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(162,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(162,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(177,5): error TS2322: Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(201,5): error TS2322: Type '{}' is not assignable to type 'boolean | undefined'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(255,26): error TS2339: Property 'startsWith' does not exist on type '{}'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(265,27): error TS2339: Property 'startsWith' does not exist on type '{}'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(271,29): error TS2339: Property 'find' does not exist on type '{}'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(271,35): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(277,45): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ChatInputArea.tsx(277,46): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(278,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ChatInputArea.tsx(279,23): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ChatInputArea.tsx(347,11): error TS2322: Type '{} | undefined' is not assignable to type 'string | undefined'.
+  Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(348,11): error TS2322: Type '{} | undefined' is not assignable to type 'string | undefined'.
+  Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(606,43): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(646,37): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(687,9): error TS2322: Type '{} | undefined' is not assignable to type 'string | undefined'.
+  Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(688,9): error TS2322: Type '{} | undefined' is not assignable to type 'string | undefined'.
+  Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(949,17): error TS2322: Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/ChatInputArea.tsx(985,17): error TS2322: Type '{}' is not assignable to type 'boolean | undefined'.
+components/UnifiedAgenticChat/ChatStream.tsx(45,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/ChatStream.tsx(145,52): error TS2339: Property 'type' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(163,66): error TS2339: Property 'id' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(169,28): error TS2339: Property 'type' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(177,30): error TS2339: Property 'title' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(180,30): error TS2339: Property 'type' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(180,52): error TS2339: Property 'language' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/ChatStream.tsx(180,67): error TS2339: Property 'type' does not exist on type 'MessageArtifact'.
+components/UnifiedAgenticChat/CodeBlock.tsx(6,10): error TS2614: Module '"@/utils/clipboard"' has no exported member 'copyToClipboard'. Did you mean to use 'import copyToClipboard from "@/utils/clipboard"' instead?
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(19,10): error TS2614: Module '"@/types/chat"' has no exported member 'ResearchTask'. Did you mean to use 'import ResearchTask from "@/types/chat"' instead?
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(32,22): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(79,41): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(163,36): error TS7006: Parameter 'step' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(163,42): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(226,40): error TS7006: Parameter 'finding' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(226,49): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(246,39): error TS7006: Parameter 'source' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DeepResearchPanel.tsx(246,47): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+components/UnifiedAgenticChat/DynamicSidecar.test.tsx(12,46): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/UnifiedAgenticChat/DynamicSidecar.test.tsx(13,63): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement | null>'.
+components/UnifiedAgenticChat/DynamicSidecar.test.tsx(18,70): error TS2339: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'.
+components/UnifiedAgenticChat/DynamicSidecar.tsx(24,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/DynamicSidecar.tsx(222,31): error TS2322: Type '{ className: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'className' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/DynamicSidecar.tsx(226,13): error TS2322: Type '{ className: string; tabId: string | undefined; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'className' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/DynamicSidecar.tsx(233,13): error TS2322: Type '{ value: string; language: string; filePath: string | undefined; enableLSP: true; height: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'value' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/DynamicSidecar.tsx(248,17): error TS2322: Type '{ value: string; filePath: string | undefined; language: string; height: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'value' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/DynamicSidecar.tsx(384,28): error TS2322: Type '{ contextId: string | undefined; className: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'contextId' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/FolderSelector.test.tsx(19,21): error TS2339: Property 'setState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/FolderSelector.test.tsx(26,21): error TS2339: Property 'setState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/FolderSelector.test.tsx(42,21): error TS2339: Property 'setState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/FolderSelector.test.tsx(51,30): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/FolderSelector.tsx(16,3): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'selectCurrentFolder'. Did you mean to use 'import selectCurrentFolder from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/FolderSelector.tsx(17,3): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'selectRecentFolders'. Did you mean to use 'import selectRecentFolders from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/FolderSelector.tsx(18,3): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'formatFolderPath'. Did you mean to use 'import formatFolderPath from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/FolderSelector.tsx(52,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/FolderSelector.tsx(53,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/FolderSelector.tsx(54,44): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/FolderSelector.tsx(54,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/FolderSelector.tsx(55,46): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/FolderSelector.tsx(55,47): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/FolderSelector.tsx(56,46): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/FolderSelector.tsx(56,47): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/FolderSelector.tsx(84,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(98,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(111,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(122,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(144,33): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+components/UnifiedAgenticChat/FolderSelector.tsx(147,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(154,26): error TS2339: Property 'filter' does not exist on type '{}'.
+components/UnifiedAgenticChat/FolderSelector.tsx(154,34): error TS7006: Parameter 'f' implicitly has an 'any' type.
+components/UnifiedAgenticChat/FolderSelector.tsx(240,54): error TS2322: Type '{}' is not assignable to type 'string'.
+components/UnifiedAgenticChat/FolderSelector.tsx(281,19): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/FolderSelector.tsx(289,53): error TS7006: Parameter 'folder' implicitly has an 'any' type.
+components/UnifiedAgenticChat/hooks/useAttachments.ts(9,34): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/UnifiedAgenticChat/hooks/useChatSubmit.ts(12,10): error TS2724: '"@/stores/unified/auth"' has no exported member named 'useBillingStore'. Did you mean 'useBillingUsageStore'?
+components/UnifiedAgenticChat/hooks/useChatSubmit.ts(19,10): error TS2614: Module '"@/utils/subscriptionGate"' has no exported member 'SubscriptionGateResult'. Did you mean to use 'import SubscriptionGateResult from "@/utils/subscriptionGate"' instead?
+components/UnifiedAgenticChat/hooks/useChatSubmit.ts(19,39): error TS2614: Module '"@/utils/subscriptionGate"' has no exported member 'SubscriptionStatus'. Did you mean to use 'import SubscriptionStatus from "@/utils/subscriptionGate"' instead?
+components/UnifiedAgenticChat/hooks/useChatSubmit.ts(125,45): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/hooks/useChatSubmit.ts(159,39): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(12,10): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+components/UnifiedAgenticChat/index.tsx(22,34): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/UnifiedAgenticChat/index.tsx(23,32): error TS2614: Module '"@/stores/unified/billingUsage"' has no exported member 'selectBudget'. Did you mean to use 'import selectBudget from "@/stores/unified/billingUsage"' instead?
+components/UnifiedAgenticChat/index.tsx(27,10): error TS2724: '"@/stores/unified/auth"' has no exported member named 'useBillingStore'. Did you mean 'useBillingUsageStore'?
+components/UnifiedAgenticChat/index.tsx(31,30): error TS2307: Cannot find module '@/services/supabaseAuth' or its corresponding type declarations.
+components/UnifiedAgenticChat/index.tsx(32,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+components/UnifiedAgenticChat/index.tsx(32,25): error TS2614: Module '"@/types/chat"' has no exported member 'ResearchTask'. Did you mean to use 'import ResearchTask from "@/types/chat"' instead?
+components/UnifiedAgenticChat/index.tsx(38,10): error TS2614: Module '"../Canvas"' has no exported member 'CanvasWorkspace'. Did you mean to use 'import CanvasWorkspace from "../Canvas"' instead?
+components/UnifiedAgenticChat/index.tsx(39,10): error TS2724: '"../ErrorBoundary"' has no exported member named 'ChatErrorBoundary'. Did you mean 'ErrorBoundary'?
+components/UnifiedAgenticChat/index.tsx(51,3): error TS2614: Module '"@/handlers/slashCommandHandlers"' has no exported member 'executeTerminalCommand'. Did you mean to use 'import executeTerminalCommand from "@/handlers/slashCommandHandlers"' instead?
+components/UnifiedAgenticChat/index.tsx(52,3): error TS2614: Module '"@/handlers/slashCommandHandlers"' has no exported member 'executeBrowserCommand'. Did you mean to use 'import executeBrowserCommand from "@/handlers/slashCommandHandlers"' instead?
+components/UnifiedAgenticChat/index.tsx(53,3): error TS2614: Module '"@/handlers/slashCommandHandlers"' has no exported member 'executeCodeCommand'. Did you mean to use 'import executeCodeCommand from "@/handlers/slashCommandHandlers"' instead?
+components/UnifiedAgenticChat/index.tsx(54,3): error TS2614: Module '"@/handlers/slashCommandHandlers"' has no exported member 'executeDatabaseCommand'. Did you mean to use 'import executeDatabaseCommand from "@/handlers/slashCommandHandlers"' instead?
+components/UnifiedAgenticChat/index.tsx(55,3): error TS2614: Module '"@/handlers/slashCommandHandlers"' has no exported member 'executeUndoCommand'. Did you mean to use 'import executeUndoCommand from "@/handlers/slashCommandHandlers"' instead?
+components/UnifiedAgenticChat/index.tsx(397,39): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(399,46): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(399,47): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(403,17): error TS2339: Property 'enabled' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(415,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/index.tsx(417,24): error TS2339: Property 'enabled' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(462,38): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(462,60): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/index.tsx(463,11): error TS2339: Property 'selectedProvider' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(463,29): error TS2339: Property 'selectedModel' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(464,5): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(465,25): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/index.tsx(466,22): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/index.tsx(471,11): error TS2339: Property 'loadCostOverview' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(472,5): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(473,25): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/index.tsx(910,30): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(992,14): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1018,36): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1045,34): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1158,14): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1266,14): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1275,14): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1305,52): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1323,31): error TS2554: Expected 0 arguments, but got 2.
+components/UnifiedAgenticChat/index.tsx(1366,14): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1387,33): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1432,34): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1521,38): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1549,38): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1577,35): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1684,32): error TS7006: Parameter 'event' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1758,40): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1759,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1763,50): error TS7006: Parameter 'step' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1763,56): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1784,42): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1785,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1788,50): error TS7006: Parameter 'step' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1788,56): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1798,57): error TS7006: Parameter 's' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1811,41): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1812,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1826,40): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1827,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1842,37): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1843,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1846,50): error TS7006: Parameter 'step' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1864,36): error TS7031: Binding element 'payload' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(1865,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(1947,38): error TS2339: Property 'defaultProvider' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(1950,35): error TS2339: Property 'defaultModels' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(1952,37): error TS2339: Property 'defaultModels' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(1958,32): error TS7006: Parameter 'err' implicitly has an 'any' type.
+components/UnifiedAgenticChat/index.tsx(2175,85): error TS2339: Property 'defaultProvider' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2179,80): error TS2339: Property 'defaultProvider' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2191,25): error TS2554: Expected 0 arguments, but got 2.
+components/UnifiedAgenticChat/index.tsx(2248,25): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(2290,12): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(2295,28): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(2298,54): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(2330,42): error TS2558: Expected 0 type arguments, but got 1.
+components/UnifiedAgenticChat/index.tsx(2349,41): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/index.tsx(2365,22): error TS2339: Property 'conversation' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2368,64): error TS2339: Property 'conversation' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2377,22): error TS2339: Property 'credits' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2378,61): error TS2339: Property 'credits' does not exist on type '{}'.
+components/UnifiedAgenticChat/index.tsx(2497,25): error TS2554: Expected 0 arguments, but got 2.
+components/UnifiedAgenticChat/index.tsx(2539,24): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/InlinePanels/TerminalInlinePanel.tsx(26,42): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/InlinePanels/TerminalInlinePanel.tsx(26,43): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/InlineToolResults/InlineTerminalOutput.tsx(22,40): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/InlineToolResults/InlineTerminalOutput.tsx(22,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/InputToolbar.tsx(10,34): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/UnifiedAgenticChat/InputToolbar.tsx(14,15): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureResult'. Did you mean to use 'import CaptureResult from "@/types/capture"' instead?
+components/UnifiedAgenticChat/InputToolbar.tsx(103,11): error TS2322: Type '{ variant: string; size: string; disabled: boolean; mode: string; conversationId: number | undefined; onCaptureComplete: ((result: CaptureResult) => void) | undefined; suppressToasts: boolean; className: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'variant' does not exist on type 'IntrinsicAttributes'.
+components/UnifiedAgenticChat/MediaLab.tsx(17,3): error TS2614: Module '"@/types/media"' has no exported member 'ImageProviderId'. Did you mean to use 'import ImageProviderId from "@/types/media"' instead?
+components/UnifiedAgenticChat/MediaLab.tsx(18,3): error TS2614: Module '"@/types/media"' has no exported member 'ImageQualityId'. Did you mean to use 'import ImageQualityId from "@/types/media"' instead?
+components/UnifiedAgenticChat/MediaLab.tsx(19,3): error TS2614: Module '"@/types/media"' has no exported member 'ImageSizeId'. Did you mean to use 'import ImageSizeId from "@/types/media"' instead?
+components/UnifiedAgenticChat/MediaLab.tsx(20,3): error TS2614: Module '"@/types/media"' has no exported member 'VideoResolutionId'. Did you mean to use 'import VideoResolutionId from "@/types/media"' instead?
+components/UnifiedAgenticChat/MediaLab.tsx(22,10): error TS2724: '"@/stores/unified/auth"' has no exported member named 'useBillingStore'. Did you mean 'useBillingUsageStore'?
+components/UnifiedAgenticChat/MediaLab.tsx(96,11): error TS2339: Property 'imageJobs' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(96,22): error TS2339: Property 'videoJobs' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(96,33): error TS2339: Property 'loadingImage' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(96,47): error TS2339: Property 'loadingVideo' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(96,61): error TS2339: Property 'generateImage' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(96,76): error TS2339: Property 'generateVideo' does not exist on type '{}'.
+components/UnifiedAgenticChat/MediaLab.tsx(99,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MediaLab.tsx(107,42): error TS7006: Parameter 'job' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MediaLab.tsx(108,42): error TS7006: Parameter 'job' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MediaLab.tsx(350,34): error TS7006: Parameter 'job' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MediaLab.tsx(351,33): error TS7006: Parameter 'img' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MediaLab.tsx(520,34): error TS7006: Parameter 'job' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx(30,15): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolResultUI'. Did you mean to use 'import ToolResultUI from "@/types/toolCalling"' instead?
+components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx(225,43): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx(225,44): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx(341,41): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
+  No index signature with a parameter of type 'string' was found on type '{}'.
+components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx(409,42): error TS2339: Property 'getState' does not exist on type '() => {}'.
+components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx(31,40): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx(31,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx(106,59): error TS2345: Argument of type 'string | Blob' is not assignable to parameter of type 'string'.
+  Type 'Blob' is not assignable to type 'string'.
+components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx(111,17): error TS2322: Type 'string | Blob' is not assignable to type 'string'.
+  Type 'Blob' is not assignable to type 'string'.
+components/UnifiedAgenticChat/MessageBubble/ToolCallCard.tsx(12,10): error TS2614: Module '"../../../api/toolConfirmation"' has no exported member 'respondToolConfirmation'. Did you mean to use 'import respondToolConfirmation from "../../../api/toolConfirmation"' instead?
+components/UnifiedAgenticChat/MessageBubble/ToolCallCard.tsx(16,10): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolCallUI'. Did you mean to use 'import ToolCallUI from "@/types/toolCalling"' instead?
+components/UnifiedAgenticChat/MessageBubble/WidgetList.tsx(8,10): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'emit'.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(38,32): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'Project'. Did you mean to use 'import Project from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(38,46): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'ProjectFile'. Did you mean to use 'import ProjectFile from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(97,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(97,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(98,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(98,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(136,15): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectSettingsDialog.tsx(147,15): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(44,3): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'selectActiveProjects'. Did you mean to use 'import selectActiveProjects from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/ProjectsView.tsx(45,3): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'selectArchivedProjects'. Did you mean to use 'import selectArchivedProjects from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/ProjectsView.tsx(46,8): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'Project'. Did you mean to use 'import Project from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/ProjectsView.tsx(65,36): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(65,37): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(66,42): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(67,44): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(68,37): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(68,38): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(69,40): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(69,41): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(70,41): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(70,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(71,42): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(71,43): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(72,44): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(72,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(73,44): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/ProjectsView.tsx(73,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(78,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(87,9): error TS2740: Type '{}' is missing the following properties from type 'Project[]': length, pop, push, concat, and 35 more.
+components/UnifiedAgenticChat/ProjectsView.tsx(90,9): error TS2740: Type '{}' is missing the following properties from type 'Project[]': length, pop, push, concat, and 35 more.
+components/UnifiedAgenticChat/ProjectsView.tsx(93,9): error TS2740: Type '{}' is missing the following properties from type 'Project[]': length, pop, push, concat, and 35 more.
+components/UnifiedAgenticChat/ProjectsView.tsx(125,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(136,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(138,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(143,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/UnifiedAgenticChat/ProjectsView.tsx(152,30): error TS2339: Property 'length' does not exist on type '{}'.
+components/UnifiedAgenticChat/ProjectsView.tsx(178,16): error TS2339: Property 'find' does not exist on type '{}'.
+components/UnifiedAgenticChat/ProjectsView.tsx(178,22): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/ProjectsView.tsx(229,38): error TS2339: Property 'length' does not exist on type '{}'.
+components/UnifiedAgenticChat/ProjectsView.tsx(231,42): error TS2339: Property 'length' does not exist on type '{}'.
+components/UnifiedAgenticChat/ProjectsView.tsx(232,34): error TS2339: Property 'length' does not exist on type '{}'.
+components/UnifiedAgenticChat/ProjectsView.tsx(526,35): error TS7006: Parameter 'file' implicitly has an 'any' type.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(22,8): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(23,39): error TS2307: Cannot find module '@/constants/planModels' or its corresponding type declarations.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(25,27): error TS2614: Module '"@/stores/unified/accountStore"' has no exported member 'selectIsTierLoading'. Did you mean to use 'import selectIsTierLoading from "@/stores/unified/accountStore"' instead?
+components/UnifiedAgenticChat/QuickModelSelector.tsx(26,25): error TS2614: Module '"@/stores/unified/modelStore"' has no exported member 'selectLastRoutingDecision'. Did you mean to use 'import selectLastRoutingDecision from "@/stores/unified/modelStore"' instead?
+components/UnifiedAgenticChat/QuickModelSelector.tsx(27,15): error TS2614: Module '"@/stores/unified/settingsStore"' has no exported member 'Provider'. Did you mean to use 'import Provider from "@/stores/unified/settingsStore"' instead?
+components/UnifiedAgenticChat/QuickModelSelector.tsx(57,5): error TS2339: Property 'selectedModel' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(58,5): error TS2339: Property 'availableModels' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(59,5): error TS2339: Property 'selectModel' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(60,5): error TS2339: Property 'thinkingModeEnabled' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(61,5): error TS2339: Property 'toggleThinkingMode' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(62,5): error TS2339: Property 'getAvailableModels' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(64,5): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(65,22): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(66,24): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(67,20): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(68,28): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(69,27): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(70,27): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(74,11): error TS2339: Property 'account' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(74,20): error TS2339: Property 'isTierLoading' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(75,5): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(76,16): error TS18046: 'state' is of type 'unknown'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(116,30): error TS7006: Parameter 'model' implicitly has an 'any' type.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(163,60): error TS7006: Parameter 'tag' implicitly has an 'any' type.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(195,44): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(211,45): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(254,29): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(353,45): error TS2339: Property 'wasRouted' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(360,57): error TS2339: Property 'routedModelId' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(361,41): error TS2339: Property 'routedModelId' does not exist on type '{}'.
+components/UnifiedAgenticChat/QuickModelSelector.tsx(363,76): error TS2339: Property 'taskType' does not exist on type '{}'.
+components/UnifiedAgenticChat/Sidebar.tsx(38,27): error TS2614: Module '"@/stores/unified/projectStore"' has no exported member 'selectActiveProjects'. Did you mean to use 'import selectActiveProjects from "@/stores/unified/projectStore"' instead?
+components/UnifiedAgenticChat/Sidebar.tsx(39,30): error TS2307: Cannot find module '@/services/supabaseAuth' or its corresponding type declarations.
+components/UnifiedAgenticChat/Sidebar.tsx(41,29): error TS1261: Already included file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/Layout/UserProfile.tsx' differs from file name '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/layout/UserProfile.tsx' only in casing.
+  The file is in the program because:
+    Imported via '../Layout/UserProfile' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/UnifiedAgenticChat/Sidebar.tsx'
+    Imported via './UserProfile' from file '/Users/siddhartha/Desktop/agiworkforce/apps/web/components/layout/Sidebar.tsx'
+    Matched by include pattern '**/*.tsx' in '/Users/siddhartha/Desktop/agiworkforce/apps/web/tsconfig.json'
+components/UnifiedAgenticChat/Sidebar.tsx(398,36): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/Sidebar.tsx(399,43): error TS2554: Expected 0 arguments, but got 1.
+components/UnifiedAgenticChat/Sidebar.tsx(399,44): error TS7006: Parameter 'state' implicitly has an 'any' type.
+components/UnifiedAgenticChat/Sidebar.tsx(404,32): error TS2345: Argument of type '{}' is not assignable to parameter of type 'SetStateAction<string | null>'.
+components/UnifiedAgenticChat/Sidebar.tsx(441,45): error TS2339: Property 'find' does not exist on type '{}'.
+components/UnifiedAgenticChat/Sidebar.tsx(441,51): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/UnifiedAgenticChat/Sidebar.tsx(885,23): error TS2339: Property 'length' does not exist on type '{}'.
+components/UnifiedAgenticChat/Sidebar.tsx(929,29): error TS2339: Property 'map' does not exist on type '{}'.
+components/UnifiedAgenticChat/Sidebar.tsx(929,34): error TS7006: Parameter 'project' implicitly has an 'any' type.
+components/UnifiedAgenticChat/TokenCounter.tsx(4,10): error TS2614: Module '"@/utils/tokenCount"' has no exported member 'formatTokens'. Did you mean to use 'import formatTokens from "@/utils/tokenCount"' instead?
+components/UnifiedAgenticChat/Widgets/WidgetRegistry.tsx(171,21): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+hooks/__tests__/usePromptSuggestions.test.ts(11,1): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(12,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(13,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(15,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(18,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(20,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(23,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(25,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(29,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(30,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(34,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(35,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(36,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(39,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(44,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(45,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(48,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(53,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(54,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(57,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(62,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(63,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(67,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(68,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(72,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(73,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(76,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(81,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(82,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(85,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(90,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(93,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(98,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(102,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(103,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(107,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(108,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(111,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(116,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(117,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(120,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(125,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(128,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(133,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(137,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(138,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(142,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(143,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(144,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(147,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(152,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(153,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(156,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(161,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(162,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(165,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(170,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(174,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(175,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(179,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(182,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(187,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(190,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(195,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(198,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(203,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(207,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(208,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(212,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(215,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(220,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(223,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(228,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(232,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(233,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(237,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(240,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(245,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(248,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(253,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(257,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(258,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(262,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(265,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(270,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(273,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(278,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(282,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(283,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(287,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(288,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(291,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(296,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(300,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(301,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(305,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(308,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(316,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(320,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(321,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(325,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(328,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(329,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(330,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(331,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(333,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(334,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(335,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(339,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(345,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(349,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(355,9): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(360,3): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(361,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(365,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/usePromptSuggestions.test.ts(368,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+hooks/__tests__/usePromptSuggestions.test.ts(372,7): error TS2304: Cannot find name 'expect'.
+hooks/__tests__/useTerminal.test.ts(11,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/__tests__/useWindowManager.test.ts(4,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useAgenticEvents.ts(1,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useAgenticEvents.ts(1,26): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useAgenticEvents.ts(2,10): error TS2614: Module '"@/constants/event-names"' has no exported member 'EVENTS'. Did you mean to use 'import EVENTS from "@/constants/event-names"' instead?
+hooks/useAgenticEvents.ts(22,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpToolExecutionStartedPayload'. Did you mean to use 'import McpToolExecutionStartedPayload from "@/types/mcp"' instead?
+hooks/useAgenticEvents.ts(23,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpToolExecutionCompletedPayload'. Did you mean to use 'import McpToolExecutionCompletedPayload from "@/types/mcp"' instead?
+hooks/useAgenticEvents.ts(24,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpConnectionChangedPayload'. Did you mean to use 'import McpConnectionChangedPayload from "@/types/mcp"' instead?
+hooks/useAgenticEvents.ts(27,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamEventPayload'. Did you mean to use 'import ToolStreamEventPayload from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(28,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamStartedEvent'. Did you mean to use 'import ToolStreamStartedEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(29,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamProgressEvent'. Did you mean to use 'import ToolStreamProgressEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(30,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamOutputChunkEvent'. Did you mean to use 'import ToolStreamOutputChunkEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(31,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamCompletedEvent'. Did you mean to use 'import ToolStreamCompletedEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(32,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamErrorEvent'. Did you mean to use 'import ToolStreamErrorEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(33,3): error TS2614: Module '"@/types/toolCalling"' has no exported member 'ToolStreamCancelledEvent'. Did you mean to use 'import ToolStreamCancelledEvent from "@/types/toolCalling"' instead?
+hooks/useAgenticEvents.ts(35,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+hooks/useAgenticEvents.ts(715,48): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(716,32): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(724,50): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(733,48): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(735,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(749,45): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(757,31): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(759,20): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(759,57): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(768,30): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(769,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(772,29): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(772,66): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(775,22): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(777,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(778,29): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(784,58): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(784,75): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(786,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(787,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(794,21): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(795,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(796,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(802,13): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(809,54): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(814,25): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(815,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(816,22): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(817,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(819,26): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(820,31): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(821,28): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(825,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(825,79): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(837,31): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(839,13): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(842,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(842,65): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(843,40): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(843,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(855,28): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(856,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(857,26): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(865,29): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(866,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(886,41): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(887,43): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(890,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(892,20): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(893,26): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(894,30): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(894,77): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(895,18): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(897,21): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(897,54): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(898,20): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(898,51): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(900,31): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(901,33): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(902,27): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(906,27): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(907,28): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(907,75): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(908,16): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(911,19): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(912,22): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(913,46): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(913,87): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(914,43): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(916,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(917,34): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(918,25): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(923,48): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(924,26): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(929,13): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(933,22): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(934,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(935,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(936,54): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(938,23): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(938,47): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(939,25): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(940,22): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(942,20): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(943,24): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(945,20): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(947,25): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(948,33): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(949,35): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(950,29): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(951,25): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(955,32): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(956,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(957,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(958,31): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(968,16): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(975,15): error TS2347: Untyped function calls may not accept type arguments.
+hooks/useAgenticEvents.ts(975,42): error TS7006: Parameter 'step' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1057,16): error TS7006: Parameter 'error' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1065,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1092,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1125,81): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1141,86): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1165,33): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1197,35): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1217,32): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1235,35): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1262,32): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1294,47): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1324,44): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1355,45): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1367,88): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1380,90): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1386,84): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1394,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1416,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1443,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1461,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1481,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1490,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1502,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1534,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1568,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(1692,32): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1692,52): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1693,34): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1693,51): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1700,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1715,32): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1715,52): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1716,34): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1716,51): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1723,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1738,34): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1738,57): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1745,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1761,36): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1761,61): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1769,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1784,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1784,63): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1785,35): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1793,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1808,38): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1808,55): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1809,38): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1809,66): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1820,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1838,35): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1838,59): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1846,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1928,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1928,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1935,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1950,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1950,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1957,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1972,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1972,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1979,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(1994,37): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(1994,62): error TS18046: 'payload' is of type 'unknown'.
+hooks/useAgenticEvents.ts(2001,13): error TS2322: Type 'unknown' is not assignable to type 'Record<string, unknown> | undefined'.
+hooks/useAgenticEvents.ts(2104,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(2133,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(2166,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(2185,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAgenticEvents.ts(2482,25): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAgenticEvents.ts(2495,25): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAgenticEvents.ts(2508,42): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAnalytics.ts(16,10): error TS2724: '"@/components/ROIDashboard/roiStore"' has no exported member named 'useROIStore'. Did you mean 'useErrorStore'?
+hooks/useAnalytics.ts(17,15): error TS2614: Module '"@/types/chat"' has no exported member 'CostAnalyticsResponse'. Did you mean to use 'import CostAnalyticsResponse from "@/types/chat"' instead?
+hooks/useAnalytics.ts(17,38): error TS2614: Module '"@/types/chat"' has no exported member 'CostOverviewResponse'. Did you mean to use 'import CostOverviewResponse from "@/types/chat"' instead?
+hooks/useAnalytics.ts(18,15): error TS2614: Module '"@/types/roi"' has no exported member 'AllTimeStats'. Did you mean to use 'import AllTimeStats from "@/types/roi"' instead?
+hooks/useAnalytics.ts(18,29): error TS2614: Module '"@/types/roi"' has no exported member 'DayStats'. Did you mean to use 'import DayStats from "@/types/roi"' instead?
+hooks/useAnalytics.ts(18,39): error TS2614: Module '"@/types/roi"' has no exported member 'WeekStats'. Did you mean to use 'import WeekStats from "@/types/roi"' instead?
+hooks/useAnalytics.ts(18,50): error TS2614: Module '"@/types/roi"' has no exported member 'MonthStats'. Did you mean to use 'import MonthStats from "@/types/roi"' instead?
+hooks/useAnalytics.ts(18,62): error TS2614: Module '"@/types/roi"' has no exported member 'ChartDataPoint'. Did you mean to use 'import ChartDataPoint from "@/types/roi"' instead?
+hooks/useAnalytics.ts(20,3): error TS2614: Module '"@/types/analytics"' has no exported member 'UsageStats'. Did you mean to use 'import UsageStats from "@/types/analytics"' instead?
+hooks/useAnalytics.ts(21,3): error TS2614: Module '"@/types/analytics"' has no exported member 'AppMetrics'. Did you mean to use 'import AppMetrics from "@/types/analytics"' instead?
+hooks/useAnalytics.ts(22,3): error TS2614: Module '"@/types/analytics"' has no exported member 'SystemMetrics'. Did you mean to use 'import SystemMetrics from "@/types/analytics"' instead?
+hooks/useAnalytics.ts(133,34): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(134,35): error TS2339: Property 'costAnalytics' does not exist on type '{}'.
+hooks/useAnalytics.ts(139,32): error TS2339: Property 'analyticsUsageStats' does not exist on type '{}'.
+hooks/useAnalytics.ts(140,32): error TS2339: Property 'appMetrics' does not exist on type '{}'.
+hooks/useAnalytics.ts(141,35): error TS2339: Property 'systemMetrics' does not exist on type '{}'.
+hooks/useAnalytics.ts(146,20): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(147,20): error TS2339: Property 'costAnalytics' does not exist on type '{}'.
+hooks/useAnalytics.ts(148,20): error TS2339: Property 'analyticsUsageStats' does not exist on type '{}'.
+hooks/useAnalytics.ts(149,20): error TS2339: Property 'appMetrics' does not exist on type '{}'.
+hooks/useAnalytics.ts(150,20): error TS2339: Property 'systemMetrics' does not exist on type '{}'.
+hooks/useAnalytics.ts(190,39): error TS2339: Property 'loadCostOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(190,72): error TS2339: Property 'loadCostAnalytics' does not exist on type '{}'.
+hooks/useAnalytics.ts(193,24): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(195,30): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(199,24): error TS2339: Property 'costAnalytics' does not exist on type '{}'.
+hooks/useAnalytics.ts(201,30): error TS2339: Property 'costAnalytics' does not exist on type '{}'.
+hooks/useAnalytics.ts(226,26): error TS2339: Property 'refreshAllMetrics' does not exist on type '{}'.
+hooks/useAnalytics.ts(374,39): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useAnalytics.ts(397,20): error TS2339: Property 'costOverview' does not exist on type '{}'.
+hooks/useApprovalActions.ts(5,10): error TS2614: Module '"../api/toolConfirmation"' has no exported member 'respondToolConfirmation'. Did you mean to use 'import respondToolConfirmation from "../api/toolConfirmation"' instead?
+hooks/useAutoCorrection.ts(3,3): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'detectErrors'. Did you mean to use 'import detectErrors from "@/utils/autoCorrection"' instead?
+hooks/useAutoCorrection.ts(4,3): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'generateCorrectionPrompt'. Did you mean to use 'import generateCorrectionPrompt from "@/utils/autoCorrection"' instead?
+hooks/useAutoCorrection.ts(5,3): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'shouldRetry'. Did you mean to use 'import shouldRetry from "@/utils/autoCorrection"' instead?
+hooks/useAutoCorrection.ts(6,3): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'extractCode'. Did you mean to use 'import extractCode from "@/utils/autoCorrection"' instead?
+hooks/useAutoCorrection.ts(7,3): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'calculateErrorSeverity'. Did you mean to use 'import calculateErrorSeverity from "@/utils/autoCorrection"' instead?
+hooks/useAutoCorrection.ts(8,8): error TS2614: Module '"@/utils/autoCorrection"' has no exported member 'DetectedError'. Did you mean to use 'import DetectedError from "@/utils/autoCorrection"' instead?
+hooks/useAutomationEvents.ts(2,10): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useAutomationEvents.ts(2,23): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useAutomationEvents.ts(4,15): error TS2614: Module '"@/types/automationEnhanced"' has no exported member 'RecordedAction'. Did you mean to use 'import RecordedAction from "@/types/automationEnhanced"' instead?
+hooks/useAutomationEvents.ts(4,31): error TS2614: Module '"@/types/automationEnhanced"' has no exported member 'Recording'. Did you mean to use 'import Recording from "@/types/automationEnhanced"' instead?
+hooks/useAutomationEvents.ts(46,48): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(47,48): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(48,46): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(49,46): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(50,50): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(51,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(55,44): error TS2339: Property 'subscribe' does not exist on type '() => {}'.
+hooks/useAutomationEvents.ts(55,55): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useAutomationEvents.ts(74,29): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useAutomationEvents.ts(78,16): error TS7006: Parameter 'unlisten' implicitly has an 'any' type.
+hooks/useBackgroundTasks.ts(16,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useBackgroundTasks.ts(17,15): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useBackgroundTasks.ts(297,84): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useBackgroundTasks.ts(305,86): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useBackgroundTasks.ts(317,80): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useBrowserAutomation.ts(4,32): error TS2614: Module '"@/stores/unified/browserStore"' has no exported member 'RecordedStep'. Did you mean to use 'import RecordedStep from "@/stores/unified/browserStore"' instead?
+hooks/useBrowserAutomation.ts(4,51): error TS2614: Module '"@/stores/unified/browserStore"' has no exported member 'ActionType'. Did you mean to use 'import ActionType from "@/stores/unified/browserStore"' instead?
+hooks/useBrowserAutomation.ts(150,5): error TS2339: Property 'sessions' does not exist on type '{}'.
+hooks/useBrowserAutomation.ts(151,5): error TS2339: Property 'activeSessionId' does not exist on type '{}'.
+hooks/useBrowserAutomation.ts(152,5): error TS2339: Property 'addAction' does not exist on type '{}'.
+hooks/useBrowserAutomation.ts(153,5): error TS2339: Property 'highlightElement' does not exist on type '{}'.
+hooks/useBrowserAutomation.ts(154,5): error TS2339: Property 'clearHighlight' does not exist on type '{}'.
+hooks/useBrowserAutomation.ts(162,44): error TS7006: Parameter 's' implicitly has an 'any' type.
+hooks/useBrowserAutomation.ts(163,51): error TS7006: Parameter 't' implicitly has an 'any' type.
+hooks/useCalendar.ts(5,3): error TS2614: Module '"@/types/calendar"' has no exported member 'CalendarAccount'. Did you mean to use 'import CalendarAccount from "@/types/calendar"' instead?
+hooks/useCalendar.ts(6,3): error TS2614: Module '"@/types/calendar"' has no exported member 'CalendarEvent'. Did you mean to use 'import CalendarEvent from "@/types/calendar"' instead?
+hooks/useCalendar.ts(7,3): error TS2614: Module '"@/types/calendar"' has no exported member 'CalendarSummary'. Did you mean to use 'import CalendarSummary from "@/types/calendar"' instead?
+hooks/useCalendar.ts(8,3): error TS2614: Module '"@/types/calendar"' has no exported member 'CreateEventRequest'. Did you mean to use 'import CreateEventRequest from "@/types/calendar"' instead?
+hooks/useCalendar.ts(9,3): error TS2614: Module '"@/types/calendar"' has no exported member 'ListEventsOptions'. Did you mean to use 'import ListEventsOptions from "@/types/calendar"' instead?
+hooks/useCalendar.ts(10,3): error TS2614: Module '"@/types/calendar"' has no exported member 'UpdateEventRequest'. Did you mean to use 'import UpdateEventRequest from "@/types/calendar"' instead?
+hooks/useCheckpoints.ts(10,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'Checkpoint'. Did you mean to use 'import Checkpoint from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(11,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'CheckpointListResponse'. Did you mean to use 'import CheckpointListResponse from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(12,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'CheckpointReason'. Did you mean to use 'import CheckpointReason from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(13,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'CheckpointSummary'. Did you mean to use 'import CheckpointSummary from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(14,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'SaveCheckpointRequest'. Did you mean to use 'import SaveCheckpointRequest from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(15,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'TaskId'. Did you mean to use 'import TaskId from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(16,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'getLatestCheckpoint'. Did you mean to use 'import getLatestCheckpoint from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(17,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'getRestoreHistory'. Did you mean to use 'import getRestoreHistory from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(18,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'listCheckpoints'. Did you mean to use 'import listCheckpoints from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(19,3): error TS2724: '"@/api/agi_checkpoint"' has no exported member named 'recordRestore'. Did you mean 'useCodeStore'?
+hooks/useCheckpoints.ts(20,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'saveCheckpoint'. Did you mean to use 'import saveCheckpoint from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(21,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'cleanupCheckpoints'. Did you mean to use 'import cleanupCheckpoints from "@/api/agi_checkpoint"' instead?
+hooks/useCheckpoints.ts(22,3): error TS2614: Module '"@/api/agi_checkpoint"' has no exported member 'deleteCheckpoint'. Did you mean to use 'import deleteCheckpoint from "@/api/agi_checkpoint"' instead?
+hooks/useCloudStorage.ts(3,15): error TS2614: Module '"@/types/cloud"' has no exported member 'CloudFile'. Did you mean to use 'import CloudFile from "@/types/cloud"' instead?
+hooks/useCloudStorage.ts(3,26): error TS2614: Module '"@/types/cloud"' has no exported member 'CloudProvider'. Did you mean to use 'import CloudProvider from "@/types/cloud"' instead?
+hooks/useCloudStorage.ts(3,41): error TS2614: Module '"@/types/cloud"' has no exported member 'OAuthCredentials'. Did you mean to use 'import OAuthCredentials from "@/types/cloud"' instead?
+hooks/useCloudStorage.ts(3,59): error TS2614: Module '"@/types/cloud"' has no exported member 'ShareLink'. Did you mean to use 'import ShareLink from "@/types/cloud"' instead?
+hooks/useCloudStorage.ts(116,18): error TS2339: Property 'accounts' does not exist on type '{}'.
+hooks/useCloudStorage.ts(116,32): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+hooks/useCloudStorage.ts(121,13): error TS2339: Property 'accounts' does not exist on type '{}'.
+hooks/useCloudStorage.ts(125,16): error TS2339: Property 'activeAccountId' does not exist on type '{}'.
+hooks/useCloudStorage.ts(126,59): error TS2339: Property 'activeAccountId' does not exist on type '{}'.
+hooks/useCloudStorage.ts(127,23): error TS2339: Property 'activeAccountId' does not exist on type '{}'.
+hooks/useCloudStorage.ts(131,18): error TS2339: Property 'pendingAuth' does not exist on type '{}'.
+hooks/useCloudStorage.ts(132,13): error TS2339: Property 'pendingAuth' does not exist on type '{}'.
+hooks/useCloudStorage.ts(141,17): error TS2339: Property 'refreshAccounts' does not exist on type '{}'.
+hooks/useCloudStorage.ts(147,19): error TS2339: Property 'selectAccount' does not exist on type '{}'.
+hooks/useCloudStorage.ts(155,19): error TS2339: Property 'beginConnect' does not exist on type '{}'.
+hooks/useCloudStorage.ts(164,17): error TS2339: Property 'activeAccountId' does not exist on type '{}'.
+hooks/useCloudStorage.ts(165,21): error TS2339: Property 'selectAccount' does not exist on type '{}'.
+hooks/useCloudStorage.ts(170,19): error TS2339: Property 'refreshAccounts' does not exist on type '{}'.
+hooks/useCloudStorage.ts(178,19): error TS2339: Property 'listFiles' does not exist on type '{}'.
+hooks/useCloudStorage.ts(186,19): error TS2339: Property 'uploadFile' does not exist on type '{}'.
+hooks/useCloudStorage.ts(194,19): error TS2339: Property 'downloadFile' does not exist on type '{}'.
+hooks/useCloudStorage.ts(202,19): error TS2339: Property 'deleteEntry' does not exist on type '{}'.
+hooks/useCloudStorage.ts(210,26): error TS2339: Property 'createFolder' does not exist on type '{}'.
+hooks/useCloudStorage.ts(218,26): error TS2339: Property 'shareLink' does not exist on type '{}'.
+hooks/useCloudStorage.ts(226,19): error TS2339: Property 'listFiles' does not exist on type '{}'.
+hooks/useCloudStorage.ts(233,31): error TS2339: Property 'currentPath' does not exist on type '{}'.
+hooks/useCloudStorage.ts(241,17): error TS2339: Property 'listFiles' does not exist on type '{}'.
+hooks/useCloudStorage.ts(246,17): error TS2339: Property 'refreshAccounts' does not exist on type '{}'.
+hooks/useCloudStorage.ts(247,15): error TS2339: Property 'activeAccountId' does not exist on type '{}'.
+hooks/useCloudStorage.ts(248,19): error TS2339: Property 'listFiles' does not exist on type '{}'.
+hooks/useCloudStorage.ts(248,35): error TS2339: Property 'currentPath' does not exist on type '{}'.
+hooks/useCloudStorage.ts(254,11): error TS2339: Property 'clearError' does not exist on type '{}'.
+hooks/useCloudStorage.ts(266,18): error TS2339: Property 'files' does not exist on type '{}'.
+hooks/useCloudStorage.ts(267,24): error TS2339: Property 'currentPath' does not exist on type '{}'.
+hooks/useCloudStorage.ts(268,20): error TS2339: Property 'loading' does not exist on type '{}'.
+hooks/useCloudStorage.ts(269,18): error TS2339: Property 'error' does not exist on type '{}'.
+hooks/useCloudStorage.ts(270,26): error TS2339: Property 'lastShareLink' does not exist on type '{}'.
+hooks/useCreditRefresh.ts(9,28): error TS2307: Cannot find module '../api/accountApi' or its corresponding type declarations.
+hooks/useCreditRefresh.ts(45,41): error TS2554: Expected 0 arguments, but got 1.
+hooks/useCreditRefresh.ts(45,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useCreditRefresh.ts(46,32): error TS2554: Expected 0 arguments, but got 1.
+hooks/useCreditRefresh.ts(46,33): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useCreditRefresh.ts(72,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useCreditRefresh.ts(182,23): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useDocuments.ts(4,3): error TS2614: Module '"@/types/document"' has no exported member 'DocumentType'. Did you mean to use 'import DocumentType from "@/types/document"' instead?
+hooks/useDocuments.ts(5,8): error TS2614: Module '"@/types/document"' has no exported member 'DocumentContent'. Did you mean to use 'import DocumentContent from "@/types/document"' instead?
+hooks/useDocuments.ts(6,8): error TS2614: Module '"@/types/document"' has no exported member 'DocumentMetadata'. Did you mean to use 'import DocumentMetadata from "@/types/document"' instead?
+hooks/useDocuments.ts(7,8): error TS2614: Module '"@/types/document"' has no exported member 'SearchResult'. Did you mean to use 'import SearchResult from "@/types/document"' instead?
+hooks/useDocuments.ts(8,8): error TS2614: Module '"@/types/document"' has no exported member 'WordDocumentConfig'. Did you mean to use 'import WordDocumentConfig from "@/types/document"' instead?
+hooks/useDocuments.ts(9,8): error TS2614: Module '"@/types/document"' has no exported member 'WordContent'. Did you mean to use 'import WordContent from "@/types/document"' instead?
+hooks/useDocuments.ts(10,8): error TS2614: Module '"@/types/document"' has no exported member 'ExcelDocumentConfig'. Did you mean to use 'import ExcelDocumentConfig from "@/types/document"' instead?
+hooks/useDocuments.ts(11,8): error TS2614: Module '"@/types/document"' has no exported member 'ExcelSheet'. Did you mean to use 'import ExcelSheet from "@/types/document"' instead?
+hooks/useDocuments.ts(12,8): error TS2614: Module '"@/types/document"' has no exported member 'PdfDocumentConfig'. Did you mean to use 'import PdfDocumentConfig from "@/types/document"' instead?
+hooks/useDocuments.ts(13,8): error TS2614: Module '"@/types/document"' has no exported member 'PdfContent'. Did you mean to use 'import PdfContent from "@/types/document"' instead?
+hooks/useEmail.ts(14,15): error TS2614: Module '"@/types/email"' has no exported member 'EmailAccount'. Did you mean to use 'import EmailAccount from "@/types/email"' instead?
+hooks/useEmail.ts(14,29): error TS2614: Module '"@/types/email"' has no exported member 'EmailAddress'. Did you mean to use 'import EmailAddress from "@/types/email"' instead?
+hooks/useEmail.ts(14,43): error TS2614: Module '"@/types/email"' has no exported member 'EmailFilter'. Did you mean to use 'import EmailFilter from "@/types/email"' instead?
+hooks/useEmail.ts(14,56): error TS2614: Module '"@/types/email"' has no exported member 'EmailMessage'. Did you mean to use 'import EmailMessage from "@/types/email"' instead?
+hooks/useMCP.ts(15,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useMCP.ts(17,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpServerInfo'. Did you mean to use 'import McpServerInfo from "@/types/mcp"' instead?
+hooks/useMCP.ts(18,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpToolInfo'. Did you mean to use 'import McpToolInfo from "@/types/mcp"' instead?
+hooks/useMCP.ts(19,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpServersConfig'. Did you mean to use 'import McpServersConfig from "@/types/mcp"' instead?
+hooks/useMCP.ts(20,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpServerConfig'. Did you mean to use 'import McpServerConfig from "@/types/mcp"' instead?
+hooks/useMCP.ts(21,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpToolResult'. Did you mean to use 'import McpToolResult from "@/types/mcp"' instead?
+hooks/useMCP.ts(22,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpServerStatus'. Did you mean to use 'import McpServerStatus from "@/types/mcp"' instead?
+hooks/useMCP.ts(23,3): error TS2614: Module '"@/types/mcp"' has no exported member 'McpEventPayload'. Did you mean to use 'import McpEventPayload from "@/types/mcp"' instead?
+hooks/useMCP.ts(679,58): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useMemory.ts(16,15): error TS2614: Module '"@/stores/unified/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/unified/memoryStore"' instead?
+hooks/useMemory.ts(16,31): error TS2614: Module '"@/stores/unified/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/unified/memoryStore"' instead?
+hooks/useMemory.ts(162,11): error TS2339: Property 'memories' does not exist on type '{}'.
+hooks/useMemory.ts(162,21): error TS2339: Property 'isLoading' does not exist on type '{}'.
+hooks/useMemory.ts(162,32): error TS2339: Property 'loadAll' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(10,15): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryCategory'. Did you mean to use 'import MemoryCategory from "@/stores/memoryStore"' instead?
+hooks/useMemoryIntegration.ts(10,31): error TS2614: Module '"@/stores/memoryStore"' has no exported member 'MemoryEntry'. Did you mean to use 'import MemoryEntry from "@/stores/memoryStore"' instead?
+hooks/useMemoryIntegration.ts(27,5): error TS2339: Property 'memories' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(28,5): error TS2339: Property 'isLoading' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(29,5): error TS2339: Property 'error' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(30,5): error TS2339: Property 'loadAll' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(31,5): error TS2339: Property 'remember' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(32,5): error TS2339: Property 'search' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(33,5): error TS2339: Property 'forget' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(34,5): error TS2339: Property 'getImportant' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(35,5): error TS2339: Property 'getByCategory' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(44,17): error TS7006: Parameter 'err' implicitly has an 'any' type.
+hooks/useMemoryIntegration.ts(201,33): error TS2339: Property 'map' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(201,38): error TS7006: Parameter 'item' implicitly has an 'any' type.
+hooks/useMemoryIntegration.ts(234,11): error TS2339: Property 'memories' does not exist on type '{}'.
+hooks/useMemoryIntegration.ts(236,33): error TS7006: Parameter 'm' implicitly has an 'any' type.
+hooks/useOrchestratorActions.ts(3,3): error TS2614: Module '"../api/orchestrator"' has no exported member 'spawnAgent'. Did you mean to use 'import spawnAgent from "../api/orchestrator"' instead?
+hooks/useOrchestratorActions.ts(4,3): error TS2614: Module '"../api/orchestrator"' has no exported member 'cancelAgent'. Did you mean to use 'import cancelAgent from "../api/orchestrator"' instead?
+hooks/useOrchestratorActions.ts(5,8): error TS2614: Module '"../api/orchestrator"' has no exported member 'SpawnAgentPayload'. Did you mean to use 'import SpawnAgentPayload from "../api/orchestrator"' instead?
+hooks/useScheduler.ts(31,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectEnabledJobs'. Did you mean to use 'import selectEnabledJobs from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(32,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectJobCount'. Did you mean to use 'import selectJobCount from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(33,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectJobs'. Did you mean to use 'import selectJobs from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(34,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectSchedulerError'. Did you mean to use 'import selectSchedulerError from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(35,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectSchedulerLoading'. Did you mean to use 'import selectSchedulerLoading from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(36,3): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'selectUpcomingJobs'. Did you mean to use 'import selectUpcomingJobs from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(38,8): error TS2614: Module '"@/stores/schedulerStore"' has no exported member 'ScheduledJob'. Did you mean to use 'import ScheduledJob from "@/stores/schedulerStore"' instead?
+hooks/useScheduler.ts(181,39): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(182,46): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(183,47): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(184,38): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(185,39): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(186,35): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(189,40): error TS2339: Property 'map' does not exist on type '{}'.
+hooks/useScheduler.ts(191,28): error TS2339: Property 'map' does not exist on type '{}'.
+hooks/useScheduler.ts(195,29): error TS2339: Property 'map' does not exist on type '{}'.
+hooks/useScheduler.ts(200,41): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(200,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(201,44): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(201,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(202,43): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(202,44): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(203,44): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(203,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(204,43): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(204,44): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(205,46): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(205,47): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(206,45): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(206,46): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(207,53): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(207,54): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(208,56): error TS2554: Expected 0 arguments, but got 1.
+hooks/useScheduler.ts(208,57): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useScheduler.ts(212,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(213,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(216,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(224,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(225,30): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useScheduler.ts(235,14): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(247,45): error TS2339: Property 'getState' does not exist on type '() => {}'.
+hooks/useScheduler.ts(247,67): error TS7006: Parameter 'j' implicitly has an 'any' type.
+hooks/useScheduler.ts(253,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(259,30): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(276,14): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(286,14): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(296,14): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(307,16): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(309,16): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(360,26): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(361,24): error TS7006: Parameter 'r' implicitly has an 'any' type.
+hooks/useScheduler.ts(380,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(387,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useScheduler.ts(393,40): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+hooks/useScreenCapture.ts(3,15): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureRecord'. Did you mean to use 'import CaptureRecord from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(3,30): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureResult'. Did you mean to use 'import CaptureResult from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(3,45): error TS2614: Module '"@/types/capture"' has no exported member 'Region'. Did you mean to use 'import Region from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(3,53): error TS2614: Module '"@/types/capture"' has no exported member 'WindowInfo'. Did you mean to use 'import WindowInfo from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(5,3): error TS2614: Module '"@/utils/captureTransforms"' has no exported member 'normalizeCaptureRecord'. Did you mean to use 'import normalizeCaptureRecord from "@/utils/captureTransforms"' instead?
+hooks/useScreenCapture.ts(6,3): error TS2614: Module '"@/utils/captureTransforms"' has no exported member 'normalizeCaptureResult'. Did you mean to use 'import normalizeCaptureResult from "@/utils/captureTransforms"' instead?
+hooks/useScreenCapture.ts(7,8): error TS2614: Module '"@/utils/captureTransforms"' has no exported member 'RawCaptureRecord'. Did you mean to use 'import RawCaptureRecord from "@/utils/captureTransforms"' instead?
+hooks/useScreenCapture.ts(8,8): error TS2614: Module '"@/utils/captureTransforms"' has no exported member 'RawCaptureResult'. Did you mean to use 'import RawCaptureResult from "@/utils/captureTransforms"' instead?
+hooks/useScreenCapture.ts(11,15): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureRecord'. Did you mean to use 'import CaptureRecord from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(11,30): error TS2614: Module '"@/types/capture"' has no exported member 'CaptureResult'. Did you mean to use 'import CaptureResult from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(11,45): error TS2614: Module '"@/types/capture"' has no exported member 'Region'. Did you mean to use 'import Region from "@/types/capture"' instead?
+hooks/useScreenCapture.ts(11,53): error TS2614: Module '"@/types/capture"' has no exported member 'WindowInfo'. Did you mean to use 'import WindowInfo from "@/types/capture"' instead?
+hooks/useTeam.ts(14,3): error TS2614: Module '"@/types/teams"' has no exported member 'Team'. Did you mean to use 'import Team from "@/types/teams"' instead?
+hooks/useTeam.ts(15,3): error TS2614: Module '"@/types/teams"' has no exported member 'TeamMember'. Did you mean to use 'import TeamMember from "@/types/teams"' instead?
+hooks/useTeam.ts(16,3): error TS2614: Module '"@/types/teams"' has no exported member 'TeamInvitation'. Did you mean to use 'import TeamInvitation from "@/types/teams"' instead?
+hooks/useTeam.ts(17,3): error TS2614: Module '"@/types/teams"' has no exported member 'TeamResource'. Did you mean to use 'import TeamResource from "@/types/teams"' instead?
+hooks/useTeam.ts(18,3): error TS2614: Module '"@/types/teams"' has no exported member 'TeamSettings'. Did you mean to use 'import TeamSettings from "@/types/teams"' instead?
+hooks/useTeam.ts(19,3): error TS2614: Module '"@/types/teams"' has no exported member 'TeamRole'. Did you mean to use 'import TeamRole from "@/types/teams"' instead?
+hooks/useTeam.ts(20,3): error TS2614: Module '"@/types/teams"' has no exported member 'ResourceType'. Did you mean to use 'import ResourceType from "@/types/teams"' instead?
+hooks/useTerminal.ts(9,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useTerminal.ts(9,31): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useTerminal.ts(10,15): error TS2614: Module '"@/stores/unified/terminalStore"' has no exported member 'ShellTypeLiteral'. Did you mean to use 'import ShellTypeLiteral from "@/stores/unified/terminalStore"' instead?
+hooks/useTerminal.ts(10,33): error TS2614: Module '"@/stores/unified/terminalStore"' has no exported member 'TerminalSession'. Did you mean to use 'import TerminalSession from "@/stores/unified/terminalStore"' instead?
+hooks/useTerminal.ts(10,50): error TS2614: Module '"@/stores/unified/terminalStore"' has no exported member 'ShellInfo'. Did you mean to use 'import ShellInfo from "@/stores/unified/terminalStore"' instead?
+hooks/useTerminal.ts(125,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useTimeout.ts(15,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useTimeout.ts(16,15): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useTimeout.ts(17,15): error TS2724: '"@/components/Execution/TimeoutWarningDialog"' has no exported member named 'TimeoutWarningData'. Did you mean 'TimeoutWarningDialog'?
+hooks/useTimeout.ts(271,90): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useTrayQuickActions.ts(2,18): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useTrayQuickActions.ts(2,31): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'UnlistenFn'.
+hooks/useUpdater.ts(2,10): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'checkForUpdates'.
+hooks/useUpdater.ts(2,27): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'relaunchApp'.
+hooks/useUpdater.ts(2,49): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useUpdater.ts(5,3): error TS2614: Module '"@/stores/unified/updaterStore"' has no exported member 'shouldShowUpdateNotification'. Did you mean to use 'import shouldShowUpdateNotification from "@/stores/unified/updaterStore"' instead?
+hooks/useUpdater.ts(6,8): error TS2614: Module '"@/stores/unified/updaterStore"' has no exported member 'UpdateStatus'. Did you mean to use 'import UpdateStatus from "@/stores/unified/updaterStore"' instead?
+hooks/useUpdater.ts(7,8): error TS2614: Module '"@/stores/unified/updaterStore"' has no exported member 'UpdateInfo'. Did you mean to use 'import UpdateInfo from "@/stores/unified/updaterStore"' instead?
+hooks/useUpdater.ts(8,8): error TS2614: Module '"@/stores/unified/updaterStore"' has no exported member 'DownloadProgress'. Did you mean to use 'import DownloadProgress from "@/stores/unified/updaterStore"' instead?
+hooks/useUpdater.ts(27,34): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(27,35): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(28,38): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(28,39): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(29,44): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(29,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(30,33): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(30,34): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(31,44): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(31,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(32,39): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(32,40): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(34,37): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(34,38): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(35,41): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(35,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(36,47): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(36,48): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(37,36): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(37,37): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(38,44): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(38,45): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(39,41): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(39,42): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(40,42): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(40,43): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(41,33): error TS2554: Expected 0 arguments, but got 1.
+hooks/useUpdater.ts(41,34): error TS7006: Parameter 'state' implicitly has an 'any' type.
+hooks/useUpdater.ts(84,12): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useUpdater.ts(88,13): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(95,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(100,71): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useUpdater.ts(102,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(124,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(129,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(130,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(134,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(148,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(149,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(153,11): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(157,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(163,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(164,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(186,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(191,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(192,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(193,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(217,17): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(221,15): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(228,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(231,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(234,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(235,9): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(240,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(241,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(253,21): error TS2339: Property 'version' does not exist on type '{}'.
+hooks/useUpdater.ts(254,7): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useUpdater.ts(254,32): error TS2339: Property 'version' does not exist on type '{}'.
+hooks/useUpdater.ts(262,5): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+hooks/useVoiceTranscription.ts(3,10): error TS2614: Module '"../api/client"' has no exported member 'API_BASE_URL'. Did you mean to use 'import API_BASE_URL from "../api/client"' instead?
+hooks/useVoiceTranscription.ts(4,30): error TS2307: Cannot find module '@/services/supabaseAuth' or its corresponding type declarations.
+hooks/useWindowManager.ts(2,27): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useWindowManager.ts(80,87): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWindowManager.ts(93,70): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWindowManager.ts(98,85): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWorkflows.ts(2,10): error TS2305: Module '"@/lib/tauri-mock"' has no exported member 'listen'.
+hooks/useWorkflows.ts(4,3): error TS2614: Module '"../api/workflow"' has no exported member 'createWorkflow'. Did you mean to use 'import createWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(5,3): error TS2614: Module '"../api/workflow"' has no exported member 'deleteWorkflow'. Did you mean to use 'import deleteWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(6,3): error TS2614: Module '"../api/workflow"' has no exported member 'executeWorkflow'. Did you mean to use 'import executeWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(7,3): error TS2614: Module '"../api/workflow"' has no exported member 'getExecutionLogs'. Did you mean to use 'import getExecutionLogs from "../api/workflow"' instead?
+hooks/useWorkflows.ts(8,3): error TS2614: Module '"../api/workflow"' has no exported member 'getUserWorkflows'. Did you mean to use 'import getUserWorkflows from "../api/workflow"' instead?
+hooks/useWorkflows.ts(9,3): error TS2614: Module '"../api/workflow"' has no exported member 'getWorkflow'. Did you mean to use 'import getWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(10,3): error TS2614: Module '"../api/workflow"' has no exported member 'getWorkflowStatus'. Did you mean to use 'import getWorkflowStatus from "../api/workflow"' instead?
+hooks/useWorkflows.ts(11,3): error TS2614: Module '"../api/workflow"' has no exported member 'pauseWorkflow'. Did you mean to use 'import pauseWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(12,3): error TS2614: Module '"../api/workflow"' has no exported member 'resumeWorkflow'. Did you mean to use 'import resumeWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(13,3): error TS2614: Module '"../api/workflow"' has no exported member 'cancelWorkflow'. Did you mean to use 'import cancelWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(14,3): error TS2614: Module '"../api/workflow"' has no exported member 'scheduleWorkflow'. Did you mean to use 'import scheduleWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(15,3): error TS2614: Module '"../api/workflow"' has no exported member 'updateWorkflow'. Did you mean to use 'import updateWorkflow from "../api/workflow"' instead?
+hooks/useWorkflows.ts(18,3): error TS2614: Module '"@/types/workflow"' has no exported member 'WorkflowDefinition'. Did you mean to use 'import WorkflowDefinition from "@/types/workflow"' instead?
+hooks/useWorkflows.ts(19,3): error TS2614: Module '"@/types/workflow"' has no exported member 'WorkflowExecution'. Did you mean to use 'import WorkflowExecution from "@/types/workflow"' instead?
+hooks/useWorkflows.ts(20,3): error TS2614: Module '"@/types/workflow"' has no exported member 'WorkflowExecutionLog'. Did you mean to use 'import WorkflowExecutionLog from "@/types/workflow"' instead?
+hooks/useWorkflows.ts(21,3): error TS2614: Module '"@/types/workflow"' has no exported member 'WorkflowStatus'. Did you mean to use 'import WorkflowStatus from "@/types/workflow"' instead?
+hooks/useWorkflows.ts(87,10): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWorkflows.ts(113,53): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWorkflows.ts(129,74): error TS7006: Parameter 'event' implicitly has an 'any' type.
+hooks/useWorkflows.ts(155,23): error TS7006: Parameter 'unlisten' implicitly has an 'any' type.
+lib/intentClassifier.ts(37,36): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+lib/modelRouter.ts(56,52): error TS2307: Cannot find module '@/constants/llm' or its corresponding type declarations.
+lib/supabase.ts(2,15): error TS2614: Module '"@/types/supabase"' has no exported member 'Database'. Did you mean to use 'import Database from "@/types/supabase"' instead?
+lib/supabase.ts(4,33): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+lib/supabase.ts(5,37): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+stores/unified/chat/agentStore.ts(349,48): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+stores/unified/chat/chatStore.ts(17,10): error TS2305: Module '"@/utils/localStorage"' has no exported member 'safeGetJSON'.
+stores/unified/chat/chatStore.ts(17,23): error TS2305: Module '"@/utils/localStorage"' has no exported member 'safeSetJSON'.
+stores/unified/chat/chatStore.ts(17,36): error TS2305: Module '"@/utils/localStorage"' has no exported member 'storageFallback'.
+stores/unified/chat/chatStore.ts(1532,47): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+stores/unified/chat/toolStore.ts(16,10): error TS2305: Module '"@/utils/localStorage"' has no exported member 'storageFallback'.
+stores/unified/chat/toolStore.ts(826,47): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+stores/unified/chat/types.ts(8,15): error TS2614: Module '"@/types/chat"' has no exported member 'Artifact'. Did you mean to use 'import Artifact from "@/types/chat"' instead?
+stores/unified/ui.ts(370,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+stores/unified/ui.ts(874,52): error TS2339: Property 'getState' does not exist on type '() => {}'.
+stores/unified/ui.ts(875,56): error TS2339: Property 'getState' does not exist on type '() => {}'.
+stores/unified/ui.ts(1039,45): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
