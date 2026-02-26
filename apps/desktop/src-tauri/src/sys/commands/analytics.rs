@@ -588,6 +588,7 @@ mod tests {
             enabled: true,
             batch_size: 10,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
         let metrics_collector = AnalyticsMetricsCollector::new();
