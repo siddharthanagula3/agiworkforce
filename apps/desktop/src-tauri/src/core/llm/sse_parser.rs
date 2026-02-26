@@ -4,18 +4,35 @@ use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+/// A single chunk of data received from a streaming LLM response (SSE).
+/// Chunks are emitted incrementally and must be reassembled by the caller
+/// into a complete `LLMResponse` once `done` is `true`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StreamChunk {
+    /// The text content of this SSE chunk. May be an empty string for non-content
+    /// events such as keepalives, tool-call deltas without text, or usage-only chunks.
     pub content: String,
+    /// Whether this is the final chunk in the stream. When `true`, no further chunks
+    /// will be emitted and the caller should finalize the assembled response.
     pub done: bool,
+    /// Why the stream ended, if known. Common values: `"stop"` (natural end),
+    /// `"length"` (max-token limit hit), `"tool_calls"` (model invoked a tool),
+    /// `"content_filter"` (filtered by provider policy). `None` while streaming.
     pub finish_reason: Option<String>,
+    /// The model identifier echoed back by the provider, if included in the response.
     pub model: Option<String>,
+    /// Token usage information provided by the model, typically included only in
+    /// the final chunk. `None` for intermediate chunks from most providers.
     pub usage: Option<TokenUsage>,
+    /// Credit-deduction information returned by the AGI Workforce billing layer.
+    /// `None` when billing is not active or for intermediate chunks.
     pub credits: Option<crate::core::llm::CreditsInfo>,
-    /// Tool calls received in this chunk (for streaming tool use)
+    /// Streaming tool-call deltas accumulated across chunks. Each entry corresponds
+    /// to one tool invocation; `arguments` is built up incrementally as chunks arrive.
+    /// `None` when the model is producing plain-text output with no tool calls.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<StreamingToolCall>>,
-    /// When true, this chunk is a keepalive/heartbeat signal from the provider
+    /// When `true`, this chunk is a keepalive/heartbeat signal from the provider
     /// (e.g. SSE comment lines like `: keep-alive`, Anthropic `ping` events).
     /// The chunk carries no content but keeps the stream alive so idle-timeout
     /// watchdogs do not fire prematurely during long-running operations like

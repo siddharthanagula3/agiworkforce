@@ -52,7 +52,8 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
-      # Suppress the pgAdmin master password prompt in local dev
+      # M24: DEV ONLY — move PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED to
+      #      docker-compose.override.yml for any shared or production-adjacent environment.
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     volumes:
@@ -60,6 +61,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # L8: Health check so dependent services and orchestrators can detect readiness
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:80/misc/ping']
+      interval: 30s
+      timeout: 10s
+      retries: 3
     logging:
       driver: json-file
       options:

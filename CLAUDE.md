@@ -1,225 +1,226 @@
-# CLAUDE.md
+# AGI Workforce — Project Memory
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> This file is loaded at the start of every Claude Code session.
+> Keep it under ~500 lines. Move reference content to skills or docs/.
+> Last updated: 2026-02-26
 
-## Knowledge & Documentation
+## What This Project Is
 
-Training data has a ~6-month lag. For anything version-sensitive, always fetch live docs before writing code.
+AGI Workforce is a **Tauri desktop application** (Rust backend + TypeScript/React frontend) that serves as an **open, model-agnostic AI desktop platform** — a Claude Desktop alternative without model restrictions. Users can connect any LLM (cloud or local), use MCP tools, manage agents, and run autonomous workflows from a single desktop app.
 
-**Always fetch live docs for:**
-
-- Any library/framework version, API shape, or config option
-- Any CLI tool flags or sub-commands
-- Any cloud provider SDK/API (AWS, GCP, Azure, Vercel, Supabase, etc.)
-- Any AI/LLM provider API (Anthropic, OpenAI, Google, etc.)
-- Anything described as "new" or "just released"
-
-**How to fetch:** Use `WebSearch` to find the canonical doc URL, then `WebFetch` to read it. Check pinned versions in `package.json`, `Cargo.toml`, `requirements.txt` against current docs before writing code.
-
-## Project Overview
-
-AGI Workforce is a monorepo containing a desktop automation application (Tauri + React + Rust), a web frontend (Next.js), browser extension, and backend services. Uses pnpm workspaces.
-
-## Common Commands
-
-```bash
-# Install dependencies
-pnpm install
-
-# Development
-pnpm dev:desktop          # Run desktop app in dev mode (runs tauri dev)
-pnpm dev:docs            # Run documentation site
-
-# Building
-pnpm build               # Build all packages (excludes desktop)
-pnpm build:all          # Build web and packages
-pnpm build:desktop      # Build desktop app (includes Tauri build)
-pnpm build:web          # Build web app only
-
-# Testing
-pnpm test                # Run all tests (vitest run across all packages)
-pnpm test -r            # Run tests recursively across packages
-pnpm test:e2e           # Run Playwright e2e tests
-pnpm test:ui            # Run tests with UI (vitest --ui)
-
-# Run a single test file
-cd apps/desktop && pnpm test src/__tests__/scheduler.test.ts
-
-# Run tests with coverage
-cd apps/desktop && pnpm test:coverage
-
-# Linting & Formatting
-pnpm lint                # Run ESLint (max 15 warnings, ignores extension/)
-pnpm lint:fix           # Fix lint issues
-pnpm format             # Format with Prettier
-pnpm format:check       # Check formatting
-
-# Type Checking
-pnpm typecheck          # Type check desktop app
-pnpm typecheck:all      # Type check all packages
-```
-
-## Architecture
-
-### Apps
-
-- **desktop** (`apps/desktop`): Tauri 2.x desktop app with React 19, Vite 7, and Rust backend. Main user-facing product.
-- **web** (`apps/web`): Next.js 16 web application (App Router). Authentication via Supabase (with SSO), Stripe payments, Upstash Redis rate limiting, admin APIs for security and directory sync.
-- **extension** (`apps/extension`): Browser extension with native messaging, side panel, and desktop automation capabilities.
-
-### Packages
-
-- **types** (`packages/types`): Shared TypeScript type definitions
-- **utils** (`packages/utils`): Shared utility functions
-
-### Services
-
-- **api-gateway** (`services/api-gateway`): Node.js/TypeScript API gateway
-- **signaling-server** (`services/signaling-server`): WebRTC signaling server
-
-## Desktop App Architecture
-
-### Frontend → Backend Communication (IPC)
-
-All Tauri commands are called via `invoke()` from `src/lib/tauri-mock.ts`. This wrapper:
-
-- In Tauri: delegates to `@tauri-apps/api/core`'s `invoke`
-- In tests: returns mock data without crashing
-- In web (non-Tauri): throws an error pointing users to download the desktop app
-
-Always import `invoke` and `isTauri` from `../lib/tauri-mock` (not directly from tauri), and check `isTauri` before calling Tauri-specific features. The `listen` function for events follows the same pattern.
-
-### Frontend State Management
-
-State uses Zustand stores organized into two layers:
-
-**Core chat stores** (`src/stores/chat/`):
-
-- `chatStore.ts` — conversations, messages, citations, token usage
-- `agentStore.ts` — agent status, background tasks, action trail
-- `toolStore.ts` — tool executions, file ops, terminal commands, approvals
-- `types.ts` — shared TypeScript types
-
-**`unifiedChatStore.ts`** — deprecated shim that re-exports from the modular stores above for backward compatibility. New code should use modular stores directly.
-
-Other stores in `src/stores/` cover: auth, billing, filesystem, MCP, memory, models, research, scheduler, settings, teams, terminal, and more.
-
-### Frontend Event System
-
-`src/hooks/useAgenticEvents.ts` — central hook that subscribes to all Tauri backend events (agent status, tool executions, approvals, MCP events, file operations, terminal commands, screenshots, artifacts). Components use this hook to receive real-time updates from the Rust backend.
-
-### Rust Backend Module Structure (`src-tauri/src/`)
-
-```
-lib.rs              # App entry point, state initialization, command registration
-core/
-  agent/            # AI agent runtime: planner.rs, executor.rs, autonomous.rs,
-                    # ai_orchestrator.rs, background_agent.rs, context_manager.rs, undo_manager.rs
-  llm/              # LLM routing layer: llm_router.rs, provider_adapter.rs,
-                    # sse_parser.rs, token_counter.rs, cost_calculator.rs, cache_manager.rs
-  llm/providers/    # Provider implementations: managed_cloud_provider.rs, ollama.rs,
-                    # http_client.rs, http_client_factory.rs (proxy/CA cert support)
-  mcp/              # Model Context Protocol: client.rs, manager.rs, registry.rs,
-                    # protocol.rs, extensions.rs, health.rs, transport.rs
-  orchestration/    # Workflow engine: workflow_engine.rs, workflow_executor.rs, workflow_scheduler.rs
-  agi/              # Higher-level AGI logic: orchestrator.rs, checkpoint_manager.rs,
-                    # memory_manager.rs, executors/ (15 domain executors: file, git, browser,
-                    # terminal, media, code, api, calendar, cloud, db, email, llm, mcp, ocr, etc.)
-  swarm/            # Multi-agent swarm: agent_spawner.rs, orchestrator.rs,
-                    # task_decomposer.rs (with SHA-256 caching & 1h TTL for idempotency),
-                    # result_aggregator.rs, circuit_breaker.rs
-  embeddings/       # Vector embeddings and semantic search
-  research/         # Research orchestration
-features/           # Domain features: terminal, calendar, communications, speech,
-                    # clipboard, search, tasks, teams, workflows, webhooks, projects
-sys/
-  commands/         # All Tauri command handlers (one file per domain, ~60+ files)
-  security/         # Auth, master password (Argon2id), secret management, kill switch
-  billing/          # Stripe billing state
-  telemetry/        # Telemetry
-automation/         # Desktop automation: input/, screen/, computer_use/, browser/,
-                    # extension_bridge.rs (CDP primary + extension fallback), vision_planner.rs,
-                    # recorder.rs, safety.rs
-data/
-  db/               # SQLite via rusqlite: models, repository pattern, migrations,
-                    # encryption.rs (SQLCipher support for database-at-rest encryption)
-  settings/         # Settings persistence
-  state/            # App state
-integrations/       # External integrations
-ui/                 # Window management, system tray
-```
-
-### LLM Routing Architecture
-
-The `LLMRouter` (`core/llm/llm_router.rs`) handles:
-
-- Exponential backoff retry with configurable `RetryConfig` (3 retries, 500ms initial, 2x multiplier)
-- Fallback chain across providers when retries fail
-- Cost tracking via `CostCalculator` and `TokenCounter` with per-task and per-session caps ($5/$50 defaults)
-- Circuit breaker for LLM provider 5xx errors with exponential cooldown
-- SSE streaming via `sse_parser.rs` with keepalive event support (300s idle timeout, 120s followup invoke timeout, 600s streaming tool loop max)
-- Prompt caching for Anthropic/OpenAI
-- Keepalive signal propagation: `StreamChunk.keepalive` field tracks provider heartbeats (SSE comments, `ping` events) to prevent timeout errors during long-running operations like image generation and extended thinking
-
-Provider implementations: `ManagedCloudProvider` handles Anthropic, OpenAI, Google, xAI, DeepSeek, and others. `OllamaProvider` handles local models. `HttpClientFactory` centralizes HTTP client creation with proxy and custom CA cert support for corporate environments.
-
-**Adding a new model:** Update `MODEL_METADATA` in `apps/desktop/src/constants/llm.ts`, add to `MODEL_POOLS` in `src/lib/modelRouter.ts`, and update the Rust provider adapter if needed.
-
-### Agent Execution Architecture
-
-1. `TaskPlanner` — LLM-powered task decomposition into `TaskStep[]`
-2. `TaskExecutor` — executes individual steps with timeout handling
-3. `AutonomousAgent` — orchestrates planner + executor with self-healing (up to 3 retries), approval gating, and task queue management
-4. `ApprovalController` — manages user approval for risky actions (tool safety tiers: Safe, RequiresNotification, RequiresConfirmation, RequiresExplicitApproval)
-5. `VisionAutomation` — screenshot-based visual verification
-
-### Security Architecture
-
-- **Master password**: Argon2id (OWASP params) for key derivation, stored verifier (not password) in SQLite
-- **Key derivation**: Combines password-derived key + machine ID via HKDF-SHA256 with purpose-specific salts
-- **Secret management**: `SecretManager` + `AuthManager` in `sys/security/`
-- **Database encryption**: SQLCipher (via `bundled-sqlcipher` feature) for database-at-rest encryption, with migration support from unencrypted databases
-- **Kill switch**: `account_status` column on Supabase profiles (active/suspended/banned/disabled), enforced in API gateway auth middleware
-- **JWT hardening**: Algorithm pinning (HS256), issuer/audience claims on all sign/verify paths
-- **Prompt sanitization**: `escape_xml()` for XML injection prevention, `sanitize_multiline_for_prompt()` for code selection preservation
-- **TLS**: `rustls-tls-native-roots` for system certificate store trust (corporate SSL inspection)
-
-### Local Database
-
-SQLite via `rusqlite` at `src-tauri/src/data/db/`. Schema managed by SQL migrations in `src-tauri/migrations/`. Repository pattern with typed models in `data/db/models.rs` and query functions in `data/db/repository.rs`. Database struct wraps `Arc<Mutex<Connection>>`. Encryption via SQLCipher (module: `encryption.rs`) with key derivation from machine ID and master password when enabled.
-
-## Enterprise Features
-
-- **SSO**: Supabase `signInWithSSO()` integration with domain detection. Routes: `/api/auth/sso-check` (GET, detects SSO domain), `/api/admin/sso` (CRUD)
-- **SCIM/Directory Sync**: WorkOS webhook handler at `/api/webhooks/directory-sync` (5 event types with HMAC-SHA256 verification), admin API at `/api/admin/directory-sync`
-- **Admin Security API**: `/api/admin/security` for suspend-user, ban-user, reactivate-user actions
-- **Proxy & Custom CA Support**: `HttpClientFactory` in `core/llm/providers/http_client_factory.rs` reads proxy URLs from env (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and accepts custom CA cert paths for corporate SSL inspection
-- **Filesystem deny list**: Tauri capabilities exclude 19 sensitive paths for both read and write (`.docker`, `.npmrc`, `.pypirc`, `.netrc`, `.azure`, `.config/gh`, `.config/heroku`, `.config/op`, `.config/stripe` and others) to prevent credential leakage and unauthorized system access
-- **Frontend components**: `StatusBanner` polls CDN status, error boundary detects connection issues, degraded state banner shows when subscription fetch fails
-- **Rate limiting**: All API endpoints protected via Upstash Redis rate limiting
-
-## Database
-
-Supabase (PostgreSQL) for the web app with migrations in `apps/web/supabase/migrations/`. The desktop app uses a local SQLite database separately. Recent migrations include `20260223000000_resilience_security_fixes.sql` (kill switch, search_path), `20260224000000_add_sso_connections.sql` (SSO), and `20260224000001_add_scim_fields.sql` (directory sync).
+**Positioning**: Where Claude Desktop locks you to Anthropic and ChatGPT Desktop locks you to OpenAI, AGI Workforce lets users connect ANY model and use the same tools, skills, memory, and agents across all of them.
 
 ## Tech Stack
 
-- **Frontend**: React 19, Next.js 16, Tailwind CSS 4, Radix UI, Zustand, Monaco Editor, xterm.js
-- **Desktop**: Tauri 2.x, Vite 7, Rust (edition 2021)
-- **Backend**: Rust (Tauri commands), Node.js services
-- **Database**: PostgreSQL (Supabase for web), SQLite (local desktop), MongoDB, Redis
-- **Testing**: Vitest, Playwright, MSW (Mock Service Worker), `@testing-library/jest-dom`
+- **Desktop framework**: Tauri v2 (Rust + WebView)
+- **Frontend**: React/TypeScript (Next.js patterns)
+- **Backend**: Rust (Tauri commands, system integration)
+- **Database**: SQLite (via Tauri)
+- **Security**: ToolGuard (1,778 lines), Argon2id encryption, SecretManager
+- **Voice**: Whisper STT, Deepgram, Piper TTS, macOS native TTS
+- **Vision**: Screenshot capture, OCR, computer use
+- **Payments**: Stripe integration
+- **Auth**: Session-based, JWT
+- **CI/CD**: GitHub Actions
 
-## Commit Convention
-
-Commits use conventional commits format (enforced by commitlint + husky pre-commit hooks):
+## Project Structure
 
 ```
-type(scope): description
+~/Desktop/agiworkforce/
+├── src-tauri/              # Rust backend (Tauri commands, system APIs)
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── commands/       # Tauri invoke handlers
+│   │   ├── security/       # ToolGuard, encryption
+│   │   └── services/       # System services
+│   └── Cargo.toml
+├── src/                    # TypeScript frontend
+│   ├── components/         # React UI components
+│   ├── pages/              # App routes/pages
+│   ├── services/           # API services, LLM routing, agent runtime
+│   ├── hooks/              # React hooks
+│   ├── utils/              # Utilities
+│   └── types/              # TypeScript types
+├── .claude/
+│   ├── agents/             # 20+ custom sub-agents (see Agent Roster)
+│   ├── commands/           # Slash commands
+│   ├── skills/             # Skills (self-review, coderabbit-full)
+│   ├── rules/              # Scoped rule files
+│   └── settings.json       # Hooks, permissions, env vars
+├── docs/
+│   ├── SESSION_STATE.md    # Current session handoff state
+│   ├── ARCHITECTURE_SNAPSHOT.md
+│   ├── feature-audit-report.md
+│   ├── research/           # Market research per feature
+│   └── rust-fixes-needed.md
+├── CLAUDE.md               # THIS FILE — project constitution
+├── MEMORY.md               # Persistent AI memory (learnings, patterns)
+├── AGENTS.md               # Agent roster and zone ownership
+├── package.json
+└── CHANGELOG.md
 ```
 
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+## Zone-Based File Ownership
 
-## Lint Constraints
+When multiple agents work in parallel, each owns a zone to prevent merge conflicts:
 
-ESLint runs with `--max-warnings=15` at the monorepo root. The `apps/extension/` directory is excluded from linting. Rust uses `deny(unused)`, `deny(dead_code)` — all unused code is a compile error.
+| Zone   | Owner                    | Files                                             |
+| ------ | ------------------------ | ------------------------------------------------- |
+| A      | frontend-engineer        | src/components/**, src/pages/**, src/styles/\*\*  |
+| B      | backend-engineer         | src/services/**, src/api/**, src/middleware/\*\*  |
+| C      | database-engineer        | src/db/**, migrations/**, src/models/\*\*         |
+| D      | integration-engineer     | src/integrations/**, src/mcp/**, src/hooks/\*\*   |
+| E      | devops-build-engineer    | Dockerfile, .github/**, scripts/**                |
+| F      | documentation-sync-agent | docs/\*\*, README.md, CHANGELOG.md                |
+| SYSTEM | rust-tauri-engineer      | src-tauri/\*\* (Rust code)                        |
+| SHARED | lead only                | package.json, tsconfig.json, CLAUDE.md, MEMORY.md |
+
+Rule: Each agent reads all zones but writes only to its assigned zone. If you need to edit outside your zone, declare it first.
+
+## Agent Roster
+
+See `AGENTS.md` for full details. Summary:
+
+**Opus-tier (complex reasoning)**:
+agent-runtime-engineer, computer-use-vision-engineer, llm-router-engineer, memory-embeddings-engineer, rust-tauri-engineer, security-auditor, integration-reviewer, team-lead-orchestrator, spec-handoff-writer, research-orchestrator-fix
+
+**Sonnet-tier (implementation)**:
+frontend-engineer, backend-engineer, database-engineer, billing-stripe-engineer, browser-extension-engineer, mcp-integration-engineer, speech-audio-engineer, code-cleanup-refactor, shared-types-guardian, test-writer, git-branch-manager
+
+**Haiku-tier (lightweight)**:
+devops-build-engineer, documentation-sync-agent, progress-state-tracker
+
+**Plugin agents**:
+plugin-dev (agent-creator, plugin-validator, skill-reviewer), feature-dev (code-architect, code-explorer, code-reviewer), pr-review-toolkit (code-reviewer, code-simplifier, comment-analyzer, pr-test-analyzer), hookify (conversation-analyzer), code-simplifier, agent-sdk-dev (verifier-py, verifier-ts)
+
+## Build & Run Commands
+
+```bash
+# Development
+pnpm dev                    # Start dev server
+pnpm tauri dev              # Start Tauri dev (frontend + Rust)
+
+# Build
+pnpm build                  # Build frontend
+pnpm tauri build            # Build desktop app
+
+# Checks
+pnpm typecheck              # TypeScript type checking
+pnpm lint                   # ESLint
+pnpm format                 # Prettier
+cargo check                 # Rust type checking
+cargo clippy                # Rust linting
+```
+
+## Development Rules
+
+### DO
+
+- Research the market (web search) before implementing any user-facing feature
+- Use sub-agents for file exploration to keep main context clean
+- Commit after each meaningful change with conventional commits: `feat(scope):`, `fix(scope):`, `chore(scope):`
+- Store API keys via SecretManager — NEVER in plaintext
+- Self-review at module completion using the `self-review` skill
+- Update `docs/SESSION_STATE.md` after every major task
+- Save learnings to `MEMORY.md` when you discover something important
+- Read instruction files: CLAUDE.md, MEMORY.md, AGENTS.md on session start
+- Check for other instruction files: GEMINI.md, .cursorrules, .windsurfrules, .github/copilot-instructions.md
+
+### DON'T
+
+- Do NOT run tests unless explicitly told "run tests" or "test now"
+- Do NOT stop coding to verify — self-review only, no mid-flow breaks
+- Do NOT refactor working code unless asked
+- Do NOT modify Rust/Tauri files directly — write changes to `docs/rust-fixes-needed.md`
+- Do NOT put transient state in CLAUDE.md — use SESSION_STATE.md
+- Do NOT hardcode model names without searching for current versions first
+
+## Coding Standards
+
+- TypeScript: strict mode, prefer interfaces over types, named exports
+- React: functional components only, hooks for state, Tailwind for styling
+- Rust: follow Tauri v2 patterns, use `#[tauri::command]` for invoke handlers
+- Naming: camelCase for TS/JS, snake_case for Rust, kebab-case for files/directories
+- Error handling: try/catch on all async operations, user-friendly error messages
+- Imports: absolute paths from src/, no circular dependencies
+
+## Instruction File Discovery
+
+AGI Workforce reads instruction files from ALL AI tools. On project open, scan for and load:
+
+1. `CLAUDE.md` (this file)
+2. `MEMORY.md` (persistent memory)
+3. `AGENTS.md` (agent definitions)
+4. `.claude/rules/*.md` (scoped rules)
+5. `GEMINI.md` (if exists)
+6. `.cursorrules` (if exists)
+7. `.cursor/rules/*.mdc` (if exists)
+8. `.windsurfrules` (if exists)
+9. `.github/copilot-instructions.md` (if exists)
+
+Merge all into unified context. This is a key differentiator — projects from any AI tool "just work."
+
+## Custom Models Architecture
+
+Cloud models (Claude, GPT, Gemini) are auto-routed internally. The Custom Models feature lets users add:
+
+- Local models: Ollama, LM Studio, vLLM, llama.cpp
+- Third-party endpoints: OpenRouter, Groq, Together, Fireworks, Mistral, DeepSeek
+- Self-hosted: company endpoints, fine-tuned models
+- Any OpenAI-compatible API
+
+Custom models are first-class citizens — they appear in every model dropdown alongside cloud models. No restrictions.
+
+## MCP & Extensions
+
+Extensions use Model Context Protocol (MCP) to connect external tools:
+
+- Currently connected: Gmail, Google Calendar, Vercel, n8n
+- Code exists for: Google Drive, Notion, Trello, Asana
+- Supports: stdio, SSE, streamable HTTP transports
+- Config stored in: `.mcp.json` and settings store
+- Tool permissions: ask / auto-approve-readonly / auto-approve-all
+
+## Security Architecture
+
+- ToolGuard: 1,778 lines of tool execution sandboxing
+- SecretManager: API keys encrypted via Argon2id, stored in SQLite/keychain
+- Input validation: deny-list for dangerous operations
+- Permission system: per-tool, per-agent approval controls
+
+## Memory System
+
+Three layers of persistent memory:
+
+1. **CLAUDE.md** (this file) — permanent rules, loaded every session
+2. **MEMORY.md** (project root) — AI learnings, patterns, updated during work
+3. **docs/SESSION_STATE.md** — session handoff state, updated before compaction
+
+## Compact Instructions
+
+When compacting, ALWAYS preserve:
+
+- Complete list of files modified in this session
+- All architectural decisions and their rationale
+- Current task progress and exact next steps
+- Error patterns discovered and their solutions
+- Zone ownership assignments for active agents
+- Contents of docs/SESSION_STATE.md
+- User preferences and workflow conventions
+
+When compacting, discard:
+
+- Raw file contents that have been committed
+- Verbose build/test output (keep only pass/fail)
+- Exploration paths that were abandoned
+- Duplicate information already in CLAUDE.md or MEMORY.md
+
+## Session Start Checklist
+
+On every new session, silently:
+
+1. Read `docs/SESSION_STATE.md` (if exists)
+2. Read `MEMORY.md`
+3. Run `git status` and `git log --oneline -10`
+4. If SESSION_STATE.md has "Next Steps", start on step 1
+5. If no state file, ask what to work on

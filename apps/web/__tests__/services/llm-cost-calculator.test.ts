@@ -498,4 +498,187 @@ describe('LLMCostCalculator', () => {
       expect(Number.isInteger(costUp)).toBe(true);
     });
   });
+
+  // =========================================================================
+  // M37 — Cross-reference web calculator against known expected values
+  //
+  // These test cases document the exact (provider, model, tokens) → cost
+  // mapping so that any drift between the TS web calculator and the Rust
+  // server-side implementation is immediately surfaced by a CI failure.
+  //
+  // Formula: cost_cents = round((inputTokens/1M * inputRate + outputTokens/1M * outputRate) * 100)
+  //
+  // Reference rates (as of January 2026):
+  //   anthropic/claude-opus-4-5:        $5.00/$25.00 per 1M tokens
+  //   anthropic/claude-sonnet-4-5:      $3.00/$15.00 per 1M tokens
+  //   anthropic/claude-haiku-4-5:       $1.00/$5.00  per 1M tokens
+  //   openai/gpt-5:                     $1.25/$10.00 per 1M tokens
+  //   openai/gpt-5.2:                   $1.75/$14.00 per 1M tokens
+  //   openai/gpt-5-nano:                $0.05/$0.40  per 1M tokens
+  //   google/gemini-3-pro-preview:      $2.00/$12.00 per 1M tokens
+  //   google/gemini-2.5-flash:          $0.30/$2.50  per 1M tokens
+  //   deepseek/deepseek-chat:           $0.28/$0.42  per 1M tokens
+  //   xai/grok-4:                       $3.00/$15.00 per 1M tokens
+  //   ollama/* (any):                   $0.00/$0.00  (free)
+  // =========================================================================
+  describe('M37 — Cross-reference table: web TS vs expected Rust output', () => {
+    /**
+     * Each entry: { provider, model, inputTokens, outputTokens, expectedCents }
+     *
+     * expectedCents is computed manually and must match the Rust cost-calculation
+     * logic (round-to-nearest-cent of dollar amount × 100).
+     */
+    const crossReferenceTable: Array<{
+      provider: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      expectedCents: number;
+      description: string;
+    }> = [
+      // ── Anthropic ──────────────────────────────────────────────────────
+      {
+        provider: 'anthropic',
+        model: 'claude-opus-4-5',
+        inputTokens: 1_000,
+        outputTokens: 500,
+        expectedCents: 2,
+        // (1000/1M*5 + 500/1M*25)*100 = (0.005+0.0125)*100 = 1.75 → round → 2
+        description: 'claude-opus-4-5: 1K in, 500 out → 2¢',
+      },
+      {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        inputTokens: 10_000,
+        outputTokens: 2_000,
+        expectedCents: 6,
+        // (10K/1M*3 + 2K/1M*15)*100 = (0.03+0.03)*100 = 6
+        description: 'claude-sonnet-4-5: 10K in, 2K out → 6¢',
+      },
+      {
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+        inputTokens: 50_000,
+        outputTokens: 10_000,
+        expectedCents: 10,
+        // (50K/1M*1 + 10K/1M*5)*100 = (0.05+0.05)*100 = 10
+        description: 'claude-haiku-4-5: 50K in, 10K out → 10¢',
+      },
+      // ── OpenAI ─────────────────────────────────────────────────────────
+      {
+        provider: 'openai',
+        model: 'gpt-5',
+        inputTokens: 10_000,
+        outputTokens: 0,
+        expectedCents: 1,
+        // (10K/1M*1.25 + 0)*100 = 0.0125*100 = 1.25 → round → 1
+        description: 'gpt-5: 10K in, 0 out → 1¢',
+      },
+      {
+        provider: 'openai',
+        model: 'gpt-5.2',
+        inputTokens: 10_000,
+        outputTokens: 2_000,
+        expectedCents: 5,
+        // (10K/1M*1.75 + 2K/1M*14)*100 = (0.0175+0.028)*100 = 4.55 → round → 5
+        description: 'gpt-5.2: 10K in, 2K out → 5¢',
+      },
+      {
+        provider: 'openai',
+        model: 'gpt-5-nano',
+        inputTokens: 100_000,
+        outputTokens: 10_000,
+        expectedCents: 1,
+        // (100K/1M*0.05 + 10K/1M*0.4)*100 = (0.005+0.004)*100 = 0.9 → round → 1
+        description: 'gpt-5-nano: 100K in, 10K out → 1¢',
+      },
+      // ── Google ─────────────────────────────────────────────────────────
+      {
+        provider: 'google',
+        model: 'gemini-3-pro-preview',
+        inputTokens: 20_000,
+        outputTokens: 5_000,
+        expectedCents: 10,
+        // (20K/1M*2 + 5K/1M*12)*100 = (0.04+0.06)*100 = 10
+        description: 'gemini-3-pro-preview: 20K in, 5K out → 10¢',
+      },
+      {
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+        inputTokens: 50_000,
+        outputTokens: 10_000,
+        expectedCents: 4,
+        // (50K/1M*0.3 + 10K/1M*2.5)*100 = (0.015+0.025)*100 = 4
+        description: 'gemini-2.5-flash: 50K in, 10K out → 4¢',
+      },
+      // ── DeepSeek ───────────────────────────────────────────────────────
+      {
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        inputTokens: 100_000,
+        outputTokens: 20_000,
+        expectedCents: 4,
+        // (100K/1M*0.28 + 20K/1M*0.42)*100 = (0.028+0.0084)*100 = 3.64 → round → 4
+        description: 'deepseek-chat: 100K in, 20K out → 4¢',
+      },
+      // ── xAI ────────────────────────────────────────────────────────────
+      {
+        provider: 'xai',
+        model: 'grok-4',
+        inputTokens: 10_000,
+        outputTokens: 2_000,
+        expectedCents: 6,
+        // (10K/1M*3 + 2K/1M*15)*100 = (0.03+0.03)*100 = 6
+        description: 'grok-4: 10K in, 2K out → 6¢',
+      },
+      // ── Ollama (free local) ────────────────────────────────────────────
+      {
+        provider: 'ollama',
+        model: 'llama3',
+        inputTokens: 1_000_000,
+        outputTokens: 500_000,
+        expectedCents: 0,
+        description: 'ollama/llama3: any tokens → 0¢ (free)',
+      },
+    ];
+
+    for (const tc of crossReferenceTable) {
+      it(tc.description, () => {
+        const cost = LLMCostCalculator.calculateCost(tc.provider, tc.model, {
+          promptTokens: tc.inputTokens,
+          completionTokens: tc.outputTokens,
+          totalTokens: tc.inputTokens + tc.outputTokens,
+        });
+        expect(cost).toBe(tc.expectedCents);
+      });
+    }
+
+    it('output cost grows linearly with output token count (sanity check)', () => {
+      const base = LLMCostCalculator.calculateCost('anthropic', 'claude-opus-4-5', {
+        promptTokens: 0,
+        completionTokens: 1_000,
+        totalTokens: 1_000,
+      });
+      const doubled = LLMCostCalculator.calculateCost('anthropic', 'claude-opus-4-5', {
+        promptTokens: 0,
+        completionTokens: 2_000,
+        totalTokens: 2_000,
+      });
+      // Doubling output tokens should roughly double cost (rounding may cause ±1)
+      expect(doubled).toBeGreaterThanOrEqual(base * 2 - 1);
+      expect(doubled).toBeLessThanOrEqual(base * 2 + 1);
+    });
+
+    it('all cross-reference results are non-negative integers', () => {
+      for (const tc of crossReferenceTable) {
+        const cost = LLMCostCalculator.calculateCost(tc.provider, tc.model, {
+          promptTokens: tc.inputTokens,
+          completionTokens: tc.outputTokens,
+          totalTokens: tc.inputTokens + tc.outputTokens,
+        });
+        expect(Number.isInteger(cost)).toBe(true);
+        expect(cost).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
 });

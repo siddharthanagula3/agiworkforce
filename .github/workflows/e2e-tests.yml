@@ -24,6 +24,8 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # M22: No continue-on-error here — E2E failures intentionally block the pipeline on main/develop.
+    # Do NOT add continue-on-error: true without a documented exception.
 
     steps:
       - name: Checkout code
@@ -84,6 +86,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: Run smoke E2E tests
+        # M22: No continue-on-error — smoke failures block CI
         run: |
           pnpm exec playwright test --project=smoke \
             --reporter=html,json \
@@ -130,10 +133,10 @@ jobs:
           if [ -f apps/desktop/test-results/results.json ]; then
             FAILED=$(grep -o '"status":"failed"' apps/desktop/test-results/results.json | wc -l)
             if [ "$FAILED" -gt 0 ]; then
-              echo "❌ Tests failed: $FAILED failures detected"
+              echo "Tests failed: $FAILED failures detected"
               exit 1
             else
-              echo "✅ All tests passed"
+              echo "All tests passed"
             fi
           fi
 

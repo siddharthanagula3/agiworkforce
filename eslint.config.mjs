@@ -306,7 +306,7 @@ export default [
       // General rules
       'no-unused-vars': 'off',
       'no-useless-catch': 'off',
-      'prefer-const': 'off',
+      'prefer-const': 'warn',
     },
   },
 
