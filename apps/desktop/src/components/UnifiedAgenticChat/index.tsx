@@ -30,7 +30,6 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import type { Artifact, ResearchTask } from '../../types/chat';
-import { useSimpleModeStore } from '../../stores/ui';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { toast } from '../../hooks/useToast';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
@@ -950,13 +949,49 @@ export const UnifiedAgenticChat: React.FC<{
         });
       };
 
+      /**
+       * Shared stream teardown helper extracted from stream-end and stream-error handlers.
+       * Clears queued updates, abort controller, loading state, tool timeouts, and agent status.
+       */
+      const finalizeStream = (
+        finalizedMessageId: string | null,
+        agentOutcome: 'completed' | 'failed',
+        agentError?: string,
+      ) => {
+        if (finalizedMessageId) {
+          clearQueuedStreamUpdates(finalizedMessageId);
+        } else {
+          clearQueuedStreamUpdates();
+        }
+        abortControllerRef.current = null;
+
+        const s = useUnifiedChatStore.getState();
+        s.setIsLoading(false);
+        s.setStreamingMessage(null);
+        toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
+          clearTimeout(timeoutEntry.softTimeoutId);
+          clearTimeout(timeoutEntry.hardTimeoutId);
+        });
+        toolExecutionTimeoutsRef.current.clear();
+
+        const currentAgent = useUnifiedChatStore.getState().agentStatus;
+        if (currentAgent?.status === 'running') {
+          useUnifiedChatStore.getState().setAgentStatus({
+            ...currentAgent,
+            status: agentOutcome,
+            completedAt: new Date(),
+            ...(agentOutcome === 'failed' && agentError ? { error: agentError } : {}),
+          });
+        }
+        clearAgentIterationEntries();
+      };
+
       registerListener(
         listen<{ conversation_id: number; message_id: string | number; created_at: string }>(
           'chat:stream-start',
           ({ payload }) => {
             if (!isMountedRef.current) return;
             markStreamActivity();
-            console.log('[UnifiedAgenticChat] Stream started:', payload);
 
             // Create new AbortController for this streaming session
             // This allows handleStopGeneration to cancel the current stream
@@ -966,9 +1001,6 @@ export const UnifiedAgenticChat: React.FC<{
             // This prevents race conditions when multiple streams are active
             const messageId = String(payload.message_id);
             activeStreamSessionsRef.current.set(payload.conversation_id, messageId);
-            console.log(
-              `[UnifiedAgenticChat] CHT-005: Registered stream session conv=${payload.conversation_id} msg=${messageId}`,
-            );
 
             // Stream has started, but we keep isLoading true until stream-end
             // This allows the UI to show streaming state
@@ -1085,9 +1117,6 @@ export const UnifiedAgenticChat: React.FC<{
 
           // CHT-005 fix: Clean up stream session tracking
           activeStreamSessionsRef.current.delete(payload.conversation_id);
-          console.log(
-            `[UnifiedAgenticChat] CHT-005: Cleaned up stream session for conv=${payload.conversation_id}`,
-          );
 
           // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-end
           if (streamWatchdogTimeoutRef.current) {
@@ -1098,7 +1127,6 @@ export const UnifiedAgenticChat: React.FC<{
           // Update billing store with new credit info
           if (payload.credits) {
             useBillingStore.getState().updateCredits(payload.credits);
-            console.log('[UnifiedAgenticChat] Updated credits from stream-end:', payload.credits);
           }
 
           const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
@@ -1118,32 +1146,7 @@ export const UnifiedAgenticChat: React.FC<{
           }
 
           if (shouldClearGlobalState) {
-            if (finalizedMessageId) {
-              clearQueuedStreamUpdates(finalizedMessageId);
-            } else {
-              clearQueuedStreamUpdates();
-            }
-            // Clear the abort controller since streaming completed
-            abortControllerRef.current = null;
-
-            state.setIsLoading(false);
-            state.setStreamingMessage(null);
-            toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-              clearTimeout(timeoutEntry.softTimeoutId);
-              clearTimeout(timeoutEntry.hardTimeoutId);
-            });
-            toolExecutionTimeoutsRef.current.clear();
-
-            // Prevent stale "Running..." indicators when a stream has already ended.
-            const currentAgent = useUnifiedChatStore.getState().agentStatus;
-            if (currentAgent?.status === 'running') {
-              useUnifiedChatStore.getState().setAgentStatus({
-                ...currentAgent,
-                status: 'completed',
-                completedAt: new Date(),
-              });
-            }
-            clearAgentIterationEntries();
+            finalizeStream(finalizedMessageId, 'completed');
           }
         }),
       );
@@ -1174,11 +1177,8 @@ export const UnifiedAgenticChat: React.FC<{
 
             if (targetId) {
               finalizedMessageId = targetId;
-              // Use friendly error messages in simple mode
-              const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
-              const displayError = isSimpleMode
-                ? formatErrorForChat(payload.error, true)
-                : `Error: ${payload.error}`;
+              // Always use friendly error messages — no raw error strings in the UI
+              const displayError = formatErrorForChat(payload.error, true);
 
               state.updateMessage(targetId, {
                 content: displayError,
@@ -1192,10 +1192,7 @@ export const UnifiedAgenticChat: React.FC<{
               );
             } else if (currentStreamingId && currentMatchesSession) {
               finalizedMessageId = currentStreamingId;
-              const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
-              const displayError = isSimpleMode
-                ? formatErrorForChat(payload.error, true)
-                : `Error: ${payload.error}`;
+              const displayError = formatErrorForChat(payload.error, true);
 
               state.updateMessage(currentStreamingId, {
                 content: displayError,
@@ -1216,10 +1213,7 @@ export const UnifiedAgenticChat: React.FC<{
               if (fallbackStreaming) {
                 finalizedMessageId = fallbackStreaming.id;
                 hasValidTarget = true;
-                const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
-                const displayError = isSimpleMode
-                  ? formatErrorForChat(payload.error, true)
-                  : `Error: ${payload.error}`;
+                const displayError = formatErrorForChat(payload.error, true);
                 state.updateMessage(fallbackStreaming.id, {
                   content: displayError,
                   metadata: { streaming: false },
@@ -1235,9 +1229,6 @@ export const UnifiedAgenticChat: React.FC<{
 
             // CHT-005 fix: Clean up stream session tracking on error
             activeStreamSessionsRef.current.delete(payload.conversation_id);
-            console.log(
-              `[UnifiedAgenticChat] CHT-005: Cleaned up stream session on error for conv=${payload.conversation_id}`,
-            );
 
             // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-error
             if (streamWatchdogTimeoutRef.current) {
@@ -1262,33 +1253,7 @@ export const UnifiedAgenticChat: React.FC<{
             }
 
             if (shouldClearGlobalState) {
-              if (finalizedMessageId) {
-                clearQueuedStreamUpdates(finalizedMessageId);
-              } else {
-                clearQueuedStreamUpdates();
-              }
-              // Clear the abort controller since streaming errored
-              abortControllerRef.current = null;
-
-              state.setIsLoading(false);
-              state.setStreamingMessage(null);
-              toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
-                clearTimeout(timeoutEntry.softTimeoutId);
-                clearTimeout(timeoutEntry.hardTimeoutId);
-              });
-              toolExecutionTimeoutsRef.current.clear();
-
-              // Prevent stale "Running..." indicators when a stream errors out.
-              const currentAgent = useUnifiedChatStore.getState().agentStatus;
-              if (currentAgent?.status === 'running') {
-                useUnifiedChatStore.getState().setAgentStatus({
-                  ...currentAgent,
-                  status: 'failed',
-                  completedAt: new Date(),
-                  error: payload.error,
-                });
-              }
-              clearAgentIterationEntries();
+              finalizeStream(finalizedMessageId, 'failed', payload.error);
             }
           },
         ),
@@ -1299,7 +1264,6 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ id: string; content: string; timestamp: string; conversation_id?: number }>(
           'chat:pending-message-added',
           ({ payload }) => {
-            console.log('[UnifiedAgenticChat] Pending message added:', payload);
             useUnifiedChatStore.getState().addPendingMessage(payload);
           },
         ),
@@ -1309,15 +1273,13 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ message: { id: string; content: string }; remaining: number }>(
           'chat:pending-message-consumed',
           ({ payload }) => {
-            console.log('[UnifiedAgenticChat] Pending message consumed:', payload);
             useUnifiedChatStore.getState().removePendingMessage(payload.message.id);
           },
         ),
       );
 
       registerListener(
-        listen<{ count: number }>('chat:pending-messages-cleared', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Pending messages cleared:', payload);
+        listen<{ count: number }>('chat:pending-messages-cleared', () => {
           useUnifiedChatStore.getState().clearPendingMessages();
         }),
       );
@@ -1328,12 +1290,7 @@ export const UnifiedAgenticChat: React.FC<{
           current_tool?: string;
           current_phase?: string;
           count: number;
-        }>('chat:pending-context-available', ({ payload }) => {
-          console.log(
-            '[UnifiedAgenticChat] Pending context available (%s):',
-            payload.current_tool || payload.current_phase || 'unknown',
-            payload.pending_messages.map((m) => m.content.slice(0, 50)),
-          );
+        }>('chat:pending-context-available', () => {
           // This event is informational - the AI can use pending messages to adjust behavior
           // The messages are already in the store, so we don't need to do anything here
         }),
@@ -1346,31 +1303,17 @@ export const UnifiedAgenticChat: React.FC<{
           pending_messages: Array<{ id: string; content: string; timestamp: string }>;
           count: number;
         }>('chat:pending-messages-ready', async ({ payload }) => {
-          console.log(
-            '[UnifiedAgenticChat] Pending messages ready for processing:',
-            payload.count,
-            'messages',
-          );
-
           // Auto-process pending messages by sending them as follow-up
           // This creates a seamless experience where queued messages are automatically sent
           // Process messages sequentially with delays to avoid race conditions
           for (let i = 0; i < payload.pending_messages.length; i++) {
             // Check if component is still mounted before processing each message
             if (!isMountedRef.current) {
-              console.log(
-                '[UnifiedAgenticChat] Component unmounted, stopping pending message processing',
-              );
               break;
             }
 
             const pending = payload.pending_messages[i];
             if (!pending) continue;
-
-            console.log(
-              '[UnifiedAgenticChat] Processing pending message:',
-              pending.content.slice(0, 50),
-            );
 
             // Remove from pending queue in store
             useUnifiedChatStore.getState().removePendingMessage(pending.id);
@@ -1413,13 +1356,6 @@ export const UnifiedAgenticChat: React.FC<{
               });
             }
           }
-
-          // Notify user that pending messages have been processed
-          if (payload.count > 0) {
-            console.log(
-              '[UnifiedAgenticChat] All pending messages have been queued for processing',
-            );
-          }
         }),
       );
 
@@ -1428,7 +1364,6 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ agent_id?: string; thinking: boolean; phase?: string; message?: string }>(
           'agent:thinking',
           ({ payload }) => {
-            console.log('[UnifiedAgenticChat] Agent thinking:', payload);
             // Update action trail with thinking status
             if (payload.thinking) {
               useUnifiedChatStore.getState().addActionTrailEntry({
@@ -1450,28 +1385,20 @@ export const UnifiedAgenticChat: React.FC<{
           error?: string;
           duration_ms?: number;
         }>('agent:finished', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Agent finished:', payload);
           // Update action trail with completion status
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: payload.success ? 'completed' : 'error',
             message: payload.success
               ? payload.result || 'Task completed successfully'
               : payload.error || 'Task failed',
-            fadeAfter: 5000, // Fade after 5 seconds
+            fadeAfter: 5000,
             metadata: { duration_ms: payload.duration_ms },
           });
 
           // Clear any running agent status
           // Note: agent:finished event may not fire in all cases, so we also clear on tool result
           const currentAgent = useUnifiedChatStore.getState().agentStatus;
-          console.log(
-            '[UnifiedAgenticChat] agent:finished - agentStatus:',
-            JSON.stringify(currentAgent),
-            'success:',
-            payload.success,
-          );
           if (currentAgent && currentAgent.status === 'running') {
-            console.log('[UnifiedAgenticChat] Clearing running agent status from agent:finished');
             useUnifiedChatStore.getState().setAgentStatus({
               ...currentAgent,
               status: payload.success ? 'completed' : 'failed',
@@ -1504,7 +1431,6 @@ export const UnifiedAgenticChat: React.FC<{
           streaming: boolean;
         }>('chat:tool-calls', ({ payload }) => {
           markStreamActivity();
-          console.log('[UnifiedAgenticChat] Tool calls detected:', payload.tool_calls.length);
 
           // CHT-009 fix: Update message metadata so MessageBubble renders the ToolCallCard
           // Find the target message
@@ -1521,10 +1447,6 @@ export const UnifiedAgenticChat: React.FC<{
             const firstTool = payload.tool_calls[0];
             if (firstTool) {
               const normalizedFirstToolName = normalizeToolNameForUi(firstTool.name);
-              console.log(
-                `[UnifiedAgenticChat] Updating message ${targetMessageId} with tool metadata:`,
-                normalizedFirstToolName,
-              );
               state.updateMessage(targetMessageId, {
                 metadata: {
                   // key fields for MessageBubble to detect tool call
@@ -1599,7 +1521,6 @@ export const UnifiedAgenticChat: React.FC<{
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
-          console.log('[UnifiedAgenticChat] Tool executing:', normalizedToolName);
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
             normalizedToolName,
@@ -1627,9 +1548,6 @@ export const UnifiedAgenticChat: React.FC<{
           tool_count?: number;
         }>('chat:agent-progress', ({ payload }) => {
           markStreamActivity();
-          console.log(
-            `[UnifiedAgenticChat] Agent progress: iteration ${payload.iteration}/${payload.max_iterations} (${payload.status})`,
-          );
           clearAgentIterationEntries();
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: payload.status === 'limit_reached' ? 'error' : 'running',
@@ -1659,15 +1577,6 @@ export const UnifiedAgenticChat: React.FC<{
         }>('chat:tool-result', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
-          console.log(
-            '[UnifiedAgenticChat] Tool result RECEIVED:',
-            normalizedToolName,
-            payload.success ? 'succeeded' : 'failed',
-            'tool_call_id:',
-            payload.tool_call_id,
-            'result length:',
-            payload.result?.length,
-          );
           clearToolExecutionTimeout(payload.tool_call_id);
 
           let parsedData: Record<string, unknown> = payload.result_data || {};
@@ -1729,10 +1638,6 @@ export const UnifiedAgenticChat: React.FC<{
           // Remove the old "running" entry for this tool_call_id to prevent "Running..." from staying
           const state = useUnifiedChatStore.getState();
           const actionTrail = state.actionTrail;
-          console.log(
-            '[UnifiedAgenticChat] Action trail entries:',
-            actionTrail.map((e) => ({ type: e.type, message: e.message, metadata: e.metadata })),
-          );
           const runningEntries = actionTrail.filter((entry) => {
             if (entry.type !== 'running') return false;
             const metadataToolCallId = (entry.metadata as Record<string, unknown> | undefined)?.[
@@ -1745,12 +1650,6 @@ export const UnifiedAgenticChat: React.FC<{
               entry.message === `Calling ${normalizedToolName}...`
             );
           });
-          console.log(
-            '[UnifiedAgenticChat] Removing running entries with tool_call_id:',
-            payload.tool_call_id,
-            'count:',
-            runningEntries.length,
-          );
           for (const runningEntry of runningEntries) {
             state.removeActionTrailEntry(runningEntry.id);
           }
@@ -1758,26 +1657,13 @@ export const UnifiedAgenticChat: React.FC<{
           // Keep agent status coherent during multi-step runs:
           // a single tool result should update step text, not mark the whole run complete.
           const currentAgent = useUnifiedChatStore.getState().agentStatus;
-          console.log(
-            '[UnifiedAgenticChat] chat:tool-result - agentStatus:',
-            JSON.stringify(currentAgent),
-            'success:',
-            payload.success,
-          );
           if (currentAgent && currentAgent.status === 'running') {
-            console.log(
-              '[UnifiedAgenticChat] Updating running agent step from chat:tool-result',
-              normalizedToolName,
-            );
             useUnifiedChatStore.getState().setAgentStatus({
               ...currentAgent,
               currentStep: payload.success
                 ? `Completed ${normalizedToolName}`
                 : `Failed ${normalizedToolName}`,
             });
-            // Verify the update
-            const afterAgent = useUnifiedChatStore.getState().agentStatus;
-            console.log('[UnifiedAgenticChat] After setAgentStatus:', JSON.stringify(afterAgent));
           }
         }),
       );
@@ -1812,12 +1698,6 @@ export const UnifiedAgenticChat: React.FC<{
             reason?: string;
             duration_ms: number;
           };
-
-          console.log(
-            '[UnifiedAgenticChat] Tool cancelled via agi:tool_stream:',
-            cancelledEvent.tool_id,
-            cancelledEvent.reason,
-          );
 
           // Clear any tool execution timeout that might be pending
           clearToolExecutionTimeout(cancelledEvent.tool_id);
@@ -1876,7 +1756,6 @@ export const UnifiedAgenticChat: React.FC<{
           step_index: number;
           description: string;
         }>('research:step_started', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Research step started:', payload);
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
@@ -1903,7 +1782,6 @@ export const UnifiedAgenticChat: React.FC<{
           success: boolean;
           details?: string;
         }>('research:step_completed', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Research step completed:', payload);
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
@@ -1931,7 +1809,6 @@ export const UnifiedAgenticChat: React.FC<{
           task_id: string;
           finding: string;
         }>('research:finding_added', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Research finding added:', payload);
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
@@ -1947,7 +1824,6 @@ export const UnifiedAgenticChat: React.FC<{
           task_id: string;
           source: { title: string; url: string; domain?: string };
         }>('research:source_added', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Research source added:', payload);
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
@@ -1964,7 +1840,6 @@ export const UnifiedAgenticChat: React.FC<{
           success: boolean;
           time_elapsed?: string;
         }>('research:completed', ({ payload }) => {
-          console.log('[UnifiedAgenticChat] Research completed:', payload);
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
@@ -2217,17 +2092,6 @@ export const UnifiedAgenticChat: React.FC<{
     const routingResult = isExplicitModelSelection
       ? { modelId: currentModel, reason: `User selected: ${currentModel}`, wasRouted: false }
       : getModelForRequest(currentModel, content, hasImages);
-
-    // Log routing decision for debugging
-    if (routingResult.wasRouted) {
-      console.log('[UnifiedAgenticChat] Model router decision:', {
-        originalModel: currentModel,
-        routedModel: routingResult.modelId,
-        reason: routingResult.reason,
-      });
-    } else if (isExplicitModelSelection) {
-      console.log('[UnifiedAgenticChat] Using explicit model selection:', currentModel);
-    }
 
     // Risk detection runs in ALL modes - dangerous patterns should always be flagged
     // The undo-based safety philosophy handles reversibility AFTER actions, but we still
@@ -2511,7 +2375,6 @@ export const UnifiedAgenticChat: React.FC<{
 
         // However, for non-streaming fallback or future mixed modes, we check for credits here too
         if (response.credits) {
-          console.log('[UnifiedAgenticChat] Updated credits from response:', response.credits);
           useBillingStore.getState().updateCredits(response.credits);
         }
 
@@ -2522,61 +2385,14 @@ export const UnifiedAgenticChat: React.FC<{
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const isSimpleMode = useSimpleModeStore.getState().mode === 'simple';
 
-      // In simple mode, use friendly error messages
-      if (isSimpleMode) {
-        const userMessage = formatErrorForChat(errorMessage, true);
-        updateMessage(assistantMessageId, {
-          content: userMessage,
-          metadata: { streaming: false },
-          error: errorMessage,
-        });
-      } else {
-        // Parse backend standardized error codes for advanced mode
-        let userMessage = `Error: ${errorMessage}`;
-
-        if (errorMessage.includes('[ERR_BILLING_QUOTA]')) {
-          const detail =
-            errorMessage.split('[ERR_BILLING_QUOTA]')[1]?.trim() || 'Insufficient credits.';
-          userMessage = `⚠️ **Payment Required**\n\n${detail}\n\nPlease check your plan limits in the Settings or upgrade to continue.`;
-        } else if (errorMessage.includes('[ERR_AUTH_INVALID]')) {
-          userMessage = `🔒 **Authentication Failed**\n\nWe couldn't verify your credentials. Please sign out and sign in again to refresh your session.`;
-        } else if (errorMessage.includes('[ERR_RATE_LIMIT]')) {
-          userMessage = `⏳ **Rate Limit Exceeded**\n\nYou are sending requests too quickly. Please wait a moment before trying again.`;
-        } else if (errorMessage.includes('[ERR_NETWORK_TIMEOUT]')) {
-          userMessage = `📡 **Network Timeout**\n\nThe request timed out. Please check your connection and try again.`;
-        } else if (errorMessage.includes('[ERR_PROVIDER_ERROR]')) {
-          const detail =
-            errorMessage.split('[ERR_PROVIDER_ERROR]')[1]?.trim() || 'Unknown provider error.';
-          userMessage = `❌ **Provider Error**\n\n${detail}`;
-        } else {
-          // Legacy fallback
-          if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-            userMessage +=
-              '\n\nAuthentication failed. Please check your subscription status or contact support if the issue persists.';
-          } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
-            userMessage += "\n\nYou've hit a rate limit. Please try again in a few moments.";
-          } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-            userMessage +=
-              '\n\nThe request timed out. Please check your internet connection and try again.';
-          } else if (errorMessage.includes('network') || errorMessage.includes('ECONNREFUSED')) {
-            userMessage += '\n\nNetwork error. Please check your internet connection.';
-          } else if (errorMessage.includes('invalid') || errorMessage.includes('validation')) {
-            userMessage +=
-              '\n\nThe request was invalid. This may be due to unsupported content or format.';
-          } else {
-            userMessage +=
-              '\n\nPlease check your internet connection and try again. If the issue persists, contact support.';
-          }
-        }
-
-        updateMessage(assistantMessageId, {
-          content: userMessage,
-          metadata: { streaming: false },
-          error: errorMessage,
-        });
-      }
+      // Always use friendly messages — formatErrorForChat handles all modes consistently
+      const userMessage = formatErrorForChat(errorMessage, true);
+      updateMessage(assistantMessageId, {
+        content: userMessage,
+        metadata: { streaming: false },
+        error: errorMessage,
+      });
       // Clean up loading state on error - for successful streaming, chat:stream-end handles this
       clearQueuedStreamUpdates(assistantMessageId);
       setIsLoading(false);
@@ -2661,8 +2477,6 @@ export const UnifiedAgenticChat: React.FC<{
   };
 
   const handleStopGeneration = async () => {
-    console.log('[UnifiedAgenticChat] Stopping generation...');
-
     // AUDIT-STREAM-059 fix: Clear the stream watchdog when user stops generation
     if (streamWatchdogTimeoutRef.current) {
       clearTimeout(streamWatchdogTimeoutRef.current);
