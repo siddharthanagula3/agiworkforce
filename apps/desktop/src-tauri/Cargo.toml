@@ -63,13 +63,13 @@ thiserror = "1.0"
 # Install via: brew install llvm (macOS) or apt install libclang-dev (Linux).
 rusqlite = { version = "0.31", features = ["bundled-sqlcipher", "backup", "blob", "chrono"] }
 tokio-rusqlite = "0.5"
-tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
-postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
-deadpool-postgres = "0.13"
-mysql_async = "0.34"
-mongodb = "3.5"
-redis = { version = "0.32.7", features = ["aio", "tokio-comp", "connection-manager"] }
-bson = "2.9"
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
+postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
+deadpool-postgres = { version = "0.13", optional = true }
+mysql_async = { version = "0.34", optional = true }
+mongodb = { version = "3.5", optional = true }
+redis = { version = "0.32.7", features = ["aio", "tokio-comp", "connection-manager"], optional = true }
+bson = { version = "2.9", optional = true }
 
 
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls", "rustls-tls-native-roots", "multipart", "blocking"], default-features = false }
@@ -256,6 +256,9 @@ vad = ["dep:webrtc-vad"]
 # Local Whisper STT (offline speech-to-text)
 # Requires whisper.cpp to be built - see whisper-rs docs
 local-whisper = ["dep:whisper-rs"]
+# Remote database clients (PostgreSQL, MySQL, MongoDB, Redis)
+# These add significant binary size; only enable if the user needs to connect to remote databases.
+remote-databases = ["dep:tokio-postgres", "dep:postgres-types", "dep:deadpool-postgres", "dep:mysql_async", "dep:mongodb", "dep:redis", "dep:bson"]
 
 
 

@@ -5,8 +5,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::data::database::{
-    ConnectionConfig, ConnectionPool, DatabaseType, MySqlClient, PoolConfig, PostgresClient,
+    ConnectionConfig, ConnectionPool, DatabaseType, PoolConfig,
 };
+#[cfg(feature = "remote-databases")]
+use crate::data::database::{MySqlClient, PostgresClient};
 use crate::sys::error::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,7 +20,9 @@ pub struct QueryResult {
 
 pub struct SqlClient {
     pools: Arc<RwLock<HashMap<String, ConnectionPool>>>,
+    #[cfg(feature = "remote-databases")]
     postgres_client: PostgresClient,
+    #[cfg(feature = "remote-databases")]
     mysql_client: MySqlClient,
 }
 
@@ -26,7 +30,9 @@ impl SqlClient {
     pub fn new() -> Self {
         Self {
             pools: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "remote-databases")]
             postgres_client: PostgresClient::new(),
+            #[cfg(feature = "remote-databases")]
             mysql_client: MySqlClient::new(),
         }
     }
@@ -41,6 +47,7 @@ impl SqlClient {
 
         config.validate()?;
 
+        #[cfg(feature = "remote-databases")]
         if config.db_type == DatabaseType::PostgreSQL {
             return self
                 .postgres_client
@@ -48,8 +55,16 @@ impl SqlClient {
                 .await;
         }
 
+        #[cfg(feature = "remote-databases")]
         if config.db_type == DatabaseType::MySQL {
             return self.mysql_client.create_pool(connection_id, config).await;
+        }
+
+        #[cfg(not(feature = "remote-databases"))]
+        if config.db_type == DatabaseType::PostgreSQL || config.db_type == DatabaseType::MySQL {
+            return Err(Error::Other(
+                "Remote database support is not enabled. Rebuild with the 'remote-databases' feature to use PostgreSQL/MySQL.".to_string(),
+            ));
         }
 
         let pool = ConnectionPool::new(config, pool_config).await?;
@@ -71,30 +86,33 @@ impl SqlClient {
     pub async fn execute_query(&self, connection_id: &str, sql: &str) -> Result<QueryResult> {
         tracing::debug!("Executing query: {}", sql);
 
-        let pools = self.pools.read().await;
-        let db_type = pools
-            .get(connection_id)
-            .map(|pool| pool.get_config().db_type.clone());
-        drop(pools);
-
-        if db_type.as_ref() == Some(&DatabaseType::PostgreSQL)
-            || self
-                .postgres_client
-                .list_pools()
-                .await
-                .contains(&connection_id.to_string())
+        #[cfg(feature = "remote-databases")]
         {
-            return self.postgres_client.execute_query(connection_id, sql).await;
-        }
+            let pools = self.pools.read().await;
+            let db_type = pools
+                .get(connection_id)
+                .map(|pool| pool.get_config().db_type.clone());
+            drop(pools);
 
-        if db_type.as_ref() == Some(&DatabaseType::MySQL)
-            || self
-                .mysql_client
-                .list_pools()
-                .await
-                .contains(&connection_id.to_string())
-        {
-            return self.mysql_client.execute_query(connection_id, sql).await;
+            if db_type.as_ref() == Some(&DatabaseType::PostgreSQL)
+                || self
+                    .postgres_client
+                    .list_pools()
+                    .await
+                    .contains(&connection_id.to_string())
+            {
+                return self.postgres_client.execute_query(connection_id, sql).await;
+            }
+
+            if db_type.as_ref() == Some(&DatabaseType::MySQL)
+                || self
+                    .mysql_client
+                    .list_pools()
+                    .await
+                    .contains(&connection_id.to_string())
+            {
+                return self.mysql_client.execute_query(connection_id, sql).await;
+            }
         }
 
         let start = std::time::Instant::now();
@@ -136,22 +154,25 @@ impl SqlClient {
             params.len()
         );
 
-        let pools = self.pools.read().await;
-        let is_postgres = if let Some(pool) = pools.get(connection_id) {
-            pool.get_config().db_type == DatabaseType::PostgreSQL
-        } else {
-            self.postgres_client
-                .list_pools()
-                .await
-                .contains(&connection_id.to_string())
-        };
-        drop(pools);
+        #[cfg(feature = "remote-databases")]
+        {
+            let pools = self.pools.read().await;
+            let is_postgres = if let Some(pool) = pools.get(connection_id) {
+                pool.get_config().db_type == DatabaseType::PostgreSQL
+            } else {
+                self.postgres_client
+                    .list_pools()
+                    .await
+                    .contains(&connection_id.to_string())
+            };
+            drop(pools);
 
-        if is_postgres {
-            return self
-                .postgres_client
-                .execute_prepared(connection_id, sql, params)
-                .await;
+            if is_postgres {
+                return self
+                    .postgres_client
+                    .execute_prepared(connection_id, sql, params)
+                    .await;
+            }
         }
 
         let start = std::time::Instant::now();
@@ -186,22 +207,25 @@ impl SqlClient {
     ) -> Result<Vec<QueryResult>> {
         tracing::info!("Executing batch of {} queries", queries.len());
 
-        let pools = self.pools.read().await;
-        let is_postgres = if let Some(pool) = pools.get(connection_id) {
-            pool.get_config().db_type == DatabaseType::PostgreSQL
-        } else {
-            self.postgres_client
-                .list_pools()
-                .await
-                .contains(&connection_id.to_string())
-        };
-        drop(pools);
+        #[cfg(feature = "remote-databases")]
+        {
+            let pools = self.pools.read().await;
+            let is_postgres = if let Some(pool) = pools.get(connection_id) {
+                pool.get_config().db_type == DatabaseType::PostgreSQL
+            } else {
+                self.postgres_client
+                    .list_pools()
+                    .await
+                    .contains(&connection_id.to_string())
+            };
+            drop(pools);
 
-        if is_postgres {
-            return self
-                .postgres_client
-                .execute_batch(connection_id, queries)
-                .await;
+            if is_postgres {
+                return self
+                    .postgres_client
+                    .execute_batch(connection_id, queries)
+                    .await;
+            }
         }
 
         let pool = self.get_pool(connection_id).await?;
@@ -222,6 +246,7 @@ impl SqlClient {
     pub async fn close_pool(&self, connection_id: &str) -> Result<()> {
         tracing::info!("Closing connection pool: {}", connection_id);
 
+        #[cfg(feature = "remote-databases")]
         if self
             .postgres_client
             .list_pools()
@@ -246,10 +271,16 @@ impl SqlClient {
 
     pub async fn list_pools(&self) -> Vec<String> {
         let pools = self.pools.read().await;
-        let mut all_pools: Vec<String> = pools.keys().cloned().collect();
+        let all_pools: Vec<String> = pools.keys().cloned().collect();
 
-        all_pools.extend(self.postgres_client.list_pools().await);
+        #[cfg(feature = "remote-databases")]
+        {
+            let mut all_pools = all_pools;
+            all_pools.extend(self.postgres_client.list_pools().await);
+            return all_pools;
+        }
 
+        #[allow(unreachable_code)]
         all_pools
     }
 
@@ -261,14 +292,17 @@ impl SqlClient {
         Ok(pool.get_stats().await)
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_test_connection(&self, connection_id: &str) -> Result<bool> {
         self.mysql_client.test_connection(connection_id).await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_list_tables(&self, connection_id: &str) -> Result<Vec<String>> {
         self.mysql_client.list_tables(connection_id).await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_describe_table(
         &self,
         connection_id: &str,
@@ -279,6 +313,7 @@ impl SqlClient {
             .await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_list_indexes(
         &self,
         connection_id: &str,
@@ -289,6 +324,7 @@ impl SqlClient {
             .await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_call_procedure(
         &self,
         connection_id: &str,
@@ -300,6 +336,7 @@ impl SqlClient {
             .await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_bulk_insert(
         &self,
         connection_id: &str,
@@ -312,6 +349,7 @@ impl SqlClient {
             .await
     }
 
+    #[cfg(feature = "remote-databases")]
     pub async fn mysql_stream_query(
         &self,
         connection_id: &str,

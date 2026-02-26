@@ -409,8 +409,39 @@ impl DailyLimitTracker {
         }
     }
 
-    /// Calculates duration until midnight in the configured timezone
+    /// Calculates duration until midnight in the configured timezone.
+    ///
+    /// Uses the IANA timezone string from `self.timezone` (parsed via `chrono_tz`)
+    /// to determine when midnight occurs. Falls back to the system local timezone
+    /// if the configured timezone string cannot be parsed.
     fn duration_until_midnight(&self) -> std::time::Duration {
+        // Try to parse the configured IANA timezone (e.g., "America/New_York")
+        if let Ok(tz) = self.timezone.parse::<chrono_tz::Tz>() {
+            let now = Utc::now().with_timezone(&tz);
+            let tomorrow = (now + Duration::days(1)).date_naive();
+            let midnight_naive = tomorrow
+                .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default());
+
+            match tz.from_local_datetime(&midnight_naive).single() {
+                Some(m) => {
+                    let duration = m.signed_duration_since(now);
+                    if duration.num_seconds() > 0 {
+                        return std::time::Duration::from_secs(duration.num_seconds() as u64);
+                    }
+                    return std::time::Duration::from_secs(60); // Fallback to 1 minute
+                }
+                None => {
+                    // Ambiguous or missing local time (DST transition); fall back to 1 hour
+                    return std::time::Duration::from_secs(3600);
+                }
+            }
+        }
+
+        // Fallback: configured timezone could not be parsed, use system local time
+        tracing::warn!(
+            "[DailyLimitTracker] Could not parse timezone '{}', falling back to system local time",
+            self.timezone
+        );
         let now = Local::now();
         let midnight = (now + Duration::days(1))
             .date_naive()
@@ -1306,9 +1337,12 @@ impl ContinuousExecutor {
                         break;
                     }
 
-                    // Calculate exponential backoff delay
+                    // Calculate exponential backoff delay with saturating arithmetic
+                    // to prevent overflow when consecutive_failures is large
                     let delay_secs = std::cmp::min(
-                        BASE_RETRY_DELAY_SECS * 2u64.pow(consecutive_failures - 1),
+                        BASE_RETRY_DELAY_SECS.saturating_mul(
+                            2u64.saturating_pow(consecutive_failures.saturating_sub(1).min(62)),
+                        ),
                         MAX_RETRY_DELAY_SECS,
                     );
 

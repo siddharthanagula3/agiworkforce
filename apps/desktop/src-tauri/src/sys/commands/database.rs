@@ -5,12 +5,15 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::data::database::{
-    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder,
-    QueryValidation, RedisClient, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
+    ConnectionConfig, DeleteQuery, InsertQuery, PoolConfig, QueryBuilder,
+    QueryValidation, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
 };
+#[cfg(feature = "remote-databases")]
+use crate::data::database::{MongoClient, RedisClient};
 use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 
+#[cfg(feature = "remote-databases")]
 /// Validates procedure names: must start with a letter or underscore, followed by
 /// alphanumerics/underscores (max 64 chars per segment), with at most one dot separator
 /// for schema-qualified names (e.g. `my_schema.my_proc`).
@@ -86,7 +89,9 @@ fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String
 
 pub struct DatabaseState {
     pub sql_client: SqlClient,
+    #[cfg(feature = "remote-databases")]
     pub mongo_client: MongoClient,
+    #[cfg(feature = "remote-databases")]
     pub redis_client: RedisClient,
 }
 
@@ -100,7 +105,9 @@ impl DatabaseState {
     pub fn new() -> Self {
         Self {
             sql_client: SqlClient::new(),
+            #[cfg(feature = "remote-databases")]
             mongo_client: MongoClient::new(),
+            #[cfg(feature = "remote-databases")]
             redis_client: RedisClient::new(),
         }
     }
@@ -306,6 +313,7 @@ pub async fn db_get_pool_stats(
     serde_json::to_value(stats).map_err(|e| format!("Serialization error: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_test_connection(
     connection_id: String,
@@ -320,6 +328,7 @@ pub async fn db_mysql_test_connection(
         .map_err(|e| format!("MySQL connection test failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_list_tables(
     connection_id: String,
@@ -334,6 +343,7 @@ pub async fn db_mysql_list_tables(
         .map_err(|e| format!("MySQL list tables failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_describe_table(
     connection_id: String,
@@ -351,6 +361,7 @@ pub async fn db_mysql_describe_table(
     serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_list_indexes(
     connection_id: String,
@@ -368,6 +379,7 @@ pub async fn db_mysql_list_indexes(
     serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_call_procedure(
     connection_id: String,
@@ -400,6 +412,7 @@ pub async fn db_mysql_call_procedure(
         .map_err(|e| format!("MySQL call procedure failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mysql_bulk_insert(
     connection_id: String,
@@ -618,6 +631,7 @@ pub async fn db_build_delete(query: DeleteQuery) -> Result<String, String> {
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_connect(
     connection_id: String,
@@ -633,6 +647,7 @@ pub async fn db_mongo_connect(
         .map_err(|e| format!("MongoDB connection failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_find(
     connection_id: String,
@@ -652,6 +667,7 @@ pub async fn db_mongo_find(
     serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_find_one(
     connection_id: String,
@@ -668,6 +684,7 @@ pub async fn db_mongo_find_one(
         .map_err(|e| format!("MongoDB findOne failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_insert_one(
     connection_id: String,
@@ -684,6 +701,7 @@ pub async fn db_mongo_insert_one(
         .map_err(|e| format!("MongoDB insertOne failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_insert_many(
     connection_id: String,
@@ -700,6 +718,7 @@ pub async fn db_mongo_insert_many(
         .map_err(|e| format!("MongoDB insertMany failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_update_many(
     connection_id: String,
@@ -719,6 +738,7 @@ pub async fn db_mongo_update_many(
     serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_delete_many(
     connection_id: String,
@@ -735,6 +755,7 @@ pub async fn db_mongo_delete_many(
         .map_err(|e| format!("MongoDB deleteMany failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_mongo_disconnect(
     connection_id: String,
@@ -749,6 +770,7 @@ pub async fn db_mongo_disconnect(
         .map_err(|e| format!("MongoDB disconnect failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_connect(
     connection_id: String,
@@ -764,6 +786,7 @@ pub async fn db_redis_connect(
         .map_err(|e| format!("Redis connection failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_get(
     connection_id: String,
@@ -779,6 +802,7 @@ pub async fn db_redis_get(
         .map_err(|e| format!("Redis GET failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_set(
     connection_id: String,
@@ -829,6 +853,7 @@ pub async fn db_redis_set(
         .map_err(|e| format!("Redis SET failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_del(
     connection_id: String,
@@ -844,6 +869,7 @@ pub async fn db_redis_del(
         .map_err(|e| format!("Redis DEL failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_exists(
     connection_id: String,
@@ -859,6 +885,7 @@ pub async fn db_redis_exists(
         .map_err(|e| format!("Redis EXISTS failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_expire(
     connection_id: String,
@@ -875,6 +902,7 @@ pub async fn db_redis_expire(
         .map_err(|e| format!("Redis EXPIRE failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_hget(
     connection_id: String,
@@ -891,6 +919,7 @@ pub async fn db_redis_hget(
         .map_err(|e| format!("Redis HGET failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_hset(
     connection_id: String,
@@ -908,6 +937,7 @@ pub async fn db_redis_hset(
         .map_err(|e| format!("Redis HSET failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_hgetall(
     connection_id: String,
@@ -923,6 +953,7 @@ pub async fn db_redis_hgetall(
         .map_err(|e| format!("Redis HGETALL failed: {}", e))
 }
 
+#[cfg(feature = "remote-databases")]
 #[tauri::command]
 pub async fn db_redis_disconnect(
     connection_id: String,
@@ -1126,6 +1157,263 @@ pub async fn db_delete_stored_password(connection_id: String) -> Result<(), Stri
         connection_id
     );
     Ok(())
+}
+
+
+// MySQL stub implementations when remote-databases feature is disabled.
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_test_connection(
+    _connection_id: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<bool, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_list_tables(
+    _connection_id: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Vec<String>, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_describe_table(
+    _connection_id: String,
+    _table_name: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_list_indexes(
+    _connection_id: String,
+    _table_name: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_call_procedure(
+    _connection_id: String,
+    _procedure_name: String,
+    _params: Vec<serde_json::Value>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Vec<serde_json::Value>, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mysql_bulk_insert(
+    _connection_id: String,
+    _table_name: String,
+    _columns: Vec<String>,
+    _rows: Vec<Vec<serde_json::Value>>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<u64, String> {
+    Err("MySQL support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+// Stub implementations when remote-databases feature is disabled.
+// These return user-friendly errors instead of causing compile failures.
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_connect(
+    _connection_id: String,
+    _config: ConnectionConfig,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<(), String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_find(
+    _connection_id: String,
+    _collection: String,
+    _filter: HashMap<String, serde_json::Value>,
+    _limit: Option<u64>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_find_one(
+    _connection_id: String,
+    _collection: String,
+    _filter: HashMap<String, serde_json::Value>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Option<HashMap<String, serde_json::Value>>, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_insert_one(
+    _connection_id: String,
+    _collection: String,
+    _document: HashMap<String, serde_json::Value>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<String, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_insert_many(
+    _connection_id: String,
+    _collection: String,
+    _documents: Vec<HashMap<String, serde_json::Value>>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Vec<String>, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_update_many(
+    _connection_id: String,
+    _collection: String,
+    _filter: HashMap<String, serde_json::Value>,
+    _update: HashMap<String, serde_json::Value>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_delete_many(
+    _connection_id: String,
+    _collection: String,
+    _filter: HashMap<String, serde_json::Value>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<u64, String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_mongo_disconnect(
+    _connection_id: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<(), String> {
+    Err("MongoDB support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_connect(
+    _connection_id: String,
+    _config: ConnectionConfig,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<(), String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_get(
+    _connection_id: String,
+    _key: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Option<String>, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_set(
+    _connection_id: String,
+    _key: String,
+    _value: String,
+    _expiration_seconds: Option<u64>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<(), String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_del(
+    _connection_id: String,
+    _keys: Vec<String>,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<u64, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_exists(
+    _connection_id: String,
+    _key: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<bool, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_expire(
+    _connection_id: String,
+    _key: String,
+    _seconds: u64,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<bool, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_hget(
+    _connection_id: String,
+    _key: String,
+    _field: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Option<String>, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_hset(
+    _connection_id: String,
+    _key: String,
+    _field: String,
+    _value: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<bool, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_hgetall(
+    _connection_id: String,
+    _key: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<HashMap<String, String>, String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
+}
+
+#[cfg(not(feature = "remote-databases"))]
+#[tauri::command]
+pub async fn db_redis_disconnect(
+    _connection_id: String,
+    _state: State<'_, Mutex<DatabaseState>>,
+) -> Result<(), String> {
+    Err("Redis support is not enabled. Rebuild with the 'remote-databases' feature.".to_string())
 }
 
 #[cfg(test)]
