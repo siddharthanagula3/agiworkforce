@@ -298,7 +298,9 @@ Generate unit tests, integration tests, and edge case tests."#
             prompt = prompt.replace(&placeholder, &value);
         }
 
-        prompt = TEMPLATE_PLACEHOLDER_RE.replace_all(&prompt, "[MISSING: $1]").to_string();
+        prompt = TEMPLATE_PLACEHOLDER_RE
+            .replace_all(&prompt, "[MISSING: $1]")
+            .to_string();
 
         Ok(prompt)
     }

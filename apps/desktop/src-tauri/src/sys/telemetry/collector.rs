@@ -111,35 +111,31 @@ impl TelemetryCollector {
         );
 
         // Attempt HTTP delivery when TELEMETRY_ENDPOINT is configured.
-        let http_succeeded =
-            if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
-                if !endpoint.is_empty() {
-                    match Self::send_batch_to_backend(&endpoint, &batch).await {
-                        Ok(_) => {
-                            tracing::debug!(
-                                "Successfully sent analytics batch {}",
-                                batch.batch_id
-                            );
-                            true
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to send analytics batch {}: {}. \
-                                 Falling back to local file.",
-                                batch.batch_id,
-                                e
-                            );
-                            false
-                        }
+        let http_succeeded = if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
+            if !endpoint.is_empty() {
+                match Self::send_batch_to_backend(&endpoint, &batch).await {
+                    Ok(_) => {
+                        tracing::debug!("Successfully sent analytics batch {}", batch.batch_id);
+                        true
                     }
-                } else {
-                    // Endpoint var is set but empty — treat as not configured.
-                    false
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to send analytics batch {}: {}. \
+                                 Falling back to local file.",
+                            batch.batch_id,
+                            e
+                        );
+                        false
+                    }
                 }
             } else {
-                // TELEMETRY_ENDPOINT not set.
+                // Endpoint var is set but empty — treat as not configured.
                 false
-            };
+            }
+        } else {
+            // TELEMETRY_ENDPOINT not set.
+            false
+        };
 
         // Persist to local file when HTTP delivery was not available or failed.
         if !http_succeeded {
@@ -151,10 +147,7 @@ impl TelemetryCollector {
                         e
                     );
                 } else {
-                    tracing::debug!(
-                        "Persisted analytics batch {} to local file",
-                        batch.batch_id
-                    );
+                    tracing::debug!("Persisted analytics batch {} to local file", batch.batch_id);
                 }
             }
             // If app_data_dir is None, events are intentionally dropped (collector

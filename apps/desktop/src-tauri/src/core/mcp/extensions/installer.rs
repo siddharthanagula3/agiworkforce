@@ -316,8 +316,7 @@ impl ExtensionInstaller {
                                 entry_path
                             )));
                         }
-                        std::path::Component::RootDir
-                        | std::path::Component::Prefix(_) => {
+                        std::path::Component::RootDir | std::path::Component::Prefix(_) => {
                             return Err(ExtensionError::ExtractionFailed(format!(
                                 "Rejected ZIP entry with absolute path: {}",
                                 entry_path

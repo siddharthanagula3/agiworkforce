@@ -50,7 +50,10 @@ mod tests {
         assert_eq!(adapted["model"], "gpt-4.1");
         // f32 temperature (0.7f32) serialized to JSON may lose precision vs f64 literal
         let temp = adapted["temperature"].as_f64().unwrap();
-        assert!((temp - 0.7_f64).abs() < 1e-5, "temperature should be ~0.7, got {temp}");
+        assert!(
+            (temp - 0.7_f64).abs() < 1e-5,
+            "temperature should be ~0.7, got {temp}"
+        );
         assert_eq!(adapted["max_tokens"], 100);
     }
 

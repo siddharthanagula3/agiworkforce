@@ -1,10 +1,10 @@
 //! Native Messaging Manifest Generation and Installation
 
 use super::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "macos")]
-fn normalize_macos_home_for_native_host_paths(home: &PathBuf) -> PathBuf {
+fn normalize_macos_home_for_native_host_paths(home: &Path) -> PathBuf {
     let home_str = home.to_string_lossy();
     let marker = "/Library/Containers/com.agiworkforce.desktop/Data";
 
@@ -15,7 +15,7 @@ fn normalize_macos_home_for_native_host_paths(home: &PathBuf) -> PathBuf {
         }
     }
 
-    home.clone()
+    home.to_path_buf()
 }
 
 #[cfg(target_os = "macos")]
@@ -171,9 +171,13 @@ fn try_install_manifests_via_external_helper(
         command.arg(ext_id);
     }
 
-    let output = command
-        .output()
-        .map_err(|e| anyhow!("Failed to launch external helper installer {:?}: {}", helper_binary, e))?;
+    let output = command.output().map_err(|e| {
+        anyhow!(
+            "Failed to launch external helper installer {:?}: {}",
+            helper_binary,
+            e
+        )
+    })?;
 
     if !output.status.success() {
         return Err(anyhow!(
@@ -569,9 +573,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_normalize_macos_home_for_native_host_paths_from_sandbox_home() {
-        let sandbox_home = PathBuf::from(
-            "/Users/siddhartha/Library/Containers/com.agiworkforce.desktop/Data",
-        );
+        let sandbox_home =
+            PathBuf::from("/Users/siddhartha/Library/Containers/com.agiworkforce.desktop/Data");
         let normalized = normalize_macos_home_for_native_host_paths(&sandbox_home);
         assert_eq!(normalized, PathBuf::from("/Users/siddhartha"));
     }

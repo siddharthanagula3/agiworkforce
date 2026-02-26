@@ -47,6 +47,33 @@ pub enum NativeMessage {
         tab_id: Option<i32>,
         format: Option<String>,
     },
+    Hover {
+        selector: String,
+        tab_id: Option<i32>,
+    },
+    WaitForSelector {
+        selector: String,
+        timeout_ms: Option<u64>,
+        tab_id: Option<i32>,
+    },
+    SelectOption {
+        selector: String,
+        value: String,
+        tab_id: Option<i32>,
+    },
+    SetChecked {
+        selector: String,
+        checked: bool,
+        tab_id: Option<i32>,
+    },
+    Focus {
+        selector: String,
+        tab_id: Option<i32>,
+    },
+    ScrollIntoView {
+        selector: String,
+        tab_id: Option<i32>,
+    },
 
     // DOM operations
     GetElement {

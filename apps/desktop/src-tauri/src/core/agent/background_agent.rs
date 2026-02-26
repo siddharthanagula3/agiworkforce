@@ -1113,10 +1113,7 @@ async fn execute_background_agent(
                     ag
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "[BackgroundAgent] Failed to create AutonomousAgent: {}",
-                        e
-                    );
+                    tracing::error!("[BackgroundAgent] Failed to create AutonomousAgent: {}", e);
                     let mut agents_lock = agents.write().await;
                     if let Some(a) = agents_lock.get_mut(&agent_id) {
                         a.fail(format!("Failed to initialize agent: {e}"));
@@ -1155,7 +1152,10 @@ async fn execute_background_agent(
     let goal = agent.goal.clone();
 
     // Command branch returns Ok(true) for Pause, Ok(false) for Cancel/TakeOver/disconnect.
-    let (cmd_handle, cmd_result): (tokio::task::JoinHandle<()>, tokio::sync::oneshot::Receiver<bool>) = {
+    let (cmd_handle, cmd_result): (
+        tokio::task::JoinHandle<()>,
+        tokio::sync::oneshot::Receiver<bool>,
+    ) = {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
             loop {
@@ -1164,9 +1164,7 @@ async fn execute_background_agent(
                         let _ = tx.send(true); // true = paused
                         break;
                     }
-                    Some(AgentCommand::Cancel)
-                    | Some(AgentCommand::TakeOver)
-                    | None => {
+                    Some(AgentCommand::Cancel) | Some(AgentCommand::TakeOver) | None => {
                         let _ = tx.send(false); // false = cancelled
                         break;
                     }
@@ -1352,10 +1350,7 @@ fn write_agent_summary(
 
     match std::fs::write(&path, content) {
         Ok(()) => {
-            tracing::info!(
-                "[BackgroundAgent] Summary written to {}",
-                path.display()
-            );
+            tracing::info!("[BackgroundAgent] Summary written to {}", path.display());
             Some(path.to_string_lossy().to_string())
         }
         Err(e) => {

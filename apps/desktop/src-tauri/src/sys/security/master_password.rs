@@ -643,13 +643,21 @@ mod tests {
     use super::*;
 
     // gitleaks:allow (test fixture — not a real secret)
-    fn valid_test_passphrase() -> &'static str { "alpha-beta-unique-phrase" }
+    fn valid_test_passphrase() -> &'static str {
+        "alpha-beta-unique-phrase"
+    }
     // gitleaks:allow (test fixture — not a real secret)
-    fn alternate_test_passphrase() -> &'static str { "gamma-delta-alt-phrase" }
+    fn alternate_test_passphrase() -> &'static str {
+        "gamma-delta-alt-phrase"
+    }
     // gitleaks:allow (test fixture — not a real secret)
-    fn invalid_test_passphrase() -> &'static str { "nonmatching-phrase" }
+    fn invalid_test_passphrase() -> &'static str {
+        "nonmatching-phrase"
+    }
     // gitleaks:allow (test fixture — not a real secret)
-    fn too_short_test_passphrase() -> &'static str { "tiny" }
+    fn too_short_test_passphrase() -> &'static str {
+        "tiny"
+    }
 
     fn create_test_manager() -> MasterPasswordManager {
         // Use in-memory database for tests to avoid temp file cleanup issues
