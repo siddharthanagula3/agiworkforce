@@ -293,7 +293,6 @@ async fn execute_chat_tool_with_timeout(
     let tool_call_id_owned = normalized_tool_call_id.map(|s| s.to_string());
     let app_handle_clone = app_handle.clone();
 
-    // AUDIT-CANCEL-060 fix: Spawn tool execution as a task so it can be aborted on cancellation.
     let exec_task = tokio::task::spawn(async move {
         tools::execute_chat_tool(
             &tool_name_owned,

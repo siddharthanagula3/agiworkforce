@@ -102,13 +102,19 @@ if (typeof window !== 'undefined') {
   idMappings = safeGetJSON<IdMapping>('id-mappings', { dbIdToUuid: {}, uuidToDbId: {} });
 }
 
+let _persistTimer: ReturnType<typeof setTimeout> | null = null;
+
 function persistIdMappings() {
-  if (typeof window !== 'undefined') {
+  if (typeof window === 'undefined') return;
+  // Debounce: batch rapid-fire ID mappings (e.g. during streaming) into a single write
+  if (_persistTimer !== null) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    _persistTimer = null;
     const success = safeSetJSON('id-mappings', idMappings);
     if (!success) {
       console.warn('[ChatStore] Failed to persist ID mappings - using in-memory only');
     }
-  }
+  }, 300);
 }
 
 /**

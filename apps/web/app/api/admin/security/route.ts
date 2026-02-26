@@ -104,12 +104,17 @@ export async function GET(request: NextRequest) {
       }
 
       case 'events': {
-        const severity = searchParams.get('severity') as
-          | 'low'
-          | 'medium'
-          | 'high'
-          | 'critical'
-          | null;
+        const rawSeverity = searchParams.get('severity');
+        const validSeverities = ['low', 'medium', 'high', 'critical'] as const;
+        const severity = validSeverities.includes(rawSeverity as (typeof validSeverities)[number])
+          ? (rawSeverity as 'low' | 'medium' | 'high' | 'critical')
+          : null;
+        if (rawSeverity && !severity) {
+          return NextResponse.json(
+            { error: `Invalid severity. Must be one of: ${validSeverities.join(', ')}` },
+            { status: 400 },
+          );
+        }
         const eventType = searchParams.get('eventType') as string | null;
         const limit = parseInt(searchParams.get('limit') || '100', 10);
 

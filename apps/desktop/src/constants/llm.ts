@@ -153,138 +153,57 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
  * - pro: Adds mid-tier models (Claude Sonnet, GPT-5.2, etc.)
  * - max/enterprise: All models including flagships
  */
+// Economy tier: low-cost models (< $3/1M output tokens). Available on all tiers.
+// Kimi K2.5 is excluded from free/hobby: $3/M output puts it in the balanced tier.
+const ECONOMY_MODELS = [
+  'gemini-3-flash-preview',
+  'glm-4.7',
+  'deepseek-chat',
+  'glm-4.6v',
+  'glm-4.6v-flash',
+  'grok-4-fast-reasoning',
+  'claude-haiku-4.5',
+  'grok-4-fast-non-reasoning',
+  'qwen-flash',
+  'gpt-5-nano',
+  'gpt-5.2-codex-low',
+  'sonar',
+] as const;
+
+// Balanced tier: mid-range models ($1–15/1M output tokens). Pro and above.
+// kimi-k2.5: Moonshot flagship at $0.60/$3.00 per M tokens, 262K context, multimodal.
+const PRO_ADDITIONS = [
+  'gpt-5.2',
+  'gpt-5.2-codex-medium',
+  'claude-sonnet-4.6',
+  'claude-sonnet-4.5',
+  'gemini-3-pro-preview',
+  'qwen-max',
+  'kimi-k2.5',
+  'sonar-pro',
+  'sonar-reasoning',
+  'sonar-deep-research',
+] as const;
+
+// Flagship tier: highest-capability models. Max and enterprise only.
+// kimi-k2.5-thinking: Moonshot flagship + reasoning mode — requires max subscription.
+const FLAGSHIP_ADDITIONS = [
+  'claude-opus-4.6',
+  'gpt-5-pro',
+  'o3',
+  'grok-4',
+  'deepseek-r1',
+  'kimi-k2.5-thinking',
+  'gpt-5.2-codex-xhigh',
+  'gpt-5.2-codex-high',
+] as const;
+
 export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
-  // Free/Hobby: Economy tier models only (< $3/1M output tokens, no flagship models)
-  // Kimi K2.5 is Moonshot's flagship ("most intelligent model") at $3/M output — excluded from free/hobby.
-  free: [
-    // Economy models - best value
-    'gemini-3-flash-preview',
-    'glm-4.7',
-    'deepseek-chat',
-    'glm-4.6v',
-    'glm-4.6v-flash',
-    'grok-4-fast-reasoning',
-    'claude-haiku-4.5',
-    'grok-4-fast-non-reasoning',
-    'qwen-flash',
-    'gpt-5-nano',
-    'gpt-5.2-codex-low',
-    // Search models
-    'sonar',
-  ],
-  hobby: [
-    // Same as free
-    'gemini-3-flash-preview',
-    'glm-4.7',
-    'deepseek-chat',
-    'glm-4.6v',
-    'glm-4.6v-flash',
-    'grok-4-fast-reasoning',
-    'claude-haiku-4.5',
-    'grok-4-fast-non-reasoning',
-    'qwen-flash',
-    'gpt-5-nano',
-    'gpt-5.2-codex-low',
-    'sonar',
-  ],
-  // Pro: Economy + balanced tier models ($1-15/1M output tokens)
-  // kimi-k2.5 added here: Moonshot flagship at $0.60/$3.00 per M tokens, comparable to qwen-max ($6/M).
-  pro: [
-    // Pro-tier additions
-    'gpt-5.2',
-    'gpt-5.2-codex-medium',
-    'claude-sonnet-4.6',
-    'claude-sonnet-4.5',
-    'gemini-3-pro-preview',
-    'qwen-max',
-    'kimi-k2.5', // Moonshot flagship: $0.60/$3.00 per M tokens, 262K context, multimodal
-    'sonar-pro',
-    'sonar-reasoning',
-    'sonar-deep-research',
-    // All economy models
-    'gemini-3-flash-preview',
-    'glm-4.7',
-    'deepseek-chat',
-    'glm-4.6v',
-    'glm-4.6v-flash',
-    'grok-4-fast-reasoning',
-    'claude-haiku-4.5',
-    'grok-4-fast-non-reasoning',
-    'qwen-flash',
-    'gpt-5-nano',
-    'gpt-5.2-codex-low',
-    'sonar',
-  ],
-  // Max: All models including flagships
-  // kimi-k2.5-thinking added alongside flagship tier: thinking mode requires max subscription.
-  max: [
-    // Flagship models
-    'claude-opus-4.6',
-    'gpt-5-pro',
-    'o3',
-    'grok-4',
-    'deepseek-r1',
-    'kimi-k2.5-thinking', // Moonshot flagship + reasoning mode — max tier only
-    // Pro-tier models
-    'gpt-5.2',
-    'gpt-5.2-codex-xhigh',
-    'gpt-5.2-codex-high',
-    'gpt-5.2-codex-medium',
-    'claude-sonnet-4.6',
-    'claude-sonnet-4.5',
-    'gemini-3-pro-preview',
-    'qwen-max',
-    'kimi-k2.5',
-    'sonar-pro',
-    'sonar-reasoning',
-    'sonar-deep-research',
-    // Economy models
-    'gemini-3-flash-preview',
-    'glm-4.7',
-    'deepseek-chat',
-    'glm-4.6v',
-    'glm-4.6v-flash',
-    'grok-4-fast-reasoning',
-    'claude-haiku-4.5',
-    'grok-4-fast-non-reasoning',
-    'qwen-flash',
-    'gpt-5-nano',
-    'gpt-5.2-codex-low',
-    'sonar',
-  ],
-  // Enterprise: Same as max (full access)
-  enterprise: [
-    'claude-opus-4.6',
-    'gpt-5-pro',
-    'o3',
-    'grok-4',
-    'deepseek-r1',
-    'kimi-k2.5-thinking',
-    'gpt-5.2',
-    'gpt-5.2-codex-xhigh',
-    'gpt-5.2-codex-high',
-    'gpt-5.2-codex-medium',
-    'claude-sonnet-4.6',
-    'claude-sonnet-4.5',
-    'gemini-3-pro-preview',
-    'qwen-max',
-    'kimi-k2.5',
-    'sonar-pro',
-    'sonar-reasoning',
-    'sonar-deep-research',
-    'gemini-3-flash-preview',
-    'glm-4.7',
-    'deepseek-chat',
-    'glm-4.6v',
-    'glm-4.6v-flash',
-    'grok-4-fast-reasoning',
-    'claude-haiku-4.5',
-    'grok-4-fast-non-reasoning',
-    'qwen-flash',
-    'gpt-5-nano',
-    'gpt-5.2-codex-low',
-    'sonar',
-  ],
+  free: [...ECONOMY_MODELS],
+  hobby: [...ECONOMY_MODELS],
+  pro: [...PRO_ADDITIONS, ...ECONOMY_MODELS],
+  max: [...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS],
+  enterprise: [...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS],
 };
 
 /**
