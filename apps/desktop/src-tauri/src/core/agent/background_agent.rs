@@ -1581,4 +1581,402 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    // ------------------------------------------------------------------
+    // truncate_string — private helper, only accessible from inline tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_truncate_string_short_unchanged() {
+        let s = "hello";
+        assert_eq!(truncate_string(s, 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_string_exact_length_unchanged() {
+        let s = "12345";
+        assert_eq!(truncate_string(s, 5), "12345");
+    }
+
+    #[test]
+    fn test_truncate_string_long_is_truncated() {
+        let s = "abcdefghij"; // 10 chars
+        // max_len=7 -> &s[..7-3] = &s[..4] = "abcd"
+        let result = truncate_string(s, 7);
+        assert_eq!(result, "abcd");
+        assert!(result.len() < s.len());
+    }
+
+    #[test]
+    fn test_truncate_string_empty_input() {
+        assert_eq!(truncate_string("", 10), "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_len_zero() {
+        // max_len=0: s.len() (any > 0) > 0, so &s[..0.saturating_sub(3)] = &s[..0] = ""
+        assert_eq!(truncate_string("hello", 0), "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_len_one() {
+        // max_len=1 < s.len(5): &s[..1.saturating_sub(3)] = &s[..0] = ""
+        assert_eq!(truncate_string("hello", 1), "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_len_two() {
+        // max_len=2 < s.len(5): &s[..2.saturating_sub(3)] = &s[..0] = ""
+        assert_eq!(truncate_string("hello", 2), "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_len_three() {
+        // max_len=3 < s.len(5): &s[..3.saturating_sub(3)] = &s[..0] = ""
+        assert_eq!(truncate_string("hello", 3), "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_len_four() {
+        // max_len=4 < s.len(5): &s[..4.saturating_sub(3)] = &s[..1] = "h"
+        assert_eq!(truncate_string("hello", 4), "h");
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: cancel_agent
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_cancel_agent() {
+        let manager = create_test_manager();
+        let context = BackgroundAgentContext::default();
+
+        let agent_id = manager
+            .push_to_background(
+                "conv_cancel".to_string(),
+                "Cancel me".to_string(),
+                context,
+                0,
+            )
+            .await
+            .unwrap();
+
+        // Cancel the agent
+        manager.cancel_agent(&agent_id).await.unwrap();
+
+        let agent = manager.get_agent(&agent_id).await.unwrap();
+        assert_eq!(agent.status, BackgroundAgentStatus::Cancelled);
+        assert!(agent.is_terminal());
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: count_active_agents
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_count_active_agents() {
+        let manager = create_test_manager();
+
+        // Initially zero
+        assert_eq!(manager.count_active_agents().await, 0);
+
+        // Push two agents
+        for i in 0..2 {
+            let context = BackgroundAgentContext::default();
+            manager
+                .push_to_background(
+                    format!("conv_{}", i),
+                    format!("Task {}", i),
+                    context,
+                    0,
+                )
+                .await
+                .unwrap();
+        }
+
+        // All are non-terminal (Queued or Running), so active count is 2
+        let count = manager.count_active_agents().await;
+        assert_eq!(count, 2);
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: list_active_agents
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_list_active_agents_excludes_cancelled() {
+        let manager = create_test_manager();
+
+        let id1 = manager
+            .push_to_background(
+                "c1".to_string(),
+                "Task 1".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        let _id2 = manager
+            .push_to_background(
+                "c2".to_string(),
+                "Task 2".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        // Cancel the first agent
+        manager.cancel_agent(&id1).await.unwrap();
+
+        let active = manager.list_active_agents().await;
+        // Only one should remain active
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].conversation_id, "c2");
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: get_agent returns None for unknown ID
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_get_agent_unknown_returns_none() {
+        let manager = create_test_manager();
+        let result = manager.get_agent("nonexistent-id").await;
+        assert!(result.is_none());
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: push_to_background persists to DB
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_push_persists_to_database() {
+        let manager = create_test_manager();
+        let context = BackgroundAgentContext::default();
+
+        let agent_id = manager
+            .push_to_background(
+                "conv_persist".to_string(),
+                "Persist me".to_string(),
+                context,
+                3,
+            )
+            .await
+            .unwrap();
+
+        // Verify the agent was persisted by reading directly from the DB
+        let conn = manager.db_conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT goal, priority FROM background_agents WHERE id = ?1")
+            .unwrap();
+        let (goal, priority): (String, u8) = stmt
+            .query_row([&agent_id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+
+        assert_eq!(goal, "Persist me");
+        assert_eq!(priority, 3);
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: cancel removes from queue
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_cancel_removes_from_queue() {
+        let manager = create_test_manager();
+
+        let id1 = manager
+            .push_to_background(
+                "c1".to_string(),
+                "Task 1".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        let _id2 = manager
+            .push_to_background(
+                "c2".to_string(),
+                "Task 2".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        // Cancel the first
+        manager.cancel_agent(&id1).await.unwrap();
+
+        // Queue should no longer contain id1
+        let queue = manager.queue.read().await;
+        assert!(!queue.contains(&id1));
+    }
+
+    // ------------------------------------------------------------------
+    // Manager: max agents error message is descriptive
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_manager_max_agents_error_message_contains_limit() {
+        let manager = create_test_manager();
+
+        for i in 0..MAX_BACKGROUND_AGENTS {
+            let context = BackgroundAgentContext::default();
+            manager
+                .push_to_background(format!("conv_{}", i), format!("Task {}", i), context, 0)
+                .await
+                .unwrap();
+        }
+
+        let result = manager
+            .push_to_background(
+                "conv_extra".to_string(),
+                "Extra".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await;
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("8"),
+            "Error message should mention the limit: {}",
+            err_msg
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // persist_agent_to_db standalone function
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_persist_agent_to_db_and_read_back() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_persist.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS background_agents (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                status TEXT NOT NULL,
+                progress_json TEXT NOT NULL,
+                summary_json TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                context_json TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0,
+                timeout_secs INTEGER NOT NULL DEFAULT 300
+            )",
+            [],
+        )
+        .unwrap();
+
+        let db_conn = Arc::new(std::sync::Mutex::new(conn));
+
+        let mut agent = BackgroundAgent::new(
+            "conv-db-test".to_string(),
+            "DB roundtrip".to_string(),
+            BackgroundAgentContext::default(),
+            4,
+        );
+        agent.start();
+        agent.update_progress(2, 5, "Step 2".to_string());
+
+        // Persist
+        persist_agent_to_db(&db_conn, &agent).unwrap();
+
+        // Read back
+        let conn = db_conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT status, goal, priority FROM background_agents WHERE id = ?1")
+            .unwrap();
+        let (status, goal, priority): (String, String, u8) = stmt
+            .query_row([&agent.id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .unwrap();
+
+        assert_eq!(status, "running");
+        assert_eq!(goal, "DB roundtrip");
+        assert_eq!(priority, 4);
+    }
+
+    #[test]
+    fn test_persist_agent_to_db_overwrites_on_update() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_overwrite.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS background_agents (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                status TEXT NOT NULL,
+                progress_json TEXT NOT NULL,
+                summary_json TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                context_json TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0,
+                timeout_secs INTEGER NOT NULL DEFAULT 300
+            )",
+            [],
+        )
+        .unwrap();
+
+        let db_conn = Arc::new(std::sync::Mutex::new(conn));
+
+        let mut agent = BackgroundAgent::new(
+            "conv-overwrite".to_string(),
+            "Overwrite test".to_string(),
+            BackgroundAgentContext::default(),
+            1,
+        );
+        agent.start();
+
+        // First persist
+        persist_agent_to_db(&db_conn, &agent).unwrap();
+
+        // Fail the agent
+        agent.fail("Something went wrong".to_string());
+        persist_agent_to_db(&db_conn, &agent).unwrap();
+
+        // Read back -- should reflect the updated status
+        let conn = db_conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT status, error FROM background_agents WHERE id = ?1")
+            .unwrap();
+        let (status, error): (String, Option<String>) = stmt
+            .query_row([&agent.id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+
+        assert_eq!(status, "failed");
+        assert_eq!(error.as_deref(), Some("Something went wrong"));
+    }
+
+    // ------------------------------------------------------------------
+    // BackgroundAgentManagerState wrapper
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_manager_state_wraps_manager() {
+        let manager = create_test_manager();
+        let state = BackgroundAgentManagerState::new(manager);
+        // Verify the Arc<RwLock<>> wrapper is accessible
+        let _inner = &state.0;
+    }
 }
