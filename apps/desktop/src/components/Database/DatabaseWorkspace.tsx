@@ -139,7 +139,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
           // Ignore cleanup errors
         }
       }
-      toast.error(`Connection failed: ${error}`);
+      console.error('[DatabaseWorkspace] Connection failed:', error);
+      toast.error('Connection failed. Check your credentials and try again.');
     }
   };
 
@@ -167,7 +168,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       }
       toast.success('Connection closed');
     } catch (error) {
-      toast.error(`Failed to close connection: ${error}`);
+      console.error('[DatabaseWorkspace] Failed to close connection:', error);
+      toast.error('Failed to close connection. Please try again.');
     }
   };
 
@@ -186,7 +188,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       const result = await executeQuery(currentQuery);
       toast.success(`Query executed: ${result.affected_rows || result.rows?.length || 0} rows`);
     } catch (error) {
-      toast.error(`Query failed: ${error}`);
+      console.error('[DatabaseWorkspace] Query failed:', error);
+      toast.error('Query failed. Check your syntax and try again.');
     }
   };
 
@@ -201,7 +204,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       const result = await mongoFind(mongoCollection, filter);
       toast.success(`Found ${Array.isArray(result) ? result.length : 0} documents`);
     } catch (error) {
-      toast.error(`MongoDB query failed: ${error}`);
+      console.error('[DatabaseWorkspace] MongoDB query failed:', error);
+      toast.error('MongoDB query failed. Check your filter and try again.');
     }
   };
 
@@ -216,7 +220,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       setRedisValue(result || '');
       toast.success(result ? 'Key found' : 'Key not found');
     } catch (error) {
-      toast.error(`Redis GET failed: ${error}`);
+      console.error('[DatabaseWorkspace] Redis GET failed:', error);
+      toast.error('Failed to get Redis key. Check your connection and try again.');
     }
   };
 
@@ -230,7 +235,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       await redisSet(redisKey, redisValue);
       toast.success('Key set successfully');
     } catch (error) {
-      toast.error(`Redis SET failed: ${error}`);
+      console.error('[DatabaseWorkspace] Redis SET failed:', error);
+      toast.error('Failed to set Redis key. Check your connection and try again.');
     }
   };
 
@@ -696,7 +702,8 @@ function SchemaExplorer({
 
       setTables(tableNames);
     } catch (error) {
-      toast.error(`Failed to load tables: ${error}`);
+      console.error('[DatabaseWorkspace] Failed to load tables:', error);
+      toast.error('Failed to load tables. Check your connection and try again.');
     } finally {
       setLoadingTables(false);
     }
@@ -723,7 +730,8 @@ function SchemaExplorer({
       });
       setTableSchema(result);
     } catch (error) {
-      toast.error(`Failed to describe table: ${error}`);
+      console.error('[DatabaseWorkspace] Failed to describe table:', error);
+      toast.error('Failed to load table schema. Please try again.');
     } finally {
       setLoadingSchema(false);
     }

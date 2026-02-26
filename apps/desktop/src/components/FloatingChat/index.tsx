@@ -65,7 +65,7 @@ export const FloatingChat = () => {
         console.error('Failed to send message:', error);
         addMessage({
           role: 'assistant',
-          content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
+          content: 'Something went wrong. Please try again.',
         });
       } finally {
         setIsSending(false);
