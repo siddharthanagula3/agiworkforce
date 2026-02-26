@@ -97,7 +97,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     try {
       await navigateTo(targetPath);
     } catch (error) {
-      toast.error(`Failed to navigate: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to navigate:', error);
+      toast.error('Failed to navigate to that path. Check the path and try again.');
     }
   };
 
@@ -110,7 +111,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
         setEditingFile(false);
         toast.success(`Opened: ${entry.name}`);
       } catch (error) {
-        toast.error(`Failed to read file: ${error}`);
+        console.error('[FilesystemWorkspace] Failed to read file:', error);
+        toast.error('Failed to open file. It may be in use or inaccessible.');
       }
     }
   };
@@ -123,7 +125,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       setEditingFile(false);
       toast.success('File saved successfully');
     } catch (error) {
-      toast.error(`Failed to save file: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to save file:', error);
+      toast.error('Failed to save file. Check permissions and try again.');
     }
   };
 
@@ -151,7 +154,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       }
       toast.success(`Deleted: ${entry.name}`);
     } catch (error) {
-      toast.error(`Failed to delete: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to delete:', error);
+      toast.error('Failed to delete. The item may be in use or you lack permissions.');
     }
   };
 
@@ -170,7 +174,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       setRenameInput('');
       toast.success(`Renamed to: ${renameInput}`);
     } catch (error) {
-      toast.error(`Failed to rename: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to rename:', error);
+      toast.error('Failed to rename. Check permissions and try again.');
     }
   };
 
@@ -187,7 +192,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       setNewFolderName('');
       toast.success(`Created folder: ${newFolderName}`);
     } catch (error) {
-      toast.error(`Failed to create folder: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to create folder:', error);
+      toast.error('Failed to create folder. Check permissions and try again.');
     }
   };
 
@@ -203,7 +209,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       setSearchResults(results);
       toast.success(`Found ${results.length} files`);
     } catch (error) {
-      toast.error(`Search failed: ${error}`);
+      console.error('[FilesystemWorkspace] Search failed:', error);
+      toast.error('Search failed. Check your pattern and try again.');
     }
   };
 
@@ -214,7 +221,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
       const metadata = await getMetadata(entry.path);
       setSelectedMetadata(metadata);
     } catch (error) {
-      toast.error(`Failed to get metadata: ${error}`);
+      console.error('[FilesystemWorkspace] Failed to get metadata:', error);
+      toast.error('Failed to load file details. Please try again.');
     }
   };
 
