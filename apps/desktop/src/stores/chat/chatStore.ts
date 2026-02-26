@@ -253,7 +253,7 @@ export interface ChatState {
 
   // Actions - Conversation management
   ensureActiveConversation: () => void;
-  createConversation: (title?: string) => string;
+  createConversation: (title?: string, options?: { incognito?: boolean }) => string;
   selectConversation: (id: string) => void;
   loadConversationMessages: (id: string, userId: string) => Promise<void>;
   setConversationMessages: (id: string, messages: EnhancedMessage[]) => void;
@@ -401,7 +401,7 @@ export const useChatStore = create<ChatState>()(
               'chat/ensureActiveConversation',
             ),
 
-          createConversation: (title = 'New chat') => {
+          createConversation: (title = 'New chat', options) => {
             const id = crypto.randomUUID();
             set(
               (state) => {
@@ -411,6 +411,7 @@ export const useChatStore = create<ChatState>()(
                   pinned: false,
                   lastMessage: '',
                   updatedAt: new Date(),
+                  ...(options?.incognito ? { incognito: true } : {}),
                 };
                 state.conversations.unshift(convo);
                 // AUDIT-006-012 fix: Cap active conversations at 500
@@ -726,12 +727,13 @@ export const useChatStore = create<ChatState>()(
                   state.messagesByConversation[convoId] = [];
                 }
                 state.messagesByConversation[convoId]!.push(newMessage);
-                // AUDIT-006-013 fix: Cap messages per conversation at 1000
+                // AUDIT-006-013 fix: Cap messages per conversation at 1000.
+                // Keep state.messages in sync with the capped array to prevent drift.
                 if (state.messagesByConversation[convoId]!.length > 1000) {
                   state.messagesByConversation[convoId] =
                     state.messagesByConversation[convoId]!.slice(-1000);
-                }
-                if (state.messages.length > 1000) {
+                  state.messages = state.messagesByConversation[convoId]!.slice();
+                } else if (state.messages.length > 1000) {
                   state.messages = state.messages.slice(-1000);
                 }
                 const convo = state.conversations.find((c) => c.id === convoId);
@@ -886,7 +888,7 @@ export const useChatStore = create<ChatState>()(
                   applyUpdate(state.messagesByConversation[convoId]!);
                 }
 
-                if (!updatedInMessages || !convoId) {
+                if (!updatedInMessages && !convoId) {
                   for (const [convId, messages] of Object.entries(state.messagesByConversation)) {
                     if (messages && applyUpdate(messages)) {
                       if (convId === state.activeConversationId) {
@@ -1467,6 +1469,7 @@ export const useChatStore = create<ChatState>()(
             if (!idMappings.uuidToDbId[uuid]) {
               idMappings.uuidToDbId[uuid] = dbId;
               idMappings.dbIdToUuid[dbId] = uuid;
+              pruneIdMappingsIfNeeded(); // M7 fix: prevent unbounded cache growth
               persistIdMappings();
             }
           },

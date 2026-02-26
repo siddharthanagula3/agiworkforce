@@ -17,7 +17,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '../../types/customModel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
@@ -145,6 +145,23 @@ function StatusDot({ status }: { status: CustomModelConfig['status'] }) {
   );
 }
 
+function configToFormState(config: CustomModelConfig | null | undefined): ModelFormState {
+  if (config) {
+    return {
+      displayName: config.displayName,
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      modelId: config.modelId,
+      apiKey: '',
+      contextWindow: config.contextWindow,
+      supportsStreaming: config.supportsStreaming,
+      supportsTools: config.supportsTools,
+      supportsVision: config.supportsVision,
+    };
+  }
+  return DEFAULT_FORM;
+}
+
 interface ModelFormDialogProps {
   open: boolean;
   initial?: CustomModelConfig | null;
@@ -153,25 +170,19 @@ interface ModelFormDialogProps {
 }
 
 function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProps) {
-  const [form, setForm] = useState<ModelFormState>(() => {
-    if (initial) {
-      return {
-        displayName: initial.displayName,
-        provider: initial.provider,
-        baseUrl: initial.baseUrl,
-        modelId: initial.modelId,
-        apiKey: '',
-        contextWindow: initial.contextWindow,
-        supportsStreaming: initial.supportsStreaming,
-        supportsTools: initial.supportsTools,
-        supportsVision: initial.supportsVision,
-      };
-    }
-    return DEFAULT_FORM;
-  });
+  const [form, setForm] = useState<ModelFormState>(() => configToFormState(initial));
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<VerifyResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Reset form state when the dialog opens or the edit target changes
+  useEffect(() => {
+    if (open) {
+      setForm(configToFormState(initial));
+      setTestResult(null);
+      setFormError(null);
+    }
+  }, [open, initial]);
 
   const handleProviderChange = (value: string) => {
     const preset = PROVIDER_PRESETS[value] ?? '';

@@ -247,19 +247,24 @@ describe('ErrorBoundary', () => {
     it('should show error details in expandable section', () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
+      // The error details section is only rendered in DEV mode
+      vi.stubEnv('DEV', true);
+
       render(
         <ErrorBoundary>
           <ThrowError shouldThrow={true} />
         </ErrorBoundary>,
       );
 
-      const detailsSection = screen.getByText('Error details');
+      // The component renders "Error details (development only)" inside a <summary>
+      const detailsSection = screen.getByText(/error details/i);
       expect(detailsSection).toBeInTheDocument();
 
       fireEvent.click(detailsSection);
 
       expect(screen.getByText(/Test error/)).toBeInTheDocument();
 
+      vi.unstubAllEnvs();
       consoleError.mockRestore();
     });
   });
@@ -298,6 +303,30 @@ describe('ErrorBoundary', () => {
 
       await waitFor(() => {
         expect(screen.queryByText('Report Error')).not.toBeInTheDocument();
+      });
+
+      consoleError.mockRestore();
+    });
+  });
+
+  describe('Error reporting rejection', () => {
+    it('should not crash when reportError rejects', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      vi.mocked(errorReportingService.errorReportingService.isEnabled).mockReturnValue(true);
+      vi.mocked(errorReportingService.errorReportingService.reportError).mockRejectedValue(
+        new Error('Network error'),
+      );
+
+      render(
+        <ErrorBoundary>
+          <ThrowError shouldThrow={true} />
+        </ErrorBoundary>,
+      );
+
+      // The component must not crash even when reporting fails.
+      await waitFor(() => {
+        expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
       });
 
       consoleError.mockRestore();

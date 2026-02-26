@@ -245,18 +245,24 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
         const customer = await stripe.customers.retrieve(stripeCustomerId);
         if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-          // Additional safety: Get the user from auth.users to verify email match
-          const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+          // Additional safety: Look up user by email via profiles table (O(1) indexed query).
+          // Replaces the previous O(N) auth.admin.listUsers() scan.
+          const { data: matchingUsers, error: authError } = await supabaseAdmin
+            .from('profiles')
+            .select('id, email')
+            .eq('email', customer.email.toLowerCase())
+            .limit(1);
 
-          if (!authError && authUsers.users) {
-            const matchingUser = authUsers.users.find((u) => u.email === customer.email);
+          if (!authError && matchingUsers && matchingUsers.length > 0) {
+            const matchingUser = matchingUsers[0];
 
             if (matchingUser) {
               // Verify this email isn't being reused by checking for existing subscriptions
               const { data: existingStripeCustomers } = await supabaseAdmin
                 .from('profiles')
                 .select('id, email, stripe_customer_id')
-                .eq('email', customer.email);
+                .eq('email', customer.email)
+                .limit(2); // Only need to detect duplicates; > 1 means email reuse
 
               if (existingStripeCustomers && existingStripeCustomers.length > 1) {
                 logger.error(
