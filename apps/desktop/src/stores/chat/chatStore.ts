@@ -200,11 +200,10 @@ export function clearIdMappings() {
  */
 function generateTitleFromMessage(content: string): string {
   const cleaned = content
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`[^`]+`/g, '')
-    .replace(/[#*_~[\](){}]/g, '')
-    .replace(/\n+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/```[\s\S]*?```/g, '') // strip fenced code blocks (must run first)
+    .replace(/`[^`]+`/g, '') // strip inline code (must run before char-stripping)
+    .replace(/[#*_~[\](){}|\n]+/g, ' ') // markdown punctuation + newlines → space (combined)
+    .replace(/\s+/g, ' ') // collapse runs of whitespace
     .trim();
 
   if (!cleaned) return 'New conversation';

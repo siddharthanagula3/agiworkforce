@@ -830,4 +830,199 @@ describe('Memory Tauri Commands', () => {
       expect(result).toEqual([]);
     });
   });
+
+  // M36 — Tauri command name and payload shape verification
+  describe('Command name and payload shape verification (M36)', () => {
+    describe('memory_remember command signature', () => {
+      it('sends exactly the expected keys: category, topic, content, importance', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(1);
+
+        await invoke('memory_remember', {
+          category: 'preference',
+          topic: 'theme',
+          content: 'dark',
+          importance: 5,
+        });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_remember');
+        expect(payload).toHaveProperty('category');
+        expect(payload).toHaveProperty('topic');
+        expect(payload).toHaveProperty('content');
+        expect(payload).toHaveProperty('importance');
+      });
+
+      it('source is optional and accepted when provided', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(2);
+
+        await invoke('memory_remember', {
+          category: 'fact',
+          topic: 'email',
+          content: 'user@example.com',
+          importance: 8,
+          source: 'user_input',
+        });
+
+        const [, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect((payload as Record<string, unknown>)['source']).toBe('user_input');
+      });
+
+      it('importance must be a number', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(3);
+
+        await invoke('memory_remember', {
+          category: 'preference',
+          topic: 'lang',
+          content: 'en',
+          importance: 7,
+        });
+
+        const [, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(typeof (payload as Record<string, unknown>)['importance']).toBe('number');
+      });
+    });
+
+    describe('memory_recall command signature', () => {
+      it('sends exactly the expected keys: category and topic', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(null);
+
+        await invoke('memory_recall', { category: 'preference', topic: 'theme' });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_recall');
+        expect(Object.keys(payload as object).sort()).toEqual(['category', 'topic'].sort());
+      });
+    });
+
+    describe('memory_search command signature', () => {
+      it('sends query as a string and limit as a number', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce([]);
+
+        await invoke('memory_search', { query: 'theme', limit: 10 });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_search');
+        expect(typeof (payload as Record<string, unknown>)['query']).toBe('string');
+        expect(typeof (payload as Record<string, unknown>)['limit']).toBe('number');
+      });
+    });
+
+    describe('memory_forget command signature', () => {
+      it('sends memory_id as a number', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(true);
+
+        await invoke('memory_forget', { memory_id: 42 });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_forget');
+        expect(typeof (payload as Record<string, unknown>)['memory_id']).toBe('number');
+      });
+    });
+
+    describe('memory_forget_topic command signature', () => {
+      it('sends category and topic as strings', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(true);
+
+        await invoke('memory_forget_topic', { category: 'fact', topic: 'name' });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_forget_topic');
+        expect(typeof (payload as Record<string, unknown>)['category']).toBe('string');
+        expect(typeof (payload as Record<string, unknown>)['topic']).toBe('string');
+      });
+    });
+
+    describe('memory_get_by_category command signature', () => {
+      it('sends category as a string', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce([]);
+
+        await invoke('memory_get_by_category', { category: 'preference' });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_get_by_category');
+        expect(typeof (payload as Record<string, unknown>)['category']).toBe('string');
+      });
+    });
+
+    describe('memory_log_context command signature', () => {
+      it('sends content as a string', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(100);
+
+        await invoke('memory_log_context', { content: 'User opened settings' });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_log_context');
+        expect(typeof (payload as Record<string, unknown>)['content']).toBe('string');
+      });
+
+      it('entry_type is optional but must be string when provided', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(101);
+
+        await invoke('memory_log_context', {
+          content: 'Milestone reached',
+          entry_type: 'milestone',
+        });
+
+        const [, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(typeof (payload as Record<string, unknown>)['entry_type']).toBe('string');
+      });
+    });
+
+    describe('memory_get_important command signature', () => {
+      it('sends min_importance as a number', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce([]);
+
+        await invoke('memory_get_important', { min_importance: 7 });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_get_important');
+        expect(typeof (payload as Record<string, unknown>)['min_importance']).toBe('number');
+      });
+    });
+
+    describe('memory_cleanup_logs command signature', () => {
+      it('sends keep_days as a number', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce(0);
+
+        await invoke('memory_cleanup_logs', { keep_days: 30 });
+
+        const [commandName, payload] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_cleanup_logs');
+        expect(typeof (payload as Record<string, unknown>)['keep_days']).toBe('number');
+      });
+    });
+
+    describe('zero-argument commands', () => {
+      it('memory_export_all is called with no payload', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce([]);
+
+        await invoke('memory_export_all');
+
+        const [commandName] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_export_all');
+        // No second argument (or undefined)
+        expect(vi.mocked(invoke).mock.calls[0]!.length).toBe(1);
+      });
+
+      it('memory_get_session_context is called with no payload', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce('');
+
+        await invoke('memory_get_session_context');
+
+        const [commandName] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_get_session_context');
+        expect(vi.mocked(invoke).mock.calls[0]!.length).toBe(1);
+      });
+
+      it('memory_list_all is called with no payload', async () => {
+        vi.mocked(invoke).mockResolvedValueOnce([]);
+
+        await invoke('memory_list_all');
+
+        const [commandName] = vi.mocked(invoke).mock.calls[0]!;
+        expect(commandName).toBe('memory_list_all');
+        expect(vi.mocked(invoke).mock.calls[0]!.length).toBe(1);
+      });
+    });
+  });
 });

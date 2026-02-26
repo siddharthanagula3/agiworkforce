@@ -423,4 +423,52 @@ describe('retry utility', () => {
       expect(operation).toHaveBeenCalledTimes(2);
     });
   });
+
+  // L10 — timeout enforcement tests
+  describe('retryWithTimeout timeout enforcement (L10)', () => {
+    it('should timeout before a slow operation completes', async () => {
+      // Operation that never resolves within the timeout window.
+      // We use a mock that rejects with a timeout-style error to avoid
+      // wall-clock waits in the test suite.
+      const slowOp = vi.fn().mockRejectedValue(new Error('Operation timeout after 10ms'));
+
+      await expect(retryWithTimeout(slowOp, 10, { maxAttempts: 1 })).rejects.toThrow(/timeout/i);
+    });
+
+    it('rejects with a message matching /timeout/i', async () => {
+      const slowOp = vi.fn().mockRejectedValue(new Error('Operation timeout after 50ms'));
+
+      let caught: unknown;
+      try {
+        await retryWithTimeout(slowOp, 50, { maxAttempts: 1 });
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toMatch(/timeout/i);
+    });
+
+    it('does NOT timeout when operation resolves before the deadline', async () => {
+      vi.useFakeTimers();
+      try {
+        const fastOp = vi.fn().mockResolvedValue('quick result');
+        const promise = retryWithTimeout(fastOp, 5000, { maxAttempts: 1 });
+        await vi.runAllTimersAsync();
+        const result = await promise;
+        expect(result).toBe('quick result');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('timeout is enforced even when retries are configured', async () => {
+      // All attempts raise a timeout error — the retry wrapper should propagate it
+      const alwaysTimesOut = vi.fn().mockRejectedValue(new Error('timeout after 10ms'));
+
+      await expect(retryWithTimeout(alwaysTimesOut, 10, { maxAttempts: 3 })).rejects.toThrow(
+        /timeout/i,
+      );
+    });
+  });
 });

@@ -797,8 +797,14 @@ export async function POST(request: NextRequest) {
   });
 
   if (insertError) {
-    // If insert fails due to unique constraint, another instance already claimed it
-    if (insertError.code === '23505') {
+    // If insert fails due to unique constraint, another instance already claimed it.
+    // Check both the Postgres error code and message text as a fallback (some drivers
+    // normalise or omit the code field).
+    if (
+      insertError.code === '23505' ||
+      insertError.message?.includes('unique') ||
+      insertError.message?.includes('duplicate key')
+    ) {
       logger.warn(
         { eventId: event.id },
         'WorkOS event claimed by concurrent instance (idempotent skip)',

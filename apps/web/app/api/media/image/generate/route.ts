@@ -404,9 +404,10 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const rateLimitResponse = await withRateLimit(request, 'image-generation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Authentication
+  // Authentication — validate Bearer token format to reject malformed/injected values
   const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const bearerMatch = authHeader?.match(/^Bearer\s+([\w\-.~+/]+=*)$/i);
+  if (!bearerMatch) {
     return NextResponse.json(
       {
         error: {
@@ -425,7 +426,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const token = authHeader.substring(7);
+  const token = bearerMatch[1];
 
   // Verify user with Supabase
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
