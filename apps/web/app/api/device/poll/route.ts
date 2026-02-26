@@ -95,11 +95,19 @@ async function handleDevicePoll(request: NextRequest) {
         .eq('device_id', device_id);
       logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
     } else {
-      // Legacy session with no fingerprint stored and none provided.
-      // Allow through for backward compatibility but warn — these sessions are being phased out.
+      // SECURITY: Legacy no-fingerprint path is now deprecated (CodeRabbit H9 / stabilization fix)
+      // Previously this allowed through for backward compatibility.
+      // Returning HTTP 410 Gone to force clients to update to fingerprint-aware versions.
       logger.warn(
         { deviceId: device_id },
-        'Device poll without fingerprint (legacy session) — consider re-authenticating',
+        'DEPRECATED: Device poll without fingerprint rejected — legacy path is sunset. Client must update.',
+      );
+      return NextResponse.json(
+        {
+          status: 'error',
+          error: 'This authentication method is deprecated. Please update your app.',
+        },
+        { status: 410, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 

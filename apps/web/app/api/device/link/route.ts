@@ -21,6 +21,37 @@ async function handleDeviceLink(request: NextRequest) {
     return rateLimitResponse;
   }
 
+  // SECURITY: Require authenticated session to prevent device-code phishing attacks (CodeRabbit C4 fix)
+  // Without authentication, an attacker can pre-seed a device_id, trick a victim into approving,
+  // and collect session tokens. Requiring auth ensures only legitimate users can initiate device linking.
+  const supabaseAuthUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL', '') || requireEnv('SUPABASE_URL');
+  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const supabaseAuth = createClient(supabaseAuthUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
+
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json(
+      { error: 'Authentication required to link a device' },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const accessToken = authHeader.slice(7);
+  const {
+    data: { user: authUser },
+    error: authError,
+  } = await supabaseAuth.auth.getUser(accessToken);
+
+  if (authError || !authUser) {
+    logger.warn({ error: authError?.message }, 'Unauthenticated device link attempt rejected');
+    return NextResponse.json(
+      { error: 'Invalid or expired authentication token' },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   try {
     // Parse and validate request body
     let body: unknown;

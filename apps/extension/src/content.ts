@@ -230,6 +230,18 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
+    case 'navigate': {
+      const url = action.value ? String(action.value) : '';
+      if (!url || !/^https?:\/\//i.test(url)) {
+        return {
+          type: actionType,
+          success: false,
+          error: `Invalid or missing URL for navigate action: ${url}`,
+        };
+      }
+      window.location.href = url;
+      return { type: actionType, success: true, url };
+    }
     case 'click': {
       const response = (await handleClick({
         selector: action.selector,
@@ -244,6 +256,77 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
         options: { delay: action.delay ?? undefined },
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
+    }
+    case 'hover': {
+      const selector = action.selector ? String(action.selector) : '';
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for hover' };
+      }
+      const element = domUtils.querySelector(selector);
+      if (!element) {
+        return { type: actionType, success: false, error: `Element not found: ${selector}` };
+      }
+      element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }));
+      return { type: actionType, success: true };
+    }
+    case 'focus': {
+      const selector = action.selector ? String(action.selector) : '';
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for focus' };
+      }
+      const element = domUtils.querySelector(selector) as HTMLElement | null;
+      if (!element) {
+        return { type: actionType, success: false, error: `Element not found: ${selector}` };
+      }
+      if (typeof element.focus === 'function') {
+        element.focus();
+      }
+      return { type: actionType, success: true };
+    }
+    case 'scroll_into_view': {
+      const selector = action.selector ? String(action.selector) : '';
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for scroll_into_view' };
+      }
+      const element = domUtils.querySelector(selector);
+      if (!element) {
+        return { type: actionType, success: false, error: `Element not found: ${selector}` };
+      }
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return { type: actionType, success: true };
+    }
+    case 'select_option': {
+      const selector = action.selector ? String(action.selector) : '';
+      const value = action.value ? String(action.value) : '';
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for select_option' };
+      }
+      const element = domUtils.querySelector(selector) as HTMLSelectElement | null;
+      if (!element || element.tagName.toLowerCase() !== 'select') {
+        return {
+          type: actionType,
+          success: false,
+          error: `Select element not found: ${selector}`,
+        };
+      }
+      element.value = value;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return { type: actionType, success: true, value };
+    }
+    case 'set_checked': {
+      const selector = action.selector ? String(action.selector) : '';
+      const checked = action.value === 'true' || action.value === '1';
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for set_checked' };
+      }
+      const element = domUtils.querySelector(selector) as HTMLInputElement | null;
+      if (!element) {
+        return { type: actionType, success: false, error: `Element not found: ${selector}` };
+      }
+      element.checked = checked;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return { type: actionType, success: true, checked };
     }
     case 'auto_fill_job_application': {
       let parsedProfile: Record<string, unknown> = {};
