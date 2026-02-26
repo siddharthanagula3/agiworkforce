@@ -18,6 +18,7 @@ import { invoke } from '../lib/tauri-mock';
 import { getModelForRequest, isManualSelection, type TaskType } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import { useSettingsStore } from './settingsStore';
+import { storageFallback } from '../lib/storageFallback';
 
 export interface ProviderStatus {
   provider: Provider;
@@ -181,16 +182,7 @@ const defaultUsageStats: UsageStats = {
   byModel: {},
 };
 
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
+// storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
 const MODEL_STORE_VERSION = 1;

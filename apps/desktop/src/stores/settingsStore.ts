@@ -14,8 +14,10 @@
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { storageFallback } from '../lib/storageFallback';
 
 import type { Provider } from '../types/provider';
+import type { CustomModelConfig } from '../types/customModel';
 export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
 export type Language = 'en' | 'es';
@@ -92,8 +94,13 @@ interface SettingsState {
   executionPreferences: ExecutionPreferences;
   globalHotkeyPreferences: GlobalHotkeyPreferences;
   allowedDirectories: string[];
+  customModels: CustomModelConfig[];
   loading: boolean;
   error: string | null;
+
+  addCustomModel: (config: CustomModelConfig) => void;
+  updateCustomModel: (id: string, config: CustomModelConfig) => void;
+  removeCustomModel: (id: string) => void;
 
   setDefaultProvider: (provider: Provider) => Promise<void>;
   setTemperature: (temperature: number) => void;
@@ -143,6 +150,7 @@ const defaultSettings: Pick<
   | 'executionPreferences'
   | 'globalHotkeyPreferences'
   | 'allowedDirectories'
+  | 'customModels'
 > = {
   llmConfig: {
     defaultProvider: 'managed_cloud',
@@ -187,6 +195,7 @@ const defaultSettings: Pick<
     combo: 'CommandOrControl+Shift+Space',
   },
   allowedDirectories: [],
+  customModels: [],
 };
 
 export const createDefaultLLMConfig = (): LLMConfig => ({
@@ -200,16 +209,7 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
   ...defaultSettings.windowPreferences,
 });
 
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
+// storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
 // v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
@@ -218,7 +218,8 @@ const storageFallback: Storage = {
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
 // v6: Added language preference
 // v9: Added globalHotkeyPreferences for system-wide Quick Query hotkey
-const SETTINGS_STORE_VERSION = 9;
+// v10: Added customModels for user-defined OpenAI-compatible endpoints
+const SETTINGS_STORE_VERSION = 10;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -231,6 +232,32 @@ export const useSettingsStore = create<SettingsState>()(
 
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'settings/setHasHydrated');
+        },
+
+        addCustomModel: (config: CustomModelConfig) => {
+          set(
+            (state) => ({ customModels: [...state.customModels, config] }),
+            undefined,
+            'settings/addCustomModel',
+          );
+        },
+
+        updateCustomModel: (id: string, config: CustomModelConfig) => {
+          set(
+            (state) => ({
+              customModels: state.customModels.map((m) => (m.id === id ? config : m)),
+            }),
+            undefined,
+            'settings/updateCustomModel',
+          );
+        },
+
+        removeCustomModel: (id: string) => {
+          set(
+            (state) => ({ customModels: state.customModels.filter((m) => m.id !== id) }),
+            undefined,
+            'settings/removeCustomModel',
+          );
         },
 
         setMaxTimeoutMinutes: (minutes: number) => {
@@ -782,6 +809,7 @@ export const useSettingsStore = create<SettingsState>()(
           executionPreferences: state.executionPreferences,
           globalHotkeyPreferences: state.globalHotkeyPreferences,
           allowedDirectories: state.allowedDirectories,
+          customModels: state.customModels,
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SettingsState> | undefined;
@@ -841,6 +869,9 @@ export const useSettingsStore = create<SettingsState>()(
             executionPreferences: mergedExecutionPreferences,
             globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
             allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
+            customModels: Array.isArray(persisted?.customModels)
+              ? persisted.customModels
+              : currentState.customModels,
           };
         },
         migrate: (persistedState: unknown, version: number) => {
@@ -945,6 +976,14 @@ export const useSettingsStore = create<SettingsState>()(
                 enabled: true,
                 combo: 'CommandOrControl+Shift+Space',
               };
+            }
+          }
+
+          // Migration from v9 to v10: Add customModels array
+          if (version < 10) {
+            const stateWithCustomModels = state as Partial<SettingsState>;
+            if (!Array.isArray(stateWithCustomModels.customModels)) {
+              stateWithCustomModels.customModels = [];
             }
           }
 

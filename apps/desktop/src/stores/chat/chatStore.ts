@@ -355,7 +355,8 @@ export const useChatStore = create<ChatState>()(
             current: 0,
             inputTokens: 0,
             outputTokens: 0,
-            max: 128000,
+            // TODO: [M6] Update dynamically when model changes — use MODEL_METADATA[selectedModel]?.contextWindow
+            max: 200000,
             percentage: 0,
             estimatedCost: 0,
           },
@@ -410,9 +411,12 @@ export const useChatStore = create<ChatState>()(
                 // AUDIT-006-012 fix: Cap active conversations at 500
                 if (state.conversations.length > 500) {
                   // Remove oldest non-pinned, non-active conversations
-                  const toRemove = state.conversations
-                    .filter((c) => !c.pinned && c.id !== id)
-                    .slice(499);
+                  // Fix [M8]: use slice(0, excess) to evict exactly the overage from the oldest
+                  // first. The previous .slice(499) always started at index 499, returning an
+                  // empty array when fewer than 499 non-pinned conversations existed.
+                  const nonPinned = state.conversations.filter((c) => !c.pinned && c.id !== id);
+                  const excess = state.conversations.length - 500;
+                  const toRemove = nonPinned.slice(0, excess);
                   for (const conv of toRemove) {
                     delete state.messagesByConversation[conv.id];
                   }
@@ -1479,7 +1483,8 @@ export const useChatStore = create<ChatState>()(
                   current: 0,
                   inputTokens: 0,
                   outputTokens: 0,
-                  max: 128000,
+                  // TODO: [M6] Update dynamically when model changes — use MODEL_METADATA[selectedModel]?.contextWindow
+                  max: 200000,
                   percentage: 0,
                   estimatedCost: 0,
                 };

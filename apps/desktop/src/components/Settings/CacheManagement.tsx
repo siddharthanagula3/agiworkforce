@@ -9,12 +9,23 @@ import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
 import { toast } from '@/hooks/useToast';
 import type { CacheStats, CacheAnalytics } from '../../types/cache';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 
 export const CacheManagement: React.FC = () => {
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [analytics, setAnalytics] = useState<CacheAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
 
   // Load cache statistics on component mount
   useEffect(() => {
@@ -40,16 +51,22 @@ export const CacheManagement: React.FC = () => {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear all cache? This cannot be undone.')) {
-      return;
-    }
-
     try {
       setLoading(true);
       await CacheService.clearAll();
-      await loadStats(); // Reload stats
+      toast({
+        title: 'Cache cleared',
+        description: 'All cache entries have been removed.',
+      });
+      await loadStats();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear cache');
+      const message = err instanceof Error ? err.message : 'Failed to clear cache';
+      setError(message);
+      toast({
+        title: 'Clear failed',
+        description: message,
+        variant: 'destructive',
+      });
       console.error('Error clearing cache:', err);
     } finally {
       setLoading(false);
@@ -60,10 +77,32 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearByType(type);
-      await loadStats(); // Reload stats
+      await loadStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to clear ${type} cache`);
       console.error(`Error clearing ${type} cache:`, err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearByProvider = async (provider: string) => {
+    try {
+      setLoading(true);
+      await CacheService.clearByProvider(provider);
+      toast({
+        title: 'Provider cache cleared',
+        description: `Cache for ${provider} has been removed.`,
+      });
+      await loadStats();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to clear cache for ${provider}`;
+      toast({
+        title: 'Clear failed',
+        description: message,
+        variant: 'destructive',
+      });
+      console.error(`Error clearing cache for provider ${provider}:`, err);
     } finally {
       setLoading(false);
     }
@@ -77,7 +116,7 @@ export const CacheManagement: React.FC = () => {
         title: 'Cache pruned',
         description: `Successfully removed ${pruned} expired cache entries`,
       });
-      await loadStats(); // Reload stats
+      await loadStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to prune expired cache');
       toast({
@@ -124,7 +163,7 @@ export const CacheManagement: React.FC = () => {
   if (error && !stats) {
     return (
       <div className="p-4 text-red-600">
-        <p>Error: {error}</p>
+        <p>Failed to load cache statistics. Please try again.</p>
         <button
           onClick={loadStats}
           className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -145,7 +184,9 @@ export const CacheManagement: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">{error}</div>
+        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+          Something went wrong loading cache data. Please try refreshing.
+        </div>
       )}
 
       {/* Overall Statistics */}
@@ -240,8 +281,9 @@ export const CacheManagement: React.FC = () => {
                     {formatCurrency(provider.cost_saved)}
                   </p>
                   <button
-                    onClick={() => CacheService.clearByProvider(provider.provider)}
-                    className="text-xs text-red-600 hover:underline"
+                    onClick={() => void handleClearByProvider(provider.provider)}
+                    disabled={loading}
+                    className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Clear
                   </button>
@@ -278,7 +320,7 @@ export const CacheManagement: React.FC = () => {
             Export Cache
           </button>
           <button
-            onClick={handleClearAll}
+            onClick={() => setClearAllDialogOpen(true)}
             disabled={loading}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
           >
@@ -286,6 +328,28 @@ export const CacheManagement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Confirmation dialog for clearing all cache */}
+      <AlertDialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all cached LLM responses, tool results, and codebase data. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleClearAll()}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
+            >
+              Clear All Cache
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
