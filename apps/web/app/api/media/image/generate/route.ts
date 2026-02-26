@@ -217,8 +217,12 @@ async function generateWithImagen(
   const apiKey = getApiKey('google');
   const model = 'imagen-4.0-generate-001';
 
-  // Parse size to aspect ratio
-  const [width, height] = size.split('x').map(Number);
+  // Parse size to aspect ratio — validate exactly 2 positive integer parts
+  const sizeParts = size.split('x').map(Number);
+  if (sizeParts.length !== 2 || sizeParts.some((n) => !Number.isFinite(n) || n <= 0)) {
+    throw new Error(`Invalid size format: "${size}". Expected format: WxH (e.g. 1024x1024)`);
+  }
+  const [width, height] = sizeParts;
   let aspectRatio = '1:1';
   if (width > height) {
     aspectRatio = '16:9';
