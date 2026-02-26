@@ -63,8 +63,7 @@ export function AllowedDirectoriesSettings() {
       }
     } catch (e: unknown) {
       console.error('Failed to open directory picker:', e);
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      setError(`Failed to open directory picker: ${errorMessage}`);
+      setError('Failed to open directory picker. Please try again.');
     }
   };
 

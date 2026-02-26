@@ -108,7 +108,8 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
 
       updateFileChange(change.id, false);
     } catch (error) {
-      toast.error(`Failed to undo: ${error}`);
+      console.error('[FileOperationHistory] Failed to undo:', error);
+      toast.error('Failed to undo. The file may have been modified or deleted.');
     } finally {
       setUndoingId(null);
     }
@@ -141,7 +142,8 @@ export function FileOperationHistory({ className, maxItems = 20 }: FileOperation
 
       updateFileChange(change.id, true);
     } catch (error) {
-      toast.error(`Failed to redo: ${error}`);
+      console.error('[FileOperationHistory] Failed to redo:', error);
+      toast.error('Failed to redo. The operation could not be replayed.');
     } finally {
       setUndoingId(null);
     }

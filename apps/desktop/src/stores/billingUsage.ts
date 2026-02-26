@@ -18,6 +18,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
+import { storageFallback } from '../lib/storageFallback';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../types/chat';
 import { supabaseAuth } from '../services/supabaseAuth';
 import {
@@ -257,18 +258,7 @@ function shouldResetPeriod(budget: TokenBudget): boolean {
   return Date.now() >= budget.periodEnd;
 }
 
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
-
+// storageFallback is imported from '../lib/storageFallback'
 const getStorage = () => (typeof window === 'undefined' ? storageFallback : window.localStorage);
 
 // ============================================================================

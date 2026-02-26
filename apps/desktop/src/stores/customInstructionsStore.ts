@@ -19,6 +19,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauriContext } from '../lib/tauri-mock';
+import { storageFallback } from '../lib/storageFallback';
 
 export interface CustomInstructionsState {
   /** Global instructions that apply to all conversations */
@@ -76,17 +77,7 @@ export interface CustomInstructionsState {
   };
 }
 
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
+// storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
 const CUSTOM_INSTRUCTIONS_STORE_VERSION = 1;
