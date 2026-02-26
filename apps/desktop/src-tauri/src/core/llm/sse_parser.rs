@@ -261,7 +261,7 @@ pub fn parse_sse_stream(
     SseStreamParser::new(response, provider)
 }
 
-fn parse_sse_event(
+pub(crate) fn parse_sse_event(
     event: &str,
     provider: crate::core::llm::Provider,
 ) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {

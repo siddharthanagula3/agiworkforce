@@ -433,7 +433,36 @@ impl QueryBuilder {
         self
     }
 
+    /// Build the SQL string for the current query.
+    ///
+    /// # Security Warning (H5)
+    /// For `INSERT` and `UPDATE` operations this method uses string interpolation
+    /// via `escape_sql_value`. While values are validated and escaped, string-based
+    /// escaping can be bypassed by edge-case inputs or encoding tricks.
+    /// **Prefer `build_parameterized()`** for write operations, which emits
+    /// `?`-placeholder SQL and returns the parameter values separately for binding
+    /// by the SQLite driver — eliminating the injection surface entirely. Use this
+    /// method only for `SELECT` queries or for display/logging where the result is
+    /// not executed directly.
     pub fn build(&self) -> Result<String> {
+        match &self.query_type {
+            QueryType::Insert(query) => {
+                tracing::warn!(
+                    "QueryBuilder::build() called for INSERT on table '{}'. \
+                     Prefer build_parameterized() to avoid string interpolation.",
+                    query.table
+                );
+            }
+            QueryType::Update(query) => {
+                tracing::warn!(
+                    "QueryBuilder::build() called for UPDATE on table '{}'. \
+                     Prefer build_parameterized() to avoid string interpolation.",
+                    query.table
+                );
+            }
+            _ => {}
+        }
+
         let sql = match &self.query_type {
             QueryType::Select(query) => self.build_select(query),
             QueryType::Insert(query) => self.build_insert(query),
