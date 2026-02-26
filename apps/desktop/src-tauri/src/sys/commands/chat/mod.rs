@@ -32,12 +32,19 @@ const DEFAULT_CONVERSATION_LIST_LIMIT: i64 = 1000;
 /// Maximum length for pending user messages
 const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
 /// Max idle wait for next streaming chunk before failing the stream.
-/// 60s to accommodate slow models, image-generation tool calls, and high-latency networks.
-const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 60;
+/// 300s (5 minutes) to accommodate:
+///   - Image/video generation tools (30-120s)
+///   - Extended thinking / reasoning models (60-180s before first token)
+///   - High-latency networks and provider cold-starts
+///   - Provider keepalive gaps during heavy load
+///     The SSE parser emits keepalive chunks for provider heartbeats (`: keep-alive`,
+///     `event: ping`), so this timeout only fires if truly NO bytes are received.
+const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 300;
 /// Max wait per follow-up model invocation in tool loop (e.g. after image generation).
-const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 60;
+/// 120s to accommodate reasoning/thinking models that can take 30-90s before first token.
+const FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 120;
 /// Max total wait across all candidate retries for a single follow-up call.
-const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 120;
+const FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 180;
 /// Fast metadata follow-ups should still allow for MCP startup and remote latency.
 const FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS: u64 = 15;
 /// Fast metadata follow-ups should have a bounded but realistic retry budget.
@@ -45,7 +52,9 @@ const FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS: u64 = 45;
 /// Limit fallback fan-out to avoid very long "thinking" states.
 const FOLLOWUP_MAX_CANDIDATES: usize = 2;
 /// Hard upper bound for a streaming tool loop.
-const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 180;
+/// 600s (10 minutes) to accommodate multi-step agentic workflows with
+/// image/video generation and reasoning model follow-ups.
+const STREAMING_TOOL_LOOP_MAX_SECS: u64 = 600;
 /// Fast metadata loops should remain bounded while tolerating transient slowness.
 const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 120;
 /// Default streaming tool-loop iteration limit.
@@ -1709,12 +1718,38 @@ pub async fn chat_send_message(
         }
     }
 
-    let agent_mode = request
-        .enable_agent_mode
-        .unwrap_or_else(|| detect_agentic_intent(&request.content));
+    // Determine whether agent mode should be used.
+    // Always check if AutomationService is actually available before enabling — even when
+    // the user has "Always Use Agent Mode" on. If the OS automation stack can't initialize
+    // (permissions denied, mutex poisoned, etc.) falling back to LLM mode is far better
+    // than failing the entire chat request with a hard error.
+    let explicitly_requested_agent = request.enable_agent_mode == Some(true);
+    let wants_agent = explicitly_requested_agent || detect_agentic_intent(&request.content);
+
+    let agent_mode = if wants_agent {
+        use crate::automation::AutomationService;
+        AutomationService::new().is_ok()
+    } else {
+        false
+    };
+
+    // When the user explicitly enabled agent mode but automation is unavailable, emit
+    // a toast-style notification so they know to grant permissions — but still let the
+    // LLM response through.
+    if explicitly_requested_agent && !agent_mode {
+        let _ = app_handle.emit(
+            "automation:permission_required",
+            serde_json::json!({
+                "reason": "agent_mode_unavailable",
+                "message": "Agent automation is unavailable on this machine. Using standard LLM mode instead. To enable automation go to System Settings → Privacy & Security → Accessibility/Screen Recording/Input Monitoring and enable AGI Workforce."
+            }),
+        );
+    }
 
     let is_deep_research = matches!(request.focus_mode.as_deref(), Some("deep-research"))
         || request.research_task_id.is_some();
+
+    let is_web_focus = matches!(request.focus_mode.as_deref(), Some("web") | Some("search"));
 
     use crate::core::agent::prompt_engineer::PromptEngineer;
     use crate::core::llm::{
@@ -2284,6 +2319,33 @@ pub async fn chat_send_message(
                     before_count,
                     tool_defs.len()
                 );
+            }
+        }
+
+        // Inject Anthropic server-side web_search tool when user explicitly selects
+        // "web" focus mode with a Claude model. This uses Anthropic's built-in
+        // server tool (web_search_20250305) which requires no API key.
+        if is_web_focus && model.to_lowercase().contains("claude") {
+            let already_has_web_search = tool_defs
+                .iter()
+                .any(|t| t.name == "web_search" || t.name == "search_web");
+            if !already_has_web_search {
+                use crate::core::llm::ToolDefinition;
+                tool_defs.push(ToolDefinition {
+                    name: "web_search".to_string(),
+                    description: "Search the web for real-time information. Use this for current events, prices, news, and anything requiring up-to-date data.".to_string(),
+                    parameters: serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query"
+                            }
+                        },
+                        "required": ["query"]
+                    }),
+                });
+                info!("[Chat] Injected Anthropic web_search server tool for web focus mode");
             }
         }
 
@@ -2960,17 +3022,28 @@ pub async fn chat_send_message(
                         {
                             Ok(value) => value,
                             Err(_) => {
-                                let timeout_message = format!(
-                                    "Streaming timed out after {}s waiting for model output",
-                                    STREAM_CHUNK_IDLE_TIMEOUT_SECS
+                                // The idle timeout fired -- no bytes (including keepalives)
+                                // arrived for STREAM_CHUNK_IDLE_TIMEOUT_SECS.  This means
+                                // the provider connection is likely dead.
+                                warn!(
+                                    "[Chat] Stream idle timeout after {}s with no data from provider (conversation={})",
+                                    STREAM_CHUNK_IDLE_TIMEOUT_SECS,
+                                    conversation_id_clone,
                                 );
-                                warn!("[Chat] {}", timeout_message);
+                                // User-friendly message -- never surface raw timeout strings
+                                let user_message = if full_content.trim().is_empty() {
+                                    "The model took too long to respond. Please try again."
+                                        .to_string()
+                                } else {
+                                    "Response was interrupted because the connection went idle. The partial response is shown above."
+                                        .to_string()
+                                };
                                 let _ = app_handle_clone.emit(
                                     "chat:stream-error",
                                     serde_json::json!({
                                         "conversation_id": conversation_id_clone,
                                         "message_id": frontend_message_id_clone,
-                                        "error": timeout_message
+                                        "error": user_message
                                     }),
                                 );
                                 let _ = app_handle_clone.emit(
@@ -3017,6 +3090,13 @@ pub async fn chat_send_message(
 
                         match chunk_result {
                             Ok(chunk) => {
+                                // Keepalive chunks carry no content -- they exist only
+                                // to reset the idle timeout above.  Skip all content
+                                // processing and do not emit events to the frontend.
+                                if chunk.keepalive {
+                                    continue;
+                                }
+
                                 full_content.push_str(&chunk.content);
                                 token_count += 1;
 
