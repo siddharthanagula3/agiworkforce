@@ -135,7 +135,10 @@ export function sanitizeEmailHtml(html: string): string {
       'img',
       'hr',
     ],
-    ALLOWED_ATTR: ['class', 'id', 'href', 'target', 'rel', 'src', 'alt', 'title', 'style'],
+    // 'style' intentionally excluded: inline CSS can be used for image-beacon
+    // exfiltration (background-image URLs). If layout fidelity is needed,
+    // allow only safe CSS properties via the afterSanitizeAttributes hook instead.
+    ALLOWED_ATTR: ['class', 'id', 'href', 'target', 'rel', 'src', 'alt', 'title'],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
     ALLOW_DATA_ATTR: false,

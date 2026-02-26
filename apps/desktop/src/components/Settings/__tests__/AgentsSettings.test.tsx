@@ -109,7 +109,9 @@ describe('AgentsSettings', () => {
 
     it('shows Sub-agents & Teams section heading', () => {
       render(<AgentsSettings />);
-      expect(screen.getByText(/sub-agents/i)).toBeInTheDocument();
+      // Multiple elements contain "sub-agents" (heading + label); confirm at least one heading
+      const headings = screen.getAllByText(/sub-agents/i);
+      expect(headings.length).toBeGreaterThan(0);
     });
 
     it('shows Execution section heading', () => {
@@ -150,10 +152,15 @@ describe('AgentsSettings', () => {
   describe('Approval mode radio buttons', () => {
     it('"Ask before actions" radio is checked when both flags are false', () => {
       render(<AgentsSettings />);
-      const radios = screen.getAllByRole('radio', { name: /approvalMode/i });
-      // First radio corresponds to "Ask before actions"
-      if (radios[0]) {
-        expect((radios[0] as HTMLInputElement).checked).toBe(true);
+      // The "Ask before actions" radio is the first in the approval-mode group.
+      // We locate it by the label text of its parent label element.
+      const radios = screen.getAllByRole('radio');
+      const askRadio = radios.find((r) =>
+        r.closest('label')?.textContent?.toLowerCase().includes('ask before actions'),
+      );
+      expect(askRadio).toBeDefined();
+      if (askRadio) {
+        expect((askRadio as HTMLInputElement).checked).toBe(true);
       }
     });
 
@@ -167,10 +174,9 @@ describe('AgentsSettings', () => {
           r.closest('label')?.textContent?.toLowerCase().includes('auto-approve all') &&
           !r.closest('label')?.textContent?.toLowerCase().includes('safe'),
       );
-      if (autoApproveAllRadio) {
-        await userEvent.click(autoApproveAllRadio);
-        expect(mockSetAutoApproveTools).toHaveBeenCalledWith(true);
-      }
+      expect(autoApproveAllRadio).toBeDefined();
+      await userEvent.click(autoApproveAllRadio!);
+      expect(mockSetAutoApproveTools).toHaveBeenCalledWith(true);
     });
 
     it('clicking "Auto-approve safe actions" calls setAlwaysUseAgentMode(true)', async () => {
@@ -179,10 +185,9 @@ describe('AgentsSettings', () => {
       const safeRadio = radios.find((r) =>
         r.closest('label')?.textContent?.toLowerCase().includes('safe actions'),
       );
-      if (safeRadio) {
-        await userEvent.click(safeRadio);
-        expect(mockSetAlwaysUseAgentMode).toHaveBeenCalledWith(true);
-      }
+      expect(safeRadio).toBeDefined();
+      await userEvent.click(safeRadio!);
+      expect(mockSetAlwaysUseAgentMode).toHaveBeenCalledWith(true);
     });
   });
 

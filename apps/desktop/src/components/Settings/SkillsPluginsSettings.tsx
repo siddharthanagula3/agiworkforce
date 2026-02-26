@@ -292,37 +292,41 @@ export function SkillsPluginsSettings() {
             plugins: Record<string, InstalledPluginRecord[]>;
           };
 
-          for (const [key, records] of Object.entries(data.plugins ?? {})) {
-            const { name, marketplace } = pluginIdFromKey(key);
-            const latestRecord = records.sort(
-              (a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
-            )[0];
-            if (!latestRecord) continue;
+          // Read all plugin manifests in parallel instead of serially.
+          const entries = Object.entries(data.plugins ?? {});
+          const resolved = await Promise.all(
+            entries.map(async ([key, records]) => {
+              const { name, marketplace } = pluginIdFromKey(key);
+              const latestRecord = [...records].sort(
+                (a, b) => new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
+              )[0];
+              if (!latestRecord) return null;
 
-            // Try to read plugin.json manifest from installPath
-            let manifest: PluginManifest | null = null;
-            try {
-              const manifestRaw = await invoke<string>('file_read', {
-                path: `${latestRecord.installPath}/plugin.json`,
-              });
-              manifest = JSON.parse(manifestRaw) as PluginManifest;
-            } catch {
-              // no manifest, use defaults
-            }
+              let manifest: PluginManifest | null = null;
+              try {
+                const manifestRaw = await invoke<string>('file_read', {
+                  path: `${latestRecord.installPath}/plugin.json`,
+                });
+                manifest = JSON.parse(manifestRaw) as PluginManifest;
+              } catch {
+                // no manifest, use defaults
+              }
 
-            resolvedPlugins.push({
-              id: key,
-              marketplaceId: marketplace,
-              displayName: manifest?.name ?? humanizeId(name),
-              description: manifest?.description ?? '',
-              version: manifest?.version ?? latestRecord.version,
-              scope: latestRecord.scope,
-              installPath: latestRecord.installPath,
-              skills: manifest?.skills?.map((s) => s.name) ?? [],
-              agents: manifest?.agents?.map((a) => a.name) ?? [],
-              installedAt: latestRecord.installedAt,
-            });
-          }
+              return {
+                id: key,
+                marketplaceId: marketplace,
+                displayName: manifest?.name ?? humanizeId(name),
+                description: manifest?.description ?? '',
+                version: manifest?.version ?? latestRecord.version,
+                scope: latestRecord.scope,
+                installPath: latestRecord.installPath,
+                skills: manifest?.skills?.map((s) => s.name) ?? [],
+                agents: manifest?.agents?.map((a) => a.name) ?? [],
+                installedAt: latestRecord.installedAt,
+              };
+            }),
+          );
+          resolvedPlugins.push(...(resolved.filter(Boolean) as ResolvedPlugin[]));
 
           resolvedPlugins.sort((a, b) => a.displayName.localeCompare(b.displayName));
         } catch {
@@ -391,6 +395,7 @@ export function SkillsPluginsSettings() {
         <Button
           variant="outline"
           size="sm"
+          aria-label="Refresh"
           onClick={() => void load()}
           disabled={loading || isNonTauri}
           className="shrink-0"

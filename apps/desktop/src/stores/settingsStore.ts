@@ -65,6 +65,8 @@ export interface ChatPreferences {
    * Equivalent to God Mode / trust-all. Use with caution.
    */
   autoApproveTools: boolean;
+  /** Enable automatic skill injection based on message intent */
+  autoInjectSkills?: boolean;
 }
 
 export interface ExecutionPreferences {
@@ -120,6 +122,7 @@ interface SettingsState {
   setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
+  setAutoInjectSkills: (enabled: boolean) => void;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
   setEnableCheckpointing: (enabled: boolean) => void;
@@ -137,6 +140,10 @@ interface SettingsState {
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 
+  // Feature capability toggles (key=capability name, value=enabled)
+  features: Record<string, boolean>;
+  setFeature: (key: string, enabled: boolean) => void;
+
   // Hydration tracking for persist middleware
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
@@ -151,6 +158,7 @@ const defaultSettings: Pick<
   | 'globalHotkeyPreferences'
   | 'allowedDirectories'
   | 'customModels'
+  | 'features'
 > = {
   llmConfig: {
     defaultProvider: 'managed_cloud',
@@ -182,6 +190,7 @@ const defaultSettings: Pick<
     alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
     autoApproveTools: false, // Off by default - show confirmation dialogs
+    autoInjectSkills: true, // Auto-inject relevant skills based on message intent
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
@@ -196,6 +205,7 @@ const defaultSettings: Pick<
   },
   allowedDirectories: [],
   customModels: [],
+  features: {},
 };
 
 export const createDefaultLLMConfig = (): LLMConfig => ({
@@ -219,7 +229,9 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v6: Added language preference
 // v9: Added globalHotkeyPreferences for system-wide Quick Query hotkey
 // v10: Added customModels for user-defined OpenAI-compatible endpoints
-const SETTINGS_STORE_VERSION = 10;
+// v11: Added features for capability toggles
+// v12: Added autoInjectSkills to chatPreferences
+const SETTINGS_STORE_VERSION = 12;
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -232,6 +244,14 @@ export const useSettingsStore = create<SettingsState>()(
 
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'settings/setHasHydrated');
+        },
+
+        setFeature: (key: string, enabled: boolean) => {
+          set(
+            (state) => ({ features: { ...state.features, [key]: enabled } }),
+            undefined,
+            'settings/setFeature',
+          );
         },
 
         addCustomModel: (config: CustomModelConfig) => {
@@ -518,6 +538,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setCompactMode',
+          );
+        },
+
+        setAutoInjectSkills: (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, autoInjectSkills: enabled },
+            }),
+            undefined,
+            'settings/setAutoInjectSkills',
           );
         },
 
@@ -821,7 +851,8 @@ export const useSettingsStore = create<SettingsState>()(
           const mergedLLMConfig: LLMConfig = {
             ...currentState.llmConfig,
             ...(persisted?.llmConfig ?? {}),
-            defaultProvider: 'managed_cloud', // Always use managed_cloud
+            defaultProvider:
+              persisted?.llmConfig?.defaultProvider ?? currentState.llmConfig.defaultProvider,
             defaultModels: {
               managed_cloud:
                 persistedDefaultModels?.managed_cloud ??
@@ -984,6 +1015,20 @@ export const useSettingsStore = create<SettingsState>()(
             const stateWithCustomModels = state as Partial<SettingsState>;
             if (!Array.isArray(stateWithCustomModels.customModels)) {
               stateWithCustomModels.customModels = [];
+            }
+          }
+
+          // Migration from v10 to v11: Add features capability toggles
+          if (version < 11) {
+            if (!state.features || typeof state.features !== 'object') {
+              (state as Partial<SettingsState>).features = {};
+            }
+          }
+
+          // Migration from v11 to v12: Add autoInjectSkills to chatPreferences
+          if (version < 12) {
+            if (state.chatPreferences && state.chatPreferences.autoInjectSkills === undefined) {
+              state.chatPreferences.autoInjectSkills = true;
             }
           }
 

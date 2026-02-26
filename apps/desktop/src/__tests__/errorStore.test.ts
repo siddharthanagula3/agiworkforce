@@ -179,9 +179,9 @@ describe('errorStore', () => {
         addError({ type: `UNIQUE_ERROR_${i}`, severity: 'info', message: `Error ${i}` });
       }
 
-      // Capture the ID of the first error (oldest)
+      // The store prepends new errors (newest first), so the oldest is at the END
       const errorsBefore = useErrorStore.getState().errors;
-      const oldestId = errorsBefore[0]?.id;
+      const oldestId = errorsBefore[errorsBefore.length - 1]?.id;
       expect(oldestId).toBeDefined();
 
       // Add one more to push past the cap — oldest should be evicted
@@ -221,11 +221,12 @@ describe('errorStore', () => {
         addError({ type: `BASE_${i}`, severity: 'info', message: `Base error ${i}` });
       }
 
+      // The store prepends (newest first), so the second-oldest is at index [length - 2]
       const at100 = useErrorStore.getState().errors;
-      const secondOldestId = at100[1]?.id;
+      const secondOldestId = at100[at100.length - 2]?.id;
       expect(secondOldestId).toBeDefined();
 
-      // Adding 2 more should evict the first two (oldest, then second-oldest)
+      // Adding 2 more should evict the last two items (oldest, then second-oldest)
       addError({ type: 'EXTRA_1', severity: 'info', message: 'Extra 1' });
       addError({ type: 'EXTRA_2', severity: 'info', message: 'Extra 2' });
 
@@ -261,9 +262,13 @@ describe('errorStore', () => {
       const toasts = useErrorStore.getState().toasts;
       expect(toasts.length).toBeLessThanOrEqual(5);
 
-      // The newest toast should be present
+      // The newest toast should be present (most recently added)
       const newestToast = toasts.find((t) => t.message === 'Toast error 6');
       expect(newestToast).toBeDefined();
+
+      // FIFO eviction: the oldest toast (0) should have been evicted first
+      const oldestToast = toasts.find((t) => t.message === 'Toast error 0');
+      expect(oldestToast).toBeUndefined();
     });
   });
 });

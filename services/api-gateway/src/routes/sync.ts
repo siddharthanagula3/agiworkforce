@@ -88,6 +88,13 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   }
 
   const batch = batchSyncSchema.parse(req.body);
+
+  // M13 fix: Validate that the user_id in the batch body matches the authenticated
+  // user to prevent IDOR attacks where a client submits data for another user.
+  if (batch.user_id !== user.userId) {
+    throw new AppError('user_id mismatch', 403);
+  }
+
   const deviceId = req.headers['x-device-id'] as string | undefined;
 
   const syncedIds: string[] = [];

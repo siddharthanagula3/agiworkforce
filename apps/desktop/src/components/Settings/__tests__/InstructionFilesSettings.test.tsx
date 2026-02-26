@@ -85,7 +85,10 @@ describe('InstructionFilesSettings', () => {
     it('shows the "Instruction Files" section heading', () => {
       setupSuccessfulScan();
       render(<InstructionFilesSettings />);
-      expect(screen.getByText(/instruction files/i)).toBeInTheDocument();
+      // Multiple elements may contain "instruction files" (heading + description);
+      // confirm at least one is present.
+      const matches = screen.getAllByText(/instruction files/i);
+      expect(matches.length).toBeGreaterThan(0);
     });
 
     it('shows known instruction file patterns in the table', () => {
@@ -102,7 +105,10 @@ describe('InstructionFilesSettings', () => {
     it('shows source labels for files', () => {
       setupSuccessfulScan();
       render(<InstructionFilesSettings />);
-      expect(screen.getByText('Claude Code')).toBeInTheDocument();
+      // Multiple files may share the same source label (e.g. both CLAUDE.md and AGENTS.md
+      // are "Claude Code"), so use getAllByText.
+      const claudeCodeLabels = screen.getAllByText('Claude Code');
+      expect(claudeCodeLabels.length).toBeGreaterThan(0);
       expect(screen.getByText('Cursor')).toBeInTheDocument();
       expect(screen.getByText('Windsurf')).toBeInTheDocument();
     });
