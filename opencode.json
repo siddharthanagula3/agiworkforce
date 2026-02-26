@@ -1,0 +1,4 @@
+{
+    "provider": "minimax",
+    "model": "minimax2.5"
+}
