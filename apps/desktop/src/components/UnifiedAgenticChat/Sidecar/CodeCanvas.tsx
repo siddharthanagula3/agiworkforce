@@ -121,9 +121,10 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
 
       return () => clearTimeout(timeoutId);
     } catch (error) {
+      console.error('[CodeCanvas] Failed to save file:', error);
       setSaveState({
         status: 'error',
-        message: `Failed to save: ${error}`,
+        message: 'Failed to save. Check permissions and try again.',
       });
       return undefined;
     }

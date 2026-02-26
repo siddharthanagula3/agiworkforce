@@ -77,7 +77,8 @@ export function CommandSuggestion({
 
       onExecute?.(response.stdout || response.stderr, response.exitCode ?? -1);
     } catch (error) {
-      toast.error(`Failed to execute command: ${error}`);
+      console.error('[CommandSuggestion] Failed to execute command:', error);
+      toast.error('Command failed. Please try again.');
     } finally {
       setIsExecuting(false);
     }
