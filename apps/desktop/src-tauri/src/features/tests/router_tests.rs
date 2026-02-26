@@ -19,6 +19,7 @@ mod sse_parser_tests {
             model: None,
             credits: None,
             tool_calls: None,
+            keepalive: false,
         };
 
         assert_eq!(chunk.content, "Hello");
@@ -40,6 +41,7 @@ mod sse_parser_tests {
             model: None,
             credits: None,
             tool_calls: None,
+            keepalive: false,
         };
 
         assert!(chunk.done);

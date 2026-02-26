@@ -48,13 +48,12 @@ impl Database {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_e| rusqlite::Error::SqliteFailure(
+        let conn = self.conn.lock().map_err(|_e| {
+            rusqlite::Error::SqliteFailure(
                 rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
                 Some("Database mutex poisoned".to_string()),
-            ))?;
+            )
+        })?;
         f(&conn)
     }
 

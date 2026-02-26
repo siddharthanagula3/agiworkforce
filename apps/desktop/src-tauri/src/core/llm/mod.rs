@@ -677,6 +677,7 @@ pub trait LLMProvider: Send + Sync {
                 }),
                 credits: None,
                 tool_calls: None,
+                keepalive: false,
             },
         )])))
     }
