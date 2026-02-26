@@ -22,6 +22,7 @@
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { storageFallback } from '../lib/storageFallback';
 import { supabaseAuth } from '../services/supabaseAuth';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
@@ -284,17 +285,7 @@ type UnifiedAuthStore = AuthState & AuthActions;
 // Storage & Caching
 // =============================================================================
 
-// Storage fallback for SSR/non-browser environments
-const storageFallback: Storage = {
-  get length() {
-    return 0;
-  },
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
+// storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
 const UNIFIED_AUTH_STORE_VERSION = 1;
