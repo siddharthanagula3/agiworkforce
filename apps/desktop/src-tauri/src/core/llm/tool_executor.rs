@@ -2536,8 +2536,11 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone());
-        // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded bash/powershell
-        let default_shell = match get_default_shell() {
+        // [H11] Security fix (supersedes AUDIT-TERMINAL-054): Always use system default shell.
+        // The shell type must NOT be LLM-controllable — an LLM requesting
+        // shell='wsl' could bypass bash-configured validator rules.
+        // If multi-shell support is needed, it must be a user settings preference.
+        let shell = match get_default_shell() {
             ShellType::PowerShell => "powershell",
             ShellType::Cmd => "cmd",
             ShellType::Zsh => "zsh",
@@ -2546,12 +2549,8 @@ impl ToolExecutor {
             ShellType::Sh => "sh",
             ShellType::Wsl => "wsl",
             ShellType::GitBash => "gitbash",
-        };
-        let shell = args
-            .get("shell")
-            .and_then(|v| v.as_str())
-            .unwrap_or(default_shell)
-            .to_lowercase();
+        }
+        .to_string();
         let timeout_ms = args
             .get("timeout_ms")
             .and_then(|v| v.as_u64())
