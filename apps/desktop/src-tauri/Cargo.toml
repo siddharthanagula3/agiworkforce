@@ -1,6 +1,6 @@
 [package]
 name = "agiworkforce-desktop"
-version = "1.1.3"
+version = "1.1.5"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
@@ -108,6 +108,7 @@ argon2 = "0.5"
 machine-uid = "0.3"  # For getting machine-unique identifiers
 hostname = "0.4"     # For getting machine hostname as part of key derivation salt
 sha2 = "0.10"
+subtle = "2"
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.8"

@@ -12,6 +12,7 @@ mod tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            keepalive: false,
         };
 
         assert_eq!(chunk.content, "Hello");
@@ -33,6 +34,7 @@ mod tests {
             }),
             credits: None,
             tool_calls: None,
+            keepalive: false,
         };
 
         assert!(chunk.done);
@@ -63,6 +65,7 @@ mod tests {
             usage: None,
             credits: None,
             tool_calls: None,
+            keepalive: false,
         };
 
         let serialized = serde_json::to_string(&chunk).unwrap();
@@ -96,6 +99,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                keepalive: false,
             };
             assert!(chunk.finish_reason.is_some());
         }
@@ -112,6 +116,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                keepalive: false,
             },
             StreamChunk {
                 content: " world".to_string(),
@@ -121,6 +126,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                keepalive: false,
             },
             StreamChunk {
                 content: "!".to_string(),
@@ -130,6 +136,7 @@ mod tests {
                 usage: None,
                 credits: None,
                 tool_calls: None,
+                keepalive: false,
             },
         ];
 
