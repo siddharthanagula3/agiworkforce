@@ -1,12 +1,3 @@
-// Provider adapter module — now integrated into the module tree.
-// All compile errors have been fixed:
-// - ToolDefinition enum patterns → struct field access (tool.name, tool.description, tool.parameters)
-// - ContentPart::ToolUse/ToolResult → correct nested field destructuring (tool_use / tool_result)
-// - AudioInput.data → AudioData enum (Base64/Bytes/Uri)
-// - AudioFormat::extension(), AudioFormat::mime_type() added to mod.rs
-// - ImageFormat::mime_type(), VideoFormat::mime_type() added to mod.rs
-// - Missing LLMResponse fields (cache_creation_input_tokens, audio_data/format/transcript) added
-
 //! Provider adapters for translating between AGI Workforce's unified format and provider-specific formats.
 //!
 //! This module provides adapters that handle the differences in request/response formats across
@@ -364,9 +355,17 @@ impl OpenAIAdapter {
     }
 
     fn canonicalize_model(model: &str) -> String {
-        if model == "gpt-5.2-codex" || model.starts_with("gpt-5.2-codex-") || model == "gpt-5-codex"
+        // Normalize all gpt-5.2-codex effort variants and legacy gpt-5-codex alias to
+        // the canonical OpenAI API model ID "gpt-5.2-codex".
+        if model.starts_with("gpt-5.2-codex-") || model == "gpt-5.2-codex" || model == "gpt-5-codex"
         {
-            "gpt-5-codex".to_string()
+            "gpt-5.2-codex".to_string()
+        } else if model == "gpt-5-pro" || model == "gpt-5-pro-2026-01" {
+            // Normalize legacy/internal gpt-5-pro IDs to canonical OpenAI API model ID.
+            "gpt-5.2-pro".to_string()
+        } else if model == "grok-4" {
+            // Normalize the generic grok-4 alias to the canonical versioned xAI model ID.
+            "grok-4-0709".to_string()
         } else {
             model.to_string()
         }
@@ -1705,9 +1704,11 @@ impl ProviderAdapter for AnthropicAdapter {
 impl AnthropicAdapter {
     fn canonicalize_model(model: &str) -> String {
         match model {
-            // Frontend uses dotted IDs; Anthropic API expects hyphenated IDs.
+            // Frontend uses dotted IDs; Anthropic API expects hyphenated alias IDs.
+            // Snapshot-pinned IDs (e.g. claude-sonnet-4-5-20250929) are passed through as-is.
             "claude-haiku-4.5" => "claude-haiku-4-5".to_string(),
             "claude-sonnet-4.5" => "claude-sonnet-4-5".to_string(),
+            "claude-sonnet-4.6" => "claude-sonnet-4-6".to_string(),
             "claude-opus-4.6" => "claude-opus-4-6".to_string(),
             _ => model.to_string(),
         }

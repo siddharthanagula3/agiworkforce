@@ -401,82 +401,90 @@ impl PlaywrightBridge {
 
         let result = tokio::time::timeout(
             Duration::from_secs(30),
-            tokio::task::spawn_blocking(move || -> std::result::Result<serde_json::Value, String> {
-                let url = Url::parse(&ws_url_owned)
-                    .map_err(|e| format!("Invalid WebSocket URL '{}': {}", ws_url_owned, e))?;
+            tokio::task::spawn_blocking(
+                move || -> std::result::Result<serde_json::Value, String> {
+                    let url = Url::parse(&ws_url_owned)
+                        .map_err(|e| format!("Invalid WebSocket URL '{}': {}", ws_url_owned, e))?;
 
-                let (mut socket, _response) = connect(url)
-                    .map_err(|e| format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e))?;
+                    let (mut socket, _response) = connect(url).map_err(|e| {
+                        format!("Failed to connect WebSocket to '{}': {}", ws_url_owned, e)
+                    })?;
 
-                // Set a read timeout so that socket.read() does not block
-                // indefinitely if Chrome becomes unresponsive. Without this,
-                // the tokio::time::timeout above would fire but the blocking
-                // task would continue, leaking a thread.
-                {
-                    let read_timeout = Some(Duration::from_secs(10));
-                    match socket.get_mut() {
-                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
-                            let _ = tcp.set_read_timeout(read_timeout);
-                        }
-                        _ => {
-                            // TLS or other stream variants -- best-effort, skip.
-                        }
-                    }
-                }
-
-                socket
-                    .send(Message::Text(payload_str))
-                    .map_err(|e| format!("Failed to send CDP command '{}': {}", method_owned, e))?;
-
-                // Read messages until we find the response with our command id.
-                loop {
-                    let msg = socket
-                        .read()
-                        .map_err(|e| format!("Failed to read CDP response for '{}': {}", method_owned, e))?;
-
-                    match msg {
-                        Message::Text(text) => {
-                            let parsed: serde_json::Value = serde_json::from_str(&text)
-                                .map_err(|e| format!("Failed to parse CDP response JSON: {}", e))?;
-
-                            // Check if this response matches our command id.
-                            if let Some(resp_id) = parsed.get("id").and_then(|v| v.as_u64()) {
-                                if resp_id == cmd_id {
-                                    // Check for CDP-level errors.
-                                    if let Some(error_obj) = parsed.get("error") {
-                                        let error_msg = error_obj
-                                            .get("message")
-                                            .and_then(|m| m.as_str())
-                                            .unwrap_or("Unknown CDP error");
-                                        let _ = socket.close(None);
-                                        return Err(format!(
-                                            "CDP error for '{}': {}",
-                                            method_owned, error_msg
-                                        ));
-                                    }
-
-                                    let _ = socket.close(None);
-                                    return Ok(parsed);
-                                }
+                    // Set a read timeout so that socket.read() does not block
+                    // indefinitely if Chrome becomes unresponsive. Without this,
+                    // the tokio::time::timeout above would fire but the blocking
+                    // task would continue, leaking a thread.
+                    {
+                        let read_timeout = Some(Duration::from_secs(10));
+                        match socket.get_mut() {
+                            tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+                                let _ = tcp.set_read_timeout(read_timeout);
                             }
-                            // Not our response (could be an event); keep reading.
+                            _ => {
+                                // TLS or other stream variants -- best-effort, skip.
+                            }
                         }
-                        Message::Close(_) => {
-                            return Err(format!(
-                                "WebSocket closed before receiving response for '{}'",
-                                method_owned
-                            ));
-                        }
-                        // Binary, Ping, Pong, Frame — skip them.
-                        _ => {}
                     }
-                }
-            })
+
+                    socket.send(Message::Text(payload_str)).map_err(|e| {
+                        format!("Failed to send CDP command '{}': {}", method_owned, e)
+                    })?;
+
+                    // Read messages until we find the response with our command id.
+                    loop {
+                        let msg = socket.read().map_err(|e| {
+                            format!("Failed to read CDP response for '{}': {}", method_owned, e)
+                        })?;
+
+                        match msg {
+                            Message::Text(text) => {
+                                let parsed: serde_json::Value = serde_json::from_str(&text)
+                                    .map_err(|e| {
+                                        format!("Failed to parse CDP response JSON: {}", e)
+                                    })?;
+
+                                // Check if this response matches our command id.
+                                if let Some(resp_id) = parsed.get("id").and_then(|v| v.as_u64()) {
+                                    if resp_id == cmd_id {
+                                        // Check for CDP-level errors.
+                                        if let Some(error_obj) = parsed.get("error") {
+                                            let error_msg = error_obj
+                                                .get("message")
+                                                .and_then(|m| m.as_str())
+                                                .unwrap_or("Unknown CDP error");
+                                            let _ = socket.close(None);
+                                            return Err(format!(
+                                                "CDP error for '{}': {}",
+                                                method_owned, error_msg
+                                            ));
+                                        }
+
+                                        let _ = socket.close(None);
+                                        return Ok(parsed);
+                                    }
+                                }
+                                // Not our response (could be an event); keep reading.
+                            }
+                            Message::Close(_) => {
+                                return Err(format!(
+                                    "WebSocket closed before receiving response for '{}'",
+                                    method_owned
+                                ));
+                            }
+                            // Binary, Ping, Pong, Frame — skip them.
+                            _ => {}
+                        }
+                    }
+                },
+            ),
         )
         .await
-        .map_err(|_| Error::Other(format!(
-            "CDP command '{}' timed out after 30s", method_for_timeout
-        )))?
+        .map_err(|_| {
+            Error::Other(format!(
+                "CDP command '{}' timed out after 30s",
+                method_for_timeout
+            ))
+        })?
         .map_err(|e| Error::Other(format!("CDP command task panicked: {}", e)))?
         .map_err(Error::Other)?;
 
@@ -508,7 +516,9 @@ impl PlaywrightBridge {
         let params = serde_json::json!({ "url": url });
 
         tracing::info!("CDP navigate to '{}'", url);
-        let response = self.send_cdp_command(&ws_url, "Page.navigate", params).await?;
+        let response = self
+            .send_cdp_command(&ws_url, "Page.navigate", params)
+            .await?;
 
         // Check if navigation returned an error message in the result.
         if let Some(result) = response.get("result") {

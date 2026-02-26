@@ -1106,10 +1106,7 @@ impl LLMRouter {
             match self.invoke_candidate(candidate, request).await {
                 Ok(outcome) => {
                     if let Some(ref tracker) = self.rate_limit_tracker {
-                        tracker.record_success(
-                            candidate.provider,
-                            Some(&candidate.model),
-                        );
+                        tracker.record_success(candidate.provider, Some(&candidate.model));
                     }
                     return Ok(outcome);
                 }
@@ -2178,10 +2175,7 @@ impl LLMRouter {
                     // Record the streaming success in the circuit breaker so that
                     // non-streaming and streaming paths share consistent state.
                     if let Some(ref tracker) = self.rate_limit_tracker {
-                        tracker.record_success(
-                            candidate.provider,
-                            Some(&candidate.model),
-                        );
+                        tracker.record_success(candidate.provider, Some(&candidate.model));
                     }
                     return Ok(stream);
                 }

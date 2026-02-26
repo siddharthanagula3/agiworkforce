@@ -137,9 +137,7 @@ impl AutonomousAgent {
             let mut queue = self.task_queue.lock();
             let pending_count = queue
                 .iter()
-                .filter(|t| {
-                    matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval)
-                })
+                .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval))
                 .count();
             if pending_count >= MAX_PENDING_TASKS {
                 return Err(anyhow!(
@@ -264,9 +262,7 @@ impl AutonomousAgent {
                     // (with timeout), then resumes or fails the task.
                     let agent_clone = self.clone_for_task()?;
                     let approval_task_id = task_id.clone();
-                    self.running_tasks
-                        .lock()
-                        .push(task_id);
+                    self.running_tasks.lock().push(task_id);
 
                     tokio::spawn(async move {
                         let approved = match tokio::time::timeout(
@@ -301,14 +297,12 @@ impl AutonomousAgent {
                             );
                             {
                                 let mut queue = agent_clone.task_queue.lock();
-                                if let Some(t) =
-                                    queue.iter_mut().find(|t| t.id == approval_task_id)
+                                if let Some(t) = queue.iter_mut().find(|t| t.id == approval_task_id)
                                 {
                                     t.status = TaskStatus::Planning;
                                 }
                             }
-                            if let Err(e) =
-                                agent_clone.execute_task(approval_task_id.clone()).await
+                            if let Err(e) = agent_clone.execute_task(approval_task_id.clone()).await
                             {
                                 tracing::error!(
                                     "[Agent] Task {} failed after approval: {}",
@@ -316,7 +310,9 @@ impl AutonomousAgent {
                                     e
                                 );
                                 // Clean up running_tasks slot on error
-                                agent_clone.running_tasks.lock()
+                                agent_clone
+                                    .running_tasks
+                                    .lock()
                                     .retain(|id| id != &approval_task_id);
                             }
                         } else {
@@ -326,15 +322,16 @@ impl AutonomousAgent {
                             );
                             {
                                 let mut queue = agent_clone.task_queue.lock();
-                                if let Some(t) =
-                                    queue.iter_mut().find(|t| t.id == approval_task_id)
+                                if let Some(t) = queue.iter_mut().find(|t| t.id == approval_task_id)
                                 {
                                     t.status = TaskStatus::Failed(
                                         "Task approval denied or timed out".to_string(),
                                     );
                                 }
                             }
-                            agent_clone.running_tasks.lock()
+                            agent_clone
+                                .running_tasks
+                                .lock()
                                 .retain(|id| id != &approval_task_id);
                         }
                     });
@@ -346,9 +343,7 @@ impl AutonomousAgent {
 
         // Push task_id to running_tasks BEFORE spawning to avoid a race where
         // execute_task could finish before the push.
-        self.running_tasks
-            .lock()
-            .push(task_id.clone());
+        self.running_tasks.lock().push(task_id.clone());
 
         let agent_clone = self.clone_for_task()?;
         let task_id_clone = task_id;
@@ -356,7 +351,9 @@ impl AutonomousAgent {
             if let Err(e) = agent_clone.execute_task(task_id_clone.clone()).await {
                 tracing::error!("[Agent] Task execution failed: {}", e);
                 // Clean up running_tasks slot on error (mirrors the approval path)
-                agent_clone.running_tasks.lock()
+                agent_clone
+                    .running_tasks
+                    .lock()
                     .retain(|id| id != &task_id_clone);
             }
         });
@@ -392,12 +389,17 @@ impl AutonomousAgent {
 
             // BUG-02 fix: emit step-started event to frontend
             if let Some(ref handle) = self.app_handle {
-                handle.emit("agent:step-started", json!({
-                    "taskId": task.id,
-                    "step": step.description,
-                    "stepIndex": step_index,
-                    "totalSteps": total_steps
-                })).ok();
+                handle
+                    .emit(
+                        "agent:step-started",
+                        json!({
+                            "taskId": task.id,
+                            "step": step.description,
+                            "stepIndex": step_index,
+                            "totalSteps": total_steps
+                        }),
+                    )
+                    .ok();
             }
 
             {
@@ -422,17 +424,19 @@ impl AutonomousAgent {
                         );
                         // BUG-02 fix: emit step-completed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle.emit("agent:step-completed", json!({
-                                "taskId": task.id,
-                                "step": step.description,
-                                "result": result.result.as_deref().unwrap_or(""),
-                                "stepIndex": step_index
-                            })).ok();
+                            handle
+                                .emit(
+                                    "agent:step-completed",
+                                    json!({
+                                        "taskId": task.id,
+                                        "step": step.description,
+                                        "result": result.result.as_deref().unwrap_or(""),
+                                        "stepIndex": step_index
+                                    }),
+                                )
+                                .ok();
                         }
-                        completed_summaries.push(format!(
-                            "{}: {}",
-                            step.id, step.description
-                        ));
+                        completed_summaries.push(format!("{}: {}", step.id, step.description));
                         step_succeeded = true;
                         break;
                     }
@@ -442,22 +446,23 @@ impl AutonomousAgent {
                             .as_deref()
                             .unwrap_or("Unknown error")
                             .to_string();
-                        let will_retry = task.retry_count < task.max_retries
-                            && attempt <= MAX_SELF_HEAL_RETRIES;
-                        tracing::warn!(
-                            "[Agent] Step {} failed: {}",
-                            step.id,
-                            error_msg
-                        );
+                        let will_retry =
+                            task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES;
+                        tracing::warn!("[Agent] Step {} failed: {}", step.id, error_msg);
                         // BUG-02 fix: emit step-failed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle.emit("agent:step-failed", json!({
-                                "taskId": task.id,
-                                "step": step.description,
-                                "error": error_msg,
-                                "attempt": attempt,
-                                "retrying": will_retry
-                            })).ok();
+                            handle
+                                .emit(
+                                    "agent:step-failed",
+                                    json!({
+                                        "taskId": task.id,
+                                        "step": step.description,
+                                        "error": error_msg,
+                                        "attempt": attempt,
+                                        "retrying": will_retry
+                                    }),
+                                )
+                                .ok();
                         }
                         if will_retry {
                             task.retry_count += 1;
@@ -520,18 +525,23 @@ impl AutonomousAgent {
                     }
                     Err(e) => {
                         let error_msg = e.to_string();
-                        let will_retry = task.retry_count < task.max_retries
-                            && attempt <= MAX_SELF_HEAL_RETRIES;
+                        let will_retry =
+                            task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES;
                         tracing::error!("[Agent] Step {} error: {}", step.id, error_msg);
                         // BUG-02 fix: emit step-failed event to frontend
                         if let Some(ref handle) = self.app_handle {
-                            handle.emit("agent:step-failed", json!({
-                                "taskId": task.id,
-                                "step": step.description,
-                                "error": error_msg,
-                                "attempt": attempt,
-                                "retrying": will_retry
-                            })).ok();
+                            handle
+                                .emit(
+                                    "agent:step-failed",
+                                    json!({
+                                        "taskId": task.id,
+                                        "step": step.description,
+                                        "error": error_msg,
+                                        "attempt": attempt,
+                                        "retrying": will_retry
+                                    }),
+                                )
+                                .ok();
                         }
                         if will_retry {
                             task.retry_count += 1;
@@ -652,17 +662,27 @@ impl AutonomousAgent {
         if let Some(ref handle) = self.app_handle {
             match &task.status {
                 TaskStatus::Completed => {
-                    handle.emit("agent:task-completed", json!({
-                        "taskId": task.id,
-                        "success": true,
-                        "stepsCompleted": completed_count
-                    })).ok();
+                    handle
+                        .emit(
+                            "agent:task-completed",
+                            json!({
+                                "taskId": task.id,
+                                "success": true,
+                                "stepsCompleted": completed_count
+                            }),
+                        )
+                        .ok();
                 }
                 TaskStatus::Failed(error_message) => {
-                    handle.emit("agent:task-failed", json!({
-                        "taskId": task.id,
-                        "error": error_message
-                    })).ok();
+                    handle
+                        .emit(
+                            "agent:task-failed",
+                            json!({
+                                "taskId": task.id,
+                                "error": error_message
+                            }),
+                        )
+                        .ok();
                 }
                 _ => {}
             }
@@ -675,9 +695,7 @@ impl AutonomousAgent {
             }
         }
 
-        self.running_tasks
-            .lock()
-            .retain(|id| id != &task_id);
+        self.running_tasks.lock().retain(|id| id != &task_id);
 
         // Wake any `run_goal` waiters now that this task reached a terminal state.
         self.task_notify.notify_waiters();

@@ -665,6 +665,340 @@ impl ToolExecutionGuard {
             },
         );
 
+        // LLM reasoning — pure internal reasoning, no side effects
+        allowed_tools.insert(
+            "llm_reason".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["prompt".to_string(), "context".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // Code analysis — read-only, no execution
+        allowed_tools.insert(
+            "code_analyze".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["code".to_string(), "language".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // Image analysis via AI vision
+        allowed_tools.insert(
+            "image_analyze".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "image_path".to_string(),
+                    "question".to_string(),
+                    "detail".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // AI image generation
+        allowed_tools.insert(
+            "image_generate".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "prompt".to_string(),
+                    "provider".to_string(),
+                    "size".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        // AI video generation
+        allowed_tools.insert(
+            "video_generate".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: false,
+                allowed_parameters: vec!["prompt".to_string(), "duration_seconds".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        // Email operations
+        allowed_tools.insert(
+            "email_fetch".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec!["account_id".to_string(), "limit".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "email_send".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "to".to_string(),
+                    "subject".to_string(),
+                    "body".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        // Calendar operations
+        allowed_tools.insert(
+            "calendar_list_events".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["account_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "calendar_create_event".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "account_id".to_string(),
+                    "title".to_string(),
+                    "start_time".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        // Cloud storage operations
+        allowed_tools.insert(
+            "cloud_download".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "account_id".to_string(),
+                    "remote_path".to_string(),
+                    "local_path".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "cloud_upload".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "account_id".to_string(),
+                    "local_path".to_string(),
+                    "remote_path".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        // Database operations (beyond existing db_query)
+        allowed_tools.insert(
+            "db_execute".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "connection_id".to_string(),
+                    "sql".to_string(),
+                    "params".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "db_transaction_begin".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["connection_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "db_transaction_commit".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec!["connection_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "db_transaction_rollback".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec!["connection_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        // Memory tools for persistent cross-session storage
+        allowed_tools.insert(
+            "memory_remember".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "category".to_string(),
+                    "topic".to_string(),
+                    "content".to_string(),
+                    "importance".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "memory_recall".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["category".to_string(), "topic".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "memory_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["query".to_string(), "limit".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "memory_forget".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec!["category".to_string(), "topic".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // Scheduler tools
+        allowed_tools.insert(
+            "schedule_reminder".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec!["message".to_string(), "time".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        // API file transfer operations
+        allowed_tools.insert(
+            "api_upload".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "url".to_string(),
+                    "file_path".to_string(),
+                    "field_name".to_string(),
+                    "fields".to_string(),
+                    "auth".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "api_download".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "url".to_string(),
+                    "save_path".to_string(),
+                    "auth".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        // Git operations
+        allowed_tools.insert(
+            "git_status".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_add".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["path".to_string(), "files".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_commit".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["path".to_string(), "message".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_push".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "remote".to_string(),
+                    "branch".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_clone".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "url".to_string(),
+                    "destination".to_string(),
+                    "branch".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
         Self {
             allowed_tools,
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
@@ -784,6 +1118,15 @@ impl ToolExecutionGuard {
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'query' parameter".to_string(),
+                    ));
+                }
+            }
+            "db_execute" => {
+                if let Some(sql) = parameters.get("sql").and_then(|q| q.as_str()) {
+                    self.validate_sql(sql)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'sql' parameter".to_string(),
                     ));
                 }
             }
