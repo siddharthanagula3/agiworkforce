@@ -434,6 +434,7 @@ export function estimateComplexity(
   hasAttachments: boolean = false,
 ): ComplexityLevel {
   let score = 0;
+  let hasHighIndicator = false;
 
   // Length-based scoring (longer messages tend to be more complex)
   const wordCount = message.split(/\s+/).length;
@@ -442,11 +443,19 @@ export function estimateComplexity(
   else if (wordCount < 20) score -= 1;
 
   // Attachment complexity (images/files usually need more capable models)
-  if (hasAttachments) score += 1;
+  // Attachments always indicate at least moderate complexity — use +2 to
+  // survive the short-message penalty.
+  if (hasAttachments) {
+    score += 2;
+    hasHighIndicator = true;
+  }
 
   // Pattern matching
   for (const pattern of COMPLEXITY_INDICATORS.high) {
-    if (pattern.test(message)) score += 2;
+    if (pattern.test(message)) {
+      score += 2;
+      hasHighIndicator = true;
+    }
   }
 
   for (const pattern of COMPLEXITY_INDICATORS.moderate) {
@@ -462,8 +471,15 @@ export function estimateComplexity(
   if (questionCount >= 3) score += 2;
   else if (questionCount >= 2) score += 1;
 
-  // Code blocks suggest technical complexity
-  if (message.includes('```')) score += 1;
+  // Code blocks suggest technical complexity — use +2 to survive short-message penalty.
+  if (message.includes('```')) {
+    score += 2;
+    hasHighIndicator = true;
+  }
+
+  // If a high-complexity indicator was detected, guarantee at least moderate.
+  // This prevents the short-message word-count penalty from masking strong signals.
+  if (hasHighIndicator && score < 2) score = 2;
 
   // Classify based on final score
   // Target: 70% simple, 20% moderate, 10% complex
@@ -1012,13 +1028,32 @@ export function routeMessage(
     };
   }
 
-  // Low confidence local classification - use default task type based on mode
-  // In production, this would call Gemini Flash for LLM classification
-  const defaultTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
+  // Low confidence local classification — use classifyIntentLocally for a content-aware
+  // task type instead of always returning a hardcoded 'general' / 'reasoning' default.
+  // classifyIntentLocally runs entirely in-process (no network, no cost) and always
+  // returns a result at 'hobby' tier, making it safe to call synchronously here.
+  // The returned IntentType is mapped to a TaskType via intentToTaskType().
+  //
+  // TODO [M8-LLM]: For Pro+ tiers, pass an async llmClassify callback through
+  // routeMessage() so that ambiguous messages can be classified by a fast model
+  // (e.g. Gemini Flash / GPT-5 Nano).  Signature: (prompt: string) => Promise<string>.
+  // Wire through call-sites once the subscription tier is available in this context.
+  let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
+
+  const intentResult = classifyIntentLocally(message, {
+    tier: 'hobby',
+    hasAttachments: false,
+    attachmentTypes: [],
+  });
+
+  if (intentResult && intentResult.confidence >= 0.4) {
+    inferredTaskType = intentToTaskType(intentResult.primary);
+  }
+
   const pool = MODEL_POOLS[autoMode];
   const { modelId, reason, complexity } = selectModelFromPool(
     pool,
-    defaultTaskType,
+    inferredTaskType,
     autoMode,
     message,
     false,
@@ -1026,9 +1061,9 @@ export function routeMessage(
 
   return {
     selectedModel: modelId,
-    taskType: defaultTaskType,
-    reason: `Default ${defaultTaskType} task. ${reason}`,
-    confidence: 0.5,
+    taskType: inferredTaskType,
+    reason: `Low-confidence local classification (${intentResult?.primary ?? 'unknown'} → ${inferredTaskType}). ${reason}`,
+    confidence: intentResult?.confidence ?? 0.4,
     complexity,
   };
 }

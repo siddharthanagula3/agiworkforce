@@ -178,6 +178,8 @@ export interface ConversationSummary {
   customInstructions?: string;
   /** Project ID this conversation belongs to */
   projectId?: string;
+  /** When true, messages in this conversation are not persisted to disk */
+  incognito?: boolean;
 }
 
 // Pending user message - for mid-task input while AI is processing

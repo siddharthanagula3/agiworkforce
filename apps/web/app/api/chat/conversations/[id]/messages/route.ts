@@ -59,13 +59,16 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
     },
   });
 
+  // Use getUser() (not getSession()) so the JWT is re-validated against Supabase
+  // on every server-side request. getSession() trusts the cookie without revalidation.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     throw createError.unauthorized();
   }
-  return session.user;
+  return user;
 }
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -197,7 +200,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: request.headers.get('authorization') || '',
-      Cookie: request.headers.get('cookie') || '',
+      // Do not forward cookies to internal LLM endpoint — Authorization header is sufficient.
     },
     body: JSON.stringify({
       model: model || conversation.model || 'auto',

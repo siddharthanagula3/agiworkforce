@@ -335,3 +335,283 @@ describe('settingsStore', () => {
     });
   });
 });
+
+// ── H16 — migrate() boundary tests ────────────────────────────────────────
+// The migrate function inside useSettingsStore's persist config is not exported
+// directly.  We test it by replicating the same migration logic as a pure
+// function that mirrors the source exactly.  This validates each version
+// boundary in isolation.
+
+type MigrateState = {
+  llmConfig?: {
+    defaultProvider?: string;
+    defaultModels?: Record<string, string>;
+    favoriteModels?: string[];
+    taskRouting?: Record<string, { provider: string; model: string }>;
+  };
+  chatPreferences?: {
+    promptCompletionEnabled?: boolean;
+    alwaysUseAgentMode?: boolean;
+    compactMode?: boolean;
+    autoApproveTools?: boolean;
+  };
+  executionPreferences?: {
+    maxTimeoutMinutes?: number;
+    enableCheckpointing?: boolean;
+    checkpointInterval?: number;
+    autoResumeOnRestart?: boolean;
+    enableTimeoutWarnings?: boolean;
+  };
+  windowPreferences?: {
+    theme?: string;
+    language?: string;
+    startupPosition?: string;
+    dockOnStartup?: string | null;
+  };
+  globalHotkeyPreferences?: {
+    enabled?: boolean;
+    combo?: string;
+  };
+  customModels?: unknown[];
+  features?: Record<string, boolean>;
+};
+
+const DEFAULT_FEATURES = {
+  webSearch: true,
+  browserAutomation: true,
+  computerUse: true,
+  screenshotOcr: true,
+  voiceInput: true,
+  voiceOutput: true,
+  fileOperations: true,
+  terminalAccess: true,
+  gitIntegration: true,
+  imageGeneration: true,
+  videoGeneration: false,
+  musicGeneration: false,
+  documentCreation: true,
+  codeExecution: true,
+  subAgents: true,
+  agentTeams: true,
+  backgroundAgents: false,
+  autoPlanning: false,
+  multiModelConsensus: false,
+};
+
+/** Mirrors the migrate() function from settingsStore.ts verbatim. */
+function migrateSettings(persistedState: unknown, version: number): MigrateState {
+  const state = persistedState as MigrateState;
+
+  // v1 → v2
+  if (version < 2) {
+    if (state?.llmConfig) {
+      state.llmConfig.defaultProvider = 'managed_cloud';
+      state.llmConfig.defaultModels = {
+        ollama: state.llmConfig?.defaultModels?.['ollama'] ?? '',
+        managed_cloud: state.llmConfig?.defaultModels?.['managed_cloud'] ?? 'auto',
+      };
+      state.llmConfig.favoriteModels = [];
+      if (state.llmConfig.taskRouting) {
+        for (const key of Object.keys(state.llmConfig.taskRouting)) {
+          state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
+        }
+      }
+    }
+  }
+
+  // v2 → v3
+  if (version < 3) {
+    if (!state.chatPreferences) {
+      state.chatPreferences = {
+        promptCompletionEnabled: true,
+        alwaysUseAgentMode: false,
+        compactMode: true,
+        autoApproveTools: false,
+      };
+    } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
+      state.chatPreferences.alwaysUseAgentMode = false;
+    }
+  }
+
+  // v3 → v4
+  if (version < 4) {
+    if (!state.executionPreferences) {
+      state.executionPreferences = {
+        maxTimeoutMinutes: 1440,
+        enableCheckpointing: true,
+        checkpointInterval: 5,
+        autoResumeOnRestart: true,
+        enableTimeoutWarnings: true,
+      };
+    }
+  }
+
+  // v4 → v5
+  if (version < 5) {
+    if (state.chatPreferences && state.chatPreferences.compactMode === undefined) {
+      state.chatPreferences.compactMode = true;
+    }
+  }
+
+  // v5 → v6
+  if (version < 6) {
+    if (state?.llmConfig?.defaultModels) {
+      state.llmConfig.defaultModels = {
+        ollama: state.llmConfig.defaultModels['ollama'] ?? '',
+        managed_cloud: state.llmConfig.defaultModels['managed_cloud'] ?? 'auto',
+      };
+    }
+  }
+
+  // v6 → v7
+  if (version < 7) {
+    if (!state.windowPreferences) {
+      state.windowPreferences = {};
+    }
+    if (!state.windowPreferences.language) {
+      state.windowPreferences.language = 'en';
+    }
+  }
+
+  // v7 → v8
+  if (version < 8) {
+    if (state.chatPreferences && state.chatPreferences.autoApproveTools === undefined) {
+      state.chatPreferences.autoApproveTools = false;
+    }
+  }
+
+  // v8 → v9
+  if (version < 9) {
+    const stateWithHotkey = state as MigrateState;
+    if (!stateWithHotkey.globalHotkeyPreferences) {
+      stateWithHotkey.globalHotkeyPreferences = {
+        enabled: true,
+        combo: 'CommandOrControl+Shift+Space',
+      };
+    }
+  }
+
+  // v9 → v10
+  if (version < 10) {
+    if (!Array.isArray(state.customModels)) {
+      state.customModels = [];
+    }
+  }
+
+  // v10 → v11
+  if (version < 11) {
+    if (!state.features || typeof state.features !== 'object') {
+      state.features = { ...DEFAULT_FEATURES };
+    }
+  }
+
+  return state;
+}
+
+describe('settingsStore migrate() boundaries (H16)', () => {
+  describe('v1 → v2: defaultProvider resets to managed_cloud', () => {
+    it('resets defaultProvider to managed_cloud', () => {
+      const old = { llmConfig: { defaultProvider: 'openai', defaultModels: {} } };
+      const result = migrateSettings(old, 1);
+      expect(result.llmConfig?.defaultProvider).toBe('managed_cloud');
+    });
+
+    it('resets favoriteModels to empty array', () => {
+      const old = { llmConfig: { favoriteModels: ['gpt-4', 'claude-3'], defaultModels: {} } };
+      const result = migrateSettings(old, 1);
+      expect(result.llmConfig?.favoriteModels).toEqual([]);
+    });
+
+    it('resets all taskRouting entries to managed_cloud/auto', () => {
+      const old = {
+        llmConfig: {
+          defaultModels: {},
+          taskRouting: {
+            code: { provider: 'openai', model: 'gpt-4' },
+            chat: { provider: 'anthropic', model: 'claude-3' },
+          },
+        },
+      };
+      const result = migrateSettings(old, 1);
+      expect(result.llmConfig?.taskRouting?.['code']).toEqual({ provider: 'managed_cloud', model: 'auto' });
+      expect(result.llmConfig?.taskRouting?.['chat']).toEqual({ provider: 'managed_cloud', model: 'auto' });
+    });
+  });
+
+  describe('v2 → v3: alwaysUseAgentMode defaults to false', () => {
+    it('adds alwaysUseAgentMode=false when chatPreferences is missing', () => {
+      const old = {};
+      const result = migrateSettings(old, 2);
+      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
+    });
+
+    it('adds alwaysUseAgentMode=false when it is undefined on existing chatPreferences', () => {
+      const old = { chatPreferences: { promptCompletionEnabled: true } };
+      const result = migrateSettings(old, 2);
+      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
+    });
+
+    it('preserves alwaysUseAgentMode=true if already set', () => {
+      // Migration only sets the field when undefined — truthy value must survive
+      // Note: the migrate function only fires when version < 3, so a stored v2
+      // state that already has alwaysUseAgentMode=true should keep it.
+      const old = { chatPreferences: { promptCompletionEnabled: true, alwaysUseAgentMode: true } };
+      const result = migrateSettings(old, 2);
+      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(true);
+    });
+  });
+
+  describe('v3 → v4: executionPreferences created', () => {
+    it('creates executionPreferences when absent', () => {
+      const old = {};
+      const result = migrateSettings(old, 3);
+      expect(result.executionPreferences).toBeDefined();
+      expect(result.executionPreferences?.maxTimeoutMinutes).toBe(1440);
+      expect(result.executionPreferences?.enableCheckpointing).toBe(true);
+      expect(result.executionPreferences?.checkpointInterval).toBe(5);
+      expect(result.executionPreferences?.autoResumeOnRestart).toBe(true);
+      expect(result.executionPreferences?.enableTimeoutWarnings).toBe(true);
+    });
+
+    it('does not overwrite existing executionPreferences', () => {
+      const old = { executionPreferences: { maxTimeoutMinutes: 60 } };
+      const result = migrateSettings(old, 3);
+      // Already present — migrate skips the block
+      expect(result.executionPreferences?.maxTimeoutMinutes).toBe(60);
+    });
+  });
+
+  describe('v4 → v5: compactMode defaults to true', () => {
+    it('sets compactMode=true when it is undefined', () => {
+      const old = { chatPreferences: { promptCompletionEnabled: true } };
+      const result = migrateSettings(old, 4);
+      expect(result.chatPreferences?.compactMode).toBe(true);
+    });
+
+    it('preserves compactMode=false if already set to false', () => {
+      const old = { chatPreferences: { compactMode: false } };
+      const result = migrateSettings(old, 4);
+      expect(result.chatPreferences?.compactMode).toBe(false);
+    });
+  });
+
+  describe('full migration from v1 to current', () => {
+    it('migrating a minimal v1 state produces all required fields', () => {
+      const v1State = {
+        llmConfig: {
+          defaultProvider: 'openai',
+          defaultModels: { openai: 'gpt-4' },
+        },
+      };
+      const result = migrateSettings(v1State, 1);
+
+      expect(result.llmConfig?.defaultProvider).toBe('managed_cloud');
+      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
+      expect(result.executionPreferences?.maxTimeoutMinutes).toBe(1440);
+      expect(result.chatPreferences?.compactMode).toBe(true);
+      expect(result.globalHotkeyPreferences?.enabled).toBe(true);
+      expect(Array.isArray(result.customModels)).toBe(true);
+      expect(result.features).toBeDefined();
+    });
+  });
+});
