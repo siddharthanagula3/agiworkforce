@@ -194,6 +194,21 @@ pub async fn db_execute_prepared(
         ));
     }
 
+    // SECURITY (H3): Restrict db_execute_prepared to safe DML/DQL only.
+    // DROP, ALTER, CREATE, PRAGMA, ATTACH, and other DDL statements are not allowed.
+    let sql_upper = sql.trim().to_uppercase();
+    if !sql_upper.starts_with("SELECT")
+        && !sql_upper.starts_with("INSERT")
+        && !sql_upper.starts_with("UPDATE")
+        && !sql_upper.starts_with("DELETE")
+        && !sql_upper.starts_with("WITH")
+    {
+        return Err(format!(
+            "Only SELECT, INSERT, UPDATE, DELETE, and WITH statements are allowed in prepared statements. Got: {}",
+            &sql[..sql.len().min(50)]
+        ));
+    }
+
     let state = state.lock().await;
 
     let result = state
@@ -496,8 +511,40 @@ pub async fn db_build_select(query: SelectQuery) -> Result<String, String> {
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 
+/// Build an INSERT SQL string using string interpolation.
+///
+/// # Deprecation Warning (M10)
+/// This command returns a fully-interpolated SQL string. Callers should treat
+/// the result as read-only data for display purposes only. For actual database
+/// writes, use `db_execute_prepared` with parameterized placeholders instead,
+/// which eliminates the risk of SQL injection from bypassing the escape layer.
+/// All column names and values are length-validated (max 10 000 chars each).
 #[tauri::command]
 pub async fn db_build_insert(query: InsertQuery) -> Result<String, String> {
+    // M10: validate lengths on all columns and values before building
+    for col in &query.columns {
+        if col.len() > 10_000 {
+            return Err(format!(
+                "Column name too long ({} chars). Maximum is 10 000",
+                col.len()
+            ));
+        }
+    }
+    for row in &query.values {
+        for val in row {
+            if val.len() > 10_000 {
+                return Err(format!(
+                    "Value too long ({} chars). Maximum is 10 000",
+                    val.len()
+                ));
+            }
+        }
+    }
+
+    tracing::warn!(
+        "db_build_insert uses string interpolation. Prefer db_execute_prepared for safe writes."
+    );
+
     let mut builder = QueryBuilder::insert(&query.table);
 
     builder = builder.into_columns(&query.columns.iter().map(|s| s.as_str()).collect::<Vec<_>>());
@@ -511,8 +558,34 @@ pub async fn db_build_insert(query: InsertQuery) -> Result<String, String> {
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 
+/// Build an UPDATE SQL string using string interpolation.
+///
+/// # Deprecation Warning (M10)
+/// This command returns a fully-interpolated SQL string. For actual database
+/// writes, use `db_execute_prepared` with parameterized placeholders instead.
+/// All keys and values are length-validated (max 10 000 chars each).
 #[tauri::command]
 pub async fn db_build_update(query: UpdateQuery) -> Result<String, String> {
+    // M10: validate lengths on all set_values keys and values
+    for (key, val) in &query.set_values {
+        if key.len() > 10_000 {
+            return Err(format!(
+                "Column name too long ({} chars). Maximum is 10 000",
+                key.len()
+            ));
+        }
+        if val.len() > 10_000 {
+            return Err(format!(
+                "Value too long ({} chars). Maximum is 10 000",
+                val.len()
+            ));
+        }
+    }
+
+    tracing::warn!(
+        "db_build_update uses string interpolation. Prefer db_execute_prepared for safe writes."
+    );
+
     let mut builder = QueryBuilder::update(&query.table);
 
     for (key, value) in &query.set_values {
@@ -891,9 +964,21 @@ pub async fn db_store_password(connection_id: String, password: String) -> Resul
         dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
     let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
 
-    // Store in database
+    // Store in database.
+    // FIXME (M16): This function opens a raw rusqlite connection that bypasses the
+    // application connection pool (DatabaseState / AppDatabase). In a multi-user or
+    // high-concurrency deployment this could cause write contention or missed WAL
+    // checkpoints. The preferred fix is to accept AppDatabase via Tauri state and
+    // execute through the pool, but that requires a Tauri command signature change
+    // (adding a State<'_, AppDatabase> parameter) which is deferred to avoid a
+    // breaking API change. WAL mode is enabled below as a mitigation.
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Enable WAL mode on this standalone connection to reduce lock contention with
+    // the pool (M16 mitigation — remove once migrated to pool-based access).
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .map_err(|e| format!("Failed to enable WAL mode: {}", e))?;
 
     let cred_key = format!("db_connection_password_{}", connection_id);
     let now = chrono::Utc::now().to_rfc3339();

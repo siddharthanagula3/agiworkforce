@@ -362,22 +362,24 @@ impl DailyLimitTracker {
         self.limits_exceeded.store(exceeded, Ordering::SeqCst);
     }
 
-    /// Returns true if daily limits are exceeded
+    /// Returns true if daily limits are exceeded.
+    ///
+    /// # Concurrency note (M3 — TOCTOU fix)
+    /// The previous implementation used a read lock to check the date and then
+    /// promoted to a write lock if a reset was needed. This left a window where
+    /// two threads could both observe `stats.date != today` on the read lock and
+    /// both attempt the reset, causing a double-reset. We now acquire the write
+    /// lock unconditionally so the check and the reset are performed atomically.
     pub fn is_limit_exceeded(&self) -> bool {
-        // First check if we need to reset for a new day
         let today = Utc::now().format("%Y-%m-%d").to_string();
-        {
-            let stats = self.stats.read();
-            if stats.date != today {
-                drop(stats);
-                let mut stats = self.stats.write();
-                *stats = DailyUsageStats::new_for_today();
-                self.limits_exceeded.store(false, Ordering::SeqCst);
-                self.reset_notifier.notify_waiters();
-                return false;
-            }
+        let mut stats = self.stats.write();
+        if stats.date != today {
+            *stats = DailyUsageStats::new_for_today();
+            self.limits_exceeded.store(false, Ordering::SeqCst);
+            self.reset_notifier.notify_waiters();
+            return false;
         }
-
+        drop(stats);
         self.limits_exceeded.load(Ordering::SeqCst)
     }
 
@@ -655,16 +657,28 @@ impl ExecutionStatePersistence {
     pub fn list_resumable_tasks(&self) -> Result<Vec<ContinuousTask>> {
         let conn = Connection::open(&self.db_path)?;
 
-        let mut stmt = conn.prepare(
+        // M2: derive terminal-status strings programmatically from the enum so
+        // that the SQL filter stays in sync if variant names ever change.
+        let completed_status = serde_json::to_string(&ContinuousTaskStatus::Completed)
+            .unwrap_or_else(|_| "\"completed\"".to_string());
+        let failed_status = serde_json::to_string(&ContinuousTaskStatus::Failed)
+            .unwrap_or_else(|_| "\"failed\"".to_string());
+        let cancelled_status = serde_json::to_string(&ContinuousTaskStatus::Cancelled)
+            .unwrap_or_else(|_| "\"cancelled\"".to_string());
+
+        let sql = format!(
             r#"
             SELECT id, description, status, priority, config_json, created_at, started_at,
                    finished_at, current_step, consecutive_failures, tokens_used, requests_made,
                    total_cost, last_error, last_checkpoint_id, result_json
             FROM continuous_execution_tasks
-            WHERE status NOT IN ('"completed"', '"failed"', '"cancelled"')
+            WHERE status NOT IN ('{}', '{}', '{}')
             ORDER BY created_at ASC
             "#,
-        )?;
+            completed_status, failed_status, cancelled_status
+        );
+
+        let mut stmt = conn.prepare(&sql)?;
 
         let tasks = stmt
             .query_map([], |row| {

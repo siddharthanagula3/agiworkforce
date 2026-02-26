@@ -145,6 +145,603 @@ mod tests {
     }
 }
 
+// =============================================================================
+// C5 — Production SSE parser function tests
+//
+// These tests call the actual `parse_sse_event` dispatcher (and through it the
+// provider-specific parse functions: parse_openai_sse, parse_anthropic_sse,
+// parse_google_sse, parse_ollama_sse) with realistic SSE event strings.
+// =============================================================================
+#[cfg(test)]
+mod production_parser_tests {
+    use crate::core::llm::sse_parser::parse_sse_event;
+    use crate::core::llm::Provider;
+
+    // =========================================================================
+    // OpenAI format tests (also covers Perplexity, XAI, DeepSeek, Qwen, etc.)
+    // =========================================================================
+
+    #[test]
+    fn test_openai_content_delta() {
+        let event = r#"data: {"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-5.2"}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk.content, "Hello");
+        assert!(!chunk.done);
+        assert!(chunk.finish_reason.is_none());
+        assert_eq!(chunk.model.as_deref(), Some("gpt-5.2"));
+        assert!(!chunk.keepalive);
+    }
+
+    #[test]
+    fn test_openai_finish_reason_stop() {
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.2"}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn test_openai_done_sentinel() {
+        let event = "data: [DONE]";
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        assert!(chunk.content.is_empty());
+        assert!(chunk.finish_reason.is_none());
+    }
+
+    #[test]
+    fn test_openai_with_usage() {
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.2","usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(15));
+        assert_eq!(usage.completion_tokens, Some(25));
+        assert_eq!(usage.total_tokens, Some(40));
+    }
+
+    #[test]
+    fn test_openai_tool_call_delta() {
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"gpt-5.2"}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(!chunk.done);
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 0);
+        assert_eq!(tool_calls[0].id, "call_xyz");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert!(tool_calls[0].arguments.contains("\"city\":"));
+    }
+
+    #[test]
+    fn test_openai_finish_reason_tool_calls() {
+        let event = r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn test_openai_api_error_in_stream() {
+        let event = r#"data: {"error":{"message":"Rate limit exceeded","type":"rate_limit_error","code":"rate_limit_exceeded"}}"#;
+
+        let result = parse_sse_event(event, Provider::OpenAI);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Rate limit exceeded"));
+        assert!(err_msg.contains("rate_limit_error"));
+    }
+
+    #[test]
+    fn test_openai_empty_data_field() {
+        // An event with no "data:" prefix lines produces an empty chunk
+        let event = "event: something\n";
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_openai_malformed_json_returns_error() {
+        let event = "data: {not valid json}";
+
+        let result = parse_sse_event(event, Provider::OpenAI);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_openai_finish_reason_length() {
+        let event = r#"data: {"choices":[{"index":0,"delta":{"content":"..."},"finish_reason":"length"}],"model":"gpt-5.2"}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("length"));
+        assert_eq!(chunk.content, "...");
+    }
+
+    #[test]
+    fn test_openai_content_filter_finish() {
+        let event = r#"data: {"choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}]}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("content_filter"));
+    }
+
+    #[test]
+    fn test_openai_multi_line_event() {
+        // SSE events can have multiple data: lines; only lines with "data:" prefix are parsed
+        let event = "event: message\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}";
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk.content, "Hi");
+        assert!(!chunk.done);
+    }
+
+    // =========================================================================
+    // Verify OpenAI-compatible providers route through parse_openai_sse
+    // =========================================================================
+
+    #[test]
+    fn test_deepseek_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"DeepSeek says hi"},"finish_reason":null}],"model":"deepseek-chat"}"#;
+
+        let chunk = parse_sse_event(event, Provider::DeepSeek).unwrap();
+
+        assert_eq!(chunk.content, "DeepSeek says hi");
+        assert_eq!(chunk.model.as_deref(), Some("deepseek-chat"));
+    }
+
+    #[test]
+    fn test_xai_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"Grok here"},"finish_reason":null}],"model":"grok-4"}"#;
+
+        let chunk = parse_sse_event(event, Provider::XAI).unwrap();
+
+        assert_eq!(chunk.content, "Grok here");
+    }
+
+    #[test]
+    fn test_perplexity_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"Search result"},"finish_reason":null}],"model":"sonar"}"#;
+
+        let chunk = parse_sse_event(event, Provider::Perplexity).unwrap();
+
+        assert_eq!(chunk.content, "Search result");
+    }
+
+    #[test]
+    fn test_qwen_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"Qwen response"},"finish_reason":null}],"model":"qwen-max"}"#;
+
+        let chunk = parse_sse_event(event, Provider::Qwen).unwrap();
+
+        assert_eq!(chunk.content, "Qwen response");
+    }
+
+    #[test]
+    fn test_moonshot_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"Kimi says"},"finish_reason":null}],"model":"kimi-k2.5-thinking"}"#;
+
+        let chunk = parse_sse_event(event, Provider::Moonshot).unwrap();
+
+        assert_eq!(chunk.content, "Kimi says");
+    }
+
+    #[test]
+    fn test_managed_cloud_uses_openai_format() {
+        let event = r#"data: [DONE]"#;
+
+        let chunk = parse_sse_event(event, Provider::ManagedCloud).unwrap();
+
+        assert!(chunk.done);
+    }
+
+    // =========================================================================
+    // Anthropic format tests
+    // =========================================================================
+
+    #[test]
+    fn test_anthropic_content_block_delta_text() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello from Claude\"}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.content, "Hello from Claude");
+        assert!(!chunk.done);
+        assert!(!chunk.keepalive);
+    }
+
+    #[test]
+    fn test_anthropic_message_start_with_model() {
+        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_abc\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-5\",\"usage\":{\"input_tokens\":25,\"output_tokens\":0}}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert_eq!(chunk.model.as_deref(), Some("claude-sonnet-4-5"));
+        assert!(!chunk.done);
+        // Usage from message_start contains input tokens
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(25));
+        assert_eq!(usage.completion_tokens, Some(0));
+    }
+
+    #[test]
+    fn test_anthropic_message_delta_stop() {
+        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":10,\"output_tokens\":50}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("end_turn"));
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(10));
+        assert_eq!(usage.completion_tokens, Some(50));
+        assert_eq!(usage.total_tokens, Some(60));
+    }
+
+    #[test]
+    fn test_anthropic_message_stop() {
+        let event = "event: message_stop\ndata: {\"type\":\"message_stop\"}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert!(chunk.done);
+    }
+
+    #[test]
+    fn test_anthropic_tool_use_content_block_start() {
+        let event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_abc\",\"name\":\"get_weather\",\"input\":{}}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "toolu_abc");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].index, 1);
+    }
+
+    #[test]
+    fn test_anthropic_input_json_delta() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"NYC\\\"\"}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].index, 1);
+        assert!(tool_calls[0].arguments.contains("NYC"));
+    }
+
+    #[test]
+    fn test_anthropic_ping_event() {
+        let event = "event: ping\ndata: {}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        // Ping event is handled inside parse_anthropic_sse as a no-op content event
+        // (keepalive detection happens at the SseStreamParser level, not in parse_anthropic_sse)
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_anthropic_error_event() {
+        let event = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}";
+
+        let result = parse_sse_event(event, Provider::Anthropic);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Overloaded"));
+        assert!(err_msg.contains("overloaded_error"));
+    }
+
+    #[test]
+    fn test_anthropic_message_delta_tool_use_stop() {
+        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"input_tokens\":20,\"output_tokens\":30}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_use"));
+    }
+
+    #[test]
+    fn test_anthropic_thinking_delta_ignored() {
+        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think...\"}}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        // Thinking deltas should not appear as content
+        assert!(chunk.content.is_empty());
+    }
+
+    #[test]
+    fn test_anthropic_content_block_stop_is_noop() {
+        let event = "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert!(!chunk.done);
+        assert!(chunk.content.is_empty());
+    }
+
+    // =========================================================================
+    // Google/Gemini format tests
+    // =========================================================================
+
+    #[test]
+    fn test_google_text_content() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"Hello from Gemini"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15}}"#;
+
+        let chunk = parse_sse_event(event, Provider::Google).unwrap();
+
+        assert_eq!(chunk.content, "Hello from Gemini");
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("STOP"));
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(10));
+        assert_eq!(usage.completion_tokens, Some(5));
+        assert_eq!(usage.total_tokens, Some(15));
+    }
+
+    #[test]
+    fn test_google_streaming_partial_no_finish() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"Partial "}],"role":"model"}}]}"#;
+
+        let chunk = parse_sse_event(event, Provider::Google).unwrap();
+
+        assert_eq!(chunk.content, "Partial ");
+        assert!(!chunk.done);
+        assert!(chunk.finish_reason.is_none());
+    }
+
+    #[test]
+    fn test_google_api_error() {
+        let event = r#"data: {"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"Quota exceeded"}}"#;
+
+        let result = parse_sse_event(event, Provider::Google);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("429"));
+        assert!(err_msg.contains("RESOURCE_EXHAUSTED"));
+        assert!(err_msg.contains("Quota exceeded"));
+    }
+
+    #[test]
+    fn test_google_safety_filter_block() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"SAFETY"}]}"#;
+
+        let result = parse_sse_event(event, Provider::Google);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("safety filters"));
+    }
+
+    #[test]
+    fn test_google_recitation_block() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"RECITATION"}]}"#;
+
+        let result = parse_sse_event(event, Provider::Google);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("recitation"));
+    }
+
+    #[test]
+    fn test_google_function_call() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"search_web","args":{"query":"weather NYC"}}}],"role":"model"},"finishReason":"STOP"}]}"#;
+
+        let chunk = parse_sse_event(event, Provider::Google).unwrap();
+
+        assert!(chunk.done);
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].name, "search_web");
+        assert!(tool_calls[0].arguments.contains("weather NYC"));
+        // Google-generated IDs start with "call_"
+        assert!(tool_calls[0].id.starts_with("call_"));
+    }
+
+    #[test]
+    fn test_google_empty_candidates() {
+        let event = r#"data: {"candidates":[]}"#;
+
+        let chunk = parse_sse_event(event, Provider::Google).unwrap();
+
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_google_malformed_json_returns_error() {
+        let event = "data: not json at all";
+
+        let result = parse_sse_event(event, Provider::Google);
+
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Ollama format tests
+    // =========================================================================
+
+    #[test]
+    fn test_ollama_streaming_content() {
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"Hello"},"done":false}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        assert_eq!(chunk.content, "Hello");
+        assert!(!chunk.done);
+        assert_eq!(chunk.model.as_deref(), Some("llama4-maverick"));
+    }
+
+    #[test]
+    fn test_ollama_done_with_usage() {
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":50}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
+        assert_eq!(chunk.model.as_deref(), Some("llama4-maverick"));
+        let usage = chunk.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, Some(20));
+        assert_eq!(usage.completion_tokens, Some(50));
+        assert_eq!(usage.total_tokens, Some(70));
+    }
+
+    #[test]
+    fn test_ollama_done_without_done_reason_defaults_to_stop() {
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":true}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        assert!(chunk.done);
+        assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn test_ollama_error_response() {
+        let event = r#"{"error":"model 'noexist' not found"}"#;
+
+        let result = parse_sse_event(event, Provider::Ollama);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("noexist"));
+    }
+
+    #[test]
+    fn test_ollama_tool_calls() {
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"calculator","arguments":{"expression":"2+2"}}}]},"done":false}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        let tool_calls = chunk.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].name, "calculator");
+        assert!(tool_calls[0].arguments.contains("2+2"));
+    }
+
+    #[test]
+    fn test_ollama_tool_calls_synthesize_finish_reason() {
+        // When Ollama returns tool calls, finish_reason should be "tool_calls"
+        // even if done=false
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"search","arguments":"{\"q\":\"test\"}"}}]},"done":false}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        // tool_calls present implies finish_reason="tool_calls"
+        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn test_ollama_malformed_json() {
+        let event = "this is not json";
+
+        let result = parse_sse_event(event, Provider::Ollama);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ollama_empty_message_content() {
+        let event = r#"{"model":"llama4-maverick","message":{"role":"assistant","content":""},"done":false}"#;
+
+        let chunk = parse_sse_event(event, Provider::Ollama).unwrap();
+
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+        assert!(chunk.finish_reason.is_none());
+    }
+
+    // =========================================================================
+    // Cross-provider edge cases
+    // =========================================================================
+
+    #[test]
+    fn test_openai_empty_delta_no_crash() {
+        // An event with an empty delta object (no content, no tool_calls)
+        let event = r#"data: {"choices":[{"delta":{},"finish_reason":null}]}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+        assert!(chunk.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_anthropic_no_data_line_produces_empty_chunk() {
+        // An event with only an event: line and no data: line
+        let event = "event: content_block_stop";
+
+        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
+
+        assert!(chunk.content.is_empty());
+        assert!(!chunk.done);
+    }
+
+    #[test]
+    fn test_google_with_model_field() {
+        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"ok"}],"role":"model"}}],"model":"gemini-3-pro-preview"}"#;
+
+        let chunk = parse_sse_event(event, Provider::Google).unwrap();
+
+        assert_eq!(chunk.model.as_deref(), Some("gemini-3-pro-preview"));
+    }
+
+    #[test]
+    fn test_openai_credits_info_parsed() {
+        let event = r#"data: {"choices":[{"delta":{},"finish_reason":"stop"}],"credits":{"cost_cents":0.5,"remaining_cents":99.5}}"#;
+
+        let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
+
+        let credits = chunk.credits.unwrap();
+        assert!((credits.cost_cents - 0.5).abs() < f64::EPSILON);
+        assert!((credits.remaining_cents - 99.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_data_prefix_with_and_without_space() {
+        // "data: {...}" and "data:{...}" should both work
+        let event_with_space = r#"data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}"#;
+        let event_without_space = r#"data:{"choices":[{"delta":{"content":"B"},"finish_reason":null}]}"#;
+
+        let chunk_a = parse_sse_event(event_with_space, Provider::OpenAI).unwrap();
+        let chunk_b = parse_sse_event(event_without_space, Provider::OpenAI).unwrap();
+
+        assert_eq!(chunk_a.content, "A");
+        assert_eq!(chunk_b.content, "B");
+    }
+}
+
 // H47 — SSE parser keepalive edge cases
 // These tests verify the `is_keepalive_event` logic by inspecting `StreamChunk.keepalive`
 // on chunks that are constructed the same way `SseStreamParser::process_buffer` does.

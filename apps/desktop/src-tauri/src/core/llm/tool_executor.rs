@@ -194,7 +194,7 @@ impl ToolExecutor {
             .any(|marker| normalized.contains(marker))
     }
 
-    fn value_is_present(value: &Value) -> bool {
+    pub(crate) fn value_is_present(value: &Value) -> bool {
         match value {
             Value::Null => false,
             Value::String(text) => !text.trim().is_empty(),
@@ -3049,148 +3049,121 @@ impl ToolExecutor {
         }
     }
 
-    async fn execute_tool_impl(
-        &self,
-        tool: &Tool,
-        args: HashMap<String, serde_json::Value>,
-        action_id: &str,
-    ) -> Result<ToolResult> {
-        match tool.id.as_str() {
-            "file_read" => {
-                let raw_path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                // Resolve relative paths against project folder
-                let path = self.resolve_path(&raw_path);
-                let session_id = args
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+    // -----------------------------------------------------------------------
+    // Extracted tool implementations (one method per tool for readability)
+    // -----------------------------------------------------------------------
 
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    });
+    async fn execute_file_read_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        // Resolve relative paths against project folder
+        let path = self.resolve_path(&raw_path);
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            });
+        }
+
+        match fs::read_to_string(&path).await {
+            Ok(content) => {
+                let content = if content.len() > FILE_READ_MAX_CHARS {
+                    format!(
+                        "{}\n\n... [truncated to first {} chars out of {}]",
+                        &content[..FILE_READ_MAX_CHARS],
+                        FILE_READ_MAX_CHARS,
+                        content.len()
+                    )
+                } else {
+                    content
+                };
+
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_read_event(
+                        &path,
+                        &content,
+                        true,
+                        None,
+                        session_id.clone(),
+                    );
+                    emit_file_operation(app_handle, file_op);
                 }
 
-                match fs::read_to_string(&path).await {
-                    Ok(content) => {
-                        let content = if content.len() > FILE_READ_MAX_CHARS {
-                            format!(
-                                "{}\n\n... [truncated to first {} chars out of {}]",
-                                &content[..FILE_READ_MAX_CHARS],
-                                FILE_READ_MAX_CHARS,
-                                content.len()
-                            )
-                        } else {
-                            content
-                        };
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "content": content, "path": &path }),
+                    error: None,
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                })
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                let is_pdf = Path::new(&path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
 
-                        if let Some(app_handle) = &self.app_handle {
-                            let file_op = create_file_read_event(
-                                &path,
-                                &content,
-                                true,
-                                None,
-                                session_id.clone(),
-                            );
-                            emit_file_operation(app_handle, file_op);
-                        }
+                if is_pdf {
+                    let path_clone = path.clone();
+                    let pdf_extract_result = tokio::task::spawn_blocking(move || {
+                        pdf_extract::extract_text(Path::new(&path_clone))
+                    })
+                    .await
+                    .map_err(|join_err| join_err.to_string())
+                    .and_then(|result| {
+                        result.map_err(|extract_err| extract_err.to_string())
+                    });
 
-                        Ok(ToolResult {
-                            success: true,
-                            data: json!({ "content": content, "path": &path }),
-                            error: None,
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                        })
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
-                        let is_pdf = Path::new(&path)
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-                            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+                    match pdf_extract_result {
+                        Ok(extracted_text) => {
+                            let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
+                                format!(
+                                    "{}\n\n... [truncated to first {} chars out of {}]",
+                                    &extracted_text[..FILE_READ_MAX_CHARS],
+                                    FILE_READ_MAX_CHARS,
+                                    extracted_text.len()
+                                )
+                            } else {
+                                extracted_text
+                            };
 
-                        if is_pdf {
-                            let path_clone = path.clone();
-                            let pdf_extract_result = tokio::task::spawn_blocking(move || {
-                                pdf_extract::extract_text(Path::new(&path_clone))
-                            })
-                            .await
-                            .map_err(|join_err| join_err.to_string())
-                            .and_then(|result| {
-                                result.map_err(|extract_err| extract_err.to_string())
-                            });
-
-                            match pdf_extract_result {
-                                Ok(extracted_text) => {
-                                    let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
-                                        format!(
-                                            "{}\n\n... [truncated to first {} chars out of {}]",
-                                            &extracted_text[..FILE_READ_MAX_CHARS],
-                                            FILE_READ_MAX_CHARS,
-                                            extracted_text.len()
-                                        )
-                                    } else {
-                                        extracted_text
-                                    };
-
-                                    if let Some(app_handle) = &self.app_handle {
-                                        let file_op = create_file_read_event(
-                                            &path,
-                                            &content,
-                                            true,
-                                            None,
-                                            session_id.clone(),
-                                        );
-                                        emit_file_operation(app_handle, file_op);
-                                    }
-
-                                    Ok(ToolResult {
-                                        success: true,
-                                        data: json!({ "content": content, "path": &path }),
-                                        error: None,
-                                        metadata: HashMap::from([
-                                            ("path".to_string(), json!(&path)),
-                                            ("source".to_string(), json!("pdf_extract")),
-                                        ]),
-                                    })
-                                }
-                                Err(pdf_error) => {
-                                    let error = format!(
-                                        "Failed to read PDF '{}': {}. Try document_extract_text for structured extraction.",
-                                        path, pdf_error
-                                    );
-                                    if let Some(app_handle) = &self.app_handle {
-                                        let file_op = create_file_read_event(
-                                            &path,
-                                            "",
-                                            false,
-                                            Some(error.clone()),
-                                            session_id.clone(),
-                                        );
-                                        emit_file_operation(app_handle, file_op);
-                                    }
-
-                                    Ok(ToolResult {
-                                        success: false,
-                                        data: json!({ "error": error.clone(), "success": false }),
-                                        error: Some(error),
-                                        metadata: HashMap::from([(
-                                            "path".to_string(),
-                                            json!(&path),
-                                        )]),
-                                    })
-                                }
+                            if let Some(app_handle) = &self.app_handle {
+                                let file_op = create_file_read_event(
+                                    &path,
+                                    &content,
+                                    true,
+                                    None,
+                                    session_id.clone(),
+                                );
+                                emit_file_operation(app_handle, file_op);
                             }
-                        } else {
+
+                            Ok(ToolResult {
+                                success: true,
+                                data: json!({ "content": content, "path": &path }),
+                                error: None,
+                                metadata: HashMap::from([
+                                    ("path".to_string(), json!(&path)),
+                                    ("source".to_string(), json!("pdf_extract")),
+                                ]),
+                            })
+                        }
+                        Err(pdf_error) => {
                             let error = format!(
-                                "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary for binary files.",
-                                path
+                                "Failed to read PDF '{}': {}. Try document_extract_text for structured extraction.",
+                                path, pdf_error
                             );
                             if let Some(app_handle) = &self.app_handle {
                                 let file_op = create_file_read_event(
@@ -3207,3516 +3180,3739 @@ impl ToolExecutor {
                                 success: false,
                                 data: json!({ "error": error.clone(), "success": false }),
                                 error: Some(error),
-                                metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                            })
-                        }
-                    }
-                    Err(e) => {
-                        if let Some(app_handle) = &self.app_handle {
-                            let file_op = create_file_read_event(
-                                &path,
-                                "",
-                                false,
-                                Some(e.to_string()),
-                                session_id.clone(),
-                            );
-                            emit_file_operation(app_handle, file_op);
-                        }
-
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to read file: {}", e), "success": false }),
-                            error: Some(format!("Failed to read file: {}", e)),
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                        })
-                    }
-                }
-            }
-            "file_write" => {
-                let raw_path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                // Resolve relative paths against project folder
-                let path = self.resolve_path(&raw_path);
-                let content = args
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing content parameter"))?
-                    .to_string();
-                let session_id = args
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    });
-                }
-
-                let old_content = fs::read_to_string(&path).await.ok();
-                if let Some(parent) = Path::new(&path).parent() {
-                    let _ = fs::create_dir_all(parent).await;
-                }
-
-                let write_result = fs::write(&path, content.as_bytes()).await;
-
-                if let Some(app_handle) = &self.app_handle {
-                    let file_op = create_file_write_event(
-                        &path,
-                        old_content.as_deref(),
-                        &content,
-                        write_result.is_ok(),
-                        write_result.as_ref().err().map(|e| e.to_string()),
-                        session_id.clone(),
-                    );
-                    emit_file_operation(app_handle, file_op);
-                }
-
-                match write_result {
-                    Ok(_) => {
-                        // Record tool execution for undo
-                        if let Some(app_handle) = &self.app_handle {
-                            if let Some(undo_state) = app_handle.try_state::<UndoState>() {
-                                let task_id = session_id
-                                    .clone()
-                                    .unwrap_or_else(|| Uuid::new_v4().to_string());
-                                let path_buf = std::path::PathBuf::from(&path);
-                                let _ = undo_state
-                                    .change_tracker
-                                    .record_tool_executed_with_path(
-                                        "file_write".to_string(),
-                                        path_buf,
-                                        old_content.clone(), // Store original content for undo
-                                        Some(content.clone()), // New content
-                                        task_id,
-                                        true, // File writes are reversible
-                                        Some("Restore previous file contents".to_string()),
-                                    )
-                                    .await;
-                            }
-                        }
-
-                        Ok(ToolResult {
-                            success: true,
-                            data: json!({ "success": true, "path": &path }),
-                            error: None,
-                            metadata: HashMap::from([
-                                ("path".to_string(), json!(&path)),
-                                ("content_length".to_string(), json!(content.len())),
-                            ]),
-                        })
-                    }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": format!("Failed to write file: {}", e), "success": false }),
-                        error: Some(format!("Failed to write file: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    }),
-                }
-            }
-            "file_delete" => {
-                let raw_path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                // Resolve relative paths against project folder
-                let path = self.resolve_path(&raw_path);
-                let session_id = args
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    });
-                }
-
-                // Read file content before deletion for undo capability
-                let file_content_before = fs::read_to_string(&path).await.ok();
-
-                let size_bytes = fs::metadata(&path)
-                    .await
-                    .ok()
-                    .map(|meta| meta.len() as usize);
-                let delete_result = fs::remove_file(&path).await;
-
-                if let Some(app_handle) = &self.app_handle {
-                    let file_op = create_file_delete_event(
-                        &path,
-                        size_bytes,
-                        delete_result.is_ok(),
-                        delete_result.as_ref().err().map(|e| e.to_string()),
-                        session_id.clone(),
-                    );
-                    emit_file_operation(app_handle, file_op);
-                }
-
-                match delete_result {
-                    Ok(_) => {
-                        // Record tool execution for undo
-                        if let Some(app_handle) = &self.app_handle {
-                            if let Some(undo_state) = app_handle.try_state::<UndoState>() {
-                                let task_id = session_id
-                                    .clone()
-                                    .unwrap_or_else(|| Uuid::new_v4().to_string());
-                                let path_buf = std::path::PathBuf::from(&path);
-                                let _ = undo_state
-                                    .change_tracker
-                                    .record_tool_executed_with_path(
-                                        "file_delete".to_string(),
-                                        path_buf,
-                                        file_content_before, // Store content for restoration
-                                        None,                // File was deleted, no after content
-                                        task_id,
-                                        true, // File deletes are reversible
-                                        Some("Restore deleted file".to_string()),
-                                    )
-                                    .await;
-                            }
-                        }
-
-                        Ok(ToolResult {
-                            success: true,
-                            data: json!({ "success": true, "path": &path }),
-                            error: None,
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                        })
-                    }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": format!("Failed to delete file: {}", e), "success": false }),
-                        error: Some(format!("Failed to delete file: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                    }),
-                }
-            }
-            "ui_screenshot" => {
-                use crate::automation::screen::capture_primary_screen;
-                match capture_primary_screen() {
-                    Ok(captured) => {
-                        let temp_file = match tempfile::Builder::new()
-                            .prefix("screenshot_")
-                            .suffix(".png")
-                            .tempfile()
-                        {
-                            Ok(file) => file,
-                            Err(e) => {
-                                return Ok(ToolResult {
-                                    success: false,
-                                    data: json!({ "error": format!("Failed to create temp file: {}", e), "success": false }),
-                                    error: Some(format!("Failed to create temp file: {}", e)),
-                                    metadata: HashMap::new(),
-                                });
-                            }
-                        };
-
-                        let temp_path = temp_file.path();
-                        match captured.pixels.save(temp_path) {
-                            Ok(_) => {
-                                let (file, path) = temp_file
-                                    .keep()
-                                    .map_err(|e| anyhow!("Failed to persist temp file: {}", e))?;
-                                drop(file);
-
-                                Ok(ToolResult {
-                                    success: true,
-                                    data: json!({
-                                        "screenshot_path": path.to_string_lossy().to_string(),
-                                        "cleanup_note": "File will be cleaned up by OS temp directory cleanup"
-                                    }),
-                                    error: None,
-                                    metadata: HashMap::from([
-                                        ("temp_file".to_string(), json!(true)),
-                                        (
-                                            "path".to_string(),
-                                            json!(path.to_string_lossy().to_string()),
-                                        ),
-                                    ]),
-                                })
-                            }
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to save screenshot: {}", e), "success": false }),
-                                error: Some(format!("Failed to save screenshot: {}", e)),
-                                metadata: HashMap::new(),
-                            }),
-                        }
-                    }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": format!("Failed to capture screenshot: {}", e), "success": false }),
-                        error: Some(format!("Failed to capture screenshot: {}", e)),
-                        metadata: HashMap::new(),
-                    }),
-                }
-            }
-            "ui_click" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::automation::{
-                        input::MouseButton, types::ElementQuery, AutomationService,
-                    };
-                    use tauri::Manager;
-
-                    let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
-                    let automation = match automation_opt.as_ref() {
-                        Some(_) => match AutomationService::new() {
-                            Ok(service) => std::sync::Arc::new(service),
-                            Err(e) => {
-                                return Ok(ToolResult {
-                                        success: false,
-                                        data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
-                                        error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
-                                        metadata: HashMap::new(),
-                                    });
-                            }
-                        },
-                        None => {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
-                                error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-                    let target = args
-                        .get("target")
-                        .ok_or_else(|| anyhow!("Missing target parameter"))?;
-
-                    if let Some(coords) = target.get("coordinates") {
-                        let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        let mut mouse_guard = automation.mouse.lock().await;
-                        let mouse_result = match mouse_guard.as_mut() {
-                            Some(mouse) => mouse.click(x, y, MouseButton::Left),
-                            None => Err(anyhow!(
-                                "Mouse automation requires Input Monitoring permission. \
-                                 Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-                            )),
-                        };
-                        match mouse_result {
-                            Ok(_) => Ok(ToolResult {
-                                success: true,
-                                data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),
-                                error: None,
-                                metadata: HashMap::new(),
-                            }),
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to click: {}", e), "success": false }),
-                                error: Some(format!("Failed to click: {}", e)),
-                                metadata: HashMap::new(),
-                            }),
-                        }
-                    } else if let Some(element_id) =
-                        target.get("element_id").and_then(|v| v.as_str())
-                    {
-                        match automation.native.invoke(element_id) {
-                            Ok(_) => Ok(ToolResult {
-                                success: true,
-                                data: json!({ "success": true, "action": "invoked", "element_id": element_id }),
-                                error: None,
-                                metadata: HashMap::new(),
-                            }),
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
-                                error: Some(format!("Failed to invoke element: {}", e)),
-                                metadata: HashMap::new(),
-                            }),
-                        }
-                    } else if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
-                        let query = ElementQuery {
-                            window: None,
-                            window_class: None,
-                            name: Some(text.to_string()),
-                            class_name: None,
-                            automation_id: None,
-                            control_type: None,
-                            max_results: Some(1),
-                        };
-                        match automation.native.find_elements(None, &query) {
-                            Ok(elements) => {
-                                if let Some(element) = elements.first() {
-                                    match automation.native.invoke(&element.id) {
-                                        Ok(_) => Ok(ToolResult {
-                                            success: true,
-                                            data: json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
-                                            error: None,
-                                            metadata: HashMap::new(),
-                                        }),
-                                        Err(e) => Ok(ToolResult {
-                                            success: false,
-                                            data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
-                                            error: Some(format!("Failed to invoke element: {}", e)),
-                                            metadata: HashMap::new(),
-                                        }),
-                                    }
-                                } else {
-                                    Ok(ToolResult {
-                                        success: false,
-                                        data: json!({ "error": format!("Element with text '{}' not found", text), "success": false }),
-                                        error: Some(format!(
-                                            "Element with text '{}' not found",
-                                            text
-                                        )),
-                                        metadata: HashMap::new(),
-                                    })
-                                }
-                            }
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
-                                error: Some(format!("Failed to find element: {}", e)),
-                                metadata: HashMap::new(),
-                            }),
-                        }
-                    } else {
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": "Invalid target format for ui_click - need coordinates, element_id, or text".to_string(), "success": false }),
-                            error: Some("Invalid target format for ui_click - need coordinates, element_id, or text".to_string()),
-                            metadata: HashMap::new(),
-                        })
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
-                        error: Some("App handle not available for UI automation".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "ui_type" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::automation::{
-                        input::KeyboardSimulator, types::ElementQuery, AutomationService,
-                    };
-                    use tauri::Manager;
-
-                    let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
-                    let automation = match automation_opt.as_ref() {
-                        Some(_) => match AutomationService::new() {
-                            Ok(service) => std::sync::Arc::new(service),
-                            Err(e) => {
-                                return Ok(ToolResult {
-                                        success: false,
-                                        data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
-                                        error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
-                                        metadata: HashMap::new(),
-                                    });
-                            }
-                        },
-                        None => {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
-                                error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-                    let target = args
-                        .get("target")
-                        .ok_or_else(|| anyhow!("Missing target parameter"))?;
-                    let text = args
-                        .get("text")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing text parameter"))?;
-
-                    if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
-                        if let Err(e) = automation.native.set_focus(element_id) {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
-                                error: Some(format!("Failed to focus element: {}", e)),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
-                        let query = ElementQuery {
-                            window: None,
-                            window_class: None,
-                            name: Some(target_text.to_string()),
-                            class_name: None,
-                            automation_id: None,
-                            control_type: None,
-                            max_results: Some(1),
-                        };
-                        match automation.native.find_elements(None, &query) {
-                            Ok(elements) => {
-                                if let Some(element) = elements.first() {
-                                    if let Err(e) = automation.native.set_focus(&element.id) {
-                                        return Ok(ToolResult {
-                                            success: false,
-                                            data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
-                                            error: Some(format!("Failed to focus element: {}", e)),
-                                            metadata: HashMap::new(),
-                                        });
-                                    }
-                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                                }
-                            }
-                            Err(e) => {
-                                return Ok(ToolResult {
-                                    success: false,
-                                    data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
-                                    error: Some(format!("Failed to find element: {}", e)),
-                                    metadata: HashMap::new(),
-                                });
-                            }
-                        }
-                    }
-
-                    let mut keyboard = KeyboardSimulator::new()
-                        .map_err(|e| anyhow!("Failed to create keyboard simulator: {}", e))?;
-                    let send_result = keyboard.send_text(text).await;
-                    match send_result {
-                        Ok(_) => Ok(ToolResult {
-                            success: true,
-                            data: json!({ "success": true, "action": "typed", "text": text }),
-                            error: None,
-                            metadata: HashMap::new(),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to type text: {}", e), "success": false }),
-                            error: Some(format!("Failed to type text: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
-                        error: Some("App handle not available for UI automation".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "search_web" => {
-                use crate::core::agi::executors::search_executor::{
-                    SearchExecutor, SearchType as ExecSearchType,
-                };
-                let tool_id = action_id;
-
-                let query = args
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing query parameter"))?
-                    .to_string();
-
-                // Emit progress: starting search
-                if let Some(app_handle) = &self.app_handle {
-                    emit_tool_progress(
-                        app_handle,
-                        tool_id,
-                        0.1,
-                        Some(&format!("Searching: {}", &query[..query.len().min(40)])),
-                    );
-                }
-
-                let num_results = args
-                    .get("num_results")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(10)
-                    .min(20) as usize;
-
-                let search_type = args
-                    .get("search_type")
-                    .and_then(|v| v.as_str())
-                    .map(|s| match s.to_lowercase().as_str() {
-                        "news" => ExecSearchType::News,
-                        "images" => ExecSearchType::General,
-                        "code" | "programming" => ExecSearchType::Code,
-                        "academic" | "scholarly" => ExecSearchType::Academic,
-                        _ => ExecSearchType::General,
-                    })
-                    .unwrap_or(ExecSearchType::General);
-
-                // Emit progress: search in progress
-                if let Some(app_handle) = &self.app_handle {
-                    emit_tool_progress(app_handle, tool_id, 0.5, Some("Fetching results..."));
-                }
-
-                let start = Instant::now();
-                let executor = SearchExecutor::new();
-                match executor.run_search(&query, search_type, num_results).await {
-                    Ok(raw) => {
-                        let duration_ms = start.elapsed().as_millis() as u64;
-                        let provider = raw
-                            .get("provider")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown");
-
-                        let results = raw
-                            .get("results")
-                            .and_then(|v| v.as_array())
-                            .cloned()
-                            .unwrap_or_default();
-
-                        let access_timestamp = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0);
-
-                        let mut normalized = Vec::new();
-                        for (idx, item) in results.iter().enumerate() {
-                            let title = item
-                                .get("title")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let url = item
-                                .get("url")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let snippet = item
-                                .get("snippet")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-
-                            if url.is_empty() && title.is_empty() {
-                                continue;
-                            }
-
-                            let domain = url::Url::parse(&url)
-                                .ok()
-                                .and_then(|u| u.host_str().map(|h| h.to_string()));
-
-                            let position = idx + 1;
-                            normalized.push(json!({
-                                "title": title,
-                                "url": url,
-                                "snippet": snippet,
-                                "domain": domain,
-                                "position": position,
-                                "citation_id": format!("cite-{}", position),
-                                "access_timestamp": access_timestamp,
-                            }));
-                        }
-
-                        let count = raw
-                            .get("results_count")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(normalized.len() as u64);
-
-                        if let Some(app_handle) = &self.app_handle {
-                            emit_tool_progress(
-                                app_handle,
-                                tool_id,
-                                1.0,
-                                Some(&format!("Found {} results", count)),
-                            );
-                        }
-
-                        Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "query": raw.get("query").and_then(|v| v.as_str()).unwrap_or(&query),
-                                "results": normalized,
-                                "count": count,
-                                "provider": provider,
-                                "duration_ms": duration_ms
-                            }),
-                            error: None,
-                            metadata: HashMap::from([
-                                ("query".to_string(), json!(query)),
-                                ("provider".to_string(), json!(provider)),
-                                ("result_count".to_string(), json!(count)),
-                            ]),
-                        })
-                    }
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!({
-                            "query": query,
-                            "results": [],
-                            "count": 0,
-                            "error": e.to_string()
-                        }),
-                        error: Some(format!("Web search failed: {}", e)),
-                        metadata: HashMap::from([("query".to_string(), json!(query))]),
-                    }),
-                }
-            }
-            "browser_navigate" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let tool_id = action_id;
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::automation::browser::NavigationOptions;
-                    use crate::sys::commands::BrowserStateWrapper;
-                    use tauri::Manager;
-
-                    // Emit progress: starting navigation
-                    emit_tool_progress(
-                        app,
-                        tool_id,
-                        0.1,
-                        Some(&format!("Navigating to {}", &url[..url.len().min(50)])),
-                    );
-
-                    let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = match browser_state.get_tab_manager() {
-                        Ok(tm) => tm.lock().await,
-                        Err(e) => {
-                            let err_msg = format!("Failed to get tab manager: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    emit_tool_progress(app, tool_id, 0.3, Some("Browser ready"));
-
-                    match tab_manager.list_tabs().await {
-                        Ok(tabs) => {
-                            let tab_id = if tabs.is_empty() {
-                                emit_tool_progress(app, tool_id, 0.4, Some("Opening new tab"));
-                                match tab_manager.open_tab(url).await {
-                                    Ok(tid) => tid,
-                                    Err(e) => {
-                                        let err_msg = format!("Failed to open tab: {}", e);
-                                        return Ok(ToolResult {
-                                            success: false,
-                                            data: json!({ "error": err_msg.clone(), "success": false }),
-                                            error: Some(err_msg),
-                                            metadata: HashMap::new(),
-                                        });
-                                    }
-                                }
-                            } else {
-                                tabs[0].id.clone()
-                            };
-
-                            emit_tool_progress(app, tool_id, 0.6, Some("Loading page..."));
-
-                            match tab_manager
-                                .navigate(&tab_id, url, NavigationOptions::default())
-                                .await
-                            {
-                                Ok(_) => {
-                                    emit_tool_progress(app, tool_id, 1.0, Some("Page loaded"));
-                                    Ok(ToolResult {
-                                        success: true,
-                                        data: json!({ "success": true, "url": url, "tab_id": tab_id }),
-                                        error: None,
-                                        metadata: HashMap::new(),
-                                    })
-                                }
-                                Err(e) => {
-                                    let err_msg = format!("Failed to navigate: {}", e);
-                                    Ok(ToolResult {
-                                        success: false,
-                                        data: json!({ "error": err_msg.clone(), "success": false }),
-                                        error: Some(err_msg),
-                                        metadata: HashMap::new(),
-                                    })
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to list tabs: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
-                    }
-                } else {
-                    let err_msg = "App handle not available for browser navigation".to_string();
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "code_execute" => {
-                let language = args
-                    .get("language")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing language parameter"))?;
-                let code = args
-                    .get("code")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing code parameter"))?;
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::features::terminal::{SessionManager, ShellType};
-                    use tauri::Manager;
-
-                    let session_manager = app.state::<SessionManager>();
-
-                    let shell_type = match language.to_lowercase().as_str() {
-                        "powershell" | "ps1" => ShellType::PowerShell,
-                        "bash" | "sh" | "shell" => ShellType::Wsl,
-                        "cmd" | "batch" => ShellType::Cmd,
-                        _ => ShellType::PowerShell,
-                    };
-
-                    let session_id = match session_manager.create_session(shell_type, None).await {
-                        Ok(sid) => sid,
-                        Err(e) => {
-                            let err_msg = format!("Failed to create session: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    match session_manager
-                        .send_input(&session_id, &format!("{}\n", code))
-                        .await
-                    {
-                        Ok(_) => {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({ "success": true, "session_id": session_id, "code": code }),
-                                error: None,
                                 metadata: HashMap::from([(
-                                    "session_id".to_string(),
-                                    json!(session_id),
+                                    "path".to_string(),
+                                    json!(&path),
                                 )]),
                             })
                         }
-                        Err(e) => {
-                            let err_msg = format!("Failed to execute code: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
                     }
                 } else {
-                    let err_msg = "App handle not available for code execution".to_string();
+                    let error = format!(
+                        "Failed to read file '{}': file is binary or not UTF-8 text. Use file_read_binary for binary files.",
+                        path
+                    );
+                    if let Some(app_handle) = &self.app_handle {
+                        let file_op = create_file_read_event(
+                            &path,
+                            "",
+                            false,
+                            Some(error.clone()),
+                            session_id.clone(),
+                        );
+                        emit_file_operation(app_handle, file_op);
+                    }
+
                     Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
+                        data: json!({ "error": error.clone(), "success": false }),
+                        error: Some(error),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     })
                 }
             }
-            "terminal_execute" => self.execute_terminal_tool(args, action_id).await,
-            "git_push" => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                let remote = args
-                    .get("remote")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let branch = args
-                    .get("branch")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if let Some(app) = &self.app_handle {
-                    if let Err(e) = self.validate_path(&path).await {
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": e.to_string(), "success": false }),
-                            error: Some(e.to_string()),
-                            metadata: HashMap::from([("path".to_string(), json!(path))]),
-                        });
-                    }
-
-                    use crate::sys::commands::git::git_push;
-
-                    match git_push(
-                        app.clone(),
-                        path.clone(),
-                        remote.clone(),
-                        branch.clone(),
+            Err(e) => {
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_read_event(
+                        &path,
+                        "",
                         false,
-                    )
-                    .await
-                    {
-                        Ok(msg) => Ok(ToolResult {
-                            success: true,
-                            data: json!({ "success": true, "message": msg }),
-                            error: None,
-                            metadata: HashMap::from([
-                                ("path".to_string(), json!(path)),
-                                ("remote".to_string(), json!(remote)),
-                                ("branch".to_string(), json!(branch)),
-                            ]),
-                        }),
-                        Err(e) => {
-                            let err_msg = format!("Git push failed: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::from([("path".to_string(), json!(path))]),
-                            })
-                        }
-                    }
-                } else {
-                    let err_msg = "App handle not available for git_push".to_string();
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    })
+                        Some(e.to_string()),
+                        session_id.clone(),
+                    );
+                    emit_file_operation(app_handle, file_op);
                 }
+
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to read file: {}", e), "success": false }),
+                    error: Some(format!("Failed to read file: {}", e)),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                })
             }
-            "db_query" => {
-                let query = args
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing query parameter"))?;
+        }
+    }
 
-                // Validate it's a SELECT query only (read-only)
-                let query_upper = query.trim().to_uppercase();
-                if !query_upper.starts_with("SELECT") && !query_upper.starts_with("WITH") {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "db_query only supports SELECT statements. Use db_execute for modifications.", "success": false }),
-                        error: Some("db_query only supports SELECT statements. Use db_execute for modifications.".to_string()),
-                        metadata: HashMap::new(),
-                    });
-                }
+    async fn execute_file_write_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        // Resolve relative paths against project folder
+        let path = self.resolve_path(&raw_path);
+        let content = args
+            .get("content")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing content parameter"))?
+            .to_string();
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
-                // Block dangerous operations even in SELECT (like subqueries with mutations)
-                let blocked_keywords = [
-                    "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE", "GRANT",
-                    "REVOKE",
-                ];
-                for keyword in &blocked_keywords {
-                    if query_upper.contains(keyword) {
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("SQL operation '{}' is not allowed in db_query.", keyword), "success": false }),
-                            error: Some(format!(
-                                "SQL operation '{}' is not allowed in db_query.",
-                                keyword
-                            )),
-                            metadata: HashMap::new(),
-                        });
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            });
+        }
+
+        let old_content = fs::read_to_string(&path).await.ok();
+        if let Some(parent) = Path::new(&path).parent() {
+            let _ = fs::create_dir_all(parent).await;
+        }
+
+        let write_result = fs::write(&path, content.as_bytes()).await;
+
+        if let Some(app_handle) = &self.app_handle {
+            let file_op = create_file_write_event(
+                &path,
+                old_content.as_deref(),
+                &content,
+                write_result.is_ok(),
+                write_result.as_ref().err().map(|e| e.to_string()),
+                session_id.clone(),
+            );
+            emit_file_operation(app_handle, file_op);
+        }
+
+        match write_result {
+            Ok(_) => {
+                // Record tool execution for undo
+                if let Some(app_handle) = &self.app_handle {
+                    if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                        let task_id = session_id
+                            .clone()
+                            .unwrap_or_else(|| Uuid::new_v4().to_string());
+                        let path_buf = std::path::PathBuf::from(&path);
+                        let _ = undo_state
+                            .change_tracker
+                            .record_tool_executed_with_path(
+                                "file_write".to_string(),
+                                path_buf,
+                                old_content.clone(), // Store original content for undo
+                                Some(content.clone()), // New content
+                                task_id,
+                                true, // File writes are reversible
+                                Some("Restore previous file contents".to_string()),
+                            )
+                            .await;
                     }
                 }
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::chat::AppDatabase;
-                    use tauri::Manager;
-
-                    let db = app.state::<AppDatabase>();
-                    let conn = match db.conn.lock() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let err_msg = format!("Database lock error: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    // Execute query and collect results - using a closure to manage lifetimes
-                    let query_result: Result<(Vec<String>, Vec<serde_json::Value>), String> =
-                        (|| {
-                            let mut stmt = conn
-                                .prepare(query)
-                                .map_err(|e| format!("Query preparation error: {}", e))?;
-                            let column_names: Vec<String> =
-                                stmt.column_names().iter().map(|s| s.to_string()).collect();
-
-                            let mut rows_iter = stmt
-                                .query([])
-                                .map_err(|e| format!("Query execution error: {}", e))?;
-                            let mut rows: Vec<serde_json::Value> = Vec::new();
-
-                            while let Some(row) = rows_iter
-                                .next()
-                                .map_err(|e| format!("Row fetch error: {}", e))?
-                            {
-                                let mut obj = serde_json::Map::new();
-                                for (idx, col_name) in column_names.iter().enumerate() {
-                                    let value: rusqlite::types::Value = row
-                                        .get(idx)
-                                        .map_err(|e| format!("Column read error: {}", e))?;
-                                    obj.insert(
-                                        col_name.clone(),
-                                        match value {
-                                            rusqlite::types::Value::Null => json!(null),
-                                            rusqlite::types::Value::Integer(n) => json!(n),
-                                            rusqlite::types::Value::Real(f) => json!(f),
-                                            rusqlite::types::Value::Text(s) => json!(s),
-                                            rusqlite::types::Value::Blob(b) => {
-                                                json!(format!("<blob {} bytes>", b.len()))
-                                            }
-                                        },
-                                    );
-                                }
-                                rows.push(serde_json::Value::Object(obj));
-                            }
-
-                            Ok((column_names, rows))
-                        })();
-
-                    match query_result {
-                        Ok((column_names, rows)) => {
-                            let row_count = rows.len();
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "columns": column_names,
-                                    "rows": rows,
-                                    "row_count": row_count
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("query".to_string(), json!(query))]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": e.clone(), "success": false }),
-                            error: Some(e),
-                            metadata: HashMap::from([("query".to_string(), json!(query))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "Database not available", "success": false }),
-                        error: Some("Database not available".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "db_execute" => {
-                let query = args
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing query parameter"))?;
-
-                // Validate it's a modification query (INSERT, UPDATE, DELETE)
-                let query_upper = query.trim().to_uppercase();
-                let is_modification = query_upper.starts_with("INSERT")
-                    || query_upper.starts_with("UPDATE")
-                    || query_upper.starts_with("DELETE");
-
-                if !is_modification {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.", "success": false }),
-                        error: Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string()),
-                        metadata: HashMap::new(),
-                    });
-                }
-
-                // Block dangerous DDL operations
-                let blocked_keywords = ["DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"];
-                for keyword in &blocked_keywords {
-                    if query_upper.contains(keyword) {
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword), "success": false }),
-                            error: Some(format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword)),
-                            metadata: HashMap::new(),
-                        });
-                    }
-                }
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::chat::AppDatabase;
-                    use tauri::Manager;
-
-                    let db = app.state::<AppDatabase>();
-                    let conn = match db.conn.lock() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let err_msg = format!("Database lock error: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    match conn.execute(query, []) {
-                        Ok(rows_affected) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "rows_affected": rows_affected,
-                                "query": query
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("query".to_string(), json!(query))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Query execution error: {}", e), "success": false }),
-                            error: Some(format!("Query execution error: {}", e)),
-                            metadata: HashMap::from([("query".to_string(), json!(query))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "Database not available", "success": false }),
-                        error: Some("Database not available".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "db_transaction_begin" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::chat::AppDatabase;
-                    use tauri::Manager;
-
-                    let db = app.state::<AppDatabase>();
-                    let conn = match db.conn.lock() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let err_msg = format!("Database lock error: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    match conn.execute("BEGIN TRANSACTION", []) {
-                        Ok(_) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "message": "Transaction started",
-                                "status": "active"
-                            }),
-                            error: None,
-                            metadata: HashMap::new(),
-                        }),
-                        Err(e) => {
-                            let err_msg = format!("Failed to begin transaction: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "Database not available", "success": false }),
-                        error: Some("Database not available".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "db_transaction_commit" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::chat::AppDatabase;
-                    use tauri::Manager;
-
-                    let db = app.state::<AppDatabase>();
-                    let conn = match db.conn.lock() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let err_msg = format!("Database lock error: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    match conn.execute("COMMIT", []) {
-                        Ok(_) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "message": "Transaction committed",
-                                "status": "committed"
-                            }),
-                            error: None,
-                            metadata: HashMap::new(),
-                        }),
-                        Err(e) => {
-                            let err_msg = format!("Failed to commit transaction: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "Database not available", "success": false }),
-                        error: Some("Database not available".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "db_transaction_rollback" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::chat::AppDatabase;
-                    use tauri::Manager;
-
-                    let db = app.state::<AppDatabase>();
-                    let conn = match db.conn.lock() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let err_msg = format!("Database lock error: {}", e);
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    };
-
-                    match conn.execute("ROLLBACK", []) {
-                        Ok(_) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "message": "Transaction rolled back",
-                                "status": "rolled_back"
-                            }),
-                            error: None,
-                            metadata: HashMap::new(),
-                        }),
-                        Err(e) => {
-                            let err_msg = format!("Failed to rollback transaction: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::new(),
-                            })
-                        }
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "Database not available", "success": false }),
-                        error: Some("Database not available".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "api_call" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let method = args.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
-                let body = args.get("body");
-                let headers = args.get("headers");
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::api::client::{ApiRequest, HttpMethod};
-                    use crate::sys::commands::ApiState;
-                    use tauri::Manager;
-
-                    let api_state = app.state::<ApiState>();
-
-                    let http_method = match method.to_uppercase().as_str() {
-                        "GET" => HttpMethod::Get,
-                        "POST" => HttpMethod::Post,
-                        "PUT" => HttpMethod::Put,
-                        "PATCH" => HttpMethod::Patch,
-                        "DELETE" => HttpMethod::Delete,
-                        _ => HttpMethod::Get,
-                    };
-
-                    let request = ApiRequest {
-                        url: url.to_string(),
-                        method: http_method,
-                        headers: headers
-                            .and_then(|h| serde_json::from_value(h.clone()).ok())
-                            .unwrap_or_default(),
-                        body: body.and_then(|b| b.as_str().map(|s| s.to_string())),
-                        query_params: HashMap::new(),
-                        auth: crate::sys::api::client::AuthType::None,
-                        timeout_ms: Some(30000),
-                    };
-
-                    match api_state.execute_request(request).await {
-                        Ok(response) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "status": response.status,
-                                "headers": response.headers,
-                                "body": response.body,
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("url".to_string(), json!(url))]),
-                        }),
-                        Err(e) => {
-                            let err_msg = format!("API call failed: {}", e);
-                            Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::from([("url".to_string(), json!(url))]),
-                            })
-                        }
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for API calls", "success": false }),
-                        error: Some("App handle not available for API calls".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "image_ocr" => {
-                let image_path = args
-                    .get("image_path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing image_path parameter"))?;
-
-                #[cfg(feature = "ocr")]
-                {
-                    use crate::automation::screen::perform_ocr;
-                    match perform_ocr(image_path).await {
-                        Ok(text) => Ok(ToolResult {
-                            success: true,
-                            data: json!({ "text": text, "image_path": image_path }),
-                            error: None,
-                            metadata: HashMap::from([(
-                                "image_path".to_string(),
-                                json!(image_path),
-                            )]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("OCR failed: {}", e), "success": false }),
-                            error: Some(format!("OCR failed: {}", e)),
-                            metadata: HashMap::from([(
-                                "image_path".to_string(),
-                                json!(image_path),
-                            )]),
-                        }),
-                    }
-                }
-                #[cfg(not(feature = "ocr"))]
-                {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "OCR feature not enabled in build", "success": false }),
-                        error: Some("OCR feature not enabled in build".to_string()),
-                        metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
-                    })
-                }
-            }
-            "code_analyze" => {
-                let code = args
-                    .get("code")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing code parameter"))?;
-                let language = args
-                    .get("language")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-
-                let line_count = code.lines().count();
-                let char_count = code.len();
-                let non_whitespace = code.chars().filter(|c| !c.is_whitespace()).count();
 
                 Ok(ToolResult {
                     success: true,
-                    data: json!({
-                        "language": language,
-                        "line_count": line_count,
-                        "char_count": char_count,
-                        "non_whitespace_chars": non_whitespace,
-                        "analysis": "Basic static analysis complete"
-                    }),
+                    data: json!({ "success": true, "path": &path }),
                     error: None,
-                    metadata: HashMap::from([("language".to_string(), json!(language))]),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&path)),
+                        ("content_length".to_string(), json!(content.len())),
+                    ]),
                 })
             }
-            "image_generate" | "media_generate_image" => {
-                let prompt = args
-                    .get("prompt")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing prompt parameter"))?
-                    .to_string();
-                let provider = args
-                    .get("provider")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let size = args
-                    .get("size")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": format!("Failed to write file: {}", e), "success": false }),
+                error: Some(format!("Failed to write file: {}", e)),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            }),
+        }
+    }
 
-                if let Some(ref app) = self.app_handle {
-                    let request = crate::sys::commands::media::MediaImageRequest {
-                        prompt: prompt.clone(),
-                        negative_prompt: None,
-                        provider,
-                        model: None,
-                        size: size.clone(),
-                        quality: None,
-                        style: None,
-                        n: Some(1),
-                    };
+    async fn execute_file_delete_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        // Resolve relative paths against project folder
+        let path = self.resolve_path(&raw_path);
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
-                    match crate::sys::commands::media::media_generate_image(app.clone(), request)
-                        .await
-                    {
-                        Ok(response) => {
-                            let result_data = json!({
-                                "success": true,
-                                "prompt": prompt.clone(),
-                                "images": response.images,
-                                "provider": response.provider,
-                                "model": response.model,
-                                "size": size,
-                                "cost": response.cost_estimate,
-                                "latency_ms": response.latency_ms
-                            });
-                            Ok(ToolResult {
-                                success: true,
-                                data: result_data,
-                                error: None,
-                                metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Image generation failed: {}", e), "success": false }),
-                            error: Some(format!("Image generation failed: {}", e)),
-                            metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                        }),
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            });
+        }
+
+        // Read file content before deletion for undo capability
+        let file_content_before = fs::read_to_string(&path).await.ok();
+
+        let size_bytes = fs::metadata(&path)
+            .await
+            .ok()
+            .map(|meta| meta.len() as usize);
+        let delete_result = fs::remove_file(&path).await;
+
+        if let Some(app_handle) = &self.app_handle {
+            let file_op = create_file_delete_event(
+                &path,
+                size_bytes,
+                delete_result.is_ok(),
+                delete_result.as_ref().err().map(|e| e.to_string()),
+                session_id.clone(),
+            );
+            emit_file_operation(app_handle, file_op);
+        }
+
+        match delete_result {
+            Ok(_) => {
+                // Record tool execution for undo
+                if let Some(app_handle) = &self.app_handle {
+                    if let Some(undo_state) = app_handle.try_state::<UndoState>() {
+                        let task_id = session_id
+                            .clone()
+                            .unwrap_or_else(|| Uuid::new_v4().to_string());
+                        let path_buf = std::path::PathBuf::from(&path);
+                        let _ = undo_state
+                            .change_tracker
+                            .record_tool_executed_with_path(
+                                "file_delete".to_string(),
+                                path_buf,
+                                file_content_before, // Store content for restoration
+                                None,                // File was deleted, no after content
+                                task_id,
+                                true, // File deletes are reversible
+                                Some("Restore deleted file".to_string()),
+                            )
+                            .await;
                     }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for image generation", "success": false }),
-                        error: Some("App handle not available for image generation".to_string()),
-                        metadata: HashMap::new(),
-                    })
                 }
+
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "path": &path }),
+                    error: None,
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                })
             }
-            "video_generate" | "media_generate_video" => {
-                let prompt = args
-                    .get("prompt")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing prompt parameter"))?
-                    .to_string();
-                let duration_secs = args
-                    .get("duration_seconds")
-                    .or_else(|| args.get("duration_secs"))
-                    .or_else(|| args.get("duration"))
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32);
-                let resolution = args
-                    .get("resolution")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": format!("Failed to delete file: {}", e), "success": false }),
+                error: Some(format!("Failed to delete file: {}", e)),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            }),
+        }
+    }
 
-                if let Some(ref app) = self.app_handle {
-                    let provider = args
-                        .get("provider")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let input_image_url = args
-                        .get("input_image_url")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let request = crate::sys::commands::media::MediaVideoRequest {
-                        prompt: prompt.clone(),
-                        negative_prompt: None,
-                        duration_secs,
-                        resolution: resolution.clone(),
-                        style: None,
-                        model: None,
-                        provider: provider.clone(),
-                        input_image_url,
-                    };
-
-                    match crate::sys::commands::media::media_generate_video(app.clone(), request)
-                        .await
-                    {
-                        Ok(response) => {
-                            let provider_label =
-                                provider.clone().unwrap_or_else(|| "runway".to_string());
-                            let result_data = json!({
-                                "success": true,
-                                "prompt": prompt.clone(),
-                                "video_url": response.video_url,
-                                "thumbnail_url": response.thumbnail_url,
-                                "id": response.id,
-                                "status": response.status,
-                                "provider": provider_label,
-                                "duration_secs": response.duration_secs.or(duration_secs),
-                                "resolution": resolution,
-                                "cost": response.cost_estimate,
-                                "latency_ms": response.latency_ms
-                            });
-                            Ok(ToolResult {
-                                success: true,
-                                data: result_data,
-                                error: None,
-                                metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
+    async fn execute_ui_screenshot_tool(
+        &self,
+        _args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        use crate::automation::screen::capture_primary_screen;
+        match capture_primary_screen() {
+            Ok(captured) => {
+                let temp_file = match tempfile::Builder::new()
+                    .prefix("screenshot_")
+                    .suffix(".png")
+                    .tempfile()
+                {
+                    Ok(file) => file,
+                    Err(e) => {
+                        return Ok(ToolResult {
                             success: false,
-                            data: json!({ "error": format!("Video generation failed: {}", e), "success": false }),
-                            error: Some(format!("Video generation failed: {}", e)),
-                            metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                        }),
+                            data: json!({ "error": format!("Failed to create temp file: {}", e), "success": false }),
+                            error: Some(format!("Failed to create temp file: {}", e)),
+                            metadata: HashMap::new(),
+                        });
                     }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for video generation", "success": false }),
-                        error: Some("App handle not available for video generation".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "llm_reason" => {
-                let prompt = args
-                    .get("prompt")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing prompt parameter"))?;
-                let model = args.get("model").and_then(|v| v.as_str());
-                let _max_tokens = args
-                    .get("max_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32);
-                let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(0);
+                };
 
-                const MAX_DEPTH: u64 = 3;
-                if depth >= MAX_DEPTH {
-                    let err_msg = format!("Maximum recursion depth ({}) exceeded", MAX_DEPTH);
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::from([("depth".to_string(), json!(depth))]),
-                    });
-                }
+                let temp_path = temp_file.path();
+                match captured.pixels.save(temp_path) {
+                    Ok(_) => {
+                        let (file, path) = temp_file
+                            .keep()
+                            .map_err(|e| anyhow!("Failed to persist temp file: {}", e))?;
+                        drop(file);
 
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::llm::RouterPreferences;
-                    use crate::sys::commands::LLMState;
-                    use tauri::Manager;
-
-                    let llm_state = app.state::<LLMState>();
-
-                    let model_str = model.unwrap_or("gpt-5-nano");
-                    let preferences = Some(RouterPreferences {
-                        provider: None,
-                        model: Some(model_str.to_string()),
-                        strategy: crate::core::llm::RoutingStrategy::Auto,
-                        context: None,
-                        prefer_cloud_credits: false,
-                    });
-
-                    let router = llm_state.router.read().await;
-                    match router.send_message(prompt, preferences).await {
-                        Ok(response) => Ok(ToolResult {
+                        Ok(ToolResult {
                             success: true,
                             data: json!({
-                                "reasoning": response,
-                                "model": model_str,
-                                "depth": depth,
+                                "screenshot_path": path.to_string_lossy().to_string(),
+                                "cleanup_note": "File will be cleaned up by OS temp directory cleanup"
                             }),
                             error: None,
-                            metadata: HashMap::from([("depth".to_string(), json!(depth))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("LLM reasoning failed: {}", e), "success": false }),
-                            error: Some(format!("LLM reasoning failed: {}", e)),
-                            metadata: HashMap::from([("depth".to_string(), json!(depth))]),
-                        }),
+                            metadata: HashMap::from([
+                                ("temp_file".to_string(), json!(true)),
+                                (
+                                    "path".to_string(),
+                                    json!(path.to_string_lossy().to_string()),
+                                ),
+                            ]),
+                        })
                     }
-                } else {
-                    Ok(ToolResult {
+                    Err(e) => Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": "App handle not available for LLM reasoning", "success": false }),
-                        error: Some("App handle not available for LLM reasoning".to_string()),
+                        data: json!({ "error": format!("Failed to save screenshot: {}", e), "success": false }),
+                        error: Some(format!("Failed to save screenshot: {}", e)),
                         metadata: HashMap::new(),
-                    })
+                    }),
                 }
             }
-            "email_send" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::email::{email_send, SendEmailRequest};
-                    #[allow(unused_imports)]
-                    use tauri::Manager;
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({ "error": format!("Failed to capture screenshot: {}", e), "success": false }),
+                error: Some(format!("Failed to capture screenshot: {}", e)),
+                metadata: HashMap::new(),
+            }),
+        }
+    }
 
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+    async fn execute_ui_click_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::automation::{
+                input::MouseButton, types::ElementQuery, AutomationService,
+            };
+            use tauri::Manager;
 
-                    let to: Vec<crate::features::communications::EmailAddress> = args
-                        .get("to")
-                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                        .unwrap_or_default();
+            let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
+            let automation = match automation_opt.as_ref() {
+                Some(_) => match AutomationService::new() {
+                    Ok(service) => std::sync::Arc::new(service),
+                    Err(e) => {
+                        return Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+                                metadata: HashMap::new(),
+                            });
+                    }
+                },
+                None => {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
+                        error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+            let target = args
+                .get("target")
+                .ok_or_else(|| anyhow!("Missing target parameter"))?;
 
-                    let subject = args
-                        .get("subject")
+            if let Some(coords) = target.get("coordinates") {
+                let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let mut mouse_guard = automation.mouse.lock().await;
+                let mouse_result = match mouse_guard.as_mut() {
+                    Some(mouse) => mouse.click(x, y, MouseButton::Left),
+                    None => Err(anyhow!(
+                        "Mouse automation requires Input Monitoring permission. \
+                         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+                    )),
+                };
+                match mouse_result {
+                    Ok(_) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),
+                        error: None,
+                        metadata: HashMap::new(),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to click: {}", e), "success": false }),
+                        error: Some(format!("Failed to click: {}", e)),
+                        metadata: HashMap::new(),
+                    }),
+                }
+            } else if let Some(element_id) =
+                target.get("element_id").and_then(|v| v.as_str())
+            {
+                match automation.native.invoke(element_id) {
+                    Ok(_) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "action": "invoked", "element_id": element_id }),
+                        error: None,
+                        metadata: HashMap::new(),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
+                        error: Some(format!("Failed to invoke element: {}", e)),
+                        metadata: HashMap::new(),
+                    }),
+                }
+            } else if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
+                let query = ElementQuery {
+                    window: None,
+                    window_class: None,
+                    name: Some(text.to_string()),
+                    class_name: None,
+                    automation_id: None,
+                    control_type: None,
+                    max_results: Some(1),
+                };
+                match automation.native.find_elements(None, &query) {
+                    Ok(elements) => {
+                        if let Some(element) = elements.first() {
+                            match automation.native.invoke(&element.id) {
+                                Ok(_) => Ok(ToolResult {
+                                    success: true,
+                                    data: json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
+                                    error: None,
+                                    metadata: HashMap::new(),
+                                }),
+                                Err(e) => Ok(ToolResult {
+                                    success: false,
+                                    data: json!({ "error": format!("Failed to invoke element: {}", e), "success": false }),
+                                    error: Some(format!("Failed to invoke element: {}", e)),
+                                    metadata: HashMap::new(),
+                                }),
+                            }
+                        } else {
+                            Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": format!("Element with text '{}' not found", text), "success": false }),
+                                error: Some(format!(
+                                    "Element with text '{}' not found",
+                                    text
+                                )),
+                                metadata: HashMap::new(),
+                            })
+                        }
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
+                        error: Some(format!("Failed to find element: {}", e)),
+                        metadata: HashMap::new(),
+                    }),
+                }
+            } else {
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Invalid target format for ui_click - need coordinates, element_id, or text".to_string(), "success": false }),
+                    error: Some("Invalid target format for ui_click - need coordinates, element_id, or text".to_string()),
+                    metadata: HashMap::new(),
+                })
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
+                error: Some("App handle not available for UI automation".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_ui_type_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::automation::{
+                input::KeyboardSimulator, types::ElementQuery, AutomationService,
+            };
+            use tauri::Manager;
+
+            let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
+            let automation = match automation_opt.as_ref() {
+                Some(_) => match AutomationService::new() {
+                    Ok(service) => std::sync::Arc::new(service),
+                    Err(e) => {
+                        return Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+                                metadata: HashMap::new(),
+                            });
+                    }
+                },
+                None => {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": "Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string(), "success": false }),
+                        error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+            let target = args
+                .get("target")
+                .ok_or_else(|| anyhow!("Missing target parameter"))?;
+            let text = args
+                .get("text")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing text parameter"))?;
+
+            if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
+                if let Err(e) = automation.native.set_focus(element_id) {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
+                        error: Some(format!("Failed to focus element: {}", e)),
+                        metadata: HashMap::new(),
+                    });
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
+                let query = ElementQuery {
+                    window: None,
+                    window_class: None,
+                    name: Some(target_text.to_string()),
+                    class_name: None,
+                    automation_id: None,
+                    control_type: None,
+                    max_results: Some(1),
+                };
+                match automation.native.find_elements(None, &query) {
+                    Ok(elements) => {
+                        if let Some(element) = elements.first() {
+                            if let Err(e) = automation.native.set_focus(&element.id) {
+                                return Ok(ToolResult {
+                                    success: false,
+                                    data: json!({ "error": format!("Failed to focus element: {}", e), "success": false }),
+                                    error: Some(format!("Failed to focus element: {}", e)),
+                                    metadata: HashMap::new(),
+                                });
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": format!("Failed to find element: {}", e), "success": false }),
+                            error: Some(format!("Failed to find element: {}", e)),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
+            }
+
+            let mut keyboard = KeyboardSimulator::new()
+                .map_err(|e| anyhow!("Failed to create keyboard simulator: {}", e))?;
+            let send_result = keyboard.send_text(text).await;
+            match send_result {
+                Ok(_) => Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "action": "typed", "text": text }),
+                    error: None,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to type text: {}", e), "success": false }),
+                    error: Some(format!("Failed to type text: {}", e)),
+                    metadata: HashMap::new(),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for UI automation".to_string(), "success": false }),
+                error: Some("App handle not available for UI automation".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_search_web_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        action_id: &str,
+    ) -> Result<ToolResult> {
+        use crate::core::agi::executors::search_executor::{
+            SearchExecutor, SearchType as ExecSearchType,
+        };
+        let tool_id = action_id;
+
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing query parameter"))?
+            .to_string();
+
+        // Emit progress: starting search
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_progress(
+                app_handle,
+                tool_id,
+                0.1,
+                Some(&format!("Searching: {}", &query[..query.len().min(40)])),
+            );
+        }
+
+        let num_results = args
+            .get("num_results")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10)
+            .min(20) as usize;
+
+        let search_type = args
+            .get("search_type")
+            .and_then(|v| v.as_str())
+            .map(|s| match s.to_lowercase().as_str() {
+                "news" => ExecSearchType::News,
+                "images" => ExecSearchType::General,
+                "code" | "programming" => ExecSearchType::Code,
+                "academic" | "scholarly" => ExecSearchType::Academic,
+                _ => ExecSearchType::General,
+            })
+            .unwrap_or(ExecSearchType::General);
+
+        // Emit progress: search in progress
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_progress(app_handle, tool_id, 0.5, Some("Fetching results..."));
+        }
+
+        let start = Instant::now();
+        let executor = SearchExecutor::new();
+        match executor.run_search(&query, search_type, num_results).await {
+            Ok(raw) => {
+                let duration_ms = start.elapsed().as_millis() as u64;
+                let provider = raw
+                    .get("provider")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+
+                let results = raw
+                    .get("results")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+
+                let access_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+
+                let mut normalized = Vec::new();
+                for (idx, item) in results.iter().enumerate() {
+                    let title = item
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let url = item
+                        .get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let snippet = item
+                        .get("snippet")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
 
-                    let body_text = args
-                        .get("body_text")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let body_html = args
-                        .get("body_html")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let request = SendEmailRequest {
-                        account_id,
-                        to,
-                        cc: vec![],
-                        bcc: vec![],
-                        reply_to: None,
-                        subject,
-                        body_text,
-                        body_html,
-                        attachments: vec![],
-                    };
-
-                    match email_send(app.clone(), request).await {
-                        Ok(message_id) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "message_id": message_id,
-                                "status": "sent"
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to send email: {}", e), "success": false }),
-                            error: Some(format!("Failed to send email: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
+                    if url.is_empty() && title.is_empty() {
+                        continue;
                     }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for email operations", "success": false }),
-                        error: Some("App handle not available for email operations".to_string()),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                    })
+
+                    let domain = url::Url::parse(&url)
+                        .ok()
+                        .and_then(|u| u.host_str().map(|h| h.to_string()));
+
+                    let position = idx + 1;
+                    normalized.push(json!({
+                        "title": title,
+                        "url": url,
+                        "snippet": snippet,
+                        "domain": domain,
+                        "position": position,
+                        "citation_id": format!("cite-{}", position),
+                        "access_timestamp": access_timestamp,
+                    }));
                 }
-            }
-            "email_fetch" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::email::email_fetch_inbox;
 
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+                let count = raw
+                    .get("results_count")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(normalized.len() as u64);
 
-                    let folder = args
-                        .get("folder")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let limit = args
-                        .get("limit")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as usize);
-
-                    match email_fetch_inbox(app.clone(), account_id, folder, limit, None).await {
-                        Ok(emails) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "emails": emails,
-                                "count": emails.len()
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to fetch emails: {}", e), "success": false }),
-                            error: Some(format!("Failed to fetch emails: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for email operations", "success": false }),
-                        error: Some("App handle not available for email operations".to_string()),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                    })
+                if let Some(app_handle) = &self.app_handle {
+                    emit_tool_progress(
+                        app_handle,
+                        tool_id,
+                        1.0,
+                        Some(&format!("Found {} results", count)),
+                    );
                 }
+
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "query": raw.get("query").and_then(|v| v.as_str()).unwrap_or(&query),
+                        "results": normalized,
+                        "count": count,
+                        "provider": provider,
+                        "duration_ms": duration_ms
+                    }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("query".to_string(), json!(query)),
+                        ("provider".to_string(), json!(provider)),
+                        ("result_count".to_string(), json!(count)),
+                    ]),
+                })
             }
-            "calendar_create_event" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::features::calendar::CreateEventRequest;
-                    use crate::sys::commands::calendar::{calendar_create_event, CalendarState};
-                    use tauri::Manager;
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "query": query,
+                    "results": [],
+                    "count": 0,
+                    "error": e.to_string()
+                }),
+                error: Some(format!("Web search failed: {}", e)),
+                metadata: HashMap::from([("query".to_string(), json!(query))]),
+            }),
+        }
+    }
 
-                    let state = app.state::<CalendarState>();
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
-                        .to_string();
+    async fn execute_browser_navigate_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        action_id: &str,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?;
+        let tool_id = action_id;
 
-                    let request: CreateEventRequest =
-                        serde_json::from_value(args.get("event").cloned().unwrap_or(json!({})))
-                            .map_err(|e| anyhow!("Invalid event data: {}", e))?;
+        if let Some(ref app) = self.app_handle {
+            use crate::automation::browser::NavigationOptions;
+            use crate::sys::commands::BrowserStateWrapper;
+            use tauri::Manager;
 
-                    match calendar_create_event(account_id, request, state, app.clone()).await {
-                        Ok(event) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "event": event,
-                                "status": "created"
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to create calendar event: {}", e), "success": false }),
-                            error: Some(format!("Failed to create calendar event: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
+            // Emit progress: starting navigation
+            emit_tool_progress(
+                app,
+                tool_id,
+                0.1,
+                Some(&format!("Navigating to {}", &url[..url.len().min(50)])),
+            );
+
+            let browser_state = app.state::<BrowserStateWrapper>();
+            let tab_manager = match browser_state.get_tab_manager() {
+                Ok(tm) => tm.lock().await,
+                Err(e) => {
+                    let err_msg = format!("Failed to get tab manager: {}", e);
+                    return Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": "App handle not available for calendar operations", "success": false }),
-                        error: Some("App handle not available for calendar operations".to_string()),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
                         metadata: HashMap::new(),
-                    })
+                    });
                 }
-            }
-            "calendar_list_events" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::features::calendar::ListEventsRequest;
-                    use crate::sys::commands::calendar::{calendar_list_events, CalendarState};
-                    use tauri::Manager;
+            };
 
-                    let state = app.state::<CalendarState>();
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
-                        .to_string();
+            emit_tool_progress(app, tool_id, 0.3, Some("Browser ready"));
 
-                    let request: ListEventsRequest =
-                        serde_json::from_value(args.get("request").cloned().unwrap_or(json!({})))
-                            .map_err(|e| anyhow!("Invalid request format: {}", e))?;
-
-                    match calendar_list_events(account_id, request, state, app.clone()).await {
-                        Ok(response) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "events": response.events,
-                                "next_page_token": response.next_page_token
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to list calendar events: {}", e), "success": false }),
-                            error: Some(format!("Failed to list calendar events: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for calendar operations", "success": false }),
-                        error: Some("App handle not available for calendar operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "cloud_upload" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::cloud::{
-                        cloud_upload, CloudState, CloudUploadRequest,
-                    };
-                    use tauri::Manager;
-
-                    let state = app.state::<CloudState>();
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
-                        .to_string();
-
-                    let local_path = args
-                        .get("local_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing local_path parameter"))?
-                        .to_string();
-
-                    let remote_path = args
-                        .get("remote_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
-                        .to_string();
-
-                    let request = CloudUploadRequest {
-                        account_id: account_id.clone(),
-                        local_path: local_path.clone(),
-                        remote_path: remote_path.clone(),
+            match tab_manager.list_tabs().await {
+                Ok(tabs) => {
+                    let tab_id = if tabs.is_empty() {
+                        emit_tool_progress(app, tool_id, 0.4, Some("Opening new tab"));
+                        match tab_manager.open_tab(url).await {
+                            Ok(tid) => tid,
+                            Err(e) => {
+                                let err_msg = format!("Failed to open tab: {}", e);
+                                return Ok(ToolResult {
+                                    success: false,
+                                    data: json!({ "error": err_msg.clone(), "success": false }),
+                                    error: Some(err_msg),
+                                    metadata: HashMap::new(),
+                                });
+                            }
+                        }
+                    } else {
+                        tabs[0].id.clone()
                     };
 
-                    match cloud_upload(request, state, app.clone()).await {
-                        Ok(file_id) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "file_id": file_id,
-                                "local_path": local_path,
-                                "remote_path": remote_path,
-                                "status": "uploaded"
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to upload to cloud storage: {}", e), "success": false }),
-                            error: Some(format!("Failed to upload to cloud storage: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for cloud storage", "success": false }),
-                        error: Some("App handle not available for cloud storage".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "cloud_download" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::cloud::{
-                        cloud_download, CloudDownloadRequest, CloudState,
-                    };
-                    use tauri::Manager;
+                    emit_tool_progress(app, tool_id, 0.6, Some("Loading page..."));
 
-                    let state = app.state::<CloudState>();
-                    let account_id = args
-                        .get("account_id")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
-                        .to_string();
-
-                    let remote_path = args
-                        .get("remote_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
-                        .to_string();
-
-                    let local_path = args
-                        .get("local_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing local_path parameter"))?
-                        .to_string();
-
-                    let request = CloudDownloadRequest {
-                        account_id: account_id.clone(),
-                        remote_path: remote_path.clone(),
-                        local_path: local_path.clone(),
-                    };
-
-                    match cloud_download(request, state, app.clone()).await {
-                        Ok(()) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "remote_path": remote_path,
-                                "local_path": local_path,
-                                "status": "downloaded"
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to download from cloud storage: {}", e), "success": false }),
-                            error: Some(format!("Failed to download from cloud storage: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for cloud storage", "success": false }),
-                        error: Some("App handle not available for cloud storage".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "productivity_create_task" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::features::productivity::{Provider, Task};
-                    use crate::sys::commands::productivity::{
-                        productivity_create_task, ProductivityState,
-                    };
-                    use tauri::Manager;
-
-                    let state = app.state::<ProductivityState>();
-
-                    let provider_str = args
-                        .get("provider")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing provider parameter"))?;
-
-                    let provider = match provider_str.to_lowercase().as_str() {
-                        "notion" => Provider::Notion,
-                        "trello" => Provider::Trello,
-                        "asana" => Provider::Asana,
-                        other => {
-                            let err_msg = format!(
-                                "Unknown provider: {}. Use 'notion', 'trello', or 'asana'",
-                                other
-                            );
-                            return Ok(ToolResult {
+                    match tab_manager
+                        .navigate(&tab_id, url, NavigationOptions::default())
+                        .await
+                    {
+                        Ok(_) => {
+                            emit_tool_progress(app, tool_id, 1.0, Some("Page loaded"));
+                            Ok(ToolResult {
+                                success: true,
+                                data: json!({ "success": true, "url": url, "tab_id": tab_id }),
+                                error: None,
+                                metadata: HashMap::new(),
+                            })
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to navigate: {}", e);
+                            Ok(ToolResult {
                                 success: false,
                                 data: json!({ "error": err_msg.clone(), "success": false }),
                                 error: Some(err_msg),
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            });
+                                metadata: HashMap::new(),
+                            })
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = format!("Failed to list tabs: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+        } else {
+            let err_msg = "App handle not available for browser navigation".to_string();
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": err_msg.clone(), "success": false }),
+                error: Some(err_msg),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_code_execute_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let language = args
+            .get("language")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing language parameter"))?;
+        let code = args
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing code parameter"))?;
+
+        if let Some(ref app) = self.app_handle {
+            use crate::features::terminal::{SessionManager, ShellType};
+            use tauri::Manager;
+
+            let session_manager = app.state::<SessionManager>();
+
+            let shell_type = match language.to_lowercase().as_str() {
+                "powershell" | "ps1" => ShellType::PowerShell,
+                "bash" | "sh" | "shell" => ShellType::Wsl,
+                "cmd" | "batch" => ShellType::Cmd,
+                _ => ShellType::PowerShell,
+            };
+
+            let session_id = match session_manager.create_session(shell_type, None).await {
+                Ok(sid) => sid,
+                Err(e) => {
+                    let err_msg = format!("Failed to create session: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            match session_manager
+                .send_input(&session_id, &format!("{}\n", code))
+                .await
+            {
+                Ok(_) => {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "session_id": session_id, "code": code }),
+                        error: None,
+                        metadata: HashMap::from([(
+                            "session_id".to_string(),
+                            json!(session_id),
+                        )]),
+                    })
+                }
+                Err(e) => {
+                    let err_msg = format!("Failed to execute code: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+        } else {
+            let err_msg = "App handle not available for code execution".to_string();
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": err_msg.clone(), "success": false }),
+                error: Some(err_msg),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_git_push_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        let remote = args
+            .get("remote")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let branch = args
+            .get("branch")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let Some(app) = &self.app_handle {
+            if let Err(e) = self.validate_path(&path).await {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(path))]),
+                });
+            }
+
+            use crate::sys::commands::git::git_push;
+
+            match git_push(
+                app.clone(),
+                path.clone(),
+                remote.clone(),
+                branch.clone(),
+                false,
+            )
+            .await
+            {
+                Ok(msg) => Ok(ToolResult {
+                    success: true,
+                    data: json!({ "success": true, "message": msg }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(path)),
+                        ("remote".to_string(), json!(remote)),
+                        ("branch".to_string(), json!(branch)),
+                    ]),
+                }),
+                Err(e) => {
+                    let err_msg = format!("Git push failed: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    })
+                }
+            }
+        } else {
+            let err_msg = "App handle not available for git_push".to_string();
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": err_msg.clone(), "success": false }),
+                error: Some(err_msg),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_db_query_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing query parameter"))?;
+
+        // Validate it's a SELECT query only (read-only)
+        let query_upper = query.trim().to_uppercase();
+        if !query_upper.starts_with("SELECT") && !query_upper.starts_with("WITH") {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "db_query only supports SELECT statements. Use db_execute for modifications.", "success": false }),
+                error: Some("db_query only supports SELECT statements. Use db_execute for modifications.".to_string()),
+                metadata: HashMap::new(),
+            });
+        }
+
+        // Block dangerous operations even in SELECT (like subqueries with mutations)
+        let blocked_keywords = [
+            "DROP", "TRUNCATE", "DELETE", "ALTER", "CREATE", "INSERT", "UPDATE", "GRANT",
+            "REVOKE",
+        ];
+        for keyword in &blocked_keywords {
+            if query_upper.contains(keyword) {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("SQL operation '{}' is not allowed in db_query.", keyword), "success": false }),
+                    error: Some(format!(
+                        "SQL operation '{}' is not allowed in db_query.",
+                        keyword
+                    )),
+                    metadata: HashMap::new(),
+                });
+            }
+        }
+
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::chat::AppDatabase;
+            use tauri::Manager;
+
+            let db = app.state::<AppDatabase>();
+            let conn = match db.conn.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    let err_msg = format!("Database lock error: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            // Execute query and collect results - using a closure to manage lifetimes
+            let query_result: Result<(Vec<String>, Vec<serde_json::Value>), String> =
+                (|| {
+                    let mut stmt = conn
+                        .prepare(query)
+                        .map_err(|e| format!("Query preparation error: {}", e))?;
+                    let column_names: Vec<String> =
+                        stmt.column_names().iter().map(|s| s.to_string()).collect();
+
+                    let mut rows_iter = stmt
+                        .query([])
+                        .map_err(|e| format!("Query execution error: {}", e))?;
+                    let mut rows: Vec<serde_json::Value> = Vec::new();
+
+                    while let Some(row) = rows_iter
+                        .next()
+                        .map_err(|e| format!("Row fetch error: {}", e))?
+                    {
+                        let mut obj = serde_json::Map::new();
+                        for (idx, col_name) in column_names.iter().enumerate() {
+                            let value: rusqlite::types::Value = row
+                                .get(idx)
+                                .map_err(|e| format!("Column read error: {}", e))?;
+                            obj.insert(
+                                col_name.clone(),
+                                match value {
+                                    rusqlite::types::Value::Null => json!(null),
+                                    rusqlite::types::Value::Integer(n) => json!(n),
+                                    rusqlite::types::Value::Real(f) => json!(f),
+                                    rusqlite::types::Value::Text(s) => json!(s),
+                                    rusqlite::types::Value::Blob(b) => {
+                                        json!(format!("<blob {} bytes>", b.len()))
+                                    }
+                                },
+                            );
+                        }
+                        rows.push(serde_json::Value::Object(obj));
+                    }
+
+                    Ok((column_names, rows))
+                })();
+
+            match query_result {
+                Ok((column_names, rows)) => {
+                    let row_count = rows.len();
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "columns": column_names,
+                            "rows": rows,
+                            "row_count": row_count
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("query".to_string(), json!(query))]),
+                    })
+                }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.clone(), "success": false }),
+                    error: Some(e),
+                    metadata: HashMap::from([("query".to_string(), json!(query))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "Database not available", "success": false }),
+                error: Some("Database not available".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_db_execute_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing query parameter"))?;
+
+        // Validate it's a modification query (INSERT, UPDATE, DELETE)
+        let query_upper = query.trim().to_uppercase();
+        let is_modification = query_upper.starts_with("INSERT")
+            || query_upper.starts_with("UPDATE")
+            || query_upper.starts_with("DELETE");
+
+        if !is_modification {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.", "success": false }),
+                error: Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string()),
+                metadata: HashMap::new(),
+            });
+        }
+
+        // Block dangerous DDL operations
+        let blocked_keywords = ["DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"];
+        for keyword in &blocked_keywords {
+            if query_upper.contains(keyword) {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword), "success": false }),
+                    error: Some(format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword)),
+                    metadata: HashMap::new(),
+                });
+            }
+        }
+
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::chat::AppDatabase;
+            use tauri::Manager;
+
+            let db = app.state::<AppDatabase>();
+            let conn = match db.conn.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    let err_msg = format!("Database lock error: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            match conn.execute(query, []) {
+                Ok(rows_affected) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "rows_affected": rows_affected,
+                        "query": query
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("query".to_string(), json!(query))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Query execution error: {}", e), "success": false }),
+                    error: Some(format!("Query execution error: {}", e)),
+                    metadata: HashMap::from([("query".to_string(), json!(query))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "Database not available", "success": false }),
+                error: Some("Database not available".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_db_transaction_begin_tool(
+        &self,
+        _args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::chat::AppDatabase;
+            use tauri::Manager;
+
+            let db = app.state::<AppDatabase>();
+            let conn = match db.conn.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    let err_msg = format!("Database lock error: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            match conn.execute("BEGIN TRANSACTION", []) {
+                Ok(_) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "message": "Transaction started",
+                        "status": "active"
+                    }),
+                    error: None,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => {
+                    let err_msg = format!("Failed to begin transaction: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "Database not available", "success": false }),
+                error: Some("Database not available".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_db_transaction_commit_tool(
+        &self,
+        _args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::chat::AppDatabase;
+            use tauri::Manager;
+
+            let db = app.state::<AppDatabase>();
+            let conn = match db.conn.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    let err_msg = format!("Database lock error: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            match conn.execute("COMMIT", []) {
+                Ok(_) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "message": "Transaction committed",
+                        "status": "committed"
+                    }),
+                    error: None,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => {
+                    let err_msg = format!("Failed to commit transaction: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "Database not available", "success": false }),
+                error: Some("Database not available".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_db_transaction_rollback_tool(
+        &self,
+        _args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::chat::AppDatabase;
+            use tauri::Manager;
+
+            let db = app.state::<AppDatabase>();
+            let conn = match db.conn.lock() {
+                Ok(c) => c,
+                Err(e) => {
+                    let err_msg = format!("Database lock error: {}", e);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            match conn.execute("ROLLBACK", []) {
+                Ok(_) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "message": "Transaction rolled back",
+                        "status": "rolled_back"
+                    }),
+                    error: None,
+                    metadata: HashMap::new(),
+                }),
+                Err(e) => {
+                    let err_msg = format!("Failed to rollback transaction: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "Database not available", "success": false }),
+                error: Some("Database not available".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_api_call_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?;
+        let method = args.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
+        let body = args.get("body");
+        let headers = args.get("headers");
+
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::api::client::{ApiRequest, HttpMethod};
+            use crate::sys::commands::ApiState;
+            use tauri::Manager;
+
+            let api_state = app.state::<ApiState>();
+
+            let http_method = match method.to_uppercase().as_str() {
+                "GET" => HttpMethod::Get,
+                "POST" => HttpMethod::Post,
+                "PUT" => HttpMethod::Put,
+                "PATCH" => HttpMethod::Patch,
+                "DELETE" => HttpMethod::Delete,
+                _ => HttpMethod::Get,
+            };
+
+            let request = ApiRequest {
+                url: url.to_string(),
+                method: http_method,
+                headers: headers
+                    .and_then(|h| serde_json::from_value(h.clone()).ok())
+                    .unwrap_or_default(),
+                body: body.and_then(|b| b.as_str().map(|s| s.to_string())),
+                query_params: HashMap::new(),
+                auth: crate::sys::api::client::AuthType::None,
+                timeout_ms: Some(30000),
+            };
+
+            match api_state.execute_request(request).await {
+                Ok(response) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "status": response.status,
+                        "headers": response.headers,
+                        "body": response.body,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("url".to_string(), json!(url))]),
+                }),
+                Err(e) => {
+                    let err_msg = format!("API call failed: {}", e);
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::from([("url".to_string(), json!(url))]),
+                    })
+                }
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for API calls", "success": false }),
+                error: Some("App handle not available for API calls".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_image_ocr_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let image_path = args
+            .get("image_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing image_path parameter"))?;
+
+        #[cfg(feature = "ocr")]
+        {
+            use crate::automation::screen::perform_ocr;
+            match perform_ocr(image_path).await {
+                Ok(text) => Ok(ToolResult {
+                    success: true,
+                    data: json!({ "text": text, "image_path": image_path }),
+                    error: None,
+                    metadata: HashMap::from([(
+                        "image_path".to_string(),
+                        json!(image_path),
+                    )]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("OCR failed: {}", e), "success": false }),
+                    error: Some(format!("OCR failed: {}", e)),
+                    metadata: HashMap::from([(
+                        "image_path".to_string(),
+                        json!(image_path),
+                    )]),
+                }),
+            }
+        }
+        #[cfg(not(feature = "ocr"))]
+        {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "OCR feature not enabled in build", "success": false }),
+                error: Some("OCR feature not enabled in build".to_string()),
+                metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+            })
+        }
+    }
+
+    async fn execute_code_analyze_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let code = args
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing code parameter"))?;
+        let language = args
+            .get("language")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        let line_count = code.lines().count();
+        let char_count = code.len();
+        let non_whitespace = code.chars().filter(|c| !c.is_whitespace()).count();
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "language": language,
+                "line_count": line_count,
+                "char_count": char_count,
+                "non_whitespace_chars": non_whitespace,
+                "analysis": "Basic static analysis complete"
+            }),
+            error: None,
+            metadata: HashMap::from([("language".to_string(), json!(language))]),
+        })
+    }
+
+    async fn execute_image_generate_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let prompt = args
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing prompt parameter"))?
+            .to_string();
+        let provider = args
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let size = args
+            .get("size")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let Some(ref app) = self.app_handle {
+            let request = crate::sys::commands::media::MediaImageRequest {
+                prompt: prompt.clone(),
+                negative_prompt: None,
+                provider,
+                model: None,
+                size: size.clone(),
+                quality: None,
+                style: None,
+                n: Some(1),
+            };
+
+            match crate::sys::commands::media::media_generate_image(app.clone(), request)
+                .await
+            {
+                Ok(response) => {
+                    let result_data = json!({
+                        "success": true,
+                        "prompt": prompt.clone(),
+                        "images": response.images,
+                        "provider": response.provider,
+                        "model": response.model,
+                        "size": size,
+                        "cost": response.cost_estimate,
+                        "latency_ms": response.latency_ms
+                    });
+                    Ok(ToolResult {
+                        success: true,
+                        data: result_data,
+                        error: None,
+                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                    })
+                }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Image generation failed: {}", e), "success": false }),
+                    error: Some(format!("Image generation failed: {}", e)),
+                    metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for image generation", "success": false }),
+                error: Some("App handle not available for image generation".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_video_generate_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let prompt = args
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing prompt parameter"))?
+            .to_string();
+        let duration_secs = args
+            .get("duration_seconds")
+            .or_else(|| args.get("duration_secs"))
+            .or_else(|| args.get("duration"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
+        let resolution = args
+            .get("resolution")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let Some(ref app) = self.app_handle {
+            let provider = args
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let input_image_url = args
+                .get("input_image_url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let request = crate::sys::commands::media::MediaVideoRequest {
+                prompt: prompt.clone(),
+                negative_prompt: None,
+                duration_secs,
+                resolution: resolution.clone(),
+                style: None,
+                model: None,
+                provider: provider.clone(),
+                input_image_url,
+            };
+
+            match crate::sys::commands::media::media_generate_video(app.clone(), request)
+                .await
+            {
+                Ok(response) => {
+                    let provider_label =
+                        provider.clone().unwrap_or_else(|| "runway".to_string());
+                    let result_data = json!({
+                        "success": true,
+                        "prompt": prompt.clone(),
+                        "video_url": response.video_url,
+                        "thumbnail_url": response.thumbnail_url,
+                        "id": response.id,
+                        "status": response.status,
+                        "provider": provider_label,
+                        "duration_secs": response.duration_secs.or(duration_secs),
+                        "resolution": resolution,
+                        "cost": response.cost_estimate,
+                        "latency_ms": response.latency_ms
+                    });
+                    Ok(ToolResult {
+                        success: true,
+                        data: result_data,
+                        error: None,
+                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                    })
+                }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Video generation failed: {}", e), "success": false }),
+                    error: Some(format!("Video generation failed: {}", e)),
+                    metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for video generation", "success": false }),
+                error: Some("App handle not available for video generation".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_llm_reason_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let prompt = args
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing prompt parameter"))?;
+        let model = args.get("model").and_then(|v| v.as_str());
+        let _max_tokens = args
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
+        let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        const MAX_DEPTH: u64 = 3;
+        if depth >= MAX_DEPTH {
+            let err_msg = format!("Maximum recursion depth ({}) exceeded", MAX_DEPTH);
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": err_msg.clone(), "success": false }),
+                error: Some(err_msg),
+                metadata: HashMap::from([("depth".to_string(), json!(depth))]),
+            });
+        }
+
+        if let Some(ref app) = self.app_handle {
+            use crate::core::llm::RouterPreferences;
+            use crate::sys::commands::LLMState;
+            use tauri::Manager;
+
+            let llm_state = app.state::<LLMState>();
+
+            let model_str = model.unwrap_or("gpt-5-nano");
+            let preferences = Some(RouterPreferences {
+                provider: None,
+                model: Some(model_str.to_string()),
+                strategy: crate::core::llm::RoutingStrategy::Auto,
+                context: None,
+                prefer_cloud_credits: false,
+            });
+
+            let router = llm_state.router.read().await;
+            match router.send_message(prompt, preferences).await {
+                Ok(response) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "reasoning": response,
+                        "model": model_str,
+                        "depth": depth,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("depth".to_string(), json!(depth))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("LLM reasoning failed: {}", e), "success": false }),
+                    error: Some(format!("LLM reasoning failed: {}", e)),
+                    metadata: HashMap::from([("depth".to_string(), json!(depth))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for LLM reasoning", "success": false }),
+                error: Some("App handle not available for LLM reasoning".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_email_send_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::email::{email_send, SendEmailRequest};
+            #[allow(unused_imports)]
+            use tauri::Manager;
+
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+
+            let to: Vec<crate::features::communications::EmailAddress> = args
+                .get("to")
+                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                .unwrap_or_default();
+
+            let subject = args
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let body_text = args
+                .get("body_text")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let body_html = args
+                .get("body_html")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let request = SendEmailRequest {
+                account_id,
+                to,
+                cc: vec![],
+                bcc: vec![],
+                reply_to: None,
+                subject,
+                body_text,
+                body_html,
+                attachments: vec![],
+            };
+
+            match email_send(app.clone(), request).await {
+                Ok(message_id) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "message_id": message_id,
+                        "status": "sent"
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to send email: {}", e), "success": false }),
+                    error: Some(format!("Failed to send email: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for email operations", "success": false }),
+                error: Some("App handle not available for email operations".to_string()),
+                metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+            })
+        }
+    }
+
+    async fn execute_email_fetch_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::email::email_fetch_inbox;
+
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+
+            let folder = args
+                .get("folder")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize);
+
+            match email_fetch_inbox(app.clone(), account_id, folder, limit, None).await {
+                Ok(emails) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "emails": emails,
+                        "count": emails.len()
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to fetch emails: {}", e), "success": false }),
+                    error: Some(format!("Failed to fetch emails: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for email operations", "success": false }),
+                error: Some("App handle not available for email operations".to_string()),
+                metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+            })
+        }
+    }
+
+    async fn execute_calendar_create_event_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::features::calendar::CreateEventRequest;
+            use crate::sys::commands::calendar::{calendar_create_event, CalendarState};
+            use tauri::Manager;
+
+            let state = app.state::<CalendarState>();
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                .to_string();
+
+            let request: CreateEventRequest =
+                serde_json::from_value(args.get("event").cloned().unwrap_or(json!({})))
+                    .map_err(|e| anyhow!("Invalid event data: {}", e))?;
+
+            match calendar_create_event(account_id, request, state, app.clone()).await {
+                Ok(event) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "event": event,
+                        "status": "created"
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to create calendar event: {}", e), "success": false }),
+                    error: Some(format!("Failed to create calendar event: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for calendar operations", "success": false }),
+                error: Some("App handle not available for calendar operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_calendar_list_events_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::features::calendar::ListEventsRequest;
+            use crate::sys::commands::calendar::{calendar_list_events, CalendarState};
+            use tauri::Manager;
+
+            let state = app.state::<CalendarState>();
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                .to_string();
+
+            let request: ListEventsRequest =
+                serde_json::from_value(args.get("request").cloned().unwrap_or(json!({})))
+                    .map_err(|e| anyhow!("Invalid request format: {}", e))?;
+
+            match calendar_list_events(account_id, request, state, app.clone()).await {
+                Ok(response) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "events": response.events,
+                        "next_page_token": response.next_page_token
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to list calendar events: {}", e), "success": false }),
+                    error: Some(format!("Failed to list calendar events: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for calendar operations", "success": false }),
+                error: Some("App handle not available for calendar operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_cloud_upload_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::cloud::{
+                cloud_upload, CloudState, CloudUploadRequest,
+            };
+            use tauri::Manager;
+
+            let state = app.state::<CloudState>();
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                .to_string();
+
+            let local_path = args
+                .get("local_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing local_path parameter"))?
+                .to_string();
+
+            let remote_path = args
+                .get("remote_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
+                .to_string();
+
+            let request = CloudUploadRequest {
+                account_id: account_id.clone(),
+                local_path: local_path.clone(),
+                remote_path: remote_path.clone(),
+            };
+
+            match cloud_upload(request, state, app.clone()).await {
+                Ok(file_id) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "file_id": file_id,
+                        "local_path": local_path,
+                        "remote_path": remote_path,
+                        "status": "uploaded"
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to upload to cloud storage: {}", e), "success": false }),
+                    error: Some(format!("Failed to upload to cloud storage: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for cloud storage", "success": false }),
+                error: Some("App handle not available for cloud storage".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_cloud_download_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::cloud::{
+                cloud_download, CloudDownloadRequest, CloudState,
+            };
+            use tauri::Manager;
+
+            let state = app.state::<CloudState>();
+            let account_id = args
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                .to_string();
+
+            let remote_path = args
+                .get("remote_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
+                .to_string();
+
+            let local_path = args
+                .get("local_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing local_path parameter"))?
+                .to_string();
+
+            let request = CloudDownloadRequest {
+                account_id: account_id.clone(),
+                remote_path: remote_path.clone(),
+                local_path: local_path.clone(),
+            };
+
+            match cloud_download(request, state, app.clone()).await {
+                Ok(()) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "remote_path": remote_path,
+                        "local_path": local_path,
+                        "status": "downloaded"
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to download from cloud storage: {}", e), "success": false }),
+                    error: Some(format!("Failed to download from cloud storage: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for cloud storage", "success": false }),
+                error: Some("App handle not available for cloud storage".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_productivity_create_task_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::features::productivity::{Provider, Task};
+            use crate::sys::commands::productivity::{
+                productivity_create_task, ProductivityState,
+            };
+            use tauri::Manager;
+
+            let state = app.state::<ProductivityState>();
+
+            let provider_str = args
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing provider parameter"))?;
+
+            let provider = match provider_str.to_lowercase().as_str() {
+                "notion" => Provider::Notion,
+                "trello" => Provider::Trello,
+                "asana" => Provider::Asana,
+                other => {
+                    let err_msg = format!(
+                        "Unknown provider: {}. Use 'notion', 'trello', or 'asana'",
+                        other
+                    );
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    });
+                }
+            };
+
+            let task: Task =
+                serde_json::from_value(args.get("task").cloned().unwrap_or(json!({})))
+                    .map_err(|e| anyhow!("Invalid task data: {}", e))?;
+
+            match productivity_create_task(state, provider, task).await {
+                Ok(response) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "task_id": response.task_id,
+                        "success": response.success,
+                        "status": "created"
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to create task: {}", e), "success": false }),
+                    error: Some(format!("Failed to create task: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for productivity tools", "success": false }),
+                error: Some("App handle not available for productivity tools".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_document_read_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::document::{document_read, DocumentState};
+            use tauri::Manager;
+
+            let state = app.state::<DocumentState>();
+            let file_path = args
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing file_path parameter"))?
+                .to_string();
+
+            match document_read(file_path.clone(), state).await {
+                Ok(content) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "content": content,
+                        "file_path": file_path
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to read document: {}", e), "success": false }),
+                    error: Some(format!("Failed to read document: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_document_search_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::document::{document_search, DocumentState};
+            use tauri::Manager;
+
+            let state = app.state::<DocumentState>();
+            let file_path = args
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing file_path parameter"))?
+                .to_string();
+
+            let query = args
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing query parameter"))?
+                .to_string();
+
+            match document_search(file_path.clone(), query.clone(), state).await {
+                Ok(results) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "results": results,
+                        "file_path": file_path,
+                        "query": query,
+                        "count": results.len()
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to search document: {}", e), "success": false }),
+                    error: Some(format!("Failed to search document: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_document_create_word_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref _app) = self.app_handle {
+            use crate::sys::commands::document::document_create_word_simple;
+
+            let output_path = args
+                .get("output_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                .to_string();
+
+            let title = args
+                .get("title")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let author = args
+                .get("author")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let paragraphs: Vec<String> = args
+                .get("paragraphs")
+                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                .unwrap_or_default();
+
+            match document_create_word_simple(
+                output_path.clone(),
+                title,
+                author,
+                paragraphs,
+            )
+            .await
+            {
+                Ok(path) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "file_path": path,
+                        "filePath": path,
+                        "format": "docx",
+                        "status": "created",
+                        "success": true
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to create Word document: {}", e), "success": false }),
+                    error: Some(format!("Failed to create Word document: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_document_create_excel_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref _app) = self.app_handle {
+            use crate::sys::commands::document::document_create_excel_simple;
+
+            let output_path = args
+                .get("output_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                .to_string();
+
+            let sheet_name = args
+                .get("sheet_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Sheet1")
+                .to_string();
+
+            let headers: Vec<String> = args
+                .get("headers")
+                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                .unwrap_or_default();
+
+            let rows: Vec<Vec<String>> = args
+                .get("rows")
+                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                .unwrap_or_default();
+
+            match document_create_excel_simple(
+                output_path.clone(),
+                sheet_name,
+                headers,
+                rows,
+            )
+            .await
+            {
+                Ok(path) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "file_path": path,
+                        "filePath": path,
+                        "format": "xlsx",
+                        "status": "created",
+                        "success": true
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to create Excel document: {}", e), "success": false }),
+                    error: Some(format!("Failed to create Excel document: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_document_create_pdf_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref _app) = self.app_handle {
+            use crate::sys::commands::document::document_create_pdf_simple;
+
+            let output_path = args
+                .get("output_path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                .to_string();
+
+            let title = args
+                .get("title")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let author = args
+                .get("author")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let paragraphs: Vec<String> = args
+                .get("paragraphs")
+                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                .unwrap_or_default();
+
+            match document_create_pdf_simple(output_path.clone(), title, author, paragraphs)
+                .await
+            {
+                Ok(path) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "file_path": path,
+                        "filePath": path,
+                        "format": "pdf",
+                        "status": "created",
+                        "success": true
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to create PDF document: {}", e), "success": false }),
+                    error: Some(format!("Failed to create PDF document: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for document operations", "success": false }),
+                error: Some("App handle not available for document operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_image_analyze_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let image_path = args
+            .get("image_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing image_path parameter"))?
+            .to_string();
+        let question = args
+            .get("question")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Describe this image in detail")
+            .to_string();
+        let _detail = args
+            .get("detail")
+            .and_then(|v| v.as_str())
+            .unwrap_or("auto")
+            .to_string();
+
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::vision::vision_answer_question;
+            use crate::sys::commands::{AppDatabase, LLMState};
+            use tauri::Manager;
+
+            let llm_state = app.state::<LLMState>();
+            let db_state = app.state::<AppDatabase>();
+
+            match vision_answer_question(
+                image_path.clone(),
+                question.clone(),
+                None,
+                None,
+                llm_state,
+                db_state,
+            )
+            .await
+            {
+                Ok(response) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "analysis": response.content,
+                        "image_path": image_path,
+                        "question": question,
+                        "model": response.model,
+                        "tokens": response.tokens,
+                        "processing_time_ms": response.processing_time_ms,
+                    }),
+                    error: None,
+                    metadata: HashMap::from([
+                        ("image_path".to_string(), json!(image_path)),
+                        ("question".to_string(), json!(question)),
+                    ]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Image analysis failed: {}", e), "success": false }),
+                    error: Some(format!("Image analysis failed: {}", e)),
+                    metadata: HashMap::from([(
+                        "image_path".to_string(),
+                        json!(image_path),
+                    )]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for image analysis", "success": false }),
+                error: Some("App handle not available for image analysis".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_git_status_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            });
+        }
+
+        use crate::sys::commands::git::git_status;
+
+        match git_status(path.clone()).await {
+            Ok(status) => Ok(ToolResult {
+                success: true,
+                data: json!({
+                    "branch": status.branch,
+                    "staged": status.staged,
+                    "unstaged": status.unstaged,
+                    "untracked": status.untracked,
+                    "conflicts": status.conflicts,
+                    "ahead": status.ahead,
+                    "behind": status.behind,
+                }),
+                error: None,
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            }),
+            Err(e) => {
+                let err_msg = format!("Git status failed: {}", e);
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
+                    metadata: HashMap::from([("path".to_string(), json!(path))]),
+                })
+            }
+        }
+    }
+
+    async fn execute_git_commit_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        let message = args
+            .get("message")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing message parameter"))?
+            .to_string();
+
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            });
+        }
+
+        use crate::sys::commands::git::git_commit;
+
+        match git_commit(path.clone(), message.clone()).await {
+            Ok(commit_id) => Ok(ToolResult {
+                success: true,
+                data: json!({
+                    "success": true,
+                    "commit_id": commit_id,
+                    "message": message,
+                }),
+                error: None,
+                metadata: HashMap::from([
+                    ("path".to_string(), json!(path)),
+                    ("message".to_string(), json!(message)),
+                ]),
+            }),
+            Err(e) => {
+                let err_msg = format!("Git commit failed: {}", e);
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
+                    metadata: HashMap::from([("path".to_string(), json!(path))]),
+                })
+            }
+        }
+    }
+
+    async fn execute_git_clone_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?
+            .to_string();
+        let destination = args
+            .get("destination")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing destination parameter"))?
+            .to_string();
+
+        if let Err(e) = self.validate_path(&destination).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("destination".to_string(), json!(destination))]),
+            });
+        }
+
+        use crate::sys::commands::git::git_clone;
+
+        match git_clone(url.clone(), destination.clone()).await {
+            Ok(msg) => Ok(ToolResult {
+                success: true,
+                data: json!({
+                    "success": true,
+                    "message": msg,
+                    "url": url,
+                    "destination": destination,
+                }),
+                error: None,
+                metadata: HashMap::from([
+                    ("url".to_string(), json!(url)),
+                    ("destination".to_string(), json!(destination)),
+                ]),
+            }),
+            Err(e) => {
+                let err_msg = format!("Git clone failed: {}", e);
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
+                    metadata: HashMap::from([("url".to_string(), json!(url))]),
+                })
+            }
+        }
+    }
+
+    async fn execute_git_add_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        let files: Vec<String> = args
+            .get("files")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![".".to_string()]);
+
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            });
+        }
+
+        use crate::sys::commands::git::git_add;
+
+        match git_add(path.clone(), files.clone()).await {
+            Ok(msg) => Ok(ToolResult {
+                success: true,
+                data: json!({
+                    "success": true,
+                    "message": msg,
+                    "files": files,
+                }),
+                error: None,
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            }),
+            Err(e) => {
+                let err_msg = format!("Git add failed: {}", e);
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
+                    metadata: HashMap::from([("path".to_string(), json!(path))]),
+                })
+            }
+        }
+    }
+
+    async fn execute_schedule_reminder_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::core::scheduler::{parse_schedule, ParsedSchedule};
+            use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
+            use chrono::{Datelike, Local, Timelike};
+            use tauri::Manager;
+
+            let message = args
+                .get("message")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing message parameter"))?
+                .to_string();
+
+            let time_expr = args
+                .get("time")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing time parameter"))?
+                .to_string();
+
+            // Parse the natural language time expression
+            let parsed = parse_schedule(&time_expr).map_err(|e| {
+                anyhow!(
+                    "Could not understand the time '{}'. Try something like 'in 2 hours', 'at 3pm', or 'tomorrow at 9am'. Error: {}",
+                    time_expr,
+                    e
+                )
+            })?;
+
+            // Convert to cron expression or one-time schedule
+            let (schedule_expr, is_recurring) = match &parsed {
+                ParsedSchedule::Once(dt) => {
+                    // For one-time reminders, create a specific cron that matches this exact time
+                    let local = dt.with_timezone(&Local);
+                    let cron = format!(
+                        "{} {} {} {} *",
+                        local.minute(),
+                        local.hour(),
+                        local.day(),
+                        local.month()
+                    );
+                    (cron, false)
+                }
+                ParsedSchedule::Cron(expr) => (expr.clone(), true),
+                ParsedSchedule::Interval(duration) => {
+                    // Convert interval to approximate cron (limited precision)
+                    let minutes = duration.num_minutes();
+                    if minutes < 60 {
+                        (format!("*/{} * * * *", minutes.max(1)), true)
+                    } else {
+                        let hours = duration.num_hours();
+                        (format!("0 */{} * * *", hours.max(1)), true)
+                    }
+                }
+            };
+
+            let state = app.state::<SchedulerState>();
+            let action_data = json!({
+                "message": message,
+                "title": "Reminder"
+            });
+
+            match state.scheduler.add_job(
+                format!("Reminder: {}", message),
+                schedule_expr,
+                SchedulerActionType::Notification,
+                action_data,
+            ) {
+                Ok(job_id) => {
+                    // Format user-friendly response
+                    let friendly_time = match &parsed {
+                        ParsedSchedule::Once(dt) => {
+                            let local = dt.with_timezone(&Local);
+                            local.format("%I:%M %p on %B %d").to_string()
+                        }
+                        ParsedSchedule::Cron(_) | ParsedSchedule::Interval(_) => {
+                            time_expr.clone()
                         }
                     };
 
-                    let task: Task =
-                        serde_json::from_value(args.get("task").cloned().unwrap_or(json!({})))
-                            .map_err(|e| anyhow!("Invalid task data: {}", e))?;
+                    let response_msg = if is_recurring {
+                        format!(
+                            "I've scheduled a recurring reminder for '{}' ({})",
+                            message, time_expr
+                        )
+                    } else {
+                        format!(
+                            "I've set a reminder for {} to '{}'",
+                            friendly_time, message
+                        )
+                    };
 
-                    match productivity_create_task(state, provider, task).await {
-                        Ok(response) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "task_id": response.task_id,
-                                "success": response.success,
-                                "status": "created"
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to create task: {}", e), "success": false }),
-                            error: Some(format!("Failed to create task: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
                     Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for productivity tools", "success": false }),
-                        error: Some("App handle not available for productivity tools".to_string()),
-                        metadata: HashMap::new(),
+                        success: true,
+                        data: json!({
+                            "job_id": job_id,
+                            "message": message,
+                            "scheduled_time": friendly_time,
+                            "is_recurring": is_recurring,
+                            "confirmation": response_msg
+                        }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("tool".to_string(), json!(tool_id)),
+                            ("job_id".to_string(), json!(job_id)),
+                        ]),
                     })
                 }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to schedule reminder: {}", e), "success": false }),
+                    error: Some(format!("Failed to schedule reminder: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
             }
-            "document_read" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::document::{document_read, DocumentState};
-                    use tauri::Manager;
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for scheduling", "success": false }),
+                error: Some("App handle not available for scheduling".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
 
-                    let state = app.state::<DocumentState>();
-                    let file_path = args
-                        .get("file_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing file_path parameter"))?
-                        .to_string();
+    async fn execute_schedule_recurring_task_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::core::scheduler::{parse_schedule, ParsedSchedule};
+            use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
+            use tauri::Manager;
 
-                    match document_read(file_path.clone(), state).await {
-                        Ok(content) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "content": content,
-                                "file_path": file_path
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to read document: {}", e), "success": false }),
-                            error: Some(format!("Failed to read document: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
+            let task_name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing name parameter"))?
+                .to_string();
+
+            let schedule_expr = args
+                .get("schedule")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing schedule parameter"))?
+                .to_string();
+
+            let action_type_str = args
+                .get("action_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("agi_task");
+
+            let action_data = args
+                .get("action_data")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+
+            // Parse the natural language schedule expression
+            let parsed = parse_schedule(&schedule_expr).map_err(|e| {
+                anyhow!(
+                    "Could not understand the schedule '{}'. Try 'every day at 9am', 'every monday', or 'every morning'. Error: {}",
+                    schedule_expr,
+                    e
+                )
+            })?;
+
+            // Convert to cron expression
+            let cron_expr = match &parsed {
+                ParsedSchedule::Cron(expr) => expr.clone(),
+                ParsedSchedule::Interval(duration) => {
+                    let minutes = duration.num_minutes();
+                    if minutes < 60 {
+                        format!("*/{} * * * *", minutes.max(1))
+                    } else {
+                        let hours = duration.num_hours();
+                        format!("0 */{} * * *", hours.max(1))
                     }
-                } else {
-                    Ok(ToolResult {
+                }
+                ParsedSchedule::Once(_) => {
+                    let err_msg = "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string();
+                    return Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": "App handle not available for document operations", "success": false }),
-                        error: Some("App handle not available for document operations".to_string()),
-                        metadata: HashMap::new(),
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    });
+                }
+            };
+
+            // Parse action type
+            let action_type = match action_type_str.to_lowercase().as_str() {
+                "workflow" => SchedulerActionType::Workflow,
+                "agi_task" | "agitask" | "agi-task" => SchedulerActionType::AgiTask,
+                "shell_command" | "shellcommand" | "shell-command" | "shell" => {
+                    SchedulerActionType::ShellCommand
+                }
+                "notification" | "notify" => SchedulerActionType::Notification,
+                "webhook" => SchedulerActionType::Webhook,
+                "script" => SchedulerActionType::Script,
+                _ => SchedulerActionType::AgiTask,
+            };
+
+            let state = app.state::<SchedulerState>();
+
+            match state.scheduler.add_job(
+                task_name.clone(),
+                cron_expr.clone(),
+                action_type.clone(),
+                action_data,
+            ) {
+                Ok(job_id) => {
+                    // Format user-friendly response
+                    let friendly_schedule = match &parsed {
+                        ParsedSchedule::Cron(_) => schedule_expr.clone(),
+                        ParsedSchedule::Interval(d) => {
+                            let hours = d.num_hours();
+                            let minutes = d.num_minutes() % 60;
+                            if hours > 0 && minutes > 0 {
+                                format!("every {} hours and {} minutes", hours, minutes)
+                            } else if hours > 0 {
+                                format!("every {} hour(s)", hours)
+                            } else {
+                                format!("every {} minute(s)", d.num_minutes())
+                            }
+                        }
+                        ParsedSchedule::Once(_) => schedule_expr.clone(),
+                    };
+
+                    let response_msg = format!(
+                        "I've scheduled '{}' to run {}",
+                        task_name, friendly_schedule
+                    );
+
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "job_id": job_id,
+                            "name": task_name,
+                            "schedule": friendly_schedule,
+                            "cron_expression": cron_expr,
+                            "action_type": action_type.to_string(),
+                            "confirmation": response_msg
+                        }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("tool".to_string(), json!(tool_id)),
+                            ("job_id".to_string(), json!(job_id)),
+                        ]),
                     })
                 }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to schedule task: {}", e), "success": false }),
+                    error: Some(format!("Failed to schedule task: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
             }
-            "document_search" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::document::{document_search, DocumentState};
-                    use tauri::Manager;
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for scheduling", "success": false }),
+                error: Some("App handle not available for scheduling".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
 
-                    let state = app.state::<DocumentState>();
-                    let file_path = args
-                        .get("file_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing file_path parameter"))?
-                        .to_string();
+    async fn execute_cancel_scheduled_task_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::scheduler::SchedulerState;
+            use tauri::Manager;
 
-                    let query = args
-                        .get("query")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing query parameter"))?
-                        .to_string();
+            let job_id = args
+                .get("job_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing job_id parameter"))?
+                .to_string();
 
-                    match document_search(file_path.clone(), query.clone(), state).await {
-                        Ok(results) => Ok(ToolResult {
+            let state = app.state::<SchedulerState>();
+
+            // First get the job details for a friendly message
+            let job_name = state
+                .scheduler
+                .get_job(&job_id)
+                .ok()
+                .flatten()
+                .map(|j| j.name.clone());
+
+            match state.scheduler.remove_job(&job_id) {
+                Ok(removed) => {
+                    if removed {
+                        let response_msg = match job_name {
+                            Some(name) => {
+                                format!("I've cancelled the scheduled task '{}'", name)
+                            }
+                            None => format!(
+                                "I've cancelled the scheduled task with ID {}",
+                                job_id
+                            ),
+                        };
+
+                        Ok(ToolResult {
                             success: true,
                             data: json!({
-                                "results": results,
-                                "file_path": file_path,
-                                "query": query,
-                                "count": results.len()
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to search document: {}", e), "success": false }),
-                            error: Some(format!("Failed to search document: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for document operations", "success": false }),
-                        error: Some("App handle not available for document operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "document_create_word" => {
-                if let Some(ref _app) = self.app_handle {
-                    use crate::sys::commands::document::document_create_word_simple;
-
-                    let output_path = args
-                        .get("output_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
-                        .to_string();
-
-                    let title = args
-                        .get("title")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let author = args
-                        .get("author")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let paragraphs: Vec<String> = args
-                        .get("paragraphs")
-                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                        .unwrap_or_default();
-
-                    match document_create_word_simple(
-                        output_path.clone(),
-                        title,
-                        author,
-                        paragraphs,
-                    )
-                    .await
-                    {
-                        Ok(path) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "file_path": path,
-                                "filePath": path,
-                                "format": "docx",
-                                "status": "created",
-                                "success": true
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to create Word document: {}", e), "success": false }),
-                            error: Some(format!("Failed to create Word document: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for document operations", "success": false }),
-                        error: Some("App handle not available for document operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "document_create_excel" => {
-                if let Some(ref _app) = self.app_handle {
-                    use crate::sys::commands::document::document_create_excel_simple;
-
-                    let output_path = args
-                        .get("output_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
-                        .to_string();
-
-                    let sheet_name = args
-                        .get("sheet_name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("Sheet1")
-                        .to_string();
-
-                    let headers: Vec<String> = args
-                        .get("headers")
-                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                        .unwrap_or_default();
-
-                    let rows: Vec<Vec<String>> = args
-                        .get("rows")
-                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                        .unwrap_or_default();
-
-                    match document_create_excel_simple(
-                        output_path.clone(),
-                        sheet_name,
-                        headers,
-                        rows,
-                    )
-                    .await
-                    {
-                        Ok(path) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "file_path": path,
-                                "filePath": path,
-                                "format": "xlsx",
-                                "status": "created",
-                                "success": true
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to create Excel document: {}", e), "success": false }),
-                            error: Some(format!("Failed to create Excel document: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for document operations", "success": false }),
-                        error: Some("App handle not available for document operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "document_create_pdf" => {
-                if let Some(ref _app) = self.app_handle {
-                    use crate::sys::commands::document::document_create_pdf_simple;
-
-                    let output_path = args
-                        .get("output_path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
-                        .to_string();
-
-                    let title = args
-                        .get("title")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let author = args
-                        .get("author")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    let paragraphs: Vec<String> = args
-                        .get("paragraphs")
-                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                        .unwrap_or_default();
-
-                    match document_create_pdf_simple(output_path.clone(), title, author, paragraphs)
-                        .await
-                    {
-                        Ok(path) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "file_path": path,
-                                "filePath": path,
-                                "format": "pdf",
-                                "status": "created",
-                                "success": true
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to create PDF document: {}", e), "success": false }),
-                            error: Some(format!("Failed to create PDF document: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for document operations", "success": false }),
-                        error: Some("App handle not available for document operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "image_analyze" => {
-                let image_path = args
-                    .get("image_path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing image_path parameter"))?
-                    .to_string();
-                let question = args
-                    .get("question")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Describe this image in detail")
-                    .to_string();
-                let _detail = args
-                    .get("detail")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("auto")
-                    .to_string();
-
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::vision::vision_answer_question;
-                    use crate::sys::commands::{AppDatabase, LLMState};
-                    use tauri::Manager;
-
-                    let llm_state = app.state::<LLMState>();
-                    let db_state = app.state::<AppDatabase>();
-
-                    match vision_answer_question(
-                        image_path.clone(),
-                        question.clone(),
-                        None,
-                        None,
-                        llm_state,
-                        db_state,
-                    )
-                    .await
-                    {
-                        Ok(response) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "analysis": response.content,
-                                "image_path": image_path,
-                                "question": question,
-                                "model": response.model,
-                                "tokens": response.tokens,
-                                "processing_time_ms": response.processing_time_ms,
+                                "job_id": job_id,
+                                "cancelled": true,
+                                "confirmation": response_msg
                             }),
                             error: None,
                             metadata: HashMap::from([
-                                ("image_path".to_string(), json!(image_path)),
-                                ("question".to_string(), json!(question)),
+                                ("tool".to_string(), json!(tool_id)),
+                                ("job_id".to_string(), json!(job_id)),
                             ]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Image analysis failed: {}", e), "success": false }),
-                            error: Some(format!("Image analysis failed: {}", e)),
-                            metadata: HashMap::from([(
-                                "image_path".to_string(),
-                                json!(image_path),
-                            )]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for image analysis", "success": false }),
-                        error: Some("App handle not available for image analysis".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "git_status" => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    });
-                }
-
-                use crate::sys::commands::git::git_status;
-
-                match git_status(path.clone()).await {
-                    Ok(status) => Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "branch": status.branch,
-                            "staged": status.staged,
-                            "unstaged": status.unstaged,
-                            "untracked": status.untracked,
-                            "conflicts": status.conflicts,
-                            "ahead": status.ahead,
-                            "behind": status.behind,
-                        }),
-                        error: None,
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
-                    Err(e) => {
-                        let err_msg = format!("Git status failed: {}", e);
+                        })
+                    } else {
+                        let err_msg = format!("No scheduled task found with ID '{}'. Use list_scheduled_tasks to see available tasks.", job_id);
                         Ok(ToolResult {
                             success: false,
                             data: json!({ "error": err_msg.clone(), "success": false }),
                             error: Some(err_msg),
-                            metadata: HashMap::from([("path".to_string(), json!(path))]),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
                         })
                     }
                 }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to cancel task: {}", e), "success": false }),
+                    error: Some(format!("Failed to cancel task: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
             }
-            "git_commit" => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                let message = args
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing message parameter"))?
-                    .to_string();
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for scheduling", "success": false }),
+                error: Some("App handle not available for scheduling".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
 
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    });
-                }
+    async fn execute_list_scheduled_tasks_tool(
+        &self,
+        _args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::sys::commands::scheduler::SchedulerState;
+            use chrono::Local;
+            use tauri::Manager;
 
-                use crate::sys::commands::git::git_commit;
+            let state = app.state::<SchedulerState>();
 
-                match git_commit(path.clone(), message.clone()).await {
-                    Ok(commit_id) => Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "success": true,
-                            "commit_id": commit_id,
-                            "message": message,
-                        }),
-                        error: None,
-                        metadata: HashMap::from([
-                            ("path".to_string(), json!(path)),
-                            ("message".to_string(), json!(message)),
-                        ]),
-                    }),
-                    Err(e) => {
-                        let err_msg = format!("Git commit failed: {}", e);
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": err_msg.clone(), "success": false }),
-                            error: Some(err_msg),
-                            metadata: HashMap::from([("path".to_string(), json!(path))]),
-                        })
-                    }
-                }
-            }
-            "git_clone" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?
-                    .to_string();
-                let destination = args
-                    .get("destination")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing destination parameter"))?
-                    .to_string();
-
-                if let Err(e) = self.validate_path(&destination).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("destination".to_string(), json!(destination))]),
-                    });
-                }
-
-                use crate::sys::commands::git::git_clone;
-
-                match git_clone(url.clone(), destination.clone()).await {
-                    Ok(msg) => Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "success": true,
-                            "message": msg,
-                            "url": url,
-                            "destination": destination,
-                        }),
-                        error: None,
-                        metadata: HashMap::from([
-                            ("url".to_string(), json!(url)),
-                            ("destination".to_string(), json!(destination)),
-                        ]),
-                    }),
-                    Err(e) => {
-                        let err_msg = format!("Git clone failed: {}", e);
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": err_msg.clone(), "success": false }),
-                            error: Some(err_msg),
-                            metadata: HashMap::from([("url".to_string(), json!(url))]),
-                        })
-                    }
-                }
-            }
-            "git_add" => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?
-                    .to_string();
-                let files: Vec<String> = args
-                    .get("files")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect()
-                    })
-                    .unwrap_or_else(|| vec![".".to_string()]);
-
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    });
-                }
-
-                use crate::sys::commands::git::git_add;
-
-                match git_add(path.clone(), files.clone()).await {
-                    Ok(msg) => Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "success": true,
-                            "message": msg,
-                            "files": files,
-                        }),
-                        error: None,
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
-                    Err(e) => {
-                        let err_msg = format!("Git add failed: {}", e);
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": err_msg.clone(), "success": false }),
-                            error: Some(err_msg),
-                            metadata: HashMap::from([("path".to_string(), json!(path))]),
-                        })
-                    }
-                }
-            }
-            "schedule_reminder" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::scheduler::{parse_schedule, ParsedSchedule};
-                    use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
-                    use chrono::{Datelike, Local, Timelike};
-                    use tauri::Manager;
-
-                    let message = args
-                        .get("message")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing message parameter"))?
-                        .to_string();
-
-                    let time_expr = args
-                        .get("time")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing time parameter"))?
-                        .to_string();
-
-                    // Parse the natural language time expression
-                    let parsed = parse_schedule(&time_expr).map_err(|e| {
-                        anyhow!(
-                            "Could not understand the time '{}'. Try something like 'in 2 hours', 'at 3pm', or 'tomorrow at 9am'. Error: {}",
-                            time_expr,
-                            e
-                        )
-                    })?;
-
-                    // Convert to cron expression or one-time schedule
-                    let (schedule_expr, is_recurring) = match &parsed {
-                        ParsedSchedule::Once(dt) => {
-                            // For one-time reminders, create a specific cron that matches this exact time
-                            let local = dt.with_timezone(&Local);
-                            let cron = format!(
-                                "{} {} {} {} *",
-                                local.minute(),
-                                local.hour(),
-                                local.day(),
-                                local.month()
-                            );
-                            (cron, false)
-                        }
-                        ParsedSchedule::Cron(expr) => (expr.clone(), true),
-                        ParsedSchedule::Interval(duration) => {
-                            // Convert interval to approximate cron (limited precision)
-                            let minutes = duration.num_minutes();
-                            if minutes < 60 {
-                                (format!("*/{} * * * *", minutes.max(1)), true)
-                            } else {
-                                let hours = duration.num_hours();
-                                (format!("0 */{} * * *", hours.max(1)), true)
-                            }
-                        }
-                    };
-
-                    let state = app.state::<SchedulerState>();
-                    let action_data = json!({
-                        "message": message,
-                        "title": "Reminder"
-                    });
-
-                    match state.scheduler.add_job(
-                        format!("Reminder: {}", message),
-                        schedule_expr,
-                        SchedulerActionType::Notification,
-                        action_data,
-                    ) {
-                        Ok(job_id) => {
-                            // Format user-friendly response
-                            let friendly_time = match &parsed {
-                                ParsedSchedule::Once(dt) => {
-                                    let local = dt.with_timezone(&Local);
-                                    local.format("%I:%M %p on %B %d").to_string()
-                                }
-                                ParsedSchedule::Cron(_) | ParsedSchedule::Interval(_) => {
-                                    time_expr.clone()
-                                }
-                            };
-
-                            let response_msg = if is_recurring {
-                                format!(
-                                    "I've scheduled a recurring reminder for '{}' ({})",
-                                    message, time_expr
-                                )
-                            } else {
-                                format!(
-                                    "I've set a reminder for {} to '{}'",
-                                    friendly_time, message
-                                )
-                            };
-
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "job_id": job_id,
-                                    "message": message,
-                                    "scheduled_time": friendly_time,
-                                    "is_recurring": is_recurring,
-                                    "confirmation": response_msg
-                                }),
-                                error: None,
-                                metadata: HashMap::from([
-                                    ("tool".to_string(), json!(tool.id)),
-                                    ("job_id".to_string(), json!(job_id)),
-                                ]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to schedule reminder: {}", e), "success": false }),
-                            error: Some(format!("Failed to schedule reminder: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
-                        error: Some("App handle not available for scheduling".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "schedule_recurring_task" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::scheduler::{parse_schedule, ParsedSchedule};
-                    use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
-                    use tauri::Manager;
-
-                    let task_name = args
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing name parameter"))?
-                        .to_string();
-
-                    let schedule_expr = args
-                        .get("schedule")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing schedule parameter"))?
-                        .to_string();
-
-                    let action_type_str = args
-                        .get("action_type")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("agi_task");
-
-                    let action_data = args
-                        .get("action_data")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}));
-
-                    // Parse the natural language schedule expression
-                    let parsed = parse_schedule(&schedule_expr).map_err(|e| {
-                        anyhow!(
-                            "Could not understand the schedule '{}'. Try 'every day at 9am', 'every monday', or 'every morning'. Error: {}",
-                            schedule_expr,
-                            e
-                        )
-                    })?;
-
-                    // Convert to cron expression
-                    let cron_expr = match &parsed {
-                        ParsedSchedule::Cron(expr) => expr.clone(),
-                        ParsedSchedule::Interval(duration) => {
-                            let minutes = duration.num_minutes();
-                            if minutes < 60 {
-                                format!("*/{} * * * *", minutes.max(1))
-                            } else {
-                                let hours = duration.num_hours();
-                                format!("0 */{} * * *", hours.max(1))
-                            }
-                        }
-                        ParsedSchedule::Once(_) => {
-                            let err_msg = "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string();
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": err_msg.clone(), "success": false }),
-                                error: Some(err_msg),
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+            match state.scheduler.list_jobs() {
+                Ok(jobs) => {
+                    let task_list: Vec<serde_json::Value> = jobs
+                        .iter()
+                        .map(|job| {
+                            let next_run_str = job.next_run.map(|dt| {
+                                dt.with_timezone(&Local)
+                                    .format("%I:%M %p on %B %d")
+                                    .to_string()
                             });
-                        }
-                    };
 
-                    // Parse action type
-                    let action_type = match action_type_str.to_lowercase().as_str() {
-                        "workflow" => SchedulerActionType::Workflow,
-                        "agi_task" | "agitask" | "agi-task" => SchedulerActionType::AgiTask,
-                        "shell_command" | "shellcommand" | "shell-command" | "shell" => {
-                            SchedulerActionType::ShellCommand
-                        }
-                        "notification" | "notify" => SchedulerActionType::Notification,
-                        "webhook" => SchedulerActionType::Webhook,
-                        "script" => SchedulerActionType::Script,
-                        _ => SchedulerActionType::AgiTask,
-                    };
+                            let last_run_str = job.last_run.map(|dt| {
+                                dt.with_timezone(&Local)
+                                    .format("%I:%M %p on %B %d")
+                                    .to_string()
+                            });
 
-                    let state = app.state::<SchedulerState>();
-
-                    match state.scheduler.add_job(
-                        task_name.clone(),
-                        cron_expr.clone(),
-                        action_type.clone(),
-                        action_data,
-                    ) {
-                        Ok(job_id) => {
-                            // Format user-friendly response
-                            let friendly_schedule = match &parsed {
-                                ParsedSchedule::Cron(_) => schedule_expr.clone(),
-                                ParsedSchedule::Interval(d) => {
-                                    let hours = d.num_hours();
-                                    let minutes = d.num_minutes() % 60;
-                                    if hours > 0 && minutes > 0 {
-                                        format!("every {} hours and {} minutes", hours, minutes)
-                                    } else if hours > 0 {
-                                        format!("every {} hour(s)", hours)
-                                    } else {
-                                        format!("every {} minute(s)", d.num_minutes())
-                                    }
-                                }
-                                ParsedSchedule::Once(_) => schedule_expr.clone(),
-                            };
-
-                            let response_msg = format!(
-                                "I've scheduled '{}' to run {}",
-                                task_name, friendly_schedule
-                            );
-
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "job_id": job_id,
-                                    "name": task_name,
-                                    "schedule": friendly_schedule,
-                                    "cron_expression": cron_expr,
-                                    "action_type": action_type.to_string(),
-                                    "confirmation": response_msg
-                                }),
-                                error: None,
-                                metadata: HashMap::from([
-                                    ("tool".to_string(), json!(tool.id)),
-                                    ("job_id".to_string(), json!(job_id)),
-                                ]),
+                            json!({
+                                "id": job.id,
+                                "name": job.name,
+                                "schedule": job.schedule,
+                                "action_type": job.action_type.to_string(),
+                                "status": format!("{:?}", job.status).to_lowercase(),
+                                "next_run": next_run_str,
+                                "last_run": last_run_str,
+                                "run_count": job.run_count,
+                                "description": job.description
                             })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to schedule task: {}", e), "success": false }),
-                            error: Some(format!("Failed to schedule task: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
+                        })
+                        .collect();
+
+                    let count = task_list.len();
+                    let response_msg = if count == 0 {
+                        "You have no scheduled tasks.".to_string()
+                    } else if count == 1 {
+                        "You have 1 scheduled task.".to_string()
+                    } else {
+                        format!("You have {} scheduled tasks.", count)
+                    };
+
                     Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
-                        error: Some("App handle not available for scheduling".to_string()),
-                        metadata: HashMap::new(),
+                        success: true,
+                        data: json!({
+                            "tasks": task_list,
+                            "count": count,
+                            "summary": response_msg
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
                     })
                 }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to list tasks: {}", e), "success": false }),
+                    error: Some(format!("Failed to list tasks: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
             }
-            "cancel_scheduled_task" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::scheduler::SchedulerState;
-                    use tauri::Manager;
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for scheduling", "success": false }),
+                error: Some("App handle not available for scheduling".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
 
-                    let job_id = args
-                        .get("job_id")
+    async fn execute_file_list_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let requested_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .or_else(|| self.project_folder.clone())
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .map(|cwd| cwd.to_string_lossy().to_string())
+            })
+            .unwrap_or_else(|| ".".to_string());
+        let path = self.resolve_path(&requested_path);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(FILE_LIST_DEFAULT_LIMIT)
+            .min(FILE_LIST_MAX_LIMIT);
+        let offset = args
+            .get("offset")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(0)
+            .min(FILE_LIST_MAX_OFFSET);
+        let timeout_ms = args
+            .get("timeout_ms")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(FILE_LIST_TIMEOUT_MS)
+            .min(300_000);
+        let mut excludes =
+            Self::parse_string_array_param(args, "exclude").unwrap_or_else(|| {
+                FILE_LIST_DEFAULT_EXCLUDES
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect()
+            });
+        excludes.sort();
+        excludes.dedup();
+
+        if let Err(e) = self.validate_path(&path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([
+                    ("path".to_string(), json!(&path)),
+                    ("requested_path".to_string(), json!(&requested_path)),
+                ]),
+            });
+        }
+
+        tracing::info!(
+            "[ToolExecutor] file_list start path='{}' offset={} limit={} timeout_ms={} excludes={:?}",
+            path,
+            offset,
+            limit,
+            timeout_ms,
+            excludes
+        );
+
+        let started = Instant::now();
+        let list_result = timeout(TokioDuration::from_millis(timeout_ms), async {
+            let mut entries = fs::read_dir(&path).await?;
+            let mut matched = 0usize;
+            let mut items = Vec::new();
+
+            while let Some(entry) = entries.next_entry().await? {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if Self::should_exclude_file_list_entry(&name, &excludes) {
+                    continue;
+                }
+
+                matched += 1;
+                if matched <= offset {
+                    continue;
+                }
+                if items.len() > limit {
+                    break;
+                }
+
+                let file_type = entry.file_type().await.ok();
+                let type_str = match file_type {
+                    Some(ft) if ft.is_dir() => "directory",
+                    Some(ft) if ft.is_symlink() => "symlink",
+                    _ => "file",
+                };
+                let metadata = entry.metadata().await.ok();
+                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+
+                items.push(json!({
+                    "name": name,
+                    "type": type_str,
+                    "path": entry.path().to_string_lossy(),
+                    "size": size
+                }));
+            }
+
+            items.sort_by(|a, b| {
+                let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                name_a.cmp(name_b)
+            });
+
+            let has_more = items.len() > limit;
+            if has_more {
+                items.truncate(limit);
+            }
+            let returned = items.len();
+            let next_offset = if has_more {
+                Some(offset + returned)
+            } else {
+                None
+            };
+
+            Ok::<Value, anyhow::Error>(json!({
+                "entries": items,
+                "count": offset + returned,
+                "returned": returned,
+                "offset": offset,
+                "limit": limit,
+                "has_more": has_more,
+                "next_offset": next_offset,
+                "path": &path,
+                "excluded": excludes,
+                "max_depth": 1
+            }))
+        })
+        .await;
+
+        match list_result {
+            Ok(Ok(data)) => {
+                tracing::info!(
+                    "[ToolExecutor] file_list completed path='{}' elapsed_ms={} returned={} has_more={}",
+                    path,
+                    started.elapsed().as_millis(),
+                    data.get("returned").and_then(|v| v.as_u64()).unwrap_or(0),
+                    data.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false)
+                );
+                Ok(ToolResult {
+                    success: true,
+                    data,
+                    error: None,
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                })
+            }
+            Ok(Err(e)) => {
+                tracing::error!(
+                    "[ToolExecutor] file_list failed path='{}' elapsed_ms={} error={}",
+                    path,
+                    started.elapsed().as_millis(),
+                    e
+                );
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to list directory: {}", e), "success": false }),
+                    error: Some(format!("Failed to list directory: {}", e)),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&path)),
+                        ("requested_path".to_string(), json!(&requested_path)),
+                    ]),
+                })
+            }
+            Err(_) => {
+                let msg = format!(
+                    "file_list timed out after {}ms. Try a narrower path, increase 'offset', or lower 'limit'.",
+                    timeout_ms
+                );
+                tracing::error!(
+                    "[ToolExecutor] file_list timeout path='{}' elapsed_ms={} timeout_ms={}",
+                    path,
+                    started.elapsed().as_millis(),
+                    timeout_ms
+                );
+                Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "path": &path,
+                        "requested_path": &requested_path,
+                        "offset": offset,
+                        "limit": limit,
+                        "timeout_ms": timeout_ms
+                    }),
+                    error: Some(msg),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&path)),
+                        ("requested_path".to_string(), json!(&requested_path)),
+                    ]),
+                })
+            }
+        }
+    }
+
+    async fn execute_memory_remember_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::core::agi::memory_manager::MemoryCategory;
+            use tauri::Manager;
+
+            let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+            // Support both "key"/"value" format and "category"/"topic"/"content" format
+            let (category, topic, content) = if let (Some(key), Some(value)) = (
+                args.get("key").and_then(|v| v.as_str()),
+                args.get("value").and_then(|v| v.as_str()),
+            ) {
+                // Simple key/value format - use Fact category
+                (MemoryCategory::Fact, key.to_string(), value.to_string())
+            } else {
+                // Full format with category/topic/content
+                let category_str = args
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("fact");
+                let category = match category_str.to_lowercase().as_str() {
+                    "preference" | "preferences" => MemoryCategory::Preference,
+                    "decision" | "decisions" => MemoryCategory::Decision,
+                    "context" => MemoryCategory::Context,
+                    _ => MemoryCategory::Fact,
+                };
+                let topic = args
+                    .get("topic")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
+                    .to_string();
+                let content = args
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing content or value parameter"))?
+                    .to_string();
+                (category, topic, content)
+            };
+
+            let importance = args
+                .get("importance")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32)
+                .unwrap_or(5);
+            let source = args.get("source").and_then(|v| v.as_str());
+
+            match memory_state.manager.remember(
+                category,
+                &topic,
+                &content,
+                Some(importance),
+                source,
+            ) {
+                Ok(memory_id) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "memory_id": memory_id,
+                        "topic": topic,
+                        "content": content,
+                        "message": format!("Remembered: {} = {}", topic, content)
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to store memory: {}", e), "success": false }),
+                    error: Some(format!("Failed to store memory: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for memory operations", "success": false }),
+                error: Some("App handle not available for memory operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_memory_recall_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::core::agi::memory_manager::MemoryCategory;
+            use tauri::Manager;
+
+            let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+            // Support both "key" format and "category"/"topic" format
+            let (category, topic) =
+                if let Some(key) = args.get("key").and_then(|v| v.as_str()) {
+                    (MemoryCategory::Fact, key.to_string())
+                } else {
+                    let category_str = args
+                        .get("category")
                         .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing job_id parameter"))?
+                        .unwrap_or("fact");
+                    let category = match category_str.to_lowercase().as_str() {
+                        "preference" | "preferences" => MemoryCategory::Preference,
+                        "decision" | "decisions" => MemoryCategory::Decision,
+                        "context" => MemoryCategory::Context,
+                        _ => MemoryCategory::Fact,
+                    };
+                    let topic = args
+                        .get("topic")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
                         .to_string();
+                    (category, topic)
+                };
 
-                    let state = app.state::<SchedulerState>();
+            match memory_state.manager.recall(category, &topic) {
+                Ok(Some(entry)) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "found": true,
+                        "memory_id": entry.id,
+                        "topic": entry.topic,
+                        "content": entry.content,
+                        "importance": entry.importance,
+                        "category": format!("{:?}", entry.category).to_lowercase(),
+                        "created_at": entry.created_at,
+                        "updated_at": entry.updated_at
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Ok(None) => Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "found": false,
+                        "topic": topic,
+                        "message": format!("No memory found for '{}'", topic)
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to recall memory: {}", e), "success": false }),
+                    error: Some(format!("Failed to recall memory: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for memory operations", "success": false }),
+                error: Some("App handle not available for memory operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
 
-                    // First get the job details for a friendly message
-                    let job_name = state
-                        .scheduler
-                        .get_job(&job_id)
-                        .ok()
-                        .flatten()
-                        .map(|j| j.name.clone());
+    async fn execute_memory_search_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use tauri::Manager;
 
-                    match state.scheduler.remove_job(&job_id) {
-                        Ok(removed) => {
-                            if removed {
-                                let response_msg = match job_name {
-                                    Some(name) => {
-                                        format!("I've cancelled the scheduled task '{}'", name)
+            let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+            let query = args
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow!("Missing query parameter"))?
+                .to_string();
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .unwrap_or(20);
+
+            match memory_state.manager.search(&query, limit) {
+                Ok(entries) => {
+                    let results: Vec<serde_json::Value> = entries
+                        .iter()
+                        .map(|e| {
+                            json!({
+                                "memory_id": e.id,
+                                "topic": e.topic,
+                                "content": e.content,
+                                "importance": e.importance,
+                                "category": format!("{:?}", e.category).to_lowercase(),
+                            })
+                        })
+                        .collect();
+                    let count = results.len();
+                    Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "results": results,
+                            "count": count,
+                            "query": query
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    })
+                }
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": format!("Failed to search memories: {}", e), "success": false }),
+                    error: Some(format!("Failed to search memories: {}", e)),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                }),
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for memory operations", "success": false }),
+                error: Some("App handle not available for memory operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_memory_forget_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        if let Some(ref app) = self.app_handle {
+            use crate::core::agi::memory_manager::MemoryCategory;
+            use tauri::Manager;
+
+            let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
+
+            // Support either memory_id or category+topic
+            if let Some(memory_id) = args.get("memory_id").and_then(|v| v.as_i64()) {
+                match memory_state.manager.forget(memory_id) {
+                    Ok(true) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "deleted": true,
+                            "memory_id": memory_id,
+                            "message": "Memory deleted successfully"
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                    Ok(false) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "deleted": false,
+                            "memory_id": memory_id,
+                            "message": "No memory found with that ID"
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
+                        error: Some(format!("Failed to delete memory: {}", e)),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                }
+            } else {
+                // Delete by category + topic
+                let category_str = args
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("fact");
+                let category = match category_str.to_lowercase().as_str() {
+                    "preference" | "preferences" => MemoryCategory::Preference,
+                    "decision" | "decisions" => MemoryCategory::Decision,
+                    "context" => MemoryCategory::Context,
+                    _ => MemoryCategory::Fact,
+                };
+                let topic = args
+                    .get("topic")
+                    .or_else(|| args.get("key"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing topic, key, or memory_id parameter"))?;
+
+                match memory_state.manager.forget_topic(category, topic) {
+                    Ok(true) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "deleted": true,
+                            "topic": topic,
+                            "message": format!("Memory '{}' deleted successfully", topic)
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                    Ok(false) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "deleted": false,
+                            "topic": topic,
+                            "message": format!("No memory found for '{}'", topic)
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
+                        error: Some(format!("Failed to delete memory: {}", e)),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    }),
+                }
+            }
+        } else {
+            Ok(ToolResult {
+                success: false,
+                data: json!({ "error": "App handle not available for memory operations", "success": false }),
+                error: Some("App handle not available for memory operations".to_string()),
+                metadata: HashMap::new(),
+            })
+        }
+    }
+
+    async fn execute_api_download_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?
+            .to_string();
+        let save_path = args
+            .get("save_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing save_path parameter"))?
+            .to_string();
+
+        // Validate destination path
+        if let Err(e) = self.validate_path(&save_path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(&save_path))]),
+            });
+        }
+
+        // Perform the download
+        let client = reqwest::Client::new();
+        match client.get(&url).send().await {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Download failed with status: {}", response.status()), "success": false }),
+                        error: Some(format!(
+                            "Download failed with status: {}",
+                            response.status()
+                        )),
+                        metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                    });
+                }
+
+                match response.bytes().await {
+                    Ok(bytes) => {
+                        // Ensure parent directory exists
+                        if let Some(parent) = Path::new(&save_path).parent() {
+                            let _ = fs::create_dir_all(parent).await;
+                        }
+
+                        match fs::write(&save_path, &bytes).await {
+                            Ok(_) => {
+                                let size = bytes.len();
+
+                                // Record for undo if available
+                                if let Some(app_handle) = &self.app_handle {
+                                    if let Some(undo_state) =
+                                        app_handle.try_state::<UndoState>()
+                                    {
+                                        let task_id = Uuid::new_v4().to_string();
+                                        let path_buf = std::path::PathBuf::from(&save_path);
+                                        let _ = undo_state
+                                            .change_tracker
+                                            .record_tool_executed_with_path(
+                                                "api_download".to_string(),
+                                                path_buf,
+                                                None, // New file, no previous content
+                                                None, // Downloaded file content not tracked
+                                                task_id,
+                                                true, // Downloads are reversible (delete the file)
+                                                Some("Delete downloaded file".to_string()),
+                                            )
+                                            .await;
                                     }
-                                    None => format!(
-                                        "I've cancelled the scheduled task with ID {}",
-                                        job_id
-                                    ),
-                                };
+                                }
 
                                 Ok(ToolResult {
                                     success: true,
                                     data: json!({
-                                        "job_id": job_id,
-                                        "cancelled": true,
-                                        "confirmation": response_msg
+                                        "success": true,
+                                        "url": url,
+                                        "save_path": save_path,
+                                        "bytes_downloaded": size
                                     }),
                                     error: None,
                                     metadata: HashMap::from([
-                                        ("tool".to_string(), json!(tool.id)),
-                                        ("job_id".to_string(), json!(job_id)),
+                                        ("url".to_string(), json!(&url)),
+                                        ("save_path".to_string(), json!(&save_path)),
                                     ]),
                                 })
-                            } else {
-                                let err_msg = format!("No scheduled task found with ID '{}'. Use list_scheduled_tasks to see available tasks.", job_id);
-                                Ok(ToolResult {
-                                    success: false,
-                                    data: json!({ "error": err_msg.clone(), "success": false }),
-                                    error: Some(err_msg),
-                                    metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                                })
-                            }
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to cancel task: {}", e), "success": false }),
-                            error: Some(format!("Failed to cancel task: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
-                        error: Some("App handle not available for scheduling".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "list_scheduled_tasks" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::scheduler::SchedulerState;
-                    use chrono::Local;
-                    use tauri::Manager;
-
-                    let state = app.state::<SchedulerState>();
-
-                    match state.scheduler.list_jobs() {
-                        Ok(jobs) => {
-                            let task_list: Vec<serde_json::Value> = jobs
-                                .iter()
-                                .map(|job| {
-                                    let next_run_str = job.next_run.map(|dt| {
-                                        dt.with_timezone(&Local)
-                                            .format("%I:%M %p on %B %d")
-                                            .to_string()
-                                    });
-
-                                    let last_run_str = job.last_run.map(|dt| {
-                                        dt.with_timezone(&Local)
-                                            .format("%I:%M %p on %B %d")
-                                            .to_string()
-                                    });
-
-                                    json!({
-                                        "id": job.id,
-                                        "name": job.name,
-                                        "schedule": job.schedule,
-                                        "action_type": job.action_type.to_string(),
-                                        "status": format!("{:?}", job.status).to_lowercase(),
-                                        "next_run": next_run_str,
-                                        "last_run": last_run_str,
-                                        "run_count": job.run_count,
-                                        "description": job.description
-                                    })
-                                })
-                                .collect();
-
-                            let count = task_list.len();
-                            let response_msg = if count == 0 {
-                                "You have no scheduled tasks.".to_string()
-                            } else if count == 1 {
-                                "You have 1 scheduled task.".to_string()
-                            } else {
-                                format!("You have {} scheduled tasks.", count)
-                            };
-
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "tasks": task_list,
-                                    "count": count,
-                                    "summary": response_msg
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to list tasks: {}", e), "success": false }),
-                            error: Some(format!("Failed to list tasks: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for scheduling", "success": false }),
-                        error: Some("App handle not available for scheduling".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "file_list" => {
-                let requested_path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToString::to_string)
-                    .or_else(|| self.project_folder.clone())
-                    .or_else(|| {
-                        std::env::current_dir()
-                            .ok()
-                            .map(|cwd| cwd.to_string_lossy().to_string())
-                    })
-                    .unwrap_or_else(|| ".".to_string());
-                let path = self.resolve_path(&requested_path);
-                let limit = args
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as usize)
-                    .unwrap_or(FILE_LIST_DEFAULT_LIMIT)
-                    .min(FILE_LIST_MAX_LIMIT);
-                let offset = args
-                    .get("offset")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as usize)
-                    .unwrap_or(0)
-                    .min(FILE_LIST_MAX_OFFSET);
-                let timeout_ms = args
-                    .get("timeout_ms")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(FILE_LIST_TIMEOUT_MS)
-                    .min(300_000);
-                let mut excludes =
-                    Self::parse_string_array_param(&args, "exclude").unwrap_or_else(|| {
-                        FILE_LIST_DEFAULT_EXCLUDES
-                            .iter()
-                            .map(|s| s.to_string())
-                            .collect()
-                    });
-                excludes.sort();
-                excludes.dedup();
-
-                if let Err(e) = self.validate_path(&path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([
-                            ("path".to_string(), json!(&path)),
-                            ("requested_path".to_string(), json!(&requested_path)),
-                        ]),
-                    });
-                }
-
-                tracing::info!(
-                    "[ToolExecutor] file_list start path='{}' offset={} limit={} timeout_ms={} excludes={:?}",
-                    path,
-                    offset,
-                    limit,
-                    timeout_ms,
-                    excludes
-                );
-
-                let started = Instant::now();
-                let list_result = timeout(TokioDuration::from_millis(timeout_ms), async {
-                    let mut entries = fs::read_dir(&path).await?;
-                    let mut matched = 0usize;
-                    let mut items = Vec::new();
-
-                    while let Some(entry) = entries.next_entry().await? {
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        if Self::should_exclude_file_list_entry(&name, &excludes) {
-                            continue;
-                        }
-
-                        matched += 1;
-                        if matched <= offset {
-                            continue;
-                        }
-                        if items.len() > limit {
-                            break;
-                        }
-
-                        let file_type = entry.file_type().await.ok();
-                        let type_str = match file_type {
-                            Some(ft) if ft.is_dir() => "directory",
-                            Some(ft) if ft.is_symlink() => "symlink",
-                            _ => "file",
-                        };
-                        let metadata = entry.metadata().await.ok();
-                        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
-
-                        items.push(json!({
-                            "name": name,
-                            "type": type_str,
-                            "path": entry.path().to_string_lossy(),
-                            "size": size
-                        }));
-                    }
-
-                    items.sort_by(|a, b| {
-                        let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                        let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                        name_a.cmp(name_b)
-                    });
-
-                    let has_more = items.len() > limit;
-                    if has_more {
-                        items.truncate(limit);
-                    }
-                    let returned = items.len();
-                    let next_offset = if has_more {
-                        Some(offset + returned)
-                    } else {
-                        None
-                    };
-
-                    Ok::<Value, anyhow::Error>(json!({
-                        "entries": items,
-                        "count": offset + returned,
-                        "returned": returned,
-                        "offset": offset,
-                        "limit": limit,
-                        "has_more": has_more,
-                        "next_offset": next_offset,
-                        "path": &path,
-                        "excluded": excludes,
-                        "max_depth": 1
-                    }))
-                })
-                .await;
-
-                match list_result {
-                    Ok(Ok(data)) => {
-                        tracing::info!(
-                            "[ToolExecutor] file_list completed path='{}' elapsed_ms={} returned={} has_more={}",
-                            path,
-                            started.elapsed().as_millis(),
-                            data.get("returned").and_then(|v| v.as_u64()).unwrap_or(0),
-                            data.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false)
-                        );
-                        Ok(ToolResult {
-                            success: true,
-                            data,
-                            error: None,
-                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
-                        })
-                    }
-                    Ok(Err(e)) => {
-                        tracing::error!(
-                            "[ToolExecutor] file_list failed path='{}' elapsed_ms={} error={}",
-                            path,
-                            started.elapsed().as_millis(),
-                            e
-                        );
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to list directory: {}", e), "success": false }),
-                            error: Some(format!("Failed to list directory: {}", e)),
-                            metadata: HashMap::from([
-                                ("path".to_string(), json!(&path)),
-                                ("requested_path".to_string(), json!(&requested_path)),
-                            ]),
-                        })
-                    }
-                    Err(_) => {
-                        let msg = format!(
-                            "file_list timed out after {}ms. Try a narrower path, increase 'offset', or lower 'limit'.",
-                            timeout_ms
-                        );
-                        tracing::error!(
-                            "[ToolExecutor] file_list timeout path='{}' elapsed_ms={} timeout_ms={}",
-                            path,
-                            started.elapsed().as_millis(),
-                            timeout_ms
-                        );
-                        Ok(ToolResult {
-                            success: false,
-                            data: json!({
-                                "path": &path,
-                                "requested_path": &requested_path,
-                                "offset": offset,
-                                "limit": limit,
-                                "timeout_ms": timeout_ms
-                            }),
-                            error: Some(msg),
-                            metadata: HashMap::from([
-                                ("path".to_string(), json!(&path)),
-                                ("requested_path".to_string(), json!(&requested_path)),
-                            ]),
-                        })
-                    }
-                }
-            }
-            "memory_remember" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::agi::memory_manager::MemoryCategory;
-                    use tauri::Manager;
-
-                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
-
-                    // Support both "key"/"value" format and "category"/"topic"/"content" format
-                    let (category, topic, content) = if let (Some(key), Some(value)) = (
-                        args.get("key").and_then(|v| v.as_str()),
-                        args.get("value").and_then(|v| v.as_str()),
-                    ) {
-                        // Simple key/value format - use Fact category
-                        (MemoryCategory::Fact, key.to_string(), value.to_string())
-                    } else {
-                        // Full format with category/topic/content
-                        let category_str = args
-                            .get("category")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("fact");
-                        let category = match category_str.to_lowercase().as_str() {
-                            "preference" | "preferences" => MemoryCategory::Preference,
-                            "decision" | "decisions" => MemoryCategory::Decision,
-                            "context" => MemoryCategory::Context,
-                            _ => MemoryCategory::Fact,
-                        };
-                        let topic = args
-                            .get("topic")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
-                            .to_string();
-                        let content = args
-                            .get("content")
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| anyhow!("Missing content or value parameter"))?
-                            .to_string();
-                        (category, topic, content)
-                    };
-
-                    let importance = args
-                        .get("importance")
-                        .and_then(|v| v.as_i64())
-                        .map(|v| v as i32)
-                        .unwrap_or(5);
-                    let source = args.get("source").and_then(|v| v.as_str());
-
-                    match memory_state.manager.remember(
-                        category,
-                        &topic,
-                        &content,
-                        Some(importance),
-                        source,
-                    ) {
-                        Ok(memory_id) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "memory_id": memory_id,
-                                "topic": topic,
-                                "content": content,
-                                "message": format!("Remembered: {} = {}", topic, content)
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to store memory: {}", e), "success": false }),
-                            error: Some(format!("Failed to store memory: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
-                        error: Some("App handle not available for memory operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "memory_recall" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::agi::memory_manager::MemoryCategory;
-                    use tauri::Manager;
-
-                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
-
-                    // Support both "key" format and "category"/"topic" format
-                    let (category, topic) =
-                        if let Some(key) = args.get("key").and_then(|v| v.as_str()) {
-                            (MemoryCategory::Fact, key.to_string())
-                        } else {
-                            let category_str = args
-                                .get("category")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("fact");
-                            let category = match category_str.to_lowercase().as_str() {
-                                "preference" | "preferences" => MemoryCategory::Preference,
-                                "decision" | "decisions" => MemoryCategory::Decision,
-                                "context" => MemoryCategory::Context,
-                                _ => MemoryCategory::Fact,
-                            };
-                            let topic = args
-                                .get("topic")
-                                .and_then(|v| v.as_str())
-                                .ok_or_else(|| anyhow!("Missing topic or key parameter"))?
-                                .to_string();
-                            (category, topic)
-                        };
-
-                    match memory_state.manager.recall(category, &topic) {
-                        Ok(Some(entry)) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "found": true,
-                                "memory_id": entry.id,
-                                "topic": entry.topic,
-                                "content": entry.content,
-                                "importance": entry.importance,
-                                "category": format!("{:?}", entry.category).to_lowercase(),
-                                "created_at": entry.created_at,
-                                "updated_at": entry.updated_at
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Ok(None) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "found": false,
-                                "topic": topic,
-                                "message": format!("No memory found for '{}'", topic)
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to recall memory: {}", e), "success": false }),
-                            error: Some(format!("Failed to recall memory: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
-                        error: Some("App handle not available for memory operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "memory_search" => {
-                if let Some(ref app) = self.app_handle {
-                    use tauri::Manager;
-
-                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
-
-                    let query = args
-                        .get("query")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("Missing query parameter"))?
-                        .to_string();
-                    let limit = args
-                        .get("limit")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as usize)
-                        .unwrap_or(20);
-
-                    match memory_state.manager.search(&query, limit) {
-                        Ok(entries) => {
-                            let results: Vec<serde_json::Value> = entries
-                                .iter()
-                                .map(|e| {
-                                    json!({
-                                        "memory_id": e.id,
-                                        "topic": e.topic,
-                                        "content": e.content,
-                                        "importance": e.importance,
-                                        "category": format!("{:?}", e.category).to_lowercase(),
-                                    })
-                                })
-                                .collect();
-                            let count = results.len();
-                            Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "results": results,
-                                    "count": count,
-                                    "query": query
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            })
-                        }
-                        Err(e) => Ok(ToolResult {
-                            success: false,
-                            data: json!({ "error": format!("Failed to search memories: {}", e), "success": false }),
-                            error: Some(format!("Failed to search memories: {}", e)),
-                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                        }),
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
-                        error: Some("App handle not available for memory operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "memory_forget" => {
-                if let Some(ref app) = self.app_handle {
-                    use crate::core::agi::memory_manager::MemoryCategory;
-                    use tauri::Manager;
-
-                    let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
-
-                    // Support either memory_id or category+topic
-                    if let Some(memory_id) = args.get("memory_id").and_then(|v| v.as_i64()) {
-                        match memory_state.manager.forget(memory_id) {
-                            Ok(true) => Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "deleted": true,
-                                    "memory_id": memory_id,
-                                    "message": "Memory deleted successfully"
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                            Ok(false) => Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "deleted": false,
-                                    "memory_id": memory_id,
-                                    "message": "No memory found with that ID"
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
-                                error: Some(format!("Failed to delete memory: {}", e)),
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                        }
-                    } else {
-                        // Delete by category + topic
-                        let category_str = args
-                            .get("category")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("fact");
-                        let category = match category_str.to_lowercase().as_str() {
-                            "preference" | "preferences" => MemoryCategory::Preference,
-                            "decision" | "decisions" => MemoryCategory::Decision,
-                            "context" => MemoryCategory::Context,
-                            _ => MemoryCategory::Fact,
-                        };
-                        let topic = args
-                            .get("topic")
-                            .or_else(|| args.get("key"))
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| anyhow!("Missing topic, key, or memory_id parameter"))?;
-
-                        match memory_state.manager.forget_topic(category, topic) {
-                            Ok(true) => Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "deleted": true,
-                                    "topic": topic,
-                                    "message": format!("Memory '{}' deleted successfully", topic)
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                            Ok(false) => Ok(ToolResult {
-                                success: true,
-                                data: json!({
-                                    "deleted": false,
-                                    "topic": topic,
-                                    "message": format!("No memory found for '{}'", topic)
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Failed to delete memory: {}", e), "success": false }),
-                                error: Some(format!("Failed to delete memory: {}", e)),
-                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                            }),
-                        }
-                    }
-                } else {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": "App handle not available for memory operations", "success": false }),
-                        error: Some("App handle not available for memory operations".to_string()),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-            "browser_click" => self.execute_browser_tool("browser_click", args).await,
-            "browser_extract" => self.execute_browser_tool("browser_extract", args).await,
-            "api_download" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?
-                    .to_string();
-                let save_path = args
-                    .get("save_path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing save_path parameter"))?
-                    .to_string();
-
-                // Validate destination path
-                if let Err(e) = self.validate_path(&save_path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(&save_path))]),
-                    });
-                }
-
-                // Perform the download
-                let client = reqwest::Client::new();
-                match client.get(&url).send().await {
-                    Ok(response) => {
-                        if !response.status().is_success() {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Download failed with status: {}", response.status()), "success": false }),
-                                error: Some(format!(
-                                    "Download failed with status: {}",
-                                    response.status()
-                                )),
-                                metadata: HashMap::from([("url".to_string(), json!(&url))]),
-                            });
-                        }
-
-                        match response.bytes().await {
-                            Ok(bytes) => {
-                                // Ensure parent directory exists
-                                if let Some(parent) = Path::new(&save_path).parent() {
-                                    let _ = fs::create_dir_all(parent).await;
-                                }
-
-                                match fs::write(&save_path, &bytes).await {
-                                    Ok(_) => {
-                                        let size = bytes.len();
-
-                                        // Record for undo if available
-                                        if let Some(app_handle) = &self.app_handle {
-                                            if let Some(undo_state) =
-                                                app_handle.try_state::<UndoState>()
-                                            {
-                                                let task_id = Uuid::new_v4().to_string();
-                                                let path_buf = std::path::PathBuf::from(&save_path);
-                                                let _ = undo_state
-                                                    .change_tracker
-                                                    .record_tool_executed_with_path(
-                                                        "api_download".to_string(),
-                                                        path_buf,
-                                                        None, // New file, no previous content
-                                                        None, // Downloaded file content not tracked
-                                                        task_id,
-                                                        true, // Downloads are reversible (delete the file)
-                                                        Some("Delete downloaded file".to_string()),
-                                                    )
-                                                    .await;
-                                            }
-                                        }
-
-                                        Ok(ToolResult {
-                                            success: true,
-                                            data: json!({
-                                                "success": true,
-                                                "url": url,
-                                                "save_path": save_path,
-                                                "bytes_downloaded": size
-                                            }),
-                                            error: None,
-                                            metadata: HashMap::from([
-                                                ("url".to_string(), json!(&url)),
-                                                ("save_path".to_string(), json!(&save_path)),
-                                            ]),
-                                        })
-                                    }
-                                    Err(e) => {
-                                        let err_msg = format!("Failed to save file: {}", e);
-                                        Ok(ToolResult {
-                                            success: false,
-                                            data: json!({ "error": err_msg.clone(), "success": false }),
-                                            error: Some(err_msg),
-                                            metadata: HashMap::from([
-                                                ("url".to_string(), json!(&url)),
-                                                ("save_path".to_string(), json!(&save_path)),
-                                            ]),
-                                        })
-                                    }
-                                }
                             }
                             Err(e) => {
-                                let err_msg = format!("Failed to read response: {}", e);
+                                let err_msg = format!("Failed to save file: {}", e);
                                 Ok(ToolResult {
                                     success: false,
                                     data: json!({ "error": err_msg.clone(), "success": false }),
                                     error: Some(err_msg),
-                                    metadata: HashMap::from([("url".to_string(), json!(&url))]),
+                                    metadata: HashMap::from([
+                                        ("url".to_string(), json!(&url)),
+                                        ("save_path".to_string(), json!(&save_path)),
+                                    ]),
                                 })
                             }
                         }
                     }
                     Err(e) => {
-                        let err_msg = format!("Download request failed: {}", e);
+                        let err_msg = format!("Failed to read response: {}", e);
                         Ok(ToolResult {
                             success: false,
                             data: json!({ "error": err_msg.clone(), "success": false }),
@@ -6726,229 +6922,320 @@ impl ToolExecutor {
                     }
                 }
             }
-            "api_upload" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let file_path = args
-                    .get("file_path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing file_path parameter"))?;
-
-                // Validate the file path
-                if let Err(e) = self.validate_path(file_path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("file_path".to_string(), json!(file_path))]),
-                    });
-                }
-
-                // Read file
-                let file_content = fs::read(file_path)
-                    .await
-                    .map_err(|e| anyhow!("Failed to read file: {}", e))?;
-
-                let file_name = Path::new(file_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("upload");
-
-                // Create multipart form
-                let part =
-                    reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
-                let form = reqwest::multipart::Form::new().part("file", part);
-
-                let client = reqwest::Client::new();
-                let response = client
-                    .post(url)
-                    .multipart(form)
-                    .send()
-                    .await
-                    .map_err(|e| anyhow!("Upload failed: {}", e))?;
-
-                let status = response.status().as_u16();
-                let body = response.text().await.unwrap_or_default();
-
+            Err(e) => {
+                let err_msg = format!("Download request failed: {}", e);
                 Ok(ToolResult {
-                    success: (200..300).contains(&status),
-                    data: json!({
-                        "status": status,
-                        "response": body,
-                        "file": file_path
-                    }),
-                    error: if status >= 400 {
-                        Some(format!("HTTP {}", status))
-                    } else {
-                        None
-                    },
-                    metadata: HashMap::from([
-                        ("url".to_string(), json!(url)),
-                        ("file_path".to_string(), json!(file_path)),
-                    ]),
+                    success: false,
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
+                    metadata: HashMap::from([("url".to_string(), json!(&url))]),
                 })
             }
-            "git_init" => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?;
+        }
+    }
 
-                // Validate the path
-                if let Err(e) = self.validate_path(path).await {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": e.to_string(), "success": false }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    });
-                }
+    async fn execute_api_upload_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?;
+        let file_path = args
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing file_path parameter"))?;
 
-                let output = tokio::process::Command::new("git")
-                    .args(["init"])
-                    .current_dir(path)
-                    .output()
-                    .await
-                    .map_err(|e| anyhow!("Failed to run git init: {}", e))?;
+        // Validate the file path
+        if let Err(e) = self.validate_path(file_path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("file_path".to_string(), json!(file_path))]),
+            });
+        }
 
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // Read file
+        let file_content = fs::read(file_path)
+            .await
+            .map_err(|e| anyhow!("Failed to read file: {}", e))?;
 
-                Ok(ToolResult {
-                    success: output.status.success(),
-                    data: json!({
-                        "message": stdout.trim(),
-                        "path": path
-                    }),
-                    error: if !output.status.success() {
-                        Some(stderr)
-                    } else {
-                        None
-                    },
-                    metadata: HashMap::from([("path".to_string(), json!(path))]),
-                })
-            }
-            "github_create_repo" => {
-                let name = args
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing name parameter"))?;
-                let description = args
-                    .get("description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let private = args
-                    .get("private")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+        let file_name = Path::new(file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("upload");
 
-                // Use gh CLI which handles auth
-                let mut cmd_args = vec!["repo", "create", name, "--confirm"];
-                if private {
-                    cmd_args.push("--private");
-                } else {
-                    cmd_args.push("--public");
-                }
-                if !description.is_empty() {
-                    cmd_args.push("--description");
-                    cmd_args.push(description);
-                }
+        // Create multipart form
+        let part =
+            reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
+        let form = reqwest::multipart::Form::new().part("file", part);
 
-                let output = tokio::process::Command::new("gh")
-                    .args(&cmd_args)
-                    .output()
-                    .await
-                    .map_err(|e| anyhow!("Failed to create repo: {}", e))?;
+        let client = reqwest::Client::new();
+        let response = client
+            .post(url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| anyhow!("Upload failed: {}", e))?;
 
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
 
-                Ok(ToolResult {
-                    success: output.status.success(),
-                    data: json!({
-                        "name": name,
-                        "url": stdout.trim(),
-                        "private": private
-                    }),
-                    error: if !output.status.success() {
-                        Some(stderr)
-                    } else {
-                        None
-                    },
-                    metadata: HashMap::from([
-                        ("name".to_string(), json!(name)),
-                        ("private".to_string(), json!(private)),
-                    ]),
-                })
-            }
-            "physical_scrape" => {
-                let url = args
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let selector = args.get("selector").and_then(|v| v.as_str());
+        Ok(ToolResult {
+            success: (200..300).contains(&status),
+            data: json!({
+                "status": status,
+                "response": body,
+                "file": file_path
+            }),
+            error: if status >= 400 {
+                Some(format!("HTTP {}", status))
+            } else {
+                None
+            },
+            metadata: HashMap::from([
+                ("url".to_string(), json!(url)),
+                ("file_path".to_string(), json!(file_path)),
+            ]),
+        })
+    }
 
-                // Use a real browser user agent to avoid bot detection
-                let client = reqwest::Client::builder()
-                    .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .build()
-                    .map_err(|e| anyhow!("Failed to create client: {}", e))?;
+    async fn execute_git_init_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?;
 
-                let response = client
-                    .get(url)
-                    .header(
-                        "Accept",
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    )
-                    .header("Accept-Language", "en-US,en;q=0.5")
-                    .send()
-                    .await
-                    .map_err(|e| anyhow!("Scrape request failed: {}", e))?;
+        // Validate the path
+        if let Err(e) = self.validate_path(path).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([("path".to_string(), json!(path))]),
+            });
+        }
 
-                let status = response.status().as_u16();
-                let html = response.text().await.unwrap_or_default();
+        let output = tokio::process::Command::new("git")
+            .args(["init"])
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(|e| anyhow!("Failed to run git init: {}", e))?;
 
-                // If selector provided, note it for the response
-                // Full CSS selector parsing would require the scraper crate
-                let extracted = if let Some(sel) = selector {
-                    format!(
-                        "Selector '{}' requested. Full HTML returned for client-side extraction.",
-                        sel
-                    )
-                } else {
-                    "Full HTML content returned.".to_string()
-                };
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-                // Truncate HTML if too large to prevent memory issues
-                let content = if html.len() > 50000 {
-                    html[..50000].to_string()
-                } else {
-                    html.clone()
-                };
+        Ok(ToolResult {
+            success: output.status.success(),
+            data: json!({
+                "message": stdout.trim(),
+                "path": path
+            }),
+            error: if !output.status.success() {
+                Some(stderr)
+            } else {
+                None
+            },
+            metadata: HashMap::from([("path".to_string(), json!(path))]),
+        })
+    }
 
-                Ok(ToolResult {
-                    success: (200..300).contains(&status),
-                    data: json!({
-                        "url": url,
-                        "status": status,
-                        "content": content,
-                        "extracted": extracted,
-                        "content_length": html.len(),
-                        "truncated": html.len() > 50000
-                    }),
-                    error: if status >= 400 {
-                        Some(format!("HTTP {}", status))
-                    } else {
-                        None
-                    },
-                    metadata: HashMap::from([
-                        ("url".to_string(), json!(url)),
-                        ("selector".to_string(), json!(selector)),
-                    ]),
-                })
-            }
+    async fn execute_github_create_repo_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let name = args
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing name parameter"))?;
+        let description = args
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let private = args
+            .get("private")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Use gh CLI which handles auth
+        let mut cmd_args = vec!["repo", "create", name, "--confirm"];
+        if private {
+            cmd_args.push("--private");
+        } else {
+            cmd_args.push("--public");
+        }
+        if !description.is_empty() {
+            cmd_args.push("--description");
+            cmd_args.push(description);
+        }
+
+        let output = tokio::process::Command::new("gh")
+            .args(&cmd_args)
+            .output()
+            .await
+            .map_err(|e| anyhow!("Failed to create repo: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(ToolResult {
+            success: output.status.success(),
+            data: json!({
+                "name": name,
+                "url": stdout.trim(),
+                "private": private
+            }),
+            error: if !output.status.success() {
+                Some(stderr)
+            } else {
+                None
+            },
+            metadata: HashMap::from([
+                ("name".to_string(), json!(name)),
+                ("private".to_string(), json!(private)),
+            ]),
+        })
+    }
+
+    async fn execute_physical_scrape_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing url parameter"))?;
+        let selector = args.get("selector").and_then(|v| v.as_str());
+
+        // Use a real browser user agent to avoid bot detection
+        let client = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+            .map_err(|e| anyhow!("Failed to create client: {}", e))?;
+
+        let response = client
+            .get(url)
+            .header(
+                "Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
+            .header("Accept-Language", "en-US,en;q=0.5")
+            .send()
+            .await
+            .map_err(|e| anyhow!("Scrape request failed: {}", e))?;
+
+        let status = response.status().as_u16();
+        let html = response.text().await.unwrap_or_default();
+
+        // If selector provided, note it for the response
+        // Full CSS selector parsing would require the scraper crate
+        let extracted = if let Some(sel) = selector {
+            format!(
+                "Selector '{}' requested. Full HTML returned for client-side extraction.",
+                sel
+            )
+        } else {
+            "Full HTML content returned.".to_string()
+        };
+
+        // Truncate HTML if too large to prevent memory issues
+        let content = if html.len() > 50000 {
+            html[..50000].to_string()
+        } else {
+            html.clone()
+        };
+
+        Ok(ToolResult {
+            success: (200..300).contains(&status),
+            data: json!({
+                "url": url,
+                "status": status,
+                "content": content,
+                "extracted": extracted,
+                "content_length": html.len(),
+                "truncated": html.len() > 50000
+            }),
+            error: if status >= 400 {
+                Some(format!("HTTP {}", status))
+            } else {
+                None
+            },
+            metadata: HashMap::from([
+                ("url".to_string(), json!(url)),
+                ("selector".to_string(), json!(selector)),
+            ]),
+        })
+    }
+
+    /// Dispatch tool execution to the appropriate handler method.
+    async fn execute_tool_impl(
+        &self,
+        tool: &Tool,
+        args: HashMap<String, serde_json::Value>,
+        action_id: &str,
+    ) -> Result<ToolResult> {
+        match tool.id.as_str() {
+            "file_read" => self.execute_file_read_tool(&args).await,
+            "file_write" => self.execute_file_write_tool(&args).await,
+            "file_delete" => self.execute_file_delete_tool(&args).await,
+            "ui_screenshot" => self.execute_ui_screenshot_tool(&args).await,
+            "ui_click" => self.execute_ui_click_tool(&args).await,
+            "ui_type" => self.execute_ui_type_tool(&args).await,
+            "search_web" => self.execute_search_web_tool(&args, action_id).await,
+            "browser_navigate" => self.execute_browser_navigate_tool(&args, action_id).await,
+            "code_execute" => self.execute_code_execute_tool(&args).await,
+            "terminal_execute" => self.execute_terminal_tool(args, action_id).await,
+            "git_push" => self.execute_git_push_tool(&args).await,
+            "db_query" => self.execute_db_query_tool(&args).await,
+            "db_execute" => self.execute_db_execute_tool(&args).await,
+            "db_transaction_begin" => self.execute_db_transaction_begin_tool(&args).await,
+            "db_transaction_commit" => self.execute_db_transaction_commit_tool(&args).await,
+            "db_transaction_rollback" => self.execute_db_transaction_rollback_tool(&args).await,
+            "api_call" => self.execute_api_call_tool(&args).await,
+            "image_ocr" => self.execute_image_ocr_tool(&args).await,
+            "code_analyze" => self.execute_code_analyze_tool(&args).await,
+            "image_generate" | "media_generate_image" => self.execute_image_generate_tool(&args).await,
+            "video_generate" | "media_generate_video" => self.execute_video_generate_tool(&args).await,
+            "llm_reason" => self.execute_llm_reason_tool(&args).await,
+            "email_send" => self.execute_email_send_tool(&args, &tool.id).await,
+            "email_fetch" => self.execute_email_fetch_tool(&args, &tool.id).await,
+            "calendar_create_event" => self.execute_calendar_create_event_tool(&args, &tool.id).await,
+            "calendar_list_events" => self.execute_calendar_list_events_tool(&args, &tool.id).await,
+            "cloud_upload" => self.execute_cloud_upload_tool(&args, &tool.id).await,
+            "cloud_download" => self.execute_cloud_download_tool(&args, &tool.id).await,
+            "productivity_create_task" => self.execute_productivity_create_task_tool(&args, &tool.id).await,
+            "document_read" => self.execute_document_read_tool(&args, &tool.id).await,
+            "document_search" => self.execute_document_search_tool(&args, &tool.id).await,
+            "document_create_word" => self.execute_document_create_word_tool(&args, &tool.id).await,
+            "document_create_excel" => self.execute_document_create_excel_tool(&args, &tool.id).await,
+            "document_create_pdf" => self.execute_document_create_pdf_tool(&args, &tool.id).await,
+            "image_analyze" => self.execute_image_analyze_tool(&args).await,
+            "git_status" => self.execute_git_status_tool(&args).await,
+            "git_commit" => self.execute_git_commit_tool(&args).await,
+            "git_clone" => self.execute_git_clone_tool(&args).await,
+            "git_add" => self.execute_git_add_tool(&args).await,
+            "schedule_reminder" => self.execute_schedule_reminder_tool(&args, &tool.id).await,
+            "schedule_recurring_task" => self.execute_schedule_recurring_task_tool(&args, &tool.id).await,
+            "cancel_scheduled_task" => self.execute_cancel_scheduled_task_tool(&args, &tool.id).await,
+            "list_scheduled_tasks" => self.execute_list_scheduled_tasks_tool(&args, &tool.id).await,
+            "file_list" => self.execute_file_list_tool(&args).await,
+            "memory_remember" => self.execute_memory_remember_tool(&args, &tool.id).await,
+            "memory_recall" => self.execute_memory_recall_tool(&args, &tool.id).await,
+            "memory_search" => self.execute_memory_search_tool(&args, &tool.id).await,
+            "memory_forget" => self.execute_memory_forget_tool(&args, &tool.id).await,
+            "browser_click" => self.execute_browser_tool("browser_click", args).await,
+            "browser_extract" => self.execute_browser_tool("browser_extract", args).await,
+            "api_download" => self.execute_api_download_tool(&args).await,
+            "api_upload" => self.execute_api_upload_tool(&args).await,
+            "git_init" => self.execute_git_init_tool(&args).await,
+            "github_create_repo" => self.execute_github_create_repo_tool(&args).await,
+            "physical_scrape" => self.execute_physical_scrape_tool(&args).await,
             id if id.starts_with("browser_") => self.execute_browser_tool(id, args).await,
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
