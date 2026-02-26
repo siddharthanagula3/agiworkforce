@@ -164,7 +164,8 @@ export function InteractiveTerminal({
       }
       setIsGettingSuggestion(false);
     } catch (error) {
-      toast.error(`Failed to get suggestion: ${error}`);
+      console.error('[InteractiveTerminal] Failed to get suggestion:', error);
+      toast.error('Could not get suggestion. Please try again.');
       setIsGettingSuggestion(false);
     }
   }, [currentCommand, workingDirectory, writePrompt]);
