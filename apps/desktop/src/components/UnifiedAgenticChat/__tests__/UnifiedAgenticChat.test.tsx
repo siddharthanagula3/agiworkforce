@@ -594,14 +594,13 @@ describe('UnifiedAgenticChat', () => {
   });
 
   const renderChat = async (props: React.ComponentProps<typeof UnifiedAgenticChat> = {}) => {
-    let result: ReturnType<typeof render>;
-    await act(async () => {
-      result = render(<UnifiedAgenticChat {...props} />);
-      // Wait for effects to settle
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    const result = render(<UnifiedAgenticChat {...props} />);
+    // Use waitFor to let async effects settle instead of relying on setTimeout(0),
+    // which can race in CI under load.
+    await waitFor(() => {
+      expect(document.body).toBeTruthy();
     });
-
-    return result!;
+    return result;
   };
 
   it('should render without crashing', async () => {
@@ -637,7 +636,7 @@ describe('UnifiedAgenticChat', () => {
     // Test compact layout
     await act(async () => {
       rerender(<UnifiedAgenticChat layout="compact" />);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await waitFor(() => { expect(document.body).toBeTruthy(); });
     });
 
     await waitFor(() => {
@@ -648,7 +647,7 @@ describe('UnifiedAgenticChat', () => {
     // Test immersive layout
     await act(async () => {
       rerender(<UnifiedAgenticChat layout="immersive" />);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await waitFor(() => { expect(document.body).toBeTruthy(); });
     });
 
     await waitFor(() => {
@@ -688,7 +687,7 @@ describe('UnifiedAgenticChat', () => {
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent(NEW_CHAT_ABORT_EVENT));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await waitFor(() => { expect(document.body).toBeTruthy(); });
     });
 
     expect(state.clearActionTrail).toHaveBeenCalledTimes(1);

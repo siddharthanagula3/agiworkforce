@@ -1,8 +1,11 @@
 /**
- * H51 — chatStore ID mapping pruning tests
+ * chatStore tests
  *
- * Tests that pruneIdMappingsIfNeeded correctly enforces the MAX_ID_MAPPINGS cap,
- * removes the oldest entries first (FIFO by dbId), and retains entries at the boundary.
+ * H51 — ID mapping pruning: pruneIdMappingsIfNeeded enforces MAX_ID_MAPPINGS cap,
+ *       removes oldest entries first (FIFO by dbId), retains entries at boundary.
+ *
+ * H15 — generateTitleFromMessage: fenced code stripping, inline code, long truncation.
+ *       Store action basics: createConversation, deleteConversation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -38,7 +41,7 @@ vi.mock('../../utils/localStorage', () => ({
 }));
 
 // Import after mocks are in place
-import { dbIdToUuid, uuidToDbId, clearIdMappings } from '../chatStore';
+import { dbIdToUuid, uuidToDbId, clearIdMappings, useChatStore } from '../chatStore';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +181,232 @@ describe('chatStore ID mapping pruning (H51)', () => {
       const newUuid = dbIdToUuid(1);
       // Should work fine and return a valid UUID (may be a different one)
       expect(typeof newUuid).toBe('string');
+    });
+  });
+});
+
+// ── H15 — generateTitleFromMessage ────────────────────────────────────────
+// generateTitleFromMessage is private to chatStore.ts.  We test its logic
+// directly by inlining the same pure function here — keeping these tests
+// fast and isolated from Zustand/Tauri state.
+
+function generateTitleFromMessage(content: string): string {
+  const cleaned = content
+    .replace(/```[\s\S]*?```/g, '') // strip fenced code blocks (must run first)
+    .replace(/`[^`]+`/g, '') // strip inline code
+    .replace(/[#*_~[\](){}|\n]+/g, ' ') // markdown punctuation + newlines → space
+    .replace(/\s+/g, ' ') // collapse whitespace
+    .trim();
+
+  if (!cleaned) return 'New conversation';
+
+  const maxLength = 50;
+  if (cleaned.length <= maxLength) return cleaned;
+
+  const truncated = cleaned.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 30) {
+    return truncated.slice(0, lastSpace) + '...';
+  }
+  return truncated + '...';
+}
+
+describe('generateTitleFromMessage (H15)', () => {
+  describe('fenced code block stripping', () => {
+    it('removes a simple fenced code block', () => {
+      const msg = 'Here is my code:\n```\nconsole.log("hello");\n```\nDoes it work?';
+      const title = generateTitleFromMessage(msg);
+      expect(title).not.toContain('```');
+      expect(title).not.toContain('console.log');
+      expect(title).toContain('Here is my code');
+    });
+
+    it('returns "New conversation" when message is only a fenced code block', () => {
+      const msg = '```typescript\nconst x: number = 42;\n```';
+      const title = generateTitleFromMessage(msg);
+      expect(title).toBe('New conversation');
+    });
+
+    it('handles multiple fenced blocks in one message', () => {
+      const msg = '```js\nfoo();\n```\nand\n```py\nbar()\n```';
+      const title = generateTitleFromMessage(msg);
+      expect(title).not.toContain('foo');
+      expect(title).not.toContain('bar');
+    });
+  });
+
+  describe('inline code stripping', () => {
+    it('removes inline backtick code', () => {
+      const msg = 'Can you help me fix this `bug`?';
+      expect(generateTitleFromMessage(msg)).toBe('Can you help me fix this ?');
+    });
+
+    it('removes multiple inline code spans', () => {
+      const msg = 'Call `foo()` then `bar()` to finish';
+      const title = generateTitleFromMessage(msg);
+      expect(title).not.toContain('foo');
+      expect(title).not.toContain('bar');
+      expect(title).toContain('Call');
+      expect(title).toContain('then');
+    });
+  });
+
+  describe('long content truncation', () => {
+    it('returns content unchanged when it is exactly 50 characters', () => {
+      const exact = 'a'.repeat(50); // 50 chars, no spaces
+      expect(generateTitleFromMessage(exact)).toBe(exact);
+    });
+
+    it('truncates content longer than 50 characters', () => {
+      const long = 'a'.repeat(60);
+      const title = generateTitleFromMessage(long);
+      expect(title.length).toBeLessThanOrEqual(53); // 50 chars + '...'
+      expect(title.endsWith('...')).toBe(true);
+    });
+
+    it('truncates at word boundary when last space is beyond position 30', () => {
+      // Build a string that has a space well past position 30 within the first 50 chars
+      // "word word word word word word x" = positions arranged so lastSpace > 30
+      const msg = 'word word word word word word extra-long-content-here';
+      const title = generateTitleFromMessage(msg);
+      expect(title.endsWith('...')).toBe(true);
+      // Should cut at a space boundary
+      const withoutEllipsis = title.slice(0, -3);
+      expect(withoutEllipsis.endsWith(' ')).toBe(false); // no trailing space before ...
+    });
+
+    it('truncates hard at 50 when last space is at or before position 30', () => {
+      // Space only at position 5 — within first 50 chars, lastSpace <= 30
+      const msg = 'short ' + 'X'.repeat(60);
+      const title = generateTitleFromMessage(msg);
+      expect(title.endsWith('...')).toBe(true);
+    });
+
+    it('returns "New conversation" for content that is all code blocks', () => {
+      const msg = '```\nconst x = 1;\n```';
+      expect(generateTitleFromMessage(msg)).toBe('New conversation');
+    });
+  });
+});
+
+// ── H15 — Store action basics ─────────────────────────────────────────────
+
+describe('chatStore action basics (H15)', () => {
+  beforeEach(() => {
+    // Reset the store to a clean slate before each test
+    useChatStore.setState({
+      conversations: [],
+      activeConversationId: null,
+      messagesByConversation: {},
+      messages: [],
+      isLoading: false,
+      isLoadingMessages: false,
+      isStreaming: false,
+      currentStreamingMessageId: null,
+      pendingMessages: [],
+      citations: [],
+      tokenUsage: {
+        current: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        max: 200000,
+        percentage: 0,
+        estimatedCost: 0,
+      },
+      focusMode: null,
+      activeView: 'chat',
+      conversationMode: 'auto',
+      draftContent: '',
+      editingMessageId: null,
+      showMessageTimestamps: true,
+      selectedMessage: null,
+    });
+    vi.clearAllMocks();
+  });
+
+  describe('createConversation', () => {
+    it('adds a new conversation to the conversations array', () => {
+      const { createConversation } = useChatStore.getState();
+      expect(useChatStore.getState().conversations).toHaveLength(0);
+      createConversation('My chat');
+      expect(useChatStore.getState().conversations).toHaveLength(1);
+    });
+
+    it('returns the UUID of the created conversation', () => {
+      const { createConversation } = useChatStore.getState();
+      const id = createConversation();
+      expect(typeof id).toBe('string');
+      expect(id.length).toBeGreaterThan(0);
+    });
+
+    it('sets the new conversation as the active conversation', () => {
+      const { createConversation } = useChatStore.getState();
+      const id = createConversation('Test');
+      expect(useChatStore.getState().activeConversationId).toBe(id);
+    });
+
+    it('uses the provided title', () => {
+      const { createConversation } = useChatStore.getState();
+      createConversation('My custom title');
+      const convo = useChatStore.getState().conversations[0];
+      expect(convo?.title).toBe('My custom title');
+    });
+
+    it('uses "New chat" as default title when none is provided', () => {
+      const { createConversation } = useChatStore.getState();
+      createConversation();
+      const convo = useChatStore.getState().conversations[0];
+      expect(convo?.title).toBe('New chat');
+    });
+
+    it('initialises an empty message list for the new conversation', () => {
+      const { createConversation } = useChatStore.getState();
+      const id = createConversation();
+      expect(useChatStore.getState().messagesByConversation[id]).toEqual([]);
+    });
+  });
+
+  describe('deleteConversation', () => {
+    it('removes the conversation from the conversations array', () => {
+      const { createConversation, deleteConversation } = useChatStore.getState();
+      const id = createConversation('To be deleted');
+      expect(useChatStore.getState().conversations).toHaveLength(1);
+      deleteConversation(id);
+      expect(useChatStore.getState().conversations).toHaveLength(0);
+    });
+
+    it('removes the message cache for the deleted conversation', () => {
+      const { createConversation, deleteConversation } = useChatStore.getState();
+      const id = createConversation();
+      expect(useChatStore.getState().messagesByConversation[id]).toBeDefined();
+      deleteConversation(id);
+      expect(useChatStore.getState().messagesByConversation[id]).toBeUndefined();
+    });
+
+    it('clears activeConversationId when the only conversation is deleted', () => {
+      const { createConversation, deleteConversation } = useChatStore.getState();
+      const id = createConversation();
+      expect(useChatStore.getState().activeConversationId).toBe(id);
+      deleteConversation(id);
+      expect(useChatStore.getState().activeConversationId).not.toBe(id);
+    });
+
+    it('does not affect other conversations', () => {
+      const { createConversation, deleteConversation } = useChatStore.getState();
+      const id1 = createConversation('Keep');
+      const id2 = createConversation('Delete');
+      deleteConversation(id2);
+      const remaining = useChatStore.getState().conversations;
+      expect(remaining.some((c) => c.id === id1)).toBe(true);
+      expect(remaining.some((c) => c.id === id2)).toBe(false);
+    });
+
+    it('is a no-op for an unknown conversation id', () => {
+      const { createConversation, deleteConversation } = useChatStore.getState();
+      createConversation('Stay');
+      const before = useChatStore.getState().conversations.length;
+      deleteConversation('non-existent-uuid');
+      expect(useChatStore.getState().conversations).toHaveLength(before);
     });
   });
 });

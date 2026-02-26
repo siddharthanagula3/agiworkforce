@@ -67,8 +67,9 @@ apps/desktop/src-tauri/tauri-info.json
 **/*.rlib
 *.rlib
 Cargo.lock
-# Allow Cargo.lock for applications
+# Allow Cargo.lock for applications and workspace root
 !apps/**/Cargo.lock
+!/Cargo.lock
 
 # --- Database files ---
 *.db

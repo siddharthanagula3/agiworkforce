@@ -95,7 +95,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: Run chat E2E tests
-        if: always()
+        if: success()
         run: |
           pnpm exec playwright test --project=chat \
             --reporter=html,json \

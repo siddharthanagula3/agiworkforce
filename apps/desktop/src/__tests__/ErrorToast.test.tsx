@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ErrorToastContainer, useErrorToast } from '../components/Errors/ErrorToast';
 import useErrorStore from '../stores/errorStore';
@@ -31,10 +31,14 @@ describe('ErrorToast', () => {
       });
 
       await waitFor(() => {
+        // The toast shows the pre-defined title from errorMessages.ts, not the raw message
         expect(screen.getByText('Connection Issue')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Connection failed')).toBeInTheDocument();
+      // The component shows the pre-defined message (not the raw error.message)
+      expect(
+        screen.getByText(/Unable to connect to the server/i),
+      ).toBeInTheDocument();
     });
 
     it('should dismiss toast when X button is clicked', async () => {
@@ -49,14 +53,14 @@ describe('ErrorToast', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Connection failed')).toBeInTheDocument();
+        expect(screen.getByText('Connection Issue')).toBeInTheDocument();
       });
 
       const dismissButton = screen.getByLabelText('Dismiss');
       fireEvent.click(dismissButton);
 
       await waitFor(() => {
-        expect(screen.queryByText('Connection failed')).not.toBeInTheDocument();
+        expect(screen.queryByText('Connection Issue')).not.toBeInTheDocument();
       });
     });
 
@@ -84,6 +88,9 @@ describe('ErrorToast', () => {
     });
 
     it('should show details when details section is expanded', async () => {
+      // The details section is only rendered in DEV mode
+      vi.stubEnv('DEV', true);
+
       render(<ErrorToastContainer />);
 
       act(() => {
@@ -96,13 +103,16 @@ describe('ErrorToast', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Connection failed')).toBeInTheDocument();
+        expect(screen.getByText('Connection Issue')).toBeInTheDocument();
       });
 
-      const detailsToggle = screen.getByText('Show details');
+      // The summary label includes "(development only)"
+      const detailsToggle = screen.getByText(/show details/i);
       fireEvent.click(detailsToggle);
 
       expect(screen.getByText('Detailed error information')).toBeInTheDocument();
+
+      vi.unstubAllEnvs();
     });
 
     it('should render different severity levels with correct styling', () => {

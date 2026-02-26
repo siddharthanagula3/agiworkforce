@@ -63,6 +63,18 @@
 
 Key blockers: Docker daemon not running, image gen API keys missing, Gmail/Calendar/Drive/Notion MCPs not fully connected
 
+## Self-Review Results (2026-02-26)
+
+Full review in REVIEW_FINDINGS.md. Key patterns discovered:
+- **Shared artifact utils**: `src/lib/artifactUtils.tsx` — `ArtifactTypeIcon` + `getArtifactFileExtension`
+- **chatStore.ts**: `updateMessage` fallback condition was `||` (should be `&&`); message cap was applied independently (causes drift — always sync via `slice()`)
+- **settingsStore.ts**: persist `merge()` was resetting `defaultProvider` to hardcoded value — preserve from persisted state
+- **CSP**: tauri.conf.json `img-src https:` wildcard replaced with specific host allowlist
+- **Auth**: Always use `supabase.auth.getUser()` (not `getSession()`) in Next.js server-side routes
+- **ESLint**: `no-explicit-any` changed to `warn` (was `off`) — 269 existing `any` usages now visible
+- **diffUtils.ts**: `applyDiff` multi-line hunk bug fixed — must spread `newContent.split('\n')`
+- 10 Rust critical/high issues documented in `docs/rust-fixes-needed.md`
+
 ## Current Priorities
 
 - Settings panel: Custom Models, Tools & Extensions, Memory & Instructions, Agents tabs
