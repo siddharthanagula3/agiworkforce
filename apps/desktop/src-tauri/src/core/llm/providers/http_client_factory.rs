@@ -53,8 +53,8 @@ impl Default for HttpClientConfig {
 /// - The `ca_cert_path` file cannot be read or does not contain a valid PEM certificate.
 /// - The underlying `reqwest::ClientBuilder::build()` call fails.
 pub fn create_http_client(config: &HttpClientConfig) -> Result<Client, String> {
-    let mut builder = Client::builder()
-        .connect_timeout(Duration::from_secs(config.connect_timeout_secs));
+    let mut builder =
+        Client::builder().connect_timeout(Duration::from_secs(config.connect_timeout_secs));
 
     if let Some(timeout_secs) = config.read_timeout_secs {
         builder = builder.timeout(Duration::from_secs(timeout_secs));
@@ -93,7 +93,10 @@ mod tests {
     fn default_config_creates_client() {
         let config = HttpClientConfig::default();
         let client = create_http_client(&config);
-        assert!(client.is_ok(), "Default config should produce a valid client");
+        assert!(
+            client.is_ok(),
+            "Default config should produce a valid client"
+        );
     }
 
     #[test]
@@ -113,6 +116,9 @@ mod tests {
             ..Default::default()
         };
         let result = create_http_client(&config);
-        assert!(result.is_err(), "Missing CA cert path should produce an error");
+        assert!(
+            result.is_err(),
+            "Missing CA cert path should produce an error"
+        );
     }
 }

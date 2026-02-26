@@ -815,13 +815,19 @@ mod malformed_message_tests {
         // deserialization should fail when the field is absent.
         let missing_code = r#"{"jsonrpc":"2.0","error":{"message":"error"},"id":1}"#;
         let result = McpMessage::from_str(missing_code);
-        assert!(result.is_err(), "expected parse to fail when 'code' is missing from error object");
+        assert!(
+            result.is_err(),
+            "expected parse to fail when 'code' is missing from error object"
+        );
 
         // Error without message — ErrorObject.message is String (required), so
         // deserialization should also fail when the field is absent.
         let missing_message = r#"{"jsonrpc":"2.0","error":{"code":-32600},"id":1}"#;
         let result = McpMessage::from_str(missing_message);
-        assert!(result.is_err(), "expected parse to fail when 'message' is missing from error object");
+        assert!(
+            result.is_err(),
+            "expected parse to fail when 'message' is missing from error object"
+        );
     }
 
     /// Test standard JSON-RPC error codes
@@ -1011,7 +1017,10 @@ mod malformed_message_tests {
         let result = McpMessage::from_str(both);
 
         // Expect successful parse; the ambiguous message is still parseable.
-        assert!(result.is_ok(), "expected parse to succeed when both result and error are present");
+        assert!(
+            result.is_ok(),
+            "expected parse to succeed when both result and error are present"
+        );
         if let Ok(McpMessage::Response(resp)) = result {
             // The result field should take precedence.
             assert!(!resp.result.is_null(), "expected result field to be set");

@@ -1457,10 +1457,7 @@ fn normalize_selector(selector: &str) -> Option<String> {
 }
 
 fn normalize_action_name(action: &str) -> String {
-    action
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['-', ' '], "_")
+    action.trim().to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
 fn extract_json_like_payload(response: &str) -> Result<String, String> {

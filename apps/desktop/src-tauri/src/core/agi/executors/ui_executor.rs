@@ -180,10 +180,12 @@ impl UiExecutor {
 
             use crate::automation::input::MouseButton;
             let mut mouse_guard = self.automation.mouse.lock().await;
-            let mouse = mouse_guard.as_mut().ok_or_else(|| anyhow!(
+            let mouse = mouse_guard.as_mut().ok_or_else(|| {
+                anyhow!(
                 "Mouse automation requires Input Monitoring permission. \
                  Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-            ))?;
+            )
+            })?;
             mouse.click(x, y, MouseButton::Left)?;
 
             context.emit_progress("Click completed", Some(1.0));
@@ -335,10 +337,12 @@ impl UiExecutor {
 
         // Type the text using shared keyboard simulator
         let mut kb_guard = self.automation.keyboard.lock().await;
-        let keyboard = kb_guard.as_mut().ok_or_else(|| anyhow!(
-            "Keyboard automation requires Input Monitoring permission. \
+        let keyboard = kb_guard.as_mut().ok_or_else(|| {
+            anyhow!(
+                "Keyboard automation requires Input Monitoring permission. \
              Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-        ))?;
+            )
+        })?;
 
         keyboard
             .send_text(text)

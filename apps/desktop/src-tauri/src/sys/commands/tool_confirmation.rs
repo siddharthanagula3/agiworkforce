@@ -353,9 +353,7 @@ pub fn set_auto_approve_all(
 
 /// Get the current global auto-approve state.
 #[tauri::command]
-pub fn get_auto_approve_all(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<bool, String> {
+pub fn get_auto_approve_all(state: State<'_, ToolConfirmationState>) -> Result<bool, String> {
     Ok(state.is_auto_approve_all())
 }
 
@@ -367,10 +365,7 @@ pub fn get_auto_approve_all(
 /// suspended agent task so it can resume execution (on approve) or fail
 /// gracefully (on reject).
 #[tauri::command]
-pub async fn resolve_task_approval(
-    task_id: String,
-    approved: bool,
-) -> Result<(), String> {
+pub async fn resolve_task_approval(task_id: String, approved: bool) -> Result<(), String> {
     use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
 
     info!(

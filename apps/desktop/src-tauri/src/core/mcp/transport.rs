@@ -86,10 +86,10 @@ pub struct StdioTransport {
 /// so child processes can find `npx`, `node`, etc.
 fn build_augmented_path() -> String {
     let extra_dirs = [
-        "/opt/homebrew/bin",       // Homebrew on Apple Silicon
-        "/usr/local/bin",          // Homebrew on Intel / manual installs
+        "/opt/homebrew/bin", // Homebrew on Apple Silicon
+        "/usr/local/bin",    // Homebrew on Intel / manual installs
         "/usr/local/sbin",
-        "/opt/local/bin",          // MacPorts
+        "/opt/local/bin", // MacPorts
         "/usr/bin",
         "/bin",
     ];

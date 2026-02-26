@@ -562,7 +562,10 @@ pub async fn get_system_resources() -> Result<SystemResourcesResponse, String> {
     let resource_state = match agi.resource_manager().get_state().await {
         Ok(state) => state,
         Err(e) => {
-            tracing::warn!("Failed to get AGI resource state, using fallback system metrics: {}", e);
+            tracing::warn!(
+                "Failed to get AGI resource state, using fallback system metrics: {}",
+                e
+            );
             return Ok(fallback_response);
         }
     };
