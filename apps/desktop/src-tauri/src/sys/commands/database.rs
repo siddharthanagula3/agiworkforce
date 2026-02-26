@@ -6,6 +6,60 @@ use crate::data::database::{
     ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder,
     QueryValidation, RedisClient, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
 };
+use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
+
+/// SQL keywords that are blocked in user-facing query commands.
+/// Only SELECT and WITH (CTE) queries are allowed for security.
+const BLOCKED_SQL_KEYWORDS: &[&str] = &[
+    "DROP",
+    "TRUNCATE",
+    "DELETE",
+    "ALTER TABLE",
+    "CREATE USER",
+    "GRANT",
+    "REVOKE",
+    "INSERT",
+    "UPDATE",
+];
+
+/// Validates that a SQL query is a read-only SELECT/WITH statement.
+/// Returns `Err` with a descriptive message if the query contains blocked keywords
+/// or does not start with SELECT/WITH. The optional `context` is included in
+/// error messages (e.g. "batch query at index 3").
+fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String> {
+    let sql_upper = sql.to_uppercase();
+
+    for keyword in BLOCKED_SQL_KEYWORDS {
+        if sql_upper.contains(keyword) {
+            let location = context
+                .map(|ctx| format!(" in {}", ctx))
+                .unwrap_or_default();
+            tracing::error!(
+                "Blocked dangerous SQL query{} with keyword: {}",
+                location,
+                keyword
+            );
+            return Err(format!(
+                "SQL operation '{}' is not allowed{}. Only SELECT queries are permitted for security.",
+                keyword, location
+            ));
+        }
+    }
+
+    let trimmed_upper = sql_upper.trim();
+    if !trimmed_upper.starts_with("SELECT") && !trimmed_upper.starts_with("WITH") {
+        let location = context
+            .map(|ctx| format!(" in {}", ctx))
+            .unwrap_or_default();
+        return Err(format!(
+            "Only SELECT queries are allowed{}. Use specific mutation commands for data modifications.",
+            location
+        ));
+    }
+
+    Ok(())
+}
 
 pub struct DatabaseState {
     pub sql_client: SqlClient,
@@ -71,34 +125,7 @@ pub async fn db_execute_query(
         ));
     }
 
-    // SECURITY: Block dangerous SQL operations - only SELECT queries are allowed by default
-    let blocked_keywords = [
-        "DROP",
-        "TRUNCATE",
-        "DELETE",
-        "ALTER TABLE",
-        "CREATE USER",
-        "GRANT",
-        "REVOKE",
-        "INSERT",
-        "UPDATE",
-    ];
-    let sql_upper = sql.to_uppercase();
-    for keyword in &blocked_keywords {
-        if sql_upper.contains(keyword) {
-            tracing::error!("Blocked dangerous SQL query with keyword: {}", keyword);
-            return Err(format!(
-                "SQL operation '{}' is not allowed. Only SELECT queries are permitted for security.",
-                keyword
-            ));
-        }
-    }
-
-    // Verify query starts with SELECT (after trimming whitespace)
-    let trimmed_upper = sql_upper.trim();
-    if !trimmed_upper.starts_with("SELECT") && !trimmed_upper.starts_with("WITH") {
-        return Err("Only SELECT queries are allowed. Use specific mutation commands for data modifications.".to_string());
-    }
+    validate_read_only_sql(&sql, None)?;
 
     let state = state.lock().await;
 
@@ -186,6 +213,8 @@ pub async fn db_execute_batch(
                 query.len()
             ));
         }
+
+        validate_read_only_sql(query, Some(&format!("batch query at index {}", index)))?;
     }
 
     let state = state.lock().await;
@@ -909,13 +938,43 @@ pub async fn db_has_stored_password(connection_id: String) -> Result<bool, Strin
 
 /// Retrieve a stored database password for creating a connection.
 /// This should only be called when actually establishing a connection,
-/// not for display purposes.
+/// not for display purposes. Requires explicit user approval.
 #[tauri::command]
-pub async fn db_get_stored_password(connection_id: String) -> Result<Option<String>, String> {
+pub async fn db_get_stored_password(
+    app: tauri::AppHandle,
+    confirmation_state: State<'_, ToolConfirmationState>,
+    connection_id: String,
+) -> Result<Option<String>, String> {
     use crate::core::mcp::config::decrypt_mcp_credential;
 
     if connection_id.trim().is_empty() {
         return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // SECURITY: Retrieving stored passwords requires explicit user approval
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "db_get_stored_password".to_string(),
+        tool_description: format!(
+            "Retrieve stored database password for connection '{}'",
+            connection_id
+        ),
+        parameters: serde_json::json!({
+            "connection_id": connection_id,
+        }),
+        risk_level: RiskLevel::Critical,
+        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+        reason: "Accessing stored database passwords is a sensitive operation that requires explicit approval.".to_string(),
+        reversible: false,
+        undo_description: None,
+    };
+
+    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !approved {
+        return Err("Password retrieval cancelled by user".to_string());
     }
 
     // Get the database path
