@@ -35,6 +35,37 @@ pub enum ExtensionMessage {
         selector: String,
         text: String,
     },
+    Navigate {
+        url: String,
+    },
+    Hover {
+        selector: String,
+    },
+    WaitForSelector {
+        selector: String,
+        timeout_ms: u64,
+    },
+    GetDomSnapshot,
+    GetUrl,
+    GetTitle,
+    GetAttribute {
+        selector: String,
+        attribute: String,
+    },
+    SelectOption {
+        selector: String,
+        value: String,
+    },
+    SetChecked {
+        selector: String,
+        checked: bool,
+    },
+    Focus {
+        selector: String,
+    },
+    ScrollIntoView {
+        selector: String,
+    },
     GetCookies,
     SetCookie {
         name: String,
@@ -205,6 +236,215 @@ impl ExtensionBridge {
         }
     }
 
+    /// Navigate the active browser tab to a URL via the extension bridge.
+    pub async fn navigate(&self, url: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::Navigate {
+                url: url.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Click an element identified by a CSS selector via the extension bridge.
+    pub async fn click(&self, selector: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::Click {
+                selector: selector.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Type text into an element identified by a CSS selector via the extension bridge.
+    pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::Type {
+                selector: selector.to_string(),
+                text: text.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Hover over an element via the extension bridge.
+    pub async fn hover(&self, selector: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::Hover {
+                selector: selector.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Wait for a CSS selector to appear in the DOM via the extension bridge.
+    pub async fn wait_for_selector(&self, selector: &str, timeout_ms: u64) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::WaitForSelector {
+                selector: selector.to_string(),
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Get the outer HTML of the entire page via the extension bridge.
+    pub async fn get_dom_snapshot(&self) -> Result<String> {
+        let response = self.send_message(ExtensionMessage::GetDomSnapshot).await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data
+                .get("html")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Get the current URL of the active browser tab via the extension bridge.
+    pub async fn get_url(&self) -> Result<String> {
+        let response = self.send_message(ExtensionMessage::GetUrl).await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Get the title of the active browser tab via the extension bridge.
+    pub async fn get_title(&self) -> Result<String> {
+        let response = self.send_message(ExtensionMessage::GetTitle).await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Get an attribute value from an element via the extension bridge.
+    pub async fn get_attribute(&self, selector: &str, attribute: &str) -> Result<String> {
+        let response = self
+            .send_message(ExtensionMessage::GetAttribute {
+                selector: selector.to_string(),
+                attribute: attribute.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data
+                .get("value")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Select an option in a select element via the extension bridge.
+    pub async fn select_option(&self, selector: &str, value: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::SelectOption {
+                selector: selector.to_string(),
+                value: value.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Set the checked state of a checkbox or radio element via the extension bridge.
+    pub async fn set_checked(&self, selector: &str, checked: bool) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::SetChecked {
+                selector: selector.to_string(),
+                checked,
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Focus an element via the extension bridge.
+    pub async fn focus(&self, selector: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::Focus {
+                selector: selector.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Scroll an element into view via the extension bridge.
+    pub async fn scroll_into_view(&self, selector: &str) -> Result<()> {
+        let response = self
+            .send_message(ExtensionMessage::ScrollIntoView {
+                selector: selector.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { .. } => Ok(()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
+    /// Extract text from an element via the extension bridge.
+    pub async fn get_text(&self, selector: &str) -> Result<String> {
+        let response = self
+            .send_message(ExtensionMessage::GetElement {
+                selector: selector.to_string(),
+            })
+            .await?;
+
+        match response {
+            ExtensionResponse::Success { data } => Ok(data
+                .get("text_content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
+        }
+    }
+
     pub async fn capture_screenshot(&self, format: &str, quality: u8) -> Result<Vec<u8>> {
         let response = self
             .send_message(ExtensionMessage::CaptureScreenshot {
@@ -241,6 +481,49 @@ fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Valu
         }
         ExtensionMessage::Type { selector, text } => {
             json!({ "type": "type", "selector": selector, "text": text, "tab_id": null })
+        }
+        ExtensionMessage::Navigate { url } => {
+            json!({ "type": "navigate", "url": url, "tab_id": null })
+        }
+        ExtensionMessage::Hover { selector } => {
+            // Hover is implemented via get_focusable_elements-style JS dispatch through CDP.
+            // The websocket server dispatches this via NativeMessage::GetFocusableElements
+            // as a workaround; here we use scrollIntoView + mouseover event as the
+            // extension bridge equivalent until a dedicated hover NativeMessage variant is added.
+            json!({ "type": "hover", "selector": selector, "tab_id": null })
+        }
+        ExtensionMessage::WaitForSelector {
+            selector,
+            timeout_ms,
+        } => {
+            json!({ "type": "wait_for_selector", "selector": selector, "timeout_ms": timeout_ms, "tab_id": null })
+        }
+        ExtensionMessage::GetDomSnapshot => {
+            json!({ "type": "get_page_content", "tab_id": null })
+        }
+        ExtensionMessage::GetUrl => {
+            json!({ "type": "get_url", "tab_id": null })
+        }
+        ExtensionMessage::GetTitle => {
+            json!({ "type": "get_title", "tab_id": null })
+        }
+        ExtensionMessage::GetAttribute {
+            selector,
+            attribute,
+        } => {
+            json!({ "type": "get_attribute", "selector": selector, "attribute": attribute, "tab_id": null })
+        }
+        ExtensionMessage::SelectOption { selector, value } => {
+            json!({ "type": "select_option", "selector": selector, "value": value, "tab_id": null })
+        }
+        ExtensionMessage::SetChecked { selector, checked } => {
+            json!({ "type": "set_checked", "selector": selector, "checked": checked, "tab_id": null })
+        }
+        ExtensionMessage::Focus { selector } => {
+            json!({ "type": "focus", "selector": selector, "tab_id": null })
+        }
+        ExtensionMessage::ScrollIntoView { selector } => {
+            json!({ "type": "scroll_into_view", "selector": selector, "tab_id": null })
         }
         ExtensionMessage::GetCookies => {
             json!({ "type": "get_cookies", "url": null })
@@ -298,7 +581,8 @@ async fn send_native_message_via_realtime(payload: Value) -> Result<Value> {
                 }
 
                 last_error = Some(error);
-                let delay_ms = REALTIME_RETRY_BASE_DELAY_MS * (1_u64 << (attempt - 1));
+                let shift = (attempt - 1).min(30);
+                let delay_ms = REALTIME_RETRY_BASE_DELAY_MS * (1_u64 << shift);
                 tracing::warn!(
                     "Extension bridge realtime attempt {}/{} failed; retrying in {}ms",
                     attempt,

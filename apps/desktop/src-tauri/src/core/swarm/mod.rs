@@ -265,4 +265,7 @@ pub mod constants {
 
     /// Maximum depth of task decomposition.
     pub const MAX_DECOMPOSITION_DEPTH: usize = 5;
+
+    /// Time-to-live for decomposition cache entries (1 hour).
+    pub const DECOMPOSITION_CACHE_TTL: Duration = Duration::from_secs(3600);
 }

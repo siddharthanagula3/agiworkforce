@@ -33,7 +33,6 @@ use crate::sys::diagnostics::DiagnosticsState;
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
 use anyhow::Context;
-use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::{async_runtime, Manager};
 use tokio::sync::Mutex as TokioMutex;
@@ -175,26 +174,26 @@ pub fn run() {
                 }
             }
 
-            // Open the database with encryption. If encrypted open fails,
-            // fall back to opening without encryption so the app remains
-            // functional (with a warning).
-            let conn = match crate::data::db::encryption::open_encrypted_connection(
+            // Open the database with encryption. Fail hard if encryption
+            // cannot be established — silently falling back to plaintext
+            // would violate the security contract and risk data exposure.
+            let conn = crate::data::db::encryption::open_encrypted_connection(
                 &db_path_str,
                 &db_encryption_key,
-            ) {
-                Ok(c) => {
-                    tracing::info!("Database opened with SQLCipher encryption");
-                    c
-                }
-                Err(enc_err) => {
-                    tracing::warn!(
-                        "Failed to open database with encryption: {}. \
-                         Falling back to unencrypted mode.",
-                        enc_err
-                    );
-                    Connection::open(&db_path).context("Failed to open database")?
-                }
-            };
+            )
+            .map_err(|enc_err| {
+                tracing::error!(
+                    "Failed to open database with encryption: {}. \
+                     Refusing to fall back to unencrypted mode.",
+                    enc_err
+                );
+                anyhow::anyhow!(
+                    "Database encryption initialization failed: {}. \
+                     Cannot start without encrypted database.",
+                    enc_err
+                )
+            })?;
+            tracing::info!("Database opened with SQLCipher encryption");
 
             // Configure SQLite for better performance and reliability.
             // These PRAGMAs must come after the encryption key PRAGMA.
@@ -247,12 +246,12 @@ pub fn run() {
             use crate::sys::commands::analytics::TelemetryState;
             use crate::sys::telemetry::{AnalyticsMetricsCollector, CollectorConfig, TelemetryCollector};
 
-            let app_data_dir = app.path().app_data_dir().ok();
+            let telemetry_data_dir = app.path().app_data_dir().ok();
             let telemetry_config = CollectorConfig {
                 enabled: true,
                 batch_size: 50,
                 flush_interval_secs: 30,
-                app_data_dir,
+                app_data_dir: telemetry_data_dir,
             };
             let telemetry_collector = TelemetryCollector::new(telemetry_config);
             let analytics_metrics = AnalyticsMetricsCollector::new();
