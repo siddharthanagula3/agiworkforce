@@ -2,9 +2,13 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+const LOCAL_EVENTS_FILE: &str = "analytics_events.json";
+const LOCAL_EVENTS_MAX: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TelemetryEvent {
@@ -29,6 +33,10 @@ pub struct CollectorConfig {
     pub enabled: bool,
     pub batch_size: usize,
     pub flush_interval_secs: u64,
+    /// When set, failed or unconfigured HTTP flushes fall back to appending
+    /// events to `analytics_events.json` inside this directory (the Tauri
+    /// app-data directory). When `None` the local-file fallback is skipped.
+    pub app_data_dir: Option<PathBuf>,
 }
 
 impl Default for CollectorConfig {
@@ -37,6 +45,7 @@ impl Default for CollectorConfig {
             enabled: false,
             batch_size: 50,
             flush_interval_secs: 30,
+            app_data_dir: None,
         }
     }
 }
@@ -101,21 +110,91 @@ impl TelemetryCollector {
             "Flushing analytics batch"
         );
 
-        if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
-            if !endpoint.is_empty() {
-                match Self::send_batch_to_backend(&endpoint, &batch).await {
-                    Ok(_) => {
-                        tracing::debug!("Successfully sent analytics batch {}", batch.batch_id);
+        // Attempt HTTP delivery when TELEMETRY_ENDPOINT is configured.
+        let http_succeeded =
+            if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
+                if !endpoint.is_empty() {
+                    match Self::send_batch_to_backend(&endpoint, &batch).await {
+                        Ok(_) => {
+                            tracing::debug!(
+                                "Successfully sent analytics batch {}",
+                                batch.batch_id
+                            );
+                            true
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to send analytics batch {}: {}. \
+                                 Falling back to local file.",
+                                batch.batch_id,
+                                e
+                            );
+                            false
+                        }
                     }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to send analytics batch: {}. Events will be lost.",
-                            e
-                        );
-                    }
+                } else {
+                    // Endpoint var is set but empty — treat as not configured.
+                    false
+                }
+            } else {
+                // TELEMETRY_ENDPOINT not set.
+                false
+            };
+
+        // Persist to local file when HTTP delivery was not available or failed.
+        if !http_succeeded {
+            if let Some(ref app_data_dir) = self.config.app_data_dir {
+                if let Err(e) = Self::append_batch_to_local_file(app_data_dir, &batch) {
+                    tracing::warn!(
+                        "Failed to persist analytics batch {} to local file: {}",
+                        batch.batch_id,
+                        e
+                    );
+                } else {
+                    tracing::debug!(
+                        "Persisted analytics batch {} to local file",
+                        batch.batch_id
+                    );
                 }
             }
+            // If app_data_dir is None, events are intentionally dropped (collector
+            // not fully configured yet — same behavior as before this change).
         }
+
+        Ok(())
+    }
+
+    /// Append all events from `batch` to `analytics_events.json` inside
+    /// `app_data_dir`, creating the file if it does not exist.  Trims the
+    /// stored list to at most `LOCAL_EVENTS_MAX` entries (oldest first).
+    fn append_batch_to_local_file(app_data_dir: &PathBuf, batch: &EventBatch) -> Result<()> {
+        use std::fs;
+
+        if !app_data_dir.exists() {
+            fs::create_dir_all(app_data_dir)?;
+        }
+
+        let file_path = app_data_dir.join(LOCAL_EVENTS_FILE);
+
+        // Load existing events (ignore parse errors — treat corrupt file as empty).
+        let mut stored: Vec<TelemetryEvent> = if file_path.exists() {
+            let raw = fs::read_to_string(&file_path)?;
+            serde_json::from_str(&raw).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        // Append new events from the batch.
+        stored.extend(batch.events.clone());
+
+        // Trim to the maximum allowed size, keeping the most recent events.
+        if stored.len() > LOCAL_EVENTS_MAX {
+            let drop_count = stored.len() - LOCAL_EVENTS_MAX;
+            stored.drain(..drop_count);
+        }
+
+        let content = serde_json::to_string_pretty(&stored)?;
+        fs::write(&file_path, content)?;
 
         Ok(())
     }
@@ -209,6 +288,7 @@ mod tests {
             enabled: true,
             batch_size: 3,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -231,6 +311,7 @@ mod tests {
             enabled: true,
             batch_size: 2,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -254,6 +335,7 @@ mod tests {
             enabled: true,
             batch_size: 10,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -291,6 +373,7 @@ mod tests {
             enabled: false,
             batch_size: 10,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -313,6 +396,7 @@ mod tests {
             enabled: true,
             batch_size: 10,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -339,6 +423,7 @@ mod tests {
             enabled: true,
             batch_size: 10,
             flush_interval_secs: 30,
+            app_data_dir: None,
         };
         let collector = TelemetryCollector::new(config);
 
