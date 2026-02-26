@@ -16,14 +16,31 @@ import { Slider } from '../ui/Slider';
 export function AgentsSettings() {
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
+  const features = useSettingsStore(useShallow((state) => state.features));
 
-  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
-  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
-  const setMaxTimeoutMinutes = useSettingsStore((state) => state.setMaxTimeoutMinutes);
-  const setEnableCheckpointing = useSettingsStore((state) => state.setEnableCheckpointing);
-  const setCheckpointInterval = useSettingsStore((state) => state.setCheckpointInterval);
-  const setAutoResumeOnRestart = useSettingsStore((state) => state.setAutoResumeOnRestart);
-  const setEnableTimeoutWarnings = useSettingsStore((state) => state.setEnableTimeoutWarnings);
+  const {
+    setAutoApproveTools,
+    setAlwaysUseAgentMode,
+    setFeature,
+    setMaxTimeoutMinutes,
+    setEnableCheckpointing,
+    setCheckpointInterval,
+    setAutoResumeOnRestart,
+    setEnableTimeoutWarnings,
+    setAutoInjectSkills,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      setAutoApproveTools: s.setAutoApproveTools,
+      setAlwaysUseAgentMode: s.setAlwaysUseAgentMode,
+      setFeature: s.setFeature,
+      setMaxTimeoutMinutes: s.setMaxTimeoutMinutes,
+      setEnableCheckpointing: s.setEnableCheckpointing,
+      setCheckpointInterval: s.setCheckpointInterval,
+      setAutoResumeOnRestart: s.setAutoResumeOnRestart,
+      setEnableTimeoutWarnings: s.setEnableTimeoutWarnings,
+      setAutoInjectSkills: s.setAutoInjectSkills,
+    })),
+  );
 
   const handleAutoApproveChange = useCallback(
     (enabled: boolean) => {
@@ -155,8 +172,8 @@ export function AgentsSettings() {
             </div>
             <Switch
               id="agents-subagents"
-              checked={chatPreferences.alwaysUseAgentMode}
-              onCheckedChange={setAlwaysUseAgentMode}
+              checked={features['subAgents'] ?? true}
+              onCheckedChange={(enabled) => setFeature('subAgents', enabled)}
             />
           </div>
 
@@ -172,8 +189,26 @@ export function AgentsSettings() {
             </div>
             <Switch
               id="agents-teams"
-              checked={chatPreferences.alwaysUseAgentMode}
-              onCheckedChange={setAlwaysUseAgentMode}
+              checked={features['agentTeams'] ?? true}
+              onCheckedChange={(enabled) => setFeature('agentTeams', enabled)}
+            />
+          </div>
+
+          <div className="border-t border-border" />
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="agents-autoInjectSkills">Auto-inject relevant skills</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically detect which skills are relevant to your message and inject their
+                instructions into the system prompt — no need to type{' '}
+                <code className="rounded bg-muted px-1 py-0.5 text-xs">/skill-name</code> manually.
+              </p>
+            </div>
+            <Switch
+              id="agents-autoInjectSkills"
+              checked={chatPreferences.autoInjectSkills ?? true}
+              onCheckedChange={setAutoInjectSkills}
             />
           </div>
         </div>

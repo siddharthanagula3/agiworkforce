@@ -4,24 +4,15 @@
  * Toolbar displayed on artifacts in chat messages with quick actions.
  */
 
-import {
-  Check,
-  Code2,
-  Copy,
-  Download,
-  ExternalLink,
-  FileSpreadsheet,
-  FileText,
-  Globe,
-  Network,
-  Presentation,
-} from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { useArtifactStore, type ArtifactType } from '@/stores/artifactStore';
+import { shareArtifact } from '@/services/artifactSharing';
 
 interface ArtifactToolbarProps {
   artifactId: string;
@@ -40,6 +31,7 @@ export function ArtifactToolbar({
 }: ArtifactToolbarProps) {
   const { setActiveArtifact, openPanel } = useArtifactStore();
   const [copied, setCopied] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(content);
@@ -53,7 +45,7 @@ export function ArtifactToolbar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title || 'artifact'}.${getExtension(artifactType)}`;
+    a.download = `${title || 'artifact'}.${getArtifactFileExtension(artifactType)}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -66,6 +58,35 @@ export function ArtifactToolbar({
     openPanel();
   }, [artifactId, setActiveArtifact, openPanel]);
 
+  const handleShare = useCallback(async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const result = await shareArtifact({
+        id: artifactId,
+        title: title || 'Artifact',
+        type: artifactType,
+        content,
+      });
+      toast.success('Link ready', {
+        description: result.url,
+        action: {
+          label: 'Copy',
+          onClick: () => {
+            void navigator.clipboard.writeText(result.url);
+          },
+        },
+        duration: 8000,
+      });
+    } catch (err) {
+      toast.error('Failed to generate share link', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsSharing(false);
+    }
+  }, [artifactId, title, artifactType, content, isSharing]);
+
   return (
     <div
       className={cn(
@@ -74,7 +95,7 @@ export function ArtifactToolbar({
       )}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <TypeIcon type={artifactType} />
+        <ArtifactTypeIcon type={artifactType} className="h-3.5 w-3.5 text-zinc-500" />
         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">
           {title || `${formatType(artifactType)} Artifact`}
         </span>
@@ -116,6 +137,20 @@ export function ArtifactToolbar({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
+              onClick={handleShare}
+              disabled={isSharing}
+            >
+              <Share2 className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isSharing ? 'Generating link...' : 'Share'}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
               onClick={handleOpenInPanel}
             >
               <ExternalLink className="h-3 w-3" />
@@ -128,48 +163,6 @@ export function ArtifactToolbar({
   );
 }
 
-function TypeIcon({ type }: { type: ArtifactType }) {
-  const className = 'h-3.5 w-3.5 text-zinc-500';
-
-  switch (type) {
-    case 'code':
-      return <Code2 className={className} />;
-    case 'document':
-      return <FileText className={className} />;
-    case 'spreadsheet':
-      return <FileSpreadsheet className={className} />;
-    case 'diagram':
-      return <Network className={className} />;
-    case 'web':
-      return <Globe className={className} />;
-    case 'presentation':
-      return <Presentation className={className} />;
-    default:
-      return <Code2 className={className} />;
-  }
-}
-
 function formatType(type: ArtifactType): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
-}
-
-function getExtension(type: ArtifactType): string {
-  switch (type) {
-    case 'code':
-      return 'txt';
-    case 'document':
-      return 'md';
-    case 'spreadsheet':
-      return 'csv';
-    case 'diagram':
-      return 'mmd';
-    case 'web':
-      return 'html';
-    case 'chart':
-      return 'json';
-    case 'presentation':
-      return 'md';
-    default:
-      return 'txt';
-  }
 }

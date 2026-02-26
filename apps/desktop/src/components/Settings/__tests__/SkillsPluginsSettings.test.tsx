@@ -130,19 +130,19 @@ function setupSuccessfulLoad({
   mockInvoke.mockImplementation((cmd: string, args?: Record<string, unknown>) => {
     if (cmd === 'get_home_directory') return Promise.resolve('/home');
     if (cmd === 'file_read') {
-      const path = args?.path as string;
-      if (path.endsWith('installed_plugins.json')) return Promise.resolve(pluginsJson);
-      if (path.includes('code-review') && path.endsWith('plugin.json'))
+      const filePath = args?.['path'] as string;
+      if (filePath.endsWith('installed_plugins.json')) return Promise.resolve(pluginsJson);
+      if (filePath.includes('code-review') && filePath.endsWith('plugin.json'))
         return Promise.resolve(CODE_REVIEW_MANIFEST);
-      if (path.includes('hookify') && path.endsWith('plugin.json') && hookifyManifestFails)
+      if (filePath.includes('hookify') && filePath.endsWith('plugin.json') && hookifyManifestFails)
         return Promise.reject(new Error('not found'));
       return Promise.resolve('{}');
     }
     if (cmd === 'dir_list') {
-      const path = args?.path as string;
-      if (path.endsWith('/commands')) return Promise.resolve(commands);
-      if (path.endsWith('/skills')) return Promise.resolve(skills);
-      if (path.endsWith('/agents')) return Promise.resolve(agents);
+      const dirPath = args?.['path'] as string;
+      if (dirPath.endsWith('/commands')) return Promise.resolve(commands);
+      if (dirPath.endsWith('/skills')) return Promise.resolve(skills);
+      if (dirPath.endsWith('/agents')) return Promise.resolve(agents);
       return Promise.resolve([]);
     }
     return Promise.reject(new Error(`Unexpected invoke: ${cmd}`));
@@ -323,8 +323,7 @@ describe('SkillsPluginsSettings', () => {
 
       const callsBefore = mockInvoke.mock.calls.length;
 
-      // The refresh button has no text — find it by its position next to the heading
-      const refreshBtn = screen.getByRole('button', { name: '' });
+      const refreshBtn = screen.getByRole('button', { name: /refresh/i });
       await userEvent.click(refreshBtn);
 
       await waitFor(() => {

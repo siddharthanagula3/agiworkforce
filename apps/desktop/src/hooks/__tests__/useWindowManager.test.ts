@@ -603,10 +603,12 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         result.current.actions.minimize(),
       ]);
 
-      // invoke should have been called for both operations
-      const calls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
-      expect(calls).toContain('window_dock');
-      expect(calls).toContain('window_minimize');
+      // dock uses invoke('window_dock'), while minimize uses the Tauri Window API
+      // (getCurrentWindow().minimize()) rather than a custom invoke command.
+      const invokeCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+      expect(invokeCalls).toContain('window_dock');
+      // minimize is called via the native window API
+      expect(mockWindowInstance.minimize).toHaveBeenCalled();
     });
   });
 
