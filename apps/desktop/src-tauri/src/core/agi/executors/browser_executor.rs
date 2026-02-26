@@ -8,6 +8,15 @@
 //! - `browser_navigate` - Navigate to a URL, opening a new tab if needed
 //! - `browser_click` - Click an element using a CSS selector
 //! - `browser_extract` - Extract text, attributes, or all elements matching a selector
+//!
+//! # Extension Bridge Fallback
+//!
+//! Each tool first attempts to dispatch the action through the CDP path (Chrome
+//! DevTools Protocol via `CdpClient`). If no CDP-connected tabs are available, the
+//! executor falls back to the `ExtensionBridge` which routes actions through the
+//! browser extension's native messaging / realtime WebSocket channel. This allows
+//! the AGI planner to automate any tab that has the AGI Workforce extension installed,
+//! even without an explicit remote-debugging port.
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::automation::browser::{AdvancedBrowserOps, ExecuteOptions};
@@ -181,10 +190,30 @@ async fn get_cdp_client(
     Ok((client, tab_id))
 }
 
+/// Obtain a clone of the `ExtensionBridge` `Arc<Mutex>` from app state.
+///
+/// Callers lock the returned value themselves so the lock is not held across
+/// await points in the helper's caller.
+fn get_extension_bridge_arc(
+    app: &tauri::AppHandle,
+) -> Result<Arc<tokio::sync::Mutex<crate::automation::browser::ExtensionBridge>>> {
+    use crate::sys::commands::BrowserStateWrapper;
+    use tauri::Manager;
+
+    let browser_state = app.state::<BrowserStateWrapper>();
+    let arc = browser_state
+        .get_extension_bridge()
+        .map_err(|e| anyhow!("Extension bridge unavailable: {}", e))?;
+    Ok(Arc::clone(arc))
+}
+
 /// Execute browser_navigate operation.
 ///
 /// Navigates the browser to the specified URL. If no tabs are open, opens a new
 /// tab first. Otherwise, navigates the first available tab.
+///
+/// Primary path: CDP via CdpClient.
+/// Fallback: ExtensionBridge when CDP tabs are unavailable.
 ///
 /// # Parameters
 ///
@@ -195,7 +224,7 @@ async fn get_cdp_client(
 /// JSON object with:
 /// - `success`: boolean indicating success
 /// - `url`: the URL navigated to
-/// - `tab_id`: the ID of the tab used
+/// - `tab_id`: the ID of the tab used (CDP) or "extension" (extension bridge)
 async fn execute_navigate(
     parameters: &HashMap<String, Value>,
     context: &ExecutorContext,
@@ -210,24 +239,55 @@ async fn execute_navigate(
         ));
     };
 
-    let (cdp_client, tab_id) = get_cdp_client(
+    // Try CDP path first.
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         true,
         Some(url),
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, tab_id)) => {
+            cdp_client
+                .navigate(url)
+                .await
+                .map_err(|e| anyhow!("Could not navigate to '{}': {}", url, e))?;
 
-    cdp_client
-        .navigate(url)
-        .await
-        .map_err(|e| anyhow!("Could not navigate to '{}': {}", url, e))?;
+            Ok(json!({
+                "success": true,
+                "url": url,
+                "tab_id": tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            // Fallback: dispatch through the extension bridge.
+            tracing::warn!(
+                "[BrowserExecutor] CDP navigate failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not navigate to '{}'. CDP: {}. Extension bridge: {}",
+                    url,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .navigate(url)
+                .await
+                .map_err(|e| anyhow!("Extension bridge navigate to '{}' failed: {}", url, e))?;
 
-    Ok(json!({
-        "success": true,
-        "url": url,
-        "tab_id": tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "url": url,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 /// Execute browser_click operation.
@@ -261,25 +321,55 @@ async fn execute_click(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .click_element(selector)
+                .await
+                .map_err(|e| anyhow!("Could not click element '{}': {}", selector, e))?;
 
-    cdp_client
-        .click_element(selector)
-        .await
-        .map_err(|e| anyhow!("Could not click element '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "action": "clicked",
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP click failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not click '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .click(selector)
+                .await
+                .map_err(|e| anyhow!("Extension bridge click '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "action": "clicked",
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "action": "clicked",
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 /// Execute browser_extract operation.
@@ -423,25 +513,55 @@ async fn execute_type(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .type_into_element(selector, text, clear_first)
+                .await
+                .map_err(|e| anyhow!("Could not type into '{}': {}", selector, e))?;
 
-    cdp_client
-        .type_into_element(selector, text, clear_first)
-        .await
-        .map_err(|e| anyhow!("Could not type into '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "action": "typed",
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP type failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not type into '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .type_text(selector, text)
+                .await
+                .map_err(|e| anyhow!("Extension bridge type into '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "action": "typed",
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "action": "typed",
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_wait_for_selector(
@@ -463,24 +583,59 @@ async fn execute_wait_for_selector(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .wait_for_selector(selector, timeout_ms)
+                .await
+                .map_err(|e| anyhow!("Selector '{}' did not appear: {}", selector, e))?;
 
-    cdp_client
-        .wait_for_selector(selector, timeout_ms)
-        .await
-        .map_err(|e| anyhow!("Selector '{}' did not appear: {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP wait_for_selector failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not wait for selector '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .wait_for_selector(selector, timeout_ms)
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Extension bridge wait_for_selector '{}' failed: {}",
+                        selector,
+                        e
+                    )
+                })?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_get_text(
@@ -582,27 +737,58 @@ async fn execute_screenshot(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            let bytes = cdp_client
+                .capture_screenshot(full_page)
+                .await
+                .map_err(|e| anyhow!("Could not capture screenshot: {}", e))?;
 
-    let bytes = cdp_client
-        .capture_screenshot(full_page)
-        .await
-        .map_err(|e| anyhow!("Could not capture screenshot: {}", e))?;
+            let encoded = STANDARD.encode(bytes);
 
-    let encoded = STANDARD.encode(bytes);
+            Ok(json!({
+                "success": true,
+                "tab_id": target_tab_id,
+                "format": "png",
+                "image_base64": encoded
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP screenshot failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not capture screenshot. CDP: {}. Extension bridge: {}",
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            let bytes = bridge_arc
+                .lock()
+                .await
+                .capture_screenshot("png", 90)
+                .await
+                .map_err(|e| anyhow!("Extension bridge screenshot failed: {}", e))?;
 
-    Ok(json!({
-        "success": true,
-        "tab_id": target_tab_id,
-        "format": "png",
-        "image_base64": encoded
-    }))
+            let encoded = STANDARD.encode(bytes);
+
+            Ok(json!({
+                "success": true,
+                "tab_id": "extension",
+                "format": "png",
+                "image_base64": encoded
+            }))
+        }
+    }
 }
 
 async fn execute_hover(
@@ -620,24 +806,53 @@ async fn execute_hover(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .hover_element(selector)
+                .await
+                .map_err(|e| anyhow!("Could not hover element '{}': {}", selector, e))?;
 
-    cdp_client
-        .hover_element(selector)
-        .await
-        .map_err(|e| anyhow!("Could not hover element '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP hover failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not hover '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .hover(selector)
+                .await
+                .map_err(|e| anyhow!("Extension bridge hover '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_focus(
@@ -655,24 +870,53 @@ async fn execute_focus(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .focus_element(selector)
+                .await
+                .map_err(|e| anyhow!("Could not focus element '{}': {}", selector, e))?;
 
-    cdp_client
-        .focus_element(selector)
-        .await
-        .map_err(|e| anyhow!("Could not focus element '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP focus failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not focus '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .focus(selector)
+                .await
+                .map_err(|e| anyhow!("Extension bridge focus '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_scroll_into_view(
@@ -690,24 +934,59 @@ async fn execute_scroll_into_view(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .scroll_into_view(selector)
+                .await
+                .map_err(|e| anyhow!("Could not scroll element '{}': {}", selector, e))?;
 
-    cdp_client
-        .scroll_into_view(selector)
-        .await
-        .map_err(|e| anyhow!("Could not scroll element '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP scroll_into_view failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not scroll '{}' into view. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .scroll_into_view(selector)
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Extension bridge scroll_into_view '{}' failed: {}",
+                        selector,
+                        e
+                    )
+                })?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_query_all(
@@ -900,24 +1179,59 @@ async fn execute_select_option(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .select_option(selector, value)
+                .await
+                .map_err(|e| anyhow!("Could not select option for '{}': {}", selector, e))?;
 
-    cdp_client
-        .select_option(selector, value)
-        .await
-        .map_err(|e| anyhow!("Could not select option for '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP select_option failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not select option for '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .select_option(selector, value)
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Extension bridge select_option '{}' failed: {}",
+                        selector,
+                        e
+                    )
+                })?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_check(
@@ -935,24 +1249,53 @@ async fn execute_check(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .set_checked(selector, true)
+                .await
+                .map_err(|e| anyhow!("Could not check '{}': {}", selector, e))?;
 
-    cdp_client
-        .set_checked(selector, true)
-        .await
-        .map_err(|e| anyhow!("Could not check '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP check failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not check '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .set_checked(selector, true)
+                .await
+                .map_err(|e| anyhow!("Extension bridge check '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_uncheck(
@@ -970,24 +1313,53 @@ async fn execute_uncheck(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            cdp_client
+                .set_checked(selector, false)
+                .await
+                .map_err(|e| anyhow!("Could not uncheck '{}': {}", selector, e))?;
 
-    cdp_client
-        .set_checked(selector, false)
-        .await
-        .map_err(|e| anyhow!("Could not uncheck '{}': {}", selector, e))?;
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": target_tab_id
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP uncheck failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not uncheck '{}'. CDP: {}. Extension bridge: {}",
+                    selector,
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            bridge_arc
+                .lock()
+                .await
+                .set_checked(selector, false)
+                .await
+                .map_err(|e| anyhow!("Extension bridge uncheck '{}' failed: {}", selector, e))?;
 
-    Ok(json!({
-        "success": true,
-        "selector": selector,
-        "tab_id": target_tab_id
-    }))
+            Ok(json!({
+                "success": true,
+                "selector": selector,
+                "tab_id": "extension"
+            }))
+        }
+    }
 }
 
 async fn execute_get_url(
@@ -1000,24 +1372,52 @@ async fn execute_get_url(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            let url = cdp_client
+                .get_url()
+                .await
+                .map_err(|e| anyhow!("Could not get URL: {}", e))?;
 
-    let url = cdp_client
-        .get_url()
-        .await
-        .map_err(|e| anyhow!("Could not get URL: {}", e))?;
+            Ok(json!({
+                "success": true,
+                "tab_id": target_tab_id,
+                "url": url
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP get_url failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not get URL. CDP: {}. Extension bridge: {}",
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            let url = bridge_arc
+                .lock()
+                .await
+                .get_url()
+                .await
+                .map_err(|e| anyhow!("Extension bridge get_url failed: {}", e))?;
 
-    Ok(json!({
-        "success": true,
-        "tab_id": target_tab_id,
-        "url": url
-    }))
+            Ok(json!({
+                "success": true,
+                "tab_id": "extension",
+                "url": url
+            }))
+        }
+    }
 }
 
 async fn execute_get_title(
@@ -1030,24 +1430,52 @@ async fn execute_get_title(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            let title = cdp_client
+                .get_title()
+                .await
+                .map_err(|e| anyhow!("Could not get title: {}", e))?;
 
-    let title = cdp_client
-        .get_title()
-        .await
-        .map_err(|e| anyhow!("Could not get title: {}", e))?;
+            Ok(json!({
+                "success": true,
+                "tab_id": target_tab_id,
+                "title": title
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP get_title failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not get title. CDP: {}. Extension bridge: {}",
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            let title = bridge_arc
+                .lock()
+                .await
+                .get_title()
+                .await
+                .map_err(|e| anyhow!("Extension bridge get_title failed: {}", e))?;
 
-    Ok(json!({
-        "success": true,
-        "tab_id": target_tab_id,
-        "title": title
-    }))
+            Ok(json!({
+                "success": true,
+                "tab_id": "extension",
+                "title": title
+            }))
+        }
+    }
 }
 
 async fn execute_go_back(
@@ -1209,24 +1637,52 @@ async fn execute_get_dom_snapshot(
         ));
     };
 
-    let (cdp_client, target_tab_id) = get_cdp_client(
+    match get_cdp_client(
         app,
         parameters.get("tab_id").and_then(|v| v.as_str()),
         false,
         None,
     )
-    .await?;
+    .await
+    {
+        Ok((cdp_client, target_tab_id)) => {
+            let html = cdp_client
+                .evaluate("document.documentElement.outerHTML")
+                .await
+                .map_err(|e| anyhow!("Could not capture DOM snapshot: {}", e))?;
 
-    let html = cdp_client
-        .evaluate("document.documentElement.outerHTML")
-        .await
-        .map_err(|e| anyhow!("Could not capture DOM snapshot: {}", e))?;
+            Ok(json!({
+                "success": true,
+                "tab_id": target_tab_id,
+                "html": html
+            }))
+        }
+        Err(cdp_err) => {
+            tracing::warn!(
+                "[BrowserExecutor] CDP get_dom_snapshot failed ({}); trying extension bridge",
+                cdp_err
+            );
+            let bridge_arc = get_extension_bridge_arc(app).map_err(|ext_err| {
+                anyhow!(
+                    "Could not get DOM snapshot. CDP: {}. Extension bridge: {}",
+                    cdp_err,
+                    ext_err
+                )
+            })?;
+            let html = bridge_arc
+                .lock()
+                .await
+                .get_dom_snapshot()
+                .await
+                .map_err(|e| anyhow!("Extension bridge get_dom_snapshot failed: {}", e))?;
 
-    Ok(json!({
-        "success": true,
-        "tab_id": target_tab_id,
-        "html": html
-    }))
+            Ok(json!({
+                "success": true,
+                "tab_id": "extension",
+                "html": html
+            }))
+        }
+    }
 }
 
 #[cfg(test)]

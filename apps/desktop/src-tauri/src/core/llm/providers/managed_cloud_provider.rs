@@ -65,10 +65,14 @@ impl ManagedCloudProvider {
     fn canonicalize_cloud_model(model: &str) -> String {
         let normalized = model.trim().to_lowercase();
         match normalized.as_str() {
-            // OpenAI Codex aliases used by desktop tiers
-            "gpt-5.2-codex" => "gpt-5-codex".to_string(),
-            m if m.starts_with("gpt-5.2-codex-") => "gpt-5-codex".to_string(),
-            // Keep user-selected model ID when no alias is needed
+            // Normalize all gpt-5.2-codex effort variants to the canonical OpenAI model ID.
+            "gpt-5.2-codex" | "gpt-5-codex" => "gpt-5.2-codex".to_string(),
+            m if m.starts_with("gpt-5.2-codex-") => "gpt-5.2-codex".to_string(),
+            // Normalize legacy gpt-5-pro internal IDs to canonical OpenAI API model ID.
+            "gpt-5-pro" | "gpt-5-pro-2026-01" => "gpt-5.2-pro".to_string(),
+            // Normalize generic grok-4 alias to versioned xAI model ID.
+            "grok-4" => "grok-4-0709".to_string(),
+            // Keep user-selected model ID when no alias is needed.
             _ => model.to_string(),
         }
     }
