@@ -6,6 +6,30 @@ import { supabase } from '../lib/supabase';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
+// In-memory cache for account_status to prevent fail-open when Supabase is unavailable.
+// TTL is intentionally short (60s) so suspensions take effect quickly.
+// On DB error with no cached entry: fail closed (503). With a cached entry: use it.
+const ACCOUNT_STATUS_CACHE_TTL_MS = 60_000;
+interface AccountStatusEntry {
+  status: string;
+  cachedAt: number;
+}
+const accountStatusCache = new Map<string, AccountStatusEntry>();
+
+function getCachedAccountStatus(userId: string): string | null {
+  const entry = accountStatusCache.get(userId);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > ACCOUNT_STATUS_CACHE_TTL_MS) {
+    accountStatusCache.delete(userId);
+    return null;
+  }
+  return entry.status;
+}
+
+function setCachedAccountStatus(userId: string, status: string): void {
+  accountStatusCache.set(userId, { status, cachedAt: Date.now() });
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -38,26 +62,43 @@ export async function authenticateToken(
     });
     req.user = authenticatedUserSchema.parse(payload);
 
-    // P0 Kill Switch: Check account status
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('account_status')
-        .eq('id', req.user.userId)
-        .single();
+    // P0 Kill Switch: Check account status. Fail closed — never fail open.
+    // Uses a short-TTL in-memory cache so brief DB outages don't block active users.
+    // On DB error with no cached entry we return 503 (fail closed).
+    const userId = req.user.userId;
+    let accountStatus = getCachedAccountStatus(userId);
 
-      if (!profile || profile.account_status !== 'active') {
-        const status = profile?.account_status || 'unknown';
-        res.status(403).json({
-          error: `Account ${status}. Contact support for assistance.`,
-          code: 'ACCOUNT_NOT_ACTIVE',
+    if (accountStatus === null) {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('account_status')
+          .eq('id', userId)
+          .single();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        const freshStatus = profile?.account_status ?? 'unknown';
+        setCachedAccountStatus(userId, freshStatus);
+        accountStatus = freshStatus;
+      } catch (killSwitchError) {
+        console.error('Kill switch DB check failed — failing closed:', killSwitchError);
+        res.status(503).json({
+          error: 'Service temporarily unavailable. Please try again shortly.',
+          code: 'AUTH_CHECK_UNAVAILABLE',
         });
         return;
       }
-    } catch (killSwitchError) {
-      // If Supabase is down, let the request through with a warning
-      // to avoid blocking all users during an outage
-      console.warn('Kill switch check failed (Supabase may be unavailable):', killSwitchError);
+    }
+
+    if (accountStatus !== 'active') {
+      res.status(403).json({
+        error: `Account ${accountStatus}. Contact support for assistance.`,
+        code: 'ACCOUNT_NOT_ACTIVE',
+      });
+      return;
     }
 
     next();

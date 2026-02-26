@@ -134,8 +134,9 @@ describe('authenticateToken Middleware', () => {
       }),
     } as never);
 
+    // Use a unique userId so the in-memory cache from other tests doesn't interfere
     const validToken = jwt.sign(
-      { userId: 'user-123', email: 'test@example.com' },
+      { userId: 'user-suspended', email: 'suspended@example.com' },
       process.env['JWT_SECRET']!,
       { expiresIn: '1h', ...JWT_SIGN_OPTIONS },
     );
@@ -164,8 +165,9 @@ describe('authenticateToken Middleware', () => {
       }),
     } as never);
 
+    // Use a unique userId so the in-memory cache from other tests doesn't interfere
     const validToken = jwt.sign(
-      { userId: 'user-123', email: 'test@example.com' },
+      { userId: 'user-banned', email: 'banned@example.com' },
       process.env['JWT_SECRET']!,
       { expiresIn: '1h', ...JWT_SIGN_OPTIONS },
     );
@@ -181,14 +183,15 @@ describe('authenticateToken Middleware', () => {
     expect(mockNext).not.toHaveBeenCalled();
   });
 
-  it('should let request through when Supabase is unavailable (kill switch graceful degradation)', async () => {
+  it('should return 503 when Supabase is unavailable and account has no cached status (fail closed)', async () => {
     const { supabase } = await import('../../src/lib/supabase');
     vi.mocked(supabase.from).mockImplementation(() => {
       throw new Error('Supabase connection failed');
     });
 
+    // Use a unique userId so the in-memory cache from other tests doesn't interfere
     const validToken = jwt.sign(
-      { userId: 'user-123', email: 'test@example.com' },
+      { userId: 'user-no-cache', email: 'nocache@example.com' },
       process.env['JWT_SECRET']!,
       { expiresIn: '1h', ...JWT_SIGN_OPTIONS },
     );
@@ -196,12 +199,13 @@ describe('authenticateToken Middleware', () => {
 
     await authenticateToken(mockReq as Request, mockRes as Response, mockNext);
 
-    // Should still call next() despite Supabase failure
-    expect(mockNext).toHaveBeenCalled();
-    expect((mockReq as Request & { user?: unknown }).user).toMatchObject({
-      userId: 'user-123',
-      email: 'test@example.com',
+    // Must fail closed — never allow unauthenticated/unknown accounts through
+    expect(mockRes.status).toHaveBeenCalledWith(503);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: 'Service temporarily unavailable. Please try again shortly.',
+      code: 'AUTH_CHECK_UNAVAILABLE',
     });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
   it('should return 403 for JWT signed without required issuer/audience', async () => {

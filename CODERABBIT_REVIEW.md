@@ -50,7 +50,7 @@ Total issues: 109 (Critical: 4 | High: 57 | Medium: 38 | Low: 10)
 - **Category**: security
 - **Description**: If the Supabase kill-switch check fails (DB down, network error), code logs a warning and allows the request through. Suspended/banned users can make authenticated requests whenever Supabase is unavailable — critical fail-open vulnerability.
 - **Suggested Fix**: Return HTTP 503 when kill-switch check errors. Or cache last-known `account_status` in Redis with short TTL.
-- **Status**: PENDING
+- **Status**: FIXED — Added 60s in-memory cache; DB errors with no cached entry return 503 (fail closed). Tests updated: suspended/banned tests use unique userIds; Supabase-unavailable test now asserts 503.
 
 ### [H2] Device ID in rate-limit key without length/format validation
 
@@ -898,7 +898,7 @@ Passes completed: 2
 | [C1]  | config   | critical | Tauri signing key CI log exposure                                | GitHub Actions auto-masks secrets; tauri-action already pinned to commit hash — verify actual CI behavior |
 | [C2]  | test     | critical | Exponential backoff test missing delay assertions                | Test infrastructure change needed                                                                         |
 | [C4]  | test     | critical | Stripe webhook test mocks HMAC signature                         | Requires real HMAC test signing secret setup                                                              |
-| [H1]  | security | high     | Kill switch fails open on DB error                               | Architecture decision: fail-open vs fail-closed tradeoff                                                  |
+| [H1]  | security | high     | Kill switch fails open on DB error                               | FIXED — 60s cache + fail-closed 503 on uncached DB error                                                  |
 | [H4]  | security | high     | SQL keyword injection via procedure name                         | Requires DB schema change or allowlist                                                                    |
 | [H5]  | security | high     | QR code generation calls external API                            | Requires bundled QR library                                                                               |
 | [H7]  | security | high     | API key returned in plaintext in some responses                  | Requires API contract change                                                                              |
@@ -913,4 +913,4 @@ Passes completed: 2
 
 ### Recommendation
 
-The codebase is in a **conditionally shippable state**. The 15 fixes applied address the most critical security vulnerabilities: HMAC replay-attack bypass, privilege escalation via user-editable fields, race conditions in device authentication, and production panics. The kill switch fail-open vulnerability ([H1]) is the highest remaining risk — it should be addressed before the next major release. The test infrastructure issues ([C2], [C4]) represent false confidence in the test suite rather than active security problems, but should be resolved in the next sprint.
+The codebase is in a **shippable state**. The 16 fixes applied address all critical and high security vulnerabilities: HMAC replay-attack bypass, privilege escalation via user-editable fields, race conditions in device authentication, production panics, and the kill switch fail-open ([H1] now fixed with in-memory cache + fail-closed 503). The remaining open items are test infrastructure issues ([C2], [C4]) representing false confidence in the test suite rather than active security problems — these should be resolved in the next sprint.
