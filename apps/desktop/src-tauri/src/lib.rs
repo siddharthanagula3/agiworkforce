@@ -247,10 +247,12 @@ pub fn run() {
             use crate::sys::commands::analytics::TelemetryState;
             use crate::sys::telemetry::{AnalyticsMetricsCollector, CollectorConfig, TelemetryCollector};
 
+            let app_data_dir = app.path().app_data_dir().ok();
             let telemetry_config = CollectorConfig {
                 enabled: true,
                 batch_size: 50,
                 flush_interval_secs: 30,
+                app_data_dir,
             };
             let telemetry_collector = TelemetryCollector::new(telemetry_config);
             let analytics_metrics = AnalyticsMetricsCollector::new();
