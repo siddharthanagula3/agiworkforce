@@ -4,6 +4,7 @@ use crate::core::skills::{
     RequirementCheckResult, Skill, SkillInvocation, SkillManager, SkillSourceFilter, SlashCommand,
 };
 use serde::Serialize;
+use std::collections::HashSet;
 use tauri::State;
 
 /// State wrapper for the skill manager.
@@ -110,6 +111,135 @@ impl From<RequirementCheckResult> for RequirementCheckResultResponse {
             os_supported: result.os_supported,
         }
     }
+}
+
+/// Result of matching a skill against a user message.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillMatchResult {
+    pub skill_name: String,
+    pub description: String,
+    pub relevance_score: f64,
+    pub match_reason: String,
+}
+
+/// Common English stopwords to filter out during tokenization.
+const STOPWORDS: &[&str] = &[
+    "a", "an", "the", "is", "it", "in", "on", "at", "to", "for", "of", "and",
+    "or", "but", "not", "with", "from", "by", "as", "this", "that", "be", "are",
+    "was", "were", "been", "being", "have", "has", "had", "do", "does", "did",
+    "will", "would", "could", "should", "may", "might", "can", "i", "me", "my",
+    "you", "your", "we", "our", "they", "them", "their", "he", "she", "his",
+    "her", "its", "what", "which", "who", "how", "when", "where", "why", "so",
+    "if", "then", "just", "also", "about", "up", "out", "no", "yes",
+];
+
+/// Tokenize a string into lowercase words, stripping punctuation and filtering
+/// out common stopwords.
+fn tokenize(text: &str) -> HashSet<String> {
+    let stopwords: HashSet<&str> = STOPWORDS.iter().copied().collect();
+
+    text.to_lowercase()
+        .split(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
+        .filter(|w| !w.is_empty() && w.len() > 1)
+        .filter(|w| !stopwords.contains(w))
+        .map(String::from)
+        .collect()
+}
+
+/// Compute the Jaccard similarity between two token sets.
+///
+/// Returns a value in `[0.0, 1.0]` where 1.0 means the sets are identical.
+fn jaccard_similarity(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
+    if a.is_empty() && b.is_empty() {
+        return 0.0;
+    }
+    let intersection = a.intersection(b).count() as f64;
+    let union = a.union(b).count() as f64;
+    if union == 0.0 {
+        0.0
+    } else {
+        intersection / union
+    }
+}
+
+/// Match available skills against a user message and return ranked results.
+///
+/// Algorithm:
+/// 1. Tokenize user message: lowercase, split on whitespace/punctuation, filter stopwords.
+/// 2. For each skill: compute Jaccard similarity between message tokens and
+///    skill name+description tokens.
+/// 3. Boost score by 0.3 if the skill name appears as a substring in the message.
+/// 4. Filter: score > 0.15, limit 3, sort descending.
+/// 5. `match_reason` lists the overlapping keywords.
+#[tauri::command]
+pub fn skill_match_for_message(
+    content: String,
+    state: State<'_, SkillsState>,
+) -> Vec<SkillMatchResult> {
+    let message_tokens = tokenize(&content);
+    if message_tokens.is_empty() {
+        return Vec::new();
+    }
+
+    let message_lower = content.to_lowercase();
+    let skills = state.manager.skills_by_source(SkillSourceFilter::All);
+
+    let mut matches: Vec<SkillMatchResult> = skills
+        .iter()
+        .filter_map(|skill| {
+            // Build token set from skill name + description
+            let skill_text = format!("{} {}", skill.name, skill.description);
+            let skill_tokens = tokenize(&skill_text);
+            if skill_tokens.is_empty() {
+                return None;
+            }
+
+            let mut score = jaccard_similarity(&message_tokens, &skill_tokens);
+
+            // Boost if the skill name appears as a substring in the message
+            let skill_name_lower = skill.name.to_lowercase();
+            if message_lower.contains(&skill_name_lower) {
+                score += 0.3;
+            }
+
+            if score <= 0.15 {
+                return None;
+            }
+
+            // Build match reason from overlapping keywords
+            let matched_keywords: Vec<&String> =
+                message_tokens.intersection(&skill_tokens).collect();
+            let reason = if matched_keywords.is_empty() {
+                format!("Skill name '{}' found in message", skill.name)
+            } else {
+                let kw_list: Vec<&str> = matched_keywords
+                    .iter()
+                    .take(5)
+                    .map(|s| s.as_str())
+                    .collect();
+                format!("Keywords matched: {}", kw_list.join(", "))
+            };
+
+            Some(SkillMatchResult {
+                skill_name: skill.name.clone(),
+                description: skill.description.clone(),
+                relevance_score: score,
+                match_reason: reason,
+            })
+        })
+        .collect();
+
+    // Sort descending by score
+    matches.sort_by(|a, b| {
+        b.relevance_score
+            .partial_cmp(&a.relevance_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Limit to top 3
+    matches.truncate(3);
+    matches
 }
 
 /// Lists all available skills.

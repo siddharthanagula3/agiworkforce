@@ -7,6 +7,26 @@ use super::models::{
     Setting, TaskType, TokenUsage,
 };
 
+/// Validates a provider or model name string (M12).
+/// Rejects values that are too long or contain characters outside the expected
+/// alphanumeric / punctuation set, guarding against injection via filter params.
+fn validate_provider_model(value: &str) -> std::result::Result<(), rusqlite::Error> {
+    if value.len() > 100 {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "Provider/model name exceeds maximum length of 100 characters".to_string(),
+        ));
+    }
+    if value
+        .chars()
+        .any(|c| !c.is_alphanumeric() && c != '-' && c != '.' && c != '/' && c != '_')
+    {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "Provider/model name contains invalid characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn create_conversation(conn: &Connection, title: String, user_id: String) -> Result<i64> {
     conn.execute(
         "INSERT INTO conversations (title, user_id) VALUES (?1, ?2)",
@@ -104,6 +124,14 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
     Ok(last_id)
 }
 
+/// Fetches a single message by its primary key.
+///
+/// # Security Note (H4 — IDOR risk for multi-user deployments)
+/// AGI Workforce is a single-user desktop application; there is no concept of
+/// separate user sessions in the current data model, so a `user_id` guard is not
+/// enforced here. If this codebase is ever adapted for a multi-tenant server
+/// deployment, an additional `AND user_id = ?2` predicate **must** be added and
+/// the caller must supply the authenticated user's ID to prevent cross-user IDOR.
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     conn.query_row(
         "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at
@@ -129,6 +157,12 @@ pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Mess
     Ok(messages)
 }
 
+/// Deletes a message by its primary key.
+///
+/// # Security Note (H4 — IDOR risk for multi-user deployments)
+/// Same caveat as `get_message`: no user_id ownership check is performed because
+/// the desktop app is single-user. A multi-tenant adaptation must add
+/// `AND user_id = ?2` with the authenticated caller's ID.
 pub fn delete_message(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM messages WHERE id = ?1", params![id])?;
     Ok(())
@@ -181,6 +215,14 @@ pub fn list_cost_timeseries(
     model: Option<&str>,
     user_id: &str,
 ) -> Result<Vec<CostTimeseriesPoint>> {
+    // M12: validate provider/model filter parameters before use
+    if let Some(p) = provider {
+        validate_provider_model(p)?;
+    }
+    if let Some(m) = model {
+        validate_provider_model(m)?;
+    }
+
     let span = days.max(1) - 1;
     let cutoff = start_of_day(Utc::now() - Duration::days(span));
 
@@ -229,6 +271,14 @@ pub fn list_cost_by_provider(
     model: Option<&str>,
     user_id: &str,
 ) -> Result<Vec<ProviderCostBreakdown>> {
+    // M12: validate provider/model filter parameters before use
+    if let Some(p) = provider {
+        validate_provider_model(p)?;
+    }
+    if let Some(m) = model {
+        validate_provider_model(m)?;
+    }
+
     let mut sql = String::from(
         "SELECT COALESCE(provider, 'unknown') AS provider,
                        COALESCE(SUM(cost), 0.0) AS total_cost
@@ -297,6 +347,14 @@ pub fn list_top_conversations_by_cost_filtered(
     model: Option<&str>,
     user_id: &str,
 ) -> Result<Vec<ConversationCostBreakdown>> {
+    // M12: validate provider/model filter parameters before use
+    if let Some(p) = provider {
+        validate_provider_model(p)?;
+    }
+    if let Some(m) = model {
+        validate_provider_model(m)?;
+    }
+
     let base = "SELECT m.conversation_id,
                        c.title,
                        COALESCE(SUM(m.cost), 0.0) AS total_cost

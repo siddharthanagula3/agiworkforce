@@ -951,6 +951,7 @@ pub fn run() {
             crate::sys::commands::chat_compact_context,
             crate::sys::commands::chat::clear_local_database,
             crate::sys::commands::search_chat_history,
+            crate::sys::commands::search_chat_history_semantic,
 
 
             crate::sys::commands::checkpoint_create,
@@ -1696,6 +1697,7 @@ pub fn run() {
             crate::sys::commands::skill_parse_slash_command,
             crate::sys::commands::skill_get_slash_commands,
             crate::sys::commands::skill_reload,
+            crate::sys::commands::skill_match_for_message,
 
             // Messaging (Discord, Telegram, Signal)
             crate::sys::commands::messaging::messaging_connect_discord,
@@ -2241,6 +2243,7 @@ pub fn run() {
             crate::sys::commands::artifacts::artifact_export_all,
             crate::sys::commands::artifacts::artifact_import_all,
             crate::sys::commands::artifacts::artifact_clear_all,
+            crate::sys::commands::artifacts::artifact_apply_diff,
 
             // Diagnostics (/doctor command)
             crate::sys::diagnostics::commands::doctor_run_checks,
