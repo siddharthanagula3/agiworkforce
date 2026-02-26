@@ -68,6 +68,12 @@ function verifyWorkOSSignature(
     }
 
     // Verify timestamp is within tolerance to prevent replay attacks
+    // Reject non-numeric timestamps — parseInt('abc') returns NaN, which
+    // makes NaN > threshold evaluate to false, bypassing the check.
+    if (!/^\d+$/.test(timestamp)) {
+      logger.warn({ timestamp }, 'WorkOS webhook timestamp is not a valid integer');
+      return false;
+    }
     const timestampMs = parseInt(timestamp, 10) * 1000;
     const now = Date.now();
     if (Math.abs(now - timestampMs) > toleranceSeconds * 1000) {
@@ -564,7 +570,16 @@ async function handleGroupUserAdded(
     .split(',')
     .map((g) => g.trim().toLowerCase())
     .filter(Boolean);
-  const groupNameLower = group.name.toLowerCase();
+  // Canonicalize and sanitize group name before role mapping.
+  // Reject names with special chars to prevent role-mapping confusion.
+  const groupNameLower = group.name.trim().toLowerCase();
+  if (!/^[a-zA-Z0-9_\- ]+$/.test(group.name.trim())) {
+    logger.warn(
+      { groupName: group.name, userId },
+      'Skipping role mapping for group with non-alphanumeric name',
+    );
+    return;
+  }
   let role: 'owner' | 'admin' | 'member' | 'viewer' = 'member';
   if (adminGroups.includes(groupNameLower)) {
     role = 'admin';

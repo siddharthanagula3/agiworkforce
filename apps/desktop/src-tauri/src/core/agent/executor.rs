@@ -412,7 +412,10 @@ impl TaskExecutor {
                 Err(_) => {
                     if let Some(name) = tmp.file_name() {
                         tail.push(name.to_owned());
-                        tmp = tmp.parent().unwrap_or(tmp);
+                        match tmp.parent() {
+                            Some(p) => tmp = p,
+                            None => break tmp.to_path_buf(),
+                        }
                     } else {
                         break tmp.to_path_buf();
                     }

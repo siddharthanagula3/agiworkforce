@@ -115,7 +115,10 @@ impl MediaExecutor {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(90))
             .build()
-            .expect("Failed to create HTTP client");
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: Failed to create HTTP client with timeout ({e}), using default");
+                reqwest::Client::new()
+            });
 
         Self { http_client }
     }
