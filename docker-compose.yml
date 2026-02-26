@@ -1,0 +1,83 @@
+# Docker Compose configuration for AGI Workforce local development infrastructure
+# Usage:
+#   Start all services:       docker compose up -d
+#   Start only postgres:      docker compose up -d postgres
+#   Stop all services:        docker compose down
+#   Destroy volumes:          docker compose down -v
+
+services:
+  # ===========================================================================
+  # PostgreSQL 16 — Primary local database (mirrors production Supabase schema)
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: agiworkforce-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: agiworkforce_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Tune for local dev (not production-safe)
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mount migration files so they run automatically on first init
+      - ./apps/web/supabase/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ===========================================================================
+  # pgAdmin 4 — Web-based PostgreSQL GUI (convenience tool for local dev)
+  # Access at: http://localhost:5050
+  # Login: admin@local.dev / admin
+  # ===========================================================================
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: agiworkforce-pgadmin
+    restart: unless-stopped
+    ports:
+      - '5050:80'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+      # Suppress the pgAdmin master password prompt in local dev
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+# ===========================================================================
+# Named Volumes
+# ===========================================================================
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# ===========================================================================
+# Networks
+# ===========================================================================
+networks:
+  default:
+    name: agiworkforce-local
+    driver: bridge
