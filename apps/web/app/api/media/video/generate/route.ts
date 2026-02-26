@@ -15,14 +15,22 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  * Video Generation API
  * Endpoint: POST /api/media/video/generate
  *
- * Proxies video generation requests to Runway or Google Veo3.
+ * Proxies video generation requests to Runway (Gen4 Turbo) or Google Veo3.
+ * Video generation is async — this endpoint creates a task and returns a task_id
+ * for polling via GET /api/media/video/status?task_id=xxx.
+ *
  * Requires Pro or Max subscription tier.
  */
+
+// Next.js route configuration — video task creation can take up to 30s
+// (the actual generation is async, so we just need time for the task-creation call).
+export const maxDuration = 60;
+export const runtime = 'nodejs';
 
 // Request validation schema
 const VideoGenerationRequestSchema = z.object({
   prompt: z.string().min(1).max(2000),
-  duration_secs: z.number().int().min(1).max(10).optional().default(5),
+  duration_secs: z.number().int().min(2).max(10).optional().default(5),
   resolution: z.enum(['720p', '1080p', '4k']).optional().default('720p'),
   provider: z.enum(['runway', 'google']).optional(),
 });
@@ -39,16 +47,16 @@ interface VideoGenerationResponse {
   estimated_duration_secs: number;
 }
 
-// Runway API response type
+// Runway task creation response
 interface RunwayTaskResponse {
   id: string;
-  status: string;
+  status?: string;
   createdAt?: string;
   failure?: string;
   failureCode?: string;
 }
 
-// Google Veo3 API response type
+// Google Veo long-running operation response
 interface GoogleVeoResponse {
   name: string;
   metadata?: {
@@ -66,7 +74,6 @@ interface GoogleVeoResponse {
  * Determine which provider to use
  */
 function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
-  // If user requested a specific provider, use it if configured
   if (requestedProvider === 'runway' && process.env.RUNWAY_API_KEY) {
     return 'runway';
   }
@@ -74,7 +81,7 @@ function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
     return 'google';
   }
 
-  // Default: Runway if available, else Google Veo3
+  // Default: Runway if available, else Google Veo
   if (process.env.RUNWAY_API_KEY) {
     return 'runway';
   }
@@ -88,8 +95,17 @@ function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
 }
 
 /**
- * Generate video using Runway API
- * https://docs.runwayml.com/
+ * Generate video using Runway Gen4 Turbo API (text-to-video)
+ *
+ * API reference: https://docs.dev.runwayml.com/api/
+ * Base URL: https://api.dev.runwayml.com/v1/
+ * Endpoint: POST /v1/text_to_video
+ * Auth: Authorization: Bearer {RUNWAY_API_KEY}
+ * Required header: X-Runway-Version: 2024-11-06
+ *
+ * Model: gen4_turbo (supports text-to-video without an image)
+ * Duration: 2–10 seconds (integer)
+ * Task status: GET /v1/tasks/{id}
  */
 async function generateWithRunway(
   prompt: string,
@@ -101,10 +117,12 @@ async function generateWithRunway(
     throw createError.serviceUnavailable('Runway API not configured');
   }
 
-  // Map resolution to Runway format
-  const runwayResolution = resolution === '4k' ? '1080p' : resolution; // Runway doesn't support 4k yet
+  // Map resolution to Runway ratio — Gen4 supports 16:9 and 9:16
+  // 4K is not yet available; fall back to 1080p
+  const ratio = resolution === '9:16' ? '9:16' : '16:9';
+  const clampedDuration = Math.max(2, Math.min(durationSecs, 10));
 
-  const response = await fetch('https://api.dev.runwayml.com/v1/tasks', {
+  const response = await fetch('https://api.dev.runwayml.com/v1/text_to_video', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -112,12 +130,12 @@ async function generateWithRunway(
       'X-Runway-Version': '2024-11-06',
     },
     body: JSON.stringify({
-      model: 'gen3a_turbo',
+      model: 'gen4_turbo',
       promptText: prompt,
-      duration: durationSecs,
-      ratio: runwayResolution === '1080p' ? '16:9' : '16:9',
-      watermark: false,
+      duration: clampedDuration,
+      ratio,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
@@ -141,11 +159,11 @@ async function generateWithRunway(
 
   if (!result.id) {
     logger.error({ result }, 'Runway API returned no task ID');
-    throw createError.internal('Failed to start video generation');
+    throw createError.internal('Failed to start video generation: no task ID returned');
   }
 
-  // Estimated duration: base time + duration-based estimate
-  const estimatedDuration = 60 + durationSecs * 10; // ~60s base + 10s per second of video
+  // Estimated wait: ~60s base + 10s per second of video
+  const estimatedDuration = 60 + clampedDuration * 10;
 
   return {
     taskId: `runway_${result.id}`,
@@ -154,8 +172,17 @@ async function generateWithRunway(
 }
 
 /**
- * Generate video using Google Veo3 API
- * https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos
+ * Generate video using Google Veo via Gemini API (async long-running operation)
+ *
+ * API reference: https://ai.google.dev/gemini-api/docs/video
+ * Base URL: https://generativelanguage.googleapis.com/v1beta
+ * Endpoint: POST /models/{model}:predictLongRunning
+ * Auth: x-goog-api-key header
+ *
+ * Current model (as of 2025-10): veo-3.1-generate-preview
+ *   - Previous model veo-2.0-generate-001 is outdated
+ * Duration: "4", "6", or "8" (string seconds — Veo does not accept arbitrary integers)
+ * Polling: GET /v1beta/{operation_name} until done === true
  */
 async function generateWithGoogleVeo(
   prompt: string,
@@ -167,11 +194,29 @@ async function generateWithGoogleVeo(
     throw createError.serviceUnavailable('Google Veo API not configured');
   }
 
-  // Map resolution to aspect ratio
-  const aspectRatio = '16:9'; // Veo3 default
+  // Veo 3.1 supports 4, 6, or 8 seconds; clamp to nearest valid value
+  type VeoDuration = 4 | 6 | 8;
+  let veoDuration: VeoDuration;
+  if (durationSecs <= 4) {
+    veoDuration = 4;
+  } else if (durationSecs <= 6) {
+    veoDuration = 6;
+  } else {
+    veoDuration = 8;
+  }
 
-  // Google Veo3 endpoint via Generative Language API
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning`;
+  // Map resolution; Veo supports 720p, 1080p, 4k
+  let veoResolution: string;
+  if (resolution === '4k') {
+    veoResolution = '4k';
+  } else if (resolution === '1080p') {
+    veoResolution = '1080p';
+  } else {
+    veoResolution = '720p';
+  }
+
+  const model = 'veo-3.1-generate-preview';
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -182,18 +227,18 @@ async function generateWithGoogleVeo(
     body: JSON.stringify({
       instances: [
         {
-          prompt: prompt,
+          prompt,
         },
       ],
       parameters: {
-        aspectRatio: aspectRatio,
-        personGeneration: 'allow_adult',
-        durationSeconds: durationSecs,
-        enhancePrompt: true,
+        aspectRatio: '16:9',
+        durationSeconds: String(veoDuration),
+        resolution: veoResolution,
         numberOfVideos: 1,
-        resolution: resolution === '4k' ? '4k' : resolution === '1080p' ? '1080p' : '720p',
+        enhancePrompt: true,
       },
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
@@ -207,16 +252,18 @@ async function generateWithGoogleVeo(
       throw createError.rateLimit('Video generation rate limit reached. Please try again later.');
     }
     if (response.status === 400) {
-      // Try to parse error for user-friendly message
       try {
-        const errorJson = JSON.parse(errorText);
+        const errorJson = JSON.parse(errorText) as { error?: { message?: string } };
         if (errorJson.error?.message?.includes('safety')) {
           throw createError.validation(
             'Your prompt was flagged by content safety filters. Please revise and try again.',
           );
         }
-      } catch {
-        // Ignore parse error, throw generic
+      } catch (parseErr) {
+        // Re-throw only if it is an AppError from createError
+        if (parseErr && typeof parseErr === 'object' && 'statusCode' in parseErr) {
+          throw parseErr;
+        }
       }
       throw createError.validation('Invalid video generation request');
     }
@@ -228,14 +275,14 @@ async function generateWithGoogleVeo(
 
   if (!result.name) {
     logger.error({ result }, 'Google Veo API returned no operation name');
-    throw createError.internal('Failed to start video generation');
+    throw createError.internal('Failed to start video generation: no operation name returned');
   }
 
-  // Extract operation ID from the name (format: operations/xxx)
+  // Operation name format: "operations/{id}" — extract the ID portion for storage
   const operationId = result.name.split('/').pop() || result.name;
 
-  // Estimated duration: base time + duration-based estimate
-  const estimatedDuration = 90 + durationSecs * 15; // ~90s base + 15s per second of video
+  // Estimated wait: ~90s base + 15s per second of video
+  const estimatedDuration = 90 + veoDuration * 15;
 
   return {
     taskId: `google_${operationId}`,
@@ -253,7 +300,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     return preflightResponse;
   }
 
-  // Rate limiting: Video generation is expensive, use strict limits
+  // Rate limiting: Video generation is expensive; use strict limits
   const rateLimitResponse = await withRateLimit(request, 'video-generation');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -339,10 +386,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       resolution,
       promptLength: prompt.length,
     },
-    'Starting video generation',
+    'Starting video generation task',
   );
 
-  // Generate video based on provider
+  // Create video generation task based on provider
   let taskId: string;
   let estimatedDuration: number;
 
@@ -357,13 +404,16 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       estimatedDuration = result.estimatedDuration;
     }
   } catch (error) {
-    // Re-throw AppError instances
+    // Re-throw AppError instances (from createError.*)
     if (error && typeof error === 'object' && 'statusCode' in error) {
       throw error;
     }
-    logger.error({ error, provider }, 'Video generation failed');
+    logger.error({ error, provider }, 'Video generation task creation failed');
     throw createError.internal('Failed to start video generation. Please try again.');
   }
+
+  // TODO: [H33] Store { task_id, user_id } mapping in Redis/Supabase for ownership verification
+  // so that GET /api/media/video/status can verify the requesting user owns this task.
 
   const response: VideoGenerationResponse = {
     success: true,

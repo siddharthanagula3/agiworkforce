@@ -454,16 +454,66 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
+  // Stream watchdog timeout — AI is working but stream went quiet
+  if (errorLower.includes('stream_watchdog_timeout') || errorLower.includes('watchdog')) {
+    return {
+      title: 'Response Is Taking Longer Than Expected',
+      message: 'The AI is still working on your request.',
+      suggestion: 'Please wait a moment or try again with a shorter request.',
+      icon: 'warning',
+    };
+  }
+
+  // Invalid API key / unauthorized
+  if (
+    errorLower.includes('invalid_api_key') ||
+    errorLower.includes('invalid api key') ||
+    errorLower.includes('api key')
+  ) {
+    return {
+      title: 'API Key Issue',
+      message: 'There is a problem with your API key configuration.',
+      suggestion: 'Please check your API key in Settings and try again.',
+      icon: 'auth',
+    };
+  }
+
+  // Quota exceeded / insufficient credits
+  if (
+    errorLower.includes('quota_exceeded') ||
+    errorLower.includes('insufficient_credits') ||
+    errorLower.includes('insufficient credits') ||
+    errorLower.includes('quota exceeded')
+  ) {
+    return {
+      title: 'Usage Limit Reached',
+      message: "You've used your quota for now.",
+      suggestion: 'Please check your billing in Settings or wait until your quota resets.',
+      icon: 'payment',
+    };
+  }
+
+  // Model not found
+  if (errorLower.includes('model_not_found') || errorLower.includes('model not found')) {
+    return {
+      title: 'Model Unavailable',
+      message: 'The selected model is not available right now.',
+      suggestion: 'Try switching to a different model in the model selector.',
+      icon: 'warning',
+    };
+  }
+
   // Network errors
   if (
     errorLower.includes('network') ||
     errorLower.includes('fetch') ||
     errorLower.includes('econnrefused') ||
-    errorLower.includes('etimedout')
+    errorLower.includes('etimedout') ||
+    errorLower.includes('fetch failed')
   ) {
     return {
-      title: 'Connection Problem',
-      message: "We couldn't connect to our servers right now.",
+      title: 'Connection Issue',
+      message: 'Could not reach the server.',
       suggestion: 'Please check your internet connection and try again.',
       icon: 'network',
     };
@@ -548,12 +598,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
  * @param isSimpleMode - Whether to use simplified messaging
  * @returns Formatted error string
  */
-export function formatErrorForChat(error: Error | string, isSimpleMode: boolean): string {
-  if (!isSimpleMode) {
-    const errorMessage = typeof error === 'string' ? error : error.message;
-    return `Error: ${errorMessage}`;
-  }
-
+export function formatErrorForChat(error: Error | string, _isSimpleMode: boolean): string {
   const friendly = getFriendlyError(error);
 
   let formatted = `**${friendly.title}**\n\n${friendly.message}`;
