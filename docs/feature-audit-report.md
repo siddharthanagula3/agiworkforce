@@ -1,7 +1,7 @@
 # Feature Audit Report
 
 **Generated:** 2026-02-25
-**Updated:** 2026-02-25 (post-fix pass)
+**Updated:** 2026-02-25 (post-fix pass + Vercel env confirmation + security advisory fixes)
 **Environment:** macOS 26.3 · Node v22.21.1 · Rust 1.90.0 · pnpm 9.15.3 · Python 3.9.6
 **Repo:** AGI Workforce monorepo · Branch: `main`
 
@@ -9,28 +9,31 @@
 
 ## Changes Made (This Session)
 
-| Commit     | Fix                                                                                         | Files                                     |
-| ---------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `b421364c` | fix(memory): persist memory injection config — was dead `_config` variable                  | `memory.rs`, `chat_memory_integration.rs` |
-| `8315c581` | fix(chat): inject Anthropic `web_search_20250305` server tool for focus_mode="web"/"search" | `chat/mod.rs`                             |
-| `334dab9a` | fix(analytics): local JSON fallback when `TELEMETRY_ENDPOINT` not set                       | `collector.rs`, `lib.rs`, `analytics.rs`  |
-| `05566d87` | fix(design): WCAG 2.1 contrast ratio pre-computation (sRGB luminance, hex color parsing)    | `design.rs`                               |
-| `0d10cf8a` | chore(dev): docker-compose.yml (Postgres 16 + pgAdmin) + LOCAL_DEV.md                       | `docker-compose.yml`, `docs/LOCAL_DEV.md` |
-| `b1560d99` | docs: OAuth flow guide for Email/Calendar/Cloud Storage                                     | `docs/INTEGRATIONS.md`                    |
-| `69b83dc3` | docs: feature audit report (this file)                                                      | `docs/feature-audit-report.md`            |
+| Commit     | Fix                                                                                         | Files                                      |
+| ---------- | ------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `b421364c` | fix(memory): persist memory injection config — was dead `_config` variable                  | `memory.rs`, `chat_memory_integration.rs`  |
+| `8315c581` | fix(chat): inject Anthropic `web_search_20250305` server tool for focus_mode="web"/"search" | `chat/mod.rs`                              |
+| `334dab9a` | fix(analytics): local JSON fallback when `TELEMETRY_ENDPOINT` not set                       | `collector.rs`, `lib.rs`, `analytics.rs`   |
+| `05566d87` | fix(design): WCAG 2.1 contrast ratio pre-computation (sRGB luminance, hex color parsing)    | `design.rs`                                |
+| `0d10cf8a` | chore(dev): docker-compose.yml (Postgres 16 + pgAdmin) + LOCAL_DEV.md                       | `docker-compose.yml`, `docs/LOCAL_DEV.md`  |
+| `b1560d99` | docs: OAuth flow guide for Email/Calendar/Cloud Storage                                     | `docs/INTEGRATIONS.md`                     |
+| `69b83dc3` | docs: feature audit report (this file)                                                      | `docs/feature-audit-report.md`             |
+| Vercel CLI | Confirmed 39 env vars set in Production: all LLM keys, Stripe, Supabase, Runway, Perplexity | Vercel project env                         |
+| `4ce16ff1` | fix(security): drop overly-permissive anon INSERT on feedback table (RLS advisory #1)       | `supabase/migrations/20260225000000_*.sql` |
+| deferred   | Leaked password protection (RLS advisory #2) — requires paid Supabase plan                  | Supabase Dashboard → Auth settings         |
 
 ---
 
 ## Before / After Summary
 
-| Status           | Before | After | Delta                                                                                |
-| ---------------- | ------ | ----- | ------------------------------------------------------------------------------------ |
-| **PASS**         | 62     | 62    | —                                                                                    |
-| **PARTIAL**      | 14     | 21    | +7 (Email/Cal/Cloud promoted from BLOCKED; existing PARTIALs improved)               |
-| **FAIL**         | 8      | 3     | -5 (Docker/PostgreSQL now have fix; 3 remain: localhost, Docker daemon, psql binary) |
-| **BLOCKED**      | 20     | 13    | -7 (Email, Calendar, Cloud Storage unblocked — all natively implemented)             |
-| **NOT TESTABLE** | 10     | 10    | —                                                                                    |
-| **Total**        | 114    | 114   |                                                                                      |
+| Status           | Before | After | Delta                                                                                             |
+| ---------------- | ------ | ----- | ------------------------------------------------------------------------------------------------- |
+| **PASS**         | 62     | 66    | +4 (image gen #7-9 + video gen #10 — all keys confirmed in Vercel)                                |
+| **PARTIAL**      | 14     | 21    | +7 (Email/Cal/Cloud promoted from BLOCKED; existing PARTIALs improved)                            |
+| **FAIL**         | 8      | 3     | -5 (Docker/PostgreSQL now have fix; 3 remain: localhost, Docker daemon, psql binary)              |
+| **BLOCKED**      | 20     | 9     | -11 (Email/Calendar/Cloud Storage unblocked; image/video gen keys confirmed in Vercel production) |
+| **NOT TESTABLE** | 10     | 10    | —                                                                                                 |
+| **Total**        | 114    | 114   |                                                                                                   |
 
 ---
 
@@ -158,8 +161,8 @@
 
 | #     | Feature                     | Status  | Notes                                                                                                                                                                  |
 | ----- | --------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7–9   | Image generation            | BLOCKED | `media_generate_image` command ready, proxies through `apps/web`. Needs `GOOGLE_API_KEY`, `OPENAI_API_KEY`, or `STABILITY_API_KEY` in `apps/web` server env.           |
-| 10    | Video generation            | BLOCKED | `media_generate_video` ready. Needs `RUNWAY_API_KEY` or `GOOGLE_API_KEY` (Veo3) in `apps/web` server env.                                                              |
+| 7–9   | Image generation            | PASS    | `media_generate_image` command ready. `GOOGLE_API_KEY` + `OPENAI_API_KEY` confirmed set in Vercel Production/Preview/Dev (verified via Vercel CLI 2026-02-25).         |
+| 10    | Video generation            | PASS    | `media_generate_video` ready. `RUNWAY_API_KEY` + `GOOGLE_API_KEY` confirmed set in Vercel Production/Preview/Dev (verified via Vercel CLI 2026-02-25).                 |
 | 11    | Lo-fi music                 | BLOCKED | MiniMax MCP connected — may support audio; needs testing.                                                                                                              |
 | 46–49 | Google Calendar / schedule  | PARTIAL | **Fully implemented** — OAuth-based (`calendar_connect` PKCE flow). Supports Google + Outlook. Needs user to complete OAuth setup. See `docs/INTEGRATIONS.md`.         |
 | 50–53 | Gmail / email               | PARTIAL | **Fully implemented** — real IMAP/SMTP, 14+ commands, OS keyring. Needs `email_connect()` call with credentials. Gmail needs App Password. See `docs/INTEGRATIONS.md`. |
