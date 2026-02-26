@@ -3,6 +3,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Activity,
+  Bot,
   Check,
   Database,
   Download,
@@ -39,6 +40,10 @@ import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
 import { CustomInstructionsSettings } from './CustomInstructionsSettings';
 import { MasterPasswordSettings } from './MasterPasswordSettings';
 import { UpdateSettings } from './UpdateSettings';
+import { ExtensionsSettings } from './ExtensionsSettings';
+import { AgentsSettings } from './AgentsSettings';
+import { InstructionFilesSettings } from './InstructionFilesSettings';
+import { CustomModelsSettings } from './CustomModelsSettings';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -229,7 +234,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </div>
           ) : (
             <Tabs defaultValue="llm-config" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-7">
+              <TabsList className="grid w-full grid-cols-8">
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
@@ -237,6 +242,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <TabsTrigger value="instructions" className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
                   Instructions
+                </TabsTrigger>
+                <TabsTrigger value="agents" className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  Agents
                 </TabsTrigger>
                 <TabsTrigger value="filesystem" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
@@ -385,6 +394,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </div>
                 </div>
 
+                {/* Custom Model Endpoints */}
+                <div className="border-t border-border pt-6">
+                  <CustomModelsSettings />
+                </div>
+
                 {/* Intelligent Routing Info */}
                 <div className="border-t border-border pt-6">
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
@@ -429,6 +443,13 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="instructions" className="space-y-6 pt-6">
                 <CustomInstructionsSettings />
+                <div className="border-t border-border pt-6">
+                  <InstructionFilesSettings />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="agents" className="space-y-6 pt-6">
+                <AgentsSettings />
               </TabsContent>
 
               <TabsContent value="filesystem" className="space-y-6 pt-6">
@@ -436,26 +457,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </TabsContent>
 
               <TabsContent value="integrations" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Integrations</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Connect your accounts for enhanced MCP tool capabilities
-                  </p>
-                  <div className="rounded-lg border border-border bg-card p-12 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="rounded-full bg-primary/10 p-4">
-                        <Github className="h-8 w-8 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-semibold mb-2">Coming Soon</h4>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                          Integration management for GitHub, Google Drive, Slack, and other services
-                          will be available in an upcoming release.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ExtensionsSettings />
               </TabsContent>
 
               <TabsContent value="window" className="space-y-6 pt-6">
