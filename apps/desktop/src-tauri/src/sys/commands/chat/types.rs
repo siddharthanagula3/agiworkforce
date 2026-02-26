@@ -99,6 +99,10 @@ pub struct UpdateConversationRequest {
     pub user_id: String,
 }
 
+fn default_auto_inject_skills() -> Option<bool> {
+    Some(true)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatSendMessageRequest {
     #[serde(default, alias = "conversationId")]
@@ -163,6 +167,16 @@ pub struct ChatSendMessageRequest {
     /// browser tools to models without `computerUse` capability).
     #[serde(default, alias = "modelCapabilities")]
     pub model_capabilities: Option<ModelCapabilitiesDto>,
+
+    /// When true, skip all SQLite persistence (no conversation/message saves, no FTS5 indexing,
+    /// no memory loading/saving). The LLM call still proceeds normally.
+    #[serde(default, alias = "incognito")]
+    pub incognito: Option<bool>,
+
+    /// When true (or absent, default true), auto-inject matching skills into the
+    /// system prompt based on message content analysis.
+    #[serde(default = "default_auto_inject_skills", alias = "autoInjectSkills")]
+    pub auto_inject_skills: Option<bool>,
 }
 
 /// Subset of model capabilities passed from the frontend to control tool filtering.

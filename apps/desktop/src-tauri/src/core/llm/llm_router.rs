@@ -525,7 +525,7 @@ impl LLMRouter {
     }
 
     /// Infer provider from model name for intelligent routing
-    fn infer_provider_from_model(&self, model: &str) -> Provider {
+    pub(crate) fn infer_provider_from_model(&self, model: &str) -> Provider {
         let model_lower = model.to_lowercase();
 
         // OpenAI models
@@ -927,38 +927,9 @@ impl LLMRouter {
         if let Some(strategy) = candidate.strategy {
             let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
 
-            // Resolve logic based on strategy and tokens (Updated January 2026)
-            let resolved_model = match strategy {
-                RoutingStrategy::AutoEconomy => {
-                    // Cost-optimized: simple queries use cheap models, complex use capable
-                    if token_count < 1000 {
-                        "gpt-5-nano" // $0.05/$0.40 per 1M - cheapest OpenAI
-                    } else if token_count < 8000 {
-                        "deepseek-chat" // $0.28/$0.42 per 1M - best value for medium context
-                    } else {
-                        "gemini-3-flash-preview" // $0.50/$3.00 per 1M - long context value
-                    }
-                }
-                RoutingStrategy::AutoBalanced => {
-                    // Balance: cheap for simple, quality for complex
-                    if token_count < 500 {
-                        "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
-                    } else if token_count < 4000 {
-                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
-                    } else {
-                        "gpt-5.2" // Strong OpenAI balanced model
-                    }
-                }
-                RoutingStrategy::AutoPremium => {
-                    // Premium: Always best models, switch based on context window needs
-                    if token_count < 16000 {
-                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
-                    } else {
-                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
-                    }
-                }
-                _ => candidate.model.as_str(),
-            };
+            // H13 fix: delegate to shared helper to avoid copy-paste with streaming path
+            let resolved_model =
+                Self::resolve_model_for_strategy(strategy, token_count, &candidate.model);
 
             tracing::info!(
                 "Dynamic Routing [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
@@ -967,7 +938,7 @@ impl LLMRouter {
                 resolved_model
             );
 
-            routed_request.model = resolved_model.to_string();
+            routed_request.model = resolved_model;
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
@@ -1855,6 +1826,50 @@ impl LLMRouter {
             },
         }
     }
+
+    /// H13 fix: shared model-resolution logic extracted from `invoke_candidate` and
+    /// `invoke_streaming_with_retry` to eliminate the copy-paste duplication.
+    ///
+    /// Given a routing strategy and the estimated prompt token count, returns the concrete
+    /// model name that should be used.  For strategies not listed the `candidate_model`
+    /// is returned unchanged.
+    pub(crate) fn resolve_model_for_strategy(
+        strategy: RoutingStrategy,
+        token_count: u32,
+        candidate_model: &str,
+    ) -> String {
+        match strategy {
+            RoutingStrategy::AutoEconomy => {
+                // Cost-optimized: simple queries use cheap models, complex use capable
+                if token_count < 1000 {
+                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - cheapest OpenAI
+                } else if token_count < 8000 {
+                    "deepseek-chat".to_string() // $0.28/$0.42 per 1M - best value for medium context
+                } else {
+                    "gemini-3-flash-preview".to_string() // $0.50/$3.00 per 1M - long context value
+                }
+            }
+            RoutingStrategy::AutoBalanced => {
+                // Balance: cheap for simple, quality for complex
+                if token_count < 500 {
+                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - fast and cheap
+                } else if token_count < 4000 {
+                    "claude-sonnet-4-5".to_string() // $3/$15 per 1M - excellent quality
+                } else {
+                    "gpt-5.2".to_string() // Strong OpenAI balanced model
+                }
+            }
+            RoutingStrategy::AutoPremium => {
+                // Premium: Always best models, switch based on context window needs
+                if token_count < 16000 {
+                    "claude-sonnet-4-5".to_string() // $3/$15 per 1M - excellent coding
+                } else {
+                    "claude-opus-4-6".to_string() // $5/$25 per 1M - best for heavy lifting
+                }
+            }
+            _ => candidate_model.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1867,14 +1882,25 @@ enum TaskCategory {
 /// Checks if `text` contains `word` as a whole word using regex `\b` word boundaries.
 /// Both `text` and `word` should already be lowercase when used with `classify_request`.
 ///
-/// L7 fix: replaced the manual byte-scanning loop with a regex `\b…\b` match so that
-/// Unicode word boundaries are handled correctly and the intent is self-documenting.
-fn contains_word(text: &str, word: &str) -> bool {
-    use regex::Regex;
-    let pattern = format!(r"\b{}\b", regex::escape(word));
-    Regex::new(&pattern)
-        .map(|re| re.is_match(text))
-        .unwrap_or(false)
+/// H1 fix: Regex is compiled once per unique word and cached in a thread-local HashMap,
+/// avoiding repeated compilation on every call in the classification hot path.
+pub(crate) fn contains_word(text: &str, word: &str) -> bool {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    thread_local! {
+        static WORD_REGEX_CACHE: RefCell<HashMap<String, regex::Regex>> =
+            RefCell::new(HashMap::new());
+    }
+
+    WORD_REGEX_CACHE.with(|cache| {
+        let mut map = cache.borrow_mut();
+        let re = map.entry(word.to_owned()).or_insert_with(|| {
+            regex::Regex::new(&format!(r"\b{}\b", regex::escape(word)))
+                .expect("valid word regex")
+        });
+        re.is_match(text)
+    })
 }
 
 fn classify_request(request: &LLMRequest) -> TaskCategory {
@@ -2082,38 +2108,9 @@ impl LLMRouter {
         if let Some(strategy) = candidate.strategy {
             let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
 
-            // Resolve logic based on strategy and tokens (Updated January 2026)
-            let resolved_model = match strategy {
-                RoutingStrategy::AutoEconomy => {
-                    // Cost-optimized: simple queries use cheap models, complex use capable
-                    if token_count < 1000 {
-                        "gpt-5-nano" // $0.05/$0.40 per 1M - cheapest OpenAI
-                    } else if token_count < 8000 {
-                        "deepseek-chat" // $0.28/$0.42 per 1M - best value for medium context
-                    } else {
-                        "gemini-3-flash-preview" // $0.50/$3.00 per 1M - long context value
-                    }
-                }
-                RoutingStrategy::AutoBalanced => {
-                    // Balance: cheap for simple, quality for complex
-                    if token_count < 500 {
-                        "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
-                    } else if token_count < 4000 {
-                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
-                    } else {
-                        "gpt-5.2" // Strong OpenAI balanced model
-                    }
-                }
-                RoutingStrategy::AutoPremium => {
-                    // Premium: Always best models, switch based on context window needs
-                    if token_count < 16000 {
-                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
-                    } else {
-                        "claude-opus-4-6" // $5/$25 per 1M - best for heavy lifting
-                    }
-                }
-                _ => candidate.model.as_str(),
-            };
+            // H13 fix: delegate to shared helper to avoid copy-paste with non-streaming path
+            let resolved_model =
+                Self::resolve_model_for_strategy(strategy, token_count, &candidate.model);
 
             tracing::info!(
                 "Dynamic Routing (Streaming) [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
@@ -2122,7 +2119,7 @@ impl LLMRouter {
                 resolved_model
             );
 
-            routed_request.model = resolved_model.to_string();
+            routed_request.model = resolved_model;
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
@@ -2132,6 +2129,47 @@ impl LLMRouter {
         }
 
         routed_request.stream = true;
+
+        // C1 fix: pre-flight session cost cap check for the streaming path.
+        //
+        // Non-streaming `invoke_candidate` increments `cumulative_cost` and hard-stops when
+        // `SESSION_COST_SAFETY_CAP` is exceeded.  The streaming path previously had no such
+        // guard, allowing unlimited spending via streaming calls.
+        //
+        // We enforce the cap in two stages:
+        //   1. Reject immediately if the current session total already exceeds the cap.
+        //   2. Estimate the input cost from prompt tokens and reject if adding it would
+        //      push the session over the cap (conservative pre-flight guard).
+        {
+            let current_cost = *self.cumulative_cost.lock();
+            if current_cost > SESSION_COST_SAFETY_CAP {
+                return Err(anyhow!(
+                    "Session cost safety cap exceeded: ${:.4} > ${:.2} limit. \
+                     Reset the router to continue.",
+                    current_cost,
+                    SESSION_COST_SAFETY_CAP
+                ));
+            }
+
+            let prompt_tokens = TokenCounter::estimate_prompt_tokens(&request.messages);
+            let estimated_input_cost = self.cost_calculator.calculate(
+                candidate.provider,
+                &routed_request.model,
+                prompt_tokens,
+                0, // output tokens unknown at this point; guard on input alone
+            );
+            let projected_cost = current_cost + estimated_input_cost;
+            if projected_cost > SESSION_COST_SAFETY_CAP {
+                return Err(anyhow!(
+                    "Session cost safety cap would be exceeded by streaming request: \
+                     current=${:.4}, estimated_input=${:.4}, limit=${:.2}. \
+                     Reset the router to continue.",
+                    current_cost,
+                    estimated_input_cost,
+                    SESSION_COST_SAFETY_CAP
+                ));
+            }
+        }
 
         let mut last_error: Option<anyhow::Error> = None;
 
