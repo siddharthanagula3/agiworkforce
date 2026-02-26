@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import { applyDiff } from '@/lib/diffUtils';
 
 // =============================================================================
 // Types
@@ -262,6 +263,20 @@ interface ArtifactResponse<T> {
 }
 
 // =============================================================================
+// Diff Types
+// =============================================================================
+
+export interface ArtifactDiff {
+  hunks: Array<{
+    startLine: number;
+    endLine: number;
+    originalContent: string;
+    newContent: string;
+  }>;
+  changeDescription?: string;
+}
+
+// =============================================================================
 // Store State
 // =============================================================================
 
@@ -315,6 +330,8 @@ interface ArtifactStoreState {
     metadata?: ArtifactMetadata,
     tags?: string[],
   ) => Promise<Artifact | null>;
+
+  applyDiffToArtifact: (id: string, diff: ArtifactDiff) => Promise<Artifact | null>;
 
   rollbackArtifact: (id: string, version: number) => Promise<Artifact | null>;
   deleteArtifact: (id: string) => Promise<boolean>;
@@ -569,6 +586,48 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           } finally {
             set({ isLoading: false });
           }
+        },
+
+        // Apply a targeted diff to an artifact (avoids full content replacement)
+        applyDiffToArtifact: async (id, diff) => {
+          set({ isLoading: true });
+          try {
+            // Attempt the dedicated Tauri command first
+            const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
+              id,
+              hunks: diff.hunks.map((h) => ({
+                start_line: h.startLine,
+                end_line: h.endLine,
+                original_content: h.originalContent,
+                new_content: h.newContent,
+              })),
+              change_description: diff.changeDescription,
+            });
+
+            if (response.success && response.data) {
+              const artifact = response.data;
+              set((state) => {
+                const newArtifacts = new Map(state.artifacts);
+                newArtifacts.set(artifact.id, artifact);
+                return { artifacts: newArtifacts, isLoading: false };
+              });
+              return artifact;
+            }
+
+            // artifact_apply_diff returned a non-success — fall through to local fallback
+          } catch {
+            // Command not yet registered — apply the diff locally and call artifact_update
+          }
+
+          // Fallback: compute new content locally and call the existing update path
+          const cached = get().artifacts.get(id);
+          if (!cached) {
+            set({ isLoading: false });
+            return null;
+          }
+
+          const newContent = applyDiff(cached.content, diff);
+          return get().updateArtifact(id, newContent, diff.changeDescription);
         },
 
         // Rollback artifact to version
@@ -834,6 +893,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       {
         name: 'artifact-store',
         version: 1,
+        // IMPORTANT: `artifacts: Map<string, Artifact>` must stay excluded from
+        // partialize. JSON.stringify serializes Maps as `{}`, so including it would
+        // silently break persistence. If you ever need to persist artifacts, add a
+        // custom `storage` option with Map-aware replacer/reviver functions.
         partialize: (state) => ({
           panelWidth: state.panelWidth,
         }),

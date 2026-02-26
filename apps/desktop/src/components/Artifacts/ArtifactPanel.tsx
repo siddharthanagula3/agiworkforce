@@ -13,18 +13,14 @@ import {
   Code2,
   Copy,
   Download,
-  FileSpreadsheet,
-  FileText,
   GitBranch,
-  Globe,
   History,
-  Image as ImageIcon,
   Maximize2,
   Minimize2,
-  Network,
+  Pencil,
   Pin,
   PinOff,
-  Presentation,
+  Share2,
   Trash2,
   X,
 } from 'lucide-react';
@@ -46,12 +42,16 @@ import {
 } from '@/components/ui/DropdownMenu';
 import {
   useArtifactStore,
+  type Artifact,
+  type ArtifactDiff,
   type ArtifactSummary,
-  type ArtifactType,
   type ArtifactVersion,
   type RenderedArtifact,
 } from '@/stores/artifactStore';
+import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { ArtifactRendererView } from './ArtifactRendererView';
+import { InlineArtifactEditor } from './InlineArtifactEditor';
+import { ShareArtifactDialog } from './ShareArtifactDialog';
 import { VersionHistoryDialog } from './VersionHistoryDialog';
 
 interface ArtifactPanelProps {
@@ -76,6 +76,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     pinArtifact,
     rollbackArtifact,
     getArtifactsByConversation,
+    applyDiffToArtifact,
   } = useArtifactStore();
 
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
@@ -84,6 +85,9 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   const [versions, setVersions] = useState<ArtifactVersion[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingArtifact, setEditingArtifact] = useState<Artifact | null>(null);
+  const [shareDialogArtifactId, setShareDialogArtifactId] = useState<string | null>(null);
   const resizeHandlersRef = useRef<{ move?: (e: MouseEvent) => void; up?: () => void }>({});
 
   // Load artifacts for conversation
@@ -102,13 +106,20 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     }
   }, [activeArtifactId, getRenderedArtifact, isStreaming]);
 
-  // Auto-update during streaming
+  // Auto-update during streaming — guard against stale IPC responses arriving
+  // after the interval is cleared (e.g. slow round-trip after streaming ends).
   useEffect(() => {
     if (isStreaming && activeArtifactId === isStreaming) {
+      let cancelled = false;
       const interval = setInterval(() => {
-        getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
+        getRenderedArtifact(activeArtifactId).then((r) => {
+          if (!cancelled) setRenderedArtifact(r);
+        });
       }, 100);
-      return () => clearInterval(interval);
+      return () => {
+        cancelled = true;
+        clearInterval(interval);
+      };
     }
     return undefined;
   }, [isStreaming, activeArtifactId, getRenderedArtifact]);
@@ -116,10 +127,14 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   // Load version history
   const loadVersionHistory = useCallback(async () => {
     if (!activeArtifactId) return;
-    const history = await useArtifactStore.getState().getVersionHistory(activeArtifactId);
-    if (history) {
-      setVersions(history);
-      setShowVersionHistory(true);
+    try {
+      const history = await useArtifactStore.getState().getVersionHistory(activeArtifactId);
+      if (history) {
+        setVersions(history);
+        setShowVersionHistory(true);
+      }
+    } catch {
+      toast.error('Failed to load version history');
     }
   }, [activeArtifactId]);
 
@@ -182,7 +197,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${artifact.title}.${getFileExtension(artifact.artifact_type)}`;
+    a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -233,6 +248,28 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     },
     [activeArtifactId, rollbackArtifact, getRenderedArtifact]
   );
+
+  // Handle inline edit save
+  const handleEditSave = useCallback(
+    async (diff: ArtifactDiff) => {
+      if (!activeArtifactId) return;
+      const artifact = await applyDiffToArtifact(activeArtifactId, diff);
+      if (artifact) {
+        toast.success('Artifact updated');
+        setIsEditing(false);
+        getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
+      } else {
+        toast.error('Failed to save changes');
+      }
+    },
+    [activeArtifactId, applyDiffToArtifact, getRenderedArtifact]
+  );
+
+  // Handle share dialog open
+  const handleShare = useCallback(() => {
+    if (!activeArtifactId) return;
+    setShareDialogArtifactId(activeArtifactId);
+  }, [activeArtifactId]);
 
   if (!panelOpen) return null;
 
@@ -313,7 +350,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                     value={artifact.id}
                     className="data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800 rounded-md px-3 py-1.5 text-xs flex items-center gap-1.5 max-w-[150px] shrink-0"
                   >
-                    {getArtifactIcon(artifact.artifact_type)}
+                    <ArtifactTypeIcon type={artifact.artifact_type} />
                     <span className="truncate">{artifact.title}</span>
                     {artifact.pinned && <Pin className="h-2.5 w-2.5 text-blue-500" />}
                   </TabsTrigger>
@@ -370,6 +407,28 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
+                              onClick={() => {
+                                if (!isEditing) {
+                                  // Load full artifact into state before opening editor
+                                  // so we don't call getState() during render.
+                                  getArtifact(artifact.id).then(setEditingArtifact);
+                                } else {
+                                  setEditingArtifact(null);
+                                }
+                                setIsEditing((v) => !v);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{isEditing ? 'Cancel edit' : 'Edit'}</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
                               onClick={handleCopy}
                             >
                               <Copy className="h-3.5 w-3.5" />
@@ -397,6 +456,11 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={handleShare}>
+                              <Share2 className="h-4 w-4 mr-2" />
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handlePin}>
                               {activeArtifact?.pinned ? (
                                 <>
@@ -424,13 +488,34 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                       </div>
                     </div>
 
-                    {/* Rendered content */}
-                    <ScrollArea className="flex-1">
-                      <ArtifactRendererView
-                        rendered={renderedArtifact}
-                        isStreaming={isStreaming === artifact.id}
+                    {/* Rendered content or inline editor */}
+                    {isEditing ? (
+                      <InlineArtifactEditor
+                        artifact={editingArtifact ?? {
+                          id: artifact.id,
+                          title: artifact.title,
+                          artifact_type: artifact.artifact_type,
+                          content: '',
+                          metadata: { Generic: {} },
+                          status: 'complete',
+                          versions: [],
+                          current_version: 1,
+                          created_at: new Date().toISOString(),
+                          updated_at: new Date().toISOString(),
+                          tags: [],
+                          pinned: false,
+                        }}
+                        onSave={handleEditSave}
+                        onCancel={() => { setIsEditing(false); setEditingArtifact(null); }}
                       />
-                    </ScrollArea>
+                    ) : (
+                      <ScrollArea className="flex-1">
+                        <ArtifactRendererView
+                          rendered={renderedArtifact}
+                          isStreaming={isStreaming === artifact.id}
+                        />
+                      </ScrollArea>
+                    )}
                   </>
                 )}
               </TabsContent>
@@ -458,58 +543,35 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         currentVersion={renderedArtifact?.version_info.current || 1}
         onRollback={handleRollback}
       />
+
+      {/* Share dialog */}
+      {shareDialogArtifactId && (
+        <ShareArtifactDialog
+          artifact={
+            useArtifactStore.getState().artifacts.get(shareDialogArtifactId) ?? {
+              id: shareDialogArtifactId,
+              title: artifacts.find((a) => a.id === shareDialogArtifactId)?.title ?? 'Artifact',
+              artifact_type: artifacts.find((a) => a.id === shareDialogArtifactId)?.artifact_type ?? 'code',
+              content: '',
+              metadata: { Generic: {} },
+              status: 'complete',
+              versions: [],
+              current_version: 1,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              tags: [],
+              pinned: false,
+            }
+          }
+          isOpen={!!shareDialogArtifactId}
+          onClose={() => setShareDialogArtifactId(null)}
+        />
+      )}
     </>
   );
 }
 
 // Helper functions
-
-function getArtifactIcon(type: ArtifactType) {
-  const className = 'h-3.5 w-3.5';
-  switch (type) {
-    case 'code':
-      return <Code2 className={className} />;
-    case 'document':
-      return <FileText className={className} />;
-    case 'spreadsheet':
-      return <FileSpreadsheet className={className} />;
-    case 'diagram':
-      return <Network className={className} />;
-    case 'web':
-      return <Globe className={className} />;
-    case 'chart':
-      return <FileSpreadsheet className={className} />;
-    case 'presentation':
-      return <Presentation className={className} />;
-    case 'image':
-      return <ImageIcon className={className} />;
-    default:
-      return <Code2 className={className} />;
-  }
-}
-
-function getFileExtension(type: ArtifactType): string {
-  switch (type) {
-    case 'code':
-      return 'txt';
-    case 'document':
-      return 'md';
-    case 'spreadsheet':
-      return 'csv';
-    case 'diagram':
-      return 'mmd';
-    case 'web':
-      return 'html';
-    case 'chart':
-      return 'json';
-    case 'presentation':
-      return 'md';
-    case 'image':
-      return 'png';
-    default:
-      return 'txt';
-  }
-}
 
 function getStatusColor(status: string): string {
   switch (status) {
