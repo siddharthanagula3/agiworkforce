@@ -61,16 +61,17 @@ const ALLOWED_TABLES: &[&str] = &[
 ];
 
 /// Validates that a table name is in the whitelist.
-/// Non-whitelisted tables are allowed but logged as warnings.
-fn validate_table_whitelist(table: &str) {
+/// Returns `Err` if the table is not in the allowlist, blocking execution.
+fn validate_table_whitelist(table: &str) -> Result<()> {
     // Extract base table name (handle schema.table format)
     let base_table = table.split('.').next_back().unwrap_or(table);
     if !ALLOWED_TABLES.contains(&base_table.to_lowercase().as_str()) {
-        tracing::warn!(
-            "Table '{}' not in whitelist, proceeding with caution",
+        return Err(Error::Other(format!(
+            "Table '{}' is not in the allowed tables list",
             table
-        );
+        )));
     }
+    Ok(())
 }
 
 fn validate_sql_identifier(identifier: &str) -> Result<()> {
@@ -94,7 +95,7 @@ fn validate_sql_identifier(identifier: &str) -> Result<()> {
     }
 
     for ch in identifier.chars() {
-        if !ch.is_alphanumeric() && ch != '_' && ch != '.' && ch != '*' && ch != ' ' {
+        if !ch.is_alphanumeric() && ch != '_' && ch != '.' && ch != '*' {
             return Err(Error::Other(format!(
                 "SQL identifier contains invalid character: '{}'",
                 ch
@@ -478,7 +479,7 @@ impl QueryBuilder {
 
     fn build_select(&self, query: &SelectQuery) -> Result<String> {
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         for column in &query.columns {
             validate_sql_identifier(column)?;
@@ -542,7 +543,7 @@ impl QueryBuilder {
         }
 
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         for column in &query.columns {
             validate_sql_identifier(column)?;
@@ -615,7 +616,7 @@ impl QueryBuilder {
         }
 
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         // SECURITY NOTE: This method interpolates escaped values into SQL.
         // For user-controlled input, callers SHOULD use build_parameterized()
@@ -674,7 +675,7 @@ impl QueryBuilder {
 
     fn build_delete(&self, query: &DeleteQuery) -> Result<String> {
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         let mut sql = format!("DELETE FROM {}", query.table);
 
@@ -737,7 +738,7 @@ impl QueryBuilder {
         }
 
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         for column in &query.columns {
             validate_sql_identifier(column)?;
@@ -787,7 +788,7 @@ impl QueryBuilder {
         }
 
         validate_sql_identifier(&query.table)?;
-        validate_table_whitelist(&query.table);
+        validate_table_whitelist(&query.table)?;
 
         let mut params = Vec::new();
         let mut param_index = 1;
