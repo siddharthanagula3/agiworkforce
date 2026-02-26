@@ -1691,7 +1691,10 @@ mod tests {
     use crate::automation::AutomationService;
 
     fn create_test_automation() -> Arc<AutomationService> {
-        Arc::new(AutomationService::new().expect("Failed to create automation service"))
+        Arc::new(
+            AutomationService::new()
+                .unwrap_or_else(|e| panic!("Failed to create automation service for testing: {}", e)),
+        )
     }
 
     #[test]

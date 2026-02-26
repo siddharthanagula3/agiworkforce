@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -9,52 +11,73 @@ use crate::data::database::{
 use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 
-/// SQL keywords that are blocked in user-facing query commands.
-/// Only SELECT and WITH (CTE) queries are allowed for security.
-const BLOCKED_SQL_KEYWORDS: &[&str] = &[
-    "DROP",
-    "TRUNCATE",
-    "DELETE",
-    "ALTER TABLE",
-    "CREATE USER",
-    "GRANT",
-    "REVOKE",
-    "INSERT",
-    "UPDATE",
-];
+/// Validates procedure names: must start with a letter or underscore, followed by
+/// alphanumerics/underscores (max 64 chars per segment), with at most one dot separator
+/// for schema-qualified names (e.g. `my_schema.my_proc`).
+/// Rejects dot-only strings like `....` that pass the old character-set check.
+static PROC_NAME_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]{0,63}(\.[a-zA-Z_][a-zA-Z0-9_]{0,63})*$")
+        .expect("static regex is valid")
+});
+
+/// Regex patterns compiled once at startup.
+/// Word-boundary matching prevents bypass via comment injection (`SEL/**/ECT`),
+/// whitespace tricks (`SELECT\n...`), or embedded keywords inside identifiers.
+static BLOCKED_KEYWORD_RE: Lazy<Regex> = Lazy::new(|| {
+    // Each keyword is wrapped in \b…\b so partial matches inside names are ignored.
+    Regex::new(
+        r"(?i)\b(DROP|TRUNCATE|DELETE|INSERT|UPDATE|ALTER|CREATE\s+USER|GRANT|REVOKE)\b",
+    )
+    .expect("static regex is valid")
+});
+
+/// Matches SQL block comments which can hide keywords from naive substring checks.
+static BLOCK_COMMENT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"/\*[\s\S]*?\*/").expect("static regex is valid")
+});
 
 /// Validates that a SQL query is a read-only SELECT/WITH statement.
-/// Returns `Err` with a descriptive message if the query contains blocked keywords
-/// or does not start with SELECT/WITH. The optional `context` is included in
-/// error messages (e.g. "batch query at index 3").
+///
+/// Defences applied (in order):
+/// 1. Strip block comments (`/* … */`) before keyword matching — prevents `SEL/**/ECT`.
+/// 2. Word-boundary regex matching for blocked DML/DDL keywords.
+/// 3. Reject semicolons — prevents multi-statement injection (`SELECT 1; DROP TABLE x`).
+/// 4. Require the query to start with SELECT or WITH after stripping leading whitespace.
+///
+/// The optional `context` is included in error messages (e.g. "batch query at index 3").
 fn validate_read_only_sql(sql: &str, context: Option<&str>) -> Result<(), String> {
-    let sql_upper = sql.to_uppercase();
+    let loc = context
+        .map(|ctx| format!(" in {}", ctx))
+        .unwrap_or_default();
 
-    for keyword in BLOCKED_SQL_KEYWORDS {
-        if sql_upper.contains(keyword) {
-            let location = context
-                .map(|ctx| format!(" in {}", ctx))
-                .unwrap_or_default();
-            tracing::error!(
-                "Blocked dangerous SQL query{} with keyword: {}",
-                location,
-                keyword
-            );
-            return Err(format!(
-                "SQL operation '{}' is not allowed{}. Only SELECT queries are permitted for security.",
-                keyword, location
-            ));
-        }
+    // 1. Remove block comments before further analysis.
+    let without_comments = BLOCK_COMMENT_RE.replace_all(sql, " ");
+
+    // 2. Reject multi-statement separators.
+    if without_comments.contains(';') {
+        tracing::error!("Blocked SQL query{} containing semicolon (multi-statement attempt)", loc);
+        return Err(format!(
+            "Semicolons are not allowed in SELECT queries{loc}. \
+             Only a single SELECT statement is permitted."
+        ));
     }
 
-    let trimmed_upper = sql_upper.trim();
-    if !trimmed_upper.starts_with("SELECT") && !trimmed_upper.starts_with("WITH") {
-        let location = context
-            .map(|ctx| format!(" in {}", ctx))
-            .unwrap_or_default();
+    // 3. Blocked keyword detection with word-boundary matching.
+    if let Some(m) = BLOCKED_KEYWORD_RE.find(&without_comments) {
+        let keyword = m.as_str().to_uppercase();
+        tracing::error!("Blocked dangerous SQL query{} with keyword: {}", loc, keyword);
         return Err(format!(
-            "Only SELECT queries are allowed{}. Use specific mutation commands for data modifications.",
-            location
+            "SQL operation '{keyword}' is not allowed{loc}. \
+             Only SELECT queries are permitted for security."
+        ));
+    }
+
+    // 4. Require SELECT or WITH (CTE) as the leading statement.
+    let trimmed_upper = without_comments.trim().to_uppercase();
+    if !trimmed_upper.starts_with("SELECT") && !trimmed_upper.starts_with("WITH") {
+        return Err(format!(
+            "Only SELECT queries are allowed{loc}. \
+             Use specific mutation commands for data modifications."
         ));
     }
 
@@ -337,29 +360,13 @@ pub async fn db_mysql_call_procedure(
     params: Vec<serde_json::Value>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    // AUDIT-003-006 fix: Validate procedure_name against alphanumeric pattern
-    // SQL identifiers should only contain alphanumeric characters, underscores, and optionally a schema prefix
-    let is_valid_identifier = procedure_name
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '.');
-
-    if !is_valid_identifier || procedure_name.is_empty() {
+    // H5 fix: Use regex to reject dot-only strings like `....` and enforce proper
+    // identifier structure: `my_proc` or `schema.my_proc`.
+    if !PROC_NAME_RE.is_match(&procedure_name) {
         return Err(format!(
-            "Invalid procedure name '{}': must contain only alphanumeric characters, underscores, or dots",
+            "Invalid procedure name '{}': must match pattern [a-zA-Z_][a-zA-Z0-9_]{{0,63}}(\\.[a-zA-Z_][a-zA-Z0-9_]{{0,63}})* \
+             (e.g. 'my_proc' or 'schema.my_proc')",
             procedure_name
-        ));
-    }
-
-    // Additional check: prevent SQL injection via schema.procedure format
-    if procedure_name.matches('.').count() > 1 {
-        return Err("Invalid procedure name: too many dots".to_string());
-    }
-
-    // Prevent excessively long names
-    if procedure_name.len() > 128 {
-        return Err(format!(
-            "Procedure name too long: {} characters. Maximum is 128",
-            procedure_name.len()
         ));
     }
 

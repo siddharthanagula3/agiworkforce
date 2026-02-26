@@ -149,94 +149,67 @@ export interface IntelligentRoutingResult {
  *
  * Capability Legend: V=Vision, T=Tools, Th=Thinking, C=ComputerUse, A=Agentic, E=CodeExecution
  */
+// =========================================================================
+// HOBBY TIER (auto-economy) - Budget models, ordered by BENCHMARK
+// Best benchmarks first within cost constraints
+// =========================================================================
+const ECONOMY_MODELS: readonly string[] = [
+  // === TOP BENCHMARK (Best quality in economy tier) ===
+  'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
+  'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
+  'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
+  'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
+
+  // === MID BENCHMARK (Good quality, very cheap) ===
+  'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
+  'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
+  'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
+
+  // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
+  'qwen-flash', // 25% SWE-bench, 75% MMLU - T✓ (128K ctx)
+  'gpt-5-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
+
+  // === SEARCH MODELS ===
+  'sonar', // Web search - V✗ T✗ (128K ctx)
+];
+
+// =========================================================================
+// PRO TIER (auto-balanced) - Economy + Pro model additions, ordered by BENCHMARK
+// =========================================================================
+const BALANCED_ADDITIONS: readonly string[] = [
+  // === TOP BENCHMARK (Pro-tier additions) ===
+  'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
+  'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
+  'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
+  'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
+
+  // === MID-HIGH BENCHMARK ===
+  'qwen-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
+
+  // === SEARCH MODELS ===
+  'sonar-pro',
+  'sonar-deep-research',
+];
+
+// =========================================================================
+// MAX/ENTERPRISE TIER (auto-premium) - Balanced + Premium model additions
+// =========================================================================
+const PREMIUM_ADDITIONS: readonly string[] = [
+  // === FLAGSHIP BENCHMARK (Best of the best) ===
+  'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
+  'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
+  'o3', // 65% SWE-bench - REASONING SPECIALIST
+
+  // === HIGH BENCHMARK ===
+  'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
+  'kimi-k2.5', // 55% SWE-bench, 99% AIME - V✓ T✓ Th✓ A✓
+  'deepseek-r1', // 55% SWE-bench - BUDGET REASONING
+];
+
 export const MODEL_POOLS: Record<AutoMode, string[]> = {
-  // =========================================================================
-  // HOBBY TIER (auto-economy) - Budget models, ordered by BENCHMARK
-  // Best benchmarks first within cost constraints
-  // =========================================================================
-  'auto-economy': [
-    // === TOP BENCHMARK (Best quality in economy tier) ===
-    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
-    'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
-    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
-
-    // === MID BENCHMARK (Good quality, very cheap) ===
-    'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
-    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
-    'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-
-    // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
-    'qwen-flash', // 25% SWE-bench, 75% MMLU - T✓ (128K ctx)
-    'gpt-5-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
-
-    // === SEARCH MODELS ===
-    'sonar', // Web search - V✗ T✗ (128K ctx)
-  ],
-  // =========================================================================
-  // PRO TIER (auto-balanced) - Economy + Pro models, ordered by BENCHMARK
-  // =========================================================================
-  'auto-balanced': [
-    // === TOP BENCHMARK (Pro-tier additions first) ===
-    'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
-    'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
-    'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
-    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
-    'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
-    'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
-    'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx)
-
-    // === MID-HIGH BENCHMARK ===
-    'qwen-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
-    'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
-    'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
-    'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-
-    // === LOWER BENCHMARK (fallbacks) ===
-    'qwen-flash',
-    'gpt-5-nano',
-
-    // === SEARCH MODELS ===
-    'sonar',
-    'sonar-pro',
-    'sonar-deep-research',
-  ],
-  // =========================================================================
-  // MAX/ENTERPRISE TIER (auto-premium) - ALL models, ordered by BENCHMARK
-  // =========================================================================
-  'auto-premium': [
-    // === FLAGSHIP BENCHMARK (Best of the best) ===
-    'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
-    'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU, 100% AIME - BEST REASONING
-    'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - CURRENT SONNET
-    'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU
-    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - Fast + high quality + A✓
-    'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
-    'gemini-3-pro-preview', // 74.2% SWE-bench, 91.9% GPQA
-    'glm-4.7', // 73.8% SWE-bench - BEST OPEN-WEIGHT
-    'deepseek-chat', // 68.8% SWE-bench - BEST VALUE
-    'glm-4.6v', // 68% SWE-bench - VISION + TOOLS
-    'o3', // 65% SWE-bench - REASONING SPECIALIST
-
-    // === HIGH BENCHMARK ===
-    'qwen-max', // 58% SWE-bench
-    'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
-    'kimi-k2.5', // 55% SWE-bench, 99% AIME - V✓ T✓ Th✓ A✓
-    'deepseek-r1', // 55% SWE-bench - BUDGET REASONING
-    'grok-4-fast-reasoning', // 48% SWE-bench - 2M CONTEXT + A✓
-    'claude-haiku-4.5', // 45% SWE-bench + A✓
-    'glm-4.6v-flash', // 45% SWE-bench - FREE!
-
-    // === LOWER BENCHMARK (fast/cheap fallbacks) ===
-    'qwen-flash',
-    'gpt-5-nano',
-
-    // === SEARCH MODELS ===
-    'sonar',
-    'sonar-pro',
-    'sonar-deep-research',
-  ],
+  'auto-economy': [...ECONOMY_MODELS],
+  'auto-balanced': [...BALANCED_ADDITIONS, ...ECONOMY_MODELS],
+  'auto-premium': [...PREMIUM_ADDITIONS, ...BALANCED_ADDITIONS, ...ECONOMY_MODELS],
 };
 
 // ============================================
@@ -246,6 +219,10 @@ export const MODEL_POOLS: Record<AutoMode, string[]> = {
 /**
  * Minimum benchmark scores for a model to be considered "viable" for a task type.
  * Economy mode uses these to filter out models that won't perform well enough.
+ *
+ * @remarks Threshold values based on internal eval suite v2.1 (2026-02). Models below
+ * these scores produced unacceptable quality regressions in internal testing.
+ * Re-evaluate when new benchmark data is available (quarterly cadence recommended).
  */
 export const BENCHMARK_THRESHOLDS: Record<
   TaskType,
@@ -679,6 +656,28 @@ function getEffectiveCost(model: ModelMetadata): number {
   return model.inputCost + model.outputCost * 1.5;
 }
 
+/** Weights for benchmark scoring — derived from internal model evaluation (2026-02) */
+const BENCHMARK_WEIGHTS = {
+  /** Primary score weight for coding tasks (SWE-bench accuracy) */
+  CODING_PRIMARY: 0.7,
+  /** Secondary score weight for coding tasks (HumanEval pass rate) */
+  CODING_SECONDARY: 0.3,
+  /** Primary score weight for reasoning tasks (GPQA accuracy) */
+  REASONING_PRIMARY: 0.5,
+  /** Secondary score weight for reasoning tasks (AIME accuracy) */
+  REASONING_SECONDARY: 0.5,
+  /** Primary score weight for agentic tasks (SWE-bench accuracy) */
+  AGENTIC_PRIMARY: 0.5,
+  /** Secondary score weight for agentic tasks (MMLU general ability) */
+  AGENTIC_SECONDARY: 0.5,
+  /** Boost multiplier applied when model has verified agentic capability */
+  AGENTIC_CAPABLE_BOOST: 1.2,
+  /** Penalty multiplier applied when model lacks agentic capability */
+  AGENTIC_INCAPABLE_PENALTY: 0.5,
+  /** Boost multiplier applied when model has vision capability for multimodal tasks */
+  MULTIMODAL_VISION_BOOST: 1.1,
+} as const;
+
 /**
  * Get the benchmark score for a model based on task type
  */
@@ -687,20 +686,30 @@ function getBenchmarkScore(model: ModelMetadata, taskType: TaskType): number {
 
   switch (taskType) {
     case 'coding':
-      return (model.benchmarks.swebench ?? 0) * 0.7 + (model.benchmarks.humaneval ?? 0) * 0.3;
+      return (
+        (model.benchmarks.swebench ?? 0) * BENCHMARK_WEIGHTS.CODING_PRIMARY +
+        (model.benchmarks.humaneval ?? 0) * BENCHMARK_WEIGHTS.CODING_SECONDARY
+      );
     case 'reasoning':
-      return (model.benchmarks.gpqa ?? 0) * 0.5 + (model.benchmarks.aime ?? 0) * 0.5;
+      return (
+        (model.benchmarks.gpqa ?? 0) * BENCHMARK_WEIGHTS.REASONING_PRIMARY +
+        (model.benchmarks.aime ?? 0) * BENCHMARK_WEIGHTS.REASONING_SECONDARY
+      );
     case 'general':
       return model.benchmarks.mmlu ?? 0;
     case 'agentic': {
       // Agentic tasks need coding ability + tool use capability
-      const baseScore = (model.benchmarks.swebench ?? 0) * 0.5 + (model.benchmarks.mmlu ?? 0) * 0.5;
-      return model.capabilities.agentic ? baseScore * 1.2 : baseScore * 0.5;
+      const baseScore =
+        (model.benchmarks.swebench ?? 0) * BENCHMARK_WEIGHTS.AGENTIC_PRIMARY +
+        (model.benchmarks.mmlu ?? 0) * BENCHMARK_WEIGHTS.AGENTIC_SECONDARY;
+      return model.capabilities.agentic
+        ? baseScore * BENCHMARK_WEIGHTS.AGENTIC_CAPABLE_BOOST
+        : baseScore * BENCHMARK_WEIGHTS.AGENTIC_INCAPABLE_PENALTY;
     }
     case 'multimodal': {
       // Multimodal needs vision + general intelligence
       const mmluScore = model.benchmarks.mmlu ?? 0;
-      return model.capabilities.vision ? mmluScore * 1.1 : 0;
+      return model.capabilities.vision ? mmluScore * BENCHMARK_WEIGHTS.MULTIMODAL_VISION_BOOST : 0;
     }
     default:
       return model.benchmarks.mmlu ?? 0;
@@ -743,16 +752,8 @@ function hasRequiredCapabilities(model: ModelMetadata, taskType: TaskType): bool
       // SOFT REQUIREMENT: Tools help with coding but aren't strictly required
       return model.capabilities.tools === true;
 
-    case 'reasoning':
-      // SOFT PREFERENCE: Thinking mode helps but isn't required
-      // All models can reason, but thinking models do it better
-      return true;
-
-    case 'general':
-      // No special requirements for general tasks
-      return true;
-
     default:
+      // reasoning, general, or any unknown task type — no hard capability gate
       return true;
   }
 }

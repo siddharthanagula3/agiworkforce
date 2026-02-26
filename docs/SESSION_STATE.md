@@ -2,11 +2,21 @@
 
 ## Current Sprint Goal
 
-COMPLETE: CodeRabbit full codebase review (Pass 2) — 15 security/logic/quality fixes applied and committed.
+Project constitution update — CLAUDE.md, MEMORY.md, AGENTS.md verified, settings.json updated, scoped rules created.
 
 ## What's Done (This Session + Previous Sessions)
 
-### CodeRabbit Full Review — COMPLETE (Pass 2 of 2)
+### Constitution Update — COMPLETE
+
+- Verified CLAUDE.md (219 lines, under 500) — already had new content
+- Verified MEMORY.md (73 lines) — already had new content
+- Verified AGENTS.md (80 lines, matches 23 agent files) — already had new content
+- Updated `.claude/settings.json` — added `env` (agent teams, auto memory) and `hooks` (PostToolUse write logger, Stop session state reminder)
+- Created `.claude/rules/typescript.md` — scoped to `src/**/*.{ts,tsx}`
+- Created `.claude/rules/rust.md` — scoped to `src-tauri/**/*.rs`
+- Created `.claude/rules/security.md` — global security rules
+
+### CodeRabbit Full Review — COMPLETE (Previous Session)
 
 **Security fixes committed** (`fix(security): apply 15 CodeRabbit audit fixes across 14 files`):
 
@@ -26,78 +36,36 @@ COMPLETE: CodeRabbit full codebase review (Pass 2) — 15 security/logic/quality
 - `sys/commands/chat/mod.rs` — duplicate AUDIT comment removed ([M11])
 - `apps/web/next.config.ts` — X-DNS-Prefetch-Control set to off ([M27])
 
-### Settings UI — COMPLETE (committed in previous session)
+### Settings UI — COMPLETE (Previous Session)
 
-All 6 settings tabs implemented and wired:
+All settings tabs implemented and wired (9 tabs total):
 
-- `types/customModel.ts` — CustomModelConfig type
-- `components/Settings/CustomModelsSettings.tsx` — provider presets, test connection
-- `components/Settings/AgentsSettings.tsx` — approval mode, sub-agents toggles
-- `components/Settings/InstructionFilesSettings.tsx` — auto-discover CLAUDE.md/GEMINI.md/.cursorrules/etc
-- `components/Settings/ExtensionsSettings.tsx` — MCPWorkspace wired in
-- `stores/settingsStore.ts` — customModels state, v10 migration
-- `components/Settings/SettingsPanel.tsx` — 8 tabs, all wired
-
-### Previous Stabilization Sprint (committed)
-
-35 fixes across Rust backend + TypeScript frontend:
-
-- LLM streaming, agent runtime, MCP, automation, UI error handling, browser fixes
+- CustomModelsSettings, AgentsSettings, InstructionFilesSettings
+- ExtensionsSettings, SkillsPluginsSettings, FeaturesPrivacySettings
+- DataPrivacy, Window, System
 
 ## What's Blocked / Requires Human Attention
 
-Per CODERABBIT_REVIEW.md Final Status:
-
 - **[C3]**: `features.test.ts` (64 KB monolith) needs to be split — large refactor, requires human audit
-- **[H4]**: SQL procedure name allows dots/keywords through — keyword blocking is substring-only
 
 ## Key Decisions Made
 
-- Settings: ADAPT existing components, don't duplicate (ExtensionsSettings → wired MCPWorkspace)
+- CLAUDE.md, MEMORY.md, AGENTS.md already had correct content from prior session — no overwrite needed
+- Settings: ADAPT existing components, don't duplicate
 - CodeRabbit review: profiles.is_admin fallback removed — only app_metadata.role grants global admin
-- TIER_ALLOWED_MODELS: extracted 3 const arrays to eliminate 80 lines of duplication
-- debounce pattern: 300ms clearTimeout debounce for localStorage writes during streaming
+- Custom models first-class citizens — appear in every model dropdown
 
-## Files Modified This Session (Continuation)
+## Files Modified This Session
 
-**Tests:**
-
-- `apps/desktop/src/components/Settings/__tests__/SkillsPluginsSettings.test.tsx` — 14 new tests
-- Fixed infinite re-render in SkillsPluginsSettings: useCallback dep → `allowedDirectories[0]`
-- Fixed homeDir fallback: `null` instead of `~` (CodeRabbit CLI finding)
-- Verified [C2] (retry delays) and [C4] (Stripe HMAC) were already implemented
-
----
-
-## Files Modified (Previous Session)
-
-**Rust:**
-
-- `apps/desktop/src-tauri/src/core/agent/executor.rs` — infinite loop fix
-- `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs` — expect() → unwrap_or_else()
-- `apps/desktop/src-tauri/src/core/llm/llm_router.rs` — should_retry calls is_server_error()
-- `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs` — duplicate comment removed
-
-**TypeScript/Web:**
-
-- `apps/desktop/src/constants/llm.ts` — TIER_ALLOWED_MODELS deduplication
-- `apps/desktop/src/stores/chat/chatStore.ts` — debounce persistIdMappings
-- `apps/web/app/api/admin/directory-sync/route.ts` — privilege escalation fix
-- `apps/web/app/api/admin/security/route.ts` — severity enum validation
-- `apps/web/app/api/device/poll/route.ts` — device_id validation + fingerprint race fix
-- `apps/web/app/api/llm/v1/chat/completions/route.ts` — logit_bias key validation
-- `apps/web/app/api/media/image/generate/route.ts` — size parsing validation
-- `apps/web/app/api/webhooks/directory-sync/route.ts` — HMAC NaN fix + group name guard
-- `apps/web/next.config.ts` — X-DNS-Prefetch-Control off
+- `.claude/settings.json` — added env vars and hooks (preserved enabledPlugins)
+- `.claude/rules/typescript.md` — NEW: TypeScript scoped rules
+- `.claude/rules/rust.md` — NEW: Rust/Tauri scoped rules
+- `.claude/rules/security.md` — NEW: global security rules
+- `docs/SESSION_STATE.md` — updated with this session's changes
 
 ## Next Steps (Priority Order)
 
-1. **[H4] SQL keyword blocking** — add regex word-boundary matching + reject semicolons in SELECT-only mode
+1. **Settings panel enhancements** — upgrade existing tabs per the detailed spec (Custom Models, Extensions, Memory & Instructions, Agents, Features & Privacy)
 2. **[C3] features.test.ts refactor** — large task, human review needed first
-3. Settings is complete at 9 tabs. All spec sections implemented:
-   - llm-config: CustomModelsSettings (custom endpoints, Ollama, Groq, etc.)
-   - instructions: InstructionFilesSettings (CLAUDE.md, GEMINI.md, .cursorrules, etc.)
-   - agents: AgentsSettings (approval mode, sub-agents, parallel config)
-   - integrations: ExtensionsSettings (MCP servers, tools)
-   - skills-plugins: SkillsPluginsSettings (installed plugins + project resources)
-   - window, data-privacy, system: preferences, encryption, resource monitor
+3. Fix remaining 8 FAIL features from audit
+4. Complete 14 PARTIAL features

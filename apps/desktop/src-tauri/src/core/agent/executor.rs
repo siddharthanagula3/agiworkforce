@@ -11,6 +11,33 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::time::timeout;
 
+/// Open a URL in the system default browser using the platform-appropriate command.
+/// Extracted from `Action::Navigate` handling to avoid triplicating the platform blocks.
+fn open_url_with_platform(url: &str) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+    }
+    Ok(())
+}
+
 pub struct TaskExecutor {
     automation: Arc<AutomationService>,
 }
@@ -109,35 +136,8 @@ impl TaskExecutor {
                      Wire PlaywrightBridge into TaskExecutor to fix BUG-07 fully."
                 );
 
-                #[cfg(target_os = "windows")]
-                {
-                    use std::process::Command;
-                    // Quote the URL to prevent shell metacharacter injection
-                    // via &, |, ^ etc. in cmd.exe
-                    let quoted = format!("start \"\" \"{}\"", safe_url.replace('"', ""));
-                    Command::new("cmd")
-                        .args(["/C", &quoted])
-                        .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    use std::process::Command;
-                    Command::new("xdg-open")
-                        .arg(safe_url)
-                        .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    Command::new("open")
-                        .arg(safe_url)
-                        .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
-                }
+                // M18 fix: delegate to shared helper instead of triplicating platform blocks.
+                open_url_with_platform(safe_url)?;
 
                 Ok(format!("Opened browser to {}", safe_url))
             }

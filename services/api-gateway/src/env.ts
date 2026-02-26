@@ -7,3 +7,14 @@ export function requireEnv(name: string): string {
   }
   return value;
 }
+
+/**
+ * Validates that all required startup environment variables are present.
+ * Call this once at process start before initialising any services.
+ * Throws on the first missing variable so the process exits with a clear error.
+ */
+export function validateStartupEnv(): void {
+  requireEnv('JWT_SECRET');
+  requireEnv('SUPABASE_URL');
+  requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+}

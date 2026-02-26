@@ -1,67 +1,79 @@
-# Repository Guidelines
+# AGI Workforce — Agent Roster
 
-## Project Structure & Module Organization
+> Defines all custom agents, their models, zone assignments, and responsibilities.
+> Referenced by CLAUDE.md. Updated when agents are added/removed.
 
-This repository is a pnpm + Rust monorepo.
+## Project Agents (.claude/agents/)
 
-- `apps/web`: Next.js web app (`app/`, `__tests__/`, `e2e/`) with SSO, admin security/directory-sync APIs.
-- `apps/desktop`: React/Vite desktop UI with Tauri backend in `apps/desktop/src-tauri`.
-- `apps/extension`: browser extension (Vite, Manifest v3) with native messaging, side panel, and desktop automation.
-- `services/api-gateway`, `services/signaling-server`: Node/Express services with `__tests__/`.
-- `packages/types`, `packages/utils`: shared workspace packages.
-- `docs/`: architecture, deployment, testing, and operations docs.
+### Tier 1: Opus (Complex Reasoning, Architecture, Security)
 
-## Build, Test, and Development Commands
+| Agent                        | File                            | Zone         | Responsibilities                                                             |
+| ---------------------------- | ------------------------------- | ------------ | ---------------------------------------------------------------------------- |
+| agent-runtime-engineer       | agent-runtime-engineer.md       | B (services) | Agent execution engine, task scheduling, lifecycle management                |
+| computer-use-vision-engineer | computer-use-vision-engineer.md | SYSTEM       | Screenshot capture, OCR, vision analysis, screen monitoring                  |
+| llm-router-engineer          | llm-router-engineer.md          | B (services) | Model routing, provider switching, custom model integration, fallback chains |
+| memory-embeddings-engineer   | memory-embeddings-engineer.md   | B (services) | Memory system, embeddings, knowledge graph, MEMORY.md management             |
+| rust-tauri-engineer          | rust-tauri-engineer.md          | SYSTEM       | All Rust/Tauri code, Tauri commands, system integration                      |
+| security-auditor             | security-auditor.md             | ALL (read)   | ToolGuard, encryption, permission system, vulnerability scanning             |
+| integration-reviewer         | integration-reviewer.md         | ALL (read)   | Cross-module integration review, API contract validation                     |
+| team-lead-orchestrator       | team-lead-orchestrator.md       | SHARED       | Sprint orchestration, task delegation, agent coordination                    |
+| spec-handoff-writer          | spec-handoff-writer.md          | F (docs)     | Specification documents, handoff notes, architecture docs                    |
+| research-orchestrator-fix    | research-orchestrator-fix.md    | F (docs)     | Market research coordination, web search, competitor analysis                |
 
-Use Node `>=22.12` and pnpm `>=9.15`.
+### Tier 2: Sonnet (Implementation, Features)
 
-- `pnpm install`: install all workspace dependencies.
-- `pnpm lint`: run ESLint across the repo.
-- `pnpm format:check`: verify Prettier formatting.
-- `pnpm typecheck:all`: run TypeScript checks in all workspaces.
-- `pnpm test`: run workspace test suites.
-- `pnpm build`: build all non-desktop packages.
-- `pnpm dev:desktop`: run desktop app locally.
-- `pnpm --filter @agiworkforce/web dev`: run web app locally.
-- `cargo test --workspace --lib`: run Rust library tests (Tauri workspace).
+| Agent                      | File                          | Zone   | Responsibilities                                                |
+| -------------------------- | ----------------------------- | ------ | --------------------------------------------------------------- |
+| frontend-engineer          | frontend-engineer.md          | A      | React components, pages, styles, UI state                       |
+| backend-engineer           | (infer)                       | B      | API endpoints, services, middleware                             |
+| database-engineer          | database-engineer.md          | C      | Schema, migrations, ORM models, queries                         |
+| billing-stripe-engineer    | billing-stripe-engineer.md    | D      | Stripe integration, payments, subscriptions, invoicing          |
+| browser-extension-engineer | browser-extension-engineer.md | D      | Browser automation, extension, web scraping                     |
+| mcp-integration-engineer   | mcp-integration-engineer.md   | D      | MCP server connections, tool registration, extension management |
+| speech-audio-engineer      | speech-audio-engineer.md      | D      | Voice input (Whisper), TTS (Piper/Deepgram), audio processing   |
+| code-cleanup-refactor      | code-cleanup-refactor.md      | ALL    | Dead code removal, refactoring, code quality                    |
+| shared-types-guardian      | shared-types-guardian.md      | SHARED | TypeScript types, API contracts, interface definitions          |
+| test-writer                | test-writer.md                | ALL    | Test suites — ONLY when explicitly told to test                 |
+| git-branch-manager         | git-branch-manager.md         | SHARED | Git operations, branching strategy, merge management            |
 
-## Security & Enterprise
+### Tier 3: Haiku (Lightweight, Fast)
 
-- **Database encryption**: SQLCipher for database-at-rest encryption, key derivation from machine ID + master password
-- **Kill switch**: `account_status` column on profiles, enforced in API gateway
-- **JWT hardening**: Algorithm pinning (HS256), issuer/audience claims
-- **Circuit breaker**: LLM provider failure tracking with exponential cooldown
-- **Cost caps**: Per-task ($5) and per-session ($50) limits on agent execution
-- **Prompt injection prevention**: XML escape and multiline sanitization
-- **SSO & SCIM**: Supabase SSO integration with domain detection, WorkOS directory sync webhooks
-- **Proxy & TLS**: Custom CA cert support, system certificate store trust via rustls-tls-native-roots
+| Agent                    | File                        | Zone | Responsibilities                             |
+| ------------------------ | --------------------------- | ---- | -------------------------------------------- |
+| devops-build-engineer    | devops-build-engineer.md    | E    | Docker, CI/CD, GitHub Actions, build scripts |
+| documentation-sync-agent | documentation-sync-agent.md | F    | Docs, README, CHANGELOG, API documentation   |
+| progress-state-tracker   | progress-state-tracker.md   | F    | SESSION_STATE.md updates, progress tracking  |
 
-## Coding Style & Naming Conventions
+## Plugin Agents
 
-Prettier is authoritative (`.prettierrc.json`): 2-space indent, single quotes, semicolons, trailing commas, `printWidth: 100`.
-Follow ESLint rules (`eslint.config.mjs`) and fix warnings before opening a PR.
+| Agent                 | Plugin            | Model   | Purpose                          |
+| --------------------- | ----------------- | ------- | -------------------------------- |
+| agent-creator         | plugin-dev        | sonnet  | Creates new agent definitions    |
+| plugin-validator      | plugin-dev        | inherit | Validates plugin structure       |
+| skill-reviewer        | plugin-dev        | inherit | Reviews skill quality            |
+| code-architect        | feature-dev       | sonnet  | Architecture for new features    |
+| code-explorer         | feature-dev       | sonnet  | Codebase exploration and mapping |
+| code-reviewer         | feature-dev       | sonnet  | Code review                      |
+| code-reviewer         | pr-review-toolkit | opus    | PR-focused code review           |
+| code-simplifier       | pr-review-toolkit | opus    | Code simplification              |
+| comment-analyzer      | pr-review-toolkit | inherit | PR comment analysis              |
+| pr-test-analyzer      | pr-review-toolkit | inherit | Test coverage analysis           |
+| conversation-analyzer | hookify           | inherit | Conversation pattern analysis    |
+| code-simplifier       | code-simplifier   | opus    | Complexity reduction             |
+| agent-sdk-verifier-py | agent-sdk-dev     | sonnet  | Python SDK verification          |
+| agent-sdk-verifier-ts | agent-sdk-dev     | sonnet  | TypeScript SDK verification      |
 
-- React components: `PascalCase.tsx`
-- Hooks: `useX.ts`
-- Utilities/services: `camelCase.ts`
-- Intentionally unused args/vars: prefix with `_`.
+## When To Use Which Agent Type
 
-## Testing Guidelines
+**Sub-agents** (Task tool): Focused, isolated work. Good for single-file implementation, research, verification. Own context, returns summary only. Use when main context is getting heavy.
 
-Primary frameworks:
+**Agent teams** (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1): Parallel work where teammates need to communicate. Good for multi-zone sprints, competing hypotheses, parallel feature work. Each gets own session.
 
-- Vitest for unit/integration tests (`*.test.ts`, `*.test.tsx`).
-- Playwright for E2E in `apps/web/e2e` and `apps/desktop/e2e`/`playwright`.
-- Rust tests under `apps/desktop/src-tauri/tests` and module `tests` folders.
-  Run package-level coverage with `pnpm --filter <workspace> test:coverage` when changing core logic. No global coverage threshold is enforced, but new code should include focused tests.
+**Direct invocation** (@agent-name): Quick delegation within current context. Good for asking a specialist a question or having them review something specific.
 
-## Commit & Pull Request Guidelines
+## Model Assignment Rules
 
-Commits must follow Conventional Commits (enforced by commitlint), e.g. `feat: add device pairing endpoint`, `fix: handle websocket reconnect`.
-Keep commits scoped to a single concern/workspace when possible.
-For PRs, include:
-
-- concise summary and affected paths
-- linked issue/ticket (if available)
-- validation steps you ran (e.g., `pnpm lint`, `pnpm test`)
-- screenshots or recordings for UI changes
+- Any agent can use custom models (Ollama, Groq, etc.) alongside cloud models
+- Model is set in agent frontmatter `model:` field (opus/sonnet/haiku/inherit)
+- `inherit` uses whatever model the parent session is using
+- Users can override per-agent model in Settings > Agents
