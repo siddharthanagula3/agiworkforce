@@ -13,14 +13,20 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  * Video Generation Status API
  * Endpoint: GET /api/media/video/status?task_id=xxx
  *
- * Polls the status of a video generation task from Runway or Google Veo3.
+ * Polls the status of a video generation task from Runway or Google Veo.
+ * The frontend should poll this endpoint every 3–5 seconds until status
+ * is "completed" or "failed". Maximum poll window: 5 minutes.
  */
+
+// Each status check is a single outbound HTTP call and should complete quickly.
+export const maxDuration = 30;
+export const runtime = 'nodejs';
 
 // Response types
 interface VideoStatusResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
   video_url?: string;
   thumbnail_url?: string;
   progress?: number;
@@ -28,6 +34,7 @@ interface VideoStatusResponse {
 }
 
 // Runway task status response
+// Ref: GET https://api.dev.runwayml.com/v1/tasks/{id}
 interface RunwayTaskStatusResponse {
   id: string;
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
@@ -39,7 +46,8 @@ interface RunwayTaskStatusResponse {
   estimatedTimeToComplete?: number;
 }
 
-// Google operation status response
+// Google long-running operation status response
+// Ref: GET https://generativelanguage.googleapis.com/v1beta/{operation_name}
 interface GoogleOperationResponse {
   name: string;
   metadata?: {
@@ -54,26 +62,31 @@ interface GoogleOperationResponse {
   };
   response?: {
     '@type': string;
+    // Veo 3.x response format
+    generatedSamples?: Array<{
+      video?: {
+        uri?: string;
+        bytesBase64Encoded?: string;
+      };
+    }>;
+    // Alternative format seen in some API versions
     videos?: Array<{
       video?: {
         uri?: string;
         bytesBase64Encoded?: string;
       };
     }>;
-    generatedSamples?: Array<{
-      video?: {
-        uri?: string;
-      };
-    }>;
   };
 }
 
 /**
- * Extract provider and original task ID from our composite task ID
+ * Extract provider and original task ID from our composite task ID.
+ * Format: "{provider}_{originalId}" e.g. "runway_abc123" or "google_xyz789"
  */
 function parseTaskId(taskId: string): { provider: 'runway' | 'google'; originalId: string } {
   if (taskId.startsWith('runway_')) {
     const originalId = taskId.substring(7);
+    // Runway task IDs are UUIDs or alphanumeric strings
     if (!/^[a-zA-Z0-9_-]+$/.test(originalId)) {
       throw createError.validation('Invalid task_id: contains disallowed characters');
     }
@@ -81,16 +94,20 @@ function parseTaskId(taskId: string): { provider: 'runway' | 'google'; originalI
   }
   if (taskId.startsWith('google_')) {
     const originalId = taskId.substring(7);
+    // Google operation IDs are numeric or alphanumeric
     if (!/^[a-zA-Z0-9_-]+$/.test(originalId)) {
       throw createError.validation('Invalid task_id: contains disallowed characters');
     }
     return { provider: 'google', originalId };
   }
-  throw createError.validation('Invalid task_id format');
+  throw createError.validation('Invalid task_id format. Expected "runway_..." or "google_..."');
 }
 
 /**
  * Get video status from Runway API
+ * Endpoint: GET https://api.dev.runwayml.com/v1/tasks/{id}
+ * Auth: Authorization: Bearer {RUNWAY_API_KEY}
+ * Required header: X-Runway-Version: 2024-11-06
  */
 async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
   const apiKey = process.env.RUNWAY_API_KEY;
@@ -104,6 +121,7 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
       Authorization: `Bearer ${apiKey}`,
       'X-Runway-Version': '2024-11-06',
     },
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
@@ -121,7 +139,7 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
 
   const result = (await response.json()) as RunwayTaskStatusResponse;
 
-  // Map Runway status to our status
+  // Map Runway statuses to our unified status vocabulary
   let status: VideoStatusResponse['status'];
   switch (result.status) {
     case 'PENDING':
@@ -150,7 +168,6 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
 
   if (status === 'completed' && result.output && result.output.length > 0) {
     statusResponse.video_url = result.output[0];
-    // Runway doesn't provide separate thumbnails, use video URL
   }
 
   if (status === 'failed' && result.failure) {
@@ -161,7 +178,12 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
 }
 
 /**
- * Get video status from Google Veo3 API
+ * Get video status from Google Veo via long-running operation polling
+ * Endpoint: GET https://generativelanguage.googleapis.com/v1beta/operations/{id}
+ * Auth: x-goog-api-key header
+ *
+ * The operation name returned by /predictLongRunning is "operations/{id}".
+ * We store only the numeric/alphanumeric ID portion and reconstruct the path here.
  */
 async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusResponse> {
   const apiKey = process.env.GOOGLE_API_KEY;
@@ -169,7 +191,7 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
     throw createError.serviceUnavailable('Google Veo API not configured');
   }
 
-  // Poll the operation status
+  // Full operation name: "operations/{operationId}"
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/operations/${operationId}`;
 
   const response = await fetch(endpoint, {
@@ -178,6 +200,7 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,
     },
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
@@ -195,7 +218,7 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
 
   const result = (await response.json()) as GoogleOperationResponse;
 
-  // Determine status
+  // Determine our unified status from the operation response
   let status: VideoStatusResponse['status'];
   if (result.error) {
     status = 'failed';
@@ -230,14 +253,16 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
     progress: result.metadata?.progress,
   };
 
-  // Extract video URL if completed
+  // Extract video URL when completed — handle both response shapes Veo may return
   if (status === 'completed' && result.response) {
-    // Try different response formats (Veo API can return in different structures)
-    const videos = result.response.videos || result.response.generatedSamples;
-    if (videos && videos.length > 0) {
-      const firstVideo = videos[0];
-      if (firstVideo.video?.uri) {
-        statusResponse.video_url = firstVideo.video.uri;
+    const samples = result.response.generatedSamples ?? result.response.videos ?? [];
+    if (samples.length > 0) {
+      const firstVideo = samples[0].video;
+      if (firstVideo?.uri) {
+        statusResponse.video_url = firstVideo.uri;
+      } else if (firstVideo?.bytesBase64Encoded) {
+        // Embed as data URI if the provider returns inline base64
+        statusResponse.video_url = `data:video/mp4;base64,${firstVideo.bytesBase64Encoded}`;
       }
     }
   }
@@ -259,7 +284,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
     return preflightResponse;
   }
 
-  // Rate limiting: Allow frequent polling for status updates
+  // Rate limiting: Allow frequent polling (status checks are cheap)
   const rateLimitResponse = await withRateLimit(request, 'video-status');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -299,8 +324,18 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Missing required parameter: task_id');
   }
 
-  // Parse task ID to determine provider
+  // Parse task ID to determine provider and get the original provider-side ID
   const { provider, originalId } = parseTaskId(taskId);
+
+  // TODO: [H33] task ownership verification — requires storing task_id → user_id mapping at creation time
+  // A proper fix: at creation time (generate/route.ts), store { task_id, user_id } in Redis/Supabase,
+  // then here look up the mapping and reject if user.id !== storedUserId.
+  console.warn(
+    '[SECURITY] Video task status called without ownership verification for task_id:',
+    taskId,
+    'user_id:',
+    user?.id,
+  );
 
   logger.info(
     {
@@ -311,7 +346,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
     'Checking video generation status',
   );
 
-  // Get status based on provider
+  // Fetch status from the appropriate provider
   let statusResponse: VideoStatusResponse;
 
   try {
@@ -321,7 +356,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
       statusResponse = await getGoogleVeoStatus(originalId);
     }
   } catch (error) {
-    // Re-throw AppError instances
+    // Re-throw AppError instances (from createError.*)
     if (error && typeof error === 'object' && 'statusCode' in error) {
       throw error;
     }
