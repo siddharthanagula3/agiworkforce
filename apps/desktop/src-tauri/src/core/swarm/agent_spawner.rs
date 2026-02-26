@@ -227,6 +227,8 @@ pub struct AgentTask {
 pub struct AgentTaskResult {
     /// Subtask ID.
     pub subtask_id: String,
+    /// ID of the agent that executed this task.
+    pub agent_id: String,
     /// Whether execution was successful.
     pub success: bool,
     /// Result value if successful.
@@ -401,6 +403,7 @@ impl AgentSpawner {
                         circuit_breaker.record_success();
                         AgentTaskResult {
                             subtask_id: task.subtask.id.clone(),
+                            agent_id: agent_id.clone(),
                             success: true,
                             result: Some(value),
                             error: None,
@@ -415,6 +418,7 @@ impl AgentSpawner {
                         }
                         AgentTaskResult {
                             subtask_id: task.subtask.id.clone(),
+                            agent_id: agent_id.clone(),
                             success: false,
                             result: None,
                             error: Some(e.to_string()),

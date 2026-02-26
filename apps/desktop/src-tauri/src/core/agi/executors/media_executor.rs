@@ -107,8 +107,13 @@ pub struct MediaExecutor {
 
 impl MediaExecutor {
     pub fn new() -> Self {
+        // Image generation: up to 60s per provider call (handled by web API route).
+        // Video generation: the web API creates the task (<30s) and the executor polls
+        // for completion — the entire poll loop can take up to 5 minutes (300s).
+        // We set the per-request timeout to 90s (generous for individual HTTP calls)
+        // and rely on the poll loop's internal 3s sleep + max_attempts for overall cap.
         let http_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_secs(90))
             .build()
             .expect("Failed to create HTTP client");
 
@@ -428,11 +433,13 @@ async fn save_image_to_history(
         .path()
         .app_data_dir()
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    std::fs::create_dir_all(&app_dir).map_err(|e| anyhow::anyhow!("{}", e))?;
+    tokio::fs::create_dir_all(&app_dir)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let history_path = app_dir.join("media_history.json");
     let mut history: Vec<crate::sys::commands::media::MediaHistoryItem> = if history_path.exists() {
-        let content = std::fs::read_to_string(&history_path)?;
+        let content = tokio::fs::read_to_string(&history_path).await?;
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         vec![]
@@ -452,7 +459,7 @@ async fn save_image_to_history(
     }
 
     let content = serde_json::to_string_pretty(&history)?;
-    std::fs::write(history_path, content)?;
+    tokio::fs::write(history_path, content).await?;
 
     Ok(())
 }
@@ -471,11 +478,13 @@ async fn save_video_to_history(
         .path()
         .app_data_dir()
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    std::fs::create_dir_all(&app_dir).map_err(|e| anyhow::anyhow!("{}", e))?;
+    tokio::fs::create_dir_all(&app_dir)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let history_path = app_dir.join("media_history.json");
     let mut history: Vec<crate::sys::commands::media::MediaHistoryItem> = if history_path.exists() {
-        let content = std::fs::read_to_string(&history_path)?;
+        let content = tokio::fs::read_to_string(&history_path).await?;
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         vec![]
@@ -495,7 +504,7 @@ async fn save_video_to_history(
     }
 
     let content = serde_json::to_string_pretty(&history)?;
-    std::fs::write(history_path, content)?;
+    tokio::fs::write(history_path, content).await?;
 
     Ok(())
 }

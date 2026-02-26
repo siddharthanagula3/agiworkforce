@@ -20,7 +20,7 @@ use crate::core::agi::Goal;
 use crate::core::llm::LLMRouter;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -142,6 +142,10 @@ pub struct SwarmOrchestrator {
     is_running: Arc<AtomicBool>,
     /// Stop signal for graceful shutdown.
     stop_signal: Arc<AtomicBool>,
+    /// Tracks subtask IDs that have already been dispatched to agents.
+    /// Prevents re-spawning the same subtask on retry when orchestration
+    /// fails partway through and `execute_parallel` is called again.
+    spawned_subtask_ids: Arc<tokio::sync::Mutex<HashSet<String>>>,
 }
 
 impl SwarmOrchestrator {
@@ -172,6 +176,7 @@ impl SwarmOrchestrator {
             stats: Arc::new(RwLock::new(SwarmStats::default())),
             is_running: Arc::new(AtomicBool::new(false)),
             stop_signal: Arc::new(AtomicBool::new(false)),
+            spawned_subtask_ids: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
         })
     }
 
@@ -300,6 +305,14 @@ impl SwarmOrchestrator {
 
         self.is_running.store(false, Ordering::SeqCst);
 
+        // Clean up: invalidate decomposition cache for this goal (no longer
+        // needed) and clear the spawned subtask tracking set.
+        self.decomposer.invalidate_cache(&goal).await;
+        {
+            let mut spawned = self.spawned_subtask_ids.lock().await;
+            spawned.clear();
+        }
+
         tracing::info!(
             "[SwarmOrchestrator] Swarm execution completed: {} ({}/{} succeeded, {:.2}x speedup)",
             if result.success { "SUCCESS" } else { "FAILED" },
@@ -342,9 +355,25 @@ impl SwarmOrchestrator {
 
             // Spawn agents and assign tasks for ready subtasks
             for subtask in ready_subtasks {
-                // Skip if already pending
+                // Skip if already pending in this execution loop
                 if pending_tasks.contains_key(&subtask.id) {
                     continue;
+                }
+
+                // SECURITY FIX [H5]: Hold lock across check+insert+mark_running
+                // to prevent TOCTOU race where two iterations could both pass
+                // the "contains" check before either inserts.
+                {
+                    let mut spawned = self.spawned_subtask_ids.lock().await;
+                    if spawned.contains(&subtask.id) {
+                        tracing::info!(
+                            "[SwarmOrchestrator] Skipping already-spawned subtask {} (idempotency guard)",
+                            subtask.id,
+                        );
+                        continue;
+                    }
+                    // Mark as dispatched BEFORE releasing lock to prevent races
+                    spawned.insert(subtask.id.clone());
                 }
 
                 // Get or spawn an agent
@@ -356,6 +385,9 @@ impl SwarmOrchestrator {
                             subtask.id,
                             e
                         );
+                        // Roll back the spawned insertion since we failed to get an agent
+                        let mut spawned = self.spawned_subtask_ids.lock().await;
+                        spawned.remove(&subtask.id);
                         continue;
                     }
                 };
@@ -392,6 +424,9 @@ impl SwarmOrchestrator {
                     }
                     Err(e) => {
                         tracing::warn!("[SwarmOrchestrator] Failed to assign task to agent: {}", e);
+                        // Roll back the spawned insertion since the task was not sent
+                        let mut spawned = self.spawned_subtask_ids.lock().await;
+                        spawned.remove(&subtask.id);
                     }
                 }
             }
@@ -405,7 +440,7 @@ impl SwarmOrchestrator {
 
                         let result = SubtaskResult {
                             subtask_id: subtask_id.clone(),
-                            agent_id: task_result.subtask_id.clone(), // Note: should be agent_id
+                            agent_id: task_result.agent_id.clone(),
                             success: task_result.success,
                             output: task_result.result,
                             error: task_result.error.clone(),
@@ -427,8 +462,14 @@ impl SwarmOrchestrator {
                         } else {
                             let will_retry = graph.mark_failed(subtask_id);
                             if will_retry && task_result.retriable {
+                                // Remove from spawned set so the retry loop
+                                // can re-dispatch this subtask to a new agent
+                                {
+                                    let mut spawned = self.spawned_subtask_ids.lock().await;
+                                    spawned.remove(subtask_id);
+                                }
                                 tracing::info!(
-                                    "[SwarmOrchestrator] Subtask {} will be retried",
+                                    "[SwarmOrchestrator] Subtask {} will be retried (cleared from spawned set)",
                                     subtask_id
                                 );
                             } else {
@@ -451,7 +492,16 @@ impl SwarmOrchestrator {
                     Err(oneshot::error::TryRecvError::Closed) => {
                         // Channel closed without result - agent failed
                         completed_ids.push(subtask_id.clone());
-                        graph.mark_failed(subtask_id);
+                        let will_retry = graph.mark_failed(subtask_id);
+                        if will_retry {
+                            // Allow re-dispatch on the next loop iteration
+                            let mut spawned = self.spawned_subtask_ids.lock().await;
+                            spawned.remove(subtask_id);
+                            tracing::info!(
+                                "[SwarmOrchestrator] Subtask {} agent channel closed, will retry (cleared from spawned set)",
+                                subtask_id,
+                            );
+                        }
 
                         results.push(SubtaskResult::failure(
                             subtask_id.clone(),
