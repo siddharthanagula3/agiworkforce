@@ -126,7 +126,8 @@ core/
                     # memory_manager.rs, executors/ (15 domain executors: file, git, browser,
                     # terminal, media, code, api, calendar, cloud, db, email, llm, mcp, ocr, etc.)
   swarm/            # Multi-agent swarm: agent_spawner.rs, orchestrator.rs,
-                    # task_decomposer.rs, result_aggregator.rs, circuit_breaker.rs
+                    # task_decomposer.rs (with SHA-256 caching & 1h TTL for idempotency),
+                    # result_aggregator.rs, circuit_breaker.rs
   embeddings/       # Vector embeddings and semantic search
   research/         # Research orchestration
 features/           # Domain features: terminal, calendar, communications, speech,
@@ -137,7 +138,8 @@ sys/
   billing/          # Stripe billing state
   telemetry/        # Telemetry
 automation/         # Desktop automation: input/, screen/, computer_use/, browser/,
-                    # vision_planner.rs, recorder.rs, safety.rs
+                    # extension_bridge.rs (CDP primary + extension fallback), vision_planner.rs,
+                    # recorder.rs, safety.rs
 data/
   db/               # SQLite via rusqlite: models, repository pattern, migrations,
                     # encryption.rs (SQLCipher support for database-at-rest encryption)
@@ -155,8 +157,9 @@ The `LLMRouter` (`core/llm/llm_router.rs`) handles:
 - Fallback chain across providers when retries fail
 - Cost tracking via `CostCalculator` and `TokenCounter` with per-task and per-session caps ($5/$50 defaults)
 - Circuit breaker for LLM provider 5xx errors with exponential cooldown
-- SSE streaming via `sse_parser.rs`
+- SSE streaming via `sse_parser.rs` with keepalive event support (300s idle timeout, 120s followup invoke timeout, 600s streaming tool loop max)
 - Prompt caching for Anthropic/OpenAI
+- Keepalive signal propagation: `StreamChunk.keepalive` field tracks provider heartbeats (SSE comments, `ping` events) to prevent timeout errors during long-running operations like image generation and extended thinking
 
 Provider implementations: `ManagedCloudProvider` handles Anthropic, OpenAI, Google, xAI, DeepSeek, and others. `OllamaProvider` handles local models. `HttpClientFactory` centralizes HTTP client creation with proxy and custom CA cert support for corporate environments.
 
@@ -191,7 +194,7 @@ SQLite via `rusqlite` at `src-tauri/src/data/db/`. Schema managed by SQL migrati
 - **SCIM/Directory Sync**: WorkOS webhook handler at `/api/webhooks/directory-sync` (5 event types with HMAC-SHA256 verification), admin API at `/api/admin/directory-sync`
 - **Admin Security API**: `/api/admin/security` for suspend-user, ban-user, reactivate-user actions
 - **Proxy & Custom CA Support**: `HttpClientFactory` in `core/llm/providers/http_client_factory.rs` reads proxy URLs from env (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and accepts custom CA cert paths for corporate SSL inspection
-- **Filesystem deny list**: Tauri capabilities exclude 9 sensitive paths (`.docker`, `.npmrc`, `.pypirc`, `.netrc`, `.azure`, `.config/gh`, `.config/heroku`, `.config/op`, `.config/stripe`)
+- **Filesystem deny list**: Tauri capabilities exclude 19 sensitive paths for both read and write (`.docker`, `.npmrc`, `.pypirc`, `.netrc`, `.azure`, `.config/gh`, `.config/heroku`, `.config/op`, `.config/stripe` and others) to prevent credential leakage and unauthorized system access
 - **Frontend components**: `StatusBanner` polls CDN status, error boundary detects connection issues, degraded state banner shows when subscription fetch fails
 - **Rate limiting**: All API endpoints protected via Upstash Redis rate limiting
 
