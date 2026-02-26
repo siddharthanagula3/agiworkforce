@@ -62,7 +62,12 @@ const ChatCompletionRequestSchema = z.object({
   max_completion_tokens: z.number().int().positive().optional(),
   presence_penalty: z.number().min(-2).max(2).optional(),
   frequency_penalty: z.number().min(-2).max(2).optional(),
-  logit_bias: z.record(z.string(), z.number()).optional(),
+  logit_bias: z
+    .record(
+      z.string().regex(/^\d+$/, 'logit_bias keys must be token IDs (numeric strings)'),
+      z.number(),
+    )
+    .optional(),
   user: z.string().optional(),
   tools: z.array(z.unknown()).optional(),
   tool_choice: z.unknown().optional(),

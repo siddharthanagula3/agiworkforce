@@ -75,16 +75,8 @@ fn is_retryable_error(error: &str) -> bool {
         return true;
     }
 
-    // Temporary server errors
-    if error_lower.contains("500")
-        || error_lower.contains("502")
-        || error_lower.contains("503")
-        || error_lower.contains("504")
-        || error_lower.contains("internal server error")
-        || error_lower.contains("bad gateway")
-        || error_lower.contains("service unavailable")
-        || error_lower.contains("gateway timeout")
-    {
+    // Temporary server errors - delegate to is_server_error to avoid duplication
+    if is_server_error(error) {
         return true;
     }
 

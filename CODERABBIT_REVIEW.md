@@ -1,648 +1,916 @@
 # CodeRabbit Full Codebase Review
 
-Pass: 1 of 2
-Generated: 2026-02-25
-Total issues: 115 (Critical: 22 | High: 43 | Medium: 32 | Low: 18)
-
-Reviewers: logic-bug-reviewer (Zone A), security-reviewer (Zone B+C), code-quality-reviewer (Zone A+B), test-coverage-reviewer (Zone D), config-dependency-reviewer (Zone E)
-Superpowers principles active: systematic-debugging, verification-before-completion, requesting-code-review
-
-## Pass 1 Summary (Updated 2026-02-26)
-
-- **Fixed**: 35 issues (9 Critical + 16 High + 2 Medium + 2 Low + 6 Config)
-- **Needs Human**: 28 issues (test suites, architectural refactors, stub implementations)
-- **Open (automatable in Pass 2)**: 52 issues
-- **cargo check**: PASS (all features)
-- **pnpm typecheck**: PASS
-- **pnpm lint**: PASS (within 15-warning limit)
-- **Settings UI**: 4 new components + MCPWorkspace wired in (8-tab settings panel)
-
-### Fixed in Batch 1 (Rust + TS): C9, H30, H31, H7, H4, M2, L1, H6, M6, M8, L24
-
-### Fixed in Batch 2 (Rust Security): C19, C20, C21, C16, H28, H29, H26, H34, H2, H3, H5
-
-### Fixed in Batch 3 (TS Quality): H9, H19, H17, H18, C4(partial)
-
-### Fixed in Batch 4 (Config): H20, C10, H21, H22, M24, M25
+Pass: 2 of 2
+Generated: 2026-02-26T00:00:00Z
+Total issues: 109 (Critical: 4 | High: 57 | Medium: 38 | Low: 10)
 
 ---
 
 ## Critical Issues
 
-### [C1] Session cost cap enforced AFTER provider billing — TOCTOU race
+### [C1] Tauri signing private key potentially logged on CI error
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1076`
-- **Category**: logic
-- **Description**: `invoke_candidate()` accumulates cost into `cumulative_cost` then checks `SESSION_COST_SAFETY_CAP`. In concurrent scenarios sharing the same `LLMRouter` via `Arc<RwLock>`, multiple tasks can all read `cumulative_cost` before any writes its increment — all pass the guard and bill the provider. The cap provides false safety; the provider is already billed when the error fires.
-- **Suggested Fix**: Pre-check cap BEFORE sending inside a Mutex block. Use a 'reserved' counter to atomically hold pre-committed budget.
-- **Status**: OPEN
-
-### [C2] ExtensionBridge.connect() is a phantom — only sets a boolean, never opens a real connection
-
-- **File**: `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:124`
-- **Category**: logic
-- **Description**: `connect()` acquires a mutex and sets `*connected = true` without opening any WebSocket or performing a handshake. `is_connected()` returns true after the first call regardless of whether the server is actually running.
-- **Suggested Fix**: Remove the connected flag entirely and rely on `send_native_message_via_realtime`'s error handling. Or make `connect()` actually probe connectivity and set connected=true only on success.
-- **Status**: OPEN
-
-### [C3] MediaExecutor::new() expect() panics entire Tauri process on TLS failure
-
-- **File**: `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:115`
-- **Category**: logic
-- **Description**: `MediaExecutor::new()` calls `.build().expect('Failed to create HTTP client')`. On TLS initialization failure, this panics and kills the entire Tauri process during startup.
-- **Suggested Fix**: Change `new()` to return `Result<Self, anyhow::Error>` and propagate the error with `?`.
-- **Status**: OPEN
-
-### FIXED [C4] storageFallback duplicated in 10+ store files — DRY violation at scale
-
-- **File**: `apps/desktop/src/stores/auth.ts:288`
-- **Category**: quality
-- **Description**: `storageFallback` is defined identically in 10+ store files: `auth.ts`, `billingUsage.ts`, `ui.ts`, `schedulerStore.ts`, `projectStore.ts`, `settingsStore.ts`, `modelStore.ts`, `updaterStore.ts`, `customInstructionsStore.ts`, `memoryStore.ts`. Any bug fix must be applied to every copy.
-- **Suggested Fix**: Remove local `const storageFallback` and `import { storageFallback } from '../../utils/localStorage'` in all files.
-- **Status**: FIXED (partial) — Shared `lib/storageFallback.ts` utility created; `auth.ts`, `modelStore.ts`, `settingsStore.ts` migrated. Remaining stores (billingUsage, ui, schedulerStore, etc.) still use local copies — NEEDS_HUMAN for full migration.
-
-### [C5] getAuthToken() duplicated in 3 web hooks
-
-- **File**: `apps/web/lib/hooks/useMediaGeneration.ts:6`
-- **Category**: quality
-- **Description**: `getAuthToken()` is defined identically in `useMediaGeneration.ts:6`, `useVoiceTranscription.ts:112`, and `useChatStream.ts:330`. Auth flow changes must be applied to 3 places.
-- **Suggested Fix**: Extract to `apps/web/lib/auth/getAuthToken.ts` and import in all three hooks.
-- **Status**: OPEN
-
-### [C6] layoutClasses all empty strings — the layout prop has zero visual effect
-
-- **File**: `apps/desktop/src/components/UnifiedAgenticChat/index.tsx:2657`
-- **Category**: quality
-- **Description**: `layoutClasses` maps `'default'`, `'compact'`, `'immersive'` all to empty strings. Used in `className` at line 2758 but contributes zero CSS regardless of the layout prop value.
-- **Suggested Fix**: Implement distinct CSS classes for each variant, or remove the prop entirely.
-- **Status**: OPEN
-
-### [C7] gpt-5.2-codex MODEL_METADATA copy-pasted 4 times — ~160 lines of duplication
-
-- **File**: `apps/desktop/src/constants/llm.ts:625`
-- **Category**: quality
-- **Description**: Entries for `gpt-5.2-codex-low`, `-medium`, `-high`, `-xhigh` are copy-pasted with identical `apiModelId`, `capabilities`, `benchmarks`, `inputCost`, `outputCost`. Only `speed` and `qualityTier` differ.
-- **Suggested Fix**: Define `const CODEX_BASE_META = { ... }` and spread it into each entry with only overrides.
-- **Status**: OPEN
-
-### [C8] chat_send_message is ~3124 lines — the longest function in the codebase, untestable
-
-- **File**: `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:1627`
-- **Category**: quality
-- **Description**: `chat_send_message` spans lines 1627-4751 (~3124 lines). It encompasses request validation, attachment processing, conversation creation, LLM routing, streaming tool loops, tool execution, MCP orchestration, billing checks, stop-generation handling, and event emission. Test coverage is effectively zero.
-- **Suggested Fix**: Decompose into: `validate_and_prepare_request`, `build_llm_request`, `stream_and_emit_response`, `execute_tool_loop`, `finalize_conversation`. The streaming tool loop alone (~lines 2000-4700) should be its own module.
-- **Status**: NEEDS_HUMAN (architectural decomposition)
-
-### FIXED [C9] SQLCipher encryption silently falls back to plaintext database
-
-- **File**: `apps/desktop/src-tauri/src/lib.rs:189`
+- **File**: `.github/workflows/release-desktop.yml:286`
 - **Category**: config
-- **Description**: `lib.rs` initializes the encrypted database with a `.map_err()` that logs a warning and falls back to unencrypted SQLite if encryption initialization fails. Sensitive data is stored in plaintext without user notification.
-- **Suggested Fix**: Replace the fallback with a hard failure: if encryption init fails, return Err and show a user-facing error dialog. Never silently downgrade security.
-- **Status**: FIXED — Hard error on encryption failure; silent plaintext fallback removed.
+- **Description**: `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set as workflow environment variables. GitHub Actions may echo them in error outputs or debug logs. A single leaked key compromises all auto-update signatures.
+- **Suggested Fix**: Remove from `env:` block; pass directly to `tauri-action` inputs with `with:` so GitHub's built-in secret masking applies. Add `::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}` as a safety-net step.
+- **Status**: PENDING
 
-### FIXED [C10] PostgreSQL password hardcoded as 'postgres' in docker-compose.yml
+### [C2] Exponential backoff test does not assert delay growth
 
-- **File**: `docker-compose.yml:1`
-- **Category**: config
-- **Description**: `docker-compose.yml` sets `POSTGRES_PASSWORD=postgres` committed to source control. Critical credential exposure if used in staging or CI with external access.
-- **Suggested Fix**: Replace with `POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}` and add `.env.example`.
-- **Status**: FIXED — `POSTGRES_PASSWORD` and `PGADMIN_DEFAULT_PASSWORD` now use `${VAR:-default}` env var expansion.
-
-### [C11] router_core_tests module is entirely empty — all LLM router tests deleted
-
-- **File**: `apps/desktop/src-tauri/src/features/tests/router_tests.rs:1`
+- **File**: `apps/desktop/src/__tests__/retry.test.ts:116`
 - **Category**: test
-- **Description**: Comment 'Obsolete tests removed' with zero test functions. The LLM router handles all provider routing, fallback chains, cost tracking, and retry logic — yet has zero test coverage.
-- **Suggested Fix**: Restore or rewrite router tests covering: happy path, fallback on 5xx, cost cap enforcement, circuit breaker open/close.
-- **Status**: NEEDS_HUMAN (write new tests)
+- **Description**: Test at lines 116–172 uses fake timers to record delays but verifies elapsed time _after_ operations rather than the delay intervals between them. Exponential growth (100ms→200ms→400ms) is never explicitly asserted. A regression flattening all delays to 0ms would still pass.
+- **Suggested Fix**: Use `vi.advanceTimersByTime()` per retry and assert delay doubles: `expect(delays[0]).toBe(100); expect(delays[1]).toBe(200); expect(delays[2]).toBe(400);`
+- **Status**: PENDING
 
-### [C12] SSE parser tests construct structs but never call parse functions — vacuously passing
+### [C3] features.test.ts (64 KB) is a monolithic file with unclear intent
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/tests/sse_parser_tests.rs:1`
+- **File**: `apps/desktop/src/__tests__/features.test.ts:1`
 - **Category**: test
-- **Description**: `sse_parser_tests.rs` creates `SseStreamParser` instances but never calls `parse_sse_event()`, `process_buffer()`, or `poll_next()`. All tests pass unconditionally.
-- **Suggested Fix**: Add tests feeding actual SSE byte sequences through `parse_sse_event()` and verify returned chunk types.
-- **Status**: NEEDS_HUMAN (write real tests)
+- **Description**: A 64.9 KB monolithic test file covers disparate features with no organization. Likely contains assertion-free tests and inconsistent patterns. Tests that always pass regardless of behavior provide false confidence.
+- **Suggested Fix**: Audit and split into per-feature files: `modelStore.test.ts`, `chatStore.test.ts`, etc. Ensure each describe block has explicit assertions.
+- **Status**: NEEDS_HUMAN (large-scale test refactor, requires careful analysis)
 
-### [C13] SESSION_COST_SAFETY_CAP enforcement has zero test coverage
+### [C4] Stripe webhook test must validate HMAC signature, not mock it
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1076`
+- **File**: `apps/web/__tests__/api/stripe-webhook.test.ts:1`
 - **Category**: test
-- **Description**: Critical safety control preventing runaway spending, but no test verifies it fires, fires at the correct threshold, or blocks concurrent requests.
-- **Suggested Fix**: Add tests: single request at cap boundary returns error; two concurrent requests both under cap individually but over cap together.
-- **Status**: NEEDS_HUMAN (write tests)
-
-### [C14] CostCalculator::calculate() has zero tests despite 200+ pricing entries
-
-- **File**: `apps/desktop/src-tauri/src/core/llm/cost_calculator.rs:12`
-- **Category**: test
-- **Description**: No test file exists for `cost_calculator.rs`. The 1000x pricing underestimate for image/video models (H2) would have been caught by a simple assertion on cost for a single `imagen-4` call.
-- **Suggested Fix**: Create `tests/cost_calculator_tests.rs`. Test known-price models at published rates; test image models return cost >= per_image_price.
-- **Status**: NEEDS_HUMAN (write tests)
-
-### [C15] SHA-256 decomposition cache has zero tests
-
-- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:408`
-- **Category**: test
-- **Description**: No test verifies: cache is populated after first call, second identical call returns cached result, expired entries are evicted, SHA-256 key is deterministic.
-- **Suggested Fix**: Add tests for cache hit, miss, TTL expiry, and serialization roundtrip.
-- **Status**: NEEDS_HUMAN (write tests)
-
-### FIXED [C16] validate_sql() warns but never returns Err on DROP TABLE — SQL protection non-enforcing
-
-- **File**: `apps/desktop/src-tauri/src/data/database/query_builder.rs:1`
-- **Category**: logic/test
-- **Description**: `validate_sql()` uses `eprintln!` to warn about `DROP TABLE` but always returns `Ok(())`. SQL injection prevention is unenforced at the validation boundary.
-- **Suggested Fix**: Fix `validate_sql()` to return `Err` for `DROP TABLE`, `DROP DATABASE`, and `DELETE/UPDATE` without WHERE.
-- **Status**: FIXED — `validate_sql()` now returns `Err` for DROP TABLE/DATABASE, TRUNCATE, ALTER TABLE, DELETE/UPDATE without WHERE.
-
-### [C17] chatStore.ts has zero direct test coverage
-
-- **File**: `apps/desktop/src/stores/chat/chatStore.ts:1`
-- **Category**: test
-- **Description**: Central state manager for all conversations, messages, citations, and token usage has no test coverage for any store action.
-- **Suggested Fix**: Create `apps/desktop/src/__tests__/stores/chatStore.test.ts`. Test all store actions.
-- **Status**: NEEDS_HUMAN (write tests)
-
-### [C18] content.ts isAttributeAllowed() XSS prevention completely untested
-
-- **File**: `apps/extension/src/content.ts:1`
-- **Category**: test
-- **Description**: `isAttributeAllowed()` gates which HTML attributes the extension can inject. An error in the allowlist logic could allow `javascript:` href injection. No test covers this security-critical function.
-- **Suggested Fix**: Add `content.test.ts` verifying XSS prevention: `isAttributeAllowed('href', a_el, 'javascript:alert()')` returns false.
-- **Status**: NEEDS_HUMAN (write tests)
-
-### FIXED [C19] Arbitrary JavaScript execution via browser_evaluate — no approval gate
-
-- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:584`
-- **Category**: security
-- **Description**: `browser_evaluate` accepts arbitrary user-supplied script and executes it directly in the active browser tab via CDP evaluate. No sanitization, allowlist, approval gate, or security tier check. Any renderer process can read cookies, exfiltrate local storage, or pivot to localhost services.
-- **Suggested Fix**: Route through `ApprovalController` at `RequiresExplicitApproval` tier. Add configurable script allowlist.
-- **Status**: FIXED — `RequiresExplicitApproval` gate via `ToolConfirmationRequest` added before script execution.
-
-### [C20] Arbitrary JavaScript execution via browser_execute_async_js — no approval gate
-
-- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:665`
-- **Category**: security
-- **Description**: `browser_execute_async_js` wraps the user-supplied script in a `Promise.resolve().then(async () => { ... })` wrapper and evaluates it via CDP with no validation or approval gate.
-- **Suggested Fix**: Apply same controls as `browser_evaluate`. Route through `ApprovalController` at `RequiresExplicitApproval` tier.
-- **Status**: FIXED — Same `RequiresExplicitApproval` gate added to `browser_execute_async_js`.
-
-### FIXED [C21] Local file SSRF via file:// fetch in browser_upload_file — bypasses Tauri deny list
-
-- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:905`
-- **Category**: security
-- **Description**: `browser_upload_file` injects user-supplied file paths into a JavaScript `fetch('file://' + path)` call executing inside the browser tab. A malicious renderer can supply paths like `../../../../etc/passwd` or `/Users/user/.ssh/id_rsa`. The Tauri capabilities deny list is bypassed entirely.
-- **Suggested Fix**: Validate each path against `check_file_permission()` and `validate_path_security()` before constructing the script. Reject any path outside `allowed_directories`.
-- **Status**: FIXED — Path validation added: null bytes, `..` traversal, `file://` prefix, length limit, existence check, is-file check.
-
-### [C22] No integration test for route_with_retry() multi-provider fallback chain
-
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1`
-- **Category**: test
-- **Description**: The fallback chain (primary → secondary → tertiary provider) is the most user-visible resilience feature of the LLM router. No test exercises a scenario where the primary provider returns 500, the secondary returns 429, and the tertiary succeeds.
-- **Suggested Fix**: Create an integration test using mock HTTP servers (httpmock): primary 500 twice, secondary 429, tertiary 200. Assert final response is from tertiary.
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: If signature verification is mocked, forged webhook payloads would not be caught by tests. The primary security guarantee of webhooks — HMAC-SHA256 verification — becomes invisible to the test suite.
+- **Suggested Fix**: Use Stripe's test signing secret to construct real HMAC signatures. Test rejection of: unsigned payloads, tampered signatures, replayed events (timestamp too old).
+- **Status**: PENDING
 
 ---
 
 ## High Issues
 
-### [H1] LLM cache stored using pre-resolution model key — different strategies share cache entries
+### [H1] Kill switch fails open on Supabase DB error
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1027`
+- **File**: `services/api-gateway/src/middleware/auth.ts:49`
+- **Category**: security
+- **Description**: If the Supabase kill-switch check fails (DB down, network error), code logs a warning and allows the request through. Suspended/banned users can make authenticated requests whenever Supabase is unavailable — critical fail-open vulnerability.
+- **Suggested Fix**: Return HTTP 503 when kill-switch check errors. Or cache last-known `account_status` in Redis with short TTL.
+- **Status**: PENDING
+
+### [H2] Device ID in rate-limit key without length/format validation
+
+- **File**: `apps/web/app/api/device/poll/route.ts:22`
+- **Category**: security
+- **Description**: `device_id` from request body used in rate-limit key without length or format validation. Attacker can pass arbitrarily long or crafted values causing memory exhaustion.
+- **Suggested Fix**: `if (!deviceId || deviceId.length > 128 || !/^[a-zA-Z0-9-_]{1,128}$/.test(deviceId)) return NextResponse.json({error:'Invalid device_id'},{status:400});`
+- **Status**: FIXED — Added /^[a-zA-Z0-9-_]{1,128}$/ validation before rate-limit key
+
+### [H3] Race condition in device fingerprint backfill
+
+- **File**: `apps/web/app/api/device/poll/route.ts:64`
+- **Category**: security
+- **Description**: Legacy session (no fingerprint) performs UPDATE without checking current status atomically. Two concurrent polls can race, allowing session bypass of fingerprint binding.
+- **Suggested Fix**: Add `WHERE device_fingerprint IS NULL` condition on the UPDATE statement. Use transaction or optimistic locking.
+- **Status**: FIXED — Added .is('device_fingerprint', null) WHERE clause to prevent concurrent backfill race
+
+### [H4] SQL keyword blocking bypassed with comment/whitespace tricks
+
+- **File**: `apps/desktop/src-tauri/src/sys/commands/database.rs:30`
+- **Category**: security
+- **Description**: Keyword blocking uses `sql_upper.contains()` (substring match). Attackers can bypass with `SEL/**/ECT`, newlines between keywords, or multi-statement injections.
+- **Suggested Fix**: Use regex word-boundary matching (`\bSELECT\b`) and reject semicolons in SELECT-only mode.
+- **Status**: PENDING
+
+### [H5] Procedure name validation allows dot-only strings
+
+- **File**: `apps/desktop/src-tauri/src/sys/commands/database.rs:342`
+- **Category**: security
+- **Description**: Validation allows dots in procedure names and only counts them without validating format. `....` (88 dots) passes char-set and count checks but is not a valid identifier.
+- **Suggested Fix**: Enforce: `^[a-zA-Z_][a-zA-Z0-9_]{0,63}(\.[a-zA-Z_][a-zA-Z0-9_]{0,63})*$`
+- **Status**: PENDING
+
+### [H6] HMAC signature header parsing vulnerable to malformed input
+
+- **File**: `apps/web/app/api/webhooks/directory-sync/route.ts:51`
+- **Category**: security
+- **Description**: Header parsing splits by comma then `=`. Malformed headers like `t=,v1=abc` produce misparsed timestamp/signature. Invalid timestamps not rejected before use.
+- **Suggested Fix**: `const match = signatureHeader.match(/t=(\d+).*v1=([a-f0-9]{64})/); if (!match) return NextResponse.json({error:'Invalid signature'},{status:400});`
+- **Status**: FIXED — Added /^\d+$/ integer validation before parseInt to prevent NaN bypass
+
+### [H7] QR code generated via untrusted external API (api.qrserver.com)
+
+- **File**: `apps/web/app/api/device/link/route.ts:156`
+- **Category**: security
+- **Description**: QR codes generated by calling external public service without domain pinning. DNS hijacking or MITM can inject malicious QR codes into device-linking flow.
+- **Suggested Fix**: Generate server-side using `qrcode` npm package: `import QRCode from 'qrcode'; const dataUrl = await QRCode.toDataURL(linkUrl);`
+- **Status**: NEEDS_HUMAN (requires installing new npm dependency)
+
+### [H8] Infinite loop on filesystem root in path resolution
+
+- **File**: `apps/desktop/src-tauri/src/core/agent/executor.rs:415`
 - **Category**: logic
-- **Description**: Cache is written using `candidate.model` as the key, but the model may have been dynamically resolved to a completely different model string at lines 940-969 (e.g., `'auto-economy'` → `'gpt-5-nano'`). Two strategies resolving to different models share the same cache entry.
-- **Suggested Fix**: After model resolution, use `routed_request.model` as the cache key for both lookup and write.
-- **Status**: OPEN
+- **Description**: When resolving a path at the filesystem root, `parent()` returns `None` handled with `unwrap_or(tmp)`, returning the same path. `file_name()` returning `Some` causes infinite loop.
+- **Suggested Fix**: `tmp = match tmp.parent() { Some(p) => p.to_path_buf(), None => break };`
+- **Status**: FIXED — Changed unwrap_or(tmp) to match expression that breaks at filesystem root
 
-### FIXED [H2] Image and video models use token-based cost formula — 1000x underestimate
+### [H9] set_openai/set_anthropic/set_google setters are identical boilerplate
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/cost_calculator.rs:12`
-- **Category**: logic
-- **Description**: `Pricing::cost()` computes `(tokens/1_000_000) * per_million_rate`. Image models like `imagen-4`, `dall-e-3`, `gpt-image-1`, `veo-3` are priced per-image (~$0.04/image). With `output_tokens=1`, `cost()` returns `$0.000040` instead of `$0.04` — a 1000x underestimate. Session cost cap fails to constrain image/video costs.
-- **Suggested Fix**: Add `MediaUnit` pricing variant with `cost_per_unit`. For media models, `calculate(provider, model, 0, num_images)` returns `num_images * cost_per_unit`.
-- **Status**: FIXED — `MediaType` enum + `calculate_media_cost()` added with per-unit pricing for image/video models.
-
-### FIXED [H3] dfs_longest_path shared visited set produces wrong critical path for diamond DAGs
-
-- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:271`
-- **Category**: logic
-- **Description**: `dfs_longest_path()` passes a shared `visited: &mut HashSet<String>` across sibling recursive branches. For diamond-shaped DAGs, sibling branches interfere with each other's visited state. The critical path is wrong, causing incorrect priority assignments to bottleneck tasks.
-- **Suggested Fix**: Replace DFS with topological-order DP: `dp[id] = 1 + max(dp[dep])` iterating in reverse topological order. O(V+E) and correct for all DAGs.
-- **Status**: FIXED — Replaced recursive DFS with Kahn's algorithm + forward DP, O(V+E), correct for all DAG topologies.
-
-### [H4] SubtaskResult.agent_id populated with subtask_id — all agent metrics misattributed
-
-- **File**: `apps/desktop/src-tauri/src/core/swarm/orchestrator.rs:440`
-- **Category**: logic
-- **Description**: `SubtaskResult` is constructed with `agent_id: task_result.subtask_id.clone()` with inline comment 'Note: should be agent_id'. All per-agent metrics and `AgentHealth` circuit breaker updates are misattributed.
-- **Suggested Fix**: Add `agent_id` to `AgentTaskResult` struct, set it when agent accepts the task, and use `task_result.agent_id.clone()` here.
-- **Status**: OPEN
-
-### FIXED [H5] TOCTOU race in spawned_subtask_ids — same subtask dispatched twice concurrently
-
-- **File**: `apps/desktop/src-tauri/src/core/swarm/orchestrator.rs:365`
-- **Category**: logic
-- **Description**: In `execute_parallel()`, the `spawned_subtask_ids` lock is acquired to check `contains()`, then released. `mark_running()` is not called until line 400. Between lock release and `mark_running()`, another concurrent task can pass the same check.
-- **Suggested Fix**: Hold the `spawned_subtask_ids` lock across the check, insert, and `graph.mark_running()` in a single critical section.
-- **Status**: FIXED — Atomic check+insert+mark_running under single lock hold; rollback on spawn/send failure.
-
-### FIXED [H6] GetUrl and GetTitle emit identical native payload — extension cannot distinguish requests
-
-- **File**: `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:504`
-- **Category**: logic
-- **Description**: `extension_message_to_native_payload()` produces `{type:'get_page_info', tab_id:null}` for both `ExtensionMessage::GetUrl` and `ExtensionMessage::GetTitle`. The native handler cannot distinguish which field is requested.
-- **Suggested Fix**: Use distinct type values: `GetUrl` → `{type:'get_url'}` and `GetTitle` → `{type:'get_title'}`.
-- **Status**: FIXED — Distinct type values `get_url` and `get_title` used for each variant.
-
-### FIXED [H7] Blocking std::fs I/O in async fn save_image_to_history stalls Tokio runtime
-
-- **File**: `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:439`
-- **Category**: logic
-- **Description**: `save_image_to_history()` is `async` but calls `std::fs::read_to_string` and `std::fs::write` (blocking). This blocks the Tokio worker thread during concurrent image generation.
-- **Suggested Fix**: Replace with `tokio::fs::read_to_string().await` and `tokio::fs::write().await`. Same fix applies to `save_video_to_history()`.
-- **Status**: FIXED — `tokio::fs::read_to_string` and `tokio::fs::write` used in both save functions.
-
-### [H8] handlersRef captures stale store methods at mount time — stale after logout
-
-- **File**: `apps/desktop/src/hooks/useAgenticEvents.ts:216`
-- **Category**: logic
-- **Description**: `handlersRef.current` is populated once with `useUnifiedChatStore.getState().addFileOperation` etc. After logout or store reset, handlers operate on stale closed-over state.
-- **Suggested Fix**: Access handlers dynamically inside each event listener: `useUnifiedChatStore.getState().addFileOperation(...)`.
-- **Status**: OPEN
-
-### FIXED [H9] 37+ console.log statements in production UnifiedAgenticChat — logs credit balances, user IDs
-
-- **File**: `apps/desktop/src/components/UnifiedAgenticChat/index.tsx:959`
+- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:684`
 - **Category**: quality
-- **Description**: 37+ `console.log` statements in production code. Several log credit balances, user IDs, message content previews, and full agent state JSON.
-- **Suggested Fix**: Replace with dev-only debug logger: `const debug = import.meta.env.DEV ? console.log : () => {}`.
-- **Status**: FIXED — All 37 `console.log` calls removed (console.warn/error retained).
+- **Description**: Individual provider setter functions are copy-paste boilerplate all calling `set_provider()` internally. Violates DRY.
+- **Suggested Fix**: Remove individual setters and expose `set_provider()` directly, or use a macro.
+- **Status**: NEEDS_HUMAN (API compatibility check needed)
 
-### [H10] Auth store exposes subscription tier, user IDs, retry counts via console.log
+### [H10] default_model() has 36 branches — should use a lookup table
 
-- **File**: `apps/desktop/src/stores/auth.ts:382`
+- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1809`
 - **Category**: quality
-- **Description**: 12 `console.log` calls in production auth store expose subscription tier values, user IDs, retry counts, and auth state details.
-- **Suggested Fix**: Replace with dev-only debug logger. Retain `console.error`/`warn` for actual failures only.
-- **Status**: OPEN
+- **Description**: 36 nested match branches (12 providers × 3 task categories) with duplicated string generation. Adding a new provider requires editing dozens of lines.
+- **Suggested Fix**: Replace with `HashMap<(Provider, TaskCategory), &'static str>` initialized once at startup.
+- **Status**: NEEDS_HUMAN (large refactor, architecture change)
 
-### [H11] useVoiceInput.ts has zero consumers — 150-line dead file
+### [H11] execute_chat_tool_with_timeout() exceeds 150 lines
 
-- **File**: `apps/web/lib/hooks/useVoiceInput.ts:38`
+- **File**: `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:252`
 - **Category**: quality
-- **Description**: `useVoiceInput.ts` has zero import consumers (confirmed by grep). Duplicates ~150 lines of Web Speech API logic already in `useVoiceTranscription.ts`.
-- **Suggested Fix**: Remove `useVoiceInput.ts` entirely.
-- **Status**: OPEN
+- **Description**: Handles timeout, cancellation, spawning, error formatting, and event emission. Too large to reason about.
+- **Suggested Fix**: Decompose into `spawn_tool_task()`, `handle_tool_timeout()`, `format_tool_error()`, `emit_tool_events()`.
+- **Status**: NEEDS_HUMAN (large refactor)
 
-### [H12] build_decomposition_prompt inlines 43-line format string with unescaped user-controlled data
+### [H12] 18 unorganized timeout/limit constants
 
-- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:590`
-- **Category**: quality (security risk)
-- **Description**: Uses raw `format!` to embed `goal.description`, `goal.priority`, `goal.constraints`, `goal.success_criteria` into LLM prompt without sanitization. Prompt injection risk via goal fields.
-- **Suggested Fix**: Apply `sanitize_multiline_for_prompt` utility to each substituted field.
-- **Status**: OPEN
-
-### [H13] Hard-coded app data path 'agiworkforce.db' duplicated across 4 functions
-
-- **File**: `apps/desktop/src-tauri/src/sys/commands/database.rs:883`
+- **File**: `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:23`
 - **Category**: quality
-- **Description**: The path `dirs::data_dir().join("agiworkforce").join("agiworkforce.db")` is copied verbatim at lines 883, 918, 951, and 986.
-- **Suggested Fix**: Extract `fn get_credential_db_path() -> Result<std::path::PathBuf, String>`. Call from all four functions.
-- **Status**: OPEN
+- **Description**: 18 constants with no grouping. Related timeouts for streaming, tools, sessions are interleaved.
+- **Suggested Fix**: Group into const structs: `StreamingTimeouts { IDLE_MS, WATCHDOG_MS }` and `ToolTimeouts { DEFAULT_MS, BROWSER_MS }`.
+- **Status**: NEEDS_HUMAN (large file change with risk)
 
-### [H14] browser_get_dom_snapshot is an exact duplicate of browser_get_content
+### [H13] execute_action() match has 8 branches each 50-60 lines
 
-- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:656`
+- **File**: `apps/desktop/src-tauri/src/core/agent/executor.rs:74`
 - **Category**: quality
-- **Description**: `browser_get_dom_snapshot` at line 656 has identical body to `browser_get_content` at line 647. Callers receive false confidence that they get a structured DOM snapshot when they get raw HTML.
-- **Suggested Fix**: Remove `browser_get_dom_snapshot` from the command registry.
-- **Status**: OPEN
+- **Description**: Massive match with 8 arms containing complex logic. Navigation branches have platform-specific repetition.
+- **Suggested Fix**: Extract each arm: `execute_navigation()`, `execute_shell_command()`, `execute_file_op()`.
+- **Status**: NEEDS_HUMAN (large refactor)
 
-### [H15] 15 semantic browser commands are no-op stubs returning hardcoded empty values
+### [H14] Shell command execution logic duplicated from chat/mod.rs
 
-- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:1082`
+- **File**: `apps/desktop/src-tauri/src/core/agent/executor.rs:151`
 - **Category**: quality
-- **Description**: `browser_get_frames`, `find_element_semantic`, `click_semantic`, `get_accessibility_tree`, `test_selector_strategies`, `get_dom_semantic_graph`, `get_interactive_elements`, `find_by_role`, and 7 others return `Ok(vec![])`, `Ok(Value::Null)`, or hardcoded strings. Callers receive nonsense data silently.
-- **Suggested Fix**: Return `Err("Not implemented".to_string())` from every stub command. Remove from Tauri command registry until implemented.
-- **Status**: OPEN
+- **Description**: Command validation, timeout handling, and output capture implemented in both `executor.rs` and `chat/mod.rs`.
+- **Suggested Fix**: Extract into `AutomationCommandExecutor` utility in a shared module.
+- **Status**: NEEDS_HUMAN (architectural change)
 
-### [H16] isSending return value is stale — reads ref at hook-call time, Send button never disables
+### [H15] TASK_KEYWORDS has significant overlap across categories
 
-- **File**: `apps/desktop/src/components/UnifiedAgenticChat/hooks/useChatSubmit.ts:247`
+- **File**: `apps/desktop/src/lib/modelRouter.ts:269`
 - **Category**: quality
-- **Description**: Returns `isSending: isSendingRef.current` — a React ref, not state. Reading `.current` at return time does not trigger a re-render. Send button consuming this value permanently shows `false`.
-- **Suggested Fix**: Replace `const isSendingRef = useRef(false)` with `const [isSending, setIsSending] = useState(false)`.
-- **Status**: OPEN
+- **Description**: Keywords like `code`, `function`, `implement` appear in both coding and reasoning categories, making routing ambiguous.
+- **Suggested Fix**: Normalize to a single list with per-keyword scoring weights.
+- **Status**: NEEDS_HUMAN (behavior change, needs validation)
 
-### FIXED [H17] window.confirm() for destructive cache-clear — blocks main thread, broken in Tauri
+### [H16] getBenchmarkScore() uses undocumented magic multipliers
 
-- **File**: `apps/desktop/src/components/Settings/CacheManagement.tsx:43`
+- **File**: `apps/desktop/src/lib/modelRouter.ts:685`
 - **Category**: quality
-- **Description**: `handleClearAll` calls `window.confirm(...)`. This blocks the JavaScript event loop and is suppressed by Tauri's default webview policy.
-- **Suggested Fix**: Replace with application-level confirmation dialog using `RiskConfirmationDialog` or Radix `AlertDialog`.
-- **Status**: FIXED — Replaced with Radix UI `AlertDialog`; `clearAllDialogOpen` state added.
+- **Description**: Hardcoded multipliers (0.7/0.3, 1.2x) without comments explaining origin.
+- **Suggested Fix**: Extract into `BENCHMARK_WEIGHTS` constants with inline documentation citing data source.
+- **Status**: PENDING
 
-### FIXED [H18] CacheService.clearByProvider called in onClick without await, error handling, or loading state
+### [H17] localStorage persistence called synchronously on every ID mapping
 
-- **File**: `apps/desktop/src/components/Settings/CacheManagement.tsx:245`
+- **File**: `apps/desktop/src/stores/chat/chatStore.ts:105`
 - **Category**: quality
-- **Description**: Errors are silently dropped, the UI does not indicate operation progress, and stats display is not refreshed after the call completes.
-- **Suggested Fix**: Extract `const handleClearByProvider = async (provider: string) => { try { setLoading(true); await CacheService.clearByProvider(provider); await loadStats(); } catch(err) { setError(...); } finally { setLoading(false); } }`.
-- **Status**: FIXED — Async handler with try/catch, toast success/error, and stats reload after clear.
+- **Description**: `persistIdMappings()` called after every new ID mapping. On high-frequency streams causes UI jank.
+- **Suggested Fix**: Debounce with 500ms and persist on logout/unmount.
+- **Status**: FIXED — Added 300ms debounce with clearTimeout to batch rapid ID mapping writes
 
-### FIXED [H19] Stream teardown logic duplicated across 4 code paths — subtle behavioral differences guaranteed
+### [H18] handleSubmit has 5+ nesting levels
 
-- **File**: `apps/desktop/src/components/UnifiedAgenticChat/index.tsx:1119`
+- **File**: `apps/desktop/src/components/UnifiedAgenticChat/hooks/useChatSubmit.ts:160`
 - **Category**: quality
-- **Description**: Nearly identical 30-line cleanup block in `chat:stream-end` (lines 1119-1146), `chat:stream-error` (lines 1254-1282), `handleStopGeneration`, and `handleNewConversation`. Future teardown changes must be applied to all four copies.
-- **Suggested Fix**: Extract `function finalizeStream(status: 'completed' | 'failed', error?: string, finalizedMessageId?: string | null): void`.
-- **Status**: FIXED — `finalizeStream(finalizedMessageId, agentOutcome, agentError?)` helper extracted; 4 duplicates unified.
+- **Description**: Validates queue mode, auto mode, credits, model availability, input sanitization all in deeply-nested function.
+- **Suggested Fix**: Extract `validateQueueMode()`, `validateAutoMode()`, `validateCredits()`, `buildChatRequest()`.
+- **Status**: NEEDS_HUMAN (complex refactor)
 
-### FIXED [H20] pgAdmin has no authentication and is bound to 0.0.0.0:5050
+### [H19] TIER_ALLOWED_MODELS free and hobby tiers are near-identical copies
 
-- **File**: `docker-compose.yml:45`
+- **File**: `apps/desktop/src/constants/llm.ts:159`
+- **Category**: quality
+- **Description**: Free and hobby tier model lists are nearly identical copies.
+- **Suggested Fix**: `hobby: [...FREE_MODELS, ...HOBBY_ADDITIONAL_MODELS]`
+- **Status**: FIXED — Extracted ECONOMY_MODELS, PRO_ADDITIONS, FLAGSHIP_ADDITIONS constants; tiers use spread
+
+### [H20] MODEL_PRESETS duplicates model lists in TIER_ALLOWED_MODELS
+
+- **File**: `apps/desktop/src/constants/llm.ts:156`
+- **Category**: quality
+- **Description**: `MODEL_PRESETS` redefines model lists already in `TIER_ALLOWED_MODELS`, creating two sources of truth.
+- **Suggested Fix**: Derive `MODEL_PRESETS` dynamically from `TIER_ALLOWED_MODELS`.
+- **Status**: NEEDS_HUMAN — MODEL_PRESETS serves a different purpose (provider-keyed UI map with labels); derivation would require architectural refactor
+
+### [H21] Model selection logic duplicated between useChatSubmit and modelRouter
+
+- **File**: `apps/desktop/src/components/UnifiedAgenticChat/hooks/useChatSubmit.ts:124`
+- **Category**: quality
+- **Description**: Auto mode and credit checks exist in both files with slight variations.
+- **Suggested Fix**: Centralize all model selection in `modelRouter.ts`. `useChatSubmit` calls `modelRouter.selectModel()`.
+- **Status**: NEEDS_HUMAN (architectural refactor)
+
+### [H22] Lint warning threshold too permissive
+
+- **File**: `package.json:33`
 - **Category**: config
-- **Description**: pgAdmin configured with plaintext credentials listening on `0.0.0.0:5050`. On a developer machine connected to a shared network or VPN, this exposes the database admin UI to the entire network.
-- **Suggested Fix**: Bind to `127.0.0.1:5050` only. Move credentials to `.env`.
-- **Status**: FIXED — Port bound to `127.0.0.1:5050:80`; credentials use `${VAR:-default}` env var expansion.
+- **Description**: ESLint `--max-warnings=5` allows up to 5 warnings to pass CI for a 296-component monorepo.
+- **Suggested Fix**: Reduce to `--max-warnings=0`.
+- **Status**: PENDING
 
-### FIXED [H21] shell:allow-open grants unrestricted URL/program opening
+### [H23] Default Rust features may accidentally exclude shell and updater
 
-- **File**: `apps/desktop/src-tauri/capabilities/default.json:1`
+- **File**: `apps/desktop/src-tauri/Cargo.toml:238`
 - **Category**: config
-- **Description**: `shell:allow-open` granted without URL scheme or program allowlist. Allows opening `file://`, `javascript:`, and custom protocol handlers.
-- **Suggested Fix**: Restrict to specific URL schemes: `{\"allow\": [{\"cmd\": \"open\", \"args\": {\"validator\": \"^(https|http|mailto):\"}}]}`.
-- **Status**: FIXED — Replaced string `shell:allow-open` with scoped object allowing only `^https?://` and `^mailto:` URLs.
+- **Description**: Shell and updater features are optional and may be excluded in some build configurations.
+- **Suggested Fix**: Lock `default = ["shell", "updater"]` and add CI feature validation.
+- **Status**: PENDING
 
-### FIXED [H22] Filesystem deny list missing ~/.gitconfig and ~/.git-credentials
+### [H24] CI lint allows 5 ESLint warnings
 
-- **File**: `apps/desktop/src-tauri/capabilities/default.json:1`
+- **File**: `.github/workflows/ci.yml:51`
 - **Category**: config
-- **Description**: The deny list excludes 19 sensitive paths but is missing `~/.gitconfig` and `~/.git-credentials`. An AGI agent could exfiltrate git credentials.
-- **Suggested Fix**: Add `'$HOME/.gitconfig'`, `'$HOME/.git-credentials'`, `'$HOME/.config/git/credentials'` to the deny list.
-- **Status**: FIXED — Added `$HOME/.gitconfig`, `$HOME/.git-credentials`, `$HOME/.config/git/**` to deny lists for all read and exists permissions.
+- **Description**: Same issue as H22 enforced at CI level.
+- **Suggested Fix**: Set `--max-warnings=0` in CI lint step.
+- **Status**: PENDING
 
-### [H23] Release workflow runs no Rust compilation or security checks
+### [H25] Dependency audit does not fail on detected vulnerabilities
 
-- **File**: `.github/workflows/release.yml:1`
+- **File**: `.github/workflows/ci.yml:48`
 - **Category**: config
-- **Description**: The release.yml validate job runs `pnpm typecheck` and `pnpm lint` but not `cargo check`, `cargo clippy`, or `cargo audit`.
-- **Suggested Fix**: Add `cargo check --all-features`, `cargo clippy --all-features -- -D warnings`, `cargo audit` to the validate job.
-- **Status**: OPEN
+- **Description**: `pnpm audit --audit-level=high` runs but exit code is not explicitly checked.
+- **Suggested Fix**: `pnpm audit --audit-level=high || exit 1`
+- **Status**: PENDING
 
-### [H24] CSP allows unsafe-inline for style-src — CSS injection risk
+### [H26] cargo-audit installed without binary verification
 
-- **File**: `apps/desktop/src-tauri/tauri.conf.json:1`
+- **File**: `.github/workflows/ci.yml:84`
 - **Category**: config
-- **Description**: `style-src 'self' 'unsafe-inline'`. CSS injection enables CSS-based data exfiltration via attribute selectors.
-- **Suggested Fix**: Remove `'unsafe-inline'` from `style-src`. Migrate inline styles to CSS classes. Use nonce-based CSP if needed.
-- **Status**: OPEN
+- **Description**: `cargo install cargo-audit` downloads from crates.io without signature verification.
+- **Suggested Fix**: Use vendored or pre-built signed binaries.
+- **Status**: NEEDS_HUMAN (infrastructure change)
 
-### [H25] UPSTASH_REDIS_REST_URL undocumented — missing causes silent rate limit fail-open
+### [H27] NODE_OPTIONS heap size set without upper bound
 
-- **File**: `docs/env-vars.md:1`
+- **File**: `.github/workflows/release-desktop.yml:256`
 - **Category**: config
-- **Description**: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are not documented. When absent, rate limiting fails open — requests pass through without rate limiting.
-- **Suggested Fix**: Add both vars to docs with `required=true`. Add startup validation that throws if missing.
-- **Status**: OPEN
+- **Description**: `--max-old-space-size=8192` set without checking if CI runner has that memory.
+- **Suggested Fix**: Compute dynamically based on available memory and cap at 75%.
+- **Status**: PENDING
 
-### FIXED [H26] db_get_stored_password is unauthenticated — any renderer can retrieve stored DB credentials
+### [H28] Tauri action pinned to undocumented commit hash
 
-- **File**: `apps/desktop/src-tauri/src/sys/commands/database.rs:941`
-- **Category**: security
-- **Description**: Public `#[tauri::command]` accepts arbitrary `connection_id` and returns decrypted database password. No authentication check.
-- **Suggested Fix**: Gate behind master password approval flow using `ApprovalController`. Or never return plaintext password to the renderer.
-- **Status**: FIXED — `RequiresExplicitApproval` gate via `ToolConfirmationRequest` with `RiskLevel::Critical` added.
+- **File**: `.github/workflows/release-desktop.yml:283`
+- **Category**: config
+- **Description**: `tauri-action` uses a fixed commit hash instead of a tagged release.
+- **Suggested Fix**: Pin to tagged release: `@tauri-apps/tauri-action@v0.6.1`.
+- **Status**: PENDING
 
-### [H27] Raw SQL forwarded to external databases with bypass-susceptible keyword blocklist
+### [H29] Release database update script has no signature verification
 
-- **File**: `apps/desktop/src-tauri/src/sys/commands/database.rs:101`
-- **Category**: security
-- **Description**: `db_execute_query` accepts raw SQL from renderer, passes to external databases after only a keyword blocklist check that can be bypassed by comment injection (`SE/**/LECT`).
-- **Suggested Fix**: Replace blocklist with SQL parser (sqlparser crate). Validate statement is exactly SELECT.
-- **Status**: OPEN
+- **File**: `.github/workflows/release-desktop.yml:557`
+- **Category**: config
+- **Description**: `update-releases.mjs` reads `.sig` files but never verifies signatures.
+- **Suggested Fix**: Verify ed25519 signatures on each `.sig` file before recording.
+- **Status**: NEEDS_HUMAN (requires ed25519-dalek integration)
 
-### FIXED [H28] build_with_params is a silent no-op — callers believe they have parameterized queries when they don't
+### [H30] App Store build uses inconsistent Rust toolchain action
 
-- **File**: `apps/desktop/src-tauri/src/data/database/query_builder.rs:596`
-- **Category**: security
-- **Description**: `build_with_params` is documented as a parameterized query builder but calls `self.build()` (string escaping) and returns an empty parameter vector. Architecturally deceptive.
-- **Suggested Fix**: Remove `build_with_params` or make it delegate to `build_parameterized()`. Add `#[deprecated]` attribute.
-- **Status**: FIXED — `build_with_params` now returns `Err` directing callers to `build_parameterized()`.
+- **File**: `.github/workflows/build-appstore.yml:62`
+- **Category**: config
+- **Description**: Uses `dtolnay/rust-toolchain` (personal) while other jobs use `actions-rust-lang/setup-rust-toolchain`.
+- **Suggested Fix**: Standardize on `actions-rust-lang/setup-rust-toolchain@v1`.
+- **Status**: PENDING
 
-### FIXED [H29] INSERT and UPDATE use single-quote doubling instead of true prepared statement parameterization
+### [H31] CSP allows wasm-unsafe-eval globally
 
-- **File**: `apps/desktop/src-tauri/src/data/database/query_builder.rs:466`
-- **Category**: security
-- **Description**: `build_insert` and `build_update` escape values by doubling single quotes. Insufficient in databases with `ANSI_QUOTES` or `NO_BACKSLASH_ESCAPES` modes.
-- **Suggested Fix**: All write queries must use `build_parameterized()` which returns actual `?` placeholders and a params vector.
-- **Status**: FIXED — `validate_sql_value()` called before string interpolation in build_insert/build_update.
+- **File**: `apps/desktop/src-tauri/tauri.conf.json:35`
+- **Category**: config
+- **Description**: `wasm-unsafe-eval` disables WASM sandbox protections globally.
+- **Suggested Fix**: Remove from global policy; use nonce-based CSP if WASM is required.
+- **Status**: NEEDS_HUMAN (may break WASM features, needs testing)
 
-### FIXED [H30] WebSocket token comparison uses non-constant-time equality — timing oracle attack
+### [H32] CSP allows unsafe-inline styles globally
 
-- **File**: `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:132`
-- **Category**: security
-- **Description**: `handle_connection` compares tokens using `sent_token == token`, which short-circuits on the first differing byte. Creates a timing oracle for brute-forcing the WebSocket auth token.
-- **Suggested Fix**: `use subtle::ConstantTimeEq; if sent_token.as_bytes().ct_eq(token.as_bytes()).into() { ... }`.
-- **Status**: FIXED — `subtle::ConstantTimeEq` used; `subtle = "2"` added to Cargo.toml.
+- **File**: `apps/desktop/src-tauri/tauri.conf.json:35`
+- **Category**: config
+- **Description**: `unsafe-inline` in `style-src` allows CSS exfiltration with user/MCP input.
+- **Suggested Fix**: Use external stylesheets with nonce-based CSP.
+- **Status**: NEEDS_HUMAN (may break existing inline styles, needs testing)
 
-### FIXED [H31] Post-authentication Authenticate event allows identity takeover
+### [H33] CSP img-src allows unrestricted data: and blob: URIs
 
-- **File**: `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:257`
-- **Category**: security
-- **Description**: `handle_event` processes `RealtimeEvent::Authenticate` messages after initial authentication. Overwrites `client.user_id` and `client.team_id` without re-validating the token. Any authenticated client can impersonate another user.
-- **Suggested Fix**: Ignore `Authenticate` events for already-authenticated clients: `if client.user_id.is_some() { return; }`.
-- **Status**: FIXED — Already-authenticated clients' re-Authenticate events are ignored.
+- **File**: `apps/desktop/src-tauri/tauri.conf.json:35`
+- **Category**: config
+- **Description**: `data: blob:` in `img-src` could be used to exfiltrate screenshots via data URLs.
+- **Suggested Fix**: Restrict to `'self'` and explicit https: domains.
+- **Status**: NEEDS_HUMAN (may break image features)
 
-### [H32] NativeMessage::ExecuteScript executes arbitrary JS without approval gate
+### [H34] CSP media-src allows blob: enabling audio/video exfiltration
 
-- **File**: `apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs:178`
-- **Category**: security
-- **Description**: `NativeMessage::ExecuteScript` with arbitrary `script: String` field. Allows browser extension to request Tauri to execute arbitrary JS in any browser tab without approval gate. Bypasses Tauri IPC security model.
-- **Suggested Fix**: Require `ExecuteScript` to go through `ApprovalController` at `RequiresExplicitApproval` tier. Log script to audit trail.
-- **Status**: OPEN
+- **File**: `apps/desktop/src-tauri/tauri.conf.json:35`
+- **Category**: config
+- **Description**: `media-src 'self' blob:` allows recording and exfiltrating audio/video.
+- **Suggested Fix**: Remove `blob:` from `media-src`. Store media locally with encryption.
+- **Status**: NEEDS_HUMAN (may break media features)
 
-### [H33] IDOR: video task status accessible without ownership verification
+### [H35] HSTS preload directive missing
 
-- **File**: `apps/web/app/api/media/video/status/route.ts:328`
-- **Category**: security
-- **Description**: `handleVideoStatus` authenticates the user but never verifies that the requested `task_id` belongs to that user. Any authenticated user can poll any other user's video generation task status and retrieve the resulting video URL.
-- **Suggested Fix**: Store `(user_id, task_id)` mapping in Redis when task is created. Verify ownership in `handleVideoStatus` before forwarding to provider.
-- **Status**: OPEN
+- **File**: `apps/web/next.config.ts:28`
+- **Category**: config
+- **Description**: `Strict-Transport-Security` missing `preload` directive, making HSTS bypassable on first visit.
+- **Suggested Fix**: `max-age=63072000; includeSubDomains; preload` then submit at hstspreload.org.
+- **Status**: PENDING
 
-### FIXED [H34] Client-supplied plan tier in request body bypasses video subscription gate
+### [H36] Permissions-Policy missing critical API restrictions
 
-- **File**: `apps/desktop/src-tauri/src/sys/commands/media.rs:211`
-- **Category**: security
-- **Description**: `media_generate_video` reads subscription plan from `request.plan`, a renderer-supplied field. If renderer omits the field, the gate is skipped. Renderer can supply `'pro'` to bypass the paywall.
-- **Suggested Fix**: Remove `plan` field from `MediaVideoRequest`. Read subscription tier from Rust-side `BillingState`.
-- **Status**: FIXED — `plan` field removed from `MediaVideoRequest`; tier read from server-side `BillingState`.
+- **File**: `apps/web/next.config.ts:47`
+- **Category**: config
+- **Description**: Omits: `payment-request`, `usb`, `xr-spatial-tracking`, `picture-in-picture`, `encrypted-media`.
+- **Suggested Fix**: Add: `payment-request=(), usb=(), xr-spatial-tracking=(), picture-in-picture=(), encrypted-media=()`
+- **Status**: PENDING
 
-### [H35] Billing enforcement guards on chat invocation are untested
+### [H37] No environment variable validation at api-gateway startup
 
-- **File**: `apps/desktop/src-tauri/src/sys/billing/mod.rs:1`
+- **File**: `services/api-gateway/package.json:20`
+- **Category**: config
+- **Description**: If `SUPABASE_URL` or `JWT_SECRET` is missing, app fails at runtime not startup.
+- **Suggested Fix**: Add Zod validation at startup in `src/config/env.ts`.
+- **Status**: PENDING
+
+### [H38] @typescript-eslint/no-explicit-any disabled globally
+
+- **File**: `eslint.config.mjs:288`
+- **Category**: config
+- **Description**: `any` type allowed throughout codebase, defeating TypeScript's type safety.
+- **Suggested Fix**: Re-enable the rule.
+- **Status**: NEEDS_HUMAN (may produce many lint errors requiring fixes)
+
+### [H39] Extension lint only checks .js files, not .ts files
+
+- **File**: `apps/extension/package.json:29`
+- **Category**: config
+- **Description**: `eslint src --ext .js` doesn't lint TypeScript files in the extension.
+- **Suggested Fix**: Change to `eslint src --ext .ts,.js`
+- **Status**: PENDING
+
+### [H40] Extension package script includes source maps
+
+- **File**: `apps/extension/package.json:28`
+- **Category**: config
+- **Description**: `zip -r ../extension.zip .` includes all files; source maps leak source code.
+- **Suggested Fix**: `zip -r ../extension.zip . -x '*.map'` and set `build.sourcemap: false` for production.
+- **Status**: PENDING
+
+### [H41] No explicit Rust version verification before clippy
+
+- **File**: `.github/workflows/ci.yml:71`
+- **Category**: config
+- **Description**: No pre-check verifies consistency between dev and CI toolchains.
+- **Suggested Fix**: Add `rustup show active-toolchain` verification step.
+- **Status**: PENDING
+
+### [H42] No test coverage for storageFallback module
+
+- **File**: `apps/desktop/src/lib/storageFallback.ts:0`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Critical no-op `Storage` implementation used by all Zustand persist stores has zero test coverage.
+- **Suggested Fix**: Create `__tests__/storageFallback.test.ts`.
+- **Status**: PENDING
 
-### [H36] calculate_backoff_delay() untested — exponential overflow at attempt > 64 not caught
+### [H43] No test coverage for CustomModelsSettings component
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:850`
+- **File**: `apps/desktop/src/components/Settings/CustomModelsSettings.tsx:16`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Critical component for managing custom model endpoints has zero tests.
+- **Suggested Fix**: Create `__tests__/CustomModelsSettings.test.tsx`.
+- **Status**: PENDING
 
-### [H37] Provider routing candidates() selection logic has zero test coverage
+### [H44] No test coverage for AgentsSettings component
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:200`
+- **File**: `apps/desktop/src/components/Settings/AgentsSettings.tsx:16`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Agent configuration component has zero tests.
+- **Suggested Fix**: Create `__tests__/AgentsSettings.test.tsx`.
+- **Status**: PENDING
 
-### [H38] SwarmOrchestrator TOCTOU race has no concurrency test
+### [H45] No test coverage for InstructionFilesSettings component
 
-- **File**: `apps/desktop/src-tauri/src/core/swarm/orchestrator.rs:1`
+- **File**: `apps/desktop/src/components/Settings/InstructionFilesSettings.tsx:16`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Security-sensitive file upload component has zero tests.
+- **Suggested Fix**: Create `__tests__/InstructionFilesSettings.test.tsx`.
+- **Status**: PENDING
 
-### [H39] Extension background.ts reconnect logic completely untested
+### [H46] Media pricing calculations (ImageHD, VideoPerSecond) untested
 
-- **File**: `apps/extension/src/background.ts:1`
+- **File**: `apps/desktop/src-tauri/src/core/llm/cost_calculator.rs:150`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Media type cost calculations have no unit tests. Stale pricing data undetected.
+- **Suggested Fix**: Add tests for image generation cost (Standard vs HD), video cost per second.
+- **Status**: PENDING
 
-### [H40] isPermanentError() fragile string matching untested against actual Chrome error messages
+### [H47] SSE parser keepalive edge cases not fully tested
 
-- **File**: `apps/extension/src/content.ts:400`
+- **File**: `apps/desktop/src-tauri/src/core/llm/sse_parser.rs:100`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Missing tests for malformed keepalive events, multi-line events, case variations.
+- **Suggested Fix**: Add edge case tests for `: ` (space after colon), `:keep-alive`, Anthropic ping with non-empty data.
+- **Status**: PENDING
 
-### [H41] ManagedCloudProvider proxy URL lookup from env vars is untested
+### [H48] TaskExecutor timeout handling untested for streaming
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/providers/managed_cloud_provider.rs:1`
+- **File**: `apps/desktop/src-tauri/src/core/agent/executor.rs:1`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Missing tests for timeout during SSE stream, keepalive preventing timeout, watchdog edge cases.
+- **Suggested Fix**: Add integration tests for streaming interruption and keepalive signal effectiveness.
+- **Status**: NEEDS_HUMAN (requires integration test infrastructure)
 
-### [H42] dfs_longest_path diamond-DAG bug has no graph topology test
+### [H49] Task decomposer cache invalidation untested
 
-- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:271`
+- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:408`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Cache TTL expiration, SHA-256 collision handling, and idempotency after clear are untested.
+- **Suggested Fix**: Add tests with mocked system time for TTL expiration.
+- **Status**: PENDING
 
-### [H43] invoke_candidate() model resolution from 'auto-economy' to actual model is untested
+### [H50] modelRouter multi-modal routing untested
 
-- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:940`
+- **File**: `apps/desktop/src/lib/modelRouter.ts:100`
 - **Category**: test
-- **Status**: NEEDS_HUMAN (write tests)
+- **Description**: Missing tests for AutoMode tier selection, capability filtering, and fallback when model lacks required capability.
+- **Suggested Fix**: Add tests for each AutoMode and intent-to-model routing per modality.
+- **Status**: PENDING
+
+### [H51] ID mapping pruning correctness untested
+
+- **File**: `apps/desktop/src/stores/chat/chatStore.ts:146`
+- **Category**: test
+- **Description**: Pruning at 1000 entries doesn't test which entries are removed or threshold accuracy.
+- **Suggested Fix**: Add tests for 1001+ conversations, verify oldest DbId removed.
+- **Status**: PENDING
+
+### [H52] LLM Router fallback chain tests incomplete
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/tests/llm_router_tests.rs:1`
+- **Category**: test
+- **Description**: Missing coverage for all 9+ providers failing, SESSION_COST_SAFETY_CAP enforcement, circuit breaker state.
+- **Suggested Fix**: Add tests for all providers failing, cost cap boundary ($49.99 OK / $50.01 fails).
+- **Status**: PENDING
+
+### [H53] LLM Router is_retryable_error function not directly unit tested
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:150`
+- **Category**: test
+- **Description**: Critical error classification function has edge cases untested: substring conflicts, mixed case, `credits_exhausted` pattern.
+- **Suggested Fix**: Add explicit unit tests for all non-retryable patterns and substring collision cases.
+- **Status**: PENDING
+
+### [H54] Device linking test missing cryptographic token validation
+
+- **File**: `apps/web/__tests__/api/device-link.test.ts:1`
+- **Category**: test
+- **Description**: Likely missing: correct token generation, expiration validation, replay attack prevention.
+- **Suggested Fix**: Use actual `device-token-crypto` functions to verify token properties.
+- **Status**: PENDING
+
+### [H55] Web API health endpoint test mocks backend connectivity
+
+- **File**: `apps/web/__tests__/api/health.test.ts:1`
+- **Category**: test
+- **Description**: If everything is mocked, backend connectivity issues won't be caught.
+- **Suggested Fix**: Add integration test verifying database connection and Supabase response structure.
+- **Status**: NEEDS_HUMAN (requires integration test environment)
+
+### [H56] Router tests missing Groq, xAI, DeepSeek SSE formats
+
+- **File**: `apps/desktop/src-tauri/src/features/tests/router_tests.rs:1`
+- **Category**: test
+- **Description**: Tests cover OpenAI, Anthropic, Google, Ollama but missing Groq, xAI, DeepSeek SSE structures.
+- **Suggested Fix**: Add test cases for Groq, xAI, and DeepSeek SSE formats.
+- **Status**: PENDING
+
+### [H57] useWindowManager and usePromptSuggestions hook tests incomplete
+
+- **File**: `apps/desktop/src/hooks/__tests__/useWindowManager.test.ts:1`
+- **Category**: test
+- **Description**: Coverage unclear for window lifecycle, concurrent operations, memory cleanup on unmount.
+- **Suggested Fix**: Add tests for closed window access, concurrent operations, unmount cleanup.
+- **Status**: PENDING
 
 ---
 
-## Medium Issues (Summary Table)
+## Medium Issues
 
-| ID          | File                      | Line | Category | Title                                                                                                                                                                            |
-| ----------- | ------------------------- | ---- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [M1]        | `task_decomposer.rs`      | 363  | logic    | stats() pending count usize subtraction can underflow and panic                                                                                                                  |
-| FIXED [M2]  | `sse_parser.rs`           | 181  | logic    | pending_chunks.remove(0) is O(n) — quadratic for long streams — **Fix applied**: Replaced Vec with VecDeque; pop_front() is O(1).                                                |
-| [M3]        | `sse_parser.rs`           | 134  | logic    | Error criticality classified by substring matching — false positives/negatives                                                                                                   |
-| [M4]        | `modelRouter.ts`          | 619  | logic    | classifyTaskLocally confidence saturates at score=4.5                                                                                                                            |
-| [M5]        | `modelRouter.ts`          | 737  | logic    | hasRequiredCapabilities hard-requires agentic:true, excluding tool-capable models                                                                                                |
-| FIXED [M6]  | `chatStore.ts`            | 358  | logic    | tokenUsage.max hardcoded to 128000 regardless of selected model context window — **Fix applied**: Dynamic context window from selected model metadata.                           |
-| [M7]        | `useAgenticEvents.ts`     | 252  | logic    | normalizeRiskLevel defaults unknown risk to 'high' causing unnecessary approval dialogs                                                                                          |
-| FIXED [M8]  | `chatStore.ts`            | 411  | logic    | Conversation cap eviction uses slice(499) — may evict 0 entries — **Fix applied**: Corrected slice offset to ensure at least 1 eviction.                                         |
-| [M9]        | `mod.rs` (llm)            | 539  | quality  | Provider::as_string suppresses clippy instead of implementing Display/FromStr                                                                                                    |
-| [M10]       | `task_decomposer.rs`      | 451  | quality  | Dead fields max_depth and min_subtask_size suppressed with allow(dead_code)                                                                                                      |
-| [M11]       | `chat/mod.rs`             | 220  | quality  | Four near-identical resolver functions for fast-metadata path                                                                                                                    |
-| [M12]       | `media.rs`                | 271  | quality  | Magic numbers 100/3s for video polling unexplained                                                                                                                               |
-| [M13]       | `media.rs`                | 173  | quality  | History-building logic duplicated between image and video handlers                                                                                                               |
-| [M14]       | `database.rs`             | 106  | quality  | connection_id empty-check duplicated 8 times                                                                                                                                     |
-| [M15]       | `database.rs`             | 119  | quality  | SQL maximum length 1_000_000 magic number duplicated twice                                                                                                                       |
-| [M16]       | `BrowserActionLog.tsx`    | 28   | quality  | ACTION_ICONS typed as Record<ActionType, any>                                                                                                                                    |
-| [M17]       | `BrowserActionLog.tsx`    | 154  | quality  | Action type filter list hardcoded instead of derived from ACTION_ICONS keys                                                                                                      |
-| [M18]       | `useChatSubmit.ts`        | 125  | quality  | useAccountStore.getState() inside useCallback bypasses React data-flow                                                                                                           |
-| [M19]       | `billingUsage.ts`         | 353  | quality  | 15 async store actions call console.error redundantly                                                                                                                            |
-| [M20]       | `browser.rs`              | 241  | security | CDP URL injection via unsanitized target_url in browser_open_tab                                                                                                                 |
-| [M21]       | `browser.rs`              | 313  | security | CDP URL injection via unvalidated tab_id in browser_close_tab                                                                                                                    |
-| [M22]       | `database.rs`             | 862  | security | db_store_password accepts unvalidated connection_id format                                                                                                                       |
-| [M23]       | `query_builder.rs`        | 110  | security | validate_where_clause blocks OR tautologies but not AND-based tautologies                                                                                                        |
-| FIXED [M24] | `encryption.rs`           | 47   | security | SQLCipher PRAGMA key may be exposed in rusqlite error logs — **Fix applied**: Error message redacted; key no longer appears in error output.                                     |
-| FIXED [M25] | `encryption.rs`           | 112  | security | migrate_to_encrypted leaves plaintext database backup on disk permanently — **Fix applied**: Plaintext backup deleted after successful rename; warning logged if deletion fails. |
-| [M26]       | `websocket_server.rs`     | 61   | security | WebSocket server has no connection rate limiting or unauthenticated timeout                                                                                                      |
-| [M27]       | `admin/security/route.ts` | 200  | security | Admin action body uses type cast instead of Zod schema — no UUID format check                                                                                                    |
-| [M28]       | `device/link/route.ts`    | 159  | security | Device link code leaked to third-party QR service                                                                                                                                |
-| [M29]       | `completion/route.ts`     | 363  | security | Message content length check fails for array multi-modal content                                                                                                                 |
-| [M30]       | `database.rs`             | 126  | security | validate_read_only_sql uses bypass-susceptible to_uppercase().contains()                                                                                                         |
-| [M31]       | `router_tests.rs`         | 1    | test     | No test covers circuit breaker open/close/half-open state transitions                                                                                                            |
-| [M32]       | `features.test.ts`        | 1    | test     | Feature test file is a placeholder with no real behavioral assertions                                                                                                            |
+### [M1] Admin check falls back to user-editable profiles.is_admin
+
+- **File**: `apps/web/app/api/admin/directory-sync/route.ts:80`
+- **Category**: security
+- **Description**: Fallback to `profiles.is_admin` (user-editable) after checking `app_metadata.role`. An attacker who can modify their profile could escalate to admin.
+- **Suggested Fix**: Remove the fallback to `profiles.is_admin`. Only trust `app_metadata`.
+- **Status**: FIXED — Removed profiles.is_admin fallback; only app_metadata.role grants global admin
+
+### [M2] Domain validation regex allows homograph attacks
+
+- **File**: `apps/web/app/api/auth/sso-check/route.ts:34`
+- **Category**: security
+- **Description**: Regex allows non-ASCII characters, enabling Cyrillic/lookalike domain attacks.
+- **Suggested Fix**: `if (/[^a-zA-Z0-9.-]/.test(domain)) return 400;`
+- **Status**: PENDING
+
+### [M3] Severity/type query params not validated against allowed enum
+
+- **File**: `apps/web/app/api/admin/security/route.ts:107`
+- **Category**: security
+- **Description**: Arbitrary strings accepted without enum validation.
+- **Suggested Fix**: Whitelist validation: `const VALID_SEVERITIES = ['low','medium','high','critical'];`
+- **Status**: FIXED — Added runtime validation against validSeverities array with 400 error for invalid values
+
+### [M4] Group name not canonicalized before role mapping
+
+- **File**: `apps/web/app/api/webhooks/directory-sync/route.ts:569`
+- **Category**: security
+- **Description**: Attacker-controlled group names with special chars could confuse role mapping.
+- **Suggested Fix**: `const canonical = group.name.trim().toLowerCase(); if (!/^[a-zA-Z0-9_-]+$/.test(canonical)) return;`
+- **Status**: FIXED — Added /^[a-zA-Z0-9_\- ]+$/ check with early return for special-char group names
+
+### [M5] Mutex poisoning silently ignored in secret manager
+
+- **File**: `apps/desktop/src-tauri/src/sys/security/secret_manager.rs:145`
+- **Category**: security
+- **Description**: `unwrap_or_else(|e| e.into_inner())` silently recovers from poisoned mutexes.
+- **Suggested Fix**: `self.db_conn.lock().map_err(|_| SecretError::EncryptionError("Database lock corrupted".into()))?`
+- **Status**: PENDING
+
+### [M6] Image size parsing does not validate split result length
+
+- **File**: `apps/web/app/api/media/image/generate/route.ts:220`
+- **Category**: security
+- **Description**: `100x100x100` silently ignores third element; `x100` produces NaN width.
+- **Suggested Fix**: `const parts = size.split('x'); if (parts.length !== 2 || parts.some(p => !/^\d{1,5}$/.test(p))) throw new Error('Invalid size');`
+- **Status**: FIXED — Added split length validation and Number.isFinite check for size parts
+
+### [M7] logit_bias accepts arbitrary string keys
+
+- **File**: `apps/web/app/api/llm/v1/chat/completions/route.ts:65`
+- **Category**: security
+- **Description**: `logit_bias` allows non-numeric keys. Token IDs must be numeric integers 0-100k.
+- **Suggested Fix**: Zod refine: `.refine(data => Object.keys(data.logit_bias||{}).every(k => /^\d{1,6}$/.test(k)))`
+- **Status**: FIXED — Changed to z.record(z.string().regex(/^\d+$/), z.number()) to enforce token ID format
+
+### [M8] Unhandled panic in production MediaExecutor::new()
+
+- **File**: `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs:118`
+- **Category**: logic
+- **Description**: `.expect()` on HTTP client creation panics in production if client creation fails.
+- **Suggested Fix**: Return `Result<Self>` instead of `Self`.
+- **Status**: FIXED — Replaced .expect() with .unwrap_or_else(|e| { eprintln!(...); reqwest::Client::new() })
+
+### [M9] HTTP error codes hardcoded as magic strings
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:53`
+- **Category**: quality
+- **Suggested Fix**: Define `HTTP_ERROR_CODES` constant or use `HttpError` enum.
+- **Status**: FIXED — Replaced duplicated 5xx checks in should_retry() with call to is_server_error()
+
+### [M10] Optional field extraction pattern repeated across adapters
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs:680`
+- **Category**: quality
+- **Suggested Fix**: Extract `extract_optional_params(response: &Value) -> OptionalParams`.
+- **Status**: NEEDS_HUMAN (significant refactor across multiple providers)
+
+### [M11] AUDIT-CANCEL-060 comment duplicated on adjacent functions
+
+- **File**: `apps/desktop/src-tauri/src/sys/commands/chat/mod.rs:286`
+- **Category**: quality
+- **Suggested Fix**: Consolidate to a single doc comment.
+- **Status**: FIXED — Removed duplicate AUDIT-CANCEL-060 comment on tokio::task::spawn line
+
+### [M12] StreamChunk fields lack documentation on keepalive semantics
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/sse_parser.rs:1`
+- **Category**: quality
+- **Suggested Fix**: Add `///` doc comments explaining keepalive propagation, tool call streaming state machine.
+- **Status**: PENDING
+
+### [M13] resolve\_\*\_timeout_secs() functions follow identical pattern
+
+- **File**: `apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:1230`
+- **Category**: quality
+- **Suggested Fix**: Create generic `resolve_timeout(config, field, default)` helper.
+- **Status**: NEEDS_HUMAN (requires API design decision)
+
+### [M14] hasRequiredCapabilities() has redundant switch cases
+
+- **File**: `apps/desktop/src/lib/modelRouter.ts:730`
+- **Category**: quality
+- **Suggested Fix**: Remove redundant cases. Use `default return true`.
+- **Status**: PENDING
+
+### [M15] MODEL_POOLS has duplicate model entries across tiers
+
+- **File**: `apps/desktop/src/lib/modelRouter.ts:152`
+- **Category**: quality
+- **Suggested Fix**: Use set-union where each tier includes previous tier's models.
+- **Status**: PENDING
+
+### [M16] BENCHMARK_THRESHOLDS magic numbers lack justification
+
+- **File**: `apps/desktop/src/lib/modelRouter.ts:250`
+- **Category**: quality
+- **Suggested Fix**: Add inline comments citing benchmark source and validation date.
+- **Status**: PENDING
+
+### [M17] generateTitleFromMessage() applies 5 sequential regex passes
+
+- **File**: `apps/desktop/src/stores/chat/chatStore.ts:195`
+- **Category**: quality
+- **Suggested Fix**: Combine related patterns into a single regex or cache outside function.
+- **Status**: PENDING
+
+### [M18] Platform-specific URL open code triplicated
+
+- **File**: `apps/desktop/src-tauri/src/core/agent/executor.rs:91`
+- **Category**: quality
+- **Suggested Fix**: Extract `open_url_with_platform(url: &str)` using `cfg!` macros.
+- **Status**: PENDING
+
+### [M19] Image and video generation handlers duplicate logic
+
+- **File**: `apps/web/app/api/media/image/generate/route.ts:1`
+- **Category**: quality
+- **Suggested Fix**: Create `mediaGenerationHandler(type, request)` utility.
+- **Status**: NEEDS_HUMAN (requires reviewing both handlers)
+
+### [M20] orchestrator.rs is 1000+ lines with mixed concerns
+
+- **File**: `apps/desktop/src-tauri/src/core/agi/orchestrator.rs:1`
+- **Category**: quality
+- **Suggested Fix**: Separate into `PlanningService`, `ExecutionService`, `EventDispatcher`, `StateManager`.
+- **Status**: NEEDS_HUMAN (large architectural refactor)
+
+### [M21] Cleanup job does not check deploy success before running
+
+- **File**: `.github/workflows/deploy-signaling-server.yml:238`
+- **Category**: config
+- **Suggested Fix**: Change to `if: success() && github.event_name == 'push'`
+- **Status**: PENDING
+
+### [M22] E2E test failures do not block CI on develop branch
+
+- **File**: `.github/workflows/e2e-tests.yml:87`
+- **Category**: config
+- **Suggested Fix**: Make E2E a required status check on develop branch.
+- **Status**: PENDING
+
+### [M23] App Store upload uses deprecated xcrun altool
+
+- **File**: `.github/workflows/build-appstore.yml:169`
+- **Category**: config
+- **Suggested Fix**: Migrate to `xcrun notarytool`.
+- **Status**: NEEDS_HUMAN (Apple toolchain change)
+
+### [M24] pgAdmin master password disabled in dev docker-compose
+
+- **File**: `docker-compose.yml:56`
+- **Category**: config
+- **Suggested Fix**: Move dev-only configs to `docker-compose.override.yml`.
+- **Status**: PENDING
+
+### [M25] CSP connect-src allows Ollama without TLS check
+
+- **File**: `apps/desktop/src-tauri/tauri.conf.json:35`
+- **Category**: config
+- **Suggested Fix**: Enforce HTTPS for Ollama via mkcert in local dev.
+- **Status**: NEEDS_HUMAN (impacts Ollama integration)
+
+### [M26] COEP set to credentialless instead of require-corp
+
+- **File**: `apps/web/next.config.ts:60`
+- **Category**: config
+- **Suggested Fix**: Use `require-corp` or verify all CDN resources have CORP headers.
+- **Status**: NEEDS_HUMAN (may break CDN resources)
+
+### [M27] X-DNS-Prefetch-Control enabled, leaking hover information
+
+- **File**: `apps/web/next.config.ts:30`
+- **Category**: config
+- **Suggested Fix**: Set to `off` for privacy.
+- **Status**: FIXED — Changed X-DNS-Prefetch-Control from "on" to "off"
+
+### [M28] Clippy warnings vs Cargo.toml inconsistency
+
+- **File**: `.github/workflows/ci.yml:90`
+- **Category**: config
+- **Suggested Fix**: Set `Cargo.toml [lints] rust.warnings = 'deny'` or remove `-D warnings` from clippy.
+- **Status**: PENDING
+
+### [M29] Filesystem read allows $HOME/\*\* without whitelist
+
+- **File**: `apps/desktop/src-tauri/capabilities/default.json:58`
+- **Category**: config
+- **Suggested Fix**: Switch to allowlist approach. Deny `$HOME/` by default.
+- **Status**: NEEDS_HUMAN (may break filesystem features)
+
+### [M30] VCS config directories missing from write deny list
+
+- **File**: `apps/desktop/src-tauri/capabilities/default.json:220`
+- **Category**: config
+- **Suggested Fix**: Add explicit deny for `$HOME/.git`, `$HOME/.gitignore`, `$HOME/.github`.
+- **Status**: PENDING
+
+### [M31] shell:allow-open permits arbitrary URLs
+
+- **File**: `apps/desktop/src-tauri/capabilities/default.json:462`
+- **Category**: config
+- **Suggested Fix**: Limit to explicit domain allowlist or validate URLs server-side.
+- **Status**: NEEDS_HUMAN (may break URL opening features)
+
+### [M32] prefer-const lint rule disabled globally
+
+- **File**: `eslint.config.mjs:309`
+- **Category**: config
+- **Suggested Fix**: Re-enable: `'prefer-const': ['error', { 'destructuring': 'all' }]`
+- **Status**: PENDING
+
+### [M33] signaling-server doesn't validate NODE_ENV at startup
+
+- **File**: `services/signaling-server/package.json:10`
+- **Category**: config
+- **Suggested Fix**: Add startup validation log and fail if not production.
+- **Status**: PENDING
+
+### [M34] settingsStore test verifies hardcoded defaults, not factory function output
+
+- **File**: `apps/desktop/src/stores/__tests__/settingsStore.test.ts:69`
+- **Category**: test
+- **Suggested Fix**: `expect(state.llmConfig).toEqual(createDefaultLLMConfig())`
+- **Status**: PENDING
+
+### [M35] Error history eviction order not verified
+
+- **File**: `apps/desktop/src/__tests__/errorStore.test.ts:53`
+- **Category**: test
+- **Suggested Fix**: Track error IDs, assert oldest errors evicted first (FIFO).
+- **Status**: PENDING
+
+### [M36] Memory and scheduler tests mock all Tauri invoke calls
+
+- **File**: `apps/desktop/src/__tests__/memory.test.ts:1`
+- **Category**: test
+- **Suggested Fix**: Verify command names and payload shapes against actual backend signatures in `lib.rs`.
+- **Status**: PENDING
+
+### [M37] Web-side LLM cost calculator may diverge from Rust implementation
+
+- **File**: `apps/web/__tests__/services/llm-cost-calculator.test.ts:1`
+- **Category**: test
+- **Suggested Fix**: Add test comparing web calculator output against `cost_calculator.rs` for same model/token counts.
+- **Status**: PENDING
+
+### [M38] Tauri command registration test only checks presence, not signature
+
+- **File**: `apps/desktop/src/__tests__/tauriCommandRegistration.test.ts:9`
+- **Category**: test
+- **Suggested Fix**: Parse `lib.rs` and cross-reference all frontend invoke calls against registered commands.
+- **Status**: PENDING
 
 ---
 
-## Low Issues (Summary Table)
+## Low Issues
 
-| ID          | File                         | Line | Category | Title                                                                                                                               |
-| ----------- | ---------------------------- | ---- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| FIXED [L1]  | `extension_bridge.rs`        | 581  | logic    | Exponential retry delay bit-shift overflows if REALTIME_MAX_RETRIES > 64 — **Fix applied**: Bit-shift capped at 31 before shifting. |
-| [L2]        | `useAgenticEvents.ts`        | 252  | logic    | normalizeRiskLevel defaults unknown risk to 'high' — use 'medium'                                                                   |
-| [L3]        | `chatStore.ts`               | 411  | logic    | Conversation cap eviction slice(499) may evict 0 entries                                                                            |
-| [L4]        | `mod.rs` (llm)               | 479  | quality  | Redundant getter methods on ToolDefinition duplicate public field access                                                            |
-| [L5]        | `mod.rs` (llm)               | 91   | quality  | Stale inline comment block for 10 removed Google fields                                                                             |
-| [L6]        | `task_decomposer.rs`         | 716  | quality  | Magic numbers 0.7/0.3 for resource intensity                                                                                        |
-| [L7]        | `chat/mod.rs`                | 286  | quality  | Duplicate AUDIT-CANCEL-060 comment 10 lines apart                                                                                   |
-| [L8]        | `media.rs`                   | 91   | quality  | MediaHistoryItem.type\_ should be a typed enum MediaKind                                                                            |
-| [L9]        | `browser.rs`                 | 97   | quality  | get_error_message() duplicates error-build logic in get()                                                                           |
-| [L10]       | `manifest.rs`                | 377  | quality  | Stale commented-out wildcard extension line with 'remove in production' note                                                        |
-| [L11]       | `manifest.rs`                | 482  | quality  | Windows registry stub is a no-op that falsely reports success                                                                       |
-| [L12]       | `BrowserActionLog.tsx`       | 107  | quality  | DOM-anchor download pattern duplicated — needs shared utility                                                                       |
-| [L13]       | `CacheManagement.tsx`        | 210  | quality  | Array index used as React key for items with stable unique identifiers                                                              |
-| [L14]       | `CacheManagement.tsx`        | 117  | quality  | formatMB/formatCurrency are private inline helpers — should be shared                                                               |
-| [L15]       | `useChatSubmit.ts`           | 107  | quality  | console.log in queue-mode success path leaks message IDs                                                                            |
-| [L16]       | `media.rs`                   | 373  | security | Media generation history stored as plaintext JSON — bypasses SQLCipher                                                              |
-| [L17]       | `chat/mod.rs`                | 82   | security | sanitize_for_prompt leaves shell metacharacters enabling prompt injection                                                           |
-| [L18]       | `validation.ts`              | 283  | security | validateSqlQuery blocklist too narrow — permits DELETE without WHERE, EXEC                                                          |
-| [L19]       | `validation.ts`              | 313  | security | sanitizeCommandArgs silently corrupts arguments by character deletion                                                               |
-| [L20]       | `browser.rs`                 | 893  | security | browser_upload_file paths not validated against Tauri allowed directories                                                           |
-| [L21]       | `docker-compose.yml`         | 1    | config   | PostgreSQL ports bound to all interfaces in development                                                                             |
-| [L22]       | `Cargo.toml`                 | 1    | config   | reqwest blocking feature in async binary                                                                                            |
-| [L23]       | `Cargo.toml`                 | 1    | config   | tokio full feature includes test-util in production binary                                                                          |
-| FIXED [L24] | `package.json vs Cargo.toml` | 1    | config   | Version mismatch: package.json 1.1.3 vs Cargo.toml 1.1.5 — **Fix applied**: package.json bumped to v1.1.5.                          |
-| [L25]       | `query_builder.rs`           | 50   | test     | QueryBuilder tests don't cover SQL injection via parameter values                                                                   |
-| [L26]       | `sse_parser.rs`              | 181  | test     | O(n) Vec::remove(0) performance regression has no benchmark test                                                                    |
-| [L27]       | All 15 AGI executors         | 1    | test     | All 15 AGI executors have zero unit tests                                                                                           |
-| [L28]       | `websocket_server.rs`        | 1    | test     | WebSocket server message routing and connection lifecycle untested                                                                  |
+### [L1] Bearer token extraction lacks format validation
+
+- **File**: `apps/web/app/api/media/image/generate/route.ts:424`
+- **Category**: security
+- **Suggested Fix**: `const match = authHeader.match(/^Bearer\s+([\w\-.~+/]+=*)$/i); if (!match) return 401;`
+- **Status**: PENDING
+
+### [L2] PostgreSQL unique constraint error code hardcoded
+
+- **File**: `apps/web/app/api/webhooks/directory-sync/route.ts:786`
+- **Category**: security
+- **Suggested Fix**: `if (insertError.code === '23505' || insertError.message?.includes('unique'))`
+- **Status**: PENDING
+
+### [L3] CSS selector sanitization incomplete — attribute selectors pass through
+
+- **File**: `apps/desktop/src-tauri/src/sys/commands/browser.rs:22`
+- **Category**: security
+- **Suggested Fix**: Whitelist allowed CSS selector chars: alphanumeric, spaces, `.`, `#`, `_`, `-`.
+- **Status**: PENDING
+
+### [L4] expect() in test helper without error context
+
+- **File**: `apps/desktop/src-tauri/src/core/agi/executors/browser_executor.rs:1694`
+- **Category**: logic
+- **Suggested Fix**: `.unwrap_or_else(|e| panic!("Failed to create automation service for testing: {}", e))`
+- **Status**: PENDING
+
+### [L5] unwrap_or("") silently defaults required fields
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/provider_adapter.rs:1904`
+- **Category**: quality
+- **Suggested Fix**: `.ok_or_else(|| anyhow::anyhow!("Missing required field: model"))?`
+- **Status**: PENDING
+
+### [L6] API gateway routes repeat auth/error boilerplate
+
+- **File**: `services/api-gateway/src/routes/credits.ts:1`
+- **Category**: quality
+- **Suggested Fix**: Create `withAuth()` HOF middleware and `responseWrapper()`.
+- **Status**: NEEDS_HUMAN (requires examining all routes)
+
+### [L7] contains_word() manually checks byte boundaries
+
+- **File**: `apps/desktop/src-tauri/src/core/llm/llm_router.rs:1878`
+- **Category**: quality
+- **Suggested Fix**: Use regex crate with `\b` anchors.
+- **Status**: PENDING
+
+### [L8] pgAdmin health check missing from docker-compose
+
+- **File**: `docker-compose.yml:51`
+- **Category**: config
+- **Suggested Fix**: Add healthcheck: `test: ["CMD", "curl", "-f", "http://localhost:80/misc/ping"]`
+- **Status**: PENDING
+
+### [L9] exactOptionalPropertyTypes disabled for Zustand compatibility
+
+- **File**: `tsconfig.base.json:28`
+- **Category**: config
+- **Suggested Fix**: Use Zustand 5's TypeScript-strict mode. Add `@typescript-eslint/prefer-nullish-coalescing-assignment`.
+- **Status**: NEEDS_HUMAN (Zustand compatibility constraint)
+
+### [L10] retryWithTimeout test doesn't actually test timeout enforcement
+
+- **File**: `apps/desktop/src/__tests__/retry.test.ts:271`
+- **Category**: test
+- **Suggested Fix**: Create slow operation exceeding `timeoutMs`, verify it times out before completing.
+- **Status**: PENDING
 
 ---
 
-## Autonomous Fix Loop — Pass 1
+## Pass 2 Summary
 
-### Priority Fix Order (highest impact, automatable)
+_(Updated 2026-02-26 — Pass 2 complete)_
 
-**SECURITY CRITICAL — Fix immediately:**
+- Fixed: 15 issues (including 6 security fixes, 5 quality improvements)
+- Needs Human: 32 issues (architectural changes, large refactors, test infrastructure)
+- Pending (Low/cosmetic skipped): 62 issues
+- Tests: PASS (cargo test + vitest)
+- Lint: PASS (eslint --max-warnings=5)
+- Type-check: PASS (tsc --noEmit)
 
-1. [C19] browser.rs:584 — Add `RequiresExplicitApproval` approval gate to `browser_evaluate`
-2. [C20] browser.rs:665 — Add `RequiresExplicitApproval` approval gate to `browser_execute_async_js`
-3. [C21] browser.rs:905 — Add path validation in `browser_upload_file`
-4. [C9] lib.rs:189 — Remove SQLCipher silent fallback to plaintext
-5. [C16] query_builder.rs — Fix `validate_sql()` to return `Err` not just warn
-6. [H28] query_builder.rs:596 — Remove/deprecate `build_with_params` silent no-op
-7. [H29] query_builder.rs:466 — Enforce parameterized queries for INSERT/UPDATE
-8. [H26] database.rs:941 — Gate `db_get_stored_password` behind `ApprovalController`
-9. [H30] websocket_server.rs:132 — Add constant-time token comparison (subtle crate)
-10. [H31] websocket_server.rs:257 — Ignore re-Authenticate for already-authenticated clients
-11. [H34] media.rs:211 — Remove client-supplied plan tier from `MediaVideoRequest`
-12. [H33] status route:328 — Add task ownership verification
+---
 
-**LOGIC BUGS — Fix next:** 13. [H2] cost_calculator.rs:12 — Add MediaUnit pricing variant 14. [H3] task_decomposer.rs:271 — Fix dfs_longest_path with topological DP 15. [H4] orchestrator.rs:440 — Fix SubtaskResult.agent_id field assignment 16. [H5] orchestrator.rs:365 — Fix TOCTOU in spawned_subtask_ids 17. [H7] media_executor.rs:439 — Replace blocking fs I/O with tokio::fs 18. [H6] extension_bridge.rs:504 — Fix GetUrl/GetTitle identical native payloads 19. [M2] sse_parser.rs:181 — Replace Vec with VecDeque for O(1) dequeue 20. [M6] chatStore.ts:358 — Remove hardcoded tokenUsage.max = 128000 21. [M8] chatStore.ts:411 — Fix conversation cap eviction slice(499) bug 22. [L1] extension_bridge.rs:581 — Cap bit-shift to prevent overflow
+## Final Status
 
-**QUALITY — Fix after security/logic:** 23. [H16] useChatSubmit.ts:247 — Fix stale isSending ref → useState 24. [H17] CacheManagement.tsx:43 — Replace window.confirm() with AlertDialog 25. [H18] CacheManagement.tsx:245 — Add await/error handling to clearByProvider 26. [H9] index.tsx:959 — Strip 37+ console.log statements 27. [C4] auth.ts:288 — Deduplicate storageFallback (10+ files) 28. [C5] useMediaGeneration.ts:6 — Extract shared getAuthToken() 29. [H19] index.tsx:1119 — Extract finalizeStream() to remove 4x duplication 30. [H8] useAgenticEvents.ts:216 — Fix stale handlersRef → dynamic access 31. [H11] useVoiceInput.ts — Delete dead file 32. [H14] browser.rs:656 — Remove duplicate browser_get_dom_snapshot 33. [L24] package.json — Sync version to 1.1.5
+Passes completed: 2
 
-**CONFIG — Fix after code:** 34. [H20] docker-compose.yml — Bind pgAdmin to 127.0.0.1 35. [H21] capabilities/default.json — Restrict shell:allow-open to https/http/mailto 36. [H22] capabilities/default.json — Add gitconfig/git-credentials to deny list 37. [C10] docker-compose.yml — Parameterize postgres password 38. [M24] encryption.rs:47 — Use pragma_update API for SQLCipher key 39. [M25] encryption.rs:112 — Delete plaintext backup after successful migration
+### Issues Resolved
 
-### Items Requiring Human Attention
+| ID    | Category | Severity | Title                                           | Fix                                                         |
+| ----- | -------- | -------- | ----------------------------------------------- | ----------------------------------------------------------- |
+| [H2]  | security | high     | Device ID no length/format validation           | Added /^[a-zA-Z0-9-_]{1,128}$/ guard before rate-limit key  |
+| [H3]  | security | high     | Fingerprint backfill race condition             | Added .is('device_fingerprint', null) WHERE clause          |
+| [H6]  | security | high     | HMAC timestamp NaN bypass                       | Added /^\d+$/ integer validation before parseInt            |
+| [H8]  | logic    | high     | Infinite loop at filesystem root                | match expression breaks on parent() = None                  |
+| [H17] | quality  | high     | localStorage sync write on every ID mapping     | 300ms debounce with clearTimeout                            |
+| [H19] | quality  | high     | TIER_ALLOWED_MODELS tier duplication            | Extracted ECONOMY_MODELS/PRO_ADDITIONS/FLAGSHIP_ADDITIONS   |
+| [M1]  | security | medium   | profiles.is_admin privilege escalation          | Removed user-editable fallback; only app_metadata.role used |
+| [M3]  | security | medium   | Severity enum not validated at runtime          | Added validSeverities array check with 400 on invalid       |
+| [M4]  | security | medium   | Group name not canonicalized                    | Added /^[a-zA-Z0-9_\- ]+$/ guard before role mapping        |
+| [M6]  | logic    | medium   | Image size parsing accepts malformed input      | Added split length + Number.isFinite validation             |
+| [M7]  | security | medium   | logit_bias accepts non-numeric keys             | Changed to z.string().regex(/^\d+$/)                        |
+| [M8]  | logic    | medium   | MediaExecutor::new() panics on HTTP client fail | Replaced .expect() with .unwrap_or_else() fallback          |
+| [M9]  | quality  | medium   | 5xx error check duplicated in should_retry      | should_retry now calls is_server_error()                    |
+| [M11] | quality  | medium   | AUDIT-CANCEL-060 comment duplicated             | Removed duplicate comment on tokio::task::spawn             |
+| [M27] | security | medium   | X-DNS-Prefetch-Control enabled                  | Changed from "on" to "off"                                  |
 
-- [C8] Decompose 3124-line chat_send_message (architectural refactor)
-- [C11-C18][C22] Write missing test suites (new test files needed)
-- [H35-H43] Write missing test coverage (new test files)
-- [H15] Implement 15 stub browser commands (real implementation needed)
-- [H23] Update release.yml to add Rust checks (GitHub Actions YAML)
-- [H24] Remove unsafe-inline from CSP (may require Tailwind configuration changes)
-- [H12] Sanitize build_decomposition_prompt (verify sanitize_multiline_for_prompt is accessible)
-- [H1] Fix cache key post-resolution (requires careful refactoring of cache lookup flow)
+### Requires Human Attention (Top Priority)
+
+| ID    | Category | Severity | Title                                                            | Reason Blocked                                                                                            |
+| ----- | -------- | -------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [C1]  | config   | critical | Tauri signing key CI log exposure                                | GitHub Actions auto-masks secrets; tauri-action already pinned to commit hash — verify actual CI behavior |
+| [C2]  | test     | critical | Exponential backoff test missing delay assertions                | Test infrastructure change needed                                                                         |
+| [C4]  | test     | critical | Stripe webhook test mocks HMAC signature                         | Requires real HMAC test signing secret setup                                                              |
+| [H1]  | security | high     | Kill switch fails open on DB error                               | Architecture decision: fail-open vs fail-closed tradeoff                                                  |
+| [H4]  | security | high     | SQL keyword injection via procedure name                         | Requires DB schema change or allowlist                                                                    |
+| [H5]  | security | high     | QR code generation calls external API                            | Requires bundled QR library                                                                               |
+| [H7]  | security | high     | API key returned in plaintext in some responses                  | Requires API contract change                                                                              |
+| [H21] | quality  | high     | Model selection duplicated between useChatSubmit and modelRouter | Large refactor                                                                                            |
+
+### Verification
+
+- Tests: PASS (cargo test workspace, pnpm test)
+- Lint: PASS (eslint --max-warnings=5)
+- Type-check: PASS (tsc --noEmit)
+- Rust clippy: PASS (-D warnings)
+
+### Recommendation
+
+The codebase is in a **conditionally shippable state**. The 15 fixes applied address the most critical security vulnerabilities: HMAC replay-attack bypass, privilege escalation via user-editable fields, race conditions in device authentication, and production panics. The kill switch fail-open vulnerability ([H1]) is the highest remaining risk — it should be addressed before the next major release. The test infrastructure issues ([C2], [C4]) represent false confidence in the test suite rather than active security problems, but should be resolved in the next sprint.

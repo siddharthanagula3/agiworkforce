@@ -47,33 +47,27 @@ async function verifyAdminAccess(
   const isAdminFromAppMetadata = user.app_metadata?.role === 'admin';
 
   if (!isAdminFromAppMetadata) {
-    // Fallback: check profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
+    // Not a global admin — check if they are an org owner/admin.
+    // NOTE: profiles.is_admin is intentionally NOT used as a fallback here because
+    // profiles is user-editable and could allow privilege escalation. Only
+    // app_metadata.role (service-role-only writable) grants global admin status.
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('organization_id, role')
+      .eq('user_id', user.id)
+      .in('role', ['owner', 'admin'])
+      .limit(1)
+      .maybeSingle();
 
-    if (!profile?.is_admin) {
-      // Not a global admin — check if they are an org owner/admin
-      const { data: membership } = await supabase
-        .from('organization_members')
-        .select('organization_id, role')
-        .eq('user_id', user.id)
-        .in('role', ['owner', 'admin'])
-        .limit(1)
-        .maybeSingle();
-
-      if (!membership) {
-        return { isAdmin: false, error: 'Insufficient privileges — org admin or owner required' };
-      }
-
-      return {
-        isAdmin: true,
-        userId: user.id,
-        organizationId: membership.organization_id,
-      };
+    if (!membership) {
+      return { isAdmin: false, error: 'Insufficient privileges — org admin or owner required' };
     }
+
+    return {
+      isAdmin: true,
+      userId: user.id,
+      organizationId: membership.organization_id,
+    };
   }
 
   // Global admin — resolve their organization
