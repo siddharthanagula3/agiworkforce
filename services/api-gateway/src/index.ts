@@ -24,23 +24,12 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
 import { createRateLimiter } from './middleware/rateLimit';
 import { logger } from './lib/logger';
+import { validateStartupEnv } from './env';
 
-if (!process.env['JWT_SECRET']) {
-  logger.fatal(
-    {},
-    'JWT_SECRET environment variable is required but not set. ' +
-      'Please set JWT_SECRET in your deployment environment (e.g., Vercel, Railway, etc.). ' +
-      'Example: JWT_SECRET=your-randomly-generated-secret-key-here',
-  );
-  process.exit(1);
-}
-
-if (!process.env['SUPABASE_URL'] || !process.env['SUPABASE_SERVICE_ROLE_KEY']) {
-  logger.fatal(
-    {},
-    'Supabase configuration missing. ' +
-      'Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.',
-  );
+try {
+  validateStartupEnv();
+} catch (err) {
+  logger.fatal({}, (err as Error).message);
   process.exit(1);
 }
 

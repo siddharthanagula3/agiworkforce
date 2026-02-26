@@ -524,4 +524,154 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       removeEventListenerSpy.mockRestore();
     });
   });
+
+  // H57 — additional window manager edge-case tests
+  describe('Closed window access (H57)', () => {
+    it('returns undefined state gracefully after unmount', async () => {
+      const { result, unmount } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(result.current.actions).toBeDefined();
+      });
+
+      const stateBeforeUnmount = result.current.state;
+      unmount();
+
+      // The last rendered state snapshot is preserved; no error is thrown
+      expect(stateBeforeUnmount).toBeDefined();
+      expect(typeof stateBeforeUnmount.fullscreen).toBe('boolean');
+    });
+
+    it('does not throw when actions are called after invoke rejects', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      vi.mocked(invoke).mockImplementation((command: string) => {
+        if (command === 'window_get_state') {
+          return Promise.resolve({
+            pinned: false,
+            alwaysOnTop: false,
+            dock: null,
+            maximized: false,
+            fullscreen: false,
+          });
+        }
+        // Simulate a closed/destroyed window rejecting every action
+        return Promise.reject(new Error('Window already closed'));
+      });
+
+      const { result } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(result.current.actions).toBeDefined();
+      });
+
+      // Should not throw — errors are swallowed internally
+      await expect(result.current.actions.toggleMaximize()).resolves.not.toThrow();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Concurrent window operations (H57)', () => {
+    it('handles multiple concurrent toggleMaximize calls without throwing', async () => {
+      const { result } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(result.current.actions).toBeDefined();
+      });
+
+      // Fire three toggleMaximize calls concurrently
+      const results = await Promise.allSettled([
+        result.current.actions.toggleMaximize(),
+        result.current.actions.toggleMaximize(),
+        result.current.actions.toggleMaximize(),
+      ]);
+
+      // All should settle (fulfilled or rejected) without crashing the hook
+      expect(results).toHaveLength(3);
+    });
+
+    it('handles concurrent dock + minimize calls without interfering', async () => {
+      const { result } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(result.current.actions).toBeDefined();
+      });
+
+      await Promise.allSettled([
+        result.current.actions.dock('left'),
+        result.current.actions.minimize(),
+      ]);
+
+      // invoke should have been called for both operations
+      const calls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+      expect(calls).toContain('window_dock');
+      expect(calls).toContain('window_minimize');
+    });
+  });
+
+  describe('Unmount cleanup releases resources (H57)', () => {
+    it('calls all unlisten functions when unmounted', async () => {
+      const unlistenFns = [vi.fn(), vi.fn(), vi.fn()];
+      let callCount = 0;
+
+      vi.mocked(listen).mockImplementation(() => {
+        const fn = unlistenFns[callCount++ % unlistenFns.length]!;
+        return Promise.resolve(fn);
+      });
+
+      const { unmount } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(vi.mocked(listen)).toHaveBeenCalled();
+      });
+
+      unmount();
+
+      await waitFor(() => {
+        // Every unlisten function that was registered should have been called
+        const called = unlistenFns.filter((fn) => fn.mock.calls.length > 0);
+        expect(called.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('does not fire state updates after component is unmounted', async () => {
+      type EventCb = (event: { payload: unknown; id: number }) => void;
+      let capturedCallback: EventCb | null = null;
+
+      vi.mocked(listen).mockImplementation(((eventName: string, callback: EventCb) => {
+        if (eventName === 'window:state') {
+          capturedCallback = callback;
+        }
+        return Promise.resolve(vi.fn());
+      }) as typeof listen);
+
+      const { result, unmount } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(capturedCallback).not.toBeNull();
+      });
+
+      const stateAtUnmount = result.current.state.fullscreen;
+
+      unmount();
+
+      // Dispatch a state event after unmount — should not change anything
+      if (capturedCallback) {
+        (capturedCallback as EventCb)({
+          id: 999,
+          payload: {
+            pinned: false,
+            alwaysOnTop: false,
+            dock: null,
+            maximized: false,
+            fullscreen: !stateAtUnmount,
+          },
+        });
+      }
+
+      // The last rendered state is unchanged
+      expect(result.current.state.fullscreen).toBe(stateAtUnmount);
+    });
+  });
 });

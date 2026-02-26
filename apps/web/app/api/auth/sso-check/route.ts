@@ -30,6 +30,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ssoEnabled: false });
   }
 
+  // Reject any non-ASCII characters first to block homograph/IDN attacks
+  if (/[^a-zA-Z0-9.-]/.test(domain)) {
+    return NextResponse.json({ error: 'Invalid domain format' }, { status: 400 });
+  }
+
   // Basic domain validation to prevent injection
   const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
   if (!domainPattern.test(domain)) {

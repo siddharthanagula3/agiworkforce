@@ -45,9 +45,11 @@ jobs:
           echo "VITE_SUPABASE_ANON_KEY=test-anon-key" >> $GITHUB_ENV
 
       - name: Dependency audit (JS)
-        run: pnpm audit --audit-level=high
+        # H25: || exit 1 ensures CI fails hard on high-severity vulnerabilities
+        run: pnpm audit --audit-level=high || exit 1
 
       - name: Lint
+        # H24: --max-warnings=0 enforced via package.json lint script
         run: pnpm lint
 
       - name: Type check
@@ -80,6 +82,10 @@ jobs:
       - name: Ensure clippy is available
         run: rustup component add clippy --toolchain 1.90.0
 
+      # H41: Verify exact Rust toolchain version before running clippy/tests
+      - name: Verify Rust toolchain
+        run: rustup show active-toolchain && rustc --version && cargo --version
+
       - name: Dependency audit (Rust)
         run: cargo install cargo-audit --locked --quiet && cargo audit
 
@@ -87,6 +93,7 @@ jobs:
         run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip enigo --skip AutomationService --skip automation
 
       - name: Clippy (Rust workspace, default features)
+        # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent
         run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
 
   desktop-e2e:
@@ -206,4 +213,5 @@ jobs:
         run: rustup component add clippy --toolchain 1.90.0
 
       - name: Clippy (all features, includes optional OCR/vision)
+        # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
