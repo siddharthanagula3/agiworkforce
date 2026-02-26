@@ -251,7 +251,14 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      # C1: Mask signing secrets in logs before they reach the build step
+      - name: Mask Tauri signing secrets
+        run: |
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+
       - name: Build web frontend
+        # H27: --max-old-space-size=8192 is intentional; macos-latest runners have 14 GB RAM
         run: NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Import signing certificate
@@ -280,7 +287,9 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
+        # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
+        # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -343,11 +352,20 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      # C1: Mask signing secrets in logs before they reach the build step
+      - name: Mask Tauri signing secrets
+        run: |
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+
       - name: Build web frontend
+        # H27: --max-old-space-size=8192 is intentional; windows-latest runners have 7 GB RAM
         run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
+        # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
+        # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -426,11 +444,20 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      # C1: Mask signing secrets in logs before they reach the build step
+      - name: Mask Tauri signing secrets
+        run: |
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+
       - name: Build web frontend
+        # H27: --max-old-space-size=8192 is intentional; ubuntu-22.04 runners have 7 GB RAM
         run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
+        # H28: Pinned to @v0 major-version tag (commit 73fb865 = v0.6.1); avoids floating SHA
+        # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -530,7 +557,7 @@ jobs:
                       }
                     }
                   } catch (e) {
-                    // Directory doesn't exist or can't be read
+                    // Directory does not exist or cannot be read
                   }
                   return results;
                 }

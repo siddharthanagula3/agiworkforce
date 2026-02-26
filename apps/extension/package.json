@@ -25,8 +25,8 @@
     "build": "vite build",
     "test": "vitest run",
     "clean": "rm -rf dist",
-    "package": "pnpm build && cd dist && zip -r ../extension.zip .",
-    "lint": "eslint src --ext .js",
+    "package": "pnpm build && cd dist && zip -r ../extension.zip . -x '*.map'",
+    "lint": "eslint src --ext .ts,.js",
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "devDependencies": {

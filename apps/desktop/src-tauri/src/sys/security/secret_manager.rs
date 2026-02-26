@@ -142,7 +142,10 @@ impl SecretManager {
         let encrypted_json = serde_json::to_string(&encrypted)
             .map_err(|e| SecretError::EncryptionError(format!("Failed to serialize: {}", e)))?;
 
-        let conn = self.db_conn.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = self
+            .db_conn
+            .lock()
+            .map_err(|_| SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into()))?;
 
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES (?1, ?2, 1)",
@@ -155,7 +158,10 @@ impl SecretManager {
 
     /// Retrieve and decrypt secret from database
     fn get_secret_from_database(&self, key: &str) -> Result<String, SecretError> {
-        let conn = self.db_conn.lock().unwrap_or_else(|e| e.into_inner());
+        let conn = self
+            .db_conn
+            .lock()
+            .map_err(|_| SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into()))?;
 
         let encrypted_json: String = conn
             .query_row(

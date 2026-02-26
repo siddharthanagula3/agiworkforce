@@ -1864,27 +1864,17 @@ enum TaskCategory {
     Creative,
 }
 
-/// Checks if `text` contains `word` as a whole word (surrounded by non-alphabetic
-/// characters or at string boundaries). Both `text` and `word` should already be
-/// lowercase when used with `classify_request`.
+/// Checks if `text` contains `word` as a whole word using regex `\b` word boundaries.
+/// Both `text` and `word` should already be lowercase when used with `classify_request`.
+///
+/// L7 fix: replaced the manual byte-scanning loop with a regex `\b…\b` match so that
+/// Unicode word boundaries are handled correctly and the intent is self-documenting.
 fn contains_word(text: &str, word: &str) -> bool {
-    let text_bytes = text.as_bytes();
-    let word_bytes = word.as_bytes();
-    let word_len = word_bytes.len();
-    if word_len == 0 || text_bytes.len() < word_len {
-        return false;
-    }
-    for i in 0..=text_bytes.len() - word_len {
-        if text_bytes[i..i + word_len] == *word_bytes {
-            let before_ok = i == 0 || !text_bytes[i - 1].is_ascii_alphabetic();
-            let after_ok =
-                i + word_len == text_bytes.len() || !text_bytes[i + word_len].is_ascii_alphabetic();
-            if before_ok && after_ok {
-                return true;
-            }
-        }
-    }
-    false
+    use regex::Regex;
+    let pattern = format!(r"\b{}\b", regex::escape(word));
+    Regex::new(&pattern)
+        .map(|re| re.is_match(text))
+        .unwrap_or(false)
 }
 
 fn classify_request(request: &LLMRequest) -> TaskCategory {

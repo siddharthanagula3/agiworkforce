@@ -236,7 +236,9 @@ jobs:
     name: Cleanup Old Images
     runs-on: ubuntu-latest
     needs: [deploy-railway, deploy-fly]
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # M21: Only run cleanup when both upstream deploy jobs succeed AND we are on a push to main.
+    # Previously used if: always() which would run cleanup even when deployments failed.
+    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       packages: write
 
