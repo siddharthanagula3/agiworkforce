@@ -13,18 +13,32 @@ use crate::core::agi::memory_manager::{
     ExtractedMemory, ImportConflictStrategy, ImportResult, LogEntryType, MemoryCategory,
     MemoryCompactionResult, MemoryEntry, MemoryExport, MemoryManager, MemoryStats,
 };
+use crate::core::llm::memory_integration::MemoryInjectionConfig;
 use crate::sys::error::{Error, Result};
+use tokio::sync::RwLock;
 
 /// State wrapper for the MemoryManager
 pub struct MemoryState {
     pub manager: Arc<MemoryManager>,
+    pub injection_config: Arc<RwLock<MemoryInjectionConfig>>,
 }
 
 impl MemoryState {
     pub fn new(db_path: &str) -> Result<Self> {
         let manager = MemoryManager::new(db_path)?;
+        let default_config = MemoryInjectionConfig {
+            enabled: true,
+            max_memories: 10,
+            min_importance: 5,
+            priority_categories: vec![
+                MemoryCategory::Decision,
+                MemoryCategory::Preference,
+                MemoryCategory::Fact,
+            ],
+        };
         Ok(Self {
             manager: Arc::new(manager),
+            injection_config: Arc::new(RwLock::new(default_config)),
         })
     }
 }

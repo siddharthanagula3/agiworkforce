@@ -56,9 +56,9 @@ pub async fn chat_configure_memory_injection(
     enabled: bool,
     max_memories: usize,
     min_importance: i32,
-    _memory_state: State<'_, MemoryState>,
+    memory_state: State<'_, MemoryState>,
 ) -> Result<()> {
-    let _config = MemoryInjectionConfig {
+    let new_config = MemoryInjectionConfig {
         enabled,
         max_memories,
         min_importance,
@@ -69,9 +69,11 @@ pub async fn chat_configure_memory_injection(
         ],
     };
 
-    // Store configuration in memory state (you may want to create a separate config store)
+    let mut config = memory_state.injection_config.write().await;
+    *config = new_config;
+
     info!(
-        "[ChatMemoryIntegration] Configured memory injection: enabled={}, max={}, min_importance={}",
+        "[ChatMemoryIntegration] Memory injection config updated: enabled={}, max={}, min_importance={}",
         enabled, max_memories, min_importance
     );
 
