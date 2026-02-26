@@ -5,8 +5,9 @@
  * credit checks, and abort handling.
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { invoke } from '../../../lib/tauri-mock';
+import { formatErrorForChat } from '../../../lib/friendlyErrors';
 import { useAccountStore } from '../../../stores/accountStore';
 import { useBillingStore } from '../../../stores/auth';
 import {
@@ -73,20 +74,20 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
   } = options;
 
   const sendAbortControllerRef = useRef<AbortController | null>(null);
-  const isSendingRef = useRef(false);
+  const [isSending, setIsSending] = useState(false);
 
   const abortSubmit = useCallback(() => {
     if (sendAbortControllerRef.current) {
       sendAbortControllerRef.current.abort();
       sendAbortControllerRef.current = null;
     }
-    isSendingRef.current = false;
+    setIsSending(false);
   }, []);
 
   const handleSubmit = useCallback(
     async (content: string): Promise<boolean> => {
       const messageContent = content.trim();
-      if (!messageContent || isSendingRef.current) {
+      if (!messageContent || isSending) {
         return false;
       }
 
@@ -144,7 +145,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
         }
       }
 
-      isSendingRef.current = true;
+      setIsSending(true);
       const messageAttachments = attachments.length > 0 ? [...attachments] : undefined;
 
       onClearContent();
@@ -170,7 +171,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
             onError(
               'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
             );
-            isSendingRef.current = false;
+            setIsSending(false);
             sendAbortControllerRef.current = null;
             return false;
           }
@@ -179,7 +180,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
             onRestoreContent(messageContent);
             if (messageAttachments) onRestoreAttachments(messageAttachments);
             onError('Daily credit limit reached. Credits will reset at midnight UTC.');
-            isSendingRef.current = false;
+            setIsSending(false);
             sendAbortControllerRef.current = null;
             return false;
           }
@@ -207,18 +208,20 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
         if (!currentAbortSignal.aborted) {
           onRestoreContent(messageContent);
           if (messageAttachments) onRestoreAttachments(messageAttachments);
-          onError(error instanceof Error ? error.message : String(error));
+          const rawMessage = error instanceof Error ? error.message : String(error);
           console.error('[useChatSubmit] Send failed:', error);
+          onError(formatErrorForChat(rawMessage, true));
         }
         return false;
       } finally {
         if (!currentAbortSignal.aborted) {
-          isSendingRef.current = false;
+          setIsSending(false);
         }
         sendAbortControllerRef.current = null;
       }
     },
     [
+      isSending,
       isQueueMode,
       selectedModel,
       selectedProvider,
@@ -242,7 +245,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
   return {
     handleSubmit,
     abortSubmit,
-    isSending: isSendingRef.current,
+    isSending,
   };
 }
 
