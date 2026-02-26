@@ -7,9 +7,10 @@ use super::{constants, SubtaskPriority, SubtaskStatus, SwarmError, SwarmResultTy
 use crate::core::agi::{Goal, Priority};
 use crate::core::llm::LLMRouter;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 /// Type of subtask determining execution strategy.
@@ -244,50 +245,97 @@ impl DependencyGraph {
             .all(|s| s.status == SubtaskStatus::Completed || s.status == SubtaskStatus::Failed)
     }
 
-    /// Gets the critical path (longest chain of dependencies).
+    /// Gets the critical path (longest chain of dependencies) using
+    /// topological-order dynamic programming. This is O(V+E) and correctly
+    /// handles all DAG structures without the exponential worst-case of
+    /// the previous recursive DFS approach.
     pub fn get_critical_path(&self) -> Vec<String> {
-        let mut longest_path = Vec::new();
-        let mut visited = HashSet::new();
-
-        // Find all root subtasks (no dependencies)
-        let roots: Vec<_> = self
-            .subtasks
-            .values()
-            .filter(|s| s.dependencies.is_empty())
-            .map(|s| s.id.clone())
-            .collect();
-
-        for root in roots {
-            let path = self.dfs_longest_path(&root, &mut visited);
-            if path.len() > longest_path.len() {
-                longest_path = path;
-            }
-        }
-
-        longest_path
-    }
-
-    fn dfs_longest_path(&self, id: &str, visited: &mut HashSet<String>) -> Vec<String> {
-        if visited.contains(id) {
+        if self.subtasks.is_empty() {
             return Vec::new();
         }
-        visited.insert(id.to_string());
 
-        let mut longest = Vec::new();
-
-        if let Some(dependents) = self.dependents.get(id) {
-            for dependent in dependents {
-                let path = self.dfs_longest_path(dependent, visited);
-                if path.len() > longest.len() {
-                    longest = path;
+        // Step 1: Compute in-degree for each node (using forward edges: dependents map)
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        for id in self.subtasks.keys() {
+            in_degree.entry(id.clone()).or_insert(0);
+        }
+        for deps in self.dependents.values() {
+            for dep in deps {
+                if self.subtasks.contains_key(dep) {
+                    *in_degree.entry(dep.clone()).or_insert(0) += 1;
                 }
             }
         }
 
-        visited.remove(id);
-        let mut result = vec![id.to_string()];
-        result.extend(longest);
-        result
+        // Step 2: Kahn's algorithm to compute topological order
+        let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+        for (id, &deg) in &in_degree {
+            if deg == 0 {
+                queue.push_back(id.clone());
+            }
+        }
+
+        let mut topo_order = Vec::with_capacity(self.subtasks.len());
+        while let Some(node) = queue.pop_front() {
+            topo_order.push(node.clone());
+            if let Some(dependents) = self.dependents.get(&node) {
+                for dep in dependents {
+                    if let Some(deg) = in_degree.get_mut(dep) {
+                        *deg -= 1;
+                        if *deg == 0 {
+                            queue.push_back(dep.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 3: DP in topological order to find longest path
+        // dist[node] = length of longest path ending at node
+        let mut dist: HashMap<String, usize> = HashMap::new();
+        // predecessor[node] = previous node on the longest path
+        let mut predecessor: HashMap<String, Option<String>> = HashMap::new();
+
+        for node in &topo_order {
+            dist.insert(node.clone(), 1); // Each node counts as 1
+            predecessor.insert(node.clone(), None);
+        }
+
+        for node in &topo_order {
+            let current_dist = dist[node];
+            if let Some(dependents) = self.dependents.get(node) {
+                for dep in dependents {
+                    if let Some(dep_dist) = dist.get_mut(dep) {
+                        if current_dist + 1 > *dep_dist {
+                            *dep_dist = current_dist + 1;
+                            predecessor.insert(dep.clone(), Some(node.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 4: Find the node with maximum distance and reconstruct the path
+        let end_node = dist
+            .iter()
+            .max_by_key(|(_, &d)| d)
+            .map(|(id, _)| id.clone());
+
+        match end_node {
+            Some(mut current) => {
+                let mut path = Vec::new();
+                loop {
+                    path.push(current.clone());
+                    match predecessor.get(&current) {
+                        Some(Some(prev)) => current = prev.clone(),
+                        _ => break,
+                    }
+                }
+                path.reverse();
+                path
+            }
+            None => Vec::new(),
+        }
     }
 
     /// Validates the graph for cycles.
@@ -385,13 +433,77 @@ pub struct GraphStats {
     pub max_parallelism: usize,
 }
 
+/// A cached decomposition result with an expiration timestamp.
+#[derive(Debug, Clone)]
+struct DecompositionCacheEntry {
+    /// The cached subtasks from a previous decomposition.
+    subtasks: Vec<Subtask>,
+    /// When this cache entry was created.
+    created_at: Instant,
+}
+
+impl DecompositionCacheEntry {
+    /// Creates a new cache entry with the current timestamp.
+    fn new(subtasks: Vec<Subtask>) -> Self {
+        Self {
+            subtasks,
+            created_at: Instant::now(),
+        }
+    }
+
+    /// Returns true if this cache entry has expired.
+    fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > constants::DECOMPOSITION_CACHE_TTL
+    }
+}
+
+/// Composite cache key combining task ID and a SHA-256 hash of the input content.
+/// This ensures that identical decomposition requests are deduplicated even across
+/// retries, while different tasks or changed inputs produce distinct keys.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DecompositionCacheKey {
+    task_id: String,
+    input_content_hash: String,
+}
+
+impl DecompositionCacheKey {
+    /// Builds a cache key from a goal by hashing its description, priority,
+    /// constraints, and success criteria.
+    fn from_goal(goal: &Goal) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(goal.description.as_bytes());
+        hasher.update(format!("{:?}", goal.priority).as_bytes());
+        for constraint in &goal.constraints {
+            // Constraint is a struct with name + value, use Debug repr for hashing
+            hasher.update(format!("{:?}", constraint).as_bytes());
+        }
+        for criterion in &goal.success_criteria {
+            hasher.update(criterion.as_bytes());
+        }
+        let hash_bytes = hasher.finalize();
+        Self {
+            task_id: goal.id.clone(),
+            input_content_hash: format!("{:x}", hash_bytes),
+        }
+    }
+}
+
 /// Task decomposer that breaks goals into parallelizable subtasks.
+///
+/// Includes an in-memory decomposition cache to guarantee idempotency:
+/// if the same task is decomposed again (e.g. after a retry), the cached
+/// result is returned without making a duplicate LLM call.
 pub struct TaskDecomposer {
     router: Arc<RwLock<LLMRouter>>,
     #[allow(dead_code)]
     max_depth: usize,
     #[allow(dead_code)]
     min_subtask_size: usize,
+    /// Thread-safe decomposition cache keyed on (task_id, input_content_hash).
+    /// Protected by a tokio Mutex to allow safe concurrent access from multiple
+    /// swarm executions without blocking the async runtime.
+    decomposition_cache:
+        Arc<tokio::sync::Mutex<HashMap<DecompositionCacheKey, DecompositionCacheEntry>>>,
 }
 
 impl TaskDecomposer {
@@ -401,18 +513,72 @@ impl TaskDecomposer {
             router,
             max_depth: constants::MAX_DECOMPOSITION_DEPTH,
             min_subtask_size: 1,
+            decomposition_cache: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
     /// Decomposes a goal into parallelizable subtasks.
+    ///
+    /// This method is **idempotent**: if the same goal (by ID and content hash)
+    /// has already been decomposed, the cached result is returned immediately
+    /// without making another LLM call. This prevents duplicate LLM costs when
+    /// decomposition is retried after a transient failure.
     pub async fn decompose(&self, goal: &Goal) -> SwarmResultType<DependencyGraph> {
         tracing::info!("[TaskDecomposer] Decomposing goal: {}", goal.description);
 
-        let mut graph = DependencyGraph::new();
+        let cache_key = DecompositionCacheKey::from_goal(goal);
+
+        // Check cache first -- return cached subtasks if available and not expired
+        {
+            let mut cache = self.decomposition_cache.lock().await;
+
+            // Evict expired entries while we hold the lock
+            cache.retain(|_k, v| !v.is_expired());
+
+            if let Some(entry) = cache.get(&cache_key) {
+                tracing::info!(
+                    "[TaskDecomposer] Cache HIT for goal '{}' (task_id={}, hash={}). Skipping LLM call.",
+                    goal.description,
+                    cache_key.task_id,
+                    &cache_key.input_content_hash[..16],
+                );
+
+                let mut graph = DependencyGraph::new();
+                for subtask in &entry.subtasks {
+                    graph.add_subtask(subtask.clone());
+                }
+                graph.validate()?;
+
+                let stats = graph.stats();
+                tracing::info!(
+                    "[TaskDecomposer] Decomposition (cached): {} subtasks, critical path: {}, max parallelism: {}",
+                    stats.total_subtasks,
+                    stats.critical_path_length,
+                    stats.max_parallelism
+                );
+
+                return Ok(graph);
+            }
+        }
+        // Lock is released here before the LLM call
+
+        tracing::debug!(
+            "[TaskDecomposer] Cache MISS for goal '{}' (task_id={}, hash={}). Calling LLM.",
+            goal.description,
+            cache_key.task_id,
+            &cache_key.input_content_hash[..16],
+        );
 
         // Use LLM to analyze and decompose the task
         let subtasks = self.analyze_and_decompose(goal).await?;
 
+        // Store the result in the cache before building the graph
+        {
+            let mut cache = self.decomposition_cache.lock().await;
+            cache.insert(cache_key, DecompositionCacheEntry::new(subtasks.clone()));
+        }
+
+        let mut graph = DependencyGraph::new();
         for subtask in subtasks {
             graph.add_subtask(subtask);
         }
@@ -429,6 +595,27 @@ impl TaskDecomposer {
         );
 
         Ok(graph)
+    }
+
+    /// Invalidates the cache entry for a specific goal. Call this when a task
+    /// completes or is abandoned to free memory.
+    pub async fn invalidate_cache(&self, goal: &Goal) {
+        let cache_key = DecompositionCacheKey::from_goal(goal);
+        let mut cache = self.decomposition_cache.lock().await;
+        if cache.remove(&cache_key).is_some() {
+            tracing::debug!(
+                "[TaskDecomposer] Cache invalidated for goal '{}'",
+                goal.description,
+            );
+        }
+    }
+
+    /// Clears all cached decomposition results.
+    pub async fn clear_cache(&self) {
+        let mut cache = self.decomposition_cache.lock().await;
+        let count = cache.len();
+        cache.clear();
+        tracing::debug!("[TaskDecomposer] Cache cleared ({} entries removed)", count,);
     }
 
     async fn analyze_and_decompose(&self, goal: &Goal) -> SwarmResultType<Vec<Subtask>> {

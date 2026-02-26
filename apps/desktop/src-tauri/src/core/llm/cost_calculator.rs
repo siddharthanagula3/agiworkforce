@@ -16,9 +16,33 @@ impl Pricing {
     }
 }
 
+/// Media type for per-unit pricing (images and video).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MediaType {
+    /// Standard-quality image generation (e.g., DALL-E 3, Imagen 4)
+    ImageStandard,
+    /// High-quality / HD image generation (e.g., Imagen 4 Ultra, gpt-image-1.5)
+    ImageHD,
+    /// Video generation priced per second (e.g., Runway, Sora, Veo 3)
+    VideoPerSecond,
+}
+
+/// Per-unit pricing for media generation (images, video).
+///
+/// Unlike token-based pricing, media generation uses a fixed per-unit cost:
+/// - Images: cost per image generated
+/// - Video: cost per second of video generated
+#[derive(Debug, Clone)]
+struct MediaPricing {
+    /// Cost per unit (per image, or per second of video)
+    cost_per_unit: f64,
+}
+
 pub struct CostCalculator {
     pricing: HashMap<(Provider, &'static str), Pricing>,
     provider_defaults: HashMap<Provider, Pricing>,
+    /// Per-unit pricing for media generation keyed on (Provider, MediaType)
+    media_pricing: HashMap<(Provider, MediaType), MediaPricing>,
 }
 
 impl Default for CostCalculator {
@@ -151,8 +175,31 @@ impl CostCalculator {
                 output_per_million: 5.00,
             },
         );
+        // Claude Sonnet 4.6 — current Sonnet (February 2026).
+        pricing.insert(
+            (Provider::Anthropic, "claude-sonnet-4-6"),
+            Pricing {
+                input_per_million: 3.00,
+                output_per_million: 15.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Anthropic, "claude-sonnet-4.6"),
+            Pricing {
+                input_per_million: 3.00,
+                output_per_million: 15.00,
+            },
+        );
+        // Claude Sonnet 4.5 — legacy (alias and snapshot-pinned IDs).
         pricing.insert(
             (Provider::Anthropic, "claude-sonnet-4-5"),
+            Pricing {
+                input_per_million: 3.00,
+                output_per_million: 15.00,
+            },
+        );
+        pricing.insert(
+            (Provider::Anthropic, "claude-sonnet-4-5-20250929"),
             Pricing {
                 input_per_million: 3.00,
                 output_per_million: 15.00,
@@ -185,6 +232,14 @@ impl CostCalculator {
         // ---------------------------------------------------------
         pricing.insert(
             (Provider::OpenAI, "gpt-5-pro"),
+            Pricing {
+                input_per_million: 5.00,
+                output_per_million: 30.00,
+            },
+        );
+        // Canonical OpenAI API model ID for GPT-5 Pro (after canonicalization).
+        pricing.insert(
+            (Provider::OpenAI, "gpt-5.2-pro"),
             Pricing {
                 input_per_million: 5.00,
                 output_per_million: 30.00,
@@ -333,6 +388,14 @@ impl CostCalculator {
         // ---------------------------------------------------------
         pricing.insert(
             (Provider::XAI, "grok-4"),
+            Pricing {
+                input_per_million: 3.00,
+                output_per_million: 15.00,
+            },
+        );
+        // Canonical versioned xAI model ID (after canonicalization of "grok-4").
+        pricing.insert(
+            (Provider::XAI, "grok-4-0709"),
             Pricing {
                 input_per_million: 3.00,
                 output_per_million: 15.00,
@@ -641,12 +704,49 @@ impl CostCalculator {
             },
         );
 
+        // ---------------------------------------------------------
+        // Media Generation Per-Unit Pricing
+        // ---------------------------------------------------------
+        let mut media_pricing = HashMap::new();
+
+        // OpenAI image generation
+        media_pricing.insert(
+            (Provider::OpenAI, MediaType::ImageStandard),
+            MediaPricing { cost_per_unit: 0.04 },
+        );
+        media_pricing.insert(
+            (Provider::OpenAI, MediaType::ImageHD),
+            MediaPricing { cost_per_unit: 0.08 },
+        );
+        // OpenAI Sora video (~$0.10 per second)
+        media_pricing.insert(
+            (Provider::OpenAI, MediaType::VideoPerSecond),
+            MediaPricing { cost_per_unit: 0.10 },
+        );
+
+        // Google image generation (Imagen 4)
+        media_pricing.insert(
+            (Provider::Google, MediaType::ImageStandard),
+            MediaPricing { cost_per_unit: 0.04 },
+        );
+        media_pricing.insert(
+            (Provider::Google, MediaType::ImageHD),
+            MediaPricing { cost_per_unit: 0.08 },
+        );
+        // Google Veo 3 video (~$0.08 per second)
+        media_pricing.insert(
+            (Provider::Google, MediaType::VideoPerSecond),
+            MediaPricing { cost_per_unit: 0.08 },
+        );
+
+        // ManagedCloud inherits from origin providers (handled in calculate_media_cost)
+
         Self {
             pricing,
             provider_defaults,
+            media_pricing,
         }
     }
-
 
     /// Providers whose pricing entries ManagedCloud may proxy through.
     /// ManagedCloud routes to models like `gpt-5-nano` (OpenAI), `deepseek-reasoner`
@@ -698,5 +798,49 @@ impl CostCalculator {
             });
 
         pricing.cost(input_tokens, output_tokens)
+    }
+
+    /// Calculates the cost for a media generation operation.
+    ///
+    /// - For images: `units` is the number of images generated.
+    /// - For video: `units` is the number of seconds of video generated.
+    ///
+    /// Returns 0.0 if no pricing is found for the provider/media_type combination.
+    pub fn calculate_media_cost(
+        &self,
+        provider: Provider,
+        media_type: MediaType,
+        units: u32,
+    ) -> f64 {
+        if units == 0 {
+            return 0.0;
+        }
+
+        let media_price = self
+            .media_pricing
+            .get(&(provider, media_type))
+            .or_else(|| {
+                // ManagedCloud fallback: check origin providers
+                if provider == Provider::ManagedCloud {
+                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
+                        .iter()
+                        .find_map(|&p| self.media_pricing.get(&(p, media_type)))
+                } else {
+                    None
+                }
+            });
+
+        match media_price {
+            Some(pricing) => pricing.cost_per_unit * units as f64,
+            None => {
+                // Fallback: use conservative defaults
+                let default_cost = match media_type {
+                    MediaType::ImageStandard => 0.04,
+                    MediaType::ImageHD => 0.08,
+                    MediaType::VideoPerSecond => 0.08,
+                };
+                default_cost * units as f64
+            }
+        }
     }
 }
