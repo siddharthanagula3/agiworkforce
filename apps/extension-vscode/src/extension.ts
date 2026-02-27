@@ -12,7 +12,15 @@
 import * as vscode from 'vscode';
 import { registerChatParticipant } from './providers/chatParticipant';
 import { SidebarProvider } from './providers/sidebarProvider';
+import { AgiCodeActionProvider, CODE_ACTION_KINDS } from './providers/codeActionProvider';
+import { AgiHoverProvider } from './providers/hoverProvider';
+import { ConversationStore } from './storage/conversationStore';
+import {
+  ConversationTreeProvider,
+  ConversationTreeItem,
+} from './providers/conversationTreeProvider';
 import { getApiKey, setApiKey, clearApiKey, chatCompletion, type ChatMessage } from './utils/api';
+import { applyLlmEdit } from './utils/applyEdit';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -31,7 +39,24 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // ── 3. Commands ─────────────────────────────────────────────────────────────
+  // ── 3. Conversation history tree view ───────────────────────────────────────
+  const conversationStore = new ConversationStore(context);
+  const conversationTreeProvider = new ConversationTreeProvider(conversationStore);
+
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider('agi-workforce.conversations', conversationTreeProvider),
+    conversationTreeProvider,
+  );
+
+  // ── 4. Code intelligence providers ──────────────────────────────────────────
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider('*', new AgiCodeActionProvider(), {
+      providedCodeActionKinds: [...CODE_ACTION_KINDS],
+    }),
+    vscode.languages.registerHoverProvider('*', new AgiHoverProvider()),
+  );
+
+  // ── 4. Commands ─────────────────────────────────────────────────────────────
   context.subscriptions.push(
     // ── agi-workforce.chat ────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.chat', async () => {
@@ -68,7 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
         title: 'AGI Workforce — Set API Key',
         prompt:
           'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
-        placeholder: placeholder !== '' ? placeholder : 'sk-agi-…',
+        placeHolder: placeholder !== '' ? placeholder : 'sk-agi-…',
         password: true,
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -109,45 +134,76 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('agi-workforce.selectModel', async () => {
       const models: vscode.QuickPickItem[] = [
         {
-          label: 'auto',
-          description: 'Smart routing — optimal model per task',
-          detail: 'Recommended: lets AGI Workforce choose the best model',
+          label: 'auto-balanced',
+          description: 'Smart routing — best model per task',
+          detail: 'Recommended: AGI Workforce picks the optimal model automatically',
         },
         {
-          label: 'gpt-4o',
-          description: 'OpenAI — fastest frontier model',
-          detail: 'Best for general coding tasks',
+          label: 'auto-economy',
+          description: 'Smart routing — fastest & cheapest',
+          detail: 'Best for quick questions and simple tasks',
         },
         {
-          label: 'gpt-4o-mini',
-          description: 'OpenAI — economical and fast',
-          detail: 'Great for simple explanations and quick fixes',
-        },
-        {
-          label: 'claude-opus-4-6',
-          description: 'Anthropic — most capable Claude',
+          label: 'auto-premium',
+          description: 'Smart routing — highest quality',
           detail: 'Best for complex reasoning and long contexts',
         },
         {
-          label: 'claude-sonnet-4-5',
-          description: 'Anthropic — balanced performance',
-          detail: 'Excellent for most coding tasks',
+          label: 'claude-opus-4.6',
+          description: 'Anthropic — flagship reasoning',
+          detail: 'Max tier · best for complex architecture, long contexts',
         },
         {
-          label: 'claude-haiku-3-5',
+          label: 'claude-sonnet-4.6',
+          description: 'Anthropic — best all-rounder',
+          detail: 'Pro tier · excellent for most coding tasks',
+        },
+        {
+          label: 'claude-haiku-4.5',
           description: 'Anthropic — ultra-fast',
-          detail: 'Ideal for quick completions',
+          detail: 'Economy · ideal for quick completions',
         },
         {
-          label: 'gemini-2.0-flash',
-          description: 'Google — fast and capable',
-          detail: 'Multimodal, long context',
+          label: 'gpt-5-pro',
+          description: 'OpenAI — flagship',
+          detail: "Max tier · OpenAI's most capable model",
         },
         {
-          label: 'o3-mini',
-          description: 'OpenAI — reasoning model',
-          detail: 'Best for complex algorithmic problems',
+          label: 'gpt-5.2',
+          description: 'OpenAI — mid-tier general',
+          detail: 'Pro tier · great for general coding',
         },
+        {
+          label: 'gpt-5-nano',
+          description: 'OpenAI — ultra-fast & cheap',
+          detail: 'Economy · best OpenAI speed/cost ratio',
+        },
+        {
+          label: 'gemini-3-pro-preview',
+          description: 'Google — strong all-rounder',
+          detail: 'Pro tier · multimodal, long context',
+        },
+        {
+          label: 'gemini-3-flash-preview',
+          description: 'Google — fast',
+          detail: 'Economy · very fast Google model',
+        },
+        {
+          label: 'deepseek-r1',
+          description: 'DeepSeek — reasoning',
+          detail: 'Max tier · strong at algorithmic problems',
+        },
+        {
+          label: 'deepseek-chat',
+          description: 'DeepSeek — balanced',
+          detail: 'Pro tier · cost-effective',
+        },
+        {
+          label: 'sonar-pro',
+          description: 'Perplexity — search + reasoning',
+          detail: 'Pro tier · web search integrated',
+        },
+        { label: 'grok-4', description: 'xAI — flagship', detail: "Max tier · xAI's best model" },
       ];
 
       const config = vscode.workspace.getConfiguration('agiWorkforce');
@@ -172,9 +228,62 @@ export function activate(context: vscode.ExtensionContext): void {
 
       vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.label}`);
     }),
+
+    // ── agi-workforce.openConversation ────────────────────────────────────────
+    vscode.commands.registerCommand(
+      'agi-workforce.openConversation',
+      async (idOrItem: string | ConversationTreeItem) => {
+        const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.conversation.id;
+        const conversation = conversationStore.get(id);
+        if (conversation === undefined) {
+          vscode.window.showWarningMessage('AGI Workforce: Conversation not found.');
+          return;
+        }
+
+        // Render conversation as Markdown in a new read-only editor tab
+        const lines: string[] = [
+          `# ${conversation.title}`,
+          '',
+          `*Model: ${conversation.model} · ${conversation.messages.length} messages*`,
+          '',
+        ];
+        for (const msg of conversation.messages) {
+          if (msg.role === 'system') continue;
+          const heading = msg.role === 'user' ? '**You**' : '**AGI Workforce**';
+          lines.push(`${heading}`, '', msg.content, '');
+        }
+
+        const doc = await vscode.workspace.openTextDocument({
+          content: lines.join('\n'),
+          language: 'markdown',
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      },
+    ),
+
+    // ── agi-workforce.deleteConversation ──────────────────────────────────────
+    vscode.commands.registerCommand(
+      'agi-workforce.deleteConversation',
+      async (item: ConversationTreeItem) => {
+        const choice = await vscode.window.showWarningMessage(
+          `Delete conversation "${item.conversation.title}"?`,
+          { modal: true },
+          'Delete',
+        );
+        if (choice === 'Delete') {
+          conversationStore.delete(item.conversation.id);
+          conversationTreeProvider.refresh();
+        }
+      },
+    ),
+
+    // ── agi-workforce.refreshConversations ────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.refreshConversations', () => {
+      conversationTreeProvider.refresh();
+    }),
   );
 
-  // ── 4. Status bar item ──────────────────────────────────────────────────────
+  // ── Status bar item ──────────────────────────────────────────────────────
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'agi-workforce.selectModel';
   statusBar.tooltip = 'AGI Workforce — click to change model';
@@ -266,15 +375,12 @@ async function runInlineCommand(
 
         progress.report({ increment: 100 });
 
-        // Open result in a new Markdown document
-        const doc = await vscode.workspace.openTextDocument({
-          content: `# AGI Workforce — ${commandLabel(command)}\n\n${result}`,
-          language: 'markdown',
-        });
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: true,
-        });
+        await applyLlmEdit(
+          editor,
+          selection.isEmpty ? new vscode.Selection(0, 0, 0, 0) : selection,
+          result,
+          commandLabel(command),
+        );
       } catch (err) {
         cancelSource.dispose();
 
