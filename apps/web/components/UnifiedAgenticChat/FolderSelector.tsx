@@ -151,7 +151,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
   // Filter recent folders to not include current folder
   const filteredRecentFolders = useMemo(() => {
-    return recentFolders.filter((f: any) => f !== currentFolder);
+    return recentFolders.filter((f: string) => f !== currentFolder);
   }, [recentFolders, currentFolder]);
 
   // Render the trigger button content
@@ -286,7 +286,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                 Clear all
               </button>
             </div>
-            {filteredRecentFolders.slice(0, 5).map((folder: any) => (
+            {filteredRecentFolders.slice(0, 5).map((folder: string) => (
               <DropdownMenuItem
                 key={folder}
                 onClick={() => handleSelectRecentFolder(folder)}

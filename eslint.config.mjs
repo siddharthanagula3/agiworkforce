@@ -333,6 +333,24 @@ export default [
     },
   },
 
+  // VS Code extension build scripts (CommonJS Node.js)
+  {
+    files: ['apps/extension-vscode/*.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+      },
+    },
+  },
+
   // Browser extension files
   {
     files: ['apps/extension/**/*.js', 'apps/extension/**/*.ts', 'apps/extension/**/*.tsx'],

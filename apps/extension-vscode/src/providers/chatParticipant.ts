@@ -1,0 +1,353 @@
+/**
+ * chatParticipant.ts — VS Code Chat Participant for AGI Workforce
+ *
+ * Registers as "@agi" in the VS Code Chat panel (GitHub Copilot chat view).
+ * Handles slash commands (/explain, /fix, /refactor, /tests, /docs, /model)
+ * and general conversation.
+ *
+ * The participant:
+ * 1. Collects context (active file, selection, workspace name, language)
+ * 2. Builds a system prompt that includes that context
+ * 3. Streams from the AGI Workforce API (or falls back to vscode.lm)
+ * 4. Writes streamed tokens back to the VS Code ChatResponseStream
+ */
+
+import * as vscode from 'vscode';
+import { streamChatCompletion, AgiWorkforceApiError, type ChatMessage } from '../utils/api';
+
+// ─── Context gathering ────────────────────────────────────────────────────────
+
+interface EditorContext {
+  fileName: string;
+  languageId: string;
+  selectedText: string;
+  surroundingCode: string;
+  workspaceName: string;
+}
+
+function gatherEditorContext(): EditorContext {
+  const editor = vscode.window.activeTextEditor;
+  const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name ?? 'unknown workspace';
+
+  if (editor === undefined) {
+    return {
+      fileName: '',
+      languageId: '',
+      selectedText: '',
+      surroundingCode: '',
+      workspaceName,
+    };
+  }
+
+  const { document, selection } = editor;
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const contextLines = config.get<number>('contextLines') ?? 50;
+
+  const selectedText = document.getText(selection);
+
+  // Gather surrounding lines for context
+  const startLine = Math.max(0, selection.start.line - contextLines);
+  const endLine = Math.min(document.lineCount - 1, selection.end.line + contextLines);
+  const surroundingRange = new vscode.Range(startLine, 0, endLine, 0);
+  const surroundingCode = document.getText(surroundingRange);
+
+  return {
+    fileName: document.fileName,
+    languageId: document.languageId,
+    selectedText,
+    surroundingCode,
+    workspaceName,
+  };
+}
+
+// ─── System prompt builder ────────────────────────────────────────────────────
+
+function buildSystemPrompt(ctx: EditorContext, command?: string): string {
+  const parts: string[] = [
+    'You are AGI Workforce, a model-agnostic AI coding assistant integrated into VS Code.',
+    'You are knowledgeable, concise, and produce production-ready code.',
+    'Always use Markdown formatting in your responses.',
+    'When showing code, use fenced code blocks with the correct language identifier.',
+  ];
+
+  if (ctx.workspaceName !== '') {
+    parts.push(`The user is working in workspace: "${ctx.workspaceName}".`);
+  }
+
+  if (ctx.fileName !== '') {
+    parts.push(`The active file is: ${ctx.fileName} (language: ${ctx.languageId}).`);
+  }
+
+  if (ctx.selectedText !== '') {
+    parts.push(
+      `\nThe user has selected the following code:\n\`\`\`${ctx.languageId}\n${ctx.selectedText}\n\`\`\``,
+    );
+  }
+
+  if (ctx.surroundingCode !== '' && ctx.selectedText === '') {
+    parts.push(
+      `\nHere is the surrounding code for context:\n\`\`\`${ctx.languageId}\n${ctx.surroundingCode}\n\`\`\``,
+    );
+  }
+
+  // Command-specific guidance
+  if (command === 'fix') {
+    parts.push(
+      '\nFocus on identifying bugs, errors, or issues and providing corrected code with explanations.',
+    );
+  } else if (command === 'refactor') {
+    parts.push(
+      '\nFocus on improving code quality, readability, and maintainability. Explain each refactoring decision.',
+    );
+  } else if (command === 'tests') {
+    parts.push(
+      '\nGenerate comprehensive unit tests. Cover edge cases, error conditions, and happy paths.',
+    );
+  } else if (command === 'docs') {
+    parts.push(
+      '\nGenerate clear, accurate documentation comments (JSDoc / TSDoc / docstrings as appropriate for the language).',
+    );
+  } else if (command === 'explain') {
+    parts.push(
+      '\nProvide a clear, thorough explanation of what the code does, how it works, and why it is written this way.',
+    );
+  }
+
+  return parts.join('\n');
+}
+
+// ─── vscode.lm fallback ───────────────────────────────────────────────────────
+
+/**
+ * Fall back to VS Code built-in Language Model API (e.g. GitHub Copilot models)
+ * when the AGI Workforce API is unavailable.
+ */
+async function streamVscodeLmFallback(
+  messages: ChatMessage[],
+  stream: vscode.ChatResponseStream,
+  token: vscode.CancellationToken,
+): Promise<void> {
+  // Select the best available model — prefer GPT-4o family
+  const [model] = await vscode.lm.selectChatModels({
+    vendor: 'copilot',
+    family: 'gpt-4o',
+  });
+
+  if (model === undefined) {
+    stream.markdown(
+      '> **AGI Workforce**: No language model available. Please configure an ' +
+        '[API key](command:agi-workforce.setApiKey) or install GitHub Copilot.',
+    );
+    return;
+  }
+
+  const lmMessages = messages.map((m) =>
+    m.role === 'user'
+      ? vscode.LanguageModelChatMessage.User(m.content)
+      : vscode.LanguageModelChatMessage.Assistant(m.content),
+  );
+
+  const response = await model.sendRequest(lmMessages, {}, token);
+
+  for await (const fragment of response.text) {
+    stream.markdown(fragment);
+  }
+}
+
+// ─── Slash command user message builders ──────────────────────────────────────
+
+function buildUserMessage(request: vscode.ChatRequest, ctx: EditorContext): string {
+  const { command, prompt } = request;
+
+  if (command === 'explain') {
+    const target = ctx.selectedText !== '' ? 'the selected code' : `the file ${ctx.fileName}`;
+    return `Explain ${target}. ${prompt}`.trim();
+  }
+
+  if (command === 'fix') {
+    const target = ctx.selectedText !== '' ? 'the selected code' : 'the code in this file';
+    return `Find and fix any bugs or issues in ${target}. Provide the corrected code and explain each fix. ${prompt}`.trim();
+  }
+
+  if (command === 'refactor') {
+    return `Suggest and apply refactoring improvements to the selected code. Explain each change. ${prompt}`.trim();
+  }
+
+  if (command === 'tests') {
+    const lang = ctx.languageId;
+    return (
+      `Generate unit tests for the selected ${lang} code using the appropriate testing framework. ` +
+      `Cover happy paths, edge cases, and error conditions. ${prompt}`.trim()
+    );
+  }
+
+  if (command === 'docs') {
+    return `Generate documentation comments for the selected ${ctx.languageId} code. ${prompt}`.trim();
+  }
+
+  if (command === 'model') {
+    return prompt !== ''
+      ? prompt
+      : 'What model are you currently using, and what models are available?';
+  }
+
+  // General chat
+  return prompt;
+}
+
+// ─── Chat history → messages ──────────────────────────────────────────────────
+
+function historyToMessages(
+  history:
+    | readonly vscode.ChatRequestTurn[]
+    | readonly (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[],
+): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+
+  for (const turn of history) {
+    if (turn instanceof vscode.ChatRequestTurn) {
+      messages.push({ role: 'user', content: turn.prompt });
+    } else if (turn instanceof vscode.ChatResponseTurn) {
+      // Collect all markdown parts into a single assistant message
+      const content = turn.response
+        .filter(
+          (part): part is vscode.ChatResponseMarkdownPart =>
+            part instanceof vscode.ChatResponseMarkdownPart,
+        )
+        .map((part) => (typeof part.value === 'string' ? part.value : part.value.value))
+        .join('');
+      if (content !== '') {
+        messages.push({ role: 'assistant', content });
+      }
+    }
+  }
+
+  return messages;
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+
+export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatRequestHandler {
+  return async (
+    request: vscode.ChatRequest,
+    context: vscode.ChatContext,
+    stream: vscode.ChatResponseStream,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.ChatResult> => {
+    // Show typing indicator
+    stream.progress('AGI Workforce is thinking…');
+
+    const editorCtx = gatherEditorContext();
+    const systemPrompt = buildSystemPrompt(editorCtx, request.command);
+    const userMessage = buildUserMessage(request, editorCtx);
+
+    // Build message array: system + history + current user turn
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...historyToMessages(context.history),
+      { role: 'user', content: userMessage },
+    ];
+
+    const config = vscode.workspace.getConfiguration('agiWorkforce');
+    const fallbackEnabled = config.get<boolean>('fallbackToVscodeLm') ?? true;
+
+    let usedFallback = false;
+
+    try {
+      await streamChatCompletion(
+        secrets,
+        messages,
+        {
+          onToken: (t) => stream.markdown(t),
+          onDone: () => {
+            // nothing — stream.markdown handles it incrementally
+          },
+          onError: (err) => {
+            throw err;
+          },
+        },
+        token,
+      );
+    } catch (err) {
+      const isNoKey = err instanceof AgiWorkforceApiError && err.code === 'NO_API_KEY';
+      const isCancelled = err instanceof AgiWorkforceApiError && err.code === 'CANCELLED';
+
+      if (isCancelled) {
+        return {};
+      }
+
+      if (isNoKey && fallbackEnabled) {
+        stream.markdown(
+          '\n\n> **Note**: No AGI Workforce API key found — using VS Code built-in model as fallback.\n' +
+            '> Run [AGI Workforce: Set API Key](command:agi-workforce.setApiKey) to use AGI Workforce models.\n\n',
+        );
+        usedFallback = true;
+        await streamVscodeLmFallback(messages, stream, token);
+      } else if (fallbackEnabled && !isNoKey) {
+        // Network or server error — try fallback
+        stream.markdown(
+          `\n\n> **AGI Workforce API error** (${
+            err instanceof Error ? err.message : String(err)
+          }) — falling back to built-in model.\n\n`,
+        );
+        usedFallback = true;
+        await streamVscodeLmFallback(messages, stream, token);
+      } else {
+        // No fallback — surface the error
+        const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+        stream.markdown(
+          `\n\n> **Error**: ${message}\n\n` +
+            '> Run [AGI Workforce: Set API Key](command:agi-workforce.setApiKey) to configure access.',
+        );
+      }
+    }
+
+    // Append helpful buttons for follow-up actions
+    if (request.command === 'fix' || request.command === 'refactor') {
+      stream.button({
+        command: 'agi-workforce.explain',
+        title: '$(info) Explain this',
+      });
+    }
+
+    return {
+      metadata: {
+        command: request.command ?? 'chat',
+        usedFallback,
+      },
+    };
+  };
+}
+
+/**
+ * Register the @agi chat participant and return a disposable.
+ */
+export function registerChatParticipant(context: vscode.ExtensionContext): vscode.Disposable {
+  const handler = createChatHandler(context.secrets);
+
+  const participant = vscode.chat.createChatParticipant('agiworkforce.agi', handler);
+
+  // Icon shown next to @agi in the chat UI
+  participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon-chat.png');
+
+  // Follow-up suggestions shown after each response
+  participant.followupProvider = {
+    provideFollowups(
+      _result: vscode.ChatResult,
+      _context: vscode.ChatContext,
+      _token: vscode.CancellationToken,
+    ): vscode.ChatFollowup[] {
+      return [
+        { prompt: '/explain', label: 'Explain the selected code', command: 'explain' },
+        { prompt: '/fix', label: 'Fix issues in the selection', command: 'fix' },
+        { prompt: '/tests', label: 'Generate tests', command: 'tests' },
+      ];
+    },
+  };
+
+  return participant;
+}
+
+// Export for unit testing
+export { buildSystemPrompt, buildUserMessage, gatherEditorContext, historyToMessages };
+export type { EditorContext };
