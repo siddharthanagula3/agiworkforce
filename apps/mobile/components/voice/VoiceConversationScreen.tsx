@@ -28,10 +28,10 @@ import * as TTS from '@/services/tts';
  */
 
 type ConversationPhase =
-  | 'listening'  // User is speaking (blue waveform)
-  | 'thinking'   // AI is processing (purple pulse)
-  | 'speaking'   // AI is speaking back (teal waveform)
-  | 'idle';      // Waiting for user to start
+  | 'listening' // User is speaking (blue waveform)
+  | 'thinking' // AI is processing (purple pulse)
+  | 'speaking' // AI is speaking back (teal waveform)
+  | 'idle'; // Waiting for user to start
 
 interface VoiceConversationScreenProps {
   /** Whether the full-screen overlay is visible */
@@ -42,31 +42,29 @@ interface VoiceConversationScreenProps {
   onSendMessage: (text: string) => Promise<string>;
 }
 
-const PHASE_CONFIG: Record<
-  ConversationPhase,
-  { label: string; color: string; sublabel: string }
-> = {
-  idle: {
-    label: 'Tap to speak',
-    color: colors.textMuted,
-    sublabel: 'Voice conversation mode',
-  },
-  listening: {
-    label: 'Listening...',
-    color: colors.agentActive,
-    sublabel: 'Speak naturally',
-  },
-  thinking: {
-    label: 'Thinking...',
-    color: colors.agentThinking,
-    sublabel: 'Processing your message',
-  },
-  speaking: {
-    label: 'Speaking...',
-    color: colors.teal,
-    sublabel: 'AI is responding',
-  },
-};
+const PHASE_CONFIG: Record<ConversationPhase, { label: string; color: string; sublabel: string }> =
+  {
+    idle: {
+      label: 'Tap to speak',
+      color: colors.textMuted,
+      sublabel: 'Voice conversation mode',
+    },
+    listening: {
+      label: 'Listening...',
+      color: colors.agentActive,
+      sublabel: 'Speak naturally',
+    },
+    thinking: {
+      label: 'Thinking...',
+      color: colors.agentThinking,
+      sublabel: 'Processing your message',
+    },
+    speaking: {
+      label: 'Speaking...',
+      color: colors.teal,
+      sublabel: 'AI is responding',
+    },
+  };
 
 function CenterOrb({ phase, audioLevel }: { phase: ConversationPhase; audioLevel: number }) {
   const orbScale = useSharedValue(1);
@@ -75,18 +73,11 @@ function CenterOrb({ phase, audioLevel }: { phase: ConversationPhase; audioLevel
   useEffect(() => {
     if (phase === 'thinking') {
       orbScale.value = withRepeat(
-        withSequence(
-          withTiming(1.15, { duration: 800 }),
-          withTiming(0.95, { duration: 800 }),
-        ),
+        withSequence(withTiming(1.15, { duration: 800 }), withTiming(0.95, { duration: 800 })),
         -1,
         true,
       );
-      orbGlow.value = withRepeat(
-        withTiming(0.5, { duration: 800 }),
-        -1,
-        true,
-      );
+      orbGlow.value = withRepeat(withTiming(0.5, { duration: 800 }), -1, true);
     } else if (phase === 'listening' || phase === 'speaking') {
       const targetScale = 1 + audioLevel * 0.3;
       orbScale.value = withSpring(targetScale, { damping: 10, stiffness: 200 });
@@ -169,6 +160,14 @@ export function VoiceConversationScreen({
   const autoListenRef = useRef(true);
   const activeRef = useRef(false);
 
+  const cleanup = useCallback(async () => {
+    autoListenRef.current = false;
+    if (VoiceService.isRecording()) {
+      await VoiceService.cancelRecording();
+    }
+    await TTS.stop();
+  }, []);
+
   // Reset state when becoming visible
   useEffect(() => {
     if (visible) {
@@ -181,15 +180,7 @@ export function VoiceConversationScreen({
       activeRef.current = false;
       cleanup();
     }
-  }, [visible]);
-
-  const cleanup = useCallback(async () => {
-    autoListenRef.current = false;
-    if (VoiceService.isRecording()) {
-      await VoiceService.cancelRecording();
-    }
-    await TTS.stop();
-  }, []);
+  }, [visible, cleanup]);
 
   const startListening = useCallback(async () => {
     if (!activeRef.current || muted) return;
@@ -207,7 +198,7 @@ export function VoiceConversationScreen({
         const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
         setAudioLevel(normalized);
       });
-    } catch (err) {
+    } catch {
       if (activeRef.current) {
         setPhase('idle');
       }
@@ -261,7 +252,7 @@ export function VoiceConversationScreen({
           }
         },
       });
-    } catch (err) {
+    } catch {
       if (activeRef.current) {
         setPhase('idle');
         setAudioLevel(0);
@@ -352,10 +343,7 @@ export function VoiceConversationScreen({
         </Pressable>
 
         {/* Phase label */}
-        <Text
-          className="text-lg font-medium mt-6"
-          style={{ color: config.color }}
-        >
+        <Text className="text-lg font-medium mt-6" style={{ color: config.color }}>
           {config.label}
         </Text>
 
@@ -400,11 +388,7 @@ export function VoiceConversationScreen({
           accessibilityLabel="End voice conversation"
           accessibilityRole="button"
         >
-          <Phone
-            size={26}
-            color={colors.white}
-            style={{ transform: [{ rotate: '135deg' }] }}
-          />
+          <Phone size={26} color={colors.white} style={{ transform: [{ rotate: '135deg' }] }} />
         </Pressable>
       </View>
     </Animated.View>

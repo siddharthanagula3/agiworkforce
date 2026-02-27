@@ -1,10 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
-import { View, Pressable, ScrollView, TextInput } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, Pressable, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
 import type { RecurrenceType } from '@/stores/scheduleStore';
 
 // ---------------------------------------------------------------------------
@@ -44,13 +43,9 @@ const RECURRENCE_OPTIONS: { key: RecurrenceType; label: string }[] = [
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-const HOURS = Array.from({ length: 24 }, (_, i) =>
-  i.toString().padStart(2, '0'),
-);
+const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 
-const MINUTES = Array.from({ length: 12 }, (_, i) =>
-  (i * 5).toString().padStart(2, '0'),
-);
+const MINUTES = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
 
 const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -166,9 +161,7 @@ export function RecurrencePicker({
                 }`}
               >
                 <Text
-                  className={`text-xs font-medium ${
-                    selected ? 'text-teal-400' : 'text-white/60'
-                  }`}
+                  className={`text-xs font-medium ${selected ? 'text-teal-400' : 'text-white/60'}`}
                 >
                   {opt.label}
                 </Text>
@@ -194,9 +187,7 @@ export function RecurrencePicker({
                   }`}
                 >
                   <Text
-                    className={`text-xs font-semibold ${
-                      selected ? 'text-white' : 'text-white/50'
-                    }`}
+                    className={`text-xs font-semibold ${selected ? 'text-white' : 'text-white/50'}`}
                   >
                     {label}
                   </Text>
@@ -227,9 +218,7 @@ export function RecurrencePicker({
                   }`}
                 >
                   <Text
-                    className={`text-xs font-medium ${
-                      selected ? 'text-white' : 'text-white/50'
-                    }`}
+                    className={`text-xs font-medium ${selected ? 'text-white' : 'text-white/50'}`}
                   >
                     {day}
                   </Text>

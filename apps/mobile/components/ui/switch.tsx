@@ -1,12 +1,7 @@
 import { Pressable } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
 
 interface SwitchProps {
   value: boolean;
@@ -37,10 +32,7 @@ export function Switch({ value, onValueChange }: SwitchProps) {
         value ? 'bg-teal-500' : 'bg-white/20'
       }`}
     >
-      <Animated.View
-        style={thumbStyle}
-        className="w-5 h-5 rounded-full bg-white shadow-sm"
-      />
+      <Animated.View style={thumbStyle} className="w-5 h-5 rounded-full bg-white shadow-sm" />
     </Pressable>
   );
 }
