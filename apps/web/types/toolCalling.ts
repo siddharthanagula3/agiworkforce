@@ -2,6 +2,23 @@
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;
+
+export interface DiffData {
+  file_path?: string;
+  old_content?: string;
+  new_content?: string;
+  hunks: Array<{
+    old_start: number;
+    old_lines: number;
+    new_start: number;
+    new_lines: number;
+    lines: Array<{
+      type: 'add' | 'remove' | 'context';
+      content: string;
+      line_number?: number;
+    }>;
+  }>;
+}
 export const useAuth = () => ({ user: null });
 export const useAccountStore = () => ({});
 export const useModelStore = () => ({});

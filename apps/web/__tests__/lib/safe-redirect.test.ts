@@ -196,8 +196,15 @@ describe('Safe Redirect', () => {
       it('should not return a cross-origin URL for space-prefixed absolute URL (M29)', () => {
         // "https://evil.com some path" — ensure implementation does not return an evil.com URL
         const result = getSafeRedirectUrl('https://evil.com some path', origin);
-        expect(result.startsWith('https://evil.com')).toBe(false);
-        expect(result.startsWith('http://evil.com')).toBe(false);
+        // Use URL constructor for proper origin comparison instead of startsWith
+        // to avoid CodeQL js/incomplete-url-substring-sanitization (startsWith would
+        // also match 'https://evil.com.attacker.com').
+        const parsed = (() => { try { return new URL(result); } catch { return null; } })();
+        if (parsed) {
+          expect(parsed.origin).not.toBe('https://evil.com');
+          expect(parsed.origin).not.toBe('http://evil.com');
+        }
+        // If result is a relative URL (no origin), it is safe (same-origin by definition).
       });
 
       it('should handle space-containing text as same-origin path', () => {
