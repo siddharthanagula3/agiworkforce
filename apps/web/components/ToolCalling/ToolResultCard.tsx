@@ -102,7 +102,7 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
         if (result.artifacts && result.artifacts.length > 0) {
           return (
             <div className="space-y-2">
-              {result.artifacts.map((artifact) => (
+              {result.artifacts.map((artifact: any) => (
                 <ImagePreview
                   key={artifact.id}
                   artifact={artifact}
@@ -259,7 +259,7 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
                 Artifacts ({result.artifacts.length})
               </div>
               <div className="space-y-1 text-xs">
-                {result.artifacts.map((artifact) => (
+                {result.artifacts.map((artifact: any) => (
                   <div
                     key={artifact.id}
                     className="flex items-center gap-2 p-2 bg-muted/30 rounded"

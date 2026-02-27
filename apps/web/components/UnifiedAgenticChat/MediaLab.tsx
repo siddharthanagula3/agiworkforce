@@ -96,7 +96,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { imageJobs, videoJobs, loadingImage, loadingVideo, generateImage, generateVideo } =
     useMediaGenerationStore();
 
-  const subscription = useBillingStore((state) => state.subscription);
+  const subscription = useBillingStore((state: any) => state.subscription);
   const plan = subscription?.plan_name?.toLowerCase() ?? 'free';
   const mediaLabAllowed = useMemo(
     () => ['pro', 'max', 'enterprise'].some((flag) => plan.includes(flag)),
@@ -104,8 +104,10 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
   const videoAllowed = mediaLabAllowed;
 
-  const latestImages = imageJobs.filter((job) => job.status === 'completed' && job.images.length);
-  const latestVideos = videoJobs.filter((job) => job.status !== 'failed');
+  const latestImages = imageJobs.filter(
+    (job: any) => job.status === 'completed' && job.images.length,
+  );
+  const latestVideos = videoJobs.filter((job: any) => job.status !== 'failed');
 
   const currentProviderModel = imageProviders.find((p) => p.id === imageProvider)?.model;
 
@@ -347,8 +349,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   Prompts you run here will land with previews, costs, and models.
                 </div>
               )}
-              {latestImages.map((job) =>
-                job.images.map((img) => (
+              {latestImages.map((job: any) =>
+                job.images.map((img: any) => (
                   <div
                     key={img.id}
                     className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-black/30"
@@ -517,7 +519,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   Kick off a Veo 3.1 render to see previews and download links.
                 </div>
               )}
-              {latestVideos.map((job) => (
+              {latestVideos.map((job: any) => (
                 <div
                   key={job.id}
                   className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/30 p-3"

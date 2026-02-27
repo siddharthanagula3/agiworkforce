@@ -3,10 +3,16 @@ import { AlertCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBillingUsageStore } from '@/stores/unified/billingUsage';
 
+const _store = useBillingUsageStore as unknown as (selector?: any) => any;
+
 export function BudgetAlertsPanel() {
-  const allAlerts = useBillingUsageStore((state) => state.budgetAlerts);
-  const alerts = useMemo(() => allAlerts.filter((a) => !a.dismissed), [allAlerts]);
-  const dismissAlert = useBillingUsageStore((state) => state.dismissAlert);
+  const alerts = useMemo(() => {
+    const allAlerts = (_store((state: any) => state.budgetAlerts) ?? []) as any[];
+    return allAlerts.filter((a: any) => !a.dismissed);
+  }, []);
+  const dismissAlert = (_store((state: any) => state.dismissAlert) ?? ((_id: string) => {})) as (
+    id: string,
+  ) => void;
 
   if (alerts.length === 0) {
     return null;
@@ -14,7 +20,7 @@ export function BudgetAlertsPanel() {
 
   return (
     <div className="space-y-2 p-4">
-      {alerts.map((alert) => {
+      {alerts.map((alert: any) => {
         const alertConfig = {
           warning: {
             icon: AlertTriangle,
@@ -34,22 +40,22 @@ export function BudgetAlertsPanel() {
             border: 'border-destructive/50',
             text: 'text-destructive',
           },
-        }[alert.type];
+        }[alert.type as 'warning' | 'danger' | 'exceeded'];
 
-        const Icon = alertConfig.icon;
+        const Icon = alertConfig?.icon ?? AlertTriangle;
 
         return (
           <div
             key={alert.id}
             className={cn(
               'flex items-start gap-3 rounded-lg border p-3 transition-all',
-              alertConfig.bg,
-              alertConfig.border,
+              alertConfig?.bg,
+              alertConfig?.border,
             )}
           >
-            <Icon className={cn('h-5 w-5 shrink-0', alertConfig.text)} />
+            <Icon className={cn('h-5 w-5 shrink-0', alertConfig?.text)} />
             <div className="min-w-0 flex-1">
-              <p className={cn('text-sm font-medium', alertConfig.text)}>{alert.message}</p>
+              <p className={cn('text-sm font-medium', alertConfig?.text)}>{alert.message}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {new Date(alert.timestamp).toLocaleTimeString()}
               </p>

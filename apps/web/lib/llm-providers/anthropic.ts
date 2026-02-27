@@ -12,9 +12,8 @@ import { logger } from '@/lib/logger';
  * Transform tools from OpenAI format to Anthropic format.
  * Handles three cases: already-Anthropic format, OpenAI function format, and bare format.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function transformTools(tools: any[]): any[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return tools.map((tool: any) => {
     // If tool is already in Anthropic format (has input_schema), use as-is
     if (tool.input_schema) {

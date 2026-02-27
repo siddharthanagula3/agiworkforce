@@ -222,7 +222,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
-  const researchTasks = useExecutionStore((state) => state.researchTasks);
+  const researchTasks = useExecutionStore((state: any) => state.researchTasks);
 
   // Tool Call Actions ID - Hoisted for store access
   const actionId =
