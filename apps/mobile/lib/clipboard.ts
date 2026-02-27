@@ -7,7 +7,7 @@
 let clipboardModule: { setStringAsync: (text: string) => Promise<void> } | null = null;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   clipboardModule = require('expo-clipboard');
 } catch {
   // expo-clipboard not installed — will fall back
@@ -30,6 +30,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 
   // Fallback: use the deprecated RN Clipboard if somehow available
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Clipboard } = require('react-native');
     if (Clipboard?.setString) {
       Clipboard.setString(text);
