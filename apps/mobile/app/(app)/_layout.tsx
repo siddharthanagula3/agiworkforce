@@ -2,18 +2,7 @@ import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
 import { MessageSquarePlus, Bot, Smartphone, Settings, MessageCircle, Calendar } from 'lucide-react-native';
 import { colors } from '@/lib/theme';
-import { ConversationList } from '@/components/sidebar/ConversationList';
-import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
-import { View } from 'react-native';
-
-function DrawerContent() {
-  return (
-    <View className="flex-1 bg-surface-base">
-      <SidebarHeader />
-      <ConversationList />
-    </View>
-  );
-}
+import { SidebarContent } from '@/components/sidebar/SidebarContent';
 
 export default function AppLayout() {
   const { width } = useWindowDimensions();
@@ -21,12 +10,12 @@ export default function AppLayout() {
 
   return (
     <Drawer
-      drawerContent={DrawerContent}
+      drawerContent={() => <SidebarContent />}
       screenOptions={{
         headerShown: false,
         drawerType: isTablet ? 'permanent' : 'front',
         drawerStyle: {
-          backgroundColor: colors.surfaceBase,
+          backgroundColor: '#131514',
           width: isTablet ? 300 : 280,
           borderRightColor: colors.border,
           borderRightWidth: 1,

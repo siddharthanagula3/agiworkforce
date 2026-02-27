@@ -8,7 +8,7 @@ export function SidebarHeader() {
   const router = useRouter();
 
   return (
-    <View className="px-4 pt-14 pb-3 gap-3">
+    <View className="px-4 pt-14 pb-3 gap-3 border-b border-white/5">
       <View className="flex-row items-center justify-between">
         <Text variant="subheading">AGI Workforce</Text>
         <Pressable
