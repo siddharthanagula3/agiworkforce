@@ -14,7 +14,6 @@ import { colors } from '@/lib/theme';
 import type { MessagingPlatform } from '@/stores/messagingStore';
 
 interface PlatformSetupSheetProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sheetRef: any;
   platform: MessagingPlatform | null;
   onConnect: (config: Record<string, string>) => Promise<void>;
