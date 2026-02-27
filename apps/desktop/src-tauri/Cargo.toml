@@ -62,7 +62,7 @@ thiserror = "1.0"
 # Note: bundled-sqlcipher requires libclang at build time on some platforms.
 # Install via: brew install llvm (macOS) or apt install libclang-dev (Linux).
 rusqlite = { version = "0.31", features = ["bundled-sqlcipher", "backup", "blob", "chrono"] }
-tokio-rusqlite = "0.5"
+tokio-rusqlite = "0.7"
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 deadpool-postgres = { version = "0.13", optional = true }
