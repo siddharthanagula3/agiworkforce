@@ -85,3 +85,13 @@ export interface StatusStep {
 export type AutoApproveMode = 'ask' | 'smart' | 'full';
 
 export type ConversationGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older';
+
+/**
+ * Typed chunk emitted by the SSE streaming service.
+ * Maps to StreamDelta in services/streaming.ts.
+ */
+export interface StreamChunk {
+  type: 'content' | 'thinking' | 'artifact' | 'done' | 'error';
+  content?: string;
+  error?: string;
+}
