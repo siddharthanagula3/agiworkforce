@@ -128,7 +128,7 @@ function TimelineStep({
               <ChevronRight className="h-3.5 w-3.5" />
               Sub-tasks ({step.children!.length})
             </div>
-            {step.children!.map((child, index) => (
+            {step.children!.map((child: any, index: any) => (
               <div key={child.tool_call.id} className="mb-4 last:mb-0">
                 <TimelineStep
                   step={child}
@@ -292,7 +292,7 @@ export function ToolExecutionTimeline({
             <div>No execution steps yet</div>
           </div>
         ) : (
-          workflow.steps.map((step, index) => (
+          workflow.steps.map((step: any, index: any) => (
             <TimelineStep
               key={step.tool_call.id}
               step={step}

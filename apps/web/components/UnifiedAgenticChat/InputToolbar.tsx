@@ -67,7 +67,7 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   conversationId,
 }) => {
   const modelMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
-  const visionUnsupported = modelMetadata?.capabilities.vision === false;
+  const visionUnsupported = modelMetadata?.capabilities?.vision === false;
 
   return (
     <div className="flex items-center gap-1">

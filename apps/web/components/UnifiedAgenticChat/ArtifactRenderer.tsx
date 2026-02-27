@@ -69,9 +69,9 @@ interface ArtifactRendererProps {
 export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps) {
   const [copied, setCopied] = useState(false);
   const { theme } = useThemeContext();
-  const rootPath = useCodeStore((state) => state.rootPath);
-  const openFile = useCodeStore((state) => state.openFile);
-  const setActiveFile = useCodeStore((state) => state.setActiveFile);
+  const rootPath = useCodeStore((state: any) => state.rootPath);
+  const openFile = useCodeStore((state: any) => state.openFile);
+  const setActiveFile = useCodeStore((state: any) => state.setActiveFile);
   const artifactStatus = (artifact as Artifact & { status?: string }).status;
   const hasContent = typeof artifact.content === 'string' && artifact.content.trim().length > 0;
   const awaitingOutput = artifactStatus === 'running' && !hasContent;
@@ -184,8 +184,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       // Split content into paragraphs for PDF generation
       const paragraphs = artifact.content
         .split(/\n\n+/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 0);
+        .map((p: any) => p.trim())
+        .filter((p: any) => p.length > 0);
 
       await invoke('document_create_pdf_simple', {
         output_path: savePath,
@@ -211,8 +211,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       // Split content into paragraphs for Word generation
       const paragraphs = artifact.content
         .split(/\n\n+/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 0);
+        .map((p: any) => p.trim())
+        .filter((p: any) => p.length > 0);
 
       await invoke('document_create_word_simple', {
         output_path: savePath,

@@ -870,11 +870,9 @@ export const useUIStore = create<UIState>()(
             if (newMode === 'simple') {
               // Dynamically import to avoid circular dependency
               Promise.all([import('./modelStore'), import('./accountStore')]).then(
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 ([{ useModelStore }, { useAccountStore }]) => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const modelStore = {} as any;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
                   const accountStore = {} as any;
                   const tier = accountStore.account.plan ?? 'hobby';
 
