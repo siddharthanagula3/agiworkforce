@@ -1,5 +1,6 @@
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default {} as any;
 export const useAuth = () => ({ user: null });
 export const useAccountStore = () => ({});
@@ -34,6 +35,7 @@ export const MonacoEditor = () => null;
 export const TerminalPanel = () => null;
 export const MemoryPanel = () => null;
 export const ScreenCaptureButton = () => null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ErrorBoundary = ({ children }: any) => children;
 export const TimeoutWarningDialog = () => null;
 export const DiffViewer = () => null;
@@ -41,4 +43,5 @@ export const DiffViewer = () => null;
 export const handleSlashCommand = () => {};
 // ... will add more if tsc complains
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const selectBudget = (_state: any) => ({ dailyBudget: 0, monthlyBudget: 0, spent: 0 });

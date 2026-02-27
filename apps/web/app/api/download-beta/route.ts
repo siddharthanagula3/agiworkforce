@@ -48,17 +48,18 @@ async function handleDownloadBeta(request: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     throw createError.unauthorized('Authentication required to download.');
   }
 
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('status')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .maybeSingle();
 
   const activeStatuses = ['active', 'trialing'];

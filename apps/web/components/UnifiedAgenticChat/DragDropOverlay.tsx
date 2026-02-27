@@ -17,6 +17,7 @@ export function DragDropOverlay({
   className,
 }: DragDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
+
   const [_dragCounter, setDragCounter] = useState(0);
 
   useEffect(() => {

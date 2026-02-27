@@ -106,14 +106,15 @@ async function handleExportUserData(request: NextRequest) {
       });
 
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user: cookieUser },
+        error: cookieAuthError,
+      } = await supabase.auth.getUser();
 
-      if (!session) {
+      if (cookieAuthError || !cookieUser) {
         throw createError.unauthorized();
       }
 
-      user = session.user;
+      user = cookieUser;
     }
 
     if (!user) {

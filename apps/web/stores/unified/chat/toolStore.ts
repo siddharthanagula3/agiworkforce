@@ -666,7 +666,7 @@ export const useToolStore = create<ToolState>()(
                 if (existing) {
                   // Filter out undefined values to avoid overwriting valid data with undefined
                   const filteredUpdates = Object.fromEntries(
-                    Object.entries(updates).filter(([_, v]) => v !== undefined),
+                    Object.entries(updates).filter(([_key, v]) => v !== undefined),
                   );
                   const updated: ToolStreamStateEntry = {
                     ...existing,
@@ -817,13 +817,14 @@ export const useToolStore = create<ToolState>()(
           trustedWorkflows: state.trustedWorkflows,
           filters: state.filters,
         }),
+
         migrate: (persistedState: unknown, _version: number) => {
           // Handle future migrations here
           return persistedState as ToolState;
         },
       },
     ),
-    { name: 'ToolStore', enabled: process.env.NODE_ENV === "development" },
+    { name: 'ToolStore', enabled: process.env.NODE_ENV === 'development' },
   ),
 );
 
