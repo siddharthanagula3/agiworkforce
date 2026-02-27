@@ -34,7 +34,8 @@ type WebviewToExtMessage =
   | { type: 'clearApiKey' }
   | { type: 'ready' }
   | { type: 'getModel' }
-  | { type: 'openSettings' };
+  | { type: 'openSettings' }
+  | { type: 'cancel' };
 
 type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -360,6 +361,13 @@ function getWebviewContent(
       font-size: 18px;
       font-weight: 700;
     }
+
+    /* ── Code blocks ── */
+    pre { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
+    pre code { color: #e6edf3; }
+    :not(pre) > code { background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 3px; color: #79c0ff; }
+    strong { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -394,16 +402,21 @@ function getWebviewContent(
     <div class="model-row">
       <span class="model-label">Model:</span>
       <select class="model-select" id="modelSelect">
-        <option value="auto">Auto (smart routing)</option>
-        <option value="gpt-4o">GPT-4o</option>
-        <option value="gpt-4o-mini">GPT-4o mini</option>
-        <option value="claude-opus-4-6">Claude Opus 4.6</option>
-        <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
-        <option value="claude-haiku-3-5">Claude Haiku 3.5</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-        <option value="o1-mini">o1-mini</option>
-        <option value="o3-mini">o3-mini</option>
+        <option value="auto-balanced">Auto (balanced)</option>
+        <option value="auto-economy">Auto (economy)</option>
+        <option value="auto-premium">Auto (premium)</option>
+        <option value="claude-opus-4.6">Claude Opus 4.6</option>
+        <option value="claude-sonnet-4.6">Claude Sonnet 4.6</option>
+        <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
+        <option value="gpt-5-pro">GPT-5 Pro</option>
+        <option value="gpt-5.2">GPT-5.2</option>
+        <option value="gpt-5-nano">GPT-5 Nano</option>
+        <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+        <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+        <option value="deepseek-r1">DeepSeek R1</option>
+        <option value="deepseek-chat">DeepSeek Chat</option>
+        <option value="sonar-pro">Sonar Pro</option>
+        <option value="grok-4">Grok 4</option>
       </select>
     </div>
     <div class="input-row">
@@ -434,6 +447,7 @@ function getWebviewContent(
     // ── State ─────────────────────────────────────────────────────────────────
     let streaming = false;
     let currentAssistantEl = null;
+    let accumulatedContent = '';
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function addMessage(role, text) {
@@ -475,6 +489,42 @@ function getWebviewContent(
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
+    // ── Markdown rendering ────────────────────────────────────────────────
+    function renderMarkdown(text) {
+      var bt = String.fromCharCode(96); // backtick char
+      var bt3 = bt + bt + bt;
+      // Escape HTML entities first (DOMPurify-lite approach)
+      var html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+      // Fenced code blocks
+      var codeBlockRe = new RegExp(bt3 + '(\\\\w*)?\\\\n([\\\\s\\\\S]*?)' + bt3, 'g');
+      html = html.replace(codeBlockRe, function(m, lang, code) {
+        return '<pre><code>' + code.replace(/\\n$/, '') + '</code></pre>';
+      });
+
+      // Inline code
+      var inlineCodeRe = new RegExp(bt + '([^' + bt + ']+?)' + bt, 'g');
+      html = html.replace(inlineCodeRe, '<code>$1</code>');
+
+      // Bold: **...**
+      html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+
+      // Newlines to <br> (but not inside <pre> blocks)
+      var parts = html.split(/(<pre[\\s\\S]*?<\\/pre>)/g);
+      for (var i = 0; i < parts.length; i++) {
+        if (!parts[i].startsWith('<pre')) {
+          parts[i] = parts[i].replace(/\\n/g, '<br>');
+        }
+      }
+      html = parts.join('');
+
+      return html;
+    }
+
     // ── Send ──────────────────────────────────────────────────────────────────
     function sendMessage() {
       if (streaming) {
@@ -493,6 +543,7 @@ function getWebviewContent(
       showTyping();
       setStreaming(true);
       currentAssistantEl = null;
+      accumulatedContent = '';
 
       vscode.postMessage({
         type: 'sendMessage',
@@ -543,15 +594,21 @@ function getWebviewContent(
         removeTyping();
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
+          accumulatedContent = '';
         }
-        currentAssistantEl.textContent += msg.payload.text;
+        accumulatedContent += msg.payload.text;
+        currentAssistantEl.textContent = accumulatedContent;
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
+        if (currentAssistantEl && accumulatedContent) {
+          currentAssistantEl.innerHTML = renderMarkdown(accumulatedContent);
+        }
         setStreaming(false);
         currentAssistantEl = null;
+        accumulatedContent = '';
       }
 
       else if (msg.type === 'error') {
