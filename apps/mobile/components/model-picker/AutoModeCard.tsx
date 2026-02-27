@@ -5,7 +5,7 @@ import { colors } from '@/lib/theme';
 import type { AutoModeDef } from '@/lib/models';
 
 // Map icon name strings to Lucide components so we can render dynamically.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const ICON_MAP: Record<string, any> = {
   Zap,
   Scale,
@@ -31,11 +31,7 @@ function SingleCard({ mode, isSelected, onSelect }: AutoModeCardProps) {
       }`}
     >
       <Icon size={18} color={isSelected ? colors.teal : colors.textMuted} />
-      <Text
-        className={`text-xs font-semibold ${
-          isSelected ? 'text-teal-400' : 'text-white'
-        }`}
-      >
+      <Text className={`text-xs font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>
         {mode.name}
       </Text>
       <Text className="text-[10px] text-white/50 text-center">{mode.description}</Text>
