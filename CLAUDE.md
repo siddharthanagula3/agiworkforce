@@ -151,6 +151,7 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 - TypeScript: strict mode, prefer interfaces, named exports, absolute imports from `src/`
 - React: functional components only, Tailwind for styling
 - Rust: follow Tauri v2 patterns, `#[tauri::command]` for invoke handlers, snake_case
+- **ALWAYS use parallel sub-agents or agent teams** — never do sequential work when tasks can be parallelized. Launch multiple Task tool calls in a single message. Use `TeamCreate` + `TaskCreate` for cross-cutting multi-agent work. Assign tasks, communicate via `SendMessage`, and properly shut down teams with `shutdown_request` when done. This is a hard requirement for all non-trivial tasks.
 
 ## Persistent Memory
 
