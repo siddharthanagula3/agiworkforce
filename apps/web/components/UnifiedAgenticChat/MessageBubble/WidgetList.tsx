@@ -5,7 +5,9 @@
  */
 
 import React, { memo, useCallback } from 'react';
-import { emit, isTauri } from '@/lib/tauri-mock';
+import { isTauri } from '@/lib/tauri-mock';
+// emit is not available in web build - stub it
+const emit = async (_event: string, _payload?: unknown): Promise<void> => {};
 import { WidgetRenderer, WidgetActionEvent } from '../Widgets';
 
 export interface WidgetData {

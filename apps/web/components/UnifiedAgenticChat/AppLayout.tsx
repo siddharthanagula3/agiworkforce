@@ -37,9 +37,9 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
-  const openArtifactPanel = useArtifactStore((state) => state.openPanel);
-  const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
-  const subscription = useBillingStore((state) => state.subscription);
+  const openArtifactPanel = useArtifactStore((state: any) => state.openPanel);
+  const closeArtifactPanel = useArtifactStore((state: any) => state.closePanel);
+  const subscription = useBillingStore((state: any) => state.subscription);
   const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
   const canAccessMediaLab = useMemo(
     () => ['pro', 'max', 'enterprise'].some((tier) => planName.includes(tier)),

@@ -28,7 +28,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   isUser,
   isStreaming = false,
 }) => {
-  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+  const compactMode = useSettingsStore((state: any) => state.chatPreferences?.compactMode);
 
   const applyCitations = (children: React.ReactNode) =>
     React.Children.map(children, (child) =>
@@ -103,19 +103,20 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               return <li>{applyCitations(children)}</li>;
             },
             img({ src, alt }) {
-              if (!src || !/^(https?:|data:image\/)/.test(src)) {
+              const srcStr = typeof src === 'string' ? src : '';
+              if (!srcStr || !/^(https?:|data:image\/)/.test(srcStr)) {
                 return null;
               }
               const handleDownload = () => {
                 const link = document.createElement('a');
-                link.href = src;
+                link.href = srcStr;
                 link.download = alt || `image_${Date.now()}.png`;
                 link.click();
               };
               return (
                 <span className="group relative inline-block my-2 rounded-xl overflow-hidden shadow-lg border border-zinc-700/50 bg-zinc-900/50">
                   <img
-                    src={src}
+                    src={srcStr}
                     alt={alt || 'Generated image'}
                     loading="lazy"
                     className="max-w-full h-auto block rounded-xl"

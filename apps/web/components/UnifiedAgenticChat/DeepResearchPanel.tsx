@@ -29,7 +29,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
   const [activeTab, setActiveTab] = useState<'process' | 'findings' | 'sources'>('process');
 
   const currentStep =
-    task.steps.find((s) => s.status === 'running') || task.steps[task.steps.length - 1];
+    task.steps.find((s: any) => s.status === 'running') || task.steps[task.steps.length - 1];
 
   const handleSourceClick = (url: string) => {
     if (onViewSource) {
@@ -76,7 +76,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               )}
               {task.status === 'running' && (
                 <span>
-                  • {task.steps.filter((s) => s.status === 'completed').length} /{' '}
+                  • {task.steps.filter((s: any) => s.status === 'completed').length} /{' '}
                   {task.steps.length} steps
                 </span>
               )}
@@ -160,7 +160,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
             <div className="p-4 max-h-[300px] overflow-y-auto custom-scrollbar bg-black/10">
               {activeTab === 'process' && (
                 <div className="space-y-3">
-                  {task.steps.map((step, idx) => (
+                  {task.steps.map((step: any, idx: any) => (
                     <div key={step.id || idx} className="flex gap-3 relative">
                       {}
                       {idx !== task.steps.length - 1 && (
@@ -223,7 +223,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               {activeTab === 'findings' && (
                 <ul className="space-y-2">
                   {task.findings.length > 0 ? (
-                    task.findings.map((finding, idx) => (
+                    task.findings.map((finding: any, idx: any) => (
                       <li
                         key={idx}
                         className="flex gap-2 text-sm text-zinc-300 bg-white/5 p-2 rounded"
@@ -243,7 +243,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               {activeTab === 'sources' && (
                 <div className="grid gap-2">
                   {task.sources.length > 0 ? (
-                    task.sources.map((source, idx) => (
+                    task.sources.map((source: any, idx: any) => (
                       <button
                         key={idx}
                         onClick={() => handleSourceClick(source.url)}

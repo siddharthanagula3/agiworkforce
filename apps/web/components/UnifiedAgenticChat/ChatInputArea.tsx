@@ -30,7 +30,8 @@ import {
 } from '@/stores/unified/unifiedChatStore';
 import { SubscriptionGateResult, type SubscriptionStatus } from '@/utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../Subscription';
-import { useBillingUsageStore } from '@/stores/unified/billingUsage';
+import { useBillingUsageStore as _useBillingUsageStoreRaw } from '@/stores/unified/billingUsage';
+const useBillingUsageStore = _useBillingUsageStoreRaw as unknown as (selector?: any) => any;
 import { useBillingStore } from '@/stores/unified/auth';
 import { useSettingsStore } from '@/stores/unified/settingsStore';
 import { useSimpleModeStore, selectIsSimpleMode } from '@/stores/unified/ui';
@@ -132,7 +133,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   // Get prompt completion setting from store
   const promptCompletionEnabled = useSettingsStore(
-    (state) => state.chatPreferences?.promptCompletionEnabled ?? true,
+    (state: any) => state.chatPreferences?.promptCompletionEnabled ?? true,
   );
 
   // Store selectors
@@ -156,10 +157,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);
   const sidebarCollapsed = useUnifiedChatStore((state) => state.sidebarCollapsed);
 
-  const selectedModel = useModelStore((state) => state.selectedModel);
-  const selectedProvider = useModelStore((state) => state.selectedProvider);
-  const thinkingModeEnabled = useModelStore((state) => state.thinkingModeEnabled);
-  const availableModels = useModelStore((state) => state.availableModels);
+  const selectedModel = useModelStore((state: any) => state.selectedModel);
+  const selectedProvider = useModelStore((state: any) => state.selectedProvider);
+  const thinkingModeEnabled = useModelStore((state: any) => state.thinkingModeEnabled);
+  const availableModels = useModelStore((state: any) => state.availableModels);
 
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
 
@@ -268,15 +269,17 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Economy)')
         : selectedModel
           ? (getModelMetadata(selectedModel)?.name ??
-            availableModels.find((m) => m.id === selectedModel)?.name ??
+            availableModels?.find((m: any) => m.id === selectedModel)?.name ??
             selectedModel)
           : 'GPT-5.1 Instant';
   }, [selectedModel, isSimpleMode, availableModels]);
 
   // Credit usage calculations
-  const getTokenCost = useBillingUsageStore((state) => state.getTokenCost);
-  const subscription = useBillingStore((state) => state.subscription);
-  const monthlyCost = getTokenCost();
+  const getTokenCost = useBillingUsageStore((state: any) => state.getTokenCost) as
+    | (() => number)
+    | undefined;
+  const subscription = useBillingStore((state: any) => state.subscription);
+  const monthlyCost = getTokenCost?.() ?? 0;
 
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
@@ -474,15 +477,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         const base64 = btoa(binary);
 
         // Determine mime type from file format
-        const mimeType = result.path.endsWith('.png')
+        const resultPath = result.path ?? '';
+        const mimeType = resultPath.endsWith('.png')
           ? 'image/png'
-          : result.path.endsWith('.jpg') || result.path.endsWith('.jpeg')
+          : resultPath.endsWith('.jpg') || resultPath.endsWith('.jpeg')
             ? 'image/jpeg'
             : 'image/png';
 
         // Create attachment from screenshot
         const attachment: Attachment = {
-          id: result.id,
+          id: result.id ?? `screenshot-${Date.now()}`,
           type: 'image',
           name: `screenshot-${new Date().toISOString().split('T')[0]}.png`,
           mimeType,

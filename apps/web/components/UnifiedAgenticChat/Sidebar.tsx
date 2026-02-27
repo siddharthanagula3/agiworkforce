@@ -38,7 +38,7 @@ import {
 import { useProjectStore, selectActiveProjects } from '@/stores/unified/projectStore';
 import { supabaseAuth } from '@/services/supabaseAuth';
 import { resetInFlightChatState } from '@/lib/newChatReset';
-import { UserProfile } from '../Layout/UserProfile';
+import { UserProfile } from '../layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ResizeHandle } from '../ui/ResizeHandle';
@@ -396,7 +396,7 @@ export function Sidebar({
 
   // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const activeProjectId = useProjectStore((state: any) => state.activeProjectId);
 
   // Sync with active project from project store
   useEffect(() => {
@@ -438,7 +438,8 @@ export function Sidebar({
 
   // Get selected project details
   const selectedProject = useMemo(
-    () => (selectedProjectFilter ? projects.find((p) => p.id === selectedProjectFilter) : null),
+    () =>
+      selectedProjectFilter ? projects.find((p: any) => p.id === selectedProjectFilter) : null,
     [projects, selectedProjectFilter],
   );
 
@@ -926,7 +927,7 @@ export function Sidebar({
                     All Conversations
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-zinc-700" />
-                  {projects.map((project) => (
+                  {projects.map((project: any) => (
                     <DropdownMenuItem
                       key={project.id}
                       onClick={() => setSelectedProjectFilter(project.id)}
