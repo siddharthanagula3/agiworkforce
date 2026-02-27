@@ -334,7 +334,14 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             set({ loadingCostOverview: true, costError: null });
             try {
               const userId = supabaseAuth.getUser()?.id;
-              if (!userId) throw new Error('User not authenticated');
+              if (!userId) {
+                set({
+                  loadingCostOverview: false,
+                  costError: null,
+                  costOverview: null,
+                });
+                return;
+              }
               const response = await invoke<CostOverviewResponse>('chat_get_cost_overview', {
                 userId,
               });
@@ -373,7 +380,14 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
             try {
               const userId = supabaseAuth.getUser()?.id;
-              if (!userId) throw new Error('User not authenticated');
+              if (!userId) {
+                set({
+                  loadingCostAnalytics: false,
+                  costError: null,
+                  costAnalytics: null,
+                });
+                return;
+              }
               const analyticsData = await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
                 userId,
                 days: sanitized.days,

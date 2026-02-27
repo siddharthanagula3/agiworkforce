@@ -1,0 +1,37 @@
+# Source files (compiled to out/)
+src/**
+!out/**
+
+# Config / build files
+.vscode/**
+.vscode-test/**
+esbuild.js
+tsconfig.json
+.eslintrc*
+eslint.config*
+.editorconfig
+.gitignore
+.gitattributes
+
+# Node modules (esbuild bundles dependencies into out/extension.js)
+node_modules/**
+
+# Test output
+coverage/**
+*.test.ts
+*.spec.ts
+
+# Misc dev artifacts
+*.map
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# pnpm / npm lockfiles (not needed in VSIX)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# CI/CD
+.github/**

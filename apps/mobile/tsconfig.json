@@ -5,7 +5,9 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/react/jsx-runtime"]
     },
     "typeRoots": ["./node_modules/@types"]
   },
@@ -17,8 +19,5 @@
     "nativewind-env.d.ts",
     "react-jsx-fix.d.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "__tests__"
-  ]
+  "exclude": ["node_modules", "__tests__"]
 }

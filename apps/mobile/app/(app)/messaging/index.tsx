@@ -17,7 +17,7 @@ export default function MessagingScreen() {
 
   const {
     platforms,
-    _loading,
+    loading,
     error,
     fetchPlatforms,
     connectPlatform,
