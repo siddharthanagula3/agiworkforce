@@ -187,7 +187,7 @@ export const useROIStore = create<ROIState>()(
     },
 
     subscribeToLiveUpdates: () => {
-      let isMounted = true;
+      const isMounted = true;
 
       listen<MetricsUpdate>('metrics:updated', (event) => {
         if (!isMounted) return;
