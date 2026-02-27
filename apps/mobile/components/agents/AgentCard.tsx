@@ -19,8 +19,20 @@ const STATUS_BAR_COLOR: Record<Agent['status'], string> = {
   waiting: colors.agentWarning,
 };
 
+function formatRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function AgentCard({ agent, index, onPress }: AgentCardProps) {
   const barColor = STATUS_BAR_COLOR[agent.status];
+  const lastUpdated = agent.updatedAt ?? agent.startedAt;
 
   return (
     <Animated.View
@@ -32,7 +44,7 @@ export function AgentCard({ agent, index, onPress }: AgentCardProps) {
         style={{ backgroundColor: colors.surfaceElevated }}
       >
         <View className="p-3 gap-2">
-          {/* Top row: icon + name + status */}
+          {/* Top row: icon + name */}
           <View className="flex-row items-center gap-2">
             <View
               className="w-8 h-8 rounded-lg items-center justify-center"
@@ -48,10 +60,7 @@ export function AgentCard({ agent, index, onPress }: AgentCardProps) {
                 {agent.model}
               </Text>
             </View>
-          </View>
-
-          {/* Status badge */}
-          <View className="flex-row">
+            {/* Status badge top-right */}
             <AgentStatusBadge status={agent.status} />
           </View>
 
@@ -73,10 +82,17 @@ export function AgentCard({ agent, index, onPress }: AgentCardProps) {
             />
           </View>
 
-          {/* Progress percentage */}
-          <Text variant="caption" className="text-white/30 text-[10px] text-right">
-            {agent.progress}%
-          </Text>
+          {/* Footer: progress % + last updated */}
+          <View className="flex-row items-center justify-between">
+            <Text variant="caption" className="text-white/30 text-[10px]">
+              {agent.progress}%
+            </Text>
+            {lastUpdated ? (
+              <Text variant="caption" className="text-white/30 text-[10px]">
+                {formatRelativeTime(lastUpdated)}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </Pressable>
     </Animated.View>
