@@ -15,6 +15,13 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { NEW_CHAT_ABORT_EVENT } from '../../../lib/newChatReset';
 
+const testHarness = vi.hoisted(() => ({
+  mockIpcInvoke: vi.fn().mockResolvedValue({}),
+  chatInputOnSend: undefined as
+    | undefined
+    | ((content: string, options?: Record<string, unknown>) => Promise<unknown> | unknown),
+}));
+
 // Mock monaco-editor before any imports
 vi.mock('monaco-editor', () => ({
   editor: {
@@ -39,6 +46,10 @@ vi.mock('../../../lib/tauri-mock', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
   isTauri: false,
   isTauriContext: vi.fn(() => false),
+}));
+
+vi.mock('../../../utils/ipc', () => ({
+  invoke: testHarness.mockIpcInvoke,
 }));
 
 // Mock the hooks that use Tauri
@@ -76,11 +87,17 @@ vi.mock('../ChatStream', () => ({
 }));
 
 vi.mock('../ChatInputArea', () => ({
-  ChatInputArea: ({ onSend: _onSend }: { onSend?: unknown }) => (
-    <div data-testid="chat-input-area">
-      <textarea placeholder="Ask me anything..." />
-    </div>
-  ),
+  ChatInputArea: ({ onSend }: { onSend?: unknown }) => {
+    testHarness.chatInputOnSend = onSend as
+      | undefined
+      | ((content: string, options?: Record<string, unknown>) => Promise<unknown> | unknown);
+
+    return (
+      <div data-testid="chat-input-area">
+        <textarea placeholder="Ask me anything..." />
+      </div>
+    );
+  },
 }));
 
 vi.mock('../BudgetAlertsPanel', () => ({
@@ -315,13 +332,17 @@ vi.mock('../../../stores/settingsStore', () => {
     loadSettings: vi.fn(),
   };
 
+  const useSettingsStore = vi.fn((selector?: (s: typeof state) => unknown) => {
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  });
+
+  (useSettingsStore as unknown as { getState: () => typeof state }).getState = () => state;
+
   return {
-    useSettingsStore: vi.fn((selector?: (s: typeof state) => unknown) => {
-      if (typeof selector === 'function') {
-        return selector(state);
-      }
-      return state;
-    }),
+    useSettingsStore,
   };
 });
 
@@ -334,13 +355,17 @@ vi.mock('../../../stores/modelStore', () => {
     availableModels: ['gpt-4o', 'claude-sonnet-4-5'],
   };
 
+  const useModelStore = vi.fn((selector?: (s: typeof state) => unknown) => {
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  });
+
+  (useModelStore as unknown as { getState: () => typeof state }).getState = () => state;
+
   return {
-    useModelStore: vi.fn((selector?: (s: typeof state) => unknown) => {
-      if (typeof selector === 'function') {
-        return selector(state);
-      }
-      return state;
-    }),
+    useModelStore,
   };
 });
 
@@ -541,6 +566,18 @@ vi.mock('../../../stores/customInstructionsStore', () => {
   return { useCustomInstructionsStore };
 });
 
+vi.mock('../../../stores/projectStore', () => ({
+  useProjectStore: {
+    getState: vi.fn(() => ({
+      currentFolder: null,
+    })),
+  },
+}));
+
+vi.mock('../../../hooks/useCreditRefresh', () => ({
+  refreshCreditsAfterMessage: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock chatStore (for backwards compatibility)
 vi.mock('../../../stores/chatStore', () => ({
   useChatStore: vi.fn(() => ({
@@ -587,6 +624,8 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 describe('UnifiedAgenticChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testHarness.mockIpcInvoke.mockResolvedValue({});
+    testHarness.chatInputOnSend = undefined;
   });
 
   afterEach(() => {
@@ -636,7 +675,9 @@ describe('UnifiedAgenticChat', () => {
     // Test compact layout
     await act(async () => {
       rerender(<UnifiedAgenticChat layout="compact" />);
-      await waitFor(() => { expect(document.body).toBeTruthy(); });
+      await waitFor(() => {
+        expect(document.body).toBeTruthy();
+      });
     });
 
     await waitFor(() => {
@@ -647,7 +688,9 @@ describe('UnifiedAgenticChat', () => {
     // Test immersive layout
     await act(async () => {
       rerender(<UnifiedAgenticChat layout="immersive" />);
-      await waitFor(() => { expect(document.body).toBeTruthy(); });
+      await waitFor(() => {
+        expect(document.body).toBeTruthy();
+      });
     });
 
     await waitFor(() => {
@@ -687,10 +730,63 @@ describe('UnifiedAgenticChat', () => {
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent(NEW_CHAT_ABORT_EVENT));
-      await waitFor(() => { expect(document.body).toBeTruthy(); });
+      await waitFor(() => {
+        expect(document.body).toBeTruthy();
+      });
     });
 
     expect(state.clearActionTrail).toHaveBeenCalledTimes(1);
     expect(state.clearToolStreams).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not force agent mode when a concrete model is explicitly selected', async () => {
+    const settingsStore = await import('../../../stores/settingsStore');
+    const modelStore = await import('../../../stores/modelStore');
+
+    settingsStore.useSettingsStore().chatPreferences.alwaysUseAgentMode = true;
+    modelStore.useModelStore().selectedModel = 'gpt-4o';
+
+    await renderChat();
+
+    expect(testHarness.chatInputOnSend).toBeTypeOf('function');
+
+    await act(async () => {
+      await testHarness.chatInputOnSend?.('hi');
+    });
+
+    expect(testHarness.mockIpcInvoke).toHaveBeenCalledWith(
+      'chat_send_message',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          modelOverride: 'gpt-4o',
+          enableAgentMode: undefined,
+        }),
+      }),
+    );
+  });
+
+  it('still forces agent mode when an auto model is selected and the setting is enabled', async () => {
+    const settingsStore = await import('../../../stores/settingsStore');
+    const modelStore = await import('../../../stores/modelStore');
+
+    settingsStore.useSettingsStore().chatPreferences.alwaysUseAgentMode = true;
+    modelStore.useModelStore().selectedModel = 'auto-balanced';
+
+    await renderChat();
+
+    expect(testHarness.chatInputOnSend).toBeTypeOf('function');
+
+    await act(async () => {
+      await testHarness.chatInputOnSend?.('hi');
+    });
+
+    expect(testHarness.mockIpcInvoke).toHaveBeenCalledWith(
+      'chat_send_message',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          enableAgentMode: true,
+        }),
+      }),
+    );
   });
 });

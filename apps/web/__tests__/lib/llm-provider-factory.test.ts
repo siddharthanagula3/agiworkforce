@@ -255,6 +255,18 @@ describe('LLMProviderFactory', () => {
       );
     });
 
+    it('maps claude-sonnet-4.6 to claude-sonnet-4-6-20251029', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-sonnet-4.6')).toBe(
+        'claude-sonnet-4-6-20251029',
+      );
+    });
+
+    it('maps claude-sonnet-4-6 (hyphen alias) to claude-sonnet-4-6-20251029', () => {
+      expect(LLMProviderFactory.mapModelIdToApiId('claude-sonnet-4-6')).toBe(
+        'claude-sonnet-4-6-20251029',
+      );
+    });
+
     it('maps claude-sonnet-4.5 to claude-sonnet-4-5-20250929', () => {
       expect(LLMProviderFactory.mapModelIdToApiId('claude-sonnet-4.5')).toBe(
         'claude-sonnet-4-5-20250929',

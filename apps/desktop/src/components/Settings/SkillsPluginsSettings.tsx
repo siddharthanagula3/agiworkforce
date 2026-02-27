@@ -22,6 +22,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
@@ -273,19 +274,19 @@ export function SkillsPluginsSettings() {
 
     try {
       // 1. Get home directory — skip user-level plugins if unavailable
-      let homeDir: string | null = null;
+      let homeDirPath: string | null = null;
       try {
-        homeDir = await invoke<string>('get_home_directory');
+        homeDirPath = await getHomeDir();
       } catch {
         console.warn('[SkillsPluginsSettings] Could not determine home directory');
       }
 
       // 2. Load installed plugins from ~/.claude/plugins/installed_plugins.json
       const resolvedPlugins: ResolvedPlugin[] = [];
-      if (homeDir) {
+      if (homeDirPath) {
         try {
           const raw = await invoke<string>('file_read', {
-            path: `${homeDir}/.claude/plugins/installed_plugins.json`,
+            path: `${homeDirPath}/.claude/plugins/installed_plugins.json`,
           });
           const data = JSON.parse(raw) as {
             version: number;

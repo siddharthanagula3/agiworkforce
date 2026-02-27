@@ -12,17 +12,19 @@ pnpm workspaces monorepo with a Cargo workspace for Rust:
 
 ```
 apps/
-  desktop/              # Tauri desktop app (primary product)
+  desktop/              # Tauri v2 desktop app (primary product)
     src/                # React/TS frontend (Vite + React 19 + Tailwind 4)
     src-tauri/          # Rust backend (Tauri v2 commands, system APIs)
   web/                  # Next.js 16 marketing/auth/billing site
+  mobile/               # React Native + Expo mobile app (iOS/Android)
   extension/            # Chrome extension (Manifest V3, native messaging)
+  extension-vscode/     # VS Code extension
 packages/
   types/                # Shared TypeScript type definitions
   utils/                # Shared utility functions
 services/
-  api-gateway/          # Express API for mobile companion
-  signaling-server/     # WebSocket signaling for realtime
+  api-gateway/          # Express API for mobile + external integrations
+  signaling-server/     # WebSocket signaling for realtime communication
 ```
 
 ## Build & Development Commands
@@ -37,8 +39,14 @@ cd apps/desktop && pnpm dev          # alias: pnpm tauri dev
 # Web app development
 cd apps/web && pnpm dev              # Next.js dev server
 
-# Extension development
+# Mobile app development (iOS/Android via Expo)
+cd apps/mobile && pnpm dev           # Expo dev server
+
+# Chrome extension development
 cd apps/extension && pnpm dev        # Vite watch build
+
+# VS Code extension development
+cd apps/extension-vscode && pnpm dev # Vite watch build
 
 # Full monorepo build (excludes desktop — it uses tauri build)
 pnpm build
@@ -163,13 +171,13 @@ Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing
 
 When parallel agents work, each writes only to its assigned zone:
 
-| Zone   | Files                                           |
-| ------ | ----------------------------------------------- |
+| Zone   | Files                                                |
+| ------ | ---------------------------------------------------- |
 | A      | `src/components/**`, `src/pages/**`, `src/styles/**` |
-| B      | `src/services/**`, `src/api/**`                 |
-| C      | `src/db/**`, `migrations/**`, `src/models/**`   |
-| D      | `src/integrations/**`, `src/mcp/**`             |
-| E      | `Dockerfile`, `.github/**`, `scripts/**`        |
-| F      | `docs/**`, `README.md`, `CHANGELOG.md`          |
-| SYSTEM | `apps/desktop/src-tauri/**`                     |
-| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`    |
+| B      | `src/services/**`, `src/api/**`                      |
+| C      | `src/db/**`, `migrations/**`, `src/models/**`        |
+| D      | `src/integrations/**`, `src/mcp/**`                  |
+| E      | `Dockerfile`, `.github/**`, `scripts/**`             |
+| F      | `docs/**`, `README.md`, `CHANGELOG.md`               |
+| SYSTEM | `apps/desktop/src-tauri/**`                          |
+| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`         |

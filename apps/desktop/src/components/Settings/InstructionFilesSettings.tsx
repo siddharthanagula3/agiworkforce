@@ -7,6 +7,7 @@
 
 import { AlertCircle, Check, Circle, Edit2, FileText, Loader2, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/Dialog';
@@ -68,11 +69,10 @@ export function InstructionFilesSettings() {
     }
 
     const init = async () => {
-      // Try to get home directory from backend
+      // Resolve home directory via @tauri-apps/api/path
       let home = '~';
       try {
-        const result = await invoke<string>('get_home_directory');
-        home = result;
+        home = await getHomeDir();
       } catch {
         // Fallback — use get_user_preference for a known path
         try {

@@ -95,6 +95,18 @@ const MODELS = [
 
   // Anthropic Models
   {
+    id: 'claude-opus-4.6',
+    object: 'model',
+    created: 1704067200,
+    owned_by: 'anthropic',
+    permission: [],
+    root: 'claude-opus-4.6',
+    parent: null,
+    tier: 'max',
+    context_window: 200000,
+    max_output: 32000,
+  },
+  {
     id: 'claude-opus-4.5',
     object: 'model',
     created: 1704067200,
@@ -105,6 +117,18 @@ const MODELS = [
     tier: 'max',
     context_window: 200000,
     max_output: 32000,
+  },
+  {
+    id: 'claude-sonnet-4.6',
+    object: 'model',
+    created: 1704067200,
+    owned_by: 'anthropic',
+    permission: [],
+    root: 'claude-sonnet-4.6',
+    parent: null,
+    tier: 'pro',
+    context_window: 200000,
+    max_output: 16000,
   },
   {
     id: 'claude-sonnet-4.5',
