@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Alert } from 'react-native';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+
 import { useAuthStore } from '@/stores/authStore';
 
 export function LoginForm() {

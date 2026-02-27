@@ -17,7 +17,7 @@ export default function MessagingScreen() {
 
   const {
     platforms,
-    loading,
+    _loading,
     error,
     fetchPlatforms,
     connectPlatform,
@@ -25,8 +25,7 @@ export default function MessagingScreen() {
     clearError,
   } = useMessagingStore();
 
-  const [selectedPlatform, setSelectedPlatform] =
-    useState<MessagingPlatform | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<MessagingPlatform | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Initial fetch
@@ -126,8 +125,8 @@ export default function MessagingScreen() {
         <View className="items-center mt-6 px-4">
           <MessageCircle size={20} color={colors.textMuted} />
           <Text className="text-xs text-white/30 text-center mt-2 leading-4">
-            Connected platforms allow your AI agents to send and receive
-            messages. All credentials are encrypted and stored securely.
+            Connected platforms allow your AI agents to send and receive messages. All credentials
+            are encrypted and stored securely.
           </Text>
         </View>
       </ScrollView>

@@ -1,7 +1,7 @@
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { Menu, LogOut, Bell, Vibrate, Shield, ExternalLink } from 'lucide-react-native';
+import { Menu, LogOut, Bell, Vibrate, ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
@@ -56,19 +56,25 @@ export default function SettingsScreen() {
         >
           <Menu size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2">Settings</Text>
+        <Text variant="subheading" className="ml-2">
+          Settings
+        </Text>
       </View>
 
       <ScrollView className="flex-1 px-4" contentContainerClassName="pb-8 gap-6">
         {/* Account */}
         <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">Account</Text>
+          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+            Account
+          </Text>
           <Text className="text-white">{user?.email ?? 'Not signed in'}</Text>
         </Card>
 
         {/* Preferences */}
         <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">Preferences</Text>
+          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+            Preferences
+          </Text>
           <SettingRow
             icon={Vibrate}
             label="Haptic Feedback"
@@ -86,21 +92,21 @@ export default function SettingsScreen() {
 
         {/* Billing */}
         <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">Billing</Text>
+          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+            Billing
+          </Text>
           <SettingRow
             icon={ExternalLink}
             label="Manage Subscription"
-            onPress={() => {/* Open agiworkforce.com/billing */}}
+            onPress={() => {
+              /* Open agiworkforce.com/billing */
+            }}
           />
         </Card>
 
         {/* Sign Out */}
         <Card>
-          <SettingRow
-            icon={LogOut}
-            label="Sign Out"
-            onPress={handleSignOut}
-          />
+          <SettingRow icon={LogOut} label="Sign Out" onPress={handleSignOut} />
         </Card>
       </ScrollView>
     </SafeAreaView>

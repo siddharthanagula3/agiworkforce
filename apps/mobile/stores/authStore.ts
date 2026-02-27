@@ -24,7 +24,7 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       session: null,
       user: null,
       isLoading: true,
@@ -47,7 +47,9 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Listen for auth state changes
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          const {
+            data: { subscription },
+          } = supabase.auth.onAuthStateChange((_event, session) => {
             set({ session, user: session?.user ?? null });
           });
           authSubscription = subscription;

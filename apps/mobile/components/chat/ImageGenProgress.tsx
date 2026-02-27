@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
 import { ImagePlus, AlertCircle, Loader2 } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -39,11 +39,7 @@ export function ImageGenProgress({
 
   useEffect(() => {
     if (status === 'pending') {
-      pulseOpacity.value = withRepeat(
-        withTiming(0.4, { duration: 1000 }),
-        -1,
-        true,
-      );
+      pulseOpacity.value = withRepeat(withTiming(0.4, { duration: 1000 }), -1, true);
     } else {
       pulseOpacity.value = withTiming(1, { duration: 200 });
     }
@@ -76,9 +72,7 @@ export function ImageGenProgress({
           backgroundColor: colors.surfaceElevated,
           borderRadius: 12,
           borderWidth: 1,
-          borderColor: isFailed
-            ? 'rgba(239, 68, 68, 0.2)'
-            : colors.border,
+          borderColor: isFailed ? 'rgba(239, 68, 68, 0.2)' : colors.border,
           padding: 14,
           marginVertical: 6,
           gap: 10,
@@ -116,9 +110,7 @@ export function ImageGenProgress({
           </View>
 
           {/* Spinner for active generation */}
-          {status === 'generating' && (
-            <Loader2 size={16} color={colors.textMuted} />
-          )}
+          {status === 'generating' && <Loader2 size={16} color={colors.textMuted} />}
         </View>
 
         {/* Prompt preview */}
