@@ -10,7 +10,9 @@ import { z } from 'zod';
 // NOTE: Keep in sync with apps/web/lib/llm-providers/factory.ts MODEL_ID_TO_API_ID
 export const SUPPORTED_MODELS = [
   'auto',
-  // Anthropic Claude 4.5 models
+  // Anthropic Claude 4.6/4.5 models
+  'claude-opus-4.6',
+  'claude-sonnet-4.6',
   'claude-opus-4.5',
   'claude-sonnet-4.5',
   'claude-haiku-4.5',

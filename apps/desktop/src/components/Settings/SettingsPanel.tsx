@@ -26,6 +26,7 @@ import {
   createDefaultWindowPreferences,
   useSettingsStore,
   type Language,
+  type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
@@ -47,6 +48,8 @@ import { AgentsSettings } from './AgentsSettings';
 import { InstructionFilesSettings } from './InstructionFilesSettings';
 import { CustomModelsSettings } from './CustomModelsSettings';
 import { SkillsPluginsSettings } from './SkillsPluginsSettings';
+import { TaskRoutingSettings } from './TaskRoutingSettings';
+import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -63,6 +66,15 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const setLanguage = useSettingsStore((state) => state.setLanguage);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
   const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
+  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
+  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
+  const setTemperature = useSettingsStore((state) => state.setTemperature);
+  const setMaxTokens = useSettingsStore((state) => state.setMaxTokens);
+  const globalHotkeyPreferences = useSettingsStore(
+    useShallow((state) => state.globalHotkeyPreferences),
+  );
+  const setGlobalHotkeyEnabled = useSettingsStore((state) => state.setGlobalHotkeyEnabled);
+  const setGlobalHotkeyCombo = useSettingsStore((state) => state.setGlobalHotkeyCombo);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
@@ -78,6 +90,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+  const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = globalHotkeyPreferences ?? {
+    enabled: true,
+    combo: 'CommandOrControl+Shift+Space',
+  };
 
   const ollamaStatus = providerStatuses.ollama;
   const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
@@ -181,6 +197,60 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
       setHasUnsavedChanges(true);
     },
     [setAutoApproveTools],
+  );
+
+  const handleCompactModeChange = useCallback(
+    (value: boolean) => {
+      setCompactMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setCompactMode],
+  );
+
+  const handlePromptCompletionChange = useCallback(
+    (value: boolean) => {
+      setPromptCompletionEnabled(value);
+      setHasUnsavedChanges(true);
+    },
+    [setPromptCompletionEnabled],
+  );
+
+  const handleTemperatureChange = useCallback(
+    (value: string) => {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed)) {
+        setTemperature(Math.max(0, Math.min(2, parsed)));
+        setHasUnsavedChanges(true);
+      }
+    },
+    [setTemperature],
+  );
+
+  const handleMaxTokensChange = useCallback(
+    (value: string) => {
+      const parsed = parseInt(value, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        setMaxTokens(parsed);
+        setHasUnsavedChanges(true);
+      }
+    },
+    [setMaxTokens],
+  );
+
+  const handleGlobalHotkeyEnabledChange = useCallback(
+    (value: boolean) => {
+      setGlobalHotkeyEnabled(value);
+      setHasUnsavedChanges(true);
+    },
+    [setGlobalHotkeyEnabled],
+  );
+
+  const handleGlobalHotkeyComboChange = useCallback(
+    (value: string) => {
+      setGlobalHotkeyCombo(value);
+      setHasUnsavedChanges(true);
+    },
+    [setGlobalHotkeyCombo],
   );
 
   // Reset hasUnsavedChanges when panel opens (fresh state)
@@ -371,6 +441,35 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           />
                         </div>
 
+                        <div className="border-t border-border pt-4 flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="compactMode">Compact Mode</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Show simple one-line status messages instead of detailed tool output
+                              blocks.
+                            </p>
+                          </div>
+                          <Switch
+                            id="compactMode"
+                            checked={chatPreferences.compactMode}
+                            onCheckedChange={handleCompactModeChange}
+                          />
+                        </div>
+
+                        <div className="border-t border-border pt-4 flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="promptCompletion">Prompt Completion</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Show AI-powered ghost-text suggestions as you type.
+                            </p>
+                          </div>
+                          <Switch
+                            id="promptCompletion"
+                            checked={chatPreferences.promptCompletionEnabled}
+                            onCheckedChange={handlePromptCompletionChange}
+                          />
+                        </div>
+
                         <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
                           <div className="space-y-0.5">
                             <Label htmlFor="autoApproveTools" className="flex items-center gap-2">
@@ -401,9 +500,66 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </div>
                 </div>
 
+                {/* Generation Parameters */}
+                <div className="border-t border-border pt-6">
+                  <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+                    <h4 className="font-semibold">Generation Parameters</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="temperature">
+                          Temperature{' '}
+                          <span className="text-xs text-muted-foreground">
+                            ({resolvedLLMConfig.temperature.toFixed(1)})
+                          </span>
+                        </Label>
+                        <input
+                          id="temperature"
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={resolvedLLMConfig.temperature}
+                          onChange={(e) => handleTemperatureChange(e.target.value)}
+                          className="w-full accent-primary"
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Precise (0)</span>
+                          <span>Creative (2)</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="maxTokens">Max Tokens</Label>
+                        <input
+                          id="maxTokens"
+                          type="number"
+                          min="256"
+                          max="200000"
+                          step="256"
+                          value={resolvedLLMConfig.maxTokens}
+                          onChange={(e) => handleMaxTokensChange(e.target.value)}
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Maximum tokens per response (256–200000)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Favorite Models */}
+                <div className="border-t border-border pt-6">
+                  <FavoriteModelsSelector />
+                </div>
+
                 {/* Custom Model Endpoints */}
                 <div className="border-t border-border pt-6">
                   <CustomModelsSettings />
+                </div>
+
+                {/* Task Routing */}
+                <div className="border-t border-border pt-6">
+                  <TaskRoutingSettings />
                 </div>
 
                 {/* Intelligent Routing Info */}
@@ -479,6 +635,43 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </p>
 
                   <div className="space-y-6">
+                    {/* Global Hotkey */}
+                    <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+                      <h4 className="font-semibold">Global Hotkey</h4>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Open AGI Workforce from anywhere with a keyboard shortcut.
+                          </p>
+                        </div>
+                        <Switch
+                          id="globalHotkeyEnabled"
+                          checked={resolvedGlobalHotkeyPreferences.enabled}
+                          onCheckedChange={handleGlobalHotkeyEnabledChange}
+                        />
+                      </div>
+                      {resolvedGlobalHotkeyPreferences.enabled && (
+                        <div className="space-y-2">
+                          <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
+                          <input
+                            id="globalHotkeyCombo"
+                            type="text"
+                            value={resolvedGlobalHotkeyPreferences.combo}
+                            onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
+                            placeholder="CommandOrControl+Shift+Space"
+                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Use Tauri accelerator format, e.g.{' '}
+                            <code className="rounded bg-muted px-1 py-0.5">
+                              CommandOrControl+Shift+Space
+                            </code>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="theme">Theme</Label>
                       <Select

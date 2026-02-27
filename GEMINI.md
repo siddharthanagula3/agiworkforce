@@ -10,7 +10,9 @@ This is a **pnpm monorepo** with the following components:
 
 - **`apps/desktop`**: The main desktop application built with **Tauri v2** (Rust) and **React** (TypeScript). Uses **Tailwind CSS v4** for styling and **Vite** as the build tool.
 - **`apps/web`**: A web-based dashboard built with **Next.js** and **React**. Integrates with **Supabase** for authentication (including SSO) and data storage. Includes admin APIs for security and directory sync.
-- **`apps/extension`**: A browser extension with native messaging, side panel, and desktop automation capabilities.
+- **`apps/mobile`**: Mobile application built with **React Native** and **Expo SDK 52**. Provides remote control of desktop agents via QR pairing, push notifications, and agent management UI. Available on iOS 17+ and Android 13+.
+- **`apps/extension`**: Chrome extension with native messaging, side panel, and desktop automation capabilities (Manifest V3).
+- **`apps/extension-vscode`**: VS Code extension for IDE integration and inline agent assistance.
 
 ### Services (`services/`)
 
@@ -62,6 +64,9 @@ pnpm format           # Run formatter
 
 - **Desktop App**: `cd apps/desktop && pnpm dev`
 - **Web App**: `cd apps/web && pnpm dev`
+- **Mobile App**: `cd apps/mobile && pnpm dev`
+- **Chrome Extension**: `cd apps/extension && pnpm dev`
+- **VS Code Extension**: `cd apps/extension-vscode && pnpm dev`
 - **API Gateway**: `cd services/api-gateway && pnpm dev`
 - **Signaling Server**: `cd services/signaling-server && pnpm dev`
 

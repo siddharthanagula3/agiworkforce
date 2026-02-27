@@ -31,6 +31,7 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   // =========================================================================
   // PREMIUM/MAX TIER ONLY - Flagship models
   // =========================================================================
+  'claude-opus-4.6': ['max', 'enterprise'],
   'claude-opus-4.5': ['max', 'enterprise'],
   'gpt-5-pro': ['max', 'enterprise'],
   'gemini-3-ultra': ['max', 'enterprise'],
@@ -42,6 +43,7 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   // PRO TIER AND ABOVE - Mid-tier quality/cost balance
   // =========================================================================
   'gpt-5.2': ['pro', 'max', 'enterprise'],
+  'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
   'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
   'kimi-k2.5-turbo': ['pro', 'max', 'enterprise'],
