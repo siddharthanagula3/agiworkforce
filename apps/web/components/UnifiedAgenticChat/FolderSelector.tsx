@@ -51,9 +51,9 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   // Store selectors
   const currentFolder = useProjectStore(selectCurrentFolder);
   const recentFolders = useProjectStore(selectRecentFolders);
-  const setCurrentFolder = useProjectStore((state) => state.setCurrentFolder);
-  const removeRecentFolder = useProjectStore((state) => state.removeRecentFolder);
-  const clearRecentFolders = useProjectStore((state) => state.clearRecentFolders);
+  const setCurrentFolder = useProjectStore((state: any) => state.setCurrentFolder);
+  const removeRecentFolder = useProjectStore((state: any) => state.removeRecentFolder);
+  const clearRecentFolders = useProjectStore((state: any) => state.clearRecentFolders);
 
   // Format display name
   const displayName = useMemo(() => {
@@ -151,7 +151,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
   // Filter recent folders to not include current folder
   const filteredRecentFolders = useMemo(() => {
-    return recentFolders.filter((f) => f !== currentFolder);
+    return recentFolders.filter((f: any) => f !== currentFolder);
   }, [recentFolders, currentFolder]);
 
   // Render the trigger button content
@@ -286,7 +286,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                 Clear all
               </button>
             </div>
-            {filteredRecentFolders.slice(0, 5).map((folder) => (
+            {filteredRecentFolders.slice(0, 5).map((folder: any) => (
               <DropdownMenuItem
                 key={folder}
                 onClick={() => handleSelectRecentFolder(folder)}

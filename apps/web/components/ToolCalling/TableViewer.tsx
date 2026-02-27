@@ -46,8 +46,8 @@ export function TableViewer({
   const filteredRows = useMemo(() => {
     if (!searchTerm) return data.rows;
 
-    return data.rows.filter((row) =>
-      Object.values(row).some((value) =>
+    return data.rows.filter((row: any) =>
+      Object.values(row).some((value: any) =>
         String(value).toLowerCase().includes(searchTerm.toLowerCase()),
       ),
     );
@@ -110,9 +110,9 @@ export function TableViewer({
 
   const handleCopyTable = async () => {
     // Convert table to TSV (Tab-Separated Values)
-    const headers = data.columns.map((col) => col.label).join('\t');
+    const headers = data.columns.map((col: any) => col.label).join('\t');
     const rows = sortedRows
-      .map((row) => data.columns.map((col) => String(row[col.key] ?? '')).join('\t'))
+      .map((row: any) => data.columns.map((col: any) => String(row[col.key] ?? '')).join('\t'))
       .join('\n');
     const tsv = `${headers}\n${rows}`;
 
@@ -130,9 +130,11 @@ export function TableViewer({
       return value;
     };
 
-    const headers = data.columns.map((col) => escapeCSV(col.label)).join(',');
+    const headers = data.columns.map((col: any) => escapeCSV(col.label)).join(',');
     const rows = sortedRows
-      .map((row) => data.columns.map((col) => escapeCSV(String(row[col.key] ?? ''))).join(','))
+      .map((row: any) =>
+        data.columns.map((col: any) => escapeCSV(String(row[col.key] ?? ''))).join(','),
+      )
       .join('\n');
     const csv = `${headers}\n${rows}`;
 
@@ -207,7 +209,7 @@ export function TableViewer({
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-muted/80 backdrop-blur-xs border-b border-border">
             <tr>
-              {data.columns.map((column) => (
+              {data.columns.map((column: any) => (
                 <th
                   key={column.key}
                   className="text-left px-3 py-2 font-semibold cursor-pointer hover:bg-muted/60 select-none group"
@@ -242,12 +244,12 @@ export function TableViewer({
                 </td>
               </tr>
             ) : (
-              paginatedRows.map((row, rowIndex) => (
+              paginatedRows.map((row: any, rowIndex: any) => (
                 <tr
                   key={rowIndex}
                   className="border-b border-border hover:bg-muted/30 transition-colors"
                 >
-                  {data.columns.map((column) => (
+                  {data.columns.map((column: any) => (
                     <td key={column.key} className="px-3 py-2 font-mono text-xs">
                       {formatCellValue(row[column.key], column.type)}
                     </td>

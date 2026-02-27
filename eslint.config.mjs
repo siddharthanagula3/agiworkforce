@@ -37,6 +37,8 @@ export default [
       // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',
+      // Web app maintenance/migration scripts (Node.js CJS, not app source)
+      'apps/web/scripts/**',
     ],
   },
 
@@ -414,6 +416,16 @@ export default [
       },
     },
     rules: {
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  // Web app: stub/ported components use `any` intentionally — suppress at root level
+  // (apps/web has its own eslint.config.mjs with eslint-config-next for full linting)
+  {
+    files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },

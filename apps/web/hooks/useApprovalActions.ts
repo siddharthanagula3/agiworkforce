@@ -4,5 +4,6 @@ export function useApprovalActions() {
     approveAction: async () => {},
     rejectAction: async () => {},
     pendingApprovals: [] as any[],
+    resolveApproval: async (_approval: any, _decision: string, _opts?: any) => {},
   };
 }

@@ -490,7 +490,7 @@ export function CustomModelsSettings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {customModels.map((model) => (
+          {customModels.map((model: any) => (
             <div
               key={model.id}
               className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 flex items-center gap-4 transition-colors hover:bg-zinc-900"
