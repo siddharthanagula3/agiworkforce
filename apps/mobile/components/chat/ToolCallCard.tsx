@@ -9,6 +9,12 @@ import {
   ChevronRight,
   FileCode,
   Clock,
+  Terminal,
+  FileText,
+  Edit3,
+  Globe,
+  Code,
+  Wrench,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +39,36 @@ const STATUS_BADGE: Record<
   completed: { label: 'Completed', color: 'green' },
   failed: { label: 'Failed', color: 'red' },
 };
+
+/** Map tool name patterns to a representative lucide icon. */
+function getToolIcon(toolName: string): typeof Terminal {
+  const name = toolName.toLowerCase();
+  if (name.includes('bash') || name.includes('shell') || name.includes('terminal')) {
+    return Terminal;
+  }
+  if (name.includes('read_file') || name.includes('read') || name.includes('file_text')) {
+    return FileText;
+  }
+  if (
+    name.includes('write_file') ||
+    name.includes('edit') ||
+    name.includes('create_file')
+  ) {
+    return Edit3;
+  }
+  if (
+    name.includes('web_search') ||
+    name.includes('browse') ||
+    name.includes('url') ||
+    name.includes('http')
+  ) {
+    return Globe;
+  }
+  if (name.includes('code') || name.includes('exec') || name.includes('python')) {
+    return Code;
+  }
+  return Wrench;
+}
 
 function StatusIcon({ status }: { status: ToolCall['status'] }) {
   switch (status) {
@@ -62,6 +98,8 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
   const hasIO = Boolean(toolCall.input || toolCall.output);
 
+  const ToolIcon = getToolIcon(toolCall.name);
+
   const toggleExpanded = useCallback(() => {
     if (hasIO) {
       setExpanded((prev) => !prev);
@@ -85,6 +123,8 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         >
           <View className="flex-row items-center gap-2 flex-1 mr-2">
             <StatusIcon status={toolCall.status} />
+            {/* Tool-type icon */}
+            <ToolIcon size={13} color={colors.textMuted} />
             <Text className="text-[13px] font-semibold text-white flex-shrink" numberOfLines={1}>
               {toolCall.name}
             </Text>
