@@ -6,6 +6,7 @@ import {
   Code2,
   Database,
   FileText,
+  Globe,
   Image as ImageIcon,
   MousePointerClick,
   PanelTopOpen,
@@ -23,6 +24,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../types/chat';
 import { BrowserVisualization } from '../Browser/BrowserVisualization';
+import { BrowserAutomationPanel } from '../Agent/BrowserAutomationPanel';
 import { MonacoEditor } from '../Editor/MonacoEditor';
 import { TerminalPanel } from '../Execution/TerminalPanel';
 import { MediaGallery } from '../Media/MediaGallery';
@@ -34,6 +36,7 @@ import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 export type DynamicPanelType =
   | 'terminal'
   | 'browser'
+  | 'extension'
   | 'code'
   | 'video'
   | 'media'
@@ -59,6 +62,7 @@ interface DynamicSidecarProps {
 const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = {
   terminal: <Terminal className="h-4 w-4 text-emerald-400" />,
   browser: <MousePointerClick className="h-4 w-4 text-sky-400" />,
+  extension: <Globe className="h-4 w-4 text-teal-400" />,
   code: <Braces className="h-4 w-4 text-amber-400" />,
   video: <Video className="h-4 w-4 text-orange-400" />,
   media: <ImageIcon className="h-4 w-4 text-indigo-400" />,
@@ -227,6 +231,8 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             tabId={payload?.['tabId'] as string | undefined}
           />
         );
+      case 'extension':
+        return <BrowserAutomationPanel className="flex-1" />;
       case 'code':
         return (
           <MonacoEditor

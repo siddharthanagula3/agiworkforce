@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
+import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { save } from '@tauri-apps/plugin-dialog';
 import { CheckCircle, Download, File, FileText, Image as ImageIcon } from 'lucide-react';
 import React, { useState } from 'react';
@@ -92,7 +93,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
       setTimeout(() => setIsDownloaded(false), 3000);
     } catch (error) {
       console.error('Download error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown download error';
+      const errorMessage = getSimpleErrorMessage(error);
       onDownloadError?.(errorMessage);
     } finally {
       setIsDownloading(false);

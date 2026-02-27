@@ -1,6 +1,7 @@
-import { Download, Loader2, Image as ImageIcon, Video } from 'lucide-react';
+import { Download, Image as ImageIcon, Video } from 'lucide-react';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
+import { MediaGenerationProgress } from '../../Media/MediaGenerationProgress';
 
 export interface ImageGenerationData {
   prompt?: string;
@@ -38,15 +39,23 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
   // Show running state first - this needs to be checked before the null check
   // because data might not be available yet during the running state
   if (status === 'running') {
-    // Extract prompt from data if available, otherwise show placeholder
     const prompt = data?.prompt ?? '';
+    const provider = data?.provider as string | undefined;
+    const mappedProvider =
+      provider === 'openai'
+        ? 'dall-e-3'
+        : provider === 'google'
+          ? 'google'
+          : provider === 'stability'
+            ? 'stability'
+            : undefined;
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
-        <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-muted-foreground">Generating image...</span>
-          {prompt && <p className="text-xs text-muted-foreground mt-0.5 truncate">{prompt}</p>}
-        </div>
+      <div className="mt-3">
+        <MediaGenerationProgress
+          type="image"
+          provider={mappedProvider as 'dall-e-3' | 'google' | 'stability' | undefined}
+          prompt={prompt}
+        />
       </div>
     );
   }
@@ -157,15 +166,21 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
   // Show running state first - this needs to be checked before the null check
   // because data might not be available yet during the running state
   if (status === 'running') {
-    // Extract prompt from data if available, otherwise show placeholder
     const prompt = data?.prompt ?? '';
+    const provider = data?.provider as string | undefined;
+    const mappedProvider =
+      provider === 'runway'
+        ? 'runway'
+        : provider === 'google' || provider === 'veo3'
+          ? 'veo3'
+          : undefined;
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
-        <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-muted-foreground">Generating video...</span>
-          {prompt && <p className="text-xs text-muted-foreground mt-0.5 truncate">{prompt}</p>}
-        </div>
+      <div className="mt-3">
+        <MediaGenerationProgress
+          type="video"
+          provider={mappedProvider as 'runway' | 'veo3' | undefined}
+          prompt={prompt}
+        />
       </div>
     );
   }
