@@ -3,7 +3,6 @@ import { Eye, Brain, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/lib/theme';
 import { formatContextWindow } from '@/lib/models';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ModelDef } from '@/lib/models';
@@ -51,9 +50,7 @@ export function ModelRow({
       {/* Left: model name + badges */}
       <View className="flex-1 gap-1">
         <Text
-          className={`text-sm font-medium ${
-            isSelected ? 'text-teal-400' : 'text-white'
-          }`}
+          className={`text-sm font-medium ${isSelected ? 'text-teal-400' : 'text-white'}`}
           numberOfLines={1}
         >
           {model.name}

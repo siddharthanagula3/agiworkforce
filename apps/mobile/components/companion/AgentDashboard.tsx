@@ -1,11 +1,7 @@
 import { useCallback } from 'react';
 import { View, Pressable, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   Bot,
@@ -54,9 +50,7 @@ function AgentStatusIcon({ status }: { status: Agent['status'] }) {
   }
 }
 
-function getStatusBadgeColor(
-  status: Agent['status'],
-): 'blue' | 'green' | 'red' | 'yellow' {
+function getStatusBadgeColor(status: Agent['status']): 'blue' | 'green' | 'red' | 'yellow' {
   switch (status) {
     case 'running':
       return 'blue';
@@ -79,10 +73,7 @@ function ProgressBar({ progress }: { progress: number }) {
   const clamped = Math.max(0, Math.min(100, progress));
   return (
     <View className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-      <View
-        className="h-full rounded-full bg-teal-500"
-        style={{ width: `${clamped}%` }}
-      />
+      <View className="h-full rounded-full bg-teal-500" style={{ width: `${clamped}%` }} />
     </View>
   );
 }
@@ -96,7 +87,7 @@ interface ApprovalCardProps {
   agentId: string;
 }
 
-function ApprovalCard({ request, agentId }: ApprovalCardProps) {
+function ApprovalCard({ request, agentId: _agentId }: ApprovalCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const handleApprove = useCallback(() => {
@@ -145,9 +136,7 @@ function ApprovalCard({ request, agentId }: ApprovalCardProps) {
           ) : (
             <ShieldCheck size={14} color={colors.agentSuccess} />
           )}
-          <Text className="text-xs font-medium text-white/80">
-            {request.toolName}
-          </Text>
+          <Text className="text-xs font-medium text-white/80">{request.toolName}</Text>
           <Badge label={request.riskLevel} color={getRiskBadgeColor(request.riskLevel)} />
         </View>
 
@@ -208,10 +197,7 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
   const timeElapsed = getTimeElapsed(agent.startedAt);
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      layout={LinearTransition.springify()}
-    >
+    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
       <Pressable onPress={onPress}>
         <Card
           variant={isSelected ? 'elevated' : 'default'}
@@ -248,9 +234,7 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
           {agent.status === 'running' && (
             <View className="mb-2">
               <ProgressBar progress={agent.progress} />
-              <Text className="text-[10px] text-white/40 mt-1 text-right">
-                {agent.progress}%
-              </Text>
+              <Text className="text-[10px] text-white/40 mt-1 text-right">{agent.progress}%</Text>
             </View>
           )}
 
@@ -285,9 +269,7 @@ function AgentCard({ agent, isSelected, onPress }: AgentCardProps) {
           {isSelected && agent.steps && agent.steps.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-xs text-white/50 mb-2 uppercase tracking-wider">
-                Steps
-              </Text>
+              <Text className="text-xs text-white/50 mb-2 uppercase tracking-wider">Steps</Text>
               {agent.steps.map((step) => (
                 <View key={step.id} className="flex-row items-start gap-2 mb-1.5">
                   <View
@@ -348,9 +330,7 @@ export function AgentDashboard() {
         <View className="w-16 h-16 rounded-2xl bg-white/5 items-center justify-center mb-4">
           <Bot size={28} color={colors.textMuted} />
         </View>
-        <Text className="text-white/60 text-center text-sm">
-          No agents running on the desktop.
-        </Text>
+        <Text className="text-white/60 text-center text-sm">No agents running on the desktop.</Text>
         <Text className="text-white/40 text-center text-xs mt-1">
           Start an agent on your desktop to see it here.
         </Text>
@@ -389,9 +369,7 @@ export function AgentDashboard() {
       )}
       ListHeaderComponent={
         <View className="flex-row items-center justify-between py-3">
-          <Text className="text-xs text-white/50 uppercase tracking-wider">
-            Active Agents
-          </Text>
+          <Text className="text-xs text-white/50 uppercase tracking-wider">Active Agents</Text>
           <Badge
             label={`${agents.length} running`}
             color={agents.some((a) => a.status === 'running') ? 'blue' : 'gray'}

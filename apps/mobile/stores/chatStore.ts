@@ -66,9 +66,9 @@ export const useChatStore = create<ChatState>()(
             '/api/chat/conversations',
           );
           set({ conversations: data.conversations ?? [] });
-        } catch (error) {
+        } catch (err) {
           // Keep existing conversations on failure — offline resilience
-          console.warn('Failed to load conversations:', error);
+          console.warn('Failed to load conversations:', err);
         } finally {
           set({ isLoadingConversations: false });
         }
@@ -87,7 +87,7 @@ export const useChatStore = create<ChatState>()(
             messages: { ...state.messages, [conversation.id]: [] },
           }));
           return conversation.id;
-        } catch (error) {
+        } catch {
           // Fallback: create local-only conversation for offline use
           const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
           const localConversation: ConversationSummary = {
@@ -121,8 +121,8 @@ export const useChatStore = create<ChatState>()(
 
         try {
           await api.delete(`/api/chat/conversations/${id}`);
-        } catch (error) {
-          console.warn('Failed to delete conversation on server:', error);
+        } catch (err) {
+          console.warn('Failed to delete conversation on server:', err);
           // Already removed locally — don't re-add to avoid confusion
         }
       },
@@ -143,8 +143,8 @@ export const useChatStore = create<ChatState>()(
               [conversationId]: data.messages ?? [],
             },
           }));
-        } catch (error) {
-          console.warn('Failed to load messages:', error);
+        } catch (err) {
+          console.warn('Failed to load messages:', err);
           // Initialize empty array so the UI doesn't stay in loading state
           set((state) => ({
             messages: {
@@ -268,9 +268,7 @@ export const useChatStore = create<ChatState>()(
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
                 const updatedMsgs = msgs.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, isStreaming: false }
-                    : m,
+                  m.id === assistantMessageId ? { ...m, isStreaming: false } : m,
                 );
 
                 // Update conversation with assistant's reply preview
@@ -308,8 +306,7 @@ export const useChatStore = create<ChatState>()(
                     ? {
                         ...m,
                         content:
-                          state.streamingContent ||
-                          'Something went wrong. Please try again.',
+                          state.streamingContent || 'Something went wrong. Please try again.',
                         isStreaming: false,
                       }
                     : m,
@@ -328,7 +325,7 @@ export const useChatStore = create<ChatState>()(
             },
             controller.signal,
           );
-        } catch (error) {
+        } catch {
           // Handle synchronous errors from streamChat (e.g., network failure before stream starts)
           if (controller.signal.aborted) return;
 
@@ -380,9 +377,7 @@ export const useChatStore = create<ChatState>()(
         // Finalize the streaming message with whatever content we have
         const state = get();
         const msgs = state.messages[convId] ?? [];
-        const updatedMsgs = msgs.map((m) =>
-          m.isStreaming ? { ...m, isStreaming: false } : m,
-        );
+        const updatedMsgs = msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m));
 
         set({
           isStreaming: false,
@@ -395,15 +390,13 @@ export const useChatStore = create<ChatState>()(
       renameConversation: async (id, title) => {
         // Optimistic update
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, title } : c,
-          ),
+          conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
 
         try {
           await api.put(`/api/chat/conversations/${id}`, { title });
-        } catch (error) {
-          console.warn('Failed to rename conversation on server:', error);
+        } catch (err) {
+          console.warn('Failed to rename conversation on server:', err);
         }
       },
     }),
@@ -423,9 +416,7 @@ export const useChatStore = create<ChatState>()(
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs
-              .filter((m) => !m.isStreaming)
-              .slice(-MAX_MESSAGES_PER_CONVERSATION);
+            messages[id] = msgs.filter((m) => !m.isStreaming).slice(-MAX_MESSAGES_PER_CONVERSATION);
           }
         }
 

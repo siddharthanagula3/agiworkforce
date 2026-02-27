@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { View, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, TextInput, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -11,13 +11,7 @@ import { AutoModeCards } from './AutoModeCard';
 import { ModelGroup } from './ModelGroup';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/stores/modelStore';
-import {
-  AUTO_MODES,
-  PROVIDERS,
-  MODEL_LIST,
-  getModelsByProvider,
-  isAutoMode,
-} from '@/lib/models';
+import { AUTO_MODES, PROVIDERS, MODEL_LIST, isAutoMode } from '@/lib/models';
 import { colors } from '@/lib/theme';
 
 interface ModelPickerSheetProps {
@@ -130,10 +124,7 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
               : 'border-white/10 bg-white/5'
           }`}
         >
-          <Brain
-            size={14}
-            color={thinkingModeEnabled ? '#a78bfa' : colors.textMuted}
-          />
+          <Brain size={14} color={thinkingModeEnabled ? '#a78bfa' : colors.textMuted} />
           <Text
             className={`text-xs font-medium ${
               thinkingModeEnabled ? 'text-purple-400' : 'text-white/50'
@@ -225,9 +216,7 @@ export function ModelPickerSheet({ sheetRef }: ModelPickerSheetProps) {
         {/* Empty state */}
         {filteredModels.length === 0 && (
           <View className="items-center justify-center py-12 px-8">
-            <Text className="text-white/40 text-sm text-center">
-              No models matching "{search}"
-            </Text>
+            <Text className="text-white/40 text-sm text-center">No models matching "{search}"</Text>
           </View>
         )}
       </BottomSheetScrollView>
