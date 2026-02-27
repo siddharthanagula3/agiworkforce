@@ -1,3 +1,3 @@
-// Stub for desktop-only feedback dialog
+// Stub for web feedback dialog
 
 export const FeedbackDialog = (_props: any) => null;
