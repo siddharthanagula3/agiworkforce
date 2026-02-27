@@ -16,7 +16,7 @@ import { colors } from '@/lib/theme';
 
 interface ModelPickerSheetProps {
   /** Ref forwarded so the parent can open/close the sheet. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   sheetRef: any;
 }
 

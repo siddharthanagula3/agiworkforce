@@ -24,8 +24,7 @@ export const SHARE_BASE_URL = 'https://app.agiworkforce.com/shared';
 const BASE64_SIZE_THRESHOLD_BYTES = 4 * 1024;
 
 // UUID v4 pattern used to distinguish stored share IDs from base64 tokens.
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -73,7 +72,6 @@ function shortHash(input: string): string {
   let hash = 5381;
   for (let i = 0; i < input.length; i++) {
     // Bitwise operations intentionally used for hash computation (djb2).
-    // eslint-disable-next-line no-bitwise
     hash = ((hash << 5) + hash + input.charCodeAt(i)) >>> 0;
   }
   // Encode as base36 (alphanumeric, no special chars) for URL safety.
@@ -112,8 +110,7 @@ function decodeBase64Payload(encoded: string): Base64Payload | null {
       title: obj['title'] as string,
       type: obj['type'] as string,
       content: obj['content'] as string,
-      language:
-        typeof obj['language'] === 'string' ? obj['language'] : undefined,
+      language: typeof obj['language'] === 'string' ? obj['language'] : undefined,
     };
   } catch (err) {
     console.debug('[ArtifactSharing] Failed to decode base64 payload:', err);
@@ -162,7 +159,7 @@ async function trySupabaseShare(
     // The `shared_artifacts` table may not yet exist in the remote schema, so
     // we use `any` here and rely on the outer try/catch to handle table-not-
     // found errors gracefully.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const { data, error } = await (client as any)
       .from('shared_artifacts')
       .insert({
@@ -178,7 +175,10 @@ async function trySupabaseShare(
       .single();
 
     if (error) {
-      console.warn('[ArtifactSharing] Supabase insert failed, falling back to base64:', error.message);
+      console.warn(
+        '[ArtifactSharing] Supabase insert failed, falling back to base64:',
+        error.message,
+      );
       return null;
     }
 
@@ -191,7 +191,10 @@ async function trySupabaseShare(
       method: 'supabase',
     };
   } catch (err) {
-    console.warn('[ArtifactSharing] Unexpected error during Supabase share, falling back to base64:', err);
+    console.warn(
+      '[ArtifactSharing] Unexpected error during Supabase share, falling back to base64:',
+      err,
+    );
     return null;
   }
 }
@@ -302,7 +305,6 @@ async function getSharedArtifactFromSupabase(shareId: string): Promise<SharedArt
   try {
     const client = getSupabase();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (client as any)
       .from('shared_artifacts')
       .select('id, title, artifact_type, content, language, created_at, expires_at, view_count')
@@ -334,7 +336,7 @@ async function getSharedArtifactFromSupabase(shareId: string): Promise<SharedArt
     }
 
     // Increment view count fire-and-forget — do not block the caller.
-    void (client as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    void (client as any)
       .from('shared_artifacts')
       .update({ view_count: row.view_count + 1 })
       .eq('id', shareId)
@@ -390,7 +392,7 @@ export async function revokeShare(shareId: string): Promise<boolean> {
 
     // The WHERE clause on user_id means RLS will also enforce ownership even
     // if the server-side policy is not yet configured.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const { error } = await (client as any)
       .from('shared_artifacts')
       .delete()
