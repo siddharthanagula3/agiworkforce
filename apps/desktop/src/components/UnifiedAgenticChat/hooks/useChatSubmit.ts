@@ -8,6 +8,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { invoke } from '../../../lib/tauri-mock';
 import { formatErrorForChat } from '../../../lib/friendlyErrors';
+import { getSimpleErrorMessage } from '../../../lib/errorMessages';
 import { useAccountStore } from '../../../stores/accountStore';
 import { useBillingStore } from '../../../stores/auth';
 import {
@@ -208,7 +209,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
         if (!currentAbortSignal.aborted) {
           onRestoreContent(messageContent);
           if (messageAttachments) onRestoreAttachments(messageAttachments);
-          const rawMessage = error instanceof Error ? error.message : String(error);
+          const rawMessage = getSimpleErrorMessage(error);
           console.error('[useChatSubmit] Send failed:', error);
           onError(formatErrorForChat(rawMessage, true));
         }

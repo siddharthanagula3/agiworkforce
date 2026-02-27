@@ -21,6 +21,8 @@ import type {
 } from '../../types/media';
 import { useBillingStore } from '../../stores/auth';
 import { toast } from 'sonner';
+import { MediaGenerationProgress } from '../Media/MediaGenerationProgress';
+import type { MediaGenProvider } from '../Media/MediaGenerationProgress';
 
 const imageProviders: Array<{
   id: ImageProviderId;
@@ -325,6 +327,21 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
 
+            {loadingImage && (
+              <MediaGenerationProgress
+                type="image"
+                provider={
+                  (imageProvider === 'google_imagen' || imageProvider === 'google_imagen_lite'
+                    ? 'google'
+                    : imageProvider === 'dalle'
+                      ? 'dall-e-3'
+                      : imageProvider === 'stable_diffusion'
+                        ? 'stability'
+                        : undefined) as MediaGenProvider | undefined
+                }
+                prompt={imagePrompt}
+              />
+            )}
             <Button
               type="submit"
               disabled={loadingImage}
@@ -491,6 +508,9 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             )}
 
+            {loadingVideo && (
+              <MediaGenerationProgress type="video" provider="veo3" prompt={videoPrompt} />
+            )}
             <Button
               type="submit"
               disabled={loadingVideo || !videoAllowed}

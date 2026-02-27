@@ -15,6 +15,7 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import type { ModelMetadata } from '../constants/llm';
 import { getAllModels, getModelMetadata, PROVIDERS_IN_ORDER } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { getModelForRequest, isManualSelection, type TaskType } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import { useSettingsStore } from './settingsStore';
@@ -243,7 +244,7 @@ export const useModelStore = create<ModelState>()(
             get().addToRecent(modelId);
           } catch (error) {
             console.error('Failed to select model:', error);
-            set({ error: String(error) }, undefined, 'model/selectModel/error');
+            set({ error: getSimpleErrorMessage(error) }, undefined, 'model/selectModel/error');
           }
         },
 
@@ -303,7 +304,7 @@ export const useModelStore = create<ModelState>()(
               provider,
               available: false,
               configured: false,
-              error: String(error),
+              error: getSimpleErrorMessage(error),
             };
 
             set(
@@ -329,7 +330,7 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to check provider statuses:', error);
             set(
-              { error: String(error), loading: false },
+              { error: getSimpleErrorMessage(error), loading: false },
               undefined,
               'model/checkAllProviders/error',
             );
@@ -345,7 +346,11 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to get usage stats:', error);
             set(
-              { error: String(error), loading: false, usageStats: defaultUsageStats },
+              {
+                error: getSimpleErrorMessage(error),
+                loading: false,
+                usageStats: defaultUsageStats,
+              },
               undefined,
               'model/getUsageStats/error',
             );
@@ -370,7 +375,7 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to get available models:', error);
             set(
-              { error: String(error), loading: false },
+              { error: getSimpleErrorMessage(error), loading: false },
               undefined,
               'model/getAvailableModels/error',
             );
@@ -404,7 +409,7 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to check Ollama status:', error);
             set(
-              { ollamaAvailable: false, ollamaError: String(error) },
+              { ollamaAvailable: false, ollamaError: getSimpleErrorMessage(error) },
               undefined,
               'model/checkOllamaStatus/error',
             );
@@ -454,7 +459,7 @@ export const useModelStore = create<ModelState>()(
               {
                 ollamaModels: [],
                 ollamaLoading: false,
-                ollamaError: String(error),
+                ollamaError: getSimpleErrorMessage(error),
               },
               undefined,
               'model/fetchOllamaModels/error',
@@ -472,7 +477,7 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to pull Ollama model:', error);
             set(
-              { ollamaLoading: false, ollamaError: String(error) },
+              { ollamaLoading: false, ollamaError: getSimpleErrorMessage(error) },
               undefined,
               'model/pullOllamaModel/error',
             );
@@ -493,7 +498,7 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to delete Ollama model:', error);
             set(
-              { ollamaLoading: false, ollamaError: String(error) },
+              { ollamaLoading: false, ollamaError: getSimpleErrorMessage(error) },
               undefined,
               'model/deleteOllamaModel/error',
             );

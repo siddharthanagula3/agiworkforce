@@ -26,6 +26,7 @@ import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 // ============================================================================
 // Types
@@ -540,7 +541,7 @@ export function JobCreationDialog({
         });
         onOpenChange(false);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getSimpleErrorMessage(error);
         setValidationError(message);
       } finally {
         setLoading(false);

@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import type {
   ActivityItem,
   AllTimeStats,
@@ -105,7 +106,7 @@ export const useROIStore = create<ROIState>()(
       } catch (error) {
         set((state) => {
           state.loading = false;
-          state.error = error instanceof Error ? error.message : 'Failed to fetch stats';
+          state.error = getSimpleErrorMessage(error);
         });
       }
     },
@@ -293,7 +294,7 @@ export const useROIStore = create<ROIState>()(
       } catch (error) {
         console.error('Failed to fetch comparison:', error);
         set((state) => {
-          state.error = error instanceof Error ? error.message : 'Failed to fetch comparison';
+          state.error = getSimpleErrorMessage(error);
         });
       }
     },
