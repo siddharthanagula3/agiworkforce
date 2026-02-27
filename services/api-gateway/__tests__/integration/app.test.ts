@@ -190,16 +190,15 @@ describe('API Gateway Integration Tests', () => {
 /**
  * WebSocket Integration Test Stubs
  *
- * These would require a running server. For now, document the pattern.
+ * These would require a running server and ws library.
  */
 describe.skip('WebSocket Integration (requires server)', () => {
   it('should establish WebSocket connection', () => {
-    // TODO: Use ws library to connect to /ws endpoint
     // const ws = new WebSocket('ws://localhost:3000/ws');
     // ws.on('open', () => { ... });
   });
 
   it('should handle WebSocket messages', () => {
-    // TODO: Test message handling
+    // Placeholder for future WebSocket message handling tests
   });
 });

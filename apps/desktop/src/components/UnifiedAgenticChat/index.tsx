@@ -59,6 +59,7 @@ import {
 } from '../../handlers/slashCommandHandlers';
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
+const AGENT_THINKING_ACTION_SOURCE = 'agent:thinking';
 
 const normalizeToolNameForUi = (toolName: string): string => {
   if (toolName.startsWith('__server__')) {
@@ -1374,13 +1375,41 @@ export const UnifiedAgenticChat: React.FC<{
         listen<{ agent_id?: string; thinking: boolean; phase?: string; message?: string }>(
           'agent:thinking',
           ({ payload }) => {
+            const chatState = useUnifiedChatStore.getState();
+
             // Update action trail with thinking status
             if (payload.thinking) {
-              useUnifiedChatStore.getState().addActionTrailEntry({
+              chatState.addActionTrailEntry({
                 type: 'thinking',
                 message: payload.message || payload.phase || 'Thinking...',
                 fadeAfter: 30000, // Fade after 30 seconds if not cleared
+                metadata: {
+                  source: AGENT_THINKING_ACTION_SOURCE,
+                  ...(payload.agent_id ? { agentId: payload.agent_id } : {}),
+                },
               });
+              return;
+            }
+
+            const matchingEntry =
+              [...chatState.getActiveActionTrail()].reverse().find((entry) => {
+                if (entry.type !== 'thinking') {
+                  return false;
+                }
+
+                const metadataSource = entry.metadata?.['source'];
+                const metadataAgentId = entry.metadata?.['agentId'];
+
+                if (metadataSource === AGENT_THINKING_ACTION_SOURCE) {
+                  return payload.agent_id === undefined || metadataAgentId === payload.agent_id;
+                }
+
+                // Fallback for stale pre-patch entries that did not tag the source.
+                return payload.agent_id === undefined;
+              }) ?? null;
+
+            if (matchingEntry) {
+              chatState.removeActionTrailEntry(matchingEntry.id);
             }
           },
         ),
@@ -2039,7 +2068,7 @@ export const UnifiedAgenticChat: React.FC<{
     return true;
   };
 
-  const handleSendMessage = async (content: string, options: SendOptions) => {
+  const handleSendMessage = async (content: string, options: SendOptions = {}) => {
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
 
@@ -2331,6 +2360,7 @@ export const UnifiedAgenticChat: React.FC<{
         // Check if always use agent mode is enabled in settings
         const alwaysUseAgentMode =
           useSettingsStore.getState().chatPreferences.alwaysUseAgentMode ?? false;
+        const shouldForceAgentMode = alwaysUseAgentMode && !isExplicitModelSelection;
 
         // Check if this conversation is in incognito mode
         const chatStoreState = useUnifiedChatStore.getState();
@@ -2395,8 +2425,9 @@ export const UnifiedAgenticChat: React.FC<{
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
             // Pass research task ID for deep research mode
             researchTaskId: isDeepResearchMode ? researchTaskId : undefined,
-            // Force agent mode if user has enabled "always use agent mode" setting
-            enableAgentMode: alwaysUseAgentMode ? true : undefined,
+            // Respect an explicit model pick over the global agent-mode preference.
+            // Auto modes still opt into forced agent execution when that preference is enabled.
+            enableAgentMode: shouldForceAgentMode ? true : undefined,
             // Project folder for scoped file operations (like Claude Code)
             projectFolder: currentProjectFolder || undefined,
             // Model capabilities for tool filtering (Phase 6)

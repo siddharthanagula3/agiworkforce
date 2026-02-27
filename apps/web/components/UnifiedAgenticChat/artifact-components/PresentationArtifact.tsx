@@ -16,14 +16,14 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
     const content = artifact.content;
 
     if (content.split('\n---\n').length > 1) {
-      return content.split('\n---\n').map((s) => s.trim());
+      return content.split('\n---\n').map((s: string) => s.trim());
     }
 
     const lines = content.split('\n');
     const slideChunks: string[] = [];
     let currentChunk: string[] = [];
 
-    lines.forEach((line) => {
+    lines.forEach((line: string) => {
       if ((line.startsWith('# ') || line.startsWith('## ')) && currentChunk.length > 0) {
         slideChunks.push(currentChunk.join('\n'));
         currentChunk = [line];

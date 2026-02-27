@@ -30,6 +30,8 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
   'claude-opus-4-6': 'claude-opus-4-6-20251101', // Claude Opus 4.6 (hyphen alias)
   'claude-opus-4-5': 'claude-opus-4-5-20251101', // Claude Opus 4.5 (hyphen alias)
+  'claude-sonnet-4.6': 'claude-sonnet-4-6-20251029', // Claude Sonnet 4.6
+  'claude-sonnet-4-6': 'claude-sonnet-4-6-20251029', // Claude Sonnet 4.6 (hyphen alias)
   'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
   'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5 (hyphen alias)
   'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
