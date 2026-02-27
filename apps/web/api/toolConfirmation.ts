@@ -1,4 +1,3 @@
-
 // STUB FILE FOR WEB PORT COMPILATION
 export const _stub = true;
 export default {} as any;
@@ -30,14 +29,17 @@ export const isTauri = false;
 export const countTokens = () => 0;
 export const getTokenPercentage = () => 0;
 
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-export const ErrorBoundary = ({children}: any) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
+export const BrowserVisualization = (_props?: any) => null;
+export const MonacoEditor = (_props?: any) => null;
+export const TerminalPanel = (_props?: any) => null;
+export const MemoryPanel = (_props?: any) => null;
+export const ScreenCaptureButton = (_props?: any) => null;
+export const ErrorBoundary = ({ children }: any) => children;
+export const TimeoutWarningDialog = (_props?: any) => null;
+export const DiffViewer = (_props?: any) => null;
 
 export const handleSlashCommand = () => {};
 // ... will add more if tsc complains
+
+// Missing named exports
+export const respondToolConfirmation = async (_id: string, _decision: any): Promise<void> => {};

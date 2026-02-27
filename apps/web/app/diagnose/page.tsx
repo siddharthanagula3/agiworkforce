@@ -53,7 +53,6 @@ export default async function DiagnosePage() {
         .select('count', { count: 'exact', head: true });
       checks.serviceRole.canConnect = !error;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_e) {
     checks.serviceRole.canConnect = false;
   }
@@ -84,7 +83,6 @@ export default async function DiagnosePage() {
           }));
         }
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
       checks.stripe.connected = false;
     }

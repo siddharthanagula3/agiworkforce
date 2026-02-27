@@ -43,13 +43,13 @@ const AUTO_ECONOMY_ID = 'auto-economy';
 const AUTO_BALANCED_ID = 'auto-balanced';
 const AUTO_PREMIUM_ID = 'auto-premium';
 
-const getQualityTierLabel = (tier: 'fast' | 'balanced' | 'best') => {
-  const labels: Record<'fast' | 'balanced' | 'best', { text: string; className: string }> = {
+const getQualityTierLabel = (tier: string | undefined) => {
+  const labels: Record<string, { text: string; className: string }> = {
     fast: { text: 'Fast', className: 'text-emerald-600 dark:text-emerald-400' },
     balanced: { text: 'Balanced', className: 'text-blue-600 dark:text-blue-400' },
     best: { text: 'Best', className: 'text-amber-600 dark:text-amber-400' },
   };
-  return labels[tier];
+  return labels[tier ?? ''] ?? { text: '', className: '' };
 };
 
 export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorProps) => {
@@ -61,7 +61,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     toggleThinkingMode,
     getAvailableModels,
   } = useModelStore(
-    useShallow((state) => ({
+    useShallow((state: any) => ({
       selectedModel: state.selectedModel,
       availableModels: state.availableModels,
       selectModel: state.selectModel,
@@ -69,14 +69,15 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       toggleThinkingMode: state.toggleThinkingMode,
       getAvailableModels: state.getAvailableModels,
     })),
-  );
+  ) as any;
 
-  const { account, isTierLoading } = useAccountStore(
-    useShallow((state) => ({
-      account: state.account,
-      isTierLoading: selectIsTierLoading(state),
-    })),
-  );
+  const { account, isTierLoading } =
+    (useAccountStore(
+      useShallow((state: any) => ({
+        account: state.account,
+        isTierLoading: selectIsTierLoading(state),
+      })),
+    ) as any) || {};
 
   // Get user's plan tier - when loading/unknown, use 'hobby' as a safe default
   // This ensures users can see some models while we confirm their actual tier
@@ -113,7 +114,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       groups[p] = [];
     });
 
-    availableModels.forEach((model) => {
+    availableModels.forEach((model: any) => {
       const group = groups[model.provider];
       if (group) {
         let metadata = getModelMetadata(model.id);
@@ -158,7 +159,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           // Filter by search query
           if (query) {
             const matchesName = metadata.name.toLowerCase().includes(query);
-            const matchesId = metadata.id.toLowerCase().includes(query);
+            const matchesId = (metadata.id ?? '').toLowerCase().includes(query);
             const matchesProvider = metadata.provider.toLowerCase().includes(query);
             const matchesBestFor = metadata.bestFor?.some((tag) =>
               tag.toLowerCase().includes(query),
@@ -192,7 +193,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       return;
     }
 
-    const metadata = availableModels.find((m) => m.id === modelId) || getModelMetadata(modelId);
+    const metadata =
+      availableModels.find((m: any) => m.id === modelId) || getModelMetadata(modelId);
     if (!metadata) {
       return;
     }
@@ -251,7 +253,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     return [AUTO_ECONOMY_ID];
   }, [userPlanTier]);
   const suggestedMetadata = suggestion
-    ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
+    ? availableModels.find((m: any) => m.id === suggestion.model) ||
+      getModelMetadata(suggestion.model)
     : null;
 
   // Auto-switch to suggested model when suggestion loads (Auto mode behavior)
@@ -430,7 +433,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                   return (
                     <button
                       key={model.id}
-                      onClick={() => handleModelChange(model.id)}
+                      onClick={() => handleModelChange(model.id ?? '')}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors',
                         isActive
@@ -442,22 +445,22 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                         <span className="truncate">{model.name}</span>
                         {/* Capability badges */}
                         <span className="flex items-center gap-0.5 shrink-0">
-                          {model.capabilities.tools && (
+                          {model.capabilities?.tools && (
                             <span aria-label="Tool use">
                               <Wand2 size={10} className="text-blue-500 dark:text-blue-400" />
                             </span>
                           )}
-                          {model.capabilities.thinking && (
+                          {model.capabilities?.thinking && (
                             <span aria-label="Extended thinking">
                               <Brain size={10} className="text-purple-500 dark:text-purple-400" />
                             </span>
                           )}
-                          {model.capabilities.vision && (
+                          {model.capabilities?.vision && (
                             <span aria-label="Vision">
                               <Sparkles size={10} className="text-amber-500 dark:text-amber-400" />
                             </span>
                           )}
-                          {model.capabilities.search && (
+                          {model.capabilities?.search && (
                             <span aria-label="Web search">
                               <Search size={10} className="text-green-500 dark:text-green-400" />
                             </span>
@@ -488,7 +491,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
         {(() => {
           const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
-          const supportsThinking = currentMetadata?.capabilities.thinking ?? false;
+          const supportsThinking = currentMetadata?.capabilities?.thinking ?? false;
           const smartVariantId = selectedModel ? THINKING_MODEL_VARIANTS[selectedModel] : undefined;
           const smartVariantName = smartVariantId ? getModelMetadata(smartVariantId)?.name : null;
 

@@ -94,9 +94,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [autoSaveMemories, setAutoSaveMemories] = useState(true);
 
   // Store actions
-  const createProject = useProjectStore((state) => state.createProject);
-  const updateProject = useProjectStore((state) => state.updateProject);
-  const conversations = useUnifiedChatStore((state) => state.conversations);
+  const createProject = useProjectStore((state: any) => state.createProject);
+  const updateProject = useProjectStore((state: any) => state.updateProject);
+  const conversations = useUnifiedChatStore((state: any) => state.conversations);
 
   // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
   const projectId = project?.id ?? null;

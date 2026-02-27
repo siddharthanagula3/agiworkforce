@@ -1,4 +1,4 @@
 // Stub for desktop-only model router
-export function getModelForRequest(options?: any) {
-  return options?.model || 'auto';
+export function getModelForRequest(..._args: any[]): any {
+  return { modelId: 'auto', reason: 'stub', wasRouted: false };
 }

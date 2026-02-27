@@ -62,16 +62,16 @@ export function ProjectsView() {
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   // Store - use useShallow for array-returning selectors to prevent re-renders
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore((state: any) => state.projects);
   const activeProjects = useProjectStore(useShallow(selectActiveProjects));
   const archivedProjects = useProjectStore(useShallow(selectArchivedProjects));
-  const isLoading = useProjectStore((state) => state.isLoading);
-  const loadProjects = useProjectStore((state) => state.loadProjects);
-  const deleteProject = useProjectStore((state) => state.deleteProject);
-  const archiveProject = useProjectStore((state) => state.archiveProject);
-  const unarchiveProject = useProjectStore((state) => state.unarchiveProject);
-  const setActiveProject = useProjectStore((state) => state.setActiveProject);
-  const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
+  const isLoading = useProjectStore((state: any) => state.isLoading);
+  const loadProjects = useProjectStore((state: any) => state.loadProjects);
+  const deleteProject = useProjectStore((state: any) => state.deleteProject);
+  const archiveProject = useProjectStore((state: any) => state.archiveProject);
+  const unarchiveProject = useProjectStore((state: any) => state.unarchiveProject);
+  const setActiveProject = useProjectStore((state: any) => state.setActiveProject);
+  const setActiveView = useUnifiedChatStore((state: any) => state.setActiveView);
 
   // Load projects on mount
   useEffect(() => {
@@ -175,7 +175,7 @@ export function ProjectsView() {
   }
 
   const selectedProject = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)
+    ? projects.find((p: any) => p.id === selectedProjectId)
     : null;
 
   return (
@@ -523,7 +523,7 @@ function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
           </h3>
           {project.files.length > 0 ? (
             <div className="space-y-2 max-h-60 overflow-auto">
-              {project.files.map((file) => (
+              {project.files.map((file: any) => (
                 <div
                   key={file.id}
                   className="flex items-center gap-2 p-2 bg-zinc-800 rounded-md text-sm"
