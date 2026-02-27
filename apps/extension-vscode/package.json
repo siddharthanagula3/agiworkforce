@@ -1,0 +1,266 @@
+{
+  "name": "agi-workforce",
+  "displayName": "AGI Workforce",
+  "description": "AI-powered coding assistant powered by AGI Workforce",
+  "version": "0.1.0",
+  "publisher": "agiworkforce",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agiworkforce/agiworkforce"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "llm",
+    "chat",
+    "copilot",
+    "assistant",
+    "coding",
+    "agent",
+    "gpt",
+    "claude",
+    "gemini"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "icon": "media/icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agi-workforce.chat",
+        "title": "AGI Workforce: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agi-workforce.explain",
+        "title": "AGI Workforce: Explain Selection",
+        "icon": "$(info)"
+      },
+      {
+        "command": "agi-workforce.fix",
+        "title": "AGI Workforce: Fix Issue",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "agi-workforce.refactor",
+        "title": "AGI Workforce: Refactor Code",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "agi-workforce.generateTests",
+        "title": "AGI Workforce: Generate Tests",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "agi-workforce.setApiKey",
+        "title": "AGI Workforce: Set API Key",
+        "icon": "$(key)"
+      },
+      {
+        "command": "agi-workforce.clearApiKey",
+        "title": "AGI Workforce: Clear API Key",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.selectModel",
+        "title": "AGI Workforce: Select Model",
+        "icon": "$(symbol-misc)"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "agiworkforce.agi",
+        "name": "agi",
+        "fullName": "AGI Workforce",
+        "description": "Model-agnostic AI assistant — use any LLM (GPT-4o, Claude, Gemini, and more)",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "explain",
+            "description": "Explain the selected code or current file"
+          },
+          {
+            "name": "fix",
+            "description": "Find and fix bugs or issues in the selected code"
+          },
+          {
+            "name": "refactor",
+            "description": "Suggest refactoring improvements for the selected code"
+          },
+          {
+            "name": "tests",
+            "description": "Generate unit tests for the selected code"
+          },
+          {
+            "name": "docs",
+            "description": "Generate documentation comments for the selected code"
+          },
+          {
+            "name": "model",
+            "description": "Switch the active LLM model"
+          }
+        ],
+        "disambiguation": [
+          {
+            "category": "coding",
+            "description": "Questions about writing, understanding, debugging, or improving code",
+            "examples": [
+              "Explain this function to me",
+              "Why is this code throwing an error?",
+              "How can I optimize this algorithm?",
+              "Write unit tests for this class"
+            ]
+          },
+          {
+            "category": "architecture",
+            "description": "Questions about software design, architecture, and best practices",
+            "examples": [
+              "What design pattern should I use here?",
+              "How should I structure this module?",
+              "What are the tradeoffs between these approaches?"
+            ]
+          }
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agi-workforce-sidebar",
+          "title": "AGI Workforce",
+          "icon": "media/icon-sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "agi-workforce-sidebar": [
+        {
+          "type": "webview",
+          "id": "agi-workforce.sidebar",
+          "name": "AGI Workforce",
+          "contextualTitle": "AGI Workforce"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "agi-workforce.explain",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@1"
+        },
+        {
+          "command": "agi-workforce.fix",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@2"
+        },
+        {
+          "command": "agi-workforce.refactor",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@3"
+        },
+        {
+          "command": "agi-workforce.generateTests",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agi-workforce.explain",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "agi-workforce.fix",
+          "when": "editorIsOpen"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AGI Workforce",
+      "properties": {
+        "agiWorkforce.apiEndpoint": {
+          "type": "string",
+          "default": "https://agiworkforce.com/api/llm/v1",
+          "description": "AGI Workforce API endpoint base URL"
+        },
+        "agiWorkforce.model": {
+          "type": "string",
+          "default": "auto",
+          "description": "Default LLM model to use (e.g. gpt-4o, claude-sonnet-4-5, gemini-2.0-flash, auto)"
+        },
+        "agiWorkforce.streamingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable streaming responses from AGI Workforce API"
+        },
+        "agiWorkforce.contextLines": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Number of surrounding lines to include as context"
+        },
+        "agiWorkforce.fallbackToVscodeLm": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fall back to VS Code built-in Language Model API if AGI Workforce API is unavailable"
+        },
+        "agiWorkforce.telemetryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send anonymous usage telemetry to help improve AGI Workforce"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "agi-workforce.chat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "agi-workforce.explain",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production && vsce package --no-dependencies",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf out",
+    "prebuild": "pnpm run clean && pnpm run typecheck",
+    "build": "pnpm run compile"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "rimraf": "^6.0.0",
+    "typescript": "^5.8.0"
+  }
+}
