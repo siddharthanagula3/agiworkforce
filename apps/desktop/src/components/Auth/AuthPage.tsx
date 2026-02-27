@@ -4,6 +4,7 @@ import { Sparkles, Zap, Shield, Bot, CheckCircle2, Loader2 } from 'lucide-react'
 import { AuthForm } from './AuthForm';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { Button } from '../ui/Button';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 interface AuthPageProps {
   onAuthSuccess?: () => void;
@@ -60,7 +61,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         setPageState('verifying');
         supabaseAuth.exchangeCodeForSession(code).then((response) => {
           if (response.error) {
-            setErrorMessage(response.error.message);
+            setErrorMessage(getSimpleErrorMessage(response.error));
             setPageState('error');
             return;
           }

@@ -12,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { cn } from '../../lib/utils';
 import { toast } from '../../hooks/useToast';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 export interface TimeoutWarningData {
   taskId: string;
@@ -132,7 +133,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
 
       onDismiss();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to extend timeout:', errorMessage);
 
       toast({
@@ -167,7 +168,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
 
       onDismiss();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to pause task:', errorMessage);
 
       toast({
@@ -210,7 +211,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
 
       onDismiss();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to abort task:', errorMessage);
 
       toast({

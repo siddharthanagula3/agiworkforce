@@ -11,6 +11,7 @@
  * - Tauri event subscription for real-time job updates
  */
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 
@@ -136,7 +137,7 @@ export const useSchedulerStore = create<SchedulerState>()(
             set({ isLoading: false }, undefined, 'scheduler/addJob/success');
             return jobId;
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to add job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/addJob/error');
             throw error;
@@ -164,7 +165,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             return success;
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to remove job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/removeJob/error');
             throw error;
@@ -194,7 +195,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             return success;
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to pause job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/pauseJob/error');
             throw error;
@@ -224,7 +225,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             return success;
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to resume job:', error);
             set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/resumeJob/error');
             throw error;
@@ -239,7 +240,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             set({ jobs, isLoading: false }, undefined, 'scheduler/listJobs/success');
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = getSimpleErrorMessage(error);
             console.error('[schedulerStore] Failed to list jobs:', error);
             set(
               { error: errorMessage, isLoading: false, jobs: [] },
