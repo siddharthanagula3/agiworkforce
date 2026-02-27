@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
-import { View, useWindowDimensions, RefreshControl } from 'react-native';
+import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
 import { Menu, Bot } from 'lucide-react-native';
-import { Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { AgentCard } from '@/components/agents/AgentCard';
 import { useAgentStore } from '@/stores/agentStore';
@@ -18,6 +17,9 @@ export default function AgentsScreen() {
 
   const agents = useAgentStore((s) => s.agents);
   const selectAgent = useAgentStore((s) => s.selectAgent);
+  const clearCompleted = useAgentStore((s) => s.clearCompleted);
+
+  const activeCount = agents.filter((a) => a.status === 'running' || a.status === 'waiting').length;
 
   const handleAgentPress = useCallback(
     (id: string) => {
@@ -43,9 +45,35 @@ export default function AgentsScreen() {
         >
           <Menu size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="text-white">
-          Agents
-        </Text>
+
+        <View className="flex-row items-center gap-2 flex-1">
+          <Text variant="subheading" className="text-white">
+            Active Agents
+          </Text>
+          {agents.length > 0 ? (
+            <View
+              className="px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: `${colors.agentActive}25` }}
+            >
+              <Text
+                className="text-[11px] font-semibold"
+                style={{ color: colors.agentActive }}
+              >
+                {activeCount > 0 ? activeCount : agents.length}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Clear completed button */}
+        {agents.some((a) => a.status === 'completed') ? (
+          <Pressable
+            onPress={clearCompleted}
+            className="px-3 py-1 rounded-lg active:bg-white/5"
+          >
+            <Text className="text-[12px] text-white/40">Clear done</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Agent grid or empty state */}
