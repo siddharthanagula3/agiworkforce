@@ -25,7 +25,7 @@ function FocusPill({ icon, label, mode: _mode, active, onClick, description }: F
           : 'bg-surface-floating text-zinc-400 hover:bg-surface-floating-hover hover:text-zinc-200',
       )}
       aria-label={`${label} mode${description ? ': ' + description : ''}`}
-      aria-pressed={active}
+      aria-checked={active}
       role="radio"
       tabIndex={0}
     >

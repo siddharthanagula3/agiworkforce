@@ -39,11 +39,18 @@ export function validateRequiredEnvVars(): ValidationResult {
   // Important but non-critical variables (specific features won't work without these)
   // These generate warnings, not errors - server will still start
   const importantVars = [
+    // Required for CSRF token verification on state-changing endpoints
+    'CSRF_SECRET',
     // Required for protected cron + diagnostic endpoints
     'CRON_SECRET',
     // Required for desktop auto-updates (Tauri updater hits /api/releases/*)
     'DESKTOP_GITHUB_OWNER',
     'DESKTOP_GITHUB_REPO',
+    // Required for rate limiting (Upstash Redis)
+    'UPSTASH_REDIS_REST_URL',
+    'UPSTASH_REDIS_REST_TOKEN',
+    // Required for encrypting device tokens (push notifications)
+    'DEVICE_TOKEN_ENCRYPTION_KEY',
   ];
 
   // Stripe price IDs (required for checkout to work)
