@@ -19,29 +19,27 @@ function isBillingInterval(value: unknown): value is BillingInterval {
   return value === 'monthly' || value === 'annual';
 }
 
-async function requireSession() {
+async function requireAuth() {
   const supabase = await createSupabaseServerClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (error || !user) {
     throw createError.unauthorized('Please sign in to join the waitlist');
   }
 
-  return { supabase, session };
+  return { supabase, user };
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { supabase, session } = await requireSession();
+  const { supabase, user } = await requireAuth();
 
-  const { data, error } = await supabase
-    .from('waitlist')
-    .select('plan')
-    .eq('user_id', session.user.id);
+  const { data, error } = await supabase.from('waitlist').select('plan').eq('user_id', user.id);
 
   if (error) {
     throw createError.internal('Failed to load waitlist status');
@@ -55,7 +53,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { supabase, session } = await requireSession();
+  const { supabase, user } = await requireAuth();
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -87,8 +85,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const { error } = await supabase.from('waitlist').upsert(
     {
-      user_id: session.user.id,
-      email: session.user.email ?? null,
+      user_id: user.id,
+      email: user.email ?? null,
       plan: payload.plan,
       billing_interval: billingInterval,
       source,

@@ -92,15 +92,13 @@ export interface RuntimeWidgetProps {
  * and WidgetRenderer passes RuntimeWidgetProps at runtime. The actual type
  * safety is enforced at widget implementation level.
  */
-export interface RegisteredWidget<
-  TConfig extends BaseWidgetConfig = BaseWidgetConfig,
-  _TProps extends BaseWidgetProps<TConfig> = BaseWidgetProps<TConfig>,
-> {
+export interface RegisteredWidget<TConfig extends BaseWidgetConfig = BaseWidgetConfig> {
   type: WidgetType;
   displayName: string;
   description?: string;
   // AUDIT-P3-TYPE: Using 'any' because widgets can be registered with either
   // BaseWidgetProps (new API) or WidgetRendererProps (legacy API)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component: React.ComponentType<any>;
   icon?: LucideIcon;
   defaultConfig?: Partial<TConfig>;

@@ -146,6 +146,14 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'qwen-image-max': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 35.0 },
 
   // ---------------------------------------------------------------------------
+  // ZhipuAI GLM (Updated 2026-02-26)
+  // https://open.bigmodel.cn/dev/howuse/model
+  // ---------------------------------------------------------------------------
+  'glm-4.7': { inputCostPer1MTokens: 0.35, outputCostPer1MTokens: 0.35 },
+  'glm-4.6v': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 0.5 },
+  'glm-4.6v-flash': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.1 },
+
+  // ---------------------------------------------------------------------------
   // Moonshot Kimi K2.5 (Updated 2026-01-28)
   // ---------------------------------------------------------------------------
   'kimi-k2.5': { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 },
@@ -189,6 +197,7 @@ const PROVIDER_DEFAULTS: Record<string, ModelPricing> = {
   xai: { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.5 }, // Grok 4 Fast
   deepseek: { inputCostPer1MTokens: 0.28, outputCostPer1MTokens: 0.42 }, // V3.2
   qwen: { inputCostPer1MTokens: 1.2, outputCostPer1MTokens: 6.0 }, // Qwen Max
+  zhipuai: { inputCostPer1MTokens: 0.35, outputCostPer1MTokens: 0.35 }, // GLM-4.7
   moonshot: { inputCostPer1MTokens: 0.8, outputCostPer1MTokens: 3.5 }, // Kimi K2.5
   perplexity: { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 }, // Sonar Deep Research
   ollama: { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 0.0 }, // Local models
