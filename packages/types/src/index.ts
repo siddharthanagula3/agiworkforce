@@ -20,3 +20,6 @@ export * from './tauri';
 
 // Error types and codes
 export * from './errors';
+
+// Custom model configuration types
+export * from './customModel';

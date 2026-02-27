@@ -33,6 +33,7 @@ export default [
       'scripts/**',
       'coverage/**',
       '**/coverage/**',
+      '**/.expo/**',
       // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',
