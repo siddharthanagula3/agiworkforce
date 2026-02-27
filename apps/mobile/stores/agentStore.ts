@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
-import type { StatusStep } from '@/types/chat';
+import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
 export interface Agent {
   id: string;
@@ -11,7 +11,9 @@ export interface Agent {
   currentStep: string;
   progress: number; // 0-100
   steps: StatusStep[];
+  toolCalls: ToolCall[];
   startedAt: string;
+  updatedAt: string;
 }
 
 interface AgentState {
@@ -19,11 +21,19 @@ interface AgentState {
   agents: Agent[];
   /** Currently selected agent for detail view */
   selectedAgentId: string | null;
+  /** Approval requests pending user action */
+  pendingApprovals: ApprovalRequest[];
 
   setAgents: (agents: Agent[]) => void;
   updateAgent: (id: string, patch: Partial<Omit<Agent, 'id'>>) => void;
   removeAgent: (id: string) => void;
   selectAgent: (id: string | null) => void;
+  clearCompleted: () => void;
+
+  /** Approval actions */
+  addApproval: (approval: ApprovalRequest) => void;
+  approveRequest: (id: string) => void;
+  rejectRequest: (id: string, reason?: string) => void;
 }
 
 export const useAgentStore = create<AgentState>()(
@@ -31,13 +41,16 @@ export const useAgentStore = create<AgentState>()(
     (set) => ({
       agents: [],
       selectedAgentId: null,
+      pendingApprovals: [],
 
       setAgents: (agents) => set({ agents }),
 
       updateAgent: (id, patch) =>
         set((state) => ({
           agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, ...patch } : agent,
+            agent.id === id
+              ? { ...agent, ...patch, updatedAt: new Date().toISOString() }
+              : agent,
           ),
         })),
 
@@ -49,6 +62,35 @@ export const useAgentStore = create<AgentState>()(
         })),
 
       selectAgent: (id) => set({ selectedAgentId: id }),
+
+      clearCompleted: () =>
+        set((state) => ({
+          agents: state.agents.filter((a) => a.status !== 'completed'),
+          selectedAgentId: state.agents.find(
+            (a) => a.id === state.selectedAgentId && a.status === 'completed',
+          )
+            ? null
+            : state.selectedAgentId,
+        })),
+
+      addApproval: (approval) =>
+        set((state) => ({
+          pendingApprovals: [...state.pendingApprovals, approval],
+        })),
+
+      approveRequest: (id) =>
+        set((state) => ({
+          pendingApprovals: state.pendingApprovals.map((r) =>
+            r.id === id ? { ...r, status: 'approved' as const } : r,
+          ),
+        })),
+
+      rejectRequest: (id, _reason) =>
+        set((state) => ({
+          pendingApprovals: state.pendingApprovals.map((r) =>
+            r.id === id ? { ...r, status: 'rejected' as const } : r,
+          ),
+        })),
     }),
     {
       name: 'agent-store',
