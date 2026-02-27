@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Generate a cryptographically-secure per-request nonce
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const nonce = btoa(crypto.randomUUID());
   const csp = buildCspWithNonce(nonce);
 
   // Forward nonce to Server Components via request header (readable via next/headers)
