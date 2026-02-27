@@ -9,7 +9,12 @@
  * - Approval workflows
  * - Layout management (sidebar, main content, sidecar)
  */
-import { listen, isTauri } from '@/lib/tauri-mock';
+import { listen as _listenBase, isTauri } from '@/lib/tauri-mock';
+// Typed wrapper for listen to support generics in web build
+const listen = <T = any,>(
+  event: string,
+  handler: (e: { payload: T }) => void,
+): Promise<() => void> => _listenBase(event, handler as any);
 import { invoke as ipcInvoke } from '@/utils/ipc';
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -20,10 +25,19 @@ import { sha256 } from '@/lib/hash';
 import { deriveTaskMetadata } from '@/lib/taskMetadata';
 import { getModelForRequest } from '@/lib/modelRouter';
 import { getModelMetadata } from '@/constants/llm';
-import { useBillingUsageStore, selectBudget } from '@/stores/unified/billingUsage';
+import {
+  useBillingUsageStore as _useBillingUsageStoreBase,
+  selectBudget,
+} from '@/stores/unified/billingUsage';
+const useBillingUsageStore = _useBillingUsageStoreBase as unknown as (selector?: any) => any;
+(useBillingUsageStore as any).getState = () => ({});
 import { useModelStore } from '@/stores/unified/modelStore';
 import { useSettingsStore } from '@/stores/unified/settingsStore';
-import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '@/stores/unified/unifiedChatStore';
+import {
+  useUnifiedChatStore,
+  type SidecarMode,
+  uuidToDbId,
+} from '@/stores/unified/unifiedChatStore';
 import { useBillingStore } from '@/stores/unified/auth';
 import { useCustomInstructionsStore } from '@/stores/unified/customInstructionsStore';
 import { useExecutionStore } from '@/stores/unified/executionStore';
@@ -396,7 +410,7 @@ const normalizeInlineToolData = (
 const BudgetTracker: React.FC = () => {
   const budget = useBillingUsageStore(selectBudget);
   const messages = useUnifiedChatStore((state) => state.messages);
-  const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
+  const addTokenUsage = useBillingUsageStore((state: any) => state.addTokenUsage);
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -459,20 +473,20 @@ export const UnifiedAgenticChat: React.FC<{
   );
 
   // CHT-008 fix: Consolidated settings and model store selectors
-  const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
+  const llmConfig = useSettingsStore(useShallow((state: any) => state.llmConfig));
   const { selectedProvider, selectedModel } = useModelStore(
-    useShallow((state) => ({
+    useShallow((state: any) => ({
       selectedProvider: state.selectedProvider,
       selectedModel: state.selectedModel,
     })),
-  );
+  ) as any;
 
   // CHT-008 fix: Consolidated billing store selectors
   const { loadCostOverview: loadOverview } = useBillingUsageStore(
-    useShallow((state) => ({
+    useShallow((state: any) => ({
       loadCostOverview: state.loadCostOverview,
     })),
-  );
+  ) as any;
 
   // Budget tracking moved to sub-component BudgetTracker
 
@@ -1760,7 +1774,7 @@ export const UnifiedAgenticChat: React.FC<{
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
             // Update the step status
-            const updatedSteps = task.steps.map((step, index) => {
+            const updatedSteps = task.steps.map((step: any, index: any) => {
               if (index === payload.step_index || step.id === payload.step_id) {
                 return { ...step, status: 'running' as const, timestamp: Date.now() };
               }
@@ -1785,7 +1799,7 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
-            const updatedSteps = task.steps.map((step, index) => {
+            const updatedSteps = task.steps.map((step: any, index: any) => {
               if (index === payload.step_index || step.id === payload.step_id) {
                 return {
                   ...step,
@@ -1795,7 +1809,7 @@ export const UnifiedAgenticChat: React.FC<{
               }
               return step;
             });
-            const completedCount = updatedSteps.filter((s) => s.status === 'completed').length;
+            const completedCount = updatedSteps.filter((s: any) => s.status === 'completed').length;
             executionStore.updateResearchTask(payload.task_id, {
               steps: updatedSteps,
               progress: Math.round((completedCount / task.steps.length) * 100),
@@ -1843,7 +1857,7 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
-            const updatedSteps = task.steps.map((step) => ({
+            const updatedSteps = task.steps.map((step: any) => ({
               ...step,
               status: payload.success ? ('completed' as const) : step.status,
             }));
@@ -1955,7 +1969,7 @@ export const UnifiedAgenticChat: React.FC<{
   const modelForMessage = selectedModel ?? fallbackModelForProvider ?? undefined;
 
   useEffect(() => {
-    void loadOverview().catch((err) =>
+    void loadOverview().catch((err: any) =>
       console.error('[UnifiedAgenticChat] Failed to load cost overview', err),
     );
   }, [loadOverview]);

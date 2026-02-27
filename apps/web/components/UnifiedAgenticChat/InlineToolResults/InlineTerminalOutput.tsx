@@ -19,7 +19,7 @@ export interface TerminalOutputData {
 
 export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status }) => {
   const [expanded, setExpanded] = useState(false);
-  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+  const compactMode = useSettingsStore((state: any) => state.chatPreferences?.compactMode);
 
   const data = result?.data as TerminalOutputData | undefined;
 

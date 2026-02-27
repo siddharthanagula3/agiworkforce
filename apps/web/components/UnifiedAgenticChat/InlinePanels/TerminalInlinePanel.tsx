@@ -23,7 +23,7 @@ export interface TerminalInlinePanelProps {
 const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
     const [copied, setCopied] = useState(false);
-    const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+    const compactMode = useSettingsStore((state: any) => state.chatPreferences?.compactMode);
     const terminalContent = panel.content.terminal;
 
     if (!terminalContent) {

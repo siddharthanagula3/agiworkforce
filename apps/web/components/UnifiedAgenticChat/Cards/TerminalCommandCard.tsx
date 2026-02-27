@@ -31,7 +31,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
 }) => {
   const [showFullOutput, setShowFullOutput] = useState(false);
   const [showExpanded, setShowExpanded] = useState(false);
-  const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
+  const compactMode = useSettingsStore((state: any) => state.chatPreferences?.compactMode);
 
   const isSuccess = command.exitCode === 0 || command.exitCode === undefined;
   const hasOutput =
