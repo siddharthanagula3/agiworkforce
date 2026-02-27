@@ -1,0 +1,12 @@
+{
+  "name": "react-native-worklets",
+  "version": "0.0.1",
+  "description": "Stub package for react-native-worklets — provides an empty Babel plugin so jest-expo tests work without the real native module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./plugin": "./plugin.js"
+  },
+  "license": "MIT",
+  "private": true
+}
