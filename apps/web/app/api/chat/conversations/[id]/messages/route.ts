@@ -192,6 +192,8 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const actualOrigin = new URL(llmEndpoint).origin;
   if (actualOrigin !== trustedOrigin) {
     logger.error({ llmEndpoint, trustedOrigin, actualOrigin }, 'LLM endpoint origin mismatch');
+    // Rollback: delete the user message we already saved
+    await supabase.from('web_messages').delete().eq('id', userMessage.id);
     throw createError.internal('LLM API configuration error');
   }
 
@@ -212,6 +214,8 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   if (!llmResponse.ok) {
     const errorData = await llmResponse.json().catch(() => ({}));
     logger.error({ status: llmResponse.status, error: errorData }, 'LLM API error');
+    // Rollback: delete the user message so the conversation stays consistent
+    await supabase.from('web_messages').delete().eq('id', userMessage.id);
     throw createError.internal('Failed to get AI response');
   }
 
@@ -237,8 +241,8 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     .single();
 
   if (asstMsgError) {
-    logger.error({ error: asstMsgError }, 'Failed to save assistant message');
-    // Don't throw - return what we have
+    logger.error({ error: asstMsgError, conversationId }, 'Failed to save assistant message');
+    throw createError.internal('Failed to save AI response');
   }
 
   // Auto-title conversation from first message
