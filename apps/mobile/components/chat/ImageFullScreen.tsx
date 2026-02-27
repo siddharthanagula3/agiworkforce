@@ -1,18 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Pressable, Modal, Share, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { X, Share2, Download } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import {
-  GestureDetector,
-  Gesture,
-  GestureHandlerRootView,
-} from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
@@ -28,14 +20,9 @@ interface ImageFullScreenProps {
  * Full-screen image viewer with pinch-to-zoom and double-tap toggle.
  * Overlay pattern matching ArtifactFullScreen.
  */
-export function ImageFullScreen({
-  imageUrl,
-  prompt,
-  visible,
-  onClose,
-}: ImageFullScreenProps) {
+export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFullScreenProps) {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
   const [saved, setSaved] = useState(false);
 
   // Zoom state via reanimated shared values
@@ -99,11 +86,7 @@ export function ImageFullScreen({
       }
     });
 
-  const composedGesture = Gesture.Simultaneous(
-    pinchGesture,
-    panGesture,
-    doubleTapGesture,
-  );
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
 
   const animatedImageStyle = useAnimatedStyle(() => ({
     transform: [
@@ -193,17 +176,12 @@ export function ImageFullScreen({
               style={{
                 padding: 10,
                 borderRadius: 8,
-                backgroundColor: saved
-                  ? 'rgba(16, 185, 129, 0.15)'
-                  : 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: saved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
               }}
               accessibilityLabel={saved ? 'Saved' : 'Save image'}
               accessibilityRole="button"
             >
-              <Download
-                size={18}
-                color={saved ? colors.agentSuccess : colors.textSecondary}
-              />
+              <Download size={18} color={saved ? colors.agentSuccess : colors.textSecondary} />
             </Pressable>
 
             {/* Close button */}

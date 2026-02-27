@@ -8,7 +8,6 @@
  */
 
 import { useConnectionStore } from '@/stores/connectionStore';
-import { useAgentStore } from '@/stores/agentStore';
 import type { RiskLevel } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
@@ -49,10 +48,7 @@ export function extractPairingCode(raw: string): string {
  * Send an approval response back to the desktop.
  * This approves or rejects a pending tool execution.
  */
-export function sendApprovalResponse(
-  requestId: string,
-  approved: boolean,
-): void {
+export function sendApprovalResponse(requestId: string, approved: boolean): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
@@ -77,10 +73,7 @@ export function requestAgentRefresh(): void {
 /**
  * Send a command to an agent running on the desktop.
  */
-export function sendAgentCommand(
-  agentId: string,
-  command: 'pause' | 'resume' | 'cancel',
-): void {
+export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 'cancel'): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
@@ -159,9 +152,7 @@ export function getRiskColor(level: RiskLevel): string {
 /**
  * Get a badge color name for the Badge component.
  */
-export function getRiskBadgeColor(
-  level: RiskLevel,
-): 'green' | 'yellow' | 'red' {
+export function getRiskBadgeColor(level: RiskLevel): 'green' | 'yellow' | 'red' {
   switch (level) {
     case 'low':
       return 'green';

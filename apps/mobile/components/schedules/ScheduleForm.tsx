@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { ChevronDown, Trash2 } from 'lucide-react-native';
+import { ChevronDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -49,28 +49,14 @@ export function ScheduleForm({
   // Form state
   const [name, setName] = useState(initialData?.name ?? '');
   const [prompt, setPrompt] = useState(initialData?.prompt ?? '');
-  const [model, setModel] = useState(initialData?.model ?? 'auto-balanced');
-  const [recurrence, setRecurrence] = useState<RecurrenceType>(
-    initialData?.recurrence ?? 'daily',
-  );
-  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
-    initialData?.daysOfWeek ?? [],
-  );
-  const [dayOfMonth, setDayOfMonth] = useState(
-    initialData?.dayOfMonth ?? 1,
-  );
-  const [timeOfDay, setTimeOfDay] = useState(
-    initialData?.timeOfDay ?? '09:00',
-  );
-  const [scheduledAt, setScheduledAt] = useState<string | null>(
-    initialData?.scheduledAt ?? null,
-  );
-  const [cronExpression, setCronExpression] = useState(
-    initialData?.cronExpression ?? '',
-  );
-  const [timezone, setTimezone] = useState(
-    initialData?.timezone ?? getDeviceTimezone(),
-  );
+  const [model] = useState(initialData?.model ?? 'auto-balanced');
+  const [recurrence, setRecurrence] = useState<RecurrenceType>(initialData?.recurrence ?? 'daily');
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initialData?.daysOfWeek ?? []);
+  const [dayOfMonth, setDayOfMonth] = useState(initialData?.dayOfMonth ?? 1);
+  const [timeOfDay, setTimeOfDay] = useState(initialData?.timeOfDay ?? '09:00');
+  const [scheduledAt, setScheduledAt] = useState<string | null>(initialData?.scheduledAt ?? null);
+  const [cronExpression, setCronExpression] = useState(initialData?.cronExpression ?? '');
+  const [timezone, setTimezone] = useState(initialData?.timezone ?? getDeviceTimezone());
 
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -115,8 +101,7 @@ export function ScheduleForm({
       if (options?.dayOfMonth !== undefined) setDayOfMonth(options.dayOfMonth);
       if (options?.timeOfDay !== undefined) setTimeOfDay(options.timeOfDay);
       if (options?.scheduledAt !== undefined) setScheduledAt(options.scheduledAt);
-      if (options?.cronExpression !== undefined)
-        setCronExpression(options.cronExpression);
+      if (options?.cronExpression !== undefined) setCronExpression(options.cronExpression);
     },
     [],
   );
@@ -235,19 +220,13 @@ export function ScheduleForm({
             onChange={handleRecurrenceChange}
           />
           {errors.daysOfWeek ? (
-            <Text className="text-xs text-red-400 mt-1">
-              {errors.daysOfWeek}
-            </Text>
+            <Text className="text-xs text-red-400 mt-1">{errors.daysOfWeek}</Text>
           ) : null}
           {errors.scheduledAt ? (
-            <Text className="text-xs text-red-400 mt-1">
-              {errors.scheduledAt}
-            </Text>
+            <Text className="text-xs text-red-400 mt-1">{errors.scheduledAt}</Text>
           ) : null}
           {errors.cronExpression ? (
-            <Text className="text-xs text-red-400 mt-1">
-              {errors.cronExpression}
-            </Text>
+            <Text className="text-xs text-red-400 mt-1">{errors.cronExpression}</Text>
           ) : null}
         </View>
 
