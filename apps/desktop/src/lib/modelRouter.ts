@@ -518,7 +518,8 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
   // 10% of traffic - best benchmarks available in economy pool
   complex: [
     'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
-    'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration
+    'claude-sonnet-4.6', // 78.5% SWE-bench - Current best Sonnet
+    'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration fallback
     'gemini-3-pro-preview', // ~75% SWE-bench - 2M context window
     'claude-haiku-4.5', // ~70% - Best writing quality
     'glm-4.6v', // 68% SWE-bench - Vision + tools
@@ -534,8 +535,9 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   coding: [
     'claude-opus-4.6', // 80.9% SWE-bench - PUBLIC #1 for coding
     'gpt-5.2', // 80.0% SWE-bench - #2, best tool integration
-    'glm-4.7', // 73.8% SWE-bench - #3, best open-weight
-    'claude-sonnet-4.5', // Great coding, more affordable
+    'claude-sonnet-4.6', // 78.5% SWE-bench - #3, current best Sonnet
+    'glm-4.7', // 73.8% SWE-bench - #4, best open-weight
+    'claude-sonnet-4.5', // Great coding, more affordable fallback
     'deepseek-chat', // Budget coding champion
   ],
   // Reasoning: GPT-5.2 for math, Claude for complex analysis
@@ -549,7 +551,8 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   // General: ChatGPT versatile, Claude for writing, DeepSeek for budget
   general: [
     'gpt-5.2', // PUBLIC #1 for versatility
-    'claude-sonnet-4.5', // Best for writing/creative
+    'claude-sonnet-4.6', // Current best Sonnet - writing/creative
+    'claude-sonnet-4.5', // Fallback Sonnet
     'deepseek-chat', // Budget champion
     'gemini-3-flash-preview', // Fast, good quality
     'glm-4.7', // Solid all-rounder
@@ -558,7 +561,8 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   agentic: [
     'gpt-5.2', // 97% τ²-bench - PUBLIC #1 for tool-calling
     'claude-opus-4.6', // Best multi-step orchestration
-    'claude-sonnet-4.5', // More affordable agentic
+    'claude-sonnet-4.6', // Current best Sonnet for agentic
+    'claude-sonnet-4.5', // More affordable agentic fallback
     'gemini-3-pro-preview', // Good tool use, 2M context
     'glm-4.7', // Agentic-capable open model
   ],
@@ -567,7 +571,8 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
     'gpt-5.2', // Excellent vision + tools
     'gemini-3-pro-preview', // Best multimodal (native video, 2M context)
     'claude-opus-4.6', // Best visual analysis
-    'claude-sonnet-4.5', // Good vision, more affordable
+    'claude-sonnet-4.6', // Current best Sonnet vision
+    'claude-sonnet-4.5', // Good vision, more affordable fallback
     'glm-4.6v', // Vision + native tool calling
   ],
 };

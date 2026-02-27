@@ -12,6 +12,7 @@
  * - subscribeWithSelector for granular subscriptions
  */
 import { invoke, isTauriContext } from '../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
@@ -367,7 +368,11 @@ export const useSettingsStore = create<SettingsState>()(
             );
           } catch (error) {
             console.error('Failed to set default provider:', error);
-            set({ error: String(error) }, undefined, 'settings/setDefaultProvider/error');
+            set(
+              { error: getSimpleErrorMessage(error) },
+              undefined,
+              'settings/setDefaultProvider/error',
+            );
             throw error;
           }
         },
@@ -759,7 +764,7 @@ export const useSettingsStore = create<SettingsState>()(
 
             if (get().loading) {
               set(
-                { error: String(error), loading: false },
+                { error: getSimpleErrorMessage(error), loading: false },
                 undefined,
                 'settings/loadSettings/error',
               );
@@ -816,7 +821,11 @@ export const useSettingsStore = create<SettingsState>()(
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
             console.error('Failed to save settings:', error);
-            set({ error: String(error), loading: false }, undefined, 'settings/saveSettings/error');
+            set(
+              { error: getSimpleErrorMessage(error), loading: false },
+              undefined,
+              'settings/saveSettings/error',
+            );
             throw error;
           }
         },
