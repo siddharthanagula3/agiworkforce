@@ -12,7 +12,9 @@ import { logger } from '@/lib/logger';
  * Transform tools from OpenAI format to Anthropic format.
  * Handles three cases: already-Anthropic format, OpenAI function format, and bare format.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function transformTools(tools: any[]): any[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return tools.map((tool: any) => {
     // If tool is already in Anthropic format (has input_schema), use as-is
     if (tool.input_schema) {
@@ -232,8 +234,10 @@ export class AnthropicProvider extends BaseLLMProvider {
     const url = `${this.baseUrl}/messages`;
 
     // Convert messages to Anthropic format, preserving tool_use/tool_result blocks
+    // Pass usePromptCache so message-body cache_control is applied (matching sendRequest)
     const messages = mapMessagesToAnthropic(
       request.messages.filter((msg) => msg.role !== 'system'),
+      request.usePromptCache,
     );
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');

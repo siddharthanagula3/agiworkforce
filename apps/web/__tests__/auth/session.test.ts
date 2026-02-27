@@ -344,8 +344,9 @@ describe('Session Management', () => {
     });
 
     it('should handle clock skew between client and server', async () => {
-      // Server time is slightly ahead
-      const _serverTimeOffset = 120; // 2 minutes ahead
+      // Server time is slightly ahead (2 minutes)
+      // Clock skew value is documented here for context; the test validates
+      // that getUser rejects while getSession returns valid-looking data.
       const sessionExpiresAt = Math.floor(Date.now() / 1000) + 60; // Expires in 1 min client time
 
       mockGetSession.mockResolvedValue({
@@ -569,7 +570,7 @@ describe('Session Management', () => {
       const client = createServerClient('', '', { cookies: {} as never });
 
       // Sign out should still succeed even with expired token
-      const { error: _error } = await client.auth.signOut();
+      await client.auth.signOut();
       // The client might return an error but the session should still be cleared locally
       expect(mockSignOut).toHaveBeenCalled();
     });

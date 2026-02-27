@@ -18,18 +18,15 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { User } from '@supabase/supabase-js';
 
-const VALID_TAGS = [
-  'coding',
-  'research',
-  'writing',
-  'brainstorm',
-  'analysis',
-  'debug',
-  'creative',
-  'general',
-] as const;
-
-type ConversationTag = (typeof VALID_TAGS)[number];
+type ConversationTag =
+  | 'coding'
+  | 'research'
+  | 'writing'
+  | 'brainstorm'
+  | 'analysis'
+  | 'debug'
+  | 'creative'
+  | 'general';
 
 async function getAuthenticatedUser(request: NextRequest): Promise<User> {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -288,18 +285,16 @@ async function handleClassify(request: NextRequest) {
   const tag = classifyText(combinedText);
 
   // Upsert the tag (insert or update if already exists)
-  const { error: upsertError } = await supabase
-    .from('conversation_tags')
-    .upsert(
-      {
-        conversation_id: conversationId,
-        user_id: user.id,
-        tag,
-        confidence: 1.0,
-        classified_at: new Date().toISOString(),
-      },
-      { onConflict: 'conversation_id,user_id' },
-    );
+  const { error: upsertError } = await supabase.from('conversation_tags').upsert(
+    {
+      conversation_id: conversationId,
+      user_id: user.id,
+      tag,
+      confidence: 1.0,
+      classified_at: new Date().toISOString(),
+    },
+    { onConflict: 'conversation_id,user_id' },
+  );
 
   if (upsertError) {
     logger.error({ error: upsertError }, 'Failed to store conversation tag');

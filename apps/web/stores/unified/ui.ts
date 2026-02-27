@@ -367,7 +367,7 @@ export const useUIStore = create<UIState>()(
               void get().reportError(newError.id);
             }
 
-            if (process.env.NODE_ENV === "development") {
+            if (process.env.NODE_ENV === 'development') {
               const consoleMethod =
                 errorData.severity === 'critical' || errorData.severity === 'error'
                   ? console.error
@@ -870,9 +870,12 @@ export const useUIStore = create<UIState>()(
             if (newMode === 'simple') {
               // Dynamically import to avoid circular dependency
               Promise.all([import('./modelStore'), import('./accountStore')]).then(
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 ([{ useModelStore }, { useAccountStore }]) => {
-                  const modelStore = ({} as any);
-                  const accountStore = ({} as any);
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const modelStore = {} as any;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const accountStore = {} as any;
                   const tier = accountStore.account.plan ?? 'hobby';
 
                   // Map tier to the best available auto mode
@@ -1036,7 +1039,7 @@ export const useUIStore = create<UIState>()(
         },
       },
     ),
-    { name: 'UIStore', enabled: process.env.NODE_ENV === "development" },
+    { name: 'UIStore', enabled: process.env.NODE_ENV === 'development' },
   ),
 );
 

@@ -26,7 +26,7 @@ const PLAN_CREDITS: Record<string, number> = {
   hobby: 350, // $3.50/month
   pro: 1200, // $12.00/month (matches desktop pricing.ts tokenCredits: 12)
   max: 15000, // $150.00/month (matches desktop pricing.ts tokenCredits: 150)
-  enterprise: 0, // Custom - handled separately
+  enterprise: 100000, // $1000.00/month — generous default; overridden per-contract via Stripe metadata
 };
 
 export interface SubscriptionInfo {
