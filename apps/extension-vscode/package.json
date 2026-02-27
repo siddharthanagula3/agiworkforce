@@ -75,6 +75,21 @@
         "command": "agi-workforce.selectModel",
         "title": "AGI Workforce: Select Model",
         "icon": "$(symbol-misc)"
+      },
+      {
+        "command": "agi-workforce.openConversation",
+        "title": "AGI Workforce: Open Conversation",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "agi-workforce.deleteConversation",
+        "title": "AGI Workforce: Delete Conversation",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.refreshConversations",
+        "title": "AGI Workforce: Refresh Conversations",
+        "icon": "$(refresh)"
       }
     ],
     "chatParticipants": [
@@ -149,10 +164,35 @@
           "id": "agi-workforce.sidebar",
           "name": "AGI Workforce",
           "contextualTitle": "AGI Workforce"
+        },
+        {
+          "type": "tree",
+          "id": "agi-workforce.conversations",
+          "name": "History",
+          "contextualTitle": "Conversation History"
         }
       ]
     },
     "menus": {
+      "view/item/context": [
+        {
+          "command": "agi-workforce.openConversation",
+          "when": "view == agi-workforce.conversations && viewItem == conversation",
+          "group": "inline@1"
+        },
+        {
+          "command": "agi-workforce.deleteConversation",
+          "when": "view == agi-workforce.conversations && viewItem == conversation",
+          "group": "inline@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "agi-workforce.refreshConversations",
+          "when": "view == agi-workforce.conversations",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "agi-workforce.explain",
@@ -196,8 +236,8 @@
         },
         "agiWorkforce.model": {
           "type": "string",
-          "default": "auto",
-          "description": "Default LLM model to use (e.g. gpt-4o, claude-sonnet-4-5, gemini-2.0-flash, auto)"
+          "default": "auto-balanced",
+          "description": "Default LLM model (e.g. auto-balanced, claude-sonnet-4.6, gpt-5.2, gemini-3-pro-preview)"
         },
         "agiWorkforce.streamingEnabled": {
           "type": "boolean",
@@ -220,6 +260,43 @@
           "type": "boolean",
           "default": false,
           "description": "Send anonymous usage telemetry to help improve AGI Workforce"
+        },
+        "agiWorkforce.hoverEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show AGI Workforce quick actions on hover over identifiers"
+        },
+        "agiWorkforce.autoApplyFixes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically apply AI-suggested fixes without showing a diff"
+        },
+        "agiWorkforce.inlineCompletions.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable ghost-text inline completions (requires API key)"
+        },
+        "agiWorkforce.agent.planMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a plan before executing agent tasks (requires confirmation)"
+        },
+        "agiWorkforce.mcp.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Model Context Protocol (MCP) tool integrations"
+        },
+        "agiWorkforce.desktopBridge.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Connect to AGI Workforce desktop app for extended agent capabilities"
+        },
+        "agiWorkforce.desktopBridge.port": {
+          "type": "number",
+          "default": 9000,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Local port for AGI Workforce desktop bridge connection"
         }
       }
     },
