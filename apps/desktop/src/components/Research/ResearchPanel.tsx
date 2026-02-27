@@ -52,6 +52,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { cn } from '@/lib/utils';
 import { invoke, listen, isTauri } from '@/lib/tauri-mock';
+import { getSimpleErrorMessage } from '@/lib/errorMessages';
 
 // Types matching the Rust backend
 export type ResearchModeId = 'quick' | 'standard' | 'deep' | 'exhaustive';
@@ -259,8 +260,7 @@ export const ResearchPanel = memo(function ResearchPanel({
       setActiveTab('report');
       onResearchComplete?.(result);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Research failed. Please try again.';
+      const errorMessage = getSimpleErrorMessage(error);
       setState((prev) => ({
         ...prev,
         status: 'error',

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '../../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import type {
   CloneWorkflowRequest,
   MarketplaceFilters,
@@ -156,7 +157,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       set({ workflows, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch workflows:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
     }
   },
 
@@ -187,7 +188,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       set({ myPublishedWorkflows: workflows, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch my workflows:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
     }
   },
 
@@ -200,7 +201,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       set({ selectedWorkflow: workflow, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch workflow:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
     }
   },
 
@@ -301,7 +302,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       set({ workflows, isLoading: false });
     } catch (error) {
       console.error('Failed to apply filters:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
     }
   },
 
@@ -330,7 +331,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       return clonedId;
     } catch (error) {
       console.error('Failed to clone workflow:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -357,7 +358,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       return published;
     } catch (error) {
       console.error('Failed to publish workflow:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -372,7 +373,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       }));
     } catch (error) {
       console.error('Failed to unpublish workflow:', error);
-      set({ error: String(error), isLoading: false });
+      set({ error: getSimpleErrorMessage(error), isLoading: false });
       throw error;
     }
   },

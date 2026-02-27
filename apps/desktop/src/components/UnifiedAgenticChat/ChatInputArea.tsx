@@ -18,6 +18,7 @@ import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
 import { cn } from '../../lib/utils';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
@@ -696,7 +697,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         setContent(messageContent);
         setDraftContent(messageContent);
         if (messageAttachments) setAttachments(messageAttachments);
-        setSubmitError(error instanceof Error ? error.message : String(error));
+        setSubmitError(getSimpleErrorMessage(error));
         console.error('[ChatInputArea] Send failed:', error);
       }
     } finally {
