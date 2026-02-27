@@ -93,6 +93,8 @@ const ChatCompletionRequestSchema = z.object({
 // Model tier requirements — synced with app/api/llm/completion/route.ts
 const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
   // Max tier only — flagship models
+  'claude-opus-4.6': ['max', 'enterprise'],
+  'claude-opus-4-6-20251101': ['max', 'enterprise'],
   'claude-opus-4.5': ['max', 'enterprise'],
   'claude-opus-4.5-20251101': ['max', 'enterprise'],
   'gpt-5-pro': ['max', 'enterprise'],
@@ -104,6 +106,8 @@ const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> 
   // Pro tier and above
   'gpt-5.2': ['pro', 'max', 'enterprise'],
   'gpt-5.2-pro': ['pro', 'max', 'enterprise'],
+  'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
+  'claude-sonnet-4-6-20251029': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4-20250514': ['pro', 'max', 'enterprise'],

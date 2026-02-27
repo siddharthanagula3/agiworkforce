@@ -122,14 +122,15 @@ interface CurrentActionBadgeProps {
 export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail();
+  const recentFirstTrail = [...actionTrail].reverse();
 
   // Get the most recent active action (running, thinking, searching, coding)
-  const activeAction = actionTrail.find((entry) =>
+  const activeAction = recentFirstTrail.find((entry) =>
     ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
   );
 
   // Also show recently completed actions for 3 seconds
-  const recentCompleted = actionTrail.find(
+  const recentCompleted = recentFirstTrail.find(
     (entry) =>
       entry.type === 'completed' && Date.now() - new Date(entry.timestamp).getTime() < 3000,
   );

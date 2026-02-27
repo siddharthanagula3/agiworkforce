@@ -1,14 +1,22 @@
-# Session State — Last Updated: 2026-02-26
+# Session State — Last Updated: 2026-02-27
 
 ## Current Sprint Goal
 
-Project constitution update — CLAUDE.md, MEMORY.md, AGENTS.md verified, settings.json updated, scoped rules created.
+Documentation sync — CLAUDE.md, GEMINI.md, SESSION_STATE.md updated to reflect mobile app (phases 0-4 complete) and VS Code extension (phases 1-4 complete). Stabilization sprint completed.
 
 ## What's Done (This Session + Previous Sessions)
 
-### Constitution Update — COMPLETE
+### Documentation Sync — IN PROGRESS (2026-02-27)
 
-- Verified CLAUDE.md (219 lines, under 500) — already had new content
+- Updated CLAUDE.md monorepo structure: added `apps/mobile/` and `apps/extension-vscode/`
+- Updated CLAUDE.md dev commands: added mobile (Expo), extension-vscode development sections
+- Updated GEMINI.md: added mobile and VS Code extension descriptions
+- Updated GEMINI.md component commands: added mobile, extensions
+- Updated SESSION_STATE.md header to reflect current status (mobilev0-4, vscode v1-4 complete, stabilization sprint done)
+
+### Constitution Update — COMPLETE (2026-02-26)
+
+- Verified CLAUDE.md (now ~280 lines with mobile/extension additions) — foundational content accurate
 - Verified MEMORY.md (73 lines) — already had new content
 - Verified AGENTS.md (80 lines, matches 23 agent files) — already had new content
 - Updated `.claude/settings.json` — added `env` (agent teams, auto memory) and `hooks` (PostToolUse write logger, Stop session state reminder)
@@ -65,7 +73,8 @@ All settings tabs implemented and wired (9 tabs total):
 
 ## Next Steps (Priority Order)
 
-1. **Settings panel enhancements** — upgrade existing tabs per the detailed spec (Custom Models, Extensions, Memory & Instructions, Agents, Features & Privacy)
-2. **[C3] features.test.ts refactor** — large task, human review needed first
-3. Fix remaining 8 FAIL features from audit
-4. Complete 14 PARTIAL features
+1. **Complete mobile app phases 5-7** — voice+camera integration, desktop companion QR pairing, migration to production
+2. **Complete VS Code extension phases 5-9** — full IDE integration, marketplace preparation
+3. **Rust specs from stabilization** — 43 orphaned Rust commands being documented in rust-fixes-needed.md
+4. **Settings UI fixes** — 10 missing UI panels being implemented (cross-team effort)
+5. **Feature completion** — 8 FAIL + 14 PARTIAL features to remediate
