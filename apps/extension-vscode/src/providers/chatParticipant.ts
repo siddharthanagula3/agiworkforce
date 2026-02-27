@@ -237,6 +237,13 @@ export function createChatHandler(secrets: vscode.SecretStorage): vscode.ChatReq
     // Show typing indicator
     stream.progress('AGI Workforce is thinking…');
 
+    // Handle /model command — open model quick-pick and return early
+    if (request.command === 'model') {
+      await vscode.commands.executeCommand('agi-workforce.selectModel');
+      stream.markdown('Model selector opened. Your next message will use the selected model.');
+      return { metadata: { command: 'model', usedFallback: false } };
+    }
+
     const editorCtx = gatherEditorContext();
     const systemPrompt = buildSystemPrompt(editorCtx, request.command);
     const userMessage = buildUserMessage(request, editorCtx);

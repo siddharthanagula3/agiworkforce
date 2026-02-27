@@ -71,6 +71,23 @@ export class AgiWorkforceApiError extends Error {
   }
 }
 
+// ─── Retry helper ─────────────────────────────────────────────────────────────
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (
+      retries <= 0 ||
+      (err instanceof AgiWorkforceApiError && err.statusCode !== undefined && err.statusCode < 500)
+    ) {
+      throw err;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    return withRetry(fn, retries - 1, delayMs * 2);
+  }
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
@@ -309,17 +326,22 @@ export async function streamChatCompletion(
   };
 
   if (streaming) {
-    await httpsPostStream(
-      `${endpoint}/chat/completions`,
-      authHeaders,
-      bodyStr,
-      (chunk) => {
-        const content = chunk.choices[0]?.delta?.content;
-        if (content !== undefined && content !== '') {
-          callbacks.onToken(content);
-        }
-      },
-      cancellationToken,
+    if (cancellationToken.isCancellationRequested) {
+      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+    }
+    await withRetry(() =>
+      httpsPostStream(
+        `${endpoint}/chat/completions`,
+        authHeaders,
+        bodyStr,
+        (chunk) => {
+          const content = chunk.choices[0]?.delta?.content;
+          if (content !== undefined && content !== '') {
+            callbacks.onToken(content);
+          }
+        },
+        cancellationToken,
+      ),
     );
     callbacks.onDone();
   } else {
@@ -340,7 +362,7 @@ export async function streamChatCompletion(
     }
 
     const parsed = JSON.parse(response.body) as ChatCompletionResponse;
-    const content = parsed.choices[0]?.message?.content ?? '';
+    const content = parsed.choices?.[0]?.message?.content ?? '';
     callbacks.onToken(content);
     callbacks.onDone();
   }
