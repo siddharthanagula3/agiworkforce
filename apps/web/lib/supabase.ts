@@ -1,16 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
-const supabaseUrl = process.env['VITE_SUPABASE_URL'] as string | undefined;
-const supabaseAnonKey = process.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
+const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'] as string | undefined;
+const supabaseAnonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] as string | undefined;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMessage =
-    'Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file. ' +
+    'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file. ' +
     'You can find these values in your Supabase project dashboard under Settings → API. ' +
     'Example .env.local:\n' +
-    'VITE_SUPABASE_URL=https://xxxxx.supabase.co\n' +
-    'VITE_SUPABASE_ANON_KEY=your-anon-key-here';
+    'NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co\n' +
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here';
 
   console.error(errorMessage);
   // Supabase features will be unavailable — do NOT throw here because the
@@ -19,17 +19,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // import this module, preventing any LLM streaming from ever starting.
 }
 
-// Simple localStorage-based storage adapter for Supabase auth
-// Using localStorage instead of system keyring to avoid OS permission prompts
-// This is secure enough for Tauri apps since localStorage is sandboxed to the app
+// localStorage-based storage adapter for Supabase auth (client-side only).
+// In server context (API routes, SSR), localStorage is unavailable — return no-ops.
 const secureStorage = {
   getItem: async (key: string): Promise<string | null> => {
+    if (typeof window === 'undefined') return null;
     return localStorage.getItem(key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem(key, value);
   },
   removeItem: async (key: string): Promise<void> => {
+    if (typeof window === 'undefined') return;
     localStorage.removeItem(key);
   },
 };

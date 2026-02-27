@@ -68,12 +68,13 @@ export function calculateCacheSavings(
   const cacheWriteTokens = response.cacheCreationInputTokens || 0;
 
   // Cached tokens cost 10% of normal price
-  const normalCostCents = (cachedTokens * inputCostPerMtok) / 100;
-  const cachedCostCents = (cachedTokens * inputCostPerMtok * 0.1) / 100;
+  // inputCostPerMtok is in dollars per 1M tokens, so convert: tokens * $/Mtok / 1M * 100 cents/$
+  const normalCostCents = (cachedTokens * inputCostPerMtok) / 10_000;
+  const cachedCostCents = (cachedTokens * inputCostPerMtok * 0.1) / 10_000;
   const savedCostCents = normalCostCents - cachedCostCents;
 
   // Cache write costs 25% extra
-  const cacheWriteCostCents = (cacheWriteTokens * inputCostPerMtok * 0.25) / 100;
+  const cacheWriteCostCents = (cacheWriteTokens * inputCostPerMtok * 0.25) / 10_000;
 
   return {
     tokensSavedByCache: cachedTokens,

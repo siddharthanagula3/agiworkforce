@@ -8,7 +8,7 @@ import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CreditService, type CreditBalance } from '@/lib/services/credit-service';
+import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
@@ -90,35 +90,85 @@ const ChatCompletionRequestSchema = z.object({
   use_prompt_cache: z.boolean().optional(),
 });
 
-// Model tier requirements
+// Model tier requirements — synced with app/api/llm/completion/route.ts
 const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
+  // Max tier only — flagship models
   'claude-opus-4.5': ['max', 'enterprise'],
   'claude-opus-4.5-20251101': ['max', 'enterprise'],
+  'gpt-5-pro': ['max', 'enterprise'],
+  'gemini-3-ultra': ['max', 'enterprise'],
   o3: ['max', 'enterprise'],
-  'o3-mini': ['max', 'enterprise'],
-  'gpt-5': ['max', 'enterprise'],
-  'gpt-5-turbo': ['max', 'enterprise'],
-  'gemini-2.5-pro': ['max', 'enterprise'],
+  'o3-pro': ['max', 'enterprise'],
+  'grok-4': ['max', 'enterprise'],
+  'deepseek-r1': ['max', 'enterprise'],
+  // Pro tier and above
+  'gpt-5.2': ['pro', 'max', 'enterprise'],
+  'gpt-5.2-pro': ['pro', 'max', 'enterprise'],
+  'claude-sonnet-4.5': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4-20250514': ['pro', 'max', 'enterprise'],
-  'gpt-4.5': ['pro', 'max', 'enterprise'],
-  'gpt-4.5-turbo': ['pro', 'max', 'enterprise'],
+  'gemini-3-pro-preview': ['pro', 'max', 'enterprise'],
+  'kimi-k2.5-turbo': ['pro', 'max', 'enterprise'],
+  'qwen-max': ['pro', 'max', 'enterprise'],
+  'qwen-coder-plus': ['pro', 'max', 'enterprise'],
+  'sonar-pro': ['pro', 'max', 'enterprise'],
+  'sonar-reasoning': ['pro', 'max', 'enterprise'],
+  'sonar-deep-research': ['pro', 'max', 'enterprise'],
 };
+
+// Economy models available to all paid tiers (hobby+)
+// Synced with app/api/llm/completion/route.ts ECONOMY_MODELS
+const ECONOMY_MODELS = new Set([
+  'gemini-3-flash-preview',
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'deepseek-chat',
+  'kimi-k2.5-thinking',
+  'grok-4-fast-reasoning',
+  'grok-4-fast-non-reasoning',
+  'grok-4-mini',
+  'grok-code-fast-1',
+  'claude-haiku-4.5',
+  'claude-haiku-4-5-20251001',
+  'claude-3-haiku',
+  'qwen-coder-flash',
+  'qwen-turbo',
+  'qwen-flash',
+  'qwen-plus',
+  'gpt-5-nano',
+  'gpt-5-mini',
+  'gpt-4o-mini',
+  'sonar',
+  'glm-4.7',
+  'glm-4.6v',
+  'glm-4.6v-flash',
+]);
 
 // Auto model tier mappings - translate tier-based model selections to actual models
 const AUTO_MODEL_MAPPINGS: Record<string, string> = {
-  'auto-economy': 'gpt-4o-mini', // Fast, cost-effective
-  'auto-balanced': 'gpt-4o', // Good balance of speed and quality
-  'auto-premium': 'claude-sonnet-4-20250514', // Best quality
+  'auto-economy': 'gpt-5-nano', // Fast, cost-effective
+  'auto-balanced': 'gpt-5.2', // Good balance of speed and quality
+  'auto-premium': 'claude-sonnet-4.5', // Best quality
 };
 
 /**
- * Resolve auto model names to actual LLM model names
- * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings
+ * Resolve auto model names to actual LLM model names.
+ * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings.
+ * Tier-aware: hobby users get downgraded to economy-tier models for balanced/premium.
  */
-function resolveAutoModel(model: string): string {
+function resolveAutoModel(model: string, subscriptionTier?: string): string {
   const modelLower = model.toLowerCase();
-  return AUTO_MODEL_MAPPINGS[modelLower] || model;
+  const mapped = AUTO_MODEL_MAPPINGS[modelLower];
+  if (!mapped) return model;
+
+  // Hobby tier can only use economy models — downgrade balanced/premium
+  const tierLower = subscriptionTier?.toLowerCase();
+  if (tierLower === 'hobby' && (modelLower === 'auto-balanced' || modelLower === 'auto-premium')) {
+    return 'gpt-5-nano'; // Best economy model
+  }
+
+  return mapped;
 }
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
@@ -128,9 +178,23 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   if (tierLower === 'free') return false;
 
   const requiredTiers = MODEL_TIER_REQUIREMENTS[modelLower];
-  if (!requiredTiers) return true;
+  if (requiredTiers) {
+    return requiredTiers.includes(tierLower as 'pro' | 'max' | 'enterprise');
+  }
 
-  return requiredTiers.includes(tierLower as 'pro' | 'max' | 'enterprise');
+  // Economy models available to all paid tiers (hobby+)
+  if (ECONOMY_MODELS.has(modelLower)) {
+    return true;
+  }
+
+  // Auto models are always allowed (they resolve to actual models later)
+  if (modelLower.startsWith('auto-')) {
+    return true;
+  }
+
+  // Unknown model — deny by default for safety
+  logger.warn({ model: modelLower, tier: tierLower }, 'Unknown model requested, denying access');
+  return false;
 }
 
 function findCheaperFallbackModel(
@@ -170,15 +234,12 @@ function findCheaperFallbackModel(
   return null;
 }
 
-function handleCreditError(
-  deductResult: {
-    code?: string;
-    daily_remaining?: number;
-    daily_limit?: number;
-    daily_used?: number;
-  },
-  _balance?: CreditBalance | null,
-): NextResponse {
+function handleCreditError(deductResult: {
+  code?: string;
+  daily_remaining?: number;
+  daily_limit?: number;
+  daily_used?: number;
+}): NextResponse {
   if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
     return NextResponse.json(
       {
@@ -369,8 +430,9 @@ async function handleChatCompletions(request: NextRequest) {
   const chatRequest = validationResult.data;
 
   // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models
+  // Tier-aware: hobby users get economy models even for balanced/premium
   const requestedModel = chatRequest.model;
-  chatRequest.model = resolveAutoModel(chatRequest.model);
+  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier);
 
   // Log if auto model was resolved
   if (requestedModel !== chatRequest.model) {
@@ -528,13 +590,8 @@ async function handleChatCompletions(request: NextRequest) {
 
   if (!hasCredits) {
     const balance = await CreditService.getBalance(user.id);
-    const deductResult = await CreditService.deductCredits(
-      user.id,
-      estimatedCostCents,
-      'Credit check',
-    );
 
-    // Try fallback model
+    // Try fallback model before returning an error
     const fallbackModel = findCheaperFallbackModel(
       chatRequest.model,
       provider,
@@ -560,10 +617,19 @@ async function handleChatCompletions(request: NextRequest) {
         provider = fallbackProvider;
         estimatedCostCents = fallbackCostCents;
       } else {
-        return handleCreditError(deductResult, balance);
+        // Determine if daily or monthly limit reached
+        const creditError =
+          balance?.daily_remaining_cents != null && balance.daily_remaining_cents <= 0
+            ? { code: 'DAILY_CREDIT_LIMIT_REACHED' as const }
+            : {};
+        return handleCreditError(creditError);
       }
     } else {
-      return handleCreditError(deductResult, balance);
+      const creditError =
+        balance?.daily_remaining_cents != null && balance.daily_remaining_cents <= 0
+          ? { code: 'DAILY_CREDIT_LIMIT_REACHED' as const }
+          : {};
+      return handleCreditError(creditError);
     }
   }
 
@@ -585,8 +651,7 @@ async function handleChatCompletions(request: NextRequest) {
   );
 
   if (!reserveResult.success) {
-    const balance = await CreditService.getBalance(user.id);
-    return handleCreditError(reserveResult, balance);
+    return handleCreditError(reserveResult);
   }
 
   // Convert messages to internal format

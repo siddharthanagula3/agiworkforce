@@ -1523,13 +1523,14 @@ export const useChatStore = create<ChatState>()(
           focusMode: state.focusMode,
           showMessageTimestamps: state.showMessageTimestamps,
         }),
+
         migrate: (persistedState: unknown, _version: number) => {
           // Handle future migrations here
           return persistedState as ChatState;
         },
       },
     ),
-    { name: 'ChatStore', enabled: process.env.NODE_ENV === "development" },
+    { name: 'ChatStore', enabled: process.env.NODE_ENV === 'development' },
   ),
 );
 
