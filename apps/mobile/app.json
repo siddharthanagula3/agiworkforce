@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "AGI Workforce",
+    "slug": "agiworkforce-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "agiworkforce",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f0f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.agiworkforce.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used for scanning QR codes and sending images to AI",
+        "NSMicrophoneUsageDescription": "Used for voice input and voice conversations",
+        "NSPhotoLibraryUsageDescription": "Used for selecting images to send to AI"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f0f"
+      },
+      "package": "com.agiworkforce.mobile",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#21808d"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow AGI Workforce to access your camera for QR scanning and image capture."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow AGI Workforce to access your photos to send images to AI."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
