@@ -48,7 +48,7 @@ import { sanitizeHtml } from '@/utils/security';
 import type { Artifact } from '@/types/chat';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { usePrompt } from '../ui/PromptDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import {
