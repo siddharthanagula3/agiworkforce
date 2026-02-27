@@ -27,3 +27,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     flowType: 'pkce',
   },
 });
+
+export async function getCurrentSession() {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
+
+export async function getCurrentUser() {
+  const { data } = await supabase.auth.getUser();
+  return data.user;
+}
