@@ -11,6 +11,6 @@ import 'react';
 
 declare module 'react' {
   // Extend ReactNode to include bigint (matches @types/react@19's definition)
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface DO_NOT_USE_OR_YOU_WILL_BE_FIRED_CALLBACK_REF_RETURN_VALUES {}
 }

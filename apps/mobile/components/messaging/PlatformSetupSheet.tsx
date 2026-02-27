@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, ActivityIndicator, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -29,11 +29,7 @@ const platformIcons: Record<
   slack: { Icon: Hash, color: '#7C3AED' },
 };
 
-export function PlatformSetupSheet({
-  sheetRef,
-  platform,
-  onConnect,
-}: PlatformSetupSheetProps) {
+export function PlatformSetupSheet({ sheetRef, platform, onConnect }: PlatformSetupSheetProps) {
   const snapPoints = useMemo(() => ['60%', '85%'], []);
 
   const [config, setConfig] = useState<Record<string, string>>({});
@@ -67,8 +63,7 @@ export function PlatformSetupSheet({
         setError(result.error ?? 'Connection test failed');
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to test connection';
+      const message = err instanceof Error ? err.message : 'Failed to test connection';
       setTestResult({ success: false, error: message });
       setError(message);
     } finally {
@@ -87,8 +82,7 @@ export function PlatformSetupSheet({
       resetState();
       sheetRef.current?.close();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to connect';
+      const message = err instanceof Error ? err.message : 'Failed to connect';
       setError(message);
     } finally {
       setConnecting(false);
@@ -232,9 +226,7 @@ export function PlatformSetupSheet({
         {/* Test result success */}
         {testResult?.success && (
           <View className="bg-emerald-500/10 rounded-lg p-3 mb-4">
-            <Text className="text-sm text-emerald-400">
-              Connection test successful
-            </Text>
+            <Text className="text-sm text-emerald-400">Connection test successful</Text>
           </View>
         )}
 
@@ -261,12 +253,7 @@ export function PlatformSetupSheet({
         />
 
         {/* Cancel */}
-        <Button
-          title="Cancel"
-          variant="ghost"
-          size="md"
-          onPress={handleCancel}
-        />
+        <Button title="Cancel" variant="ghost" size="md" onPress={handleCancel} />
       </BottomSheetScrollView>
     </BottomSheet>
   );

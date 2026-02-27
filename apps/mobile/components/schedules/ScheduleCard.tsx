@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
-import type { Schedule, RecurrenceType } from '@/stores/scheduleStore';
+import type { Schedule } from '@/stores/scheduleStore';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -69,9 +69,7 @@ function formatRecurrence(schedule: Schedule): string {
       return `Monthly on the ${day}${suffix} at ${time}`;
     }
     case 'custom':
-      return schedule.cronExpression
-        ? `Cron: ${schedule.cronExpression}`
-        : `Custom at ${time}`;
+      return schedule.cronExpression ? `Cron: ${schedule.cronExpression}` : `Custom at ${time}`;
     default:
       return time;
   }
@@ -112,13 +110,7 @@ function getStatusBadge(status: Schedule['lastRunStatus']): {
 // Component
 // ---------------------------------------------------------------------------
 
-export function ScheduleCard({
-  schedule,
-  index,
-  onPress,
-  onToggle,
-  onDelete,
-}: ScheduleCardProps) {
+export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: ScheduleCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
 
@@ -131,41 +123,29 @@ export function ScheduleCard({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300).delay(index * 60).springify()}
+      entering={FadeInDown.duration(300)
+        .delay(index * 60)
+        .springify()}
     >
-      <Pressable
-        onPress={() => onPress(schedule.id)}
-        className="mb-3 active:opacity-80"
-      >
+      <Pressable onPress={() => onPress(schedule.id)} className="mb-3 active:opacity-80">
         <Card variant="elevated">
           {/* Row 1: Name + Toggle */}
           <View className="flex-row items-center justify-between mb-2">
-            <Text
-              className="text-[15px] font-semibold text-white flex-1 mr-3"
-              numberOfLines={1}
-            >
+            <Text className="text-[15px] font-semibold text-white flex-1 mr-3" numberOfLines={1}>
               {schedule.name}
             </Text>
-            <Switch
-              value={schedule.isActive}
-              onValueChange={() => onToggle(schedule.id)}
-            />
+            <Switch value={schedule.isActive} onValueChange={() => onToggle(schedule.id)} />
           </View>
 
           {/* Row 2: Prompt (truncated) */}
-          <Text
-            className="text-sm text-white/50 mb-2.5 leading-[18px]"
-            numberOfLines={2}
-          >
+          <Text className="text-sm text-white/50 mb-2.5 leading-[18px]" numberOfLines={2}>
             {schedule.prompt}
           </Text>
 
           {/* Row 3: Recurrence */}
           <View className="flex-row items-center gap-1.5 mb-2.5">
             <Clock size={13} color={colors.textMuted} />
-            <Text className="text-xs text-white/60">
-              {formatRecurrence(schedule)}
-            </Text>
+            <Text className="text-xs text-white/60">{formatRecurrence(schedule)}</Text>
           </View>
 
           {/* Row 4: Model + Last run status */}

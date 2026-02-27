@@ -2,7 +2,6 @@ import { useEffect, useMemo, useCallback } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { MessageSquare } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Separator } from '@/components/ui/separator';
 import { ConversationItem } from './ConversationItem';
 import { useChatStore } from '@/stores/chatStore';
 import { colors } from '@/lib/theme';
@@ -18,7 +17,6 @@ interface GroupedConversations {
  * Groups conversations into Today / Yesterday / This Week / Older buckets.
  */
 function groupConversations(conversations: ConversationSummary[]): GroupedConversations[] {
-  const now = Date.now();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
@@ -118,7 +116,13 @@ export function ConversationList() {
       {grouped.map((group, groupIndex) => (
         <View key={group.label}>
           {/* Group header */}
-          <View style={{ paddingHorizontal: 4, paddingTop: groupIndex === 0 ? 8 : 16, paddingBottom: 6 }}>
+          <View
+            style={{
+              paddingHorizontal: 4,
+              paddingTop: groupIndex === 0 ? 8 : 16,
+              paddingBottom: 6,
+            }}
+          >
             <Text
               style={{
                 fontSize: 11,
