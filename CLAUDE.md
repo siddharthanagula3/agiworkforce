@@ -1,226 +1,174 @@
-# AGI Workforce — Project Memory
+# CLAUDE.md
 
-> This file is loaded at the start of every Claude Code session.
-> Keep it under ~500 lines. Move reference content to skills or docs/.
-> Last updated: 2026-02-26
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What This Project Is
 
-AGI Workforce is a **Tauri desktop application** (Rust backend + TypeScript/React frontend) that serves as an **open, model-agnostic AI desktop platform** — a Claude Desktop alternative without model restrictions. Users can connect any LLM (cloud or local), use MCP tools, manage agents, and run autonomous workflows from a single desktop app.
+AGI Workforce is a Tauri v2 desktop application (Rust backend + React/TypeScript frontend) — an open, model-agnostic AI desktop platform. Users can connect any LLM (cloud or local), use MCP tools, manage agents, and run autonomous workflows. A companion Next.js web app handles marketing, auth, and billing.
 
-**Positioning**: Where Claude Desktop locks you to Anthropic and ChatGPT Desktop locks you to OpenAI, AGI Workforce lets users connect ANY model and use the same tools, skills, memory, and agents across all of them.
+## Monorepo Structure
 
-## Tech Stack
-
-- **Desktop framework**: Tauri v2 (Rust + WebView)
-- **Frontend**: React/TypeScript (Next.js patterns)
-- **Backend**: Rust (Tauri commands, system integration)
-- **Database**: SQLite (via Tauri)
-- **Security**: ToolGuard (1,778 lines), Argon2id encryption, SecretManager
-- **Voice**: Whisper STT, Deepgram, Piper TTS, macOS native TTS
-- **Vision**: Screenshot capture, OCR, computer use
-- **Payments**: Stripe integration
-- **Auth**: Session-based, JWT
-- **CI/CD**: GitHub Actions
-
-## Project Structure
+pnpm workspaces monorepo with a Cargo workspace for Rust:
 
 ```
-~/Desktop/agiworkforce/
-├── src-tauri/              # Rust backend (Tauri commands, system APIs)
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── commands/       # Tauri invoke handlers
-│   │   ├── security/       # ToolGuard, encryption
-│   │   └── services/       # System services
-│   └── Cargo.toml
-├── src/                    # TypeScript frontend
-│   ├── components/         # React UI components
-│   ├── pages/              # App routes/pages
-│   ├── services/           # API services, LLM routing, agent runtime
-│   ├── hooks/              # React hooks
-│   ├── utils/              # Utilities
-│   └── types/              # TypeScript types
-├── .claude/
-│   ├── agents/             # 20+ custom sub-agents (see Agent Roster)
-│   ├── commands/           # Slash commands
-│   ├── skills/             # Skills (self-review, coderabbit-full)
-│   ├── rules/              # Scoped rule files
-│   └── settings.json       # Hooks, permissions, env vars
-├── docs/
-│   ├── SESSION_STATE.md    # Current session handoff state
-│   ├── ARCHITECTURE_SNAPSHOT.md
-│   ├── feature-audit-report.md
-│   ├── research/           # Market research per feature
-│   └── rust-fixes-needed.md
-├── CLAUDE.md               # THIS FILE — project constitution
-├── MEMORY.md               # Persistent AI memory (learnings, patterns)
-├── AGENTS.md               # Agent roster and zone ownership
-├── package.json
-└── CHANGELOG.md
+apps/
+  desktop/              # Tauri desktop app (primary product)
+    src/                # React/TS frontend (Vite + React 19 + Tailwind 4)
+    src-tauri/          # Rust backend (Tauri v2 commands, system APIs)
+  web/                  # Next.js 16 marketing/auth/billing site
+  extension/            # Chrome extension (Manifest V3, native messaging)
+packages/
+  types/                # Shared TypeScript type definitions
+  utils/                # Shared utility functions
+services/
+  api-gateway/          # Express API for mobile companion
+  signaling-server/     # WebSocket signaling for realtime
 ```
 
-## Zone-Based File Ownership
-
-When multiple agents work in parallel, each owns a zone to prevent merge conflicts:
-
-| Zone   | Owner                    | Files                                             |
-| ------ | ------------------------ | ------------------------------------------------- |
-| A      | frontend-engineer        | src/components/**, src/pages/**, src/styles/\*\*  |
-| B      | backend-engineer         | src/services/**, src/api/**, src/middleware/\*\*  |
-| C      | database-engineer        | src/db/**, migrations/**, src/models/\*\*         |
-| D      | integration-engineer     | src/integrations/**, src/mcp/**, src/hooks/\*\*   |
-| E      | devops-build-engineer    | Dockerfile, .github/**, scripts/**                |
-| F      | documentation-sync-agent | docs/\*\*, README.md, CHANGELOG.md                |
-| SYSTEM | rust-tauri-engineer      | src-tauri/\*\* (Rust code)                        |
-| SHARED | lead only                | package.json, tsconfig.json, CLAUDE.md, MEMORY.md |
-
-Rule: Each agent reads all zones but writes only to its assigned zone. If you need to edit outside your zone, declare it first.
-
-## Agent Roster
-
-See `AGENTS.md` for full details. Summary:
-
-**Opus-tier (complex reasoning)**:
-agent-runtime-engineer, computer-use-vision-engineer, llm-router-engineer, memory-embeddings-engineer, rust-tauri-engineer, security-auditor, integration-reviewer, team-lead-orchestrator, spec-handoff-writer, research-orchestrator-fix
-
-**Sonnet-tier (implementation)**:
-frontend-engineer, backend-engineer, database-engineer, billing-stripe-engineer, browser-extension-engineer, mcp-integration-engineer, speech-audio-engineer, code-cleanup-refactor, shared-types-guardian, test-writer, git-branch-manager
-
-**Haiku-tier (lightweight)**:
-devops-build-engineer, documentation-sync-agent, progress-state-tracker
-
-**Plugin agents**:
-plugin-dev (agent-creator, plugin-validator, skill-reviewer), feature-dev (code-architect, code-explorer, code-reviewer), pr-review-toolkit (code-reviewer, code-simplifier, comment-analyzer, pr-test-analyzer), hookify (conversation-analyzer), code-simplifier, agent-sdk-dev (verifier-py, verifier-ts)
-
-## Build & Run Commands
+## Build & Development Commands
 
 ```bash
-# Development
-pnpm dev                    # Start dev server
-pnpm tauri dev              # Start Tauri dev (frontend + Rust)
+# Install dependencies
+pnpm install
 
-# Build
-pnpm build                  # Build frontend
-pnpm tauri build            # Build desktop app
+# Desktop app development (starts Vite frontend + Rust backend)
+cd apps/desktop && pnpm dev          # alias: pnpm tauri dev
 
-# Checks
-pnpm typecheck              # TypeScript type checking
-pnpm lint                   # ESLint
-pnpm format                 # Prettier
-cargo check                 # Rust type checking
-cargo clippy                # Rust linting
+# Web app development
+cd apps/web && pnpm dev              # Next.js dev server
+
+# Extension development
+cd apps/extension && pnpm dev        # Vite watch build
+
+# Full monorepo build (excludes desktop — it uses tauri build)
+pnpm build
+
+# Desktop app build (produces platform installer)
+cd apps/desktop && pnpm build        # runs: vite build && tauri build
+
+# Type checking
+pnpm typecheck                       # runs: cd apps/desktop && tsc --noEmit
+pnpm typecheck:all                   # all workspaces
+
+# Linting
+pnpm lint                            # ESLint (excludes apps/extension)
+pnpm lint:extension                  # ESLint for extension only
+cargo clippy                         # Rust linting (run from repo root)
+cargo check                          # Rust type checking
+
+# Formatting
+pnpm format                          # Prettier
+pnpm format:check                    # Prettier check only
+
+# Tests (only run when explicitly asked)
+cd apps/desktop && pnpm test         # Vitest unit tests
+cd apps/desktop && pnpm test:e2e     # Playwright E2E
+cd apps/web && pnpm test             # Web app tests
+cd services/api-gateway && pnpm test # API tests
 ```
+
+## Commit Conventions
+
+Husky pre-commit runs `lint-staged` (ESLint + Prettier). Commit-msg runs `commitlint` with `@commitlint/config-conventional`.
+
+- Format: `type(scope): lowercase subject` — e.g., `fix(rust): websocket timing fix`
+- Header max 100 characters
+- Subject MUST be lowercase (not Sentence-case or PascalCase)
+- Valid types: feat, fix, chore, docs, refactor, test, perf, ci, build, style
+
+## Architecture
+
+### Rust Backend (`apps/desktop/src-tauri/src/`)
+
+The Rust backend is organized into six top-level modules:
+
+- **`core/`** — AI engine and intelligence layer
+  - `llm/` — LLM routing (`llm_router.rs`, 2274 lines), SSE streaming (`sse_parser.rs`), provider adapters, cost calculation, token counting
+  - `agent/` — Agent runtime: planner, executor, autonomous mode, background agents, vision, RAG
+  - `swarm/` — Parallel agent orchestration: task decomposition, agent spawning, result aggregation
+  - `mcp/` — Model Context Protocol: server connections, tool registration, extensions
+  - `agi/` — Higher-level AGI orchestration, executors, templates
+  - `embeddings/`, `research/`, `scheduler/`, `skills/`, `intent/`, `artifacts/`
+
+- **`sys/`** — System services and platform integration
+  - `commands/` — All `#[tauri::command]` handlers (100+ files), invoked from frontend via `invoke()`
+  - `security/` — ToolGuard (`tool_guard.rs`, 1778 lines), SecretManager, encryption (Argon2id + AES-GCM), auth, RBAC, rate limiting
+  - `billing/`, `diagnostics/`, `logging/`, `telemetry/`, `permissions/`, `account/`
+
+- **`automation/`** — Desktop automation: screen capture, input simulation, browser control, computer use, OCR
+- **`features/`** — Domain features: terminal, speech/voice, calendar, teams, workflows, documents, canvas
+- **`integrations/`** — External service integrations: cloud sync, native messaging, realtime, APIs
+- **`data/`** — Data layer: SQLite database, settings, cache, analytics, metrics
+
+Entry point: `main.rs` calls `lib.rs::run()` which sets up Tauri with all plugins and managed state.
+
+### TypeScript Frontend (`apps/desktop/src/`)
+
+React 19 SPA with Vite, using react-router-dom for routing:
+
+- **`components/`** — 60+ component directories (Agent, Chat, Settings, Voice, Vision, Terminal, etc.)
+- **`stores/`** — 40+ Zustand stores with Immer and Persist middleware. Key stores:
+  - `settingsStore.ts` — App configuration (persist v10 migration)
+  - `unifiedChatStore.ts` — Chat state management
+  - `mcpStore.ts` / `mcpbStore.ts` — MCP connections
+  - `modelStore.ts` — Model selection and configuration
+- **`services/`** — API services, analytics, Stripe, Supabase auth, caching
+- **`hooks/`** — React hooks
+- **`constants/`** — LLM model definitions (`llm.ts` is the TS-side model catalog)
+- **`types/`** — TypeScript interfaces
+
+### Frontend-Backend Communication
+
+Frontend calls Rust via `@tauri-apps/api invoke()`. Each command is a `#[tauri::command]` function registered in `lib.rs`. State is passed via Tauri's managed state system (`app.manage(StateWrapper)` → `State<'_, T>` in handlers).
+
+### Web App (`apps/web/`)
+
+Next.js 16 with App Router. Routes: `/login`, `/signup`, `/dashboard`, `/pricing`, `/chat`, `/docs`, `/download`, etc. Uses Supabase for auth (SSR via `@supabase/ssr`), Stripe for billing, Upstash Redis for rate limiting.
+
+### Shared Packages
+
+- `packages/types/` — TypeScript types shared between desktop, web, and services
+- `packages/utils/` — Utility functions shared across apps
+
+## Key Technical Details
+
+- **LLM Routing**: `core/llm/llm_router.rs` handles all model routing. `provider_adapter.rs` maps provider-specific API formats. Model catalog lives in both `src/constants/llm.ts` (frontend) and `provider_adapter.rs` (Rust) — these must stay in sync.
+- **Streaming**: SSE parsing via `sse_parser.rs`. Uses dual HTTP clients (one with streaming timeout disabled).
+- **Security**: ToolGuard validates all tool execution. SecretManager encrypts API keys via Argon2id + AES-GCM, stored in SQLite/keychain. Never plaintext.
+- **MCP**: Supports stdio, SSE, and streamable HTTP transports. Config in `.mcp.json`.
+- **State Management**: Zustand v5 + Immer + Persist. Settings persist to localStorage with migration support.
+- **UI Components**: Radix UI primitives + Tailwind CSS + Lucide icons + Sonner toasts.
+- **Rust features**: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `appstore`, `devtools`.
+- **Build dependencies**: `rusqlite` with `bundled-sqlcipher` requires `libclang` (`brew install llvm` on macOS).
 
 ## Development Rules
 
-### DO
-
+- Do NOT run tests unless explicitly asked
+- Do NOT modify Rust/Tauri files directly — write changes to `docs/rust-fixes-needed.md` for manual review
 - Research the market (web search) before implementing any user-facing feature
-- Use sub-agents for file exploration to keep main context clean
-- Commit after each meaningful change with conventional commits: `feat(scope):`, `fix(scope):`, `chore(scope):`
-- Store API keys via SecretManager — NEVER in plaintext
-- Self-review at module completion using the `self-review` skill
-- Update `docs/SESSION_STATE.md` after every major task
-- Save learnings to `MEMORY.md` when you discover something important
-- Read instruction files: CLAUDE.md, MEMORY.md, AGENTS.md on session start
-- Check for other instruction files: GEMINI.md, .cursorrules, .windsurfrules, .github/copilot-instructions.md
+- Conventional commits enforced: `type(scope): lowercase subject`, max 100 chars
+- All secrets through SecretManager — never in plaintext, never in committed `.env`
+- TypeScript: strict mode, prefer interfaces, named exports, absolute imports from `src/`
+- React: functional components only, Tailwind for styling
+- Rust: follow Tauri v2 patterns, `#[tauri::command]` for invoke handlers, snake_case
 
-### DON'T
+## Persistent Memory
 
-- Do NOT run tests unless explicitly told "run tests" or "test now"
-- Do NOT stop coding to verify — self-review only, no mid-flow breaks
-- Do NOT refactor working code unless asked
-- Do NOT modify Rust/Tauri files directly — write changes to `docs/rust-fixes-needed.md`
-- Do NOT put transient state in CLAUDE.md — use SESSION_STATE.md
-- Do NOT hardcode model names without searching for current versions first
+- `MEMORY.md` — AI learnings, patterns, preferences (updated during work)
+- `AGENTS.md` — Agent roster, zone ownership, model assignments
+- `docs/SESSION_STATE.md` — Session handoff state (updated before compaction)
 
-## Coding Standards
+## Zone-Based File Ownership (Multi-Agent)
 
-- TypeScript: strict mode, prefer interfaces over types, named exports
-- React: functional components only, hooks for state, Tailwind for styling
-- Rust: follow Tauri v2 patterns, use `#[tauri::command]` for invoke handlers
-- Naming: camelCase for TS/JS, snake_case for Rust, kebab-case for files/directories
-- Error handling: try/catch on all async operations, user-friendly error messages
-- Imports: absolute paths from src/, no circular dependencies
+When parallel agents work, each writes only to its assigned zone:
 
-## Instruction File Discovery
-
-AGI Workforce reads instruction files from ALL AI tools. On project open, scan for and load:
-
-1. `CLAUDE.md` (this file)
-2. `MEMORY.md` (persistent memory)
-3. `AGENTS.md` (agent definitions)
-4. `.claude/rules/*.md` (scoped rules)
-5. `GEMINI.md` (if exists)
-6. `.cursorrules` (if exists)
-7. `.cursor/rules/*.mdc` (if exists)
-8. `.windsurfrules` (if exists)
-9. `.github/copilot-instructions.md` (if exists)
-
-Merge all into unified context. This is a key differentiator — projects from any AI tool "just work."
-
-## Custom Models Architecture
-
-Cloud models (Claude, GPT, Gemini) are auto-routed internally. The Custom Models feature lets users add:
-
-- Local models: Ollama, LM Studio, vLLM, llama.cpp
-- Third-party endpoints: OpenRouter, Groq, Together, Fireworks, Mistral, DeepSeek
-- Self-hosted: company endpoints, fine-tuned models
-- Any OpenAI-compatible API
-
-Custom models are first-class citizens — they appear in every model dropdown alongside cloud models. No restrictions.
-
-## MCP & Extensions
-
-Extensions use Model Context Protocol (MCP) to connect external tools:
-
-- Currently connected: Gmail, Google Calendar, Vercel, n8n
-- Code exists for: Google Drive, Notion, Trello, Asana
-- Supports: stdio, SSE, streamable HTTP transports
-- Config stored in: `.mcp.json` and settings store
-- Tool permissions: ask / auto-approve-readonly / auto-approve-all
-
-## Security Architecture
-
-- ToolGuard: 1,778 lines of tool execution sandboxing
-- SecretManager: API keys encrypted via Argon2id, stored in SQLite/keychain
-- Input validation: deny-list for dangerous operations
-- Permission system: per-tool, per-agent approval controls
-
-## Memory System
-
-Three layers of persistent memory:
-
-1. **CLAUDE.md** (this file) — permanent rules, loaded every session
-2. **MEMORY.md** (project root) — AI learnings, patterns, updated during work
-3. **docs/SESSION_STATE.md** — session handoff state, updated before compaction
-
-## Compact Instructions
-
-When compacting, ALWAYS preserve:
-
-- Complete list of files modified in this session
-- All architectural decisions and their rationale
-- Current task progress and exact next steps
-- Error patterns discovered and their solutions
-- Zone ownership assignments for active agents
-- Contents of docs/SESSION_STATE.md
-- User preferences and workflow conventions
-
-When compacting, discard:
-
-- Raw file contents that have been committed
-- Verbose build/test output (keep only pass/fail)
-- Exploration paths that were abandoned
-- Duplicate information already in CLAUDE.md or MEMORY.md
-
-## Session Start Checklist
-
-On every new session, silently:
-
-1. Read `docs/SESSION_STATE.md` (if exists)
-2. Read `MEMORY.md`
-3. Run `git status` and `git log --oneline -10`
-4. If SESSION_STATE.md has "Next Steps", start on step 1
-5. If no state file, ask what to work on
+| Zone   | Files                                           |
+| ------ | ----------------------------------------------- |
+| A      | `src/components/**`, `src/pages/**`, `src/styles/**` |
+| B      | `src/services/**`, `src/api/**`                 |
+| C      | `src/db/**`, `migrations/**`, `src/models/**`   |
+| D      | `src/integrations/**`, `src/mcp/**`             |
+| E      | `Dockerfile`, `.github/**`, `scripts/**`        |
+| F      | `docs/**`, `README.md`, `CHANGELOG.md`          |
+| SYSTEM | `apps/desktop/src-tauri/**`                     |
+| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`    |
