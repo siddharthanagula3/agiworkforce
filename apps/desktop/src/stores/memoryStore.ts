@@ -95,7 +95,7 @@ function pruneMemories(memories: MemoryEntry[]): MemoryEntry[] {
   );
 
   // First pass: enforce max entries limit (keep newest)
-  let pruned =
+  const pruned =
     sorted.length > MEMORY_LIMITS.maxEntries ? sorted.slice(-MEMORY_LIMITS.maxEntries) : sorted;
 
   // Second pass: enforce total size limit (remove oldest until under limit)
