@@ -15,6 +15,7 @@ import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { Region, CaptureResult, WindowInfo } from '../../types/capture';
 import { toast } from 'sonner';
 import { isTauri } from '../../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 interface ScreenCaptureButtonProps {
   conversationId?: number;
@@ -56,7 +57,7 @@ export function ScreenCaptureButton({
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to capture screen';
+      const message = getSimpleErrorMessage(error);
       toast.error(message);
       console.error('Capture error:', error);
     }
@@ -112,7 +113,7 @@ export function ScreenCaptureButton({
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to capture region';
+      const message = getSimpleErrorMessage(error);
       toast.error(message);
       console.error('Capture error:', error);
     }
@@ -127,7 +128,7 @@ export function ScreenCaptureButton({
       }
       onCaptureComplete?.(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to capture window';
+      const message = getSimpleErrorMessage(error);
       toast.error(message);
       console.error('Capture error:', error);
     }

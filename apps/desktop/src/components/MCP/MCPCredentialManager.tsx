@@ -20,6 +20,7 @@ import {
 import type { McpServerInfo } from '../../types/mcp';
 import { invoke, openUrl } from '../../lib/tauri-mock';
 import { useMcpStore } from '../../stores/mcpStore';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 interface MCPCredentialManagerProps {
   servers: McpServerInfo[];
@@ -164,7 +165,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         loading: { ...prev.loading, [provider]: false },
         error: {
           ...prev.error,
-          [provider]: error instanceof Error ? error.message : 'Failed to start OAuth',
+          [provider]: getSimpleErrorMessage(error),
         },
       }));
     }
@@ -195,7 +196,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         loading: { ...prev.loading, [provider]: false },
         error: {
           ...prev.error,
-          [provider]: error instanceof Error ? error.message : 'Failed to disconnect',
+          [provider]: getSimpleErrorMessage(error),
         },
       }));
     }
@@ -237,7 +238,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
           loading: { ...prev.loading, [provider]: false },
           error: {
             ...prev.error,
-            [provider]: error instanceof Error ? error.message : 'Failed to complete OAuth',
+            [provider]: getSimpleErrorMessage(error),
           },
         }));
       }

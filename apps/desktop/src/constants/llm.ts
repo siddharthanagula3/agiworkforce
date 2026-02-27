@@ -851,7 +851,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'claude-sonnet-4.5': {
     id: 'claude-sonnet-4.5',
-    apiModelId: 'claude-sonnet-4-5-20250929',
+    apiModelId: 'claude-sonnet-4-5',
     name: 'Claude 4.5 Sonnet',
     provider: 'anthropic',
     modelType: 'code',
@@ -887,7 +887,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   },
   'claude-haiku-4.5': {
     id: 'claude-haiku-4.5',
-    apiModelId: 'claude-haiku-4-5-20251001',
+    apiModelId: 'claude-haiku-4-5',
     name: 'Claude 4.5 Haiku',
     provider: 'anthropic',
     modelType: 'chat',

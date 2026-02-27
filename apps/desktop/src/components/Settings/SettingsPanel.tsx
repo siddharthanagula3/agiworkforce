@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
+import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
@@ -674,7 +675,7 @@ function DataPrivacyTab() {
       }
     } catch (error) {
       console.error('Failed to export data:', error);
-      setExportError(error instanceof Error ? error.message : 'Failed to export data');
+      setExportError(getSimpleErrorMessage(error));
       if (exportErrorTimerRef.current) {
         window.clearTimeout(exportErrorTimerRef.current);
       }

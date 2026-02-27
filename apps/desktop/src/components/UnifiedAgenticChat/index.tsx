@@ -16,6 +16,7 @@ import { EyeOff } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
+import { useExtensionEvents } from '../../hooks/useExtensionEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
@@ -32,6 +33,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import type { Artifact, ResearchTask } from '../../types/chat';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { toast } from '../../hooks/useToast';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
@@ -571,6 +573,7 @@ export const UnifiedAgenticChat: React.FC<{
   } = useRiskConfirmation();
 
   useAgenticEvents();
+  useExtensionEvents();
 
   // Initialize slash command parsing
   const { parseSlashCommand } = useSlashCommands();
@@ -1894,7 +1897,8 @@ export const UnifiedAgenticChat: React.FC<{
           const currentId = state.currentStreamingMessageId;
           if (!currentId) return;
 
-          const progressText = payload.message ?? `Processing ${payload.tool_name.replace(/_/g, ' ')}...`;
+          const progressText =
+            payload.message ?? `Processing ${payload.tool_name.replace(/_/g, ' ')}...`;
 
           state.updateMessage(currentId, {
             metadata: {
@@ -2090,7 +2094,7 @@ export const UnifiedAgenticChat: React.FC<{
         // Add the inline panel to the message
         useUnifiedChatStore.getState().addInlinePanel(userMessageId, panel);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage = getSimpleErrorMessage(error);
         updateMessage(userMessageId, {
           error: errorMessage,
         });
@@ -2330,9 +2334,7 @@ export const UnifiedAgenticChat: React.FC<{
 
         // Check if this conversation is in incognito mode
         const chatStoreState = useUnifiedChatStore.getState();
-        const activeConvo = chatStoreState.conversations.find(
-          (c) => c.id === activeConversationId,
-        );
+        const activeConvo = chatStoreState.conversations.find((c) => c.id === activeConversationId);
         const isIncognito = activeConvo?.incognito ?? false;
 
         // Get current project folder for scoped file operations
@@ -2427,7 +2429,7 @@ export const UnifiedAgenticChat: React.FC<{
       }
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getSimpleErrorMessage(error);
 
       // Always use friendly messages — formatErrorForChat handles all modes consistently
       const userMessage = formatErrorForChat(errorMessage, true);
@@ -2450,7 +2452,7 @@ export const UnifiedAgenticChat: React.FC<{
       // Fix 2 (supabase.ts graceful degradation + .env.production) resolves Bug 3.
       // If stream_watchdog_timeout recurs without Bug 2 present, check the Rust-side
       // 30-second stream connection timeout in llm_router.rs (stream_timeout variable).
-      const WATCHDOG_TIMEOUT_MS = 60 * 1000; // 60 seconds of inactivity (accommodates image generation 30-90s)
+      const WATCHDOG_TIMEOUT_MS = 120 * 1000; // 120 seconds — covers reasoning models (o3, DeepSeek-R1, extended thinking) that take 30-90s before first token
       markStreamActivity();
 
       const scheduleWatchdog = () => {
