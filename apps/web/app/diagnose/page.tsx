@@ -53,7 +53,7 @@ export default async function DiagnosePage() {
         .select('count', { count: 'exact', head: true });
       checks.serviceRole.canConnect = !error;
     }
-  } catch (_e) {
+  } catch {
     checks.serviceRole.canConnect = false;
   }
 
@@ -83,7 +83,7 @@ export default async function DiagnosePage() {
           }));
         }
       }
-    } catch (_e) {
+    } catch {
       checks.stripe.connected = false;
     }
   }
