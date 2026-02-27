@@ -16,5 +16,9 @@
     "expo-env.d.ts",
     "nativewind-env.d.ts",
     "react-jsx-fix.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "__tests__"
   ]
 }

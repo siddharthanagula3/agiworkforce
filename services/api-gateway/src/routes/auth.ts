@@ -132,7 +132,7 @@ router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
   });
 });
 
-router.get('/verify', async (req: Request, res: Response) => {
+router.get('/verify', authRateLimiter, async (req: Request, res: Response) => {
   // SECURITY: Properly parse the Authorization header instead of simple string replace.
   // Validates the 'Bearer <token>' format case-insensitively and handles edge cases.
   const parts = req.headers.authorization?.split(' ');
