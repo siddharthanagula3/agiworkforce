@@ -3,11 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
-import {
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCIceCandidate,
-} from 'react-native-webrtc';
+import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import { WS_URL } from '@/lib/constants';
 import { useAgentStore } from './agentStore';
 import type { Agent } from './agentStore';
@@ -115,7 +111,6 @@ function setupPeerConnection(): void {
     ],
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   peerConnection = new RTCPeerConnection(config) as any;
   const pc = peerConnection as any;
 
@@ -148,7 +143,7 @@ function setupPeerConnection(): void {
 /**
  * Configure data channel event handlers.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function setupDataChannel(channel: any): void {
   channel.onopen = () => {
     console.log('[companion] DataChannel open — low-latency control active');
@@ -172,10 +167,7 @@ function setupDataChannel(channel: any): void {
 /**
  * Handle WebRTC signaling messages (offer/answer/ice).
  */
-async function handleSignalingMessage(
-  kind: SignalKind,
-  payload: unknown,
-): Promise<void> {
+async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promise<void> {
   if (!peerConnection) return;
   const data = payload as Record<string, unknown>;
 
@@ -184,11 +176,10 @@ async function handleSignalingMessage(
       case 'offer': {
         const sdp = data['sdp'] as { type: string; sdp: string };
         if (sdp) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (peerConnection as any).setRemoteDescription(new RTCSessionDescription(sdp as any));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
           const answer = await (peerConnection as any).createAnswer();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
           await (peerConnection as any).setLocalDescription(answer);
           signalingClient?.sendSignal('answer', { sdp: answer });
         }
@@ -197,7 +188,6 @@ async function handleSignalingMessage(
       case 'answer': {
         const sdp = data['sdp'] as { type: string; sdp: string };
         if (sdp) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (peerConnection as any).setRemoteDescription(new RTCSessionDescription(sdp as any));
         }
         break;

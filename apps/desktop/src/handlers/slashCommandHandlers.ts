@@ -101,10 +101,7 @@ export async function executeTerminalCommand(
   const outputEvent = `terminal-output-${streamId}`;
   const exitEvent = `terminal-exit-${streamId}`;
 
-  let outputUnlisten: (() => void) | undefined;
-  let exitUnlisten: (() => void) | undefined;
-
-  outputUnlisten = await listen<{ stream?: string; data?: string }>(outputEvent, (event) => {
+  const outputUnlisten = await listen<{ stream?: string; data?: string }>(outputEvent, (event) => {
     const payload = event.payload;
     const chunk = typeof payload === 'string' ? payload : (payload?.data ?? '');
 
@@ -127,7 +124,7 @@ export async function executeTerminalCommand(
     });
   });
 
-  exitUnlisten = await listen(exitEvent, () => {
+  const exitUnlisten = await listen(exitEvent, () => {
     outputUnlisten?.();
     exitUnlisten?.();
   });

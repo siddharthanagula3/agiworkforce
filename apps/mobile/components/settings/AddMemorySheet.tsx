@@ -21,7 +21,7 @@ const CATEGORIES = ['General', 'Coding', 'Research', 'Writing', 'Preferences'] a
 
 interface AddMemorySheetProps {
   /** Ref to control open/close from parent */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   sheetRef: any;
   /** If provided, pre-populate fields for editing */
   editingMemory: MemoryEntry | null;
@@ -31,12 +31,7 @@ interface AddMemorySheetProps {
   onUpdate: (id: string, content: string) => void;
 }
 
-export function AddMemorySheet({
-  sheetRef,
-  editingMemory,
-  onSave,
-  onUpdate,
-}: AddMemorySheetProps) {
+export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: AddMemorySheetProps) {
   const snapPoints = useMemo(() => ['50%'], []);
 
   const [content, setContent] = useState('');
@@ -102,9 +97,7 @@ export function AddMemorySheet({
       handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
     >
       <View className="px-4 pt-1 pb-2">
-        <Text variant="subheading">
-          {isEditing ? 'Edit Memory' : 'Add Memory'}
-        </Text>
+        <Text variant="subheading">{isEditing ? 'Edit Memory' : 'Add Memory'}</Text>
       </View>
 
       {/* Content input */}
@@ -137,13 +130,9 @@ export function AddMemorySheet({
               return (
                 <Pressable
                   key={cat}
-                  onPress={() =>
-                    setSelectedCategory(isSelected ? null : cat.toLowerCase())
-                  }
+                  onPress={() => setSelectedCategory(isSelected ? null : cat.toLowerCase())}
                   className={`px-3 py-1.5 rounded-full border ${
-                    isSelected
-                      ? 'border-teal-500/50 bg-teal-500/15'
-                      : 'border-white/10 bg-white/5'
+                    isSelected ? 'border-teal-500/50 bg-teal-500/15' : 'border-white/10 bg-white/5'
                   }`}
                 >
                   <Text

@@ -86,8 +86,6 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
     }
 
     let mounted = true;
-    let timer: ReturnType<typeof setTimeout>;
-
     const performCheck = async () => {
       // Wait for store hydration first
       await waitForUpdaterHydration();
@@ -125,7 +123,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
     };
 
     // Delay the check to allow app to settle
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       void performCheck();
     }, startupDelay);
 
