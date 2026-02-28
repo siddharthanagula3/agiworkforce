@@ -792,6 +792,9 @@ export default defineConfig({
 
   private saveToStorage(): void {
     try {
+      // Note: This stores non-sensitive workspace metadata (file names, paths, and
+      // user-authored code content for the vibe editor). No secrets, API keys, or
+      // credentials are stored here. localStorage is appropriate for this use case.
       const state = {
         files: Array.from(this.files.entries()),
         openFiles: Array.from(this.openFiles),

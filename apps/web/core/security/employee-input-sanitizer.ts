@@ -544,6 +544,7 @@ function removeDelimiterInjections(input: string): string {
   let cleaned = input;
 
   // Remove common delimiter patterns used for context switching
+  // Loop until stable to prevent bypasses via nested patterns
   const delimiterPatterns = [
     /===+\s*(?:NEW\s+)?(?:SYSTEM|ADMIN|OVERRIDE|INSTRUCTIONS?)\s*===+/gi,
     /---+\s*(?:BEGIN|END|NEW)\s+(?:SYSTEM|ADMIN|INSTRUCTIONS?)\s*---+/gi,
@@ -555,9 +556,13 @@ function removeDelimiterInjections(input: string): string {
     /<!--\s*(?:system|admin|override|hidden)[\s\S]*?-->/gi,
   ];
 
-  for (const pattern of delimiterPatterns) {
-    cleaned = cleaned.replace(pattern, '');
-  }
+  let prev;
+  do {
+    prev = cleaned;
+    for (const pattern of delimiterPatterns) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+  } while (cleaned !== prev);
 
   return cleaned;
 }
@@ -568,8 +573,12 @@ function removeDelimiterInjections(input: string): string {
 function stripFormattingFromInput(input: string): string {
   let cleaned = input;
 
-  // Remove HTML tags
-  cleaned = cleaned.replace(/<[^>]*>/g, '');
+  // Remove HTML tags — loop until stable to prevent nested tag bypass
+  let prev;
+  do {
+    prev = cleaned;
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+  } while (cleaned !== prev);
 
   // Remove markdown code blocks
   cleaned = cleaned.replace(/```[\s\S]*?```/g, '');
