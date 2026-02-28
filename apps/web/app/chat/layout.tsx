@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/services/supabase-server';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
+import ChatLayoutShell from './ChatLayoutShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,5 +15,5 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
     redirect('/login');
   }
 
-  return <div className="agi-dashboard-theme min-h-screen">{children}</div>;
+  return <ChatLayoutShell>{children}</ChatLayoutShell>;
 }
