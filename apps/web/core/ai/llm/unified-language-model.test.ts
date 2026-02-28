@@ -282,7 +282,8 @@ describe('UnifiedLLMService', () => {
     it('should route to correct provider', async () => {
       const providers: Array<{
         name: LLMProvider;
-        mock: typeof openaiProvider;
+
+        mock: any;
       }> = [
         { name: 'openai', mock: openaiProvider },
         { name: 'anthropic', mock: anthropicProvider },
@@ -426,7 +427,7 @@ describe('UnifiedLLMService', () => {
 
     it('should check API abuse when enabled', async () => {
       vi.mocked(isFeatureEnabled).mockReturnValue(true);
-      vi.mocked(checkUserInput).mockReturnValue({ allowed: true });
+      vi.mocked(checkUserInput).mockReturnValue({ allowed: true, riskLevel: 'none' as const });
       // Mock twice because we call sendMessage twice (toThrow + toMatchObject)
       vi.mocked(checkApiAbuse)
         .mockResolvedValueOnce({
@@ -574,9 +575,8 @@ describe('UnifiedLLMService', () => {
 
     it('should throw PROVIDER_NOT_FOUND for invalid provider', async () => {
       const customService = new UnifiedLLMService();
-      // @ts-expect-error - Testing invalid provider
       await expect(
-        customService.sendMessage(mockMessages, undefined, undefined, 'invalid'),
+        customService.sendMessage(mockMessages, undefined, undefined, 'invalid' as LLMProvider),
       ).rejects.toThrow(UnifiedLLMError);
     });
 

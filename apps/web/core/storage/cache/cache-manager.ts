@@ -5,6 +5,10 @@
 
 import { supabase } from '@shared/lib/supabase-client';
 
+// Tables not yet in generated Database type
+
+const db = supabase as any;
+
 export interface CacheEntry<T = unknown> {
   key: string;
   value: T;
@@ -57,7 +61,7 @@ class CacheService {
 
     // Try persistent cache
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('cache_entries')
         .select('*')
         .eq('cache_key', key)
@@ -72,7 +76,7 @@ class CacheService {
 
       if (new Date() < expiresAt) {
         // Cache hit - update access count
-        await supabase
+        await db
           .from('cache_entries')
           .update({
             accessed_count: entry.accessed_count + 1,
@@ -104,16 +108,8 @@ class CacheService {
   /**
    * Set value in cache
    */
-  async set<T = unknown>(
-    key: string,
-    value: T,
-    options: CacheOptions = {}
-  ): Promise<void> {
-    const {
-      ttl = this.DEFAULT_TTL,
-      persistent = false,
-      refreshOnAccess = false,
-    } = options;
+  async set<T = unknown>(key: string, value: T, options: CacheOptions = {}): Promise<void> {
+    const { ttl = this.DEFAULT_TTL, persistent = false, refreshOnAccess = false } = options;
 
     const expiresAt = new Date(Date.now() + ttl);
     const entry: CacheEntry<T> = {
@@ -130,7 +126,7 @@ class CacheService {
     // Optionally store in persistent cache
     if (persistent) {
       try {
-        await supabase.from('cache_entries').upsert({
+        await db.from('cache_entries').upsert({
           cache_key: key,
           cache_value: value,
           expires_at: expiresAt.toISOString(),
@@ -152,7 +148,7 @@ class CacheService {
 
     // Remove from persistent cache
     try {
-      await supabase.from('cache_entries').delete().eq('cache_key', key);
+      await db.from('cache_entries').delete().eq('cache_key', key);
     } catch (error) {
       console.error('[Cache] Error deleting from persistent cache:', error);
     }
@@ -168,10 +164,7 @@ class CacheService {
 
       // Clear all persistent cache
       try {
-        await supabase
-          .from('cache_entries')
-          .delete()
-          .gte('id', '00000000-0000-0000-0000-000000000000');
+        await db.from('cache_entries').delete().gte('id', '00000000-0000-0000-0000-000000000000');
       } catch (error) {
         console.error('[Cache] Error clearing persistent cache:', error);
       }
@@ -192,15 +185,9 @@ class CacheService {
       // Delete from persistent cache (using SQL LIKE)
       try {
         const likePattern = pattern.replace(/\*/g, '%');
-        await supabase
-          .from('cache_entries')
-          .delete()
-          .like('cache_key', likePattern);
+        await db.from('cache_entries').delete().like('cache_key', likePattern);
       } catch (error) {
-        console.error(
-          '[Cache] Error clearing persistent cache by pattern:',
-          error
-        );
+        console.error('[Cache] Error clearing persistent cache by pattern:', error);
       }
     }
   }
@@ -225,11 +212,9 @@ class CacheService {
       totalAccesses: entries.reduce((sum, entry) => sum + entry.accessCount, 0),
       averageAccessCount:
         memorySize > 0
-          ? entries.reduce((sum, entry) => sum + entry.accessCount, 0) /
-            memorySize
+          ? entries.reduce((sum, entry) => sum + entry.accessCount, 0) / memorySize
           : 0,
-      expiredCount: entries.filter((entry) => new Date() >= entry.expiresAt)
-        .length,
+      expiredCount: entries.filter((entry) => new Date() >= entry.expiresAt).length,
     };
 
     return stats;
@@ -244,7 +229,7 @@ class CacheService {
       keyGenerator: (...args: Parameters<T>) => string;
       ttl?: number;
       persistent?: boolean;
-    }
+    },
   ): T {
     const { keyGenerator, ttl, persistent } = options;
 
@@ -287,7 +272,7 @@ class CacheService {
     // Fetch missing keys from persistent cache
     if (missingKeys.length > 0) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from('cache_entries')
           .select('*')
           .in('cache_key', missingKeys);
@@ -322,7 +307,7 @@ class CacheService {
    */
   async setMany<T = unknown>(
     entries: Array<{ key: string; value: T }>,
-    options: CacheOptions = {}
+    options: CacheOptions = {},
   ): Promise<void> {
     const { ttl = this.DEFAULT_TTL, persistent = false } = options;
 
@@ -350,7 +335,7 @@ class CacheService {
           last_accessed_at: new Date().toISOString(),
         }));
 
-        await supabase.from('cache_entries').upsert(rows);
+        await db.from('cache_entries').upsert(rows);
       } catch (error) {
         console.error('[Cache] Error in batch set:', error);
       }
@@ -401,7 +386,7 @@ class CacheService {
           .split('*')
           .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
           .join('.*') +
-        '$'
+        '$',
     );
     return regex.test(str);
   }
@@ -433,8 +418,7 @@ export const CacheKeys = {
   userEmployees: (userId: string) => `user:employees:${userId}`,
   chatMessages: (sessionId: string) => `chat:messages:${sessionId}`,
   workflowStats: (workflowId: string) => `workflow:stats:${workflowId}`,
-  analyticsMetrics: (userId: string, period: string) =>
-    `analytics:metrics:${userId}:${period}`,
+  analyticsMetrics: (userId: string, period: string) => `analytics:metrics:${userId}:${period}`,
   automationOverview: (userId: string) => `automation:overview:${userId}`,
   userSettings: (userId: string) => `user:settings:${userId}`,
   apiUsage: (userId: string, period: string) => `api:usage:${userId}:${period}`,

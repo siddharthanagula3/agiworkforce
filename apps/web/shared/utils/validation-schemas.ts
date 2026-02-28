@@ -209,7 +209,7 @@ export const supportTicketSchema = z.object({
 
 export const searchQuerySchema = z.object({
   query: z.string().max(500),
-  filters: z.record(z.string()).optional(),
+  filters: z.record(z.string(), z.string()).optional(),
   sort: z.enum(['relevance', 'date', 'popularity']).default('relevance'),
   limit: z.number().int().min(1).max(100).default(20),
   offset: z.number().int().min(0).default(0),
@@ -279,7 +279,7 @@ export function validateData<T>(
  * Formats Zod errors for display
  */
 export function formatZodErrors(errors: z.ZodError): string[] {
-  return errors.errors.map((err) => {
+  return errors.issues.map((err: any) => {
     const path = err.path.join('.');
     return path ? `${path}: ${err.message}` : err.message;
   });

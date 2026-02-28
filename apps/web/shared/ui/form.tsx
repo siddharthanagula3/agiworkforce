@@ -111,4 +111,5 @@ const FormMessage = React.forwardRef<
 });
 FormMessage.displayName = 'FormMessage';
 
+export { useFormField } from '@shared/ui/form-hooks';
 export { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, FormField };

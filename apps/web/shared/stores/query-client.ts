@@ -14,7 +14,8 @@ import {
   MutationCache,
 } from '@tanstack/react-query';
 // ReactQueryDevtools loaded lazily in dev only
-let ReactQueryDevtools: React.ComponentType<{ initialIsOpen?: boolean }> | null = null;
+
+let ReactQueryDevtools: React.ComponentType<any> | null = null;
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   import('@tanstack/react-query-devtools').then((mod) => {
     ReactQueryDevtools = mod.ReactQueryDevtools;
@@ -290,7 +291,7 @@ export class APIException extends Error {
   status?: number;
   details?: unknown;
 
-  constructor(error: APIError) {
+  constructor(error: ApiError) {
     super(error.message);
     this.code = error.code;
     this.status = error.status;
@@ -326,8 +327,9 @@ function handlePaymentRequired(): void {
 import type { ApiError, ApiResponse as SharedApiResponse } from '@shared/types';
 
 // Extended API response type for query client with pagination meta
-export interface APIResponse<T = unknown> extends Omit<SharedApiResponse<T>, 'data'> {
+export interface APIResponse<T = unknown> extends Omit<SharedApiResponse<T>, 'data' | 'error'> {
   data: T;
+  error?: string | null;
   errors?: string[];
   meta?: {
     page?: number;
@@ -401,7 +403,7 @@ export const apiFetch = async <T = unknown>(
       throw new APIException({
         message: data.message || `HTTP ${response.status}: ${response.statusText}`,
         status: response.status,
-        details: data.errors || data,
+        details: (data.errors || data) as unknown as Record<string, unknown>,
       });
     }
 

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
+import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
@@ -60,7 +60,7 @@ async function handler(request: NextRequest) {
       error,
     } = await supabase.auth.getUser(token);
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Invalid or expired token');
+      throw createError.unauthorized('Invalid or expired token');
     }
     userId = user.id;
   } else {
@@ -81,7 +81,7 @@ async function handler(request: NextRequest) {
       error,
     } = await ssrClient.auth.getUser();
     if (error || !user) {
-      throw createError('UNAUTHORIZED', 'Authentication required');
+      throw createError.unauthorized('Authentication required');
     }
     userId = user.id;
   }
@@ -90,7 +90,7 @@ async function handler(request: NextRequest) {
   const { employeeId, message, model, provider, systemPrompt, conversationHistory } = body;
 
   if (!message) {
-    throw createError('BAD_REQUEST', 'Message is required');
+    throw createError.badRequest('Message is required');
   }
 
   // Build messages array
@@ -113,8 +113,7 @@ async function handler(request: NextRequest) {
   if (!hasCredits) {
     const balance = await CreditService.getBalance(userId);
     const remainingCents = balance?.credits_remaining_cents ?? 0;
-    throw createError(
-      'FORBIDDEN',
+    throw createError.forbidden(
       `Insufficient credits. You need approximately ${estimatedCents} credits but have ${remainingCents} remaining. Please upgrade your plan at /pricing.`,
     );
   }
@@ -127,8 +126,7 @@ async function handler(request: NextRequest) {
     const llmProvider = LLMProviderFactory.createProvider(selectedProvider);
 
     if (!llmProvider) {
-      throw createError(
-        'BAD_REQUEST',
+      throw createError.badRequest(
         `Provider "${selectedProvider}" is not configured. Check API key configuration.`,
       );
     }
@@ -146,12 +144,10 @@ async function handler(request: NextRequest) {
       max_tokens: 4096,
     });
 
-    logger.info('Agent execution started', {
-      userId,
-      employeeId,
-      model: selectedModel,
-      provider: selectedProvider,
-    });
+    logger.info(
+      { userId, employeeId, model: selectedModel, provider: selectedProvider },
+      'Agent execution started',
+    );
 
     // Wrap the stream to track token usage and deduct credits after completion
     const trackingStream = new TransformStream({
@@ -210,7 +206,7 @@ async function handler(request: NextRequest) {
 
     const trackedStream = stream.pipeThrough(trackingStream);
 
-    return new Response(trackedStream, {
+    return new NextResponse(trackedStream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -218,9 +214,9 @@ async function handler(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Agent execution failed', { userId, employeeId, error });
-    throw createError('INTERNAL', 'Agent execution failed');
+    logger.error({ userId, employeeId, error }, 'Agent execution failed');
+    throw createError.internal('Agent execution failed');
   }
 }
 
-export const POST = withErrorHandler(withRateLimit(handler, { maxRequests: 30, windowMs: 60000 }));
+export const POST = withErrorHandler(withRateLimitHandler(handler, 'llm-streaming'));

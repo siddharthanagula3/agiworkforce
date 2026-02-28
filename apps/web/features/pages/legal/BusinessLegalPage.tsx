@@ -272,12 +272,8 @@ export const BusinessLegalPage: React.FC<BusinessLegalPageProps> = ({ className 
 
   const calculateProgress = (documents: O1VisaDocument[] | LegalDocument[]) => {
     const total = documents.length;
-    const completed = documents.filter((doc) =>
-      'status' in doc
-        ? doc.status === 'approved' || doc.status === 'filed'
-        : 'status' in doc
-          ? doc.status === 'approved'
-          : false,
+    const completed = documents.filter(
+      (doc) => doc.status === 'approved' || doc.status === 'filed',
     ).length;
     return total > 0 ? (completed / total) * 100 : 0;
   };

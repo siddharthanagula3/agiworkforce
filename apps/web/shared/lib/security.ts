@@ -3,7 +3,7 @@
  * Handles XSS prevention, data sanitization, and security headers
  */
 
-import DOMPurify from 'dompurify';
+import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 
 // ========================================
 // XSS Protection and Data Sanitization
@@ -302,7 +302,7 @@ export class SecurityManager {
   // XSS Protection and Data Sanitization
   // ========================================
 
-  private static defaultSanitizeConfig: DOMPurify.Config = {
+  private static defaultSanitizeConfig: DOMPurifyConfig = {
     ALLOWED_TAGS: [
       'a',
       'b',
@@ -354,14 +354,13 @@ export class SecurityManager {
     KEEP_CONTENT: true,
     RETURN_DOM: false,
     RETURN_DOM_FRAGMENT: false,
-    RETURN_DOM_IMPORT: false,
   };
 
   // Sanitize HTML content to prevent XSS
   static sanitizeHtml(html: string, options: SanitizeOptions = {}): string {
     if (!html) return '';
 
-    const config: DOMPurify.Config = {
+    const config: DOMPurifyConfig = {
       ...this.defaultSanitizeConfig,
       ...(options.allowedTags && { ALLOWED_TAGS: options.allowedTags }),
       ...(options.allowedAttributes && {
@@ -369,7 +368,7 @@ export class SecurityManager {
       }),
     };
 
-    return DOMPurify.sanitize(html, config);
+    return DOMPurify.sanitize(html, config) as string;
   }
 
   // Sanitize text for safe display (removes all HTML)
@@ -425,7 +424,7 @@ export class SecurityManager {
   static sanitizeJson<T = unknown>(jsonString: string, maxDepth: number = 10): T | null {
     try {
       const parsed = JSON.parse(jsonString);
-      return this.deepSanitize(parsed, maxDepth);
+      return this.deepSanitize(parsed, maxDepth) as T;
     } catch (error) {
       console.error('JSON sanitization failed:', error);
       return null;

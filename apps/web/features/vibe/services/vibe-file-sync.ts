@@ -140,8 +140,7 @@ class VibeFileSyncService {
    */
   async loadFilesFromDatabase(sessionId: string): Promise<void> {
     try {
-      const { data, error } = await supabase
-        .from('vibe_files')
+      const { data, error } = await (supabase.from('vibe_files') as any)
         .select('*')
         .eq('session_id', sessionId)
         .order('uploaded_at', { ascending: true });
@@ -157,7 +156,7 @@ class VibeFileSyncService {
 
       // Add files to store
       const store = useVibeFileStore.getState();
-      for (const row of data) {
+      for (const row of data as any[]) {
         const file: VibeFile = {
           id: row.id,
           name: row.name,
@@ -327,7 +326,7 @@ class VibeFileSyncService {
       const fileType = this.inferMimeType(fileName);
 
       // Upsert file record
-      const { error } = await supabase.from('vibe_files').upsert(
+      const { error } = await (supabase.from('vibe_files') as any).upsert(
         {
           id: fileId,
           session_id: sessionId,
@@ -416,19 +415,20 @@ class VibeFileSyncService {
 
     try {
       // Find the file by path in metadata
-      const { data: files } = await supabase
-        .from('vibe_files')
+      const { data: files } = await (supabase.from('vibe_files') as any)
         .select('id, metadata')
         .eq('session_id', this.currentSessionId);
 
-      const fileToDelete = files?.find((f) => {
+      const fileToDelete = (files as any[] | null)?.find((f: any) => {
         const metadata = f.metadata as Record<string, unknown> | null;
         const filePath = metadata?.original_path || metadata?.path;
         return filePath === path || `/${filePath}` === path;
       });
 
       if (fileToDelete) {
-        const { error } = await supabase.from('vibe_files').delete().eq('id', fileToDelete.id);
+        const { error } = await (supabase.from('vibe_files') as any)
+          .delete()
+          .eq('id', fileToDelete.id);
 
         if (error) {
           throw error;

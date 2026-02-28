@@ -762,39 +762,5 @@ export interface ValidationError {
   code: string;
 }
 
-// Export all types for easy importing
-export type {
-  AIEmployee,
-  EmployeeCapabilities,
-  ToolDefinition,
-  WorkflowDefinition,
-  PerformanceMetrics,
-  CostMetrics,
-  Availability,
-  EmployeeMetadata,
-  JobAssignment,
-  ToolExecution,
-  ChatMessage,
-  EmployeePerformanceHistory,
-  EmployeeTrainingRecord,
-  EmployeeHire,
-  EmployeeSession,
-  MCPTool,
-  MCPRequest,
-  MCPResponse,
-  MCPToolResult,
-  SystemPrompt,
-  EmployeeSearchFilters,
-  EmployeeSearchResult,
-  EmployeeAnalytics,
-  EmployeeReport,
-  EmployeeNotification,
-  EmployeeError,
-  APIResponse,
-  PaginatedResponse,
-  EmployeeEvent,
-  RealtimeSubscription,
-  EmployeeSystemConfig,
-  ValidationSchema,
-  ValidationResult,
-};
+// Note: All types above are already exported via their interface/type declarations.
+// No need for a duplicate re-export block.

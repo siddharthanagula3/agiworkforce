@@ -401,7 +401,7 @@ export class EnhancedChatSynchronizationService {
     try {
       const { data, error } = await supabase
         .from('web_messages')
-        .insert(this.transformLocalMessage(message) as never)
+        .insert(this.transformLocalMessage(message) as any)
         .select()
         .single();
 
@@ -461,8 +461,7 @@ export class EnhancedChatSynchronizationService {
     store.setSyncing(true);
 
     try {
-      const { error } = await supabase
-        .from('web_messages')
+      const { error } = await (supabase.from('web_messages') as any)
         .update(this.transformLocalMessage(message as ChatMessage))
         .eq('id', message.id);
 

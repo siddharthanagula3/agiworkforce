@@ -172,9 +172,8 @@ export function isProduction(): boolean {
  */
 export function isDevelopment(): boolean {
   return (
-    process.env.NODE_ENV === 'development' ||
-    process.env.NEXT_PUBLIC_APP_ENV === 'development' ||
-    process.env.NODE_ENV === 'development'
+    (process.env.NODE_ENV as string) === 'development' ||
+    process.env.NEXT_PUBLIC_APP_ENV === 'development'
   );
 }
 

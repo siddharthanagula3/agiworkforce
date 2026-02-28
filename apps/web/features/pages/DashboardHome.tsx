@@ -28,6 +28,7 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+// Sample data — replace with real conversation history from API
 const MOCK_RECENT_CONVERSATIONS = [
   { id: '1', title: 'TypeScript refactoring help', updatedAt: '2 hours ago' },
   { id: '2', title: 'Marketing copy for landing page', updatedAt: '5 hours ago' },
@@ -150,7 +151,12 @@ export const DashboardHomePage: React.FC = () => {
       {/* Recent Conversations */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent Conversations</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">Recent Conversations</h2>
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              Sample
+            </Badge>
+          </div>
           <Button variant="ghost" size="sm" onClick={() => router.push('/chat')}>
             View all
             <ArrowRight className="ml-1 h-3.5 w-3.5" />

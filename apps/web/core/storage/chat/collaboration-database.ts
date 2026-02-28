@@ -9,6 +9,11 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+
+// Tables not yet in generated Database type — use untyped client for these
+
+const db = supabase as any;
+import { MultiAgentChatError } from '@shared/types/multi-agent-chat';
 import type {
   AgentCollaboration,
   AgentCollaborationInsert,
@@ -16,7 +21,6 @@ import type {
   CreateCollaborationRequest,
   SessionType,
   TaskStatus,
-  MultiAgentChatError,
 } from '@shared/types/multi-agent-chat';
 
 // =============================================
@@ -31,7 +35,7 @@ export async function createCollaboration(
   request: CreateCollaborationRequest,
 ): Promise<AgentCollaboration> {
   try {
-    const collaborationData: AgentCollaborationInsert = {
+    const collaborationData = {
       conversation_id: conversationId,
       session_name: request.session_name || null,
       session_type: request.session_type,
@@ -42,9 +46,9 @@ export async function createCollaboration(
       workflow_steps: request.workflow_steps || [],
       current_step: 0,
       output_artifacts: [],
-    };
+    } as unknown as AgentCollaborationInsert;
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('agent_collaborations')
       .insert(collaborationData)
       .select()
@@ -86,7 +90,7 @@ export async function getCollaboration(
   collaborationId: string,
 ): Promise<AgentCollaboration | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('agent_collaborations')
       .select('*')
       .eq('id', collaborationId)
@@ -126,7 +130,7 @@ export async function listCollaborations(
   },
 ): Promise<{ collaborations: AgentCollaboration[]; total: number }> {
   try {
-    let query = supabase
+    let query = db
       .from('agent_collaborations')
       .select('*', { count: 'exact' })
       .eq('conversation_id', conversationId);
@@ -182,7 +186,7 @@ export async function updateCollaboration(
   updates: AgentCollaborationUpdate,
 ): Promise<AgentCollaboration> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('agent_collaborations')
       .update(updates)
       .eq('id', collaborationId)
@@ -219,10 +223,7 @@ export async function updateCollaboration(
  */
 export async function deleteCollaboration(collaborationId: string): Promise<void> {
   try {
-    const { error } = await supabase
-      .from('agent_collaborations')
-      .delete()
-      .eq('id', collaborationId);
+    const { error } = await db.from('agent_collaborations').delete().eq('id', collaborationId);
 
     if (error) {
       throw new MultiAgentChatError(
@@ -648,7 +649,7 @@ export async function getCollaborationStats(conversationId: string): Promise<{
   collaboration_types: Record<string, number>;
 }> {
   try {
-    const { data: collaborations, error } = await supabase
+    const { data: collaborations, error } = await db
       .from('agent_collaborations')
       .select('*')
       .eq('conversation_id', conversationId);
@@ -664,12 +665,24 @@ export async function getCollaborationStats(conversationId: string): Promise<{
     const stats = {
       total_collaborations: collaborations?.length || 0,
       active_collaborations:
-        collaborations?.filter((c) => c.task_status === 'in_progress').length || 0,
+        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'in_progress')
+          .length || 0,
       completed_collaborations:
-        collaborations?.filter((c) => c.task_status === 'completed').length || 0,
-      failed_collaborations: collaborations?.filter((c) => c.task_status === 'failed').length || 0,
-      total_messages: collaborations?.reduce((sum, c) => sum + c.total_messages, 0) || 0,
-      total_iterations: collaborations?.reduce((sum, c) => sum + c.total_iterations, 0) || 0,
+        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'completed')
+          .length || 0,
+      failed_collaborations:
+        collaborations?.filter((c: Record<string, unknown>) => c.task_status === 'failed').length ||
+        0,
+      total_messages:
+        collaborations?.reduce(
+          (sum: number, c: Record<string, unknown>) => sum + (c.total_messages as number),
+          0,
+        ) || 0,
+      total_iterations:
+        collaborations?.reduce(
+          (sum: number, c: Record<string, unknown>) => sum + (c.total_iterations as number),
+          0,
+        ) || 0,
       average_consensus_score: 0,
       average_duration_seconds: 0,
       collaboration_types: {} as Record<string, number>,
@@ -677,31 +690,36 @@ export async function getCollaborationStats(conversationId: string): Promise<{
 
     // Calculate average consensus score
     const collaborationsWithConsensus =
-      collaborations?.filter((c) => c.consensus_score !== null) || [];
+      collaborations?.filter((c: Record<string, unknown>) => c.consensus_score !== null) || [];
     if (collaborationsWithConsensus.length > 0) {
       stats.average_consensus_score =
-        collaborationsWithConsensus.reduce((sum, c) => sum + (c.consensus_score || 0), 0) /
-        collaborationsWithConsensus.length;
+        collaborationsWithConsensus.reduce(
+          (sum: number, c: Record<string, unknown>) => sum + ((c.consensus_score as number) || 0),
+          0,
+        ) / collaborationsWithConsensus.length;
     }
 
     // Calculate average duration
     const completedCollaborations =
-      collaborations?.filter((c) => c.completed_at && c.started_at) || [];
+      collaborations?.filter((c: Record<string, unknown>) => c.completed_at && c.started_at) || [];
     if (completedCollaborations.length > 0) {
-      const totalDuration = completedCollaborations.reduce((sum, c) => {
-        const start = new Date(c.started_at).getTime();
-        const end = new Date(c.completed_at!).getTime();
-        return sum + (end - start);
-      }, 0);
+      const totalDuration = completedCollaborations.reduce(
+        (sum: number, c: Record<string, unknown>) => {
+          const start = new Date(c.started_at as string).getTime();
+          const end = new Date(c.completed_at as string).getTime();
+          return sum + (end - start);
+        },
+        0,
+      );
       stats.average_duration_seconds = Math.round(
         totalDuration / completedCollaborations.length / 1000,
       );
     }
 
     // Count collaboration types
-    collaborations?.forEach((c) => {
-      stats.collaboration_types[c.session_type] =
-        (stats.collaboration_types[c.session_type] || 0) + 1;
+    collaborations?.forEach((c: Record<string, unknown>) => {
+      stats.collaboration_types[c.session_type as string] =
+        (stats.collaboration_types[c.session_type as string] || 0) + 1;
     });
 
     return stats;
@@ -724,7 +742,7 @@ export async function getActiveCollaborations(
   conversationId: string,
 ): Promise<AgentCollaboration[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('agent_collaborations')
       .select('*')
       .eq('conversation_id', conversationId)
@@ -760,7 +778,7 @@ export async function getParticipantCollaborationHistory(
   limit: number = 50,
 ): Promise<AgentCollaboration[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('agent_collaborations')
       .select('*')
       .contains('participant_ids', [participantId])

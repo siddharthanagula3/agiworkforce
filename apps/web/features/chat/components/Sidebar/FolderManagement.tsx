@@ -81,6 +81,13 @@ export function FolderManagement({
   const [folderColor, setFolderColor] = useState('gray');
   const [folderDescription, setFolderDescription] = useState('');
 
+  /** Reset form fields to defaults */
+  const resetFormState = useCallback(() => {
+    setFolderName('');
+    setFolderColor('gray');
+    setFolderDescription('');
+  }, []);
+
   const loadFolders = useCallback(async () => {
     if (!user?.id) return;
 
@@ -128,9 +135,7 @@ export function FolderManagement({
 
       toast.success('Folder created');
       setCreateDialogOpen(false);
-      setFolderName('');
-      setFolderColor('gray');
-      setFolderDescription('');
+      resetFormState();
       await loadFolders();
     } catch (error) {
       console.error('[FolderManagement] Failed to create folder:', error);
@@ -160,9 +165,7 @@ export function FolderManagement({
 
       toast.success('Folder updated');
       setEditingFolder(null);
-      setFolderName('');
-      setFolderColor('gray');
-      setFolderDescription('');
+      resetFormState();
       await loadFolders();
     } catch (error) {
       console.error('[FolderManagement] Failed to update folder:', error);
@@ -215,9 +218,7 @@ export function FolderManagement({
   };
 
   const openCreateDialog = () => {
-    setFolderName('');
-    setFolderColor('gray');
-    setFolderDescription('');
+    resetFormState();
     setCreateDialogOpen(true);
   };
 
@@ -362,9 +363,7 @@ export function FolderManagement({
           if (!open) {
             setCreateDialogOpen(false);
             setEditingFolder(null);
-            setFolderName('');
-            setFolderColor('gray');
-            setFolderDescription('');
+            resetFormState();
           }
         }}
       >
@@ -422,9 +421,7 @@ export function FolderManagement({
               onClick={() => {
                 setCreateDialogOpen(false);
                 setEditingFolder(null);
-                setFolderName('');
-                setFolderColor('gray');
-                setFolderDescription('');
+                resetFormState();
               }}
               disabled={isSaving}
             >

@@ -243,16 +243,19 @@ export class ConversationBranchingService {
    * Returns array from current session to root
    */
   async getBranchHistory(sessionId: string): Promise<BranchHistoryEntry[]> {
-    const { data, error } = await supabase.rpc('get_branch_history', {
-      p_session_id: sessionId,
-    });
+    const { data, error } = await supabase.rpc(
+      'get_branch_history' as any,
+      {
+        p_session_id: sessionId,
+      } as any,
+    );
 
     if (error) {
       console.error('Failed to get branch history:', error);
       return [{ sessionId, branchName: null, branchPointMessageId: null, depth: 0 }];
     }
 
-    return (data || []).map(
+    return ((data || []) as any[]).map(
       (row: {
         session_id: string;
         branch_name: string | null;
@@ -271,9 +274,12 @@ export class ConversationBranchingService {
    * Get the root session ID for any session in a branch tree
    */
   async getRootSessionId(sessionId: string): Promise<string> {
-    const { data, error } = await supabase.rpc('get_root_session', {
-      session_id: sessionId,
-    });
+    const { data, error } = await supabase.rpc(
+      'get_root_session' as any,
+      {
+        session_id: sessionId,
+      } as any,
+    );
 
     if (error) {
       console.error('Failed to get root session:', error);

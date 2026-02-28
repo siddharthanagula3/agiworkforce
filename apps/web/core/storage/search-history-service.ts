@@ -5,6 +5,10 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+
+// RPC functions not yet in generated Database type
+
+const db = supabase as any;
 import { logger } from '@shared/lib/logger';
 
 // ============================================================================
@@ -139,7 +143,7 @@ export class SearchHistoryService {
     }
 
     try {
-      const { data, error } = (await supabase.rpc('track_search', {
+      const { data, error } = (await db.rpc('track_search', {
         p_user_id: userId,
         p_query: query,
         p_result_count: resultCount,
@@ -169,7 +173,7 @@ export class SearchHistoryService {
    */
   async getRecentSearches(userId: string, limit: number = 10): Promise<RecentSearch[]> {
     try {
-      const { data, error } = await supabase.rpc('get_recent_searches', {
+      const { data, error } = await db.rpc('get_recent_searches', {
         p_user_id: userId,
         p_limit: limit,
       });
@@ -202,7 +206,7 @@ export class SearchHistoryService {
    */
   async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
     try {
-      const { data, error } = await supabase.rpc('get_popular_searches', {
+      const { data, error } = await db.rpc('get_popular_searches', {
         p_limit: limit,
         p_days: days,
       });
@@ -245,7 +249,7 @@ export class SearchHistoryService {
     }
 
     try {
-      const { data, error } = await supabase.rpc('get_search_suggestions', {
+      const { data, error } = await db.rpc('get_search_suggestions', {
         p_user_id: userId,
         p_partial_query: partialQuery,
         p_limit: limit,
@@ -277,7 +281,7 @@ export class SearchHistoryService {
    */
   async clearSearchHistory(userId: string): Promise<number> {
     try {
-      const { data, error } = await supabase.rpc('clear_search_history', {
+      const { data, error } = await db.rpc('clear_search_history', {
         p_user_id: userId,
       });
 
@@ -304,7 +308,7 @@ export class SearchHistoryService {
    */
   async deleteSearch(userId: string, searchId: string): Promise<void> {
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('search_history')
         .delete()
         .eq('id', searchId)

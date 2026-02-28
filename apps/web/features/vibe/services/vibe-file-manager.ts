@@ -182,7 +182,7 @@ export class VibeFileManager {
       };
 
       // Save metadata to database
-      const { error: dbError } = await supabase.from('vibe_files').insert({
+      const { error: dbError } = await (supabase.from('vibe_files') as any).insert({
         id: vibeFile.id,
         name: vibeFile.name,
         type: vibeFile.type,
@@ -192,7 +192,7 @@ export class VibeFileManager {
         uploaded_by: vibeFile.uploaded_by,
         session_id: vibeFile.session_id,
         metadata: vibeFile.metadata || {},
-      });
+      } as any);
 
       if (dbError) throw dbError;
 
@@ -253,8 +253,7 @@ export class VibeFileManager {
    */
   async getFiles(sessionId: string): Promise<VibeFile[]> {
     try {
-      const { data, error } = await supabase
-        .from('vibe_files')
+      const { data, error } = await (supabase.from('vibe_files') as any)
         .select('*')
         .eq('session_id', sessionId)
         .order('uploaded_at', { ascending: false });
@@ -263,7 +262,7 @@ export class VibeFileManager {
 
       if (!data) return [];
 
-      return data.map((row) => ({
+      return (data as any[]).map((row: any) => ({
         id: row.id,
         name: row.name,
         type: row.type,
@@ -288,8 +287,7 @@ export class VibeFileManager {
    */
   async getFile(fileId: string): Promise<VibeFile | null> {
     try {
-      const { data, error } = await supabase
-        .from('vibe_files')
+      const { data, error } = await (supabase.from('vibe_files') as any)
         .select('*')
         .eq('id', fileId)
         .maybeSingle();
@@ -297,16 +295,17 @@ export class VibeFileManager {
       if (error) throw error;
       if (!data) return null;
 
+      const row = data as any;
       return {
-        id: data.id,
-        name: data.name,
-        type: data.type,
-        size: data.size,
-        url: data.url,
-        uploaded_at: new Date(data.uploaded_at),
-        uploaded_by: data.uploaded_by,
-        session_id: data.session_id,
-        metadata: data.metadata,
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        size: row.size,
+        url: row.url,
+        uploaded_at: new Date(row.uploaded_at),
+        uploaded_by: row.uploaded_by,
+        session_id: row.session_id,
+        metadata: row.metadata,
       };
     } catch (error) {
       console.error('Failed to get file:', error);
@@ -327,12 +326,14 @@ export class VibeFileManager {
         throw new Error('File not found');
       }
 
-      const filePath = file.metadata?.original_path;
+      const filePath = (file.metadata as any)?.original_path as string | undefined;
       if (!filePath) {
         throw new Error('File path not found in metadata');
       }
 
-      const { data, error } = await supabase.storage.from(this.STORAGE_BUCKET).download(filePath);
+      const { data, error } = await supabase.storage
+        .from(this.STORAGE_BUCKET)
+        .download(filePath as string);
 
       if (error) throw error;
 
@@ -363,7 +364,7 @@ export class VibeFileManager {
         throw new Error('File not found');
       }
 
-      const filePath = file.metadata?.original_path;
+      const filePath = (file.metadata as any)?.original_path as string | undefined;
       if (!filePath) {
         throw new Error('File path not found in metadata');
       }
@@ -376,7 +377,9 @@ export class VibeFileManager {
       if (storageError) throw storageError;
 
       // Delete metadata from database
-      const { error: dbError } = await supabase.from('vibe_files').delete().eq('id', fileId);
+      const { error: dbError } = await (supabase.from('vibe_files') as any)
+        .delete()
+        .eq('id', fileId);
 
       if (dbError) throw dbError;
     } catch (error) {
@@ -396,8 +399,7 @@ export class VibeFileManager {
   async deleteSessionFiles(sessionId: string): Promise<void> {
     try {
       // Get all files for the session
-      const { data: files, error: selectError } = await supabase
-        .from('vibe_files')
+      const { data: files, error: selectError } = await (supabase.from('vibe_files') as any)
         .select('id, metadata')
         .eq('session_id', sessionId);
 
@@ -405,9 +407,9 @@ export class VibeFileManager {
       if (!files || files.length === 0) return;
 
       // Extract file paths for storage deletion
-      const filePaths = files
-        .map((f) => f.metadata?.original_path)
-        .filter((path): path is string => !!path);
+      const filePaths = (files as any[])
+        .map((f: any) => f.metadata?.original_path)
+        .filter((path: any): path is string => !!path);
 
       // Batch delete from storage (single API call)
       if (filePaths.length > 0) {
@@ -422,8 +424,7 @@ export class VibeFileManager {
       }
 
       // Batch delete metadata from database (single API call)
-      const { error: dbError } = await supabase
-        .from('vibe_files')
+      const { error: dbError } = await (supabase.from('vibe_files') as any)
         .delete()
         .eq('session_id', sessionId);
 
@@ -441,8 +442,7 @@ export class VibeFileManager {
   async cleanup(olderThan: Date): Promise<void> {
     try {
       // Get files to delete
-      const { data: files, error: selectError } = await supabase
-        .from('vibe_files')
+      const { data: files, error: selectError } = await (supabase.from('vibe_files') as any)
         .select('*')
         .lt('uploaded_at', olderThan.toISOString());
 
@@ -450,9 +450,9 @@ export class VibeFileManager {
       if (!files || files.length === 0) return;
 
       // Delete from storage
-      const filePaths = files
-        .map((f) => f.metadata?.original_path)
-        .filter((path): path is string => !!path);
+      const filePaths = (files as any[])
+        .map((f: any) => f.metadata?.original_path)
+        .filter((path: any): path is string => !!path);
 
       if (filePaths.length > 0) {
         const { error: storageError } = await supabase.storage
@@ -465,8 +465,7 @@ export class VibeFileManager {
       }
 
       // Delete metadata from database
-      const { error: dbError } = await supabase
-        .from('vibe_files')
+      const { error: dbError } = await (supabase.from('vibe_files') as any)
         .delete()
         .lt('uploaded_at', olderThan.toISOString());
 
@@ -505,15 +504,14 @@ export class VibeFileManager {
    */
   async getUserStorageUsage(userId: string): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .from('vibe_files')
+      const { data, error } = await (supabase.from('vibe_files') as any)
         .select('size')
         .eq('uploaded_by', userId);
 
       if (error) throw error;
       if (!data) return 0;
 
-      return data.reduce((total, file) => total + file.size, 0);
+      return (data as any[]).reduce((total: number, file: any) => total + file.size, 0);
     } catch (error) {
       console.error('Failed to get storage usage:', error);
       return 0;

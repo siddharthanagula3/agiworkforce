@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -125,7 +127,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
     <div
       className={cn(
         'glass-strong flex h-full flex-col border-r border-border/50 backdrop-blur-xl',
-        'overflow-hidden',
+        'overflow-visible',
         className,
       )}
     >

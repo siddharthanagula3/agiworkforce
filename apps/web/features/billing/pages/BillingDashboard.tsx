@@ -258,7 +258,7 @@ const BillingPage: React.FC = () => {
         await contactEnterpriseSales({
           userId: user.id,
           userEmail: user.email || '',
-          userName: user.user_metadata?.full_name || user.email,
+          userName: (user.user_metadata?.full_name as string) || user.email || '',
         });
       }
     } catch (error) {
@@ -467,7 +467,7 @@ const BillingPage: React.FC = () => {
                   {billing?.price === 0
                     ? 'Free'
                     : formatCurrency(billing?.price || 0, billing?.currency || 'USD')}
-                  {billing?.price > 0 && (
+                  {(billing?.price ?? 0) > 0 && (
                     <span className="text-sm text-muted-foreground">/month</span>
                   )}
                 </p>
@@ -535,14 +535,17 @@ const BillingPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Used</span>
                   <span className="text-2xl font-bold">
-                    {billing?.usage.totalTokens.toLocaleString() || 0}
+                    {(billing?.usage?.totalTokens ?? 0).toLocaleString() || 0}
                   </span>
                 </div>
                 <Progress
                   value={
-                    billing?.usage.totalTokens && billing?.usage.totalLimit
+                    (billing?.usage?.totalTokens ?? 0) && (billing?.usage?.totalLimit ?? 1)
                       ? Math.min(
-                          Math.max((billing.usage.totalTokens / billing.usage.totalLimit) * 100, 0),
+                          Math.max(
+                            (billing!.usage.totalTokens / billing!.usage.totalLimit) * 100,
+                            0,
+                          ),
                           100,
                         )
                       : 0
@@ -554,18 +557,20 @@ const BillingPage: React.FC = () => {
                     {billing?.plan === 'free' ? 'Monthly Limit' : 'Token Allocation'}
                   </span>
                   <span className="font-medium">
-                    {(billing?.usage.totalLimit || 1000000).toLocaleString()} tokens
+                    {((billing?.usage?.totalLimit ?? 1) || 1000000).toLocaleString()} tokens
                   </span>
                 </div>
-                {billing?.usage.totalTokens > 0 &&
-                  billing?.usage.totalTokens >= (billing?.usage.totalLimit || 1000000) * 0.8 && (
+                {(billing?.usage?.totalTokens ?? 0) > 0 &&
+                  (billing?.usage?.totalTokens ?? 0) >=
+                    ((billing?.usage?.totalLimit ?? 1) || 1000000) * 0.8 && (
                     <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
                       <AlertTriangle className="h-4 w-4" />
                       <span>
                         Approaching limit -{' '}
                         {(
-                          ((billing?.usage.totalLimit - billing?.usage.totalTokens) /
-                            billing?.usage.totalLimit) *
+                          (((billing?.usage?.totalLimit ?? 1) -
+                            (billing?.usage?.totalTokens ?? 0)) /
+                            (billing?.usage?.totalLimit ?? 1)) *
                           100
                         ).toFixed(0)}
                         % remaining
@@ -741,8 +746,8 @@ const BillingPage: React.FC = () => {
 
         {/* Buy More Tokens Section */}
         {(showBuyTokens ||
-          (billing?.usage.totalTokens > 0 &&
-            billing?.usage.totalTokens >= billing?.usage.totalLimit * 0.85)) && (
+          ((billing?.usage?.totalTokens ?? 0) > 0 &&
+            (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.85)) && (
           <Card id="buy-tokens-section" className="border-2 border-primary/50">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -765,11 +770,11 @@ const BillingPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {/* Warning if near limit */}
-              {billing?.usage.totalTokens > 0 &&
-                billing?.usage.totalTokens >= billing?.usage.totalLimit * 0.85 && (
+              {(billing?.usage?.totalTokens ?? 0) > 0 &&
+                (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.85 && (
                   <div
                     className={`mb-6 rounded-lg border p-4 ${
-                      billing?.usage.totalTokens >= billing?.usage.totalLimit * 0.95
+                      (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.95
                         ? 'border-red-500/50 bg-red-500/10'
                         : 'border-yellow-500/50 bg-yellow-500/10'
                     }`}
@@ -777,22 +782,26 @@ const BillingPage: React.FC = () => {
                     <div className="flex items-start gap-3">
                       <AlertTriangle
                         className={`mt-0.5 h-5 w-5 ${
-                          billing?.usage.totalTokens >= billing?.usage.totalLimit * 0.95
+                          (billing?.usage?.totalTokens ?? 0) >=
+                          (billing?.usage?.totalLimit ?? 1) * 0.95
                             ? 'text-red-500'
                             : 'text-yellow-500'
                         }`}
                       />
                       <div className="flex-1">
                         <h4 className="mb-1 font-semibold">
-                          {billing?.usage.totalTokens >= billing?.usage.totalLimit * 0.95
+                          {(billing?.usage?.totalTokens ?? 0) >=
+                          (billing?.usage?.totalLimit ?? 1) * 0.95
                             ? '🚨 Critical: 95% Usage Reached'
                             : '⚠️ Warning: 85% Usage Reached'}
                         </h4>
                         <p className="text-sm text-muted-foreground">
                           You've used{' '}
-                          {((billing?.usage.totalTokens / billing?.usage.totalLimit) * 100).toFixed(
-                            1,
-                          )}
+                          {(
+                            ((billing?.usage?.totalTokens ?? 0) /
+                              (billing?.usage?.totalLimit ?? 1)) *
+                            100
+                          ).toFixed(1)}
                           % of your {billing?.plan === 'pro' ? '10M' : '1M'} token limit. Buy more
                           tokens now to avoid service interruption.
                         </p>

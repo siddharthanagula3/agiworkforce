@@ -1,11 +1,41 @@
 import { supabase } from '@shared/lib/supabase-client';
-import type { ToolDefinition, ToolType, IntegrationType } from '../types/ai-employee';
+
+const db = supabase as any;
+
+// Local type definitions
+interface ToolDefinition {
+  id: string;
+  name: string;
+  type: ToolType;
+  description: string;
+  parameters: Record<string, unknown>;
+  invocationPattern: string;
+  integrationType: IntegrationType;
+
+  config: Record<string, any>;
+  isActive: boolean;
+}
+
+type ToolType = 'analysis' | 'generation' | 'automation' | 'search' | 'communication' | string;
+
+type IntegrationType =
+  | 'n8n_workflow'
+  | 'openai_api'
+  | 'anthropic_api'
+  | 'cursor_agent'
+  | 'replit_agent'
+  | 'claude_code'
+  | 'custom_api'
+  | 'webhook'
+  | 'database'
+  | 'file_system';
 
 // Tool Invocation Service
 // Handles the execution of tools by AI employees
 class ToolInvocationService {
   private toolRegistry: Map<string, ToolDefinition> = new Map();
-  private integrationHandlers: Map<IntegrationType, (...args: unknown[]) => unknown> = new Map();
+
+  private integrationHandlers: Map<IntegrationType, (...args: any[]) => any> = new Map();
 
   constructor() {
     this.initializeIntegrationHandlers();
@@ -50,7 +80,7 @@ class ToolInvocationService {
 
     // Store in database
     try {
-      const { error } = await supabase.from('ai_tools').upsert({
+      const { error } = await db.from('ai_tools').upsert({
         id: tool.id,
         name: tool.name,
         type: tool.type,
@@ -58,8 +88,8 @@ class ToolInvocationService {
         parameters: tool.parameters,
         invocation_pattern: tool.invocationPattern,
         integration_type: tool.integrationType,
-        config: tool.config,
-        is_active: tool.isActive,
+        config: (tool as any).config,
+        is_active: (tool as any).isActive,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -81,7 +111,7 @@ class ToolInvocationService {
       return { success: false, error: 'Tool not found', result: null };
     }
 
-    if (!tool.isActive) {
+    if (!(tool as any).isActive) {
       return { success: false, error: 'Tool is not active', result: null };
     }
 
@@ -120,7 +150,7 @@ class ToolInvocationService {
 
   // Validate tool parameters
   private validateParameters(tool: ToolDefinition, parameters: Record<string, unknown>) {
-    for (const param of tool.parameters) {
+    for (const param of Object.values(tool.parameters) as any[]) {
       if (param.required && !(param.name in parameters)) {
         return {
           valid: false,
@@ -183,7 +213,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { n8nWorkflowId, n8nApiKey, n8nBaseUrl } = tool.config;
+    const { n8nWorkflowId, n8nApiKey, n8nBaseUrl } = (tool as any).config;
 
     if (!n8nWorkflowId || !n8nApiKey || !n8nBaseUrl) {
       throw new Error('N8N configuration is incomplete');
@@ -215,7 +245,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { model, temperature, maxTokens } = tool.config;
+    const { model, temperature, maxTokens } = (tool as any).config;
 
     // Get auth token for proxy authentication
     const {
@@ -256,7 +286,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { model, maxTokens } = tool.config;
+    const { model, maxTokens } = (tool as any).config;
 
     // Get auth token for proxy authentication
     const {
@@ -296,7 +326,7 @@ class ToolInvocationService {
   ) {
     // Cursor Agent integration - this would typically involve
     // sending requests to Cursor's API or using their SDK
-    const { cursorApiKey, cursorEndpoint } = tool.config;
+    const { cursorApiKey, cursorEndpoint } = (tool as any).config;
 
     if (!cursorApiKey || !cursorEndpoint) {
       throw new Error('Cursor Agent configuration is incomplete');
@@ -328,7 +358,7 @@ class ToolInvocationService {
     context?: unknown,
   ) {
     // Replit Agent integration
-    const { replitApiKey, replitEndpoint } = tool.config;
+    const { replitApiKey, replitEndpoint } = (tool as any).config;
 
     if (!replitApiKey || !replitEndpoint) {
       throw new Error('Replit Agent configuration is incomplete');
@@ -369,7 +399,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { apiUrl, apiKey, method = 'POST' } = tool.config;
+    const { apiUrl, apiKey, method = 'POST' } = (tool as any).config;
 
     if (!apiUrl) {
       throw new Error('Custom API URL is required');
@@ -405,7 +435,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { webhookUrl, method = 'POST' } = tool.config;
+    const { webhookUrl, method = 'POST' } = (tool as any).config;
 
     if (!webhookUrl) {
       throw new Error('Webhook URL is required');
@@ -435,7 +465,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { operation, table, query } = tool.config;
+    const { operation, table, query } = (tool as any).config;
 
     if (!operation) {
       throw new Error('Database operation is required');
@@ -472,7 +502,7 @@ class ToolInvocationService {
     let result;
     switch (operation) {
       case 'select': {
-        let queryBuilder = supabase.from(table).select(parameters.select || '*');
+        let queryBuilder = db.from(table).select(parameters.select || '*');
 
         // Automatically add user_id filter for user-scoped tables
         if (isUserScopedTable && !parameters.user_id) {
@@ -496,11 +526,11 @@ class ToolInvocationService {
           ? { ...(parameters.data as Record<string, unknown>), user_id: userId }
           : (parameters.data as Record<string, unknown>);
 
-        result = await supabase.from(table).insert(insertData);
+        result = await db.from(table).insert(insertData);
         break;
       }
       case 'update': {
-        let queryBuilder = supabase.from(table).update(parameters.data as Record<string, unknown>);
+        let queryBuilder = db.from(table).update(parameters.data as Record<string, unknown>);
 
         // For user-scoped tables, require user_id in where clause
         if (isUserScopedTable) {
@@ -516,7 +546,7 @@ class ToolInvocationService {
         break;
       }
       case 'delete': {
-        let queryBuilder = supabase.from(table).delete();
+        let queryBuilder = db.from(table).delete();
 
         // For user-scoped tables, require user_id in where clause
         if (isUserScopedTable) {
@@ -533,7 +563,7 @@ class ToolInvocationService {
       }
       case 'custom':
         // For custom RPC calls, pass userId in parameters
-        result = await supabase.rpc(query, {
+        result = await (supabase as any).rpc(query, {
           ...parameters,
           user_id: userId,
         });
@@ -555,7 +585,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { operation, path } = tool.config;
+    const { operation, path } = (tool as any).config;
 
     if (!operation || !path) {
       throw new Error('File system operation and path are required');
@@ -574,7 +604,7 @@ class ToolInvocationService {
     context?: unknown,
   ) {
     try {
-      await supabase.from('tool_executions').insert({
+      await db.from('tool_executions').insert({
         tool_id: toolId,
         parameters,
         result,
@@ -595,7 +625,7 @@ class ToolInvocationService {
     }
 
     try {
-      const { data, error } = await supabase.from('ai_tools').select('*').eq('id', toolId).single();
+      const { data, error } = await db.from('ai_tools').select('*').eq('id', toolId).single();
 
       if (error) throw error;
       return { data, error: null };

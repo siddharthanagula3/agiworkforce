@@ -248,9 +248,16 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             // agentStatuses is kept in sync for backward compatibility
             const agent = state.assignedAgents[agentId];
             if (agent) {
-              // Merge status into the agent assignment
-              const updatedAgent = { ...agent, ...status };
-              state.assignedAgents[agentId] = updatedAgent;
+              // Merge status into the agent assignment (pick only compatible fields)
+              const { status: newStatus, currentTask, toolsUsing, output } = status;
+              const updatedAgent: AgentAssignment = {
+                ...agent,
+                ...(newStatus !== undefined && { status: newStatus }),
+                ...(currentTask !== undefined && { currentTask }),
+                ...(toolsUsing !== undefined && { toolsUsing }),
+                ...(output !== undefined && { output: String(output) }),
+              };
+              state.assignedAgents[agentId] = updatedAgent as any;
 
               // Also update in session's assignedAgents for consistency
               if (state.activeSessionId && state.sessions[state.activeSessionId]) {
@@ -259,7 +266,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                   (a) => a.agentId === agentId,
                 );
                 if (sessionAgentIndex >= 0) {
-                  session.assignedAgents[sessionAgentIndex] = updatedAgent;
+                  session.assignedAgents[sessionAgentIndex] = updatedAgent as any;
                 }
               }
 
@@ -313,12 +320,13 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
         updateTokenUsage: (usage: Partial<TokenUsageByModel>) => {
           set((state) => {
             Object.entries(usage).forEach(([model, stats]) => {
+              if (!stats) return;
               if (state.tokenUsage[model]) {
                 state.tokenUsage[model].totalTokens += stats.totalTokens;
                 state.tokenUsage[model].cost += stats.cost;
                 state.tokenUsage[model].callCount += stats.callCount || 1;
               } else {
-                state.tokenUsage[model] = { ...stats };
+                state.tokenUsage[model] = { ...stats } as any;
               }
             });
 

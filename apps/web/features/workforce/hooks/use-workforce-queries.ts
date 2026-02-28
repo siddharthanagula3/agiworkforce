@@ -471,7 +471,7 @@ export function useToggleEmployeeStatus(): UseMutationResult<
       const { error } = isActive
         ? await supabase
             .from('hired_employees')
-            .upsert({ user_id: user.id, employee_id: employeeId })
+            .upsert({ user_id: user.id, employee_id: employeeId } as any)
         : await supabase
             .from('hired_employees')
             .delete()

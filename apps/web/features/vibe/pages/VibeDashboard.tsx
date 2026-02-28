@@ -325,51 +325,48 @@ const VibeDashboard: React.FC = () => {
     );
   }, []);
 
-  const handleAgentAction = useCallback(
-    (action: VibeAgentActionRow) => {
-      const status: WorkingStep['status'] =
-        action.status === 'failed'
-          ? 'failed'
-          : action.status === 'completed'
-            ? 'completed'
-            : 'in_progress';
+  const handleAgentAction = useCallback((action: VibeAgentActionRow) => {
+    const status: WorkingStep['status'] =
+      action.status === 'failed'
+        ? 'failed'
+        : action.status === 'completed'
+          ? 'completed'
+          : 'in_progress';
 
-      // Use type guards to safely extract metadata and result
-      const actionMetadata = getValidatedActionMetadata(action.metadata);
-      const actionResult = getValidatedActionResult(action.result);
+    // Use type guards to safely extract metadata and result
+    const actionMetadata = getValidatedActionMetadata(action.metadata);
+    const actionResult = getValidatedActionResult(action.result);
 
-      const description =
-        actionMetadata.summary ||
-        actionMetadata.description ||
-        actionMetadata.command ||
-        `${action.agent_name} ${action.action_type.replace(/_/g, ' ')}`;
+    const description =
+      actionMetadata.summary ||
+      actionMetadata.description ||
+      actionMetadata.command ||
+      `${action.agent_name} ${action.action_type.replace(/_/g, ' ')}`;
 
-      workingStepsMapRef.current.set(action.id, {
-        id: action.id,
-        description,
-        status,
-        timestamp: action.timestamp ? new Date(action.timestamp) : undefined,
-        result: actionResult.output || actionResult.summary || action.error || undefined,
-      });
+    workingStepsMapRef.current.set(action.id, {
+      id: action.id,
+      description,
+      status,
+      timestamp: action.timestamp ? new Date(action.timestamp) : undefined,
+      result: actionResult.output || actionResult.summary || action.error || undefined,
+    });
 
-      const ordered = Array.from(workingStepsMapRef.current.values()).sort(
-        (a, b) => (a.timestamp?.getTime() || 0) - (b.timestamp?.getTime() || 0),
-      );
-      setWorkingSteps(ordered);
+    const ordered = Array.from(workingStepsMapRef.current.values()).sort(
+      (a, b) => (a.timestamp?.getTime() || 0) - (b.timestamp?.getTime() || 0),
+    );
+    setWorkingSteps(ordered);
 
-      setActiveAgent((prev) => ({
-        name: action.agent_name,
-        role:
-          actionMetadata.agent_role ||
-          prev?.role ||
-          AI_EMPLOYEES.find((e) => e.name === action.agent_name)?.role ||
-          'AI Agent',
-        status: status === 'failed' ? 'error' : status === 'completed' ? 'completed' : 'working',
-        currentTask: description,
-      }));
-    },
-    [hiredEmployees],
-  );
+    setActiveAgent((prev) => ({
+      name: action.agent_name,
+      role:
+        actionMetadata.agent_role ||
+        prev?.role ||
+        AI_EMPLOYEES.find((e) => e.name === action.agent_name)?.role ||
+        'AI Agent',
+      status: status === 'failed' ? 'error' : status === 'completed' ? 'completed' : 'working',
+      currentTask: description,
+    }));
+  }, []);
 
   useVibeRealtime({
     sessionId: currentSessionId || null,
