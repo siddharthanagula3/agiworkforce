@@ -1,6 +1,10 @@
 import { supabase } from '@shared/lib/supabase-client';
 
-const db = supabase as any;
+// Use type assertion to access tables not in generated schema
+const db = supabase as unknown as {
+  from: (table: string) => ReturnType<typeof supabase.from>;
+  rpc: (fn: string, params?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>;
+};
 
 // Local type definitions
 interface ToolDefinition {
@@ -12,7 +16,7 @@ interface ToolDefinition {
   invocationPattern: string;
   integrationType: IntegrationType;
 
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   isActive: boolean;
 }
 
@@ -35,7 +39,14 @@ type IntegrationType =
 class ToolInvocationService {
   private toolRegistry: Map<string, ToolDefinition> = new Map();
 
-  private integrationHandlers: Map<IntegrationType, (...args: any[]) => any> = new Map();
+  private integrationHandlers: Map<
+    IntegrationType,
+    (
+      tool: ToolDefinition,
+      parameters: Record<string, unknown>,
+      context?: unknown,
+    ) => Promise<unknown>
+  > = new Map();
 
   constructor() {
     this.initializeIntegrationHandlers();
@@ -88,8 +99,8 @@ class ToolInvocationService {
         parameters: tool.parameters,
         invocation_pattern: tool.invocationPattern,
         integration_type: tool.integrationType,
-        config: (tool as any).config,
-        is_active: (tool as any).isActive,
+        config: tool.config as Record<string, string>,
+        is_active: tool.isActive,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -111,7 +122,7 @@ class ToolInvocationService {
       return { success: false, error: 'Tool not found', result: null };
     }
 
-    if (!(tool as any).isActive) {
+    if (!tool.isActive) {
       return { success: false, error: 'Tool is not active', result: null };
     }
 
@@ -150,7 +161,11 @@ class ToolInvocationService {
 
   // Validate tool parameters
   private validateParameters(tool: ToolDefinition, parameters: Record<string, unknown>) {
-    for (const param of Object.values(tool.parameters) as any[]) {
+    for (const param of Object.values(tool.parameters) as Array<{
+      name: string;
+      required?: boolean;
+      type?: string;
+    }>) {
       if (param.required && !(param.name in parameters)) {
         return {
           valid: false,
@@ -213,7 +228,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { n8nWorkflowId, n8nApiKey, n8nBaseUrl } = (tool as any).config;
+    const { n8nWorkflowId, n8nApiKey, n8nBaseUrl } = tool.config as Record<string, string>;
 
     if (!n8nWorkflowId || !n8nApiKey || !n8nBaseUrl) {
       throw new Error('N8N configuration is incomplete');
@@ -245,7 +260,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     _context?: unknown,
   ) {
-    const { model, temperature, maxTokens } = (tool as any).config;
+    const { model, temperature, maxTokens } = tool.config as Record<string, string>;
 
     // Get auth token for proxy authentication
     const {
@@ -286,7 +301,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     _context?: unknown,
   ) {
-    const { model, maxTokens } = (tool as any).config;
+    const { model, maxTokens } = tool.config as Record<string, string>;
 
     // Get auth token for proxy authentication
     const {
@@ -326,7 +341,7 @@ class ToolInvocationService {
   ) {
     // Cursor Agent integration - this would typically involve
     // sending requests to Cursor's API or using their SDK
-    const { cursorApiKey, cursorEndpoint } = (tool as any).config;
+    const { cursorApiKey, cursorEndpoint } = tool.config as Record<string, string>;
 
     if (!cursorApiKey || !cursorEndpoint) {
       throw new Error('Cursor Agent configuration is incomplete');
@@ -358,7 +373,7 @@ class ToolInvocationService {
     context?: unknown,
   ) {
     // Replit Agent integration
-    const { replitApiKey, replitEndpoint } = (tool as any).config;
+    const { replitApiKey, replitEndpoint } = tool.config as Record<string, string>;
 
     if (!replitApiKey || !replitEndpoint) {
       throw new Error('Replit Agent configuration is incomplete');
@@ -399,7 +414,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { apiUrl, apiKey, method = 'POST' } = (tool as any).config;
+    const { apiUrl, apiKey, method = 'POST' } = tool.config as Record<string, string>;
 
     if (!apiUrl) {
       throw new Error('Custom API URL is required');
@@ -435,7 +450,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { webhookUrl, method = 'POST' } = (tool as any).config;
+    const { webhookUrl, method = 'POST' } = tool.config as Record<string, string>;
 
     if (!webhookUrl) {
       throw new Error('Webhook URL is required');
@@ -465,7 +480,7 @@ class ToolInvocationService {
     parameters: Record<string, unknown>,
     context?: unknown,
   ) {
-    const { operation, table, query } = (tool as any).config;
+    const { operation, table, query } = tool.config as Record<string, string>;
 
     if (!operation) {
       throw new Error('Database operation is required');
@@ -563,7 +578,7 @@ class ToolInvocationService {
       }
       case 'custom':
         // For custom RPC calls, pass userId in parameters
-        result = await (supabase as any).rpc(query, {
+        result = await db.rpc(query, {
           ...parameters,
           user_id: userId,
         });
@@ -585,7 +600,7 @@ class ToolInvocationService {
     _parameters: Record<string, unknown>,
     _context?: unknown,
   ) {
-    const { operation, path } = (tool as any).config;
+    const { operation, path } = tool.config as Record<string, string>;
 
     if (!operation || !path) {
       throw new Error('File system operation and path are required');

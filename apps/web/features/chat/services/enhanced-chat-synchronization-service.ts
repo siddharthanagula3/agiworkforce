@@ -397,6 +397,7 @@ export class EnhancedChatSynchronizationService {
     try {
       const { data: _data, error } = await supabase
         .from('web_messages')
+
         .insert(this.transformLocalMessage(message) as any)
         .select()
         .single();

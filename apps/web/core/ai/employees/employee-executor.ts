@@ -218,6 +218,7 @@ export class AIEmployeeExecutor {
     const baseParameters: Record<string, unknown> = {
       task,
       employee: this.employee.name,
+
       role: (this.employee as any).role,
       timestamp: new Date().toISOString(),
     };
@@ -390,6 +391,7 @@ export class AIEmployeeExecutor {
       );
 
       // Transform performance data to our expected PerformanceMetrics format
+
       const pd = performanceData as Record<string, any> | null;
       const currentMetrics: PerformanceMetrics = {
         tasksCompleted: pd?.tasks_completed ?? 0,

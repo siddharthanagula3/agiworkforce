@@ -406,6 +406,7 @@ export class ChatPersistenceService {
 
         this.state.messages.set(
           session.id,
+
           messages.map((m: any) => ({
             id: m.id,
             sessionId: m.session_id,

@@ -71,6 +71,7 @@ export class VibeAgentActionService {
 
     const { data, error } = await supabase
       .from('vibe_agent_actions')
+
       .insert(action as any)
       .select()
       .single();

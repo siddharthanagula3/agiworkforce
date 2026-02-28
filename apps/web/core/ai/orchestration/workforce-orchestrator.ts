@@ -117,14 +117,17 @@ export class WorkforceOrchestratorRefactored {
 
     if (userId) {
       try {
-        const { data: hiredEmployees, error } = await (supabase as any)
-          .from('hired_employees')
+        const { data: hiredEmployees, error } = await (
+          supabase.from('hired_employees' as never) as any
+        )
           .select('employee_id, employee_name')
           .eq('user_id', userId);
 
         if (!error && hiredEmployees && hiredEmployees.length > 0) {
           // Create set of hired employee IDs for quick lookup
-          const hiredIds = new Set((hiredEmployees as any[]).map((e: any) => e.employee_id));
+          const hiredIds = new Set(
+            (hiredEmployees as Array<{ employee_id: string }>).map((e) => e.employee_id),
+          );
 
           // Filter to only employees user has hired (or free employees with price 0)
           availableEmployees = this.employees.filter(
@@ -591,14 +594,17 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
 
       if (user) {
         try {
-          const { data: hiredEmployees, error } = await (supabase as any)
-            .from('hired_employees')
+          const { data: hiredEmployees, error } = await (
+            supabase.from('hired_employees' as never) as any
+          )
             .select('employee_id, employee_name')
             .eq('user_id', user.id);
 
           if (!error && hiredEmployees && hiredEmployees.length > 0) {
             // Create set of hired employee IDs for quick lookup
-            const hiredIds = new Set((hiredEmployees as any[]).map((e: any) => e.employee_id));
+            const hiredIds = new Set(
+              (hiredEmployees as Array<{ employee_id: string }>).map((e) => e.employee_id),
+            );
 
             // Filter to only employees user has hired (or free employees with price 0)
             availableEmployees = this.employees.filter(

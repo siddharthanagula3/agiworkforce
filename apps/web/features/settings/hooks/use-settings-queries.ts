@@ -565,7 +565,8 @@ export function useOrganizationSettings(
     queryKey: ['settings', 'organization', organizationId ?? 'current'],
     queryFn: async (): Promise<OrganizationSettings | null> => {
       // Try to get organization from database
-      let query = (supabase as any).from('organizations').select('*');
+
+      let query = (supabase.from('organizations' as never) as any).select('*');
 
       if (organizationId) {
         query = query.eq('id', organizationId);
@@ -583,21 +584,21 @@ export function useOrganizationSettings(
 
       if (!data) return null;
 
-      const row = data as any;
+      const row = data as Record<string, unknown>;
       return {
-        id: row.id,
-        name: row.name,
-        slug: row.slug,
-        logoUrl: row.logo_url,
-        description: row.description,
-        website: row.website,
-        billingEmail: row.billing_email,
-        plan: row.plan || 'free',
-        memberCount: row.member_count || 1,
-        maxMembers: row.max_members || 5,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        settings: row.settings || {
+        id: row.id as string,
+        name: row.name as string,
+        slug: row.slug as string,
+        logoUrl: (row.logo_url as string | null) ?? null,
+        description: (row.description as string | null) ?? null,
+        website: (row.website as string | null) ?? null,
+        billingEmail: (row.billing_email as string | null) ?? null,
+        plan: (row.plan as OrganizationSettings['plan']) || 'free',
+        memberCount: (row.member_count as number) || 1,
+        maxMembers: (row.max_members as number) || 5,
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
+        settings: (row.settings as OrganizationSettings['settings']) || {
           allowMemberInvites: true,
           requireEmailVerification: true,
           defaultRole: 'member',
@@ -634,8 +635,7 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     { organizationId: string; updates: Partial<OrganizationSettings> }
   >({
     mutationFn: async ({ organizationId, updates }) => {
-      const { error } = await (supabase as any)
-        .from('organizations')
+      const { error } = await (supabase.from('organizations' as never) as any)
         .update({
           name: updates.name,
           description: updates.description,
@@ -698,8 +698,7 @@ export function useTeamMembers(
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organizationId) return [];
 
-      const { data, error } = await (supabase as any)
-        .from('organization_members')
+      const { data, error } = await (supabase.from('organization_members' as never) as any)
         .select(
           `
           id,
@@ -729,25 +728,25 @@ export function useTeamMembers(
         throw error;
       }
 
-      return ((data || []) as any[]).map((member) => {
+      return ((data || []) as Array<Record<string, unknown>>).map((member) => {
         const user = member.users as {
           email: string;
           display_name: string;
           avatar_url: string | null;
         } | null;
         return {
-          id: member.id,
-          userId: member.user_id,
-          organizationId: member.organization_id,
+          id: member.id as string,
+          userId: member.user_id as string,
+          organizationId: member.organization_id as string,
           email: user?.email || '',
           name: user?.display_name || '',
           avatarUrl: user?.avatar_url || null,
-          role: member.role || 'member',
-          status: member.status || 'active',
-          invitedAt: member.invited_at,
-          joinedAt: member.joined_at,
-          lastActiveAt: member.last_active_at,
-          permissions: member.permissions || [],
+          role: (member.role as TeamMember['role']) || 'member',
+          status: (member.status as TeamMember['status']) || 'active',
+          invitedAt: member.invited_at as string,
+          joinedAt: member.joined_at as string,
+          lastActiveAt: member.last_active_at as string,
+          permissions: (member.permissions as string[]) || [],
         };
       });
     },
@@ -778,8 +777,7 @@ export function useInviteTeamMember(): UseMutationResult<
     { organizationId: string; email: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ organizationId, email, role }) => {
-      const { data, error } = await (supabase as any)
-        .from('organization_members')
+      const { data, error } = await (supabase.from('organization_members' as never) as any)
         .insert({
           organization_id: organizationId,
           email,
@@ -792,17 +790,17 @@ export function useInviteTeamMember(): UseMutationResult<
 
       if (error) throw error;
 
-      const row = data as any;
+      const row = data as Record<string, unknown>;
       return {
-        id: row.id,
-        userId: row.user_id,
-        organizationId: row.organization_id,
+        id: row.id as string,
+        userId: row.user_id as string,
+        organizationId: row.organization_id as string,
         email: email,
         name: '',
         avatarUrl: null,
-        role: row.role,
+        role: row.role as TeamMember['role'],
         status: 'pending' as const,
-        invitedAt: row.invited_at,
+        invitedAt: row.invited_at as string | null,
         joinedAt: null,
         lastActiveAt: null,
         permissions: [],
@@ -835,8 +833,7 @@ export function useRemoveTeamMember(): UseMutationResult<
 
   return useMutation<void, Error, { memberId: string; organizationId: string }>({
     mutationFn: async ({ memberId }) => {
-      const { error } = await (supabase as any)
-        .from('organization_members')
+      const { error } = await (supabase.from('organization_members' as never) as any)
         .delete()
         .eq('id', memberId);
 
@@ -873,8 +870,7 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
     { memberId: string; organizationId: string; role: TeamMember['role'] }
   >({
     mutationFn: async ({ memberId, role }) => {
-      const { error } = await (supabase as any)
-        .from('organization_members')
+      const { error } = await (supabase.from('organization_members' as never) as any)
         .update({ role })
         .eq('id', memberId);
 
@@ -938,8 +934,7 @@ export function useUserActivity(
 
       if (!targetUserId) return [];
 
-      const { data, error } = await (supabase as any)
-        .from('user_activity')
+      const { data, error } = await (supabase.from('user_activity' as never) as any)
         .select('*')
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
@@ -953,15 +948,15 @@ export function useUserActivity(
         throw error;
       }
 
-      return ((data || []) as any[]).map((activity) => ({
-        id: activity.id,
-        userId: activity.user_id,
-        type: activity.type || 'other',
-        description: activity.description || '',
-        ipAddress: activity.ip_address,
-        userAgent: activity.user_agent,
-        metadata: activity.metadata || {},
-        createdAt: activity.created_at,
+      return ((data || []) as Array<Record<string, unknown>>).map((activity) => ({
+        id: activity.id as string,
+        userId: activity.user_id as string,
+        type: (activity.type as UserActivity['type']) || 'other',
+        description: (activity.description as string) || '',
+        ipAddress: activity.ip_address as string,
+        userAgent: activity.user_agent as string,
+        metadata: (activity.metadata as Record<string, unknown>) || {},
+        createdAt: activity.created_at as string,
       }));
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -1039,8 +1034,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       },
     ],
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      let query = (supabase as any)
-        .from('audit_logs')
+      let query = (supabase.from('audit_logs' as never) as any)
         .select('*')
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -1075,15 +1069,15 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         throw error;
       }
 
-      return ((data || []) as any[]).map((log) => ({
-        id: log.id,
-        userId: log.user_id,
-        action: log.action,
-        resourceType: log.resource_type,
-        resourceId: log.resource_id,
+      return ((data || []) as Array<Record<string, unknown>>).map((log) => ({
+        id: log.id as string,
+        userId: (log.user_id as string | null) ?? null,
+        action: log.action as string,
+        resourceType: (log.resource_type as string | null) ?? null,
+        resourceId: (log.resource_id as string | null) ?? null,
         details: (log.details as Record<string, unknown>) || {},
-        ipAddress: log.ip_address,
-        createdAt: log.created_at,
+        ipAddress: (log.ip_address as string | null) ?? null,
+        createdAt: log.created_at as string,
       }));
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -1103,8 +1097,7 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
   return useQuery<string[], Error>({
     queryKey: ['audit', 'actions'],
     queryFn: async (): Promise<string[]> => {
-      const { data, error } = await (supabase as any)
-        .from('audit_logs')
+      const { data, error } = await (supabase.from('audit_logs' as never) as any)
         .select('action')
         .limit(1000);
 
@@ -1116,7 +1109,7 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
       }
 
       const actions = new Set<string>();
-      ((data || []) as any[]).forEach((row) => {
+      ((data || []) as Array<{ action?: string }>).forEach((row) => {
         if (row.action) actions.add(row.action);
       });
 
