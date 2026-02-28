@@ -21,8 +21,8 @@ logs/
 *.log
 report.*.json
 
-# --- Internal/local artifacts ---
-artifacts/
+# --- Internal/local artifacts (root-level only) ---
+/artifacts/
 
 # --- Runtime data ---
 pids/
@@ -155,9 +155,9 @@ debug/
 # --- MCP Configuration (contains sensitive credentials) ---
 .mcp.json
 
-# --- Application cache ---
+# --- Application cache (root-level only) ---
 .cache/
-cache/
+/cache/
 
 # --- Playwright browsers ---
 ms-playwright/

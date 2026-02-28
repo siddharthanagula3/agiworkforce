@@ -134,7 +134,7 @@ export const useAgentMetricsStore = create<AgentMetricsState>()(
         isBackgroundServiceRunning: false,
 
         startSession: (sessionData) => {
-          const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const sessionId = `session-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`;
           const now = new Date();
 
           const newSession: ChatSession = {
@@ -247,7 +247,7 @@ export const useAgentMetricsStore = create<AgentMetricsState>()(
         addActivity: (activity) => {
           const newActivity = {
             ...activity,
-            id: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `activity-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
             timestamp: new Date(),
           };
 
