@@ -8,8 +8,7 @@
  */
 
 import React, { useState, useRef, KeyboardEvent } from 'react';
-import { useWorkforceStore } from '@shared/stores/workforce-store';
-import { AI_EMPLOYEES } from '@/data/marketplace-employees';
+import { ChatAIService } from '@/features/chat/services/chat-ai-service';
 import { useVibeViewStore, type FileTreeItem } from '../../stores/vibe-view-store';
 import { Button } from '@shared/ui/button';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -37,7 +36,6 @@ export function VibeMessageInput({
   placeholder = 'Type a message... (@ for agents, # for files)',
   className,
 }: VibeMessageInputProps) {
-  const { hiredEmployees } = useWorkforceStore();
   const { fileTree } = useVibeViewStore();
 
   const [input, setInput] = useState('');
@@ -166,23 +164,19 @@ export function VibeMessageInput({
       setMentionQuery(query);
       setMentionStartPos(cursorPos - atMatch[0].length);
 
-      // Filter agents - look up employee data from the static catalog
-      const agentSuggestions: MentionSuggestion[] = (hiredEmployees || [])
-        .map((emp) => {
-          const empData = AI_EMPLOYEES.find((e) => e.id === emp.employee_id);
-          return { hired: emp, data: empData };
-        })
+      // Filter skills - all skills are always available (no hiring needed)
+      const allSkills = ChatAIService.getAvailableSkillsSync();
+      const agentSuggestions: MentionSuggestion[] = allSkills
         .filter(
-          ({ hired, data }) =>
-            (data?.name?.toLowerCase().includes(query) ?? false) ||
-            (data?.role?.toLowerCase().includes(query) ?? false) ||
-            (hired.employee_name?.toLowerCase().includes(query) ?? false),
+          (skill) =>
+            skill.name.toLowerCase().includes(query) ||
+            skill.category.toLowerCase().includes(query),
         )
-        .map(({ hired, data }) => ({
-          id: hired.id,
-          name: data?.name || hired.employee_name || 'Unknown',
+        .map((skill) => ({
+          id: skill.id,
+          name: skill.name,
           type: 'agent' as const,
-          role: data?.role,
+          role: skill.category,
         }))
         .slice(0, 5); // Limit to 5 suggestions
 

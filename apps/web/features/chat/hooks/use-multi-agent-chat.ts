@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useMissionStore } from '@shared/stores/mission-control-store';
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
+import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import type { AIEmployee } from '@core/types/ai-employee';
 
 export interface MultiAgentChatOptions {
@@ -84,18 +84,11 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
     Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
   >([]);
 
-  // Load available agents
+  // Load available agents (all agents are always available in skills-based model)
   useEffect(() => {
     const loadAgents = async () => {
       try {
-        // Ensure employees are loaded
-        await workforceOrchestratorRefactored.processRequest({
-          userId: userId || 'system',
-          input: 'initialize',
-          mode: 'chat',
-        });
-
-        const agents = workforceOrchestratorRefactored.getAvailableEmployees();
+        const agents = await systemPromptsService.getAvailableEmployees();
         setAvailableAgents(agents);
       } catch (err) {
         console.error('Failed to load agents:', err);
@@ -144,17 +137,24 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
       const messageMode = opts.forceMode || missionMode;
 
       try {
-        const response = await workforceOrchestratorRefactored.processRequest({
-          userId,
-          input: content,
-          mode: messageMode,
-          sessionId,
-          conversationHistory: conversationHistoryRef.current,
+        // Skills-based model: send message via direct API call
+        const apiResponse = await fetch('/api/llm/completion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            input: content,
+            mode: messageMode,
+            sessionId,
+            conversationHistory: conversationHistoryRef.current,
+          }),
         });
 
-        if (!response.success) {
-          throw new Error(response.error || 'Failed to process message');
+        if (!apiResponse.ok) {
+          throw new Error('Failed to process message');
         }
+
+        const responseData = await apiResponse.json();
 
         // Add user message to conversation history
         conversationHistoryRef.current.push({
@@ -163,10 +163,10 @@ export function useMultiAgentChat(options: MultiAgentChatOptions = {}): UseMulti
         });
 
         // Add assistant response to conversation history
-        if (response.chatResponse) {
+        if (responseData.chatResponse) {
           conversationHistoryRef.current.push({
             role: 'assistant',
-            content: response.chatResponse,
+            content: responseData.chatResponse,
           });
         }
 

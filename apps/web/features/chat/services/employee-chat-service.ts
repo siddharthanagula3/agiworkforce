@@ -5,7 +5,6 @@
  * Supports multi-agent collaboration with supervisor pattern for complex tasks
  */
 
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import { multiAgentCollaborationService } from './multi-agent-collaboration-service';
 import { sequentialWorkflowOrchestrator } from '@core/ai/orchestration/sequential-workflow-orchestrator';
@@ -13,7 +12,7 @@ import { employeeMemoryService } from '@core/ai/employees/employee-memory-servic
 import {
   consultingOrchestrator,
   type ConsultingDomain,
-  type ConsultationResult,
+  type ConsultationResult as _ConsultationResult,
 } from '@core/ai/orchestration/consulting-orchestrator';
 import { ExpertiseTaxonomy } from '@core/ai/orchestration/intelligent-agent-router';
 import type { AIEmployee } from '@core/types/ai-employee';
@@ -335,11 +334,24 @@ export class EmployeeChatService {
         }
       }
 
-      const response = await workforceOrchestratorRefactored.routeMessageToEmployee(
-        selection.employee.name,
-        userMessage,
-        enhancedHistory as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
-      );
+      // Skills-based model: route message via direct API call
+      const apiResponse = await fetch('/api/llm/completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent: selection.employee.name,
+          input: userMessage,
+          mode: 'chat',
+          conversationHistory: enhancedHistory,
+        }),
+      });
+
+      if (!apiResponse.ok) {
+        throw new Error(`API request failed: ${apiResponse.statusText}`);
+      }
+
+      const apiData = await apiResponse.json();
+      const response = apiData.response || userMessage;
 
       store.updateEmployeeStatus(selection.employee.name, 'idle');
 
@@ -1162,7 +1174,7 @@ export class EmployeeChatService {
     let bestEmployee = this.employees[0];
     let bestScore = 0;
     let bestReasons: string[] = ['general assistant'];
-    let bestExpertise: string[] = [];
+    let _bestExpertise: string[] = [];
 
     scores.forEach((data, employeeName) => {
       if (data.score > bestScore) {
@@ -1171,7 +1183,7 @@ export class EmployeeChatService {
           bestEmployee = employee;
           bestScore = data.score;
           bestReasons = data.reasons;
-          bestExpertise = data.matchedExpertise;
+          _bestExpertise = data.matchedExpertise;
         }
       }
     });
