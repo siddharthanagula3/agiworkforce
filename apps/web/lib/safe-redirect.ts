@@ -54,10 +54,16 @@ export function getSafeRedirectUrl(
 
   // If it's a relative path (starts with /), it's safe
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    // Normalize to prevent path traversal tricks
-    // Remove any double slashes that might appear after the first character
-    const normalized = trimmed.replace(/\/+/g, '/');
-    return normalized;
+    // Normalize only the pathname to prevent path traversal tricks with double slashes.
+    // Apply to pathname only — not query string or hash — to avoid corrupting URL parameters
+    // that contain URLs (e.g. /search?redirect=https://example.com).
+    try {
+      const u = new URL(trimmed, 'http://placeholder');
+      u.pathname = u.pathname.replace(/\/+/g, '/');
+      return u.pathname + u.search + u.hash;
+    } catch {
+      return fallback;
+    }
   }
 
   // Try to parse as URL to check if it's same-origin

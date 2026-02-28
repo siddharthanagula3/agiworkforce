@@ -4,6 +4,115 @@ import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
 
+const GOOGLE_JSON_SCHEMA_ONLY_KEYS = new Set([
+  '$schema',
+  '$defs',
+  'definitions',
+  'additionalProperties',
+  'allOf',
+  'anyOf',
+  'const',
+  'contains',
+  'dependentRequired',
+  'dependentSchemas',
+  'else',
+  'examples',
+  'if',
+  'not',
+  'oneOf',
+  'patternProperties',
+  'prefixItems',
+  'then',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+]);
+
+type JsonObject = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasSchemaShape(value: unknown): value is JsonObject {
+  return (
+    isPlainObject(value) &&
+    ['type', 'properties', 'items', 'required', '$defs', 'definitions'].some((key) => key in value)
+  );
+}
+
+function normalizeGoogleToolSchema(schema: unknown, isRoot = true): unknown {
+  if (Array.isArray(schema)) {
+    return schema.map((item) => normalizeGoogleToolSchema(item, false));
+  }
+
+  if (!isPlainObject(schema)) {
+    return schema;
+  }
+
+  // Some MCP / JSON Schema tool adapters wrap the actual schema in a top-level `schema` field.
+  if (isRoot && hasSchemaShape(schema.schema)) {
+    return normalizeGoogleToolSchema(schema.schema, true);
+  }
+
+  const normalized: JsonObject = {};
+
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === '$schema') continue;
+    if (key === 'schema' && isPlainObject(value)) continue;
+    normalized[key] = normalizeGoogleToolSchema(value, false);
+  }
+
+  if (normalized.type === 'array' && !('items' in normalized)) {
+    normalized.items = {};
+  }
+
+  if (!('type' in normalized) && 'properties' in normalized) {
+    normalized.type = 'object';
+  }
+
+  return normalized;
+}
+
+function requiresGoogleJsonSchema(schema: unknown): boolean {
+  if (Array.isArray(schema)) {
+    return schema.some(requiresGoogleJsonSchema);
+  }
+
+  if (!isPlainObject(schema)) {
+    return false;
+  }
+
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'schema' && hasSchemaShape(value)) {
+      return true;
+    }
+    if (GOOGLE_JSON_SCHEMA_ONLY_KEYS.has(key)) {
+      return true;
+    }
+    if (requiresGoogleJsonSchema(value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getGoogleToolParameters(
+  schema: unknown,
+): { parameters: JsonObject } | { parametersJsonSchema: JsonObject } {
+  const normalized = normalizeGoogleToolSchema(schema);
+  const baseSchema =
+    isPlainObject(normalized) && Object.keys(normalized).length > 0
+      ? normalized
+      : { type: 'object', properties: {} };
+
+  if (requiresGoogleJsonSchema(schema)) {
+    return { parametersJsonSchema: baseSchema };
+  }
+
+  return { parameters: baseSchema };
+}
+
 /**
  * Convert OpenAI-format tools to Google's functionDeclarations format.
  * OpenAI: { type: "function", function: { name, description, parameters } }
@@ -17,7 +126,7 @@ function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations:
       return {
         name: fn['name'],
         description: fn['description'] || '',
-        parameters: fn['parameters'] || { type: 'object', properties: {} },
+        ...getGoogleToolParameters(fn['parameters']),
       };
     }
     // Handle Anthropic format: { name, description, input_schema }
@@ -25,14 +134,14 @@ function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations:
       return {
         name: tool['name'],
         description: tool['description'] || '',
-        parameters: tool['input_schema'],
+        ...getGoogleToolParameters(tool['input_schema']),
       };
     }
     // Handle flat format (from desktop's transform): { name, description, parameters }
     return {
       name: tool['name'],
       description: tool['description'] || '',
-      parameters: tool['parameters'] || { type: 'object', properties: {} },
+      ...getGoogleToolParameters(tool['parameters']),
     };
   });
 
