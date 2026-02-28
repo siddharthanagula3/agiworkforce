@@ -1,11 +1,13 @@
 /**
  * ChatComposer - Modern, minimal chat input
  *
- * Redesigned with:
- * - Single-line input that expands
- * - Tools hidden behind + button (like Claude.ai)
- * - @mention for employee selection
- * - Clean, focused design
+ * Redesigned to match the desktop app's ChatInputArea visual design:
+ * - Pill-shaped glassmorphic container (rounded-2xl, backdrop-blur-xl)
+ * - Textarea above a dedicated toolbar row
+ * - Left toolbar: + tools popover + attach button
+ * - Right toolbar: character count + send button
+ * - @mention dropdown anchored above the composer
+ * - Attachments and error state rendered outside/above the pill
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -14,17 +16,8 @@ import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@shared/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@shared/ui/command';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
 import {
-  Send,
   Paperclip,
   X,
   Loader2,
@@ -33,7 +26,6 @@ import {
   Video,
   FileText,
   Search,
-  Sparkles,
   ArrowUp,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -83,6 +75,8 @@ const TOOLS = [
   { id: 'search', label: 'Web Search', icon: Search, color: 'text-green-500' },
 ];
 
+const MAX_CHAR_LENGTH = 20000;
+
 const DEFAULT_EMPLOYEES: AIEmployee[] = [
   {
     id: 'auto',
@@ -106,9 +100,11 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -119,28 +115,58 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
     }
   }, [message]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Handle @mention detection
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
-    setMessage(value);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
 
-    // Check for @ mention
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-      // If there's no space after @, show mention picker
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setShowMentions(true);
-        setMentionQuery(textAfterAt);
-        setMentionStartIndex(lastAtIndex);
+      if (value.length > MAX_CHAR_LENGTH) {
+        setSubmitError(`Character limit exceeded by ${value.length - MAX_CHAR_LENGTH} characters`);
         return;
       }
-    }
-    setShowMentions(false);
-  }, []);
+
+      const charPercentage = (value.length / MAX_CHAR_LENGTH) * 100;
+      if (charPercentage > 90) {
+        setSubmitError(
+          `${MAX_CHAR_LENGTH - value.length} characters remaining (${charPercentage.toFixed(0)}% used)`,
+        );
+      } else if (
+        submitError?.includes('Character limit') ||
+        submitError?.includes('characters remaining')
+      ) {
+        setSubmitError(null);
+      }
+
+      const cursorPos = e.target.selectionStart || 0;
+      setMessage(value);
+
+      // Check for @ mention
+      const textBeforeCursor = value.substring(0, cursorPos);
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+      if (lastAtIndex !== -1) {
+        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+        // If there's no space after @, show mention picker
+        if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+          setShowMentions(true);
+          setMentionQuery(textAfterAt);
+          setMentionStartIndex(lastAtIndex);
+          return;
+        }
+      }
+      setShowMentions(false);
+    },
+    [submitError],
+  );
 
   // Filter employees for mention
   const filteredEmployees = availableEmployees.filter(
@@ -148,9 +174,6 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
       emp.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
       emp.description.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
-
-  // Track focus timeout for cleanup
-  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle mention selection
   const handleMentionSelect = useCallback(
@@ -187,17 +210,11 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
     [message, mentionStartIndex],
   );
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (focusTimeoutRef.current) {
-        clearTimeout(focusTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const handleSubmit = async () => {
     if (!message.trim() && attachments.length === 0) return;
+    if (isLoading) return;
+
+    setSubmitError(null);
 
     try {
       // Build tool prefix
@@ -219,6 +236,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
       setSelectedTools([]);
     } catch (error) {
       console.error('Failed to send message:', error);
+      setSubmitError('Failed to send message. Please try again.');
     }
   };
 
@@ -251,6 +269,10 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
   };
 
   const canSend = (message.trim() || attachments.length > 0) && !isLoading;
+
+  // Character count display logic
+  const charCount = message.length;
+  const charNearLimit = charCount > MAX_CHAR_LENGTH * 0.9;
 
   return (
     <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
@@ -342,12 +364,32 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
         </div>
       )}
 
-      {/* Main Input Container */}
-      <div className="relative rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-1 focus-within:ring-ring">
-        {/* @Mention Dropdown */}
+      {/* Error display */}
+      {submitError && (
+        <div
+          className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100"
+          role="alert"
+          aria-live="assertive"
+        >
+          {submitError}
+        </div>
+      )}
+
+      {/* Main Input Container — glassmorphic pill */}
+      <div
+        className={cn(
+          'relative overflow-visible rounded-2xl',
+          'bg-card/95 backdrop-blur-xl',
+          'border border-border/80',
+          'shadow-xl dark:shadow-black/30',
+          'transition-all duration-200 ease-out',
+          'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
+        )}
+      >
+        {/* @Mention Dropdown — anchored above the pill */}
         {showMentions && filteredEmployees.length > 0 && (
           <div
-            className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-lg border border-border bg-popover shadow-lg"
+            className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border bg-popover shadow-lg"
             role="listbox"
             aria-label="Select employee to mention"
           >
@@ -379,77 +421,8 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
           </div>
         )}
 
-        <div className="flex items-end gap-2 p-2">
-          {/* Tools Button */}
-          <TooltipProvider delayDuration={300}>
-            <Popover open={showTools} onOpenChange={setShowTools}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        'h-9 w-9 rounded-full',
-                        selectedTools.length > 0 && 'bg-primary/10 text-primary',
-                      )}
-                      disabled={isLoading}
-                      aria-label="Add tools"
-                      aria-expanded={showTools}
-                    >
-                      <Plus className="h-5 w-5" aria-hidden="true" />
-                    </Button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top">Add tools</TooltipContent>
-              </Tooltip>
-              <PopoverContent align="start" className="w-56 p-2">
-                <div className="space-y-1" role="menu" aria-label="Available tools">
-                  {TOOLS.map((tool) => {
-                    const Icon = tool.icon;
-                    const isSelected = selectedTools.includes(tool.id);
-                    return (
-                      <button
-                        key={tool.id}
-                        onClick={() => toggleTool(tool.id)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                          isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted',
-                        )}
-                        role="menuitem"
-                        aria-pressed={isSelected}
-                      >
-                        <Icon className={cn('h-4 w-4', tool.color)} aria-hidden="true" />
-                        <span className="flex-1 text-left">{tool.label}</span>
-                        {isSelected && (
-                          <div className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Attach Button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-full"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading}
-                  aria-label="Attach file"
-                >
-                  <Paperclip className="h-5 w-5" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Attach file</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {/* Textarea */}
+        {/* Textarea — full width, no border, auto-resize */}
+        <div className="relative px-3 pt-3">
           <Textarea
             ref={textareaRef}
             value={message}
@@ -457,40 +430,142 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={isLoading}
-            className="min-h-[52px] flex-1 resize-none border-0 bg-transparent px-2 py-3 text-base shadow-none focus-visible:ring-0"
+            className={cn(
+              'w-full resize-none bg-transparent py-2 px-1',
+              'text-[15px] leading-6',
+              'border-0 shadow-none',
+              'focus-visible:ring-0 focus-visible:outline-none',
+              'placeholder:text-muted-foreground/60',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
             rows={1}
             aria-label="Message input"
+            style={{ minHeight: '52px', maxHeight: '200px' }}
           />
+        </div>
 
-          {/* Send Button */}
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!canSend}
-                  size="icon"
-                  className={cn(
-                    'h-9 w-9 rounded-full transition-all',
-                    canSend
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'bg-muted text-muted-foreground',
-                  )}
-                  aria-label={isLoading ? 'Sending message' : 'Send message'}
-                  aria-busy={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <ArrowUp className="h-5 w-5" aria-hidden="true" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {isLoading ? 'Sending...' : 'Send message'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        {/* Toolbar row — below textarea */}
+        <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+          {/* Left side: tools + attach */}
+          <div className="flex items-center gap-1">
+            <TooltipProvider delayDuration={300}>
+              {/* Tools popover button */}
+              <Popover open={showTools} onOpenChange={setShowTools}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                          selectedTools.length > 0 &&
+                            'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+                        )}
+                        disabled={isLoading}
+                        aria-label="Add tools"
+                        aria-expanded={showTools}
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Add tools</TooltipContent>
+                </Tooltip>
+                <PopoverContent align="start" className="w-56 p-2">
+                  <div className="space-y-0.5" role="menu" aria-label="Available tools">
+                    {TOOLS.map((tool) => {
+                      const Icon = tool.icon;
+                      const isSelected = selectedTools.includes(tool.id);
+                      return (
+                        <button
+                          key={tool.id}
+                          onClick={() => toggleTool(tool.id)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted',
+                          )}
+                          role="menuitem"
+                          aria-pressed={isSelected}
+                        >
+                          <Icon className={cn('h-4 w-4', tool.color)} aria-hidden="true" />
+                          <span className="flex-1 text-left">{tool.label}</span>
+                          {isSelected && (
+                            <div className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Attach button */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Attach file</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Right side: char count + send */}
+          <div className="flex items-center gap-2">
+            {/* Character count — only shown when approaching limit */}
+            {charCount > 0 && (
+              <span
+                className={cn(
+                  'text-xs font-medium tabular-nums',
+                  charNearLimit
+                    ? 'text-orange-500 dark:text-orange-400'
+                    : 'text-muted-foreground/60',
+                )}
+                aria-live="polite"
+              >
+                {charCount.toLocaleString()}
+              </span>
+            )}
+
+            {/* Send button */}
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!canSend}
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8 rounded-full transition-all duration-150',
+                      canSend
+                        ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow'
+                        : 'bg-muted text-muted-foreground cursor-not-allowed',
+                    )}
+                    aria-label={isLoading ? 'Sending message' : 'Send message'}
+                    aria-busy={isLoading}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isLoading ? 'Sending...' : 'Send message'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
         {/* Hidden file input */}
@@ -498,6 +573,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
+          accept="image/*,audio/*,text/*,application/pdf,application/json,.md,.txt,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.c,.cpp,.h,.html,.css,.xml,.yaml,.yml,.toml,.csv,.sql,.sh"
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -509,13 +585,23 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
       </div>
 
       {/* Helper text */}
-      <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+      <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground/70">
         <span>
-          Type <kbd className="rounded border bg-muted px-1 font-mono">@</kbd> to mention an
-          employee
+          Type{' '}
+          <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">@</kbd>{' '}
+          to mention a skill
         </span>
         <span className="hidden sm:inline">
-          <kbd className="rounded border bg-muted px-1 font-mono">Enter</kbd> to send
+          <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
+            Enter
+          </kbd>{' '}
+          to send
+        </span>
+        <span className="hidden sm:inline">
+          <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
+            Shift+Enter
+          </kbd>{' '}
+          for newline
         </span>
       </div>
     </div>

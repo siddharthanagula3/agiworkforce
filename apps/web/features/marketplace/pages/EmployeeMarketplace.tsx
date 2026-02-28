@@ -1,13 +1,12 @@
 'use client';
 
 /**
- * AI Employee Marketplace Page
- * Browse, search, and hire specialized AI employees
+ * AI Agents Marketplace Page
+ * Browse AI agents and start conversations with them
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -16,28 +15,20 @@ import {
   Search,
   Bot,
   Users,
-  DollarSign,
   TrendingUp,
   Code,
   Palette,
   BarChart3,
   Camera,
-  Loader2,
-  ShoppingCart,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useAuthStore } from '@shared/stores/authentication-store';
-import { useWorkforceStore } from '@shared/stores/workforce-store';
 import { useBusinessMetrics } from '@shared/hooks/useAnalytics';
-import { supabase } from '@shared/lib/supabase-client';
-import { toast } from 'sonner';
 import { queryKeys } from '@shared/stores/query-client';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import {
   EmployeeCard,
   EmployeeGridSkeleton,
-  MarketplaceHeaderSkeleton,
-  MarketplaceFiltersSkeleton,
   type AIEmployee,
 } from '@features/marketplace/components';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
@@ -58,21 +49,12 @@ const categories = [
 ];
 
 export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) => {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isHiringAll, setIsHiringAll] = useState(false);
-  const [hiringProgress, setHiringProgress] = useState({
-    current: 0,
-    total: 0,
-  });
 
-  const queryClient = useQueryClient();
-  const { user } = useAuthStore();
-  const { hiredEmployees, fetchHiredEmployees } = useWorkforceStore();
-  const { trackMarketplaceView, trackEmployeeHire } = useBusinessMetrics();
+  const { trackMarketplaceView } = useBusinessMetrics();
 
   // Track marketplace view on component mount
   useEffect(() => {
@@ -83,17 +65,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
     });
   }, [trackMarketplaceView, selectedCategory, searchQuery, sortBy, viewMode]);
 
-  // Fetch hired employees on mount
-  useEffect(() => {
-    if (user) {
-      fetchHiredEmployees();
-    }
-  }, [user, fetchHiredEmployees]);
-
-  // Get purchased employee IDs from workforce store
-  const purchasedEmployeeIds = new Set(hiredEmployees.map((emp) => emp.employee_id));
-
-  // Fetch AI employees from Supabase database using React Query
+  // Fetch AI agents using React Query
   const { data: employees = [], isLoading } = useQuery<AIEmployee[]>({
     queryKey: queryKeys.employees.marketplace({
       category: selectedCategory,
@@ -101,7 +73,6 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
       sortBy,
     }),
     queryFn: async () => {
-      // Use static employee data from marketplace-employees.ts
       let filteredEmployees = [...AI_EMPLOYEES];
 
       // Apply category filter
@@ -123,53 +94,32 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
         );
       }
 
-      // Transform to marketplace card format
+      // Transform to card format
       const transformedEmployees = filteredEmployees.map((emp) => ({
         id: emp.id,
         name: emp.name,
         role: emp.role || emp.specialty || 'AI Specialist',
         category: emp.category,
         description: emp.description,
-        provider: emp.provider as 'claude' | 'gpt4' | 'gemini',
-        price: emp.price,
-        originalPrice: emp.originalPrice,
-        yearlyPrice: emp.yearlyPrice,
+        provider: emp.provider as string,
         avatar: emp.avatar,
         skills: emp.skills || [],
         specialty: emp.specialty,
         fitLevel: emp.fitLevel || ('excellent' as const),
         popular: emp.popular || false,
         defaultTools: emp.defaultTools || [],
-        isHired: purchasedEmployeeIds.has(emp.id),
-        rating: emp.rating ?? 4.5 + Math.random() * 0.5,
-        reviews: emp.reviews ?? Math.floor(Math.random() * 100) + 10,
-        successRate: emp.successRate ?? 85 + Math.floor(Math.random() * 15),
-        avgResponseTime: emp.avgResponseTime || `${Math.floor(Math.random() * 30) + 5}s`,
-        examples: emp.examples || [
-          `Help with ${(emp.role || 'AI').toLowerCase()} tasks`,
-          `Provide expert advice on ${emp.category} topics`,
-        ],
       }));
 
       // Apply sorting
       switch (sortBy) {
-        case 'rating':
-          transformedEmployees.sort((a, b) => b.rating - a.rating);
-          break;
-        case 'price-low':
-          transformedEmployees.sort((a, b) => a.price - b.price);
-          break;
-        case 'price-high':
-          transformedEmployees.sort((a, b) => b.price - a.price);
-          break;
         case 'newest':
           transformedEmployees.sort((a, b) => b.id.localeCompare(a.id));
           break;
         case 'popular':
         default:
           transformedEmployees.sort((a, b) => {
-            const aScore = (a.popular ? 1 : 0) + a.rating;
-            const bScore = (b.popular ? 1 : 0) + b.rating;
+            const aScore = a.popular ? 1 : 0;
+            const bScore = b.popular ? 1 : 0;
             return bScore - aScore;
           });
           break;
@@ -179,123 +129,6 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
-
-  // Track whether component is mounted to prevent state updates after unmount
-  const isMountedRef = React.useRef(true);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const handleHireAll = async () => {
-    if (!user) {
-      toast.error('Please sign in to hire AI employees', {
-        description: 'You need to be signed in to hire AI employees',
-        duration: 4000,
-      });
-      router.push('/auth/login');
-      return;
-    }
-
-    // Get all unhired employees
-    const unhiredEmployees = employees.filter((emp) => !emp.isHired);
-
-    if (unhiredEmployees.length === 0) {
-      toast.info('All employees are already hired', {
-        description: 'You have hired all available AI employees',
-      });
-      return;
-    }
-
-    setIsHiringAll(true);
-    setHiringProgress({ current: 0, total: unhiredEmployees.length });
-
-    let successCount = 0;
-    let failureCount = 0;
-
-    for (let i = 0; i < unhiredEmployees.length; i++) {
-      // Check if component is still mounted
-      if (!isMountedRef.current) break;
-
-      const employee = unhiredEmployees[i];
-
-      try {
-        // Check if already hired (double-check)
-        const { data: existingHire } = await supabase
-          .from('hired_employees')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('employee_id', employee.id)
-          .maybeSingle();
-
-        if (!existingHire) {
-          // Insert hire record
-          const { error } = await supabase.from('hired_employees').insert({
-            user_id: user.id,
-            employee_id: employee.id,
-            employee_name: employee.name,
-          });
-
-          if (error && error.code !== '23505') {
-            // Not a duplicate error
-            console.error('[HireAll] Insert failed:', error);
-            failureCount++;
-          } else {
-            successCount++;
-            // Track successful hire
-            trackEmployeeHire(employee.id, employee.name, {
-              category: employee.category,
-              skills: employee.skills,
-              price: employee.price,
-            });
-          }
-        } else {
-          successCount++; // Already hired
-        }
-      } catch (error) {
-        console.error('[HireAll] Unexpected error:', error);
-        failureCount++;
-      }
-
-      // Only update state if still mounted
-      if (isMountedRef.current) {
-        setHiringProgress({ current: i + 1, total: unhiredEmployees.length });
-      }
-
-      // Small delay to avoid rate limiting
-      if (i < unhiredEmployees.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    // Only update state if still mounted
-    if (!isMountedRef.current) return;
-
-    setIsHiringAll(false);
-
-    // Dispatch custom event for workforce sync
-    window.dispatchEvent(new CustomEvent('team:refresh'));
-
-    // Refresh the hired employees list
-    await fetchHiredEmployees();
-    queryClient.invalidateQueries({ queryKey: queryKeys.employees.all() });
-
-    if (failureCount === 0) {
-      toast.success(`Successfully hired all ${successCount} AI employees!`, {
-        description: 'All employees are now part of your workforce',
-        duration: 5000,
-      });
-    } else {
-      toast.warning(`Hired ${successCount} employees, ${failureCount} failed`, {
-        description: 'Some employees could not be hired. Please try again for failed employees.',
-        duration: 5000,
-      });
-    }
-  };
 
   return (
     <ErrorBoundary
@@ -318,42 +151,16 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-              AI Employee Marketplace
+              AI Agents
             </h1>
             <p className="text-sm text-muted-foreground md:text-base">
-              Browse and hire specialized AI employees for your projects.
+              Browse AI agents and their skills. Click any agent to start a conversation.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-border text-xs md:text-sm">
-              <Users className="mr-1 h-3 w-3" />
-              {employees.length} Available
-            </Badge>
-            <Button
-              onClick={handleHireAll}
-              disabled={isHiringAll || employees.filter((e) => !e.isHired).length === 0}
-              size="sm"
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              aria-label={
-                isHiringAll
-                  ? `Hiring all employees: ${hiringProgress.current} of ${hiringProgress.total} complete`
-                  : `Hire all ${employees.filter((e) => !e.isHired).length} available AI employees`
-              }
-            >
-              {isHiringAll ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  <span className="hidden sm:inline">Hiring </span>
-                  {hiringProgress.current}/{hiringProgress.total}
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  Hire All
-                </>
-              )}
-            </Button>
-          </div>
+          <Badge variant="outline" className="border-border text-xs md:text-sm">
+            <Users className="mr-1 h-3 w-3" />
+            {employees.length} Available
+          </Badge>
         </div>
 
         {/* Search and Filters */}
@@ -365,11 +172,11 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                   <Input
-                    placeholder="Search employees..."
+                    placeholder="Search agents..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="border-border bg-background pl-10 text-sm"
-                    aria-label="Search AI employees by name, role, or skills"
+                    aria-label="Search AI agents by name, role, or skills"
                   />
                 </div>
               </div>
@@ -412,18 +219,15 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
                 })}
               </div>
 
-              {/* Sort */}
+              {/* Sort and View Toggle */}
               <div className="flex gap-2">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
                   className="rounded-md border border-border bg-background px-2 py-2 text-xs text-foreground md:px-3 md:text-sm"
-                  aria-label="Sort employees by criteria"
+                  aria-label="Sort agents by criteria"
                 >
                   <option value="popular">Most Popular</option>
-                  <option value="rating">Highest Rated</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
                   <option value="newest">Newest</option>
                 </select>
 
@@ -441,7 +245,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
           </CardContent>
         </Card>
 
-        {/* Employees Grid/List */}
+        {/* Agents Grid/List */}
         {isLoading ? (
           <EmployeeGridSkeleton count={6} viewMode={viewMode} />
         ) : employees.length === 0 ? (
@@ -450,18 +254,18 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                 <Bot className="h-10 w-10 text-primary" />
               </div>
-              <h3 className="mb-2 text-2xl font-semibold text-foreground">No AI Employees Found</h3>
+              <h3 className="mb-2 text-2xl font-semibold text-foreground">No AI Agents Found</h3>
               <p className="mb-6 max-w-md text-center text-muted-foreground">
                 {searchQuery || selectedCategory !== 'all'
-                  ? 'Try adjusting your search or filters to find AI employees.'
-                  : 'Our marketplace is currently being populated. AI employees will be available soon for hire.'}
+                  ? 'Try adjusting your search or filters to find AI agents.'
+                  : 'Our marketplace is currently being populated. AI agents will be available soon.'}
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button
                   variant="default"
                   onClick={() => window.location.reload()}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  aria-label="Reload page to check for new AI employees"
+                  aria-label="Reload page to check for new AI agents"
                 >
                   <Search className="mr-2 h-4 w-4" />
                   Check Again
@@ -485,18 +289,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
             )}
           >
             {employees.map((employee) => (
-              <EmployeeCard
-                key={employee.id}
-                employee={employee}
-                viewMode={viewMode}
-                onHired={(emp) => {
-                  trackEmployeeHire(emp.id, emp.name, {
-                    category: emp.category,
-                    skills: emp.skills,
-                    price: emp.price,
-                  });
-                }}
-              />
+              <EmployeeCard key={employee.id} employee={employee} viewMode={viewMode} />
             ))}
           </div>
         )}
