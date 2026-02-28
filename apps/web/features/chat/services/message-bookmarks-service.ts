@@ -29,18 +29,31 @@ interface DBBookmark {
   user_id: string;
   session_id: string;
   message_id: string;
-  note?: string;
-  tags: string[];
+  note: string | null;
+  tags: string[] | null;
   created_at: string;
   updated_at: string;
+  [key: string]: unknown;
 }
 
-interface DBBookmarkedMessage extends DBBookmark {
-  message_role: string;
-  message_content: string;
-  message_created_at: string;
-  session_title: string;
-  session_created_at: string;
+interface DBBookmarkedMessage {
+  id: string | null;
+  user_id: string | null;
+  session_id: string | null;
+  message_id: string | null;
+  note: string | null;
+  tags: string[] | null;
+  created_at: string | null;
+  updated_at: string | null;
+  bookmark_note: string | null;
+  bookmark_tags: string[] | null;
+  bookmarked_at: string | null;
+  message_role: string | null;
+  message_content: string | null;
+  message_created_at: string | null;
+  session_title: string | null;
+  session_created_at: string | null;
+  [key: string]: unknown;
 }
 
 interface BookmarkWithTags {
@@ -97,7 +110,7 @@ class MessageBookmarksService {
       throw new Error('Failed to add bookmark: No data returned');
     }
 
-    return this.mapDBBookmarkToBookmark(data);
+    return this.mapDBBookmarkToBookmark(data as unknown as DBBookmark);
   }
 
   /**
@@ -154,7 +167,9 @@ class MessageBookmarksService {
       throw new Error(`Failed to get bookmarks: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBBookmarkedMessageToBookmarkedMessage);
+    return (data || []).map((d) =>
+      this.mapDBBookmarkedMessageToBookmarkedMessage(d as unknown as DBBookmarkedMessage),
+    );
   }
 
   /**
@@ -173,7 +188,9 @@ class MessageBookmarksService {
       throw new Error(`Failed to get session bookmarks: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBBookmarkedMessageToBookmarkedMessage);
+    return (data || []).map((d) =>
+      this.mapDBBookmarkedMessageToBookmarkedMessage(d as unknown as DBBookmarkedMessage),
+    );
   }
 
   /**
@@ -192,7 +209,9 @@ class MessageBookmarksService {
       throw new Error(`Failed to search bookmarks: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBBookmarkedMessageToBookmarkedMessage);
+    return (data || []).map((d) =>
+      this.mapDBBookmarkedMessageToBookmarkedMessage(d as unknown as DBBookmarkedMessage),
+    );
   }
 
   /**
@@ -228,7 +247,9 @@ class MessageBookmarksService {
       throw new Error(`Failed to get bookmarks by tag: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBBookmarkedMessageToBookmarkedMessage);
+    return (data || []).map((d) =>
+      this.mapDBBookmarkedMessageToBookmarkedMessage(d as unknown as DBBookmarkedMessage),
+    );
   }
 
   /**
@@ -264,7 +285,7 @@ class MessageBookmarksService {
       userId: dbBookmark.user_id,
       sessionId: dbBookmark.session_id,
       messageId: dbBookmark.message_id,
-      note: dbBookmark.note,
+      note: dbBookmark.note ?? undefined,
       tags: dbBookmark.tags || [],
       createdAt: new Date(dbBookmark.created_at),
       updatedAt: new Date(dbBookmark.updated_at),
@@ -278,19 +299,19 @@ class MessageBookmarksService {
     dbBookmarked: DBBookmarkedMessage,
   ): BookmarkedMessage {
     return {
-      id: dbBookmarked.id,
-      userId: dbBookmarked.user_id,
-      sessionId: dbBookmarked.session_id,
-      messageId: dbBookmarked.message_id,
-      note: dbBookmarked.note,
-      tags: dbBookmarked.tags || [],
-      createdAt: new Date(dbBookmarked.created_at),
-      updatedAt: new Date(dbBookmarked.updated_at),
-      messageRole: dbBookmarked.message_role as 'user' | 'assistant' | 'system',
-      messageContent: dbBookmarked.message_content,
-      messageCreatedAt: new Date(dbBookmarked.message_created_at),
-      sessionTitle: dbBookmarked.session_title,
-      sessionCreatedAt: new Date(dbBookmarked.session_created_at),
+      id: dbBookmarked.id ?? '',
+      userId: dbBookmarked.user_id ?? '',
+      sessionId: dbBookmarked.session_id ?? '',
+      messageId: dbBookmarked.message_id ?? '',
+      note: dbBookmarked.bookmark_note ?? undefined,
+      tags: dbBookmarked.bookmark_tags || [],
+      createdAt: new Date(dbBookmarked.bookmarked_at ?? Date.now()),
+      updatedAt: new Date(dbBookmarked.bookmarked_at ?? Date.now()),
+      messageRole: (dbBookmarked.message_role as 'user' | 'assistant' | 'system') ?? 'user',
+      messageContent: dbBookmarked.message_content ?? '',
+      messageCreatedAt: new Date(dbBookmarked.message_created_at ?? Date.now()),
+      sessionTitle: dbBookmarked.session_title ?? 'Untitled',
+      sessionCreatedAt: new Date(dbBookmarked.session_created_at ?? Date.now()),
     };
   }
 }

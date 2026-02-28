@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Workforce Page - Modern AI Workforce Management Interface
  * Professional design with glassmorphism and real-time data
@@ -107,7 +109,7 @@ const EmployeeManagement: React.FC = () => {
 
   // Updated: Jan 15th 2026 - Removed console statements for production
   const totalEmployees = hiredEmployees.length;
-  const activeEmployees = hiredEmployees.filter((emp) => emp.is_active).length;
+  const activeEmployees = hiredEmployees.length;
 
   return (
     <ErrorBoundary fallback={<WorkforceErrorFallback />}>
@@ -312,7 +314,7 @@ const EmployeeManagement: React.FC = () => {
                         {hiredEmployees.map((rec, index) => {
                           const emp = AI_EMPLOYEES.find((e) => e.id === rec.employee_id);
                           // Fallback values when employee data is not found
-                          const displayName = emp?.role || rec.role || 'AI Employee';
+                          const displayName = emp?.role || rec.employee_name || 'AI Employee';
                           const displayAvatar = emp?.avatar;
                           const displaySpecialty =
                             emp?.specialty || emp?.description || 'AI specialist ready to assist';
@@ -353,7 +355,7 @@ const EmployeeManagement: React.FC = () => {
                                       )}
                                     </div>
                                     <Badge variant="outline" className="text-xs">
-                                      {rec.provider}
+                                      {emp?.provider || 'AI'}
                                     </Badge>
                                   </div>
                                 </div>
