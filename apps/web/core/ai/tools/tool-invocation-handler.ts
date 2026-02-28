@@ -458,7 +458,7 @@ class ToolInvocationService {
     const userScopedTables = [
       'web_conversations',
       'web_messages',
-      'purchased_employees',
+      'hired_employees',
       'user_shortcuts',
       'token_transactions',
       'token_usage',

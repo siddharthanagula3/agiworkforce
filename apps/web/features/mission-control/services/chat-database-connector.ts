@@ -62,10 +62,10 @@ export async function listMessages(
   const { data, error } = await supabase
     .from('web_messages')
     .select('*')
-    .eq('session_id', sessionId)
+    .eq('conversation_id', sessionId)
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return (data || []) as ChatMessageRecord[];
+  return (data || []) as unknown as ChatMessageRecord[];
 }
 
 export async function sendMessage(
@@ -78,9 +78,9 @@ export async function sendMessage(
   const supabaseClient: SupabaseClient<Database> = supabase;
   const { data, error } = await supabase
     .from('web_messages')
-    .insert({ session_id: sessionId, role, content })
+    .insert({ conversation_id: sessionId, role, content })
     .select('*')
     .single();
   if (error) throw error;
-  return data as ChatMessageRecord;
+  return data as unknown as ChatMessageRecord;
 }

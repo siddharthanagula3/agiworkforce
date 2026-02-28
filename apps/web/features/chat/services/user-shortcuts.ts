@@ -86,7 +86,7 @@ export async function createUserShortcut(
       label: data.label,
       icon: () => null,
       prompt: data.prompt,
-      category: data.category,
+      category: data.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
     };
   } catch (error) {
     console.error('[User Shortcuts] Error:', error);

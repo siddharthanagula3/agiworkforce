@@ -58,7 +58,7 @@ export interface SearchSuggestion {
 
 interface MessageWithSession {
   id: string;
-  session_id: string;
+  conversation_id: string;
   role: string;
   content: string;
   created_at: string;
@@ -316,7 +316,7 @@ class GlobalSearchService {
       .select(
         `
         id,
-        session_id,
+        conversation_id,
         role,
         content,
         created_at,
@@ -327,7 +327,7 @@ class GlobalSearchService {
         )
       `,
       )
-      .in('session_id', sessionIds)
+      .in('conversation_id', sessionIds)
       .ilike('content', `%${filters.query}%`);
 
     // Apply role filter
@@ -351,12 +351,12 @@ class GlobalSearchService {
       return [];
     }
 
-    return ((data || []) as MessageWithSession[]).map((message) => {
+    return ((data || []) as unknown as MessageWithSession[]).map((message) => {
       const match = this.extractMatch(message.content, filters.query);
 
       return {
         type: 'message' as const,
-        sessionId: message.session_id,
+        sessionId: message.conversation_id,
         sessionTitle: message.web_conversations?.title || 'Untitled Chat',
         messageId: message.id,
         content: message.content,
@@ -468,8 +468,5 @@ class GlobalSearchService {
     return popular.map((p) => p.query);
   }
 }
-
-// Export types for external use
-export type { RecentSearch, PopularSearch, SearchSuggestion };
 
 export const globalSearchService = new GlobalSearchService();

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Optimistic Hire Button Component
  * Provides instant UI feedback for hiring AI employees
@@ -63,11 +65,11 @@ export const HireButton: React.FC<HireButtonProps> = ({
       try {
         // Check if already hired
         const { data: existingHire } = await supabase
-          .from('purchased_employees')
+          .from('hired_employees')
           .select('id')
           .eq('user_id', user.id)
           .eq('employee_id', employeeId)
-          .single();
+          .maybeSingle();
 
         if (existingHire) {
           setIsProcessing(false);
@@ -78,13 +80,10 @@ export const HireButton: React.FC<HireButtonProps> = ({
         }
 
         // Insert hire record
-        const { error } = await supabase.from('purchased_employees').insert({
+        const { error } = await supabase.from('hired_employees').insert({
           user_id: user.id,
           employee_id: employeeId,
-          name: employeeName,
-          role: employeeName,
-          provider: 'chatgpt', // Default provider
-          is_active: true,
+          employee_name: employeeName,
         });
 
         if (error) {

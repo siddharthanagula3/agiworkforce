@@ -25,11 +25,12 @@ interface DBChatFolder {
   name: string;
   color: string;
   icon: string;
-  description?: string;
-  parent_folder_id?: string;
+  description: string | null;
+  parent_folder_id: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
+  [key: string]: unknown;
 }
 
 class FolderManagementService {
@@ -49,7 +50,7 @@ class FolderManagementService {
       throw new Error(`Failed to load folders: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBFolderToFolder);
+    return (data || []).map((f) => this.mapDBFolderToFolder(f as unknown as DBChatFolder));
   }
 
   /**
@@ -181,7 +182,7 @@ class FolderManagementService {
    * Move a session to a folder
    */
   async moveSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
-    const { error } = await supabase.rpc('move_session_to_folder', {
+    const { error } = await (supabase as any).rpc('move_session_to_folder', {
       p_session_id: sessionId,
       p_folder_id: folderId,
     });
@@ -305,8 +306,8 @@ class FolderManagementService {
       name: dbFolder.name,
       color: dbFolder.color,
       icon: dbFolder.icon,
-      description: dbFolder.description,
-      parentFolderId: dbFolder.parent_folder_id,
+      description: dbFolder.description ?? undefined,
+      parentFolderId: dbFolder.parent_folder_id ?? undefined,
       sortOrder: dbFolder.sort_order,
       createdAt: new Date(dbFolder.created_at),
       updatedAt: new Date(dbFolder.updated_at),

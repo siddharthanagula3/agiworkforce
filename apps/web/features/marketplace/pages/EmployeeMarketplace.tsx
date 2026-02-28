@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AI Employee Marketplace Page
  * Browse, search, and hire specialized AI employees
@@ -224,7 +226,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
       try {
         // Check if already hired (double-check)
         const { data: existingHire } = await supabase
-          .from('purchased_employees')
+          .from('hired_employees')
           .select('id')
           .eq('user_id', user.id)
           .eq('employee_id', employee.id)
@@ -232,13 +234,10 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
 
         if (!existingHire) {
           // Insert hire record
-          const { error } = await supabase.from('purchased_employees').insert({
+          const { error } = await supabase.from('hired_employees').insert({
             user_id: user.id,
             employee_id: employee.id,
-            name: employee.name,
-            role: employee.role || employee.name,
-            provider: 'chatgpt',
-            is_active: true,
+            employee_name: employee.name,
           });
 
           if (error && error.code !== '23505') {

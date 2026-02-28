@@ -108,7 +108,11 @@ export class ConversationBranchingService {
       if (branchPointIndex >= 0) {
         const messagesToCopy = allMessages.slice(0, branchPointIndex + 1);
         for (const msg of messagesToCopy) {
-          await chatPersistenceService.saveMessage(branchSession.id, msg.role, msg.content);
+          await chatPersistenceService.saveMessage(
+            branchSession.id,
+            msg.role as 'user' | 'assistant' | 'system',
+            msg.content,
+          );
         }
       }
 
@@ -140,7 +144,9 @@ export class ConversationBranchingService {
     branchName: string | null,
     userId: string,
   ): Promise<ConversationBranch> {
-    const { data, error } = await supabase
+    // conversation_branches is a custom table not in Supabase generated types
+
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .insert({
         parent_session_id: parentSessionId,
@@ -154,10 +160,10 @@ export class ConversationBranchingService {
 
     if (error) {
       console.error('Failed to save branch metadata:', error);
-      throw new Error(`Failed to save branch metadata: ${error.message}`);
+      throw new Error(`Failed to save branch metadata: ${(error as { message: string }).message}`);
     }
 
-    return this.mapDBBranchToBranch(data);
+    return this.mapDBBranchToBranch(data as unknown as DBConversationBranch);
   }
 
   /**
@@ -167,12 +173,12 @@ export class ConversationBranchingService {
     sessionId: string,
     userId?: string,
   ): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .select(
         `
         *,
-        child_session:chat_sessions!child_session_id (
+        child_session:web_conversations!child_session_id (
           id,
           title,
           created_at,
@@ -189,7 +195,19 @@ export class ConversationBranchingService {
       return [];
     }
 
-    return (data || []).map((row) => {
+    return (
+      (data || []) as unknown as Array<
+        DBConversationBranch & {
+          child_session: {
+            id: string;
+            title: string;
+            created_at: string;
+            updated_at: string;
+            is_active: boolean;
+          } | null;
+        }
+      >
+    ).map((row) => {
       const branch = this.mapDBBranchToBranch(row);
       const childSession = row.child_session as {
         id: string;
@@ -269,7 +287,7 @@ export class ConversationBranchingService {
    * Check if a session is a branch (has a parent)
    */
   async isBranchSession(sessionId: string): Promise<boolean> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .select('id')
       .eq('child_session_id', sessionId)
@@ -287,7 +305,7 @@ export class ConversationBranchingService {
    * Get branch info for a session if it is a branch
    */
   async getBranchInfo(sessionId: string): Promise<ConversationBranch | null> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .select('*')
       .eq('child_session_id', sessionId)
@@ -304,7 +322,7 @@ export class ConversationBranchingService {
    * Update branch name
    */
   async updateBranchName(branchId: string, newName: string): Promise<ConversationBranch> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .update({ branch_name: newName })
       .eq('id', branchId)
@@ -322,7 +340,10 @@ export class ConversationBranchingService {
    * Delete a branch record (does not delete the session)
    */
   async deleteBranch(branchId: string): Promise<void> {
-    const { error } = await supabase.from('conversation_branches').delete().eq('id', branchId);
+    const { error } = await (supabase as any)
+      .from('conversation_branches')
+      .delete()
+      .eq('id', branchId);
 
     if (error) {
       throw new Error(`Failed to delete branch: ${error.message}`);
@@ -469,7 +490,11 @@ export class ConversationBranchingService {
 
       // Copy combined messages to the merge session
       for (const msg of combinedMessages) {
-        await chatPersistenceService.saveMessage(mergeSession.id, msg.role, msg.content);
+        await chatPersistenceService.saveMessage(
+          mergeSession.id,
+          msg.role as 'user' | 'assistant' | 'system',
+          msg.content,
+        );
       }
 
       return mergeSession;
@@ -521,12 +546,12 @@ export class ConversationBranchingService {
    * Get branches at a specific message point
    */
   async getBranchesAtMessage(messageId: string): Promise<ConversationBranchWithDetails[]> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('conversation_branches')
       .select(
         `
         *,
-        child_session:chat_sessions!child_session_id (
+        child_session:web_conversations!child_session_id (
           id,
           title,
           created_at,
@@ -543,7 +568,19 @@ export class ConversationBranchingService {
       return [];
     }
 
-    return (data || []).map((row) => {
+    return (
+      (data || []) as unknown as Array<
+        DBConversationBranch & {
+          child_session: {
+            id: string;
+            title: string;
+            created_at: string;
+            updated_at: string;
+            is_active: boolean;
+          } | null;
+        }
+      >
+    ).map((row) => {
       const branch = this.mapDBBranchToBranch(row);
       const childSession = row.child_session as {
         id: string;
@@ -578,7 +615,7 @@ export class ConversationBranchingService {
    * Count branches for a session
    */
   async countBranches(sessionId: string): Promise<number> {
-    const { count, error } = await supabase
+    const { count, error } = await (supabase as any)
       .from('conversation_branches')
       .select('*', { count: 'exact', head: true })
       .eq('parent_session_id', sessionId);
