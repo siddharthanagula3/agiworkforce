@@ -65,3 +65,10 @@ query-filters:
   - exclude:
       id: rust/cleartext-logging
       path-regex: ".*/metrics\\.rs$"
+
+  # Exclude clear-text-storage alert for Vibe file system workspace metadata
+  # localStorage stores user-authored code (NOT secrets, API keys, or credentials)
+  # This is non-sensitive workspace metadata for the Vibe editor
+  - exclude:
+      id: js/clear-text-storage-of-sensitive-data
+      path: 'apps/web/features/vibe/services/vibe-file-system.ts'
