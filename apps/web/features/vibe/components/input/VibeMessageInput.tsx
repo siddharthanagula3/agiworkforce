@@ -7,7 +7,7 @@
  * - Keyboard shortcuts (Enter to send, Shift+Enter for new line)
  */
 
-import React, { useState, useRef, KeyboardEvent, useEffect } from 'react';
+import React, { useState, useRef, KeyboardEvent } from 'react';
 import { useWorkforceStore } from '@shared/stores/workforce-store';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 import { useVibeViewStore, type FileTreeItem } from '../../stores/vibe-view-store';

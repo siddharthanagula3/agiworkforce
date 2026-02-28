@@ -19,7 +19,6 @@ import type {
   ToolCallStatus,
   ToolUsageStats,
   ToolCategory,
-  ToolPermission,
   CanonicalToolName,
   UserPermissionLevel,
   ExecutionHistoryEntry,
@@ -27,7 +26,6 @@ import type {
   ValidationResult,
 } from './types';
 import {
-  TOOL_DISPLAY_NAMES,
   resolveToolName,
   hasToolPermission,
   createToolCall,
@@ -647,7 +645,7 @@ function createFileReaderTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       // Stub implementation - actual implementation in vibe-tool-orchestrator
       return {
         success: true,
@@ -695,7 +693,7 @@ function createFileWriterTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `File written to ${(params as { file_path: string }).file_path}`,
@@ -756,7 +754,7 @@ function createFileEditorTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `File edited: ${(params as { file_path: string }).file_path}`,
@@ -810,7 +808,7 @@ function createPatternSearchTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `Pattern search for: ${(params as { pattern: string }).pattern}`,
@@ -857,7 +855,7 @@ function createFileFinderTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `Files found for pattern: ${(params as { pattern: string }).pattern}`,
@@ -906,7 +904,7 @@ function createCommandExecutorTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (_params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: 'Command execution simulated in browser sandbox',
@@ -954,7 +952,7 @@ function createWebSearchTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `Web search for: ${(params as { query: string }).query}`,
@@ -1002,7 +1000,7 @@ function createWebFetchTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: `Fetched URL: ${(params as { url: string }).url}`,
@@ -1049,7 +1047,7 @@ function createCodeAnalyzerTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (_params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: 'Code analysis complete',
@@ -1096,7 +1094,7 @@ function createCodeGeneratorTool(): UnifiedTool {
       },
     },
     parameterSchema: schema,
-    execute: async (params, context): Promise<ToolResult> => {
+    execute: async (_params, _context): Promise<ToolResult> => {
       return {
         success: true,
         output: 'Code generation complete',

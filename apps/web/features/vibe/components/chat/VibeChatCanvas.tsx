@@ -105,8 +105,14 @@ const VibeMessageInput: React.FC<{
 };
 
 const VibeChatCanvas: React.FC = () => {
-  const { messages, addMessage, isLoading, currentSessionId, createNewSession, setLoading } =
-    useVibeChatStore();
+  const {
+    messages,
+    addMessage,
+    isLoading: _isLoading,
+    currentSessionId,
+    createNewSession,
+    setLoading,
+  } = useVibeChatStore();
   const { activeAgents } = useVibeAgentStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

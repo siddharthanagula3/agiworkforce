@@ -1266,7 +1266,7 @@ export class ConsultingOrchestrator {
           });
 
           return result;
-        } catch (error) {
+        } catch (_error) {
           store.updateEmployeeStatus(agent.name, 'error');
           return null;
         }
@@ -1332,7 +1332,7 @@ Respond in JSON format:
   "rationale": "..."
 }`;
 
-    const planResponse = await this.callLLM(request, supervisor, planPrompt);
+    const _planResponse = await this.callLLM(request, supervisor, planPrompt);
 
     // Execute based on supervisor's plan
     const contributions: AgentContribution[] = [];
@@ -1355,7 +1355,7 @@ Respond in JSON format:
           content: result.output,
           metadata: { employeeName: agent.name, role: 'agent' as const },
         });
-      } catch (error) {
+      } catch (_error) {
         store.updateEmployeeStatus(agent.name, 'error');
       }
     }
@@ -1432,7 +1432,7 @@ Create a comprehensive final consultation that:
           output: response.content,
           tokensUsed: response.tokensUsed,
         };
-      } catch (error) {
+      } catch (_error) {
         store.updateEmployeeStatus(agent.name, 'error');
         return null;
       }
@@ -1667,7 +1667,7 @@ ${step.instructions || ''}`;
 
   private synthesizeResults(
     contributions: AgentContribution[],
-    workflow: ConsultingWorkflow,
+    _workflow: ConsultingWorkflow,
   ): StructuredConsultationOutput {
     const recommendations: Recommendation[] = [];
     const actionItems: ActionItem[] = [];

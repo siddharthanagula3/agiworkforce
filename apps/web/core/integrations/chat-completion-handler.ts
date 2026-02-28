@@ -54,7 +54,7 @@ export async function sendAIMessage(
  * SECURITY: Always returns true since providers are available through authenticated proxies
  * Actual availability is determined server-side
  */
-export function isProviderConfigured(provider: AIProvider): boolean {
+export function isProviderConfigured(_provider: AIProvider): boolean {
   // All providers are available through authenticated Netlify proxies
   // Actual availability depends on server-side API key configuration
   return true;

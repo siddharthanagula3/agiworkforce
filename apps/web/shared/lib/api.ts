@@ -3,7 +3,7 @@
  * Centralized API client with authentication, error handling, and type safety
  */
 
-import { APIResponse, APIError, APIException } from '@shared/stores/query-client';
+import { APIResponse, APIException } from '@shared/stores/query-client';
 
 // ========================================
 // API Configuration
@@ -84,7 +84,7 @@ export class APIClient {
   }
 
   // Retry logic with exponential backoff
-  private async retryRequest<T>(
+  private async retryRequest<_T>(
     requestFn: () => Promise<Response>,
     attempt = 1,
   ): Promise<Response> {
@@ -177,7 +177,7 @@ export class APIClient {
           };
           const retryResponse = await fetch(url, retryOptions);
           return this.parseResponse<T>(retryResponse);
-        } catch (refreshError) {
+        } catch (_refreshError) {
           // Refresh failed, clear tokens and throw original 401 error
           this.clearTokens();
           throw new APIException({
@@ -251,7 +251,7 @@ export class APIClient {
     let data: APIResponse<T>;
     try {
       data = await response.json();
-    } catch (error) {
+    } catch (_error) {
       throw new APIException({
         message: 'Invalid JSON response',
         code: 'INVALID_JSON',

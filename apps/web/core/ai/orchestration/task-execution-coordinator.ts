@@ -3,7 +3,7 @@
  * This is the central controller for the AI Workforce
  */
 
-import { Task, TaskStatus, AgentType, ExecutionPlan } from './reasoning/task-breakdown';
+import { Task, AgentType, ExecutionPlan } from './reasoning/task-breakdown';
 import { agentCommunicator, AgentMessage } from './agent-communication-protocol';
 import { logger } from '@shared/lib/logger';
 

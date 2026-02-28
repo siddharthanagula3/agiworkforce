@@ -10,7 +10,6 @@ import {
   Sparkles,
   ChevronDown,
   MessageSquare,
-  Workflow,
   LayoutDashboard,
   Briefcase,
   Building2,
@@ -28,7 +27,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 const PublicHeader: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const pathname = usePathname();
+  const _pathname = usePathname();
   const router = useRouter();
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const { user } = useAuthStore();

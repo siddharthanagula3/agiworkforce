@@ -32,7 +32,7 @@ export interface ChatState {
 }
 
 export const useChatState = () => {
-  const { user } = useAuthStore();
+  const { user: _user } = useAuthStore();
   const [state, setState] = useState<ChatState>({
     tabs: [],
     activeTabId: null,

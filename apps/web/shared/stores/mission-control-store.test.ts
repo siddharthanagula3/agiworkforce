@@ -9,7 +9,6 @@ import type { Task } from './mission-control-store';
 import {
   createMockTask,
   createPendingTask,
-  createInProgressTask,
   createCompletedTask,
   createFailedTask,
   createUserMessage,

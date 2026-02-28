@@ -107,7 +107,7 @@ export const useThrottle = <T extends (...args: unknown[]) => void>(
  */
 export const useMemoizedValue = <T>(factory: () => T, deps: React.DependencyList): T => {
   const factoryRef = useRef(factory);
-  const depsLength = deps.length;
+  const _depsLength = deps.length;
 
   // Keep factory ref up to date via useEffect to avoid ref access during render
   useEffect(() => {

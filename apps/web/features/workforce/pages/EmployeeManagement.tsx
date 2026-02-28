@@ -33,12 +33,9 @@ import {
   Sparkles,
   Zap,
   Target,
-  Clock,
   ArrowRight,
-  MessageSquare,
   Code,
 } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 
 // Error fallback component for Workforce page
@@ -276,7 +273,9 @@ const EmployeeManagement: React.FC = () => {
                         <Sparkles className="h-5 w-5 text-primary" />
                         Your AI Team
                       </CardTitle>
-                      <CardDescription>Employees you've hired from the marketplace</CardDescription>
+                      <CardDescription>
+                        Employees you&apos;ve hired from the marketplace
+                      </CardDescription>
                     </div>
                     <Badge variant="outline">
                       {hiredEmployees.length}{' '}

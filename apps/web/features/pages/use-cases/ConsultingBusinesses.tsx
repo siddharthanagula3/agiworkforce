@@ -1,20 +1,12 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import {
-  Briefcase,
-  FileText,
-  Users,
-  Clock,
-  CheckCircle2,
-  ArrowRight,
-  BarChart3,
-  Lightbulb,
-} from 'lucide-react';
+import { Briefcase, Clock, CheckCircle2, ArrowRight, BarChart3, Lightbulb } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import Image from 'next/image';
 
 const ConsultingBusinessesPage: React.FC = () => {
   const router = useRouter();
@@ -146,10 +138,12 @@ const ConsultingBusinessesPage: React.FC = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=600&fit=crop"
                 alt="Professional consulting team collaborating on business strategy and analysis"
                 className="rounded-3xl"
+                width={800}
+                height={600}
               />
             </motion.div>
           </div>
@@ -294,7 +288,7 @@ const ConsultingBusinessesPage: React.FC = () => {
             viewport={{ once: true }}
             className="rounded-3xl border border-border/40 bg-background/60 p-12 backdrop-blur-xl"
           >
-            <div className="mb-6 text-4xl opacity-20">"</div>
+            <div className="mb-6 text-4xl opacity-20">&quot;</div>
             <p className="mb-8 text-2xl font-medium">
               AI employees create all our client reports, research briefs, and project
               documentation. We tripled our client base without hiring a single analyst.

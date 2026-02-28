@@ -12,11 +12,7 @@
  */
 
 import { useMultiAgentChatStore } from '@shared/stores/multi-agent-chat-store';
-import type {
-  ChatMessage,
-  ConversationParticipant,
-  MessageDeliveryStatus,
-} from '@shared/stores/multi-agent-chat-store';
+import type { ChatMessage, ConversationParticipant } from '@shared/stores/multi-agent-chat-store';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -104,7 +100,7 @@ export class MessageRoutingService {
     this.addRule({
       id: 'direct-message',
       name: 'Direct Message Routing',
-      condition: (message, participants) => {
+      condition: (message, _participants) => {
         // Check if message mentions a specific participant
         const mentions = this.extractMentions(message.content);
         return mentions.length === 1;
@@ -120,7 +116,7 @@ export class MessageRoutingService {
     this.addRule({
       id: 'group-mention',
       name: 'Group Mention Routing',
-      condition: (message, participants) => {
+      condition: (message, _participants) => {
         const mentions = this.extractMentions(message.content);
         return mentions.length > 1;
       },
@@ -135,7 +131,7 @@ export class MessageRoutingService {
     this.addRule({
       id: 'broadcast',
       name: 'Broadcast Routing',
-      condition: (message, participants) => {
+      condition: (message, _participants) => {
         // Messages with no specific mentions are broadcast
         const mentions = this.extractMentions(message.content);
         return mentions.length === 0;

@@ -535,7 +535,7 @@ export class TaskDecomposer {
   /**
    * Add dependencies between tasks based on logical flow
    */
-  private addDependencies(tasks: Task[], intent: UserIntent): Task[] {
+  private addDependencies(tasks: Task[], _intent: UserIntent): Task[] {
     // Create a copy to avoid mutation
     const tasksWithDeps = tasks.map((t) => ({ ...t }));
 

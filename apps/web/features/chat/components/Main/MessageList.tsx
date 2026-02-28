@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useState } from 'react';
 import { ScrollArea } from '@shared/ui/scroll-area';
-import { Loader2, Bot } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Sparkles, User } from 'lucide-react';
+import { LayoutDashboard, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
