@@ -16,9 +16,16 @@ import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
+import {
+  getAllowedAutoModesForTier,
+  getModelMetadata,
+  isModelAllowedForTier,
+  normalizeSubscriptionTier,
+} from '../constants/llm';
 
 import type { Provider } from '../types/provider';
 import type { CustomModelConfig } from '../types/customModel';
+import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
 export type Language = 'en' | 'es';
@@ -228,11 +235,39 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v4: Added executionPreferences for extended timeout support
 // v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
 // v6: Added language preference
+// v7: Added language preference to windowPreferences
+// v8: Added autoApproveTools to chatPreferences
 // v9: Added globalHotkeyPreferences for system-wide Quick Query hotkey
 // v10: Added customModels for user-defined OpenAI-compatible endpoints
 // v11: Added features for capability toggles
 // v12: Added autoInjectSkills to chatPreferences
 const SETTINGS_STORE_VERSION = 12;
+
+export function isTaskRoutingModelAllowedForTier(
+  category: TaskCategory,
+  modelId: string,
+  tier: SubscriptionTier | string | null | undefined,
+): boolean {
+  if (!modelId || modelId === 'auto') {
+    return true;
+  }
+
+  if (modelId.startsWith('auto')) {
+    return getAllowedAutoModesForTier(tier).includes(modelId);
+  }
+
+  if (category === 'image' || category === 'video') {
+    return true;
+  }
+
+  const metadata = getModelMetadata(modelId);
+  if (metadata?.provider === 'ollama') {
+    return true;
+  }
+
+  const normalizedTier = normalizeSubscriptionTier(tier);
+  return isModelAllowedForTier(modelId, normalizedTier);
+}
 
 export const useSettingsStore = create<SettingsState>()(
   devtools(
@@ -1055,6 +1090,39 @@ export const useSettingsStore = create<SettingsState>()(
     { name: 'SettingsStore', enabled: import.meta.env.DEV },
   ),
 );
+
+export const enforceTaskRoutingTierRestriction = (planTier: string | null): void => {
+  const normalizedTier = normalizeSubscriptionTier(planTier);
+  const { llmConfig, setTaskRouting } = useSettingsStore.getState();
+
+  (
+    Object.entries(llmConfig.taskRouting) as Array<[TaskCategory, TaskRouting[TaskCategory]]>
+  ).forEach(([category, route]) => {
+    if (isTaskRoutingModelAllowedForTier(category, route.model, normalizedTier)) {
+      return;
+    }
+
+    console.log(
+      `[SettingsStore] Enforcing task routing restriction: ${normalizedTier} tier cannot use ${route.model} for ${category}, switching to auto`,
+    );
+    setTaskRouting(category, 'managed_cloud', 'auto');
+  });
+};
+
+if (typeof window !== 'undefined') {
+  import('./auth').then(({ useUnifiedAuthStore }) => {
+    if (useUnifiedAuthStore?.subscribe) {
+      useUnifiedAuthStore.subscribe(
+        (state) => state.plan,
+        (plan) => {
+          if (plan) {
+            enforceTaskRoutingTierRestriction(plan);
+          }
+        },
+      );
+    }
+  });
+}
 
 /**
  * Wait for settings store to finish hydrating from localStorage.
