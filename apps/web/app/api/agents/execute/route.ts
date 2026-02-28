@@ -11,7 +11,9 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
-export const OPTIONS = handleCorsPreflightRequest;
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
 
 /**
  * Estimate cost in cents for a request based on message length.
