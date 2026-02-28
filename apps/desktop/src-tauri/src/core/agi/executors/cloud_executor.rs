@@ -690,6 +690,7 @@ mod tests {
 
     #[test]
     fn test_cloud_executor_default() {
+        #[allow(clippy::default_constructed_unit_structs)]
         let executor = CloudExecutor::default();
         assert_eq!(executor.tool_names().len(), 6);
     }

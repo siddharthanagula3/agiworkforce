@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_all_failure_categories_exist() {
-        let categories = vec![
+        let categories = [
             FailureCategory::ResourceUnavailable,
             FailureCategory::PermissionDenied,
             FailureCategory::InvalidInput,
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_all_correction_types() {
-        let types = vec![
+        let types = [
             CorrectionType::Retry,
             CorrectionType::RetryWithModification,
             CorrectionType::UseAlternativeTool,
@@ -831,7 +831,7 @@ mod tests {
     #[test]
     fn test_graceful_degradation_sequence() {
         // Expected degradation order: retry -> modify -> skip -> human
-        let degradation_steps = vec![
+        let degradation_steps = [
             CorrectionType::Retry,
             CorrectionType::RetryWithModification,
             CorrectionType::Skip,

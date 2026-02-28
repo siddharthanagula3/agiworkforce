@@ -712,31 +712,43 @@ impl CostCalculator {
         // OpenAI image generation
         media_pricing.insert(
             (Provider::OpenAI, MediaType::ImageStandard),
-            MediaPricing { cost_per_unit: 0.04 },
+            MediaPricing {
+                cost_per_unit: 0.04,
+            },
         );
         media_pricing.insert(
             (Provider::OpenAI, MediaType::ImageHD),
-            MediaPricing { cost_per_unit: 0.08 },
+            MediaPricing {
+                cost_per_unit: 0.08,
+            },
         );
         // OpenAI Sora video (~$0.10 per second)
         media_pricing.insert(
             (Provider::OpenAI, MediaType::VideoPerSecond),
-            MediaPricing { cost_per_unit: 0.10 },
+            MediaPricing {
+                cost_per_unit: 0.10,
+            },
         );
 
         // Google image generation (Imagen 4)
         media_pricing.insert(
             (Provider::Google, MediaType::ImageStandard),
-            MediaPricing { cost_per_unit: 0.04 },
+            MediaPricing {
+                cost_per_unit: 0.04,
+            },
         );
         media_pricing.insert(
             (Provider::Google, MediaType::ImageHD),
-            MediaPricing { cost_per_unit: 0.08 },
+            MediaPricing {
+                cost_per_unit: 0.08,
+            },
         );
         // Google Veo 3 video (~$0.08 per second)
         media_pricing.insert(
             (Provider::Google, MediaType::VideoPerSecond),
-            MediaPricing { cost_per_unit: 0.08 },
+            MediaPricing {
+                cost_per_unit: 0.08,
+            },
         );
 
         // ManagedCloud inherits from origin providers (handled in calculate_media_cost)
@@ -816,19 +828,16 @@ impl CostCalculator {
             return 0.0;
         }
 
-        let media_price = self
-            .media_pricing
-            .get(&(provider, media_type))
-            .or_else(|| {
-                // ManagedCloud fallback: check origin providers
-                if provider == Provider::ManagedCloud {
-                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
-                        .iter()
-                        .find_map(|&p| self.media_pricing.get(&(p, media_type)))
-                } else {
-                    None
-                }
-            });
+        let media_price = self.media_pricing.get(&(provider, media_type)).or_else(|| {
+            // ManagedCloud fallback: check origin providers
+            if provider == Provider::ManagedCloud {
+                Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
+                    .iter()
+                    .find_map(|&p| self.media_pricing.get(&(p, media_type)))
+            } else {
+                None
+            }
+        });
 
         match media_price {
             Some(pricing) => pricing.cost_per_unit * units as f64,

@@ -216,9 +216,7 @@ pub async fn artifact_apply_diff(
     };
 
     if hunks.is_empty() {
-        return Ok(ArtifactResponse::err(
-            "No diff hunks provided".to_string(),
-        ));
+        return Ok(ArtifactResponse::err("No diff hunks provided".to_string()));
     }
 
     // 2. Split current content into lines
@@ -288,9 +286,8 @@ pub async fn artifact_apply_diff(
     }
 
     // 7. Delegate to the existing update path to save as a new version
-    let description = change_description.unwrap_or_else(|| {
-        format!("Applied {} diff hunk(s)", hunks.len())
-    });
+    let description =
+        change_description.unwrap_or_else(|| format!("Applied {} diff hunk(s)", hunks.len()));
 
     let update_request = UpdateArtifactRequest {
         id,

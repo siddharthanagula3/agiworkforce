@@ -419,8 +419,8 @@ impl DailyLimitTracker {
         if let Ok(tz) = self.timezone.parse::<chrono_tz::Tz>() {
             let now = Utc::now().with_timezone(&tz);
             let tomorrow = (now + Duration::days(1)).date_naive();
-            let midnight_naive = tomorrow
-                .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default());
+            let midnight_naive =
+                tomorrow.and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default());
 
             match tz.from_local_datetime(&midnight_naive).single() {
                 Some(m) => {

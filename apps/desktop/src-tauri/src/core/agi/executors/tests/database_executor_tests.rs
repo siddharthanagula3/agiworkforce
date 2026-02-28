@@ -23,6 +23,7 @@ mod tests {
 
     #[test]
     fn test_database_executor_default() {
+        #[allow(clippy::default_constructed_unit_structs)]
         let executor = DatabaseExecutor::default();
         assert_eq!(executor.tool_names().len(), 5);
     }

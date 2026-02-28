@@ -333,7 +333,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     },
                     "search_type": {
                         "type": "string",
-                        "description": "Search type: web, news, images (default: web)"
+                        "description": "Search type: web or news (default: web)"
                     }
                 },
                 "required": ["query"]

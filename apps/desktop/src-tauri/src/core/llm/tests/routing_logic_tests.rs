@@ -39,7 +39,11 @@ mod tests {
             &self,
             _request: &LLMRequest,
         ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
-            Err(format!("MockProvider({}) does not send real requests", self.provider_name).into())
+            Err(format!(
+                "MockProvider({}) does not send real requests",
+                self.provider_name
+            )
+            .into())
         }
 
         fn is_configured(&self) -> bool {
@@ -70,7 +74,12 @@ mod tests {
             (Provider::ManagedCloud, "managed_cloud"),
         ];
         for &(provider, name) in all_providers {
-            router.set_provider(provider, Box::new(MockProvider { provider_name: name }));
+            router.set_provider(
+                provider,
+                Box::new(MockProvider {
+                    provider_name: name,
+                }),
+            );
         }
         router
     }
@@ -88,8 +97,14 @@ mod tests {
 
     #[test]
     fn test_provider_from_string_anthropic() {
-        assert_eq!(Provider::from_string("anthropic"), Some(Provider::Anthropic));
-        assert_eq!(Provider::from_string("Anthropic"), Some(Provider::Anthropic));
+        assert_eq!(
+            Provider::from_string("anthropic"),
+            Some(Provider::Anthropic)
+        );
+        assert_eq!(
+            Provider::from_string("Anthropic"),
+            Some(Provider::Anthropic)
+        );
     }
 
     #[test]
@@ -104,7 +119,10 @@ mod tests {
 
     #[test]
     fn test_provider_from_string_perplexity_aliases() {
-        assert_eq!(Provider::from_string("perplexity"), Some(Provider::Perplexity));
+        assert_eq!(
+            Provider::from_string("perplexity"),
+            Some(Provider::Perplexity)
+        );
         assert_eq!(Provider::from_string("pplx"), Some(Provider::Perplexity));
         assert_eq!(Provider::from_string("sonar"), Some(Provider::Perplexity));
     }
@@ -142,8 +160,14 @@ mod tests {
 
     #[test]
     fn test_provider_from_string_managed_cloud_aliases() {
-        assert_eq!(Provider::from_string("managed_cloud"), Some(Provider::ManagedCloud));
-        assert_eq!(Provider::from_string("managedcloud"), Some(Provider::ManagedCloud));
+        assert_eq!(
+            Provider::from_string("managed_cloud"),
+            Some(Provider::ManagedCloud)
+        );
+        assert_eq!(
+            Provider::from_string("managedcloud"),
+            Some(Provider::ManagedCloud)
+        );
         assert_eq!(Provider::from_string("cloud"), Some(Provider::ManagedCloud));
     }
 
@@ -341,7 +365,10 @@ mod tests {
     fn test_router_context_default() {
         let ctx = RouterContext::default();
         assert!(ctx.intents.is_empty(), "Default intents must be empty");
-        assert!(!ctx.requires_vision, "Default requires_vision must be false");
+        assert!(
+            !ctx.requires_vision,
+            "Default requires_vision must be false"
+        );
         assert_eq!(ctx.token_estimate, 0);
         assert!(ctx.intent_type.is_none());
         assert!(ctx.selected_model.is_none());
@@ -489,7 +516,12 @@ mod tests {
         // when selected_model="claude-..." and provider not registered, falls to legacy routing.
         // We check that the returned provider is sane (not panicking).
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-sonnet-4-5"));
+        let ctx = intelligent_context(
+            "pro",
+            Some("coding"),
+            Some("chat"),
+            Some("claude-sonnet-4-5"),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         // Without Anthropic registered, falls to legacy and may return a different provider.
         // At minimum it must not panic and must return a non-empty model.
@@ -520,8 +552,7 @@ mod tests {
     #[test]
     fn test_infer_provider_deepseek_model_prefix() {
         let router = LLMRouter::new();
-        let ctx =
-            intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
+        let ctx = intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -555,99 +586,180 @@ mod tests {
     #[test]
     fn test_infer_provider_openai_gpt_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("gpt-5.2"), Provider::OpenAI);
-        assert_eq!(router.infer_provider_from_model("gpt-5-nano"), Provider::OpenAI);
-        assert_eq!(router.infer_provider_from_model("GPT-5.2"), Provider::OpenAI);
+        assert_eq!(
+            router.infer_provider_from_model("gpt-5.2"),
+            Provider::OpenAI
+        );
+        assert_eq!(
+            router.infer_provider_from_model("gpt-5-nano"),
+            Provider::OpenAI
+        );
+        assert_eq!(
+            router.infer_provider_from_model("GPT-5.2"),
+            Provider::OpenAI
+        );
     }
 
     #[test]
     fn test_infer_provider_openai_reasoning_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("o1-preview"), Provider::OpenAI);
+        assert_eq!(
+            router.infer_provider_from_model("o1-preview"),
+            Provider::OpenAI
+        );
         assert_eq!(router.infer_provider_from_model("o3"), Provider::OpenAI);
-        assert_eq!(router.infer_provider_from_model("o3-mini"), Provider::OpenAI);
+        assert_eq!(
+            router.infer_provider_from_model("o3-mini"),
+            Provider::OpenAI
+        );
     }
 
     #[test]
     fn test_infer_provider_openai_non_chat_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("dall-e-3"), Provider::OpenAI);
-        assert_eq!(router.infer_provider_from_model("tts-1-hd"), Provider::OpenAI);
-        assert_eq!(router.infer_provider_from_model("whisper-1"), Provider::OpenAI);
+        assert_eq!(
+            router.infer_provider_from_model("dall-e-3"),
+            Provider::OpenAI
+        );
+        assert_eq!(
+            router.infer_provider_from_model("tts-1-hd"),
+            Provider::OpenAI
+        );
+        assert_eq!(
+            router.infer_provider_from_model("whisper-1"),
+            Provider::OpenAI
+        );
     }
 
     #[test]
     fn test_infer_provider_anthropic_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("claude-sonnet-4-5"), Provider::Anthropic);
-        assert_eq!(router.infer_provider_from_model("claude-opus-4-6"), Provider::Anthropic);
-        assert_eq!(router.infer_provider_from_model("claude-haiku-4-5"), Provider::Anthropic);
+        assert_eq!(
+            router.infer_provider_from_model("claude-sonnet-4-5"),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            router.infer_provider_from_model("claude-opus-4-6"),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            router.infer_provider_from_model("claude-haiku-4-5"),
+            Provider::Anthropic
+        );
         // Case insensitive
-        assert_eq!(router.infer_provider_from_model("Claude-Sonnet-4-5"), Provider::Anthropic);
+        assert_eq!(
+            router.infer_provider_from_model("Claude-Sonnet-4-5"),
+            Provider::Anthropic
+        );
     }
 
     #[test]
     fn test_infer_provider_google_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("gemini-3-pro-preview"), Provider::Google);
-        assert_eq!(router.infer_provider_from_model("gemini-3-flash-preview"), Provider::Google);
-        assert_eq!(router.infer_provider_from_model("imagen-4"), Provider::Google);
+        assert_eq!(
+            router.infer_provider_from_model("gemini-3-pro-preview"),
+            Provider::Google
+        );
+        assert_eq!(
+            router.infer_provider_from_model("gemini-3-flash-preview"),
+            Provider::Google
+        );
+        assert_eq!(
+            router.infer_provider_from_model("imagen-4"),
+            Provider::Google
+        );
     }
 
     #[test]
     fn test_infer_provider_deepseek_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("deepseek-chat"), Provider::DeepSeek);
-        assert_eq!(router.infer_provider_from_model("deepseek-reasoner"), Provider::DeepSeek);
+        assert_eq!(
+            router.infer_provider_from_model("deepseek-chat"),
+            Provider::DeepSeek
+        );
+        assert_eq!(
+            router.infer_provider_from_model("deepseek-reasoner"),
+            Provider::DeepSeek
+        );
     }
 
     #[test]
     fn test_infer_provider_xai_models() {
         let router = LLMRouter::new();
         assert_eq!(router.infer_provider_from_model("grok-4"), Provider::XAI);
-        assert_eq!(router.infer_provider_from_model("grok-4-fast-reasoning"), Provider::XAI);
+        assert_eq!(
+            router.infer_provider_from_model("grok-4-fast-reasoning"),
+            Provider::XAI
+        );
         assert_eq!(router.infer_provider_from_model("GROK-4"), Provider::XAI);
     }
 
     #[test]
     fn test_infer_provider_perplexity_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("sonar"), Provider::Perplexity);
-        assert_eq!(router.infer_provider_from_model("sonar-deep-research"), Provider::Perplexity);
+        assert_eq!(
+            router.infer_provider_from_model("sonar"),
+            Provider::Perplexity
+        );
+        assert_eq!(
+            router.infer_provider_from_model("sonar-deep-research"),
+            Provider::Perplexity
+        );
     }
 
     #[test]
     fn test_infer_provider_qwen_models() {
         let router = LLMRouter::new();
         assert_eq!(router.infer_provider_from_model("qwen-max"), Provider::Qwen);
-        assert_eq!(router.infer_provider_from_model("qwen3-coder"), Provider::Qwen);
+        assert_eq!(
+            router.infer_provider_from_model("qwen3-coder"),
+            Provider::Qwen
+        );
     }
 
     #[test]
     fn test_infer_provider_moonshot_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("kimi-k2.5-thinking"), Provider::Moonshot);
-        assert_eq!(router.infer_provider_from_model("moonshot-v1"), Provider::Moonshot);
+        assert_eq!(
+            router.infer_provider_from_model("kimi-k2.5-thinking"),
+            Provider::Moonshot
+        );
+        assert_eq!(
+            router.infer_provider_from_model("moonshot-v1"),
+            Provider::Moonshot
+        );
     }
 
     #[test]
     fn test_infer_provider_zhipu_models() {
         let router = LLMRouter::new();
         assert_eq!(router.infer_provider_from_model("glm-4.7"), Provider::Zhipu);
-        assert_eq!(router.infer_provider_from_model("glm-4.6v-flash"), Provider::Zhipu);
+        assert_eq!(
+            router.infer_provider_from_model("glm-4.6v-flash"),
+            Provider::Zhipu
+        );
     }
 
     #[test]
     fn test_infer_provider_flux_to_managed_cloud() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("flux-2-pro"), Provider::ManagedCloud);
+        assert_eq!(
+            router.infer_provider_from_model("flux-2-pro"),
+            Provider::ManagedCloud
+        );
     }
 
     #[test]
     fn test_infer_provider_unknown_defaults_to_managed_cloud() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("some-unknown-model"), Provider::ManagedCloud);
-        assert_eq!(router.infer_provider_from_model("my-fine-tuned-llm"), Provider::ManagedCloud);
+        assert_eq!(
+            router.infer_provider_from_model("some-unknown-model"),
+            Provider::ManagedCloud
+        );
+        assert_eq!(
+            router.infer_provider_from_model("my-fine-tuned-llm"),
+            Provider::ManagedCloud
+        );
         assert_eq!(router.infer_provider_from_model(""), Provider::ManagedCloud);
     }
 
@@ -782,7 +894,15 @@ mod tests {
     #[test]
     fn test_routing_all_code_intents_hobby() {
         let router = LLMRouter::new();
-        for intent in &["code", "devops", "repo", "terminal", "automation", "build", "test"] {
+        for intent in &[
+            "code",
+            "devops",
+            "repo",
+            "terminal",
+            "automation",
+            "build",
+            "test",
+        ] {
             let context = legacy_context(
                 vec![intent.to_string()],
                 false,
@@ -1048,12 +1168,8 @@ mod tests {
     #[test]
     fn test_intelligent_routing_unknown_model_defaults_to_managed_cloud() {
         let router = router_with_all_providers();
-        let context = intelligent_context(
-            "pro",
-            Some("image-gen"),
-            Some("image"),
-            Some("flux-2-pro"),
-        );
+        let context =
+            intelligent_context("pro", Some("image-gen"), Some("image"), Some("flux-2-pro"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::ManagedCloud);
         assert_eq!(suggestion.model, "flux-2-pro");
