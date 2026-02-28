@@ -226,7 +226,7 @@ export function MediaStudio() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
+    <div className="animate-fade-in-up mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">

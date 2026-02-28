@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Menu, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -9,11 +9,16 @@ import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposer
 import { ChatSidebarNew } from '@features/chat/components/Sidebar/ChatSidebarNew';
 import { MessageListNew } from '@features/chat/components/messages/MessageListNew';
 import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { useModelStore } from '@shared/stores/model-store';
+import { ChatAIService } from '@features/chat/services/chat-ai-service';
 
 export default function ChatSessionPage() {
   const router = useRouter();
   const params = useParams();
   const sessionId = params?.sessionId as string;
+  const { user } = useAuthStore();
+  const { selectedModelId } = useModelStore();
 
   const {
     sessions,
@@ -24,14 +29,22 @@ export default function ChatSessionPage() {
     deleteSession,
     renameSession,
     addMessage,
+    appendToMessage,
+    setStreaming,
     deleteMessage,
     setLoading,
     setActiveSession,
     isLoading,
+    loadMessagesFromDb,
+    saveMessageToDb,
+    saveSessionToDb,
   } = useChatStore();
 
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const abortRef = useRef(false);
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
 
   const messages = allMessages[sessionId] || [];
 
@@ -42,10 +55,107 @@ export default function ChatSessionPage() {
     }
   }, [sessionId, setActiveSession]);
 
+  // Load messages from DB if we have none locally
+  useEffect(() => {
+    if (mounted && sessionId && messages.length === 0) {
+      loadMessagesFromDb(sessionId);
+    }
+  }, [mounted, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const processAIResponse = async (
+    userContent: string,
+    currentMessages: typeof messages,
+    skillId?: string,
+  ) => {
+    if (!sessionId || !user?.id) return;
+
+    setLoading(true);
+
+    // Create placeholder assistant message for streaming
+    const assistantId = addMessage(sessionId, {
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+      metadata: { model: selectedModelId },
+    });
+
+    try {
+      // Build conversation history
+      const conversationHistory = currentMessages
+        .filter((m) => !m.isStreaming)
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      // Use ChatAIService for unified skill-aware routing
+      const fullResponse = await ChatAIService.sendMessage({
+        sessionId,
+        content: userContent,
+        skillId,
+        conversationHistory: [...conversationHistory, { role: 'user', content: userContent }],
+        onChunk: (chunk) => {
+          if (!abortRef.current) {
+            const store = useChatStore.getState();
+            store.appendToMessage(sessionId, assistantId, chunk);
+          }
+        },
+      });
+
+      // Finalize
+      const store = useChatStore.getState();
+      store.setStreaming(sessionId, assistantId, false);
+      store.setLoading(false);
+
+      // Save to DB in background
+      const finalMessages = store.messages[sessionId] || [];
+      const userMsg = finalMessages.find((m) => m.role === 'user' && m.content === userContent);
+      const assistantMsg = finalMessages.find((m) => m.id === assistantId);
+
+      if (userMsg) {
+        saveMessageToDb(userMsg, user.id).catch(() => {});
+      }
+      if (assistantMsg) {
+        saveMessageToDb(
+          { ...assistantMsg, content: fullResponse, isStreaming: false },
+          user.id,
+        ).catch(() => {});
+      }
+
+      // Update session in DB
+      const session = store.sessions.find((s) => s.id === sessionId);
+      if (session) {
+        saveSessionToDb(session, user.id).catch(() => {});
+      }
+    } catch (err) {
+      console.error('[ChatSession] AI response error:', err);
+      const store = useChatStore.getState();
+      const errorContent =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      store.updateMessage(sessionId, assistantId, `**Error:** ${errorContent}`);
+      store.setStreaming(sessionId, assistantId, false);
+      store.setLoading(false);
+    }
+  };
+
+  // Process pending user messages that need AI responses
+  const pendingProcessedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!mounted || !sessionId || !user?.id) return;
+    const msgs = useChatStore.getState().messages[sessionId] || [];
+    if (msgs.length === 0) return;
+
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg.role === 'user' && !pendingProcessedRef.current.has(lastMsg.id)) {
+      pendingProcessedRef.current.add(lastMsg.id);
+      const hasStreamingAssistant = msgs.some((m) => m.role === 'assistant' && m.isStreaming);
+      if (!hasStreamingAssistant) {
+        processAIResponse(lastMsg.content, msgs);
+      }
+    }
+  }, [mounted, sessionId, user?.id, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleNewChat = useCallback(() => {
-    const id = createSession();
+    const id = createSession(user?.id);
     router.push(`/chat/${id}`);
-  }, [createSession, router]);
+  }, [createSession, router, user?.id]);
 
   const handleDeleteSession = useCallback(
     (id: string) => {
@@ -63,53 +173,16 @@ export default function ChatSessionPage() {
   );
 
   const handleSend = useCallback(
-    (content: string) => {
-      if (!sessionId) return;
+    (content: string, _attachments?: File[], skillId?: string) => {
+      if (!sessionId || !user?.id) return;
 
       addMessage(sessionId, { role: 'user', content });
 
-      // Simulate AI response
-      setLoading(true);
-      const assistantId = addMessage(sessionId, {
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-      });
-
-      const responses = [
-        "I'd be happy to help with that! ",
-        'Let me think about this...\n\n',
-        "Here's what I found:\n\n",
-        'This is a simulated response. ',
-        'Once connected to a real AI backend, ',
-        "you'll receive actual responses here.\n\n",
-        'The interface supports:\n',
-        '- **Bold** and *italic* text\n',
-        '- `inline code` and code blocks\n',
-        '- Lists and tables\n',
-        '- [Links](https://example.com)\n\n',
-        '```typescript\n',
-        'function greet(name: string) {\n',
-        '  return `Hello, ${name}!`;\n',
-        '}\n',
-        '```\n',
-      ];
-
-      let index = 0;
-      const interval = setInterval(() => {
-        if (index < responses.length) {
-          const store = useChatStore.getState();
-          store.appendToMessage(sessionId, assistantId, responses[index]);
-          index++;
-        } else {
-          clearInterval(interval);
-          const store = useChatStore.getState();
-          store.setStreaming(sessionId, assistantId, false);
-          store.setLoading(false);
-        }
-      }, 80);
+      // Get current messages for conversation history
+      const currentMsgs = useChatStore.getState().messages[sessionId] || [];
+      processAIResponse(content, currentMsgs, skillId);
     },
-    [sessionId, addMessage, setLoading],
+    [sessionId, user?.id, addMessage, processAIResponse],
   );
 
   const handleDeleteMessage = useCallback(

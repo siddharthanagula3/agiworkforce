@@ -130,7 +130,7 @@ export default function SupportPage() {
   ];
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="animate-fade-in-up space-y-8 p-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export default function SupportPage() {
       </div>
 
       {/* FAQ Section */}
-      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <HelpCircle className="h-5 w-5 text-primary" />
@@ -170,7 +170,7 @@ export default function SupportPage() {
       </Card>
 
       {/* Contact Form */}
-      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
             <MessageSquare className="h-5 w-5 text-primary" />
@@ -297,7 +297,7 @@ export default function SupportPage() {
                 rel={link.external ? 'noopener noreferrer' : undefined}
                 className="block"
               >
-                <Card className="h-full cursor-pointer border-border/50 bg-card/80 backdrop-blur-xl transition-colors hover:border-primary/50 hover:bg-accent/20">
+                <Card className="h-full cursor-pointer border-white/[0.06] bg-white/[0.03] backdrop-blur-xl transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.05]">
                   <CardContent className="p-4">
                     <div className="mb-2 flex items-center gap-2">
                       <Icon className="h-5 w-5 text-primary" />
