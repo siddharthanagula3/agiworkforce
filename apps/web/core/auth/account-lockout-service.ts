@@ -16,9 +16,11 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
-// RPC functions not yet in generated Database type
-
-const db = supabase as any;
+// RPC functions not yet in generated Database type — use typed helper
+const db = {
+  rpc: (name: string, params?: Record<string, unknown>) =>
+    supabase.rpc(name as never, (params ?? {}) as never),
+};
 
 /**
  * Configuration for account lockout policy
@@ -142,28 +144,25 @@ class AccountLockoutService {
 
     try {
       // Try database first
-      const { data, error } = await db.rpc(
-        'check_account_lockout' as any,
-        {
-          p_email: normalizedEmail,
-        } as any,
-      );
+      const { data, error } = await db.rpc('check_account_lockout', {
+        p_email: normalizedEmail,
+      });
 
       if (error) {
         logger.warn('Database lockout check failed, using in-memory fallback:', error.message);
         return this.checkLockoutInMemory(normalizedEmail);
       }
 
-      const rpcData = data as any;
+      const rpcData = data as Array<Record<string, unknown>> | null;
       if (rpcData && rpcData.length > 0) {
         const result = rpcData[0];
         const isLocked = result.is_locked === true;
-        const lockedUntil = result.locked_until ? new Date(result.locked_until) : null;
+        const lockedUntil = result.locked_until ? new Date(result.locked_until as string) : null;
 
         return {
           isLocked,
           lockedUntil,
-          failedAttempts: result.failed_attempts || 0,
+          failedAttempts: (result.failed_attempts as number) || 0,
           message: isLocked
             ? `Account is locked until ${lockedUntil?.toLocaleString()}. Please try again later.`
             : 'Account is not locked.',
@@ -193,14 +192,11 @@ class AccountLockoutService {
 
     try {
       // Record in database
-      const { data, error } = await db.rpc(
-        'record_failed_login' as any,
-        {
-          p_email: normalizedEmail,
-          p_max_attempts: this.config.maxAttempts,
-          p_lockout_duration_minutes: this.config.lockoutDurationMinutes,
-        } as any,
-      );
+      const { data, error } = await db.rpc('record_failed_login', {
+        p_email: normalizedEmail,
+        p_max_attempts: this.config.maxAttempts,
+        p_lockout_duration_minutes: this.config.lockoutDurationMinutes,
+      });
 
       if (error) {
         logger.warn(
@@ -210,13 +206,13 @@ class AccountLockoutService {
         return this.recordFailedLoginInMemory(normalizedEmail);
       }
 
-      const rpcData = data as any;
+      const rpcData = data as Array<Record<string, unknown>> | null;
       if (rpcData && rpcData.length > 0) {
         const result = rpcData[0];
         const isLocked = result.is_locked === true;
         const justLocked = result.should_lock === true;
-        const lockedUntil = result.locked_until ? new Date(result.locked_until) : null;
-        const attemptsRemaining = result.attempts_remaining || 0;
+        const lockedUntil = result.locked_until ? new Date(result.locked_until as string) : null;
+        const attemptsRemaining = (result.attempts_remaining as number) || 0;
 
         // Log security event
         if (this.config.enableAuditLogging) {
@@ -286,12 +282,9 @@ class AccountLockoutService {
 
     try {
       // Reset in database
-      const { error } = await db.rpc(
-        'record_successful_login' as any,
-        {
-          p_email: normalizedEmail,
-        } as any,
-      );
+      const { error } = await db.rpc('record_successful_login', {
+        p_email: normalizedEmail,
+      });
 
       if (error) {
         logger.warn('Database successful login record failed:', error.message);
@@ -328,12 +321,9 @@ class AccountLockoutService {
     const normalizedEmail = this.normalizeEmail(email);
 
     try {
-      const { data, error } = await db.rpc(
-        'admin_unlock_account' as any,
-        {
-          p_email: normalizedEmail,
-        } as any,
-      );
+      const { data, error } = await db.rpc('admin_unlock_account', {
+        p_email: normalizedEmail,
+      });
 
       if (error) {
         logger.error('Admin unlock failed:', error.message);
@@ -377,21 +367,21 @@ class AccountLockoutService {
     avgFailedAttempts: number;
   }> {
     try {
-      const { data, error } = await db.rpc('get_lockout_stats' as any);
+      const { data, error } = await db.rpc('get_lockout_stats');
 
       if (error) {
         logger.warn('Failed to get lockout stats:', error.message);
         return this.getInMemoryStats();
       }
 
-      const rpcData = data as any;
+      const rpcData = data as Array<Record<string, unknown>> | null;
       if (rpcData && rpcData.length > 0) {
         const stats = rpcData[0];
         return {
-          totalLockedAccounts: stats.total_locked_accounts || 0,
-          totalTrackedAccounts: stats.total_tracked_accounts || 0,
-          recentLockouts: stats.recent_lockouts || 0,
-          avgFailedAttempts: parseFloat(stats.avg_failed_attempts) || 0,
+          totalLockedAccounts: (stats.total_locked_accounts as number) || 0,
+          totalTrackedAccounts: (stats.total_tracked_accounts as number) || 0,
+          recentLockouts: (stats.recent_lockouts as number) || 0,
+          avgFailedAttempts: parseFloat(String(stats.avg_failed_attempts)) || 0,
         };
       }
 

@@ -299,8 +299,7 @@ export function useEmployeeReviews(
       // Try to fetch from database
       // Note: employee_reviews table may not exist in Supabase schema yet
 
-      const { data, error } = await (supabase as any)
-        .from('employee_reviews')
+      const { data, error } = await (supabase.from('employee_reviews' as never) as any)
         .select('*')
         .eq('employee_id', employeeId)
         .order('created_at', { ascending: false });
@@ -314,15 +313,15 @@ export function useEmployeeReviews(
         throw error;
       }
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        userId: r.user_id,
-        employeeId: r.employee_id,
-        rating: r.rating,
-        comment: r.comment || '',
-        createdAt: r.created_at,
-        userName: r.user_name,
-        userAvatar: r.user_avatar,
+      return (data || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        userId: r.user_id as string,
+        employeeId: r.employee_id as string,
+        rating: r.rating as number,
+        comment: (r.comment as string) || '',
+        createdAt: r.created_at as string,
+        userName: r.user_name as string | undefined,
+        userAvatar: r.user_avatar as string | undefined,
       }));
     },
     enabled: !!employeeId,
@@ -363,8 +362,7 @@ export function useWorkforceStats(
       // Fetch token usage (table may not exist in schema yet)
       let totalTokensUsed = 0;
       try {
-        const { data: tokenData } = await (supabase as any)
-          .from('user_token_balances')
+        const { data: tokenData } = await (supabase.from('user_token_balances' as never) as any)
           .select('current_balance')
           .eq('user_id', userId)
           .maybeSingle();
@@ -471,7 +469,7 @@ export function useToggleEmployeeStatus(): UseMutationResult<
       const { error } = isActive
         ? await supabase
             .from('hired_employees')
-            .upsert({ user_id: user.id, employee_id: employeeId } as any)
+            .upsert({ user_id: user.id, employee_id: employeeId } as never)
         : await supabase
             .from('hired_employees')
             .delete()
@@ -534,8 +532,7 @@ export function useSubmitEmployeeReview(): UseMutationResult<
         throw new Error('You must be logged in to submit a review');
       }
 
-      const { data, error } = await (supabase as any)
-        .from('employee_reviews')
+      const { data, error } = await (supabase.from('employee_reviews' as never) as any)
         .insert({
           user_id: user.id,
           employee_id: employeeId,

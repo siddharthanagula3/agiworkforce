@@ -246,6 +246,7 @@ class SupportService {
       }
 
       // Update ticket's updated_at timestamp
+
       await (supabase.from('support_tickets') as any)
         .update({ updated_at: new Date().toISOString() })
         .eq('id', ticketId);

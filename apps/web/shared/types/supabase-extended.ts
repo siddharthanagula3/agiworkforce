@@ -13,16 +13,16 @@ import type { Database } from './supabase';
 // Using `any` ensures supabase .select(), .insert(), .update(), .upsert()
 // all compile without narrowing to `never`.
 type StubTable = {
-  Row: Record<string, any>;
-  Insert: Record<string, any>;
-  Update: Record<string, any>;
+  Row: Record<string, unknown>;
+  Insert: Record<string, unknown>;
+  Update: Record<string, unknown>;
   Relationships: [];
 };
 
 // Permissive stub for RPC functions not yet in schema
 type StubFunction = {
-  Args: Record<string, any>;
-  Returns: any;
+  Args: Record<string, unknown>;
+  Returns: unknown;
 };
 
 // Tables referenced in code but missing from generated schema

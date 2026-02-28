@@ -297,7 +297,7 @@ class PerformanceService {
         if (lcpEntry) {
           monitoringService.trackPerformance({
             lcp: lcpEntry.startTime,
-          } as any);
+          } as Record<string, unknown>);
         }
       });
 
@@ -312,7 +312,7 @@ class PerformanceService {
             const eventTiming = entry as PerformanceEventTiming;
             monitoringService.trackPerformance({
               fid: eventTiming.processingStart - eventTiming.startTime,
-            } as any);
+            } as Record<string, unknown>);
           }
         });
       });
@@ -326,14 +326,17 @@ class PerformanceService {
         const entries = list.getEntries();
         entries.forEach((entry) => {
           if (entry.entryType === 'layout-shift') {
-            const layoutShift = entry as any;
+            const layoutShift = entry as PerformanceEntry & {
+              hadRecentInput?: boolean;
+              value?: number;
+            };
             if (!layoutShift.hadRecentInput) {
-              clsValue += layoutShift.value;
+              clsValue += layoutShift.value ?? 0;
             }
           }
         });
 
-        monitoringService.trackPerformance({ cls: clsValue } as any);
+        monitoringService.trackPerformance({ cls: clsValue } as Record<string, unknown>);
       });
 
       clsObserver.observe({ entryTypes: ['layout-shift'] });
@@ -353,7 +356,7 @@ class PerformanceService {
             const resource = entry as PerformanceResourceTiming;
             monitoringService.trackPerformance({
               slowResource: resource.duration,
-            } as any);
+            } as Record<string, unknown>);
           }
         });
       });
@@ -374,7 +377,7 @@ class PerformanceService {
           if (entry.entryType === 'longtask') {
             monitoringService.trackPerformance({
               longTask: entry.duration,
-            } as any);
+            } as Record<string, unknown>);
           }
         });
       });

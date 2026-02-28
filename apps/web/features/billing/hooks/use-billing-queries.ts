@@ -167,10 +167,10 @@ const PRO_PROVIDER_LIMIT = 2_500_000;
 async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
   // Try get_credit_balance RPC first (shared Supabase billing)
   const { data: rpcData, error: rpcError } = await supabase.rpc(
-    'get_credit_balance' as any,
+    'get_credit_balance' as never,
     {
       p_user_id: userId,
-    } as any,
+    } as never,
   );
 
   if (!rpcError && rpcData !== null && rpcData !== undefined) {
@@ -202,8 +202,9 @@ async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
     return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
   }
 
-  const remaining = Math.max((data as any).credits_remaining_cents ?? 0, 0);
-  const allocated = (data as any).credits_allocated_cents ?? 0;
+  const row = data as Record<string, unknown>;
+  const remaining = Math.max(Number(row.credits_remaining_cents ?? 0), 0);
+  const allocated = Number(row.credits_allocated_cents ?? 0);
   return {
     currentBalance: remaining,
     totalGranted: allocated,
@@ -215,8 +216,8 @@ async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
  * Fetch token usage by provider
  */
 async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
-  const { data, error } = await (supabase as any)
-    .from('token_usage')
+  const { data, error } = await supabase
+    .from('token_usage' as never)
     .select('provider, input_tokens, output_tokens, total_tokens, total_cost')
     .eq('user_id', userId);
 
@@ -227,7 +228,7 @@ async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
     { provider: 'Perplexity', tokens: 0, cost: 0, limit: FREE_PROVIDER_LIMIT },
   ];
 
-  if (error || !data || (data as any[]).length === 0) {
+  if (error || !data || (data as unknown[]).length === 0) {
     return defaultUsage;
   }
 
@@ -256,8 +257,8 @@ async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
  * Fetch user plan from database
  */
 async function fetchUserPlan(userId: string): Promise<UserPlanData> {
-  const { data, error } = await (supabase as any)
-    .from('users')
+  const { data, error } = await supabase
+    .from('users' as never)
     .select('plan, subscription_end_date, plan_status, stripe_customer_id, stripe_subscription_id')
     .eq('id', userId)
     .maybeSingle();
@@ -271,12 +272,17 @@ async function fetchUserPlan(userId: string): Promise<UserPlanData> {
     };
   }
 
-  const row = data as any;
+  const row = data as {
+    plan?: string;
+    subscription_end_date?: string | null;
+    stripe_customer_id?: string | null;
+    stripe_subscription_id?: string | null;
+  };
   return {
     plan: (row.plan as BillingPlan) || 'free',
-    subscriptionEndDate: row.subscription_end_date,
-    stripeCustomerId: row.stripe_customer_id,
-    stripeSubscriptionId: row.stripe_subscription_id,
+    subscriptionEndDate: row.subscription_end_date ?? null,
+    stripeCustomerId: row.stripe_customer_id ?? null,
+    stripeSubscriptionId: row.stripe_subscription_id ?? null,
   };
 }
 
@@ -434,8 +440,8 @@ export function useTokenAnalytics(
               ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
               : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      const { data: sessions, error } = await (supabase as any)
-        .from('web_conversations')
+      const { data: sessions, error } = await supabase
+        .from('web_conversations' as never)
         .select(
           `
           id,
@@ -605,8 +611,8 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
     queryFn: async (): Promise<Subscription | null> => {
       if (!user?.id) return null;
 
-      const { data, error } = await (supabase as any)
-        .from('users')
+      const { data, error } = await supabase
+        .from('users' as never)
         .select(
           `
           id,
@@ -626,7 +632,15 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
         return null;
       }
 
-      const row = data as any;
+      const row = data as {
+        id: string;
+        plan?: string;
+        plan_status?: string;
+        subscription_end_date?: string | null;
+        stripe_subscription_id?: string | null;
+        stripe_customer_id?: string | null;
+        trial_end_date?: string | null;
+      };
       const now = new Date();
       const periodEnd = row.subscription_end_date
         ? new Date(row.subscription_end_date)
@@ -645,9 +659,9 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
         cancelAtPeriodEnd: false,
         canceledAt: null,
         trialStart: null,
-        trialEnd: row.trial_end_date,
-        stripeSubscriptionId: row.stripe_subscription_id,
-        stripeCustomerId: row.stripe_customer_id,
+        trialEnd: row.trial_end_date ?? null,
+        stripeSubscriptionId: row.stripe_subscription_id ?? null,
+        stripeCustomerId: row.stripe_customer_id ?? null,
         priceId: null,
         quantity: 1,
         metadata: {},
@@ -712,8 +726,8 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
       if (!user?.id) return [];
 
       // Try to fetch from invoices table
-      const { data, error } = await (supabase as any)
-        .from('invoices')
+      const { data, error } = await supabase
+        .from('invoices' as never)
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -727,18 +741,32 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
         throw error;
       }
 
-      return ((data || []) as any[]).map((inv) => ({
+      interface InvoiceRow {
+        id: string;
+        invoice_number?: string;
+        status?: string;
+        amount?: number;
+        currency?: string;
+        description?: string;
+        created_at: string;
+        due_date?: string | null;
+        paid_at?: string | null;
+        invoice_pdf?: string | null;
+        hosted_invoice_url?: string | null;
+        line_items?: InvoiceLineItem[];
+      }
+      return ((data || []) as InvoiceRow[]).map((inv) => ({
         id: inv.id,
         number: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
-        status: inv.status || 'paid',
+        status: (inv.status || 'paid') as Invoice['status'],
         amount: inv.amount || 0,
         currency: inv.currency || 'USD',
         description: inv.description || 'Subscription charge',
         createdAt: inv.created_at,
-        dueDate: inv.due_date,
-        paidAt: inv.paid_at,
-        invoicePdf: inv.invoice_pdf,
-        hostedInvoiceUrl: inv.hosted_invoice_url,
+        dueDate: inv.due_date ?? null,
+        paidAt: inv.paid_at ?? null,
+        invoicePdf: inv.invoice_pdf ?? null,
+        hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
         lineItems: inv.line_items || [],
       }));
     },
@@ -797,8 +825,8 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
       if (!user?.id) return [];
 
       // Try to fetch from payment_methods table
-      const { data, error } = await (supabase as any)
-        .from('payment_methods')
+      const { data, error } = await supabase
+        .from('payment_methods' as never)
         .select('*')
         .eq('user_id', user.id)
         .order('is_default', { ascending: false });
@@ -812,9 +840,27 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
         throw error;
       }
 
-      return ((data || []) as any[]).map((pm) => ({
+      interface PaymentMethodRow {
+        id: string;
+        type?: string;
+        is_default?: boolean;
+        card_brand?: string;
+        card_last4?: string;
+        card_exp_month?: number;
+        card_exp_year?: number;
+        billing_name?: string | null;
+        billing_email?: string | null;
+        billing_city?: string | null;
+        billing_country?: string | null;
+        billing_line1?: string | null;
+        billing_line2?: string | null;
+        billing_postal_code?: string | null;
+        billing_state?: string | null;
+        created_at: string;
+      }
+      return ((data || []) as PaymentMethodRow[]).map((pm) => ({
         id: pm.id,
-        type: pm.type || 'card',
+        type: (pm.type || 'card') as PaymentMethod['type'],
         isDefault: pm.is_default || false,
         card: pm.card_brand
           ? {
@@ -825,15 +871,15 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
             }
           : undefined,
         billingDetails: {
-          name: pm.billing_name,
-          email: pm.billing_email,
+          name: pm.billing_name ?? null,
+          email: pm.billing_email ?? null,
           address: {
-            city: pm.billing_city,
-            country: pm.billing_country,
-            line1: pm.billing_line1,
-            line2: pm.billing_line2,
-            postalCode: pm.billing_postal_code,
-            state: pm.billing_state,
+            city: pm.billing_city ?? null,
+            country: pm.billing_country ?? null,
+            line1: pm.billing_line1 ?? null,
+            line2: pm.billing_line2 ?? null,
+            postalCode: pm.billing_postal_code ?? null,
+            state: pm.billing_state ?? null,
           },
         },
         createdAt: pm.created_at,
@@ -911,8 +957,8 @@ export function useTokenUsageHistory(
     queryFn: async (): Promise<TokenUsageHistoryRecord[]> => {
       if (!user?.id) return [];
 
-      let query = (supabase as any)
-        .from('token_usage')
+      let query = supabase
+        .from('token_usage' as never)
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -940,10 +986,23 @@ export function useTokenUsageHistory(
         throw error;
       }
 
-      return ((data || []) as any[]).map((record) => ({
+      interface UsageHistoryRow {
+        id: string;
+        user_id: string;
+        session_id?: string | null;
+        provider: string;
+        model?: string;
+        input_tokens?: number;
+        output_tokens?: number;
+        total_tokens?: number;
+        total_cost?: number;
+        created_at: string;
+        metadata?: Record<string, unknown>;
+      }
+      return ((data || []) as UsageHistoryRow[]).map((record) => ({
         id: record.id,
         userId: record.user_id,
-        sessionId: record.session_id,
+        sessionId: record.session_id ?? null,
         provider: record.provider,
         model: record.model || 'unknown',
         inputTokens: record.input_tokens || 0,
@@ -1047,8 +1106,8 @@ export function useBillingAnalytics(
       const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
 
       // Fetch token usage data
-      const { data: usageData, error: usageError } = await (supabase as any)
-        .from('token_usage')
+      const { data: usageData, error: usageError } = await supabase
+        .from('token_usage' as never)
         .select('*')
         .eq('user_id', user.id)
         .gte('created_at', previousStartDate.toISOString())
@@ -1062,20 +1121,23 @@ export function useBillingAnalytics(
         throw usageError;
       }
 
-      const records = (usageData || []) as any[];
-      const currentRecords = records.filter((r: any) => new Date(r.created_at) >= startDate);
+      interface UsageRecord {
+        created_at: string;
+        total_cost?: number;
+        total_tokens?: number;
+        provider?: string;
+        [key: string]: unknown;
+      }
+      const records = (usageData || []) as UsageRecord[];
+      const currentRecords = records.filter((r) => new Date(r.created_at) >= startDate);
       const previousRecords = records.filter(
-        (r: any) =>
-          new Date(r.created_at) >= previousStartDate && new Date(r.created_at) < startDate,
+        (r) => new Date(r.created_at) >= previousStartDate && new Date(r.created_at) < startDate,
       );
 
       // Calculate overview
-      const totalSpent = currentRecords.reduce(
-        (sum: number, r: any) => sum + (r.total_cost || 0),
-        0,
-      );
+      const totalSpent = currentRecords.reduce((sum: number, r) => sum + (r.total_cost || 0), 0);
       const totalTokensUsed = currentRecords.reduce(
-        (sum: number, r: any) => sum + (r.total_tokens || 0),
+        (sum: number, r) => sum + (r.total_tokens || 0),
         0,
       );
       const avgCostPerDay = totalSpent / days;
@@ -1084,7 +1146,7 @@ export function useBillingAnalytics(
 
       // Calculate trends
       const trendsMap = new Map<string, { tokens: number; cost: number; sessions: number }>();
-      currentRecords.forEach((r: any) => {
+      currentRecords.forEach((r) => {
         const date = r.created_at.split('T')[0];
         const existing = trendsMap.get(date) || { tokens: 0, cost: 0, sessions: 0 };
         trendsMap.set(date, {
@@ -1100,7 +1162,7 @@ export function useBillingAnalytics(
 
       // Calculate provider breakdown
       const providerMap = new Map<string, { tokens: number; cost: number; sessions: number }>();
-      currentRecords.forEach((r: any) => {
+      currentRecords.forEach((r) => {
         const provider = r.provider || 'unknown';
         const existing = providerMap.get(provider) || { tokens: 0, cost: 0, sessions: 0 };
         providerMap.set(provider, {
@@ -1122,8 +1184,8 @@ export function useBillingAnalytics(
         sessions: currentRecords.length,
       };
       const previousPeriod = {
-        tokens: previousRecords.reduce((sum: number, r: any) => sum + (r.total_tokens || 0), 0),
-        cost: previousRecords.reduce((sum: number, r: any) => sum + (r.total_cost || 0), 0),
+        tokens: previousRecords.reduce((sum: number, r) => sum + (r.total_tokens || 0), 0),
+        cost: previousRecords.reduce((sum: number, r) => sum + (r.total_cost || 0), 0),
         sessions: previousRecords.length,
       };
       const percentChange = {
