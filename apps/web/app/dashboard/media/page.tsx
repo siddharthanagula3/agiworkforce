@@ -1,6 +1,5 @@
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { redirect } from 'next/navigation';
-import { DashboardLayout } from '../../../components/dashboard/DashboardLayout';
 import { MediaGallery } from '@/components/Media/MediaGallery';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +15,7 @@ export default async function MediaPage() {
   }
 
   return (
-    <DashboardLayout>
+    <div className="py-6">
       <div className="space-y-2 mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Media Generation</h1>
         <p className="text-zinc-400 text-sm">
@@ -24,6 +23,6 @@ export default async function MediaPage() {
         </p>
       </div>
       <MediaGallery />
-    </DashboardLayout>
+    </div>
   );
 }

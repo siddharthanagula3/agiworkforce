@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from '../../services/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { redirect } from 'next/navigation';
-import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { CreditMonitor } from '../../components/dashboard/CreditMonitor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { CreditCard, Download, Users, Zap } from 'lucide-react';
@@ -71,7 +70,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <div className="flex items-center gap-2">
@@ -204,6 +203,6 @@ export default async function DashboardPage() {
           usagePercentage={creditUsagePercentage}
         />
       )}
-    </DashboardLayout>
+    </>
   );
 }

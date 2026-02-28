@@ -1,0 +1,734 @@
+/**
+ * EnhancedMessageInput - Rich text input with advanced features
+ *
+ * Features:
+ * - Rich text editing with markdown support
+ * - File attachment support
+ * - @mention autocomplete for agents
+ * - Markdown preview
+ * - Voice input with recording visualization
+ * - Audio playback before sending
+ * - Auto-resize textarea
+ * - Keyboard shortcuts
+ * - Character counter
+ */
+
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { cn } from '@shared/lib/utils';
+import { Button } from '@shared/components/ui/button';
+import { Separator } from '@shared/components/ui/separator';
+import { ScrollArea } from '@shared/components/ui/scroll-area';
+import {
+  Send,
+  Paperclip,
+  Mic,
+  MicOff,
+  Bold,
+  Italic,
+  Code,
+  X,
+  Eye,
+  EyeOff,
+  Square,
+  Pause,
+  Play,
+  AlertCircle,
+} from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Agent } from '../Main/MultiAgentChatInterface';
+import { useVoiceRecording } from '../../hooks/use-voice-recording';
+import { AudioVisualizer } from './AudioVisualizer';
+import { AudioPlayer } from './AudioPlayer';
+
+interface EnhancedMessageInputProps {
+  /** Array of agents for mention autocomplete */
+  agents: Agent[];
+  /** Callback when sending a message */
+  onSend: (content: string, attachments?: File[]) => void;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Maximum character count */
+  maxLength?: number;
+  /** Whether voice input is enabled */
+  enableVoice?: boolean;
+  /** Whether markdown preview is enabled */
+  enablePreview?: boolean;
+  /** Custom className */
+  className?: string;
+}
+
+interface Attachment {
+  file: File;
+  id: string;
+  preview?: string;
+  isAudio?: boolean;
+}
+
+// Recording states for UI rendering
+type RecordingState = 'idle' | 'recording' | 'paused' | 'preview';
+
+// Updated: Jan 15th 2026 - Added React.memo for performance
+// Updated: Jan 29th 2026 - Added full voice recording implementation
+export const EnhancedMessageInput = React.memo(function EnhancedMessageInput({
+  agents,
+  onSend,
+  placeholder = 'Type a message...',
+  maxLength = 10000,
+  enableVoice = true,
+  enablePreview = true,
+  className,
+}: EnhancedMessageInputProps) {
+  // State
+  const [content, setContent] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionPosition, setMentionPosition] = useState(0);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+
+  // Voice recording hook
+  const {
+    isRecording,
+    isPaused,
+    audioBlob,
+    audioUrl,
+    duration,
+    audioLevels,
+    permissionStatus,
+    error: recordingError,
+    isSupported: isVoiceSupported,
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    clearRecording,
+    requestPermission,
+  } = useVoiceRecording();
+
+  // Derived recording state for UI
+  const recordingState: RecordingState = useMemo(() => {
+    if (audioBlob && audioUrl) return 'preview';
+    if (isPaused) return 'paused';
+    if (isRecording) return 'recording';
+    return 'idle';
+  }, [isRecording, isPaused, audioBlob, audioUrl]);
+
+  // Refs
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mentionStartPos = useRef(0);
+  // Track timeouts for cleanup to prevent memory leaks
+  const timeoutRefs = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Voice recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  // Filtered agents for mention autocomplete
+  const filteredAgents = agents.filter((agent) =>
+    agent.name.toLowerCase().includes(mentionQuery.toLowerCase()),
+  );
+
+  // Helper to create tracked timeouts that clean up properly
+  const createTrackedTimeout = useCallback((callback: () => void, delay: number) => {
+    const timeoutId = setTimeout(() => {
+      timeoutRefs.current.delete(timeoutId);
+      callback();
+    }, delay);
+    timeoutRefs.current.add(timeoutId);
+    return timeoutId;
+  }, []);
+
+  // Cleanup all pending timeouts and media recorder on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(clearTimeout);
+      timeoutRefs.current.clear();
+      // Stop any ongoing recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    }
+  }, [content]);
+
+  // Handle content change
+  const handleContentChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newContent = e.target.value;
+      if (newContent.length <= maxLength) {
+        setContent(newContent);
+
+        // Check for @ mention
+        const cursorPos = e.target.selectionStart;
+        const textBeforeCursor = newContent.substring(0, cursorPos);
+        const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+        if (lastAtIndex !== -1) {
+          const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+          if (!textAfterAt.includes(' ')) {
+            setShowMentions(true);
+            setMentionQuery(textAfterAt);
+            mentionStartPos.current = lastAtIndex;
+            setMentionPosition(cursorPos);
+            setSelectedMentionIndex(0);
+          } else {
+            setShowMentions(false);
+          }
+        } else {
+          setShowMentions(false);
+        }
+      }
+    },
+    [maxLength],
+  );
+
+  // Handle mention selection
+  const handleMentionSelect = useCallback(
+    (agent: Agent) => {
+      const before = content.substring(0, mentionStartPos.current);
+      const after = content.substring(mentionPosition);
+      const newContent = `${before}@${agent.name} ${after}`;
+      setContent(newContent);
+      setShowMentions(false);
+
+      // Focus back to textarea with tracked timeout
+      createTrackedTimeout(() => {
+        textareaRef.current?.focus();
+        const newCursorPos = mentionStartPos.current + agent.name.length + 2;
+        textareaRef.current?.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    },
+    [content, mentionPosition, createTrackedTimeout],
+  );
+
+  // Handle file attachment
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newAttachments: Attachment[] = files.map((file) => {
+      const attachment: Attachment = {
+        file,
+        id: Math.random().toString(36).substring(7),
+        isAudio: file.type.startsWith('audio/'),
+      };
+
+      // Generate preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === attachment.id ? { ...a, preview: result } : a)),
+          );
+        };
+        reader.readAsDataURL(file);
+      }
+
+      return attachment;
+    });
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  // Remove attachment
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  // Insert markdown formatting
+  const insertMarkdown = useCallback(
+    (prefix: string, suffix: string = prefix) => {
+      if (!textareaRef.current) return;
+
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+      const selectedText = content.substring(start, end);
+      const newContent =
+        content.substring(0, start) + prefix + selectedText + suffix + content.substring(end);
+
+      setContent(newContent);
+
+      // Restore cursor position with tracked timeout
+      createTrackedTimeout(() => {
+        const newCursorPos = start + prefix.length + selectedText.length;
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    },
+    [content, createTrackedTimeout],
+  );
+
+  // Handle send
+  const handleSend = useCallback(() => {
+    if (content.trim() || attachments.length > 0) {
+      onSend(
+        content,
+        attachments.map((a) => a.file),
+      );
+      setContent('');
+      setAttachments([]);
+      setShowPreview(false);
+    }
+  }, [content, attachments, onSend]);
+
+  // Voice recording handlers
+  const handleVoiceToggle = useCallback(async () => {
+    if (recordingState === 'idle') {
+      // Check permission first
+      if (permissionStatus === 'denied') {
+        // Show error, user needs to enable in browser settings
+        return;
+      }
+      if (permissionStatus === 'prompt' || permissionStatus === 'unknown') {
+        const granted = await requestPermission();
+        if (!granted) return;
+      }
+      await startRecording();
+    } else if (recordingState === 'recording') {
+      pauseRecording();
+    } else if (recordingState === 'paused') {
+      resumeRecording();
+    }
+  }, [
+    recordingState,
+    permissionStatus,
+    requestPermission,
+    startRecording,
+    pauseRecording,
+    resumeRecording,
+  ]);
+
+  const handleStopRecording = useCallback(async () => {
+    await stopRecording();
+  }, [stopRecording]);
+
+  const handleDiscardRecording = useCallback(() => {
+    clearRecording();
+  }, [clearRecording]);
+
+  const handleSendAudio = useCallback(
+    (audioFile: File) => {
+      // Add audio file as attachment and send
+      const audioAttachment: Attachment = {
+        file: audioFile,
+        id: Math.random().toString(36).substring(7),
+        isAudio: true,
+      };
+
+      // Include any existing text content with the voice message
+      onSend(content || '[Voice Message]', [
+        ...attachments.map((a) => a.file),
+        audioAttachment.file,
+      ]);
+
+      // Clear state
+      setContent('');
+      setAttachments([]);
+      clearRecording();
+    },
+    [content, attachments, onSend, clearRecording],
+  );
+
+  const handleReRecord = useCallback(async () => {
+    clearRecording();
+    await startRecording();
+  }, [clearRecording, startRecording]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts while recording
+      if (recordingState !== 'idle' && recordingState !== 'preview') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          handleStopRecording();
+        }
+        return;
+      }
+
+      // Send on Enter (without Shift)
+      if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
+        e.preventDefault();
+        handleSend();
+      }
+
+      // Navigate mentions with arrow keys
+      if (showMentions) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedMentionIndex((prev) => Math.min(prev + 1, filteredAgents.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedMentionIndex((prev) => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (filteredAgents[selectedMentionIndex]) {
+            handleMentionSelect(filteredAgents[selectedMentionIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          setShowMentions(false);
+        }
+      }
+
+      // Markdown shortcuts
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        switch (e.key) {
+          case 'b':
+            e.preventDefault();
+            insertMarkdown('**');
+            break;
+          case 'i':
+            e.preventDefault();
+            insertMarkdown('*');
+            break;
+          case 'k':
+            e.preventDefault();
+            insertMarkdown('`');
+            break;
+        }
+      }
+    };
+
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.addEventListener('keydown', handleKeyDown);
+      return () => textarea.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [
+    showMentions,
+    filteredAgents,
+    selectedMentionIndex,
+    handleSend,
+    handleMentionSelect,
+    insertMarkdown,
+    recordingState,
+    handleStopRecording,
+  ]);
+
+  const charCount = content.length;
+  const isNearLimit = charCount > maxLength * 0.9;
+
+  // Check if voice is actually enabled (browser support + prop)
+  const voiceEnabled = enableVoice && isVoiceSupported;
+
+  return (
+    <div className={cn('flex flex-col gap-2', className)}>
+      {/* Recording Error Display */}
+      {recordingError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{recordingError}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 px-2"
+            onClick={handleDiscardRecording}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Voice Recording UI */}
+      {(recordingState === 'recording' || recordingState === 'paused') && (
+        <div className="flex flex-col gap-2">
+          <AudioVisualizer
+            audioLevels={audioLevels}
+            duration={duration}
+            isRecording={isRecording}
+            isPaused={isPaused}
+            size="md"
+          />
+          <div className="flex items-center justify-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleVoiceToggle}>
+              {isPaused ? (
+                <>
+                  <Play className="h-4 w-4" />
+                  Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-4 w-4" />
+                  Pause
+                </>
+              )}
+            </Button>
+            <Button variant="default" size="sm" className="gap-2" onClick={handleStopRecording}>
+              <Square className="h-4 w-4" />
+              Stop
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-destructive hover:text-destructive"
+              onClick={handleDiscardRecording}
+            >
+              <X className="h-4 w-4" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Audio Preview / Playback */}
+      {recordingState === 'preview' && audioUrl && (
+        <AudioPlayer
+          src={audioUrl}
+          audioBlob={audioBlob ?? undefined}
+          onSend={handleSendAudio}
+          onDiscard={handleDiscardRecording}
+          onReRecord={handleReRecord}
+          showActions={true}
+          size="md"
+        />
+      )}
+
+      {/* Attachments Preview */}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="group relative overflow-hidden rounded-lg border border-border bg-card"
+            >
+              {attachment.preview ? (
+                <img
+                  src={attachment.preview}
+                  alt={attachment.file.name}
+                  className="h-20 w-20 object-cover"
+                />
+              ) : attachment.isAudio ? (
+                <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 p-2">
+                  <Mic className="h-5 w-5 text-muted-foreground" />
+                  <span className="truncate text-xs text-muted-foreground">
+                    {attachment.file.name}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 p-2">
+                  <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  <span className="truncate text-xs text-muted-foreground">
+                    {attachment.file.name}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => handleRemoveAttachment(attachment.id)}
+                className="absolute right-1 top-1 rounded-full bg-background/80 p-1 opacity-0 transition-opacity hover:bg-background group-hover:opacity-100"
+                aria-label="Remove attachment"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Markdown Preview */}
+      {showPreview && content && (
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">Preview</span>
+          </div>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {/* Input Area - Hidden when actively recording */}
+      {recordingState !== 'recording' && recordingState !== 'paused' && (
+        <div className="relative flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+          {/* Formatting Toolbar */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => insertMarkdown('**')}
+              title="Bold (Ctrl+B)"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => insertMarkdown('*')}
+              title="Italic (Ctrl+I)"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => insertMarkdown('`')}
+              title="Code (Ctrl+K)"
+            >
+              <Code className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => insertMarkdown('```\n', '\n```')}
+              title="Code block"
+            >
+              <Code className="h-4 w-4" />
+            </Button>
+
+            <Separator orientation="vertical" className="mx-1 h-5" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
+            {enablePreview && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setShowPreview(!showPreview)}
+                title={showPreview ? 'Hide preview' : 'Show preview'}
+              >
+                {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            )}
+
+            <div className="ml-auto flex items-center gap-2">
+              {isNearLimit && (
+                <span
+                  className={cn(
+                    'text-xs',
+                    charCount >= maxLength ? 'text-destructive' : 'text-muted-foreground',
+                  )}
+                >
+                  {charCount} / {maxLength}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Textarea */}
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={handleContentChange}
+              placeholder={placeholder}
+              className="max-h-[200px] min-h-[60px] w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              rows={1}
+              disabled={recordingState === 'preview'}
+            />
+
+            {/* Mention Autocomplete */}
+            {showMentions && filteredAgents.length > 0 && (
+              <div className="absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-border bg-card shadow-lg">
+                <ScrollArea className="max-h-48">
+                  {filteredAgents.map((agent, index) => (
+                    <button
+                      key={agent.id}
+                      onClick={() => handleMentionSelect(agent)}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-2 text-left transition-colors',
+                        index === selectedMentionIndex
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-muted',
+                      )}
+                    >
+                      <div
+                        className="h-6 w-6 rounded-full"
+                        style={{ backgroundColor: agent.color }}
+                      >
+                        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white">
+                          {agent.name.substring(0, 2).toUpperCase()}
+                        </div>
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <div className="truncate text-sm font-medium">{agent.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{agent.role}</div>
+                      </div>
+                    </button>
+                  ))}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {voiceEnabled && recordingState === 'idle' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-2"
+                  onClick={handleVoiceToggle}
+                  title={
+                    permissionStatus === 'denied'
+                      ? 'Microphone access denied'
+                      : 'Start voice recording'
+                  }
+                  disabled={permissionStatus === 'denied'}
+                >
+                  {permissionStatus === 'denied' ? (
+                    <MicOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+
+              {!isVoiceSupported && enableVoice && (
+                <span className="text-xs text-muted-foreground">Voice recording not supported</span>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSend}
+              disabled={
+                (!content.trim() && attachments.length === 0) || recordingState === 'preview'
+              }
+              size="sm"
+              className="gap-2"
+            >
+              <Send className="h-4 w-4" />
+              Send
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+        accept="image/*,.pdf,.doc,.docx,.txt,.csv,.json,audio/*"
+      />
+    </div>
+  );
+});
+
+export default EnhancedMessageInput;
