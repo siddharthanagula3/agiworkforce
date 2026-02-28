@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useMissionStore } from '@shared/stores/mission-control-store';
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
+import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import type { AIEmployee } from '@core/types/ai-employee';
 
 export interface CollaborationOptions {
@@ -77,20 +77,11 @@ export function useAgentCollaboration(
   const [availableAgents, setAvailableAgents] = useState<AIEmployee[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load available agents
+  // Load available agents (all agents are always available in skills-based model)
   useEffect(() => {
     const loadAgents = async () => {
       try {
-        // Trigger employee loading
-        if (!workforceOrchestratorRefactored.areEmployeesLoaded()) {
-          await workforceOrchestratorRefactored.processRequest({
-            userId: userId || 'system',
-            input: 'initialize',
-            mode: 'chat',
-          });
-        }
-
-        const agents = workforceOrchestratorRefactored.getAvailableEmployees();
+        const agents = await systemPromptsService.getAvailableEmployees();
         setAvailableAgents(agents);
         setIsInitialized(true);
       } catch (err) {
@@ -178,15 +169,21 @@ export function useAgentCollaboration(
       }
 
       try {
-        const response = await workforceOrchestratorRefactored.processRequest({
-          userId,
-          input: task,
-          mode: 'mission', // Use mission mode for collaboration
-          sessionId,
+        // Skills-based model: collaboration is handled via direct API calls
+        const response = await fetch('/api/llm/completion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            input: task,
+            mode: 'mission',
+            sessionId,
+            agents: collaborativeAgents,
+          }),
         });
 
-        if (!response.success) {
-          throw new Error(response.error || 'Collaboration failed to start');
+        if (!response.ok) {
+          throw new Error('Collaboration failed to start');
         }
 
         toast.success('Collaboration started successfully');
@@ -210,15 +207,26 @@ export function useAgentCollaboration(
     toast.success('Collaboration resumed');
   }, [resumeMission]);
 
-  // Route message to specific agent
+  // Route message to specific agent via direct API call
   const routeMessageToAgent = useCallback(
     async (agentName: string, message: string): Promise<string> => {
       try {
-        const response = await workforceOrchestratorRefactored.routeMessageToEmployee(
-          agentName,
-          message,
-        );
-        return response;
+        const response = await fetch('/api/llm/completion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent: agentName,
+            input: message,
+            mode: 'chat',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to route message');
+        }
+
+        const data = await response.json();
+        return data.response || message;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to route message';
         toast.error(errorMsg);

@@ -13,8 +13,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { useWorkforceStore } from '@shared/stores/workforce-store';
-import { AI_EMPLOYEES } from '@/data/marketplace-employees';
+import { useModelStore } from '@shared/stores/model-store';
 import { useVibeChatStore } from '../stores/vibe-chat-store';
 import { VibeLayout } from '../layouts/VibeLayout';
 import { SimpleChatPanel } from '../components/redesign/SimpleChatPanel';
@@ -27,7 +26,6 @@ import type { AgentStatus } from '../components/agent-panel/AgentStatusCard';
 import type { WorkingStep } from '../components/agent-panel/WorkingProcessSection';
 import type { AgentMessage } from '../components/agent-panel/AgentMessageList';
 import { supabase } from '@shared/lib/supabase-client';
-import { workforceOrchestratorRefactored } from '@core/ai/orchestration/workforce-orchestrator';
 import { useVibeRealtime, type VibeAgentActionRow } from '../hooks/use-vibe-realtime';
 import { VibeMessageService } from '../services/vibe-message-service';
 import { vibeMessageHandler } from '../services/vibe-message-handler';
@@ -173,7 +171,6 @@ function getMessageIsStreaming(metadata: Record<string, unknown> | null | undefi
 const VibeDashboard: React.FC = () => {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { hiredEmployees } = useWorkforceStore();
   const { currentSessionId, setCurrentSession } = useVibeChatStore();
 
   // Phase orchestrator for VibeSDK-style workflow tracking
@@ -184,7 +181,11 @@ const VibeDashboard: React.FC = () => {
     reset: _resetOrchestrator,
   } = useVibeOrchestrator();
 
-  const [activeAgent, setActiveAgent] = useState<AgentStatus | null>(null);
+  const [activeAgent, setActiveAgent] = useState<AgentStatus>({
+    name: 'Vibe Assistant',
+    role: 'Full-Stack Developer',
+    status: 'idle',
+  });
   const [_workingSteps, setWorkingSteps] = useState<WorkingStep[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -267,6 +268,7 @@ const VibeDashboard: React.FC = () => {
     if (!user) return null;
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_sessions not in generated types
       const { data, error } = await (supabase as any)
         .from('vibe_sessions')
         .select('id')
@@ -280,6 +282,7 @@ const VibeDashboard: React.FC = () => {
       let sessionId = data?.id;
 
       if (!sessionId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vibe_sessions not in generated types
         const { data: inserted, error: insertError } = await (supabase as any)
           .from('vibe_sessions')
           .insert({ user_id: user.id, title: 'VIBE Session' })
@@ -300,28 +303,133 @@ const VibeDashboard: React.FC = () => {
     }
   }, [currentSessionId, loadMessages, setCurrentSession, user]);
 
-  const streamAssistantResponse = useCallback(async (messageId: string, fullContent: string) => {
-    const chunks = fullContent.split(/(\s+)/).filter((part) => part.length);
-    for (const chunk of chunks) {
+  /**
+   * Stream a response from /api/llm/completion using SSE.
+   * Appends content chunks to the message in real-time.
+   * Returns the full response text.
+   */
+  const streamSSEResponse = useCallback(
+    async (
+      messageId: string,
+      conversationHistory: Array<{ role: string; content: string }>,
+    ): Promise<string> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const selectedModelId = useModelStore.getState().selectedModelId;
+
+      const response = await fetch('/api/llm/completion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          model: selectedModelId,
+          messages: conversationHistory,
+          stream: true,
+          max_tokens: 4096,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({ error: 'Request failed' }))) as {
+          error?: string;
+        };
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
+
+      // Non-streaming fallback
+      if (!response.body) {
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const text = data.choices?.[0]?.message?.content || '';
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId ? { ...msg, content: text, isStreaming: false } : msg,
+          ),
+        );
+        return text;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const jsonStr = trimmed.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr) as {
+              choices?: Array<{ delta?: { content?: string } }>;
+              delta?: { text?: string };
+            };
+            const content =
+              parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
+            if (content) {
+              fullResponse += content;
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === messageId
+                    ? { ...msg, content: fullResponse }
+                    : msg,
+                ),
+              );
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.trim() && buffer.trim().startsWith('data: ')) {
+        const jsonStr = buffer.trim().slice(6).trim();
+        if (jsonStr !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(jsonStr) as {
+              choices?: Array<{ delta?: { content?: string } }>;
+              delta?: { text?: string };
+            };
+            const content =
+              parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
+            if (content) {
+              fullResponse += content;
+            }
+          } catch {
+            // Skip
+          }
+        }
+      }
+
+      // Mark streaming complete
       setMessages((prev) =>
-        prev.map((message) =>
-          message.id === messageId
-            ? {
-                ...message,
-                content: `${message.content || ''}${chunk}`,
-              }
-            : message,
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, content: fullResponse, isStreaming: false }
+            : msg,
         ),
       );
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    }
 
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === messageId ? { ...message, isStreaming: false } : message,
-      ),
-    );
-  }, []);
+      return fullResponse;
+    },
+    [],
+  );
 
   const handleAgentAction = useCallback((action: VibeAgentActionRow) => {
     const status: WorkingStep['status'] =
@@ -356,11 +464,7 @@ const VibeDashboard: React.FC = () => {
 
     setActiveAgent((prev) => ({
       name: action.agent_name,
-      role:
-        actionMetadata.agent_role ||
-        prev?.role ||
-        AI_EMPLOYEES.find((e) => e.name === action.agent_name)?.role ||
-        'AI Agent',
+      role: actionMetadata.agent_role || prev?.role || 'AI Agent',
       status: status === 'failed' ? 'error' : status === 'completed' ? 'completed' : 'working',
       currentTask: description,
     }));
@@ -381,26 +485,8 @@ const VibeDashboard: React.FC = () => {
       return;
     }
 
-    if (!hiredEmployees || hiredEmployees.length === 0) {
-      router.push(
-        '/dashboard/hire?message=Please+hire+at+least+one+AI+employee+to+use+the+VIBE+workspace.',
-      );
-      return;
-    }
-
     ensureSession();
-  }, [ensureSession, hiredEmployees, router, user]);
-
-  useEffect(() => {
-    if (hiredEmployees?.length && !activeAgent) {
-      const firstEmp = AI_EMPLOYEES.find((e) => e.id === hiredEmployees[0].employee_id);
-      setActiveAgent({
-        name: firstEmp?.name || hiredEmployees[0].employee_name || 'AI Specialist',
-        role: firstEmp?.role || 'Engineer',
-        status: 'idle',
-      });
-    }
-  }, [activeAgent, hiredEmployees]);
+  }, [ensureSession, router, user]);
 
   useEffect(() => {
     // Defensive: Ensure sessionId is valid before creating channel
@@ -499,22 +585,6 @@ const VibeDashboard: React.FC = () => {
           },
         });
 
-        // Call workforce orchestrator
-        const orchestratorResponse = await workforceOrchestratorRefactored.processRequest({
-          userId: user.id,
-          input: content,
-          mode: 'chat',
-          sessionId,
-          conversationHistory: [...messagesRef.current, userMessage].map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-        });
-
-        if (!orchestratorResponse.success || !orchestratorResponse.chatResponse) {
-          throw new Error(orchestratorResponse.error || 'No response generated by workforce.');
-        }
-
         setWorkingSteps((prev) =>
           prev.map((step, index) => (index <= 1 ? { ...step, status: 'completed' } : step)),
         );
@@ -529,28 +599,30 @@ const VibeDashboard: React.FC = () => {
           role: 'assistant',
           content: '',
           timestamp: new Date(),
-          agentName:
-            ((orchestratorResponse as unknown as Record<string, unknown>)
-              .assignedEmployee as string) ||
-            activeAgent?.name ||
-            hiredEmployees?.[0]?.employee_name ||
-            'AI Assistant',
-          agentRole:
-            activeAgent?.role ||
-            AI_EMPLOYEES.find((e) => e.id === hiredEmployees?.[0]?.employee_id)?.role ||
-            'Specialist',
+          agentName: activeAgent.name,
+          agentRole: activeAgent.role,
           isStreaming: true,
         };
 
         upsertMessage(assistantMessage);
 
-        // Stream response to UI
-        await streamAssistantResponse(assistantMessageId, orchestratorResponse.chatResponse);
+        // Build conversation history for the API
+        const conversationHistory = [...messagesRef.current, userMessage].map((msg) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+        }));
+
+        // Stream response from /api/llm/completion via SSE
+        const fullResponse = await streamSSEResponse(assistantMessageId, conversationHistory);
+
+        if (!fullResponse) {
+          throw new Error('No response received from AI');
+        }
 
         // Process AI response for code files
         try {
           const parseResult = await vibeMessageHandler.handleAIResponse(
-            orchestratorResponse.chatResponse,
+            fullResponse,
             sessionId,
           );
 
@@ -584,7 +656,7 @@ const VibeDashboard: React.FC = () => {
           sessionId,
           userId: user.id,
           role: 'assistant',
-          content: orchestratorResponse.chatResponse,
+          content: fullResponse,
           employeeName: assistantMessage.agentName,
           employeeRole: assistantMessage.agentRole,
           isStreaming: false,
@@ -603,9 +675,7 @@ const VibeDashboard: React.FC = () => {
             step.status === 'in_progress' ? { ...step, status: 'failed' } : step,
           ),
         );
-        if (activeAgent) {
-          setActiveAgent({ ...activeAgent, status: 'error' });
-        }
+        setActiveAgent({ ...activeAgent, status: 'error' });
       } finally {
         setIsLoading(false);
       }
@@ -614,26 +684,21 @@ const VibeDashboard: React.FC = () => {
       activeAgent,
       currentSessionId,
       ensureSession,
-      hiredEmployees,
       initSession,
       orchestratorSession,
       processEvent,
-      streamAssistantResponse,
+      streamSSEResponse,
       upsertMessage,
       user,
     ],
   );
 
-  if (!user || !hiredEmployees) {
+  if (!user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
-
-  if (hiredEmployees.length === 0) {
-    return null;
   }
 
   return (
