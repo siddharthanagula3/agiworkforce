@@ -14,8 +14,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, Sparkles, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
+import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
-import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
+import {
+  MODEL_PRESETS,
+  PROVIDER_LABELS,
+  getAllowedAutoModesForTier,
+  getBestAutoModeForTier,
+} from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 
 interface QuickQueryProps {
@@ -37,6 +43,10 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
       selectModel: state.selectModel,
     })),
   );
+  const account = useAccountStore((state) => state.account);
+  const planTier = account.plan ?? 'hobby';
+  const allowedAutoModes = getAllowedAutoModesForTier(planTier);
+  const defaultModel = getBestAutoModeForTier(planTier);
 
   // Focus input when overlay opens
   useEffect(() => {
@@ -102,10 +112,10 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
   const handleSubmit = useCallback(() => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    onSubmit(trimmed, selectedModel ?? 'auto-balanced');
+    onSubmit(trimmed, selectedModel ?? defaultModel);
     setQuery('');
     onClose();
-  }, [query, selectedModel, onSubmit, onClose]);
+  }, [defaultModel, query, selectedModel, onSubmit, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -125,6 +135,9 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
     const managed = MODEL_PRESETS['managed_cloud'];
     if (managed) {
       for (const m of managed) {
+        if (m.value.startsWith('auto') && !allowedAutoModes.includes(m.value)) {
+          continue;
+        }
         options.push({ value: m.value, label: m.label, provider: 'managed_cloud' });
       }
     }
@@ -133,9 +146,16 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
   })();
 
   const currentModelLabel = (() => {
-    if (!selectedModel) return 'Auto';
+    if (!selectedModel) {
+      const defaultOption = modelOptions.find((option) => option.value === defaultModel);
+      return defaultOption?.label ?? 'Auto (Economy)';
+    }
     const found = modelOptions.find((o) => o.value === selectedModel);
     if (found) return found.label;
+    if (selectedModel.startsWith('auto')) {
+      const defaultOption = modelOptions.find((option) => option.value === defaultModel);
+      return defaultOption?.label ?? 'Auto (Economy)';
+    }
     // Fallback: show raw model id nicely
     return selectedModel.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   })();
