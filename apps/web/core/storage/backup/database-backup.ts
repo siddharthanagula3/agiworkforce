@@ -75,6 +75,7 @@ class BackupService {
     this.isInitialized = true;
 
     console.log('BackupService initialized with config:', this.config);
+
     monitoringService.trackEvent('backup_service_initialized', this.config as any);
   }
 

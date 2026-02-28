@@ -255,8 +255,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       loadSessionsFromDb: async (userId: string) => {
         try {
-          const { data, error } = await (supabase as any)
-            .from('vibe_sessions')
+          const { data, error } = await (supabase.from('vibe_sessions' as never) as any)
             .select('*')
             .eq('user_id', userId)
             .order('updated_at', { ascending: false });
@@ -267,14 +266,14 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
 
           if (data && data.length > 0) {
-            const dbSessions: ChatSession[] = data.map((row: any) => ({
-              id: row.id,
-              title: row.title || 'Untitled',
-              createdAt: new Date(row.created_at),
-              updatedAt: new Date(row.updated_at),
-              preview: row.preview || '',
-              messageCount: row.message_count || 0,
-              userId: row.user_id,
+            const dbSessions: ChatSession[] = data.map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              title: (row.title as string) || 'Untitled',
+              createdAt: new Date(row.created_at as string),
+              updatedAt: new Date(row.updated_at as string),
+              preview: (row.preview as string) || '',
+              messageCount: (row.message_count as number) || 0,
+              userId: row.user_id as string,
             }));
 
             set((state) => {
@@ -299,8 +298,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       loadMessagesFromDb: async (sessionId: string) => {
         try {
-          const { data, error } = await (supabase as any)
-            .from('vibe_messages')
+          const { data, error } = await (supabase.from('vibe_messages' as never) as any)
             .select('*')
             .eq('session_id', sessionId)
             .order('timestamp', { ascending: true });
@@ -311,14 +309,14 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
 
           if (data && data.length > 0) {
-            const dbMessages: ChatMessage[] = data.map((row: any) => ({
-              id: row.id,
-              sessionId: row.session_id,
+            const dbMessages: ChatMessage[] = data.map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              sessionId: row.session_id as string,
               role: row.role as 'user' | 'assistant',
-              content: row.content || '',
-              createdAt: new Date(row.timestamp || row.created_at),
+              content: (row.content as string) || '',
+              createdAt: new Date((row.timestamp as string) || (row.created_at as string)),
               isStreaming: false,
-              metadata: row.metadata || undefined,
+              metadata: (row.metadata as ChatMessage['metadata']) || undefined,
             }));
 
             set((state) => {
@@ -332,7 +330,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       saveMessageToDb: async (message: ChatMessage, userId: string) => {
         try {
-          await (supabase as any).from('vibe_messages').insert({
+          await (supabase.from('vibe_messages' as never) as any).insert({
             id: message.id,
             session_id: message.sessionId,
             user_id: userId,
@@ -348,7 +346,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       saveSessionToDb: async (session: ChatSession, userId: string) => {
         try {
-          await (supabase as any).from('vibe_sessions').upsert({
+          await (supabase.from('vibe_sessions' as never) as any).upsert({
             id: session.id,
             user_id: userId,
             title: session.title,

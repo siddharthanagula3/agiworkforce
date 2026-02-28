@@ -83,7 +83,7 @@ export class ChatPersistenceService {
         role: metadata?.role || 'assistant',
         provider: metadata?.provider || 'openai',
         is_active: true,
-      } as any)
+      } as never)
       .select()
       .maybeSingle();
 
@@ -107,7 +107,7 @@ export class ChatPersistenceService {
 
     if (error) throw new Error(`Failed to load sessions: ${error.message}`);
 
-    return (data || []).map((session: any) => {
+    return (data || []).map((session: Record<string, unknown>) => {
       // Extract message count from nested select result
       // Supabase returns count as an array with single object or direct count
       const chatMessages = session.web_messages as
@@ -181,8 +181,10 @@ export class ChatPersistenceService {
     });
 
     // The next cursor is the updated_at of the last item
-    const lastItem = resultItems[resultItems.length - 1] as any;
-    const nextCursor = hasMore && lastItem ? lastItem.updated_at : null;
+    const lastItem = resultItems[resultItems.length - 1] as
+      | { updated_at?: string; created_at?: string }
+      | undefined;
+    const nextCursor = hasMore && lastItem ? (lastItem.updated_at ?? null) : null;
 
     return {
       data: sessions,
@@ -369,8 +371,10 @@ export class ChatPersistenceService {
     );
 
     // The next cursor is the created_at of the last item
-    const lastItem = resultItems[resultItems.length - 1] as any;
-    const nextCursor = hasMore && lastItem ? lastItem.created_at : null;
+    const lastItem = resultItems[resultItems.length - 1] as
+      | { updated_at?: string; created_at?: string }
+      | undefined;
+    const nextCursor = hasMore && lastItem ? (lastItem.created_at ?? null) : null;
 
     return {
       data: messages,
@@ -423,8 +427,10 @@ export class ChatPersistenceService {
       .map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
 
     // The next cursor is the created_at of the first item (oldest in this batch)
-    const oldestItem = resultItems[resultItems.length - 1] as any;
-    const nextCursor = hasMore && oldestItem ? oldestItem.created_at : null;
+    const oldestItem = resultItems[resultItems.length - 1] as
+      | { updated_at?: string; created_at?: string }
+      | undefined;
+    const nextCursor = hasMore && oldestItem ? (oldestItem.created_at ?? null) : null;
 
     return {
       data: messages,
@@ -688,7 +694,7 @@ export class ChatPersistenceService {
           role: msg.role,
           content: msg.content,
           created_at: new Date(msg.createdAt).toISOString(),
-        })) as any,
+        })) as never,
       );
 
       if (error) {

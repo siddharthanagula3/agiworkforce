@@ -455,21 +455,21 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
 
   return (
-    <div className="animate-fade-in-up mx-auto max-w-3xl space-y-6 p-4 md:p-6">
+    <div className="animate-fade-in-up mx-auto max-w-3xl space-y-6 px-4 py-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Settings</h1>
         <p className="text-sm text-muted-foreground">
           Manage your account, AI configuration, and preferences
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-5">
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
               key={value}
               value={value}
-              className={cn('flex items-center gap-1.5 text-xs sm:text-sm')}
+              className={cn('flex shrink-0 items-center gap-1.5 text-xs sm:text-sm')}
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">{label}</span>

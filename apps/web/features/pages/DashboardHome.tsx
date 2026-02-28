@@ -275,10 +275,10 @@ export const DashboardHomePage: React.FC = () => {
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
 
   return (
-    <div className="animate-fade-in-up space-y-8 py-6">
+    <div className="animate-fade-in-up space-y-6 px-4 py-4 sm:space-y-8 sm:px-6 sm:py-6">
       {/* Welcome Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           {getGreeting()},{' '}
           <span className="bg-gradient-to-r from-terra-cotta-300 to-terra-cotta-500 bg-clip-text text-transparent">
             {displayName}
@@ -388,7 +388,7 @@ export const DashboardHomePage: React.FC = () => {
                         />
                       </div>
                       <span className="flex-1 truncate text-sm">{convo.title}</span>
-                      <div className="flex items-center gap-1 text-muted-foreground/40">
+                      <div className="hidden items-center gap-1 text-muted-foreground/40 sm:flex">
                         <Clock className="h-3 w-3" />
                         <span className="text-xs">{convo.updatedAt}</span>
                       </div>
