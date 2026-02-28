@@ -21,15 +21,15 @@ const PublicFooter: React.FC = () => {
       { label: 'Contact', href: '/contact-sales' },
     ],
     resources: [
-      { label: 'Documentation', href: '/documentation' },
-      { label: 'API Reference', href: '/api-reference' },
+      { label: 'Documentation', href: '/docs' },
+      { label: 'API Reference', href: '/api-docs' },
       { label: 'Help Center', href: '/help' },
       { label: 'Security', href: '/security' },
     ],
     legal: [
-      { label: 'Privacy Policy', href: '/privacy-policy' },
-      { label: 'Terms of Service', href: '/terms-of-service' },
-      { label: 'Cookie Policy', href: '/cookie-policy' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
+      { label: 'Cookie Policy', href: '/cookies' },
       { label: 'Security', href: '/security' },
     ],
   };
@@ -138,10 +138,10 @@ const PublicFooter: React.FC = () => {
             © {currentYear} AGI Workforce. All rights reserved. Built with AI for the AI age.
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <Link href="/privacy-policy" className="transition-colors hover:text-foreground">
+            <Link href="/privacy" className="transition-colors hover:text-foreground">
               Privacy
             </Link>
-            <Link href="/terms-of-service" className="transition-colors hover:text-foreground">
+            <Link href="/terms" className="transition-colors hover:text-foreground">
               Terms
             </Link>
             <Link href="/help" className="transition-colors hover:text-foreground">

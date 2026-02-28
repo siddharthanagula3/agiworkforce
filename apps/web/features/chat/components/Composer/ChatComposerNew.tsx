@@ -14,9 +14,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
 
 interface ChatComposerProps {
-  onSend: (content: string, attachments?: File[]) => void;
+  onSend: (content: string, attachments?: File[], skillId?: string) => void;
   isLoading?: boolean;
   placeholder?: string;
   disabled?: boolean;
@@ -27,15 +28,6 @@ const TOOLS = [
   { id: 'video', label: 'Generate Video', icon: Video, color: 'text-pink-400' },
   { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
   { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
-];
-
-const SKILLS = [
-  { id: 'auto', name: 'Auto-Select', description: 'Let AI choose the best skill', icon: Sparkles },
-  { id: 'code-review', name: 'Code Reviewer', description: 'Review and improve code' },
-  { id: 'researcher', name: 'Researcher', description: 'Deep research on any topic' },
-  { id: 'writer', name: 'Content Writer', description: 'Write articles, docs, copy' },
-  { id: 'designer', name: 'UI Designer', description: 'Design guidance and feedback' },
-  { id: 'analyst', name: 'Data Analyst', description: 'Analyze data and trends' },
 ];
 
 export function ChatComposerNew({
@@ -52,11 +44,34 @@ export function ChatComposerNew({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
+  const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() => {
+    // Start with sync defaults, then load real data
+    return ChatAIService.getAvailableSkillsSync();
+  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
+
+  // Load real skills data on mount
+  useEffect(() => {
+    ChatAIService.getAvailableSkills().then((skills) => {
+      if (skills.length > 0) {
+        // Prepend the "Auto-Select" option
+        setAvailableSkills([
+          {
+            id: 'auto',
+            name: 'Auto-Select',
+            description: 'Let AI choose the best skill',
+            category: 'General',
+          },
+          ...skills,
+        ]);
+      }
+    });
+  }, []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -102,27 +117,31 @@ export function ChatComposerNew({
     setShowMentions(false);
   }, []);
 
-  const filteredSkills = SKILLS.filter(
-    (skill) =>
-      skill.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-      skill.description.toLowerCase().includes(mentionQuery.toLowerCase()),
-  );
+  const filteredSkills = availableSkills
+    .filter(
+      (skill) =>
+        skill.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+        skill.description.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+        skill.id.toLowerCase().includes(mentionQuery.toLowerCase()),
+    )
+    .slice(0, 12); // Cap at 12 results for performance
 
   const handleMentionSelect = useCallback(
-    (skill: (typeof SKILLS)[0]) => {
+    (skill: SkillInfo) => {
       if (mentionStartIndex === -1) return;
       const before = message.substring(0, mentionStartIndex);
       const cursorPos = textareaRef.current?.selectionStart || message.length;
       const after = message.substring(cursorPos);
       const newMessage = `${before}@${skill.name} ${after}`;
       setMessage(newMessage);
+      setSelectedSkill(skill.id === 'auto' ? null : skill);
       setShowMentions(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
     [message, mentionStartIndex],
   );
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
 
@@ -135,16 +154,17 @@ export function ChatComposerNew({
     };
     const prefix = selectedTools.map((t) => toolPrefixes[t] || '').join('');
 
-    onSend(prefix + message, attachments.length > 0 ? attachments : undefined);
+    onSend(prefix + message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id);
     setMessage('');
     setAttachments([]);
     setSelectedTools([]);
+    setSelectedSkill(null);
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [message, attachments, isLoading, disabled, selectedTools, onSend]);
+  };
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -174,6 +194,24 @@ export function ChatComposerNew({
 
   return (
     <div className="relative mx-auto w-full max-w-3xl px-4 pb-4">
+      {/* Selected Skill Badge */}
+      {selectedSkill && (
+        <div className="mb-2 flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs text-primary">
+            <Sparkles className="h-3 w-3" />
+            {selectedSkill.name}
+            <button
+              onClick={() => setSelectedSkill(null)}
+              className="rounded-full p-0.5 hover:bg-primary/20"
+              aria-label={`Remove ${selectedSkill.name} skill`}
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+          <span className="text-[10px] text-muted-foreground">{selectedSkill.category}</span>
+        </div>
+      )}
+
       {/* Selected Tools Tags */}
       {selectedTools.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -240,32 +278,34 @@ export function ChatComposerNew({
               <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Skills
               </div>
-              {filteredSkills.map((skill) => {
-                const Icon = skill.icon;
-                return (
-                  <button
-                    key={skill.id}
-                    onClick={() => handleMentionSelect(skill)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      {Icon ? (
-                        <Icon className="h-3.5 w-3.5" />
-                      ) : (
-                        <span className="text-[10px] font-bold">
-                          {skill.name.substring(0, 2).toUpperCase()}
-                        </span>
-                      )}
+              {filteredSkills.map((skill) => (
+                <button
+                  key={skill.id}
+                  onClick={() => handleMentionSelect(skill)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    {skill.id === 'auto' ? (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    ) : (
+                      <span className="text-[10px] font-bold">
+                        {skill.name.substring(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{skill.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {skill.description}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{skill.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {skill.description}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                  </div>
+                  {skill.category && skill.id !== 'auto' && (
+                    <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                      {skill.category}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         )}

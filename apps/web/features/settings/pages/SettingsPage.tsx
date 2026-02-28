@@ -52,7 +52,7 @@ function ProfileTab() {
   };
 
   return (
-    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-lg">Profile Information</CardTitle>
         <CardDescription>Update your personal details</CardDescription>
@@ -112,7 +112,7 @@ function AIConfigurationTab() {
   };
 
   return (
-    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-lg">AI Configuration</CardTitle>
         <CardDescription>Configure default AI model and parameters</CardDescription>
@@ -260,7 +260,7 @@ function APIKeysTab() {
   };
 
   return (
-    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-lg">API Keys</CardTitle>
         <CardDescription>Manage your AI provider API keys</CardDescription>
@@ -312,7 +312,7 @@ function AppearanceTab() {
   const [fontSize, setFontSize] = useState('medium');
 
   return (
-    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-lg">Appearance</CardTitle>
         <CardDescription>Customize the look and feel</CardDescription>
@@ -396,7 +396,7 @@ function NotificationsTab() {
   const [marketingEmails, setMarketingEmails] = useState(false);
 
   return (
-    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+    <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-lg">Notifications</CardTitle>
         <CardDescription>Choose what notifications you receive</CardDescription>
@@ -455,7 +455,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
+    <div className="animate-fade-in-up mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
