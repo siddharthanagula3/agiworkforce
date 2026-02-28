@@ -107,7 +107,13 @@ export function extractArtifactTitle(content: string): string | undefined {
   // Try first heading
   const headingMatch = content.match(/<h1[^>]*>(.*?)<\/h1>/i);
   if (headingMatch) {
-    return headingMatch[1].replace(/<[^>]*>/g, '').trim();
+    let text = headingMatch[1];
+    let prev;
+    do {
+      prev = text;
+      text = text.replace(/<[^>]*>/g, '');
+    } while (text !== prev);
+    return text.trim();
   }
 
   return undefined;
@@ -149,7 +155,7 @@ export function extractArtifacts(markdown: string): ArtifactData[] {
       const title = extractArtifactTitle(block.content);
 
       artifacts.push({
-        id: `artifact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `artifact-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
         type,
         language: block.language,
         title,
