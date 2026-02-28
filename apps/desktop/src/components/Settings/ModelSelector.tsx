@@ -1,8 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Search, X, Filter, Star, Clock, Grid, List } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
+import { useAccountStore } from '../../stores/accountStore';
 import { ModelCard } from './ModelCard';
-import { getAllModels, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
+import {
+  getAllModels,
+  getAllowedAutoModesForTier,
+  isModelAllowedForTier,
+  normalizeSubscriptionTier,
+  PROVIDER_LABELS,
+  PROVIDERS_IN_ORDER,
+} from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 import type { ModelMetadata } from '../../constants/llm';
 import { cn } from '../../lib/utils';
@@ -27,8 +35,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
   const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore();
+  const account = useAccountStore((state) => state.account);
+  const planTier = normalizeSubscriptionTier(account.plan);
+  const allowedAutoModes = useMemo(() => new Set(getAllowedAutoModesForTier(planTier)), [planTier]);
 
-  const allModels = useMemo(() => getAllModels(), []);
+  const allModels = useMemo(
+    () =>
+      getAllModels().filter((model) => {
+        if (model.id === 'auto') {
+          return true;
+        }
+        if (model.id.startsWith('auto')) {
+          return allowedAutoModes.has(model.id);
+        }
+        return model.provider === 'ollama' || isModelAllowedForTier(model.id, planTier);
+      }),
+    [allowedAutoModes, planTier],
+  );
 
   // Filter models based on search, provider filter, and mode
   const filteredModels = useMemo(() => {

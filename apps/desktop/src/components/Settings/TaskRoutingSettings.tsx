@@ -1,10 +1,21 @@
 import { Info, RotateCcw } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MODEL_METADATA, type ModelMetadata } from '../../constants/llm';
-import { useSettingsStore, type TaskCategory, type TaskRouting } from '../../stores/settingsStore';
-import type { Provider } from '../../types/provider';
+import {
+  MODEL_METADATA,
+  getAllowedAutoModesForTier,
+  isModelAllowedForTier,
+  normalizeSubscriptionTier,
+  type ModelMetadata,
+} from '../../constants/llm';
+import {
+  useSettingsStore,
+  type TaskCategory,
+  type TaskRouting,
+  type Provider,
+} from '../../stores/settingsStore';
+import { useAccountStore } from '../../stores/accountStore';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Button } from '../ui/Button';
@@ -57,11 +68,25 @@ const TASK_CATEGORY_INFO: Record<
  * Get available models for a task category.
  * Filters models based on their type and capabilities.
  */
-function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
+function getModelsForCategory(category: TaskCategory, planTier: string | null): ModelMetadata[] {
   const models = Object.values(MODEL_METADATA);
+  const normalizedTier = normalizeSubscriptionTier(planTier);
+  const allowedAutoModes = new Set(getAllowedAutoModesForTier(normalizedTier));
 
   // Auto modes are available for all categories
-  const autoModes = models.filter((m) => m.id.startsWith('auto'));
+  const autoModes = models.filter(
+    (m) => m.id === 'auto' || (m.id.startsWith('auto') && allowedAutoModes.has(m.id)),
+  );
+
+  const isTierAllowed = (model: ModelMetadata) => {
+    if (model.id.startsWith('auto')) {
+      return allowedAutoModes.has(model.id);
+    }
+    if (category === 'image' || category === 'video') {
+      return true;
+    }
+    return isModelAllowedForTier(model.id, normalizedTier);
+  };
 
   switch (category) {
     case 'code':
@@ -70,6 +95,7 @@ function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
         ...models.filter(
           (m) =>
             !m.id.startsWith('auto') &&
+            isTierAllowed(m) &&
             (m.modelType === 'code' ||
               m.modelType === 'reasoning' ||
               (m.modelType === 'chat' && m.benchmarks?.swebench && m.benchmarks.swebench > 50)),
@@ -81,6 +107,7 @@ function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
         ...models.filter(
           (m) =>
             !m.id.startsWith('auto') &&
+            isTierAllowed(m) &&
             (m.modelType === 'chat' || m.modelType === 'reasoning' || m.modelType === 'multimodal'),
         ),
       ];
@@ -88,7 +115,10 @@ function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
       return [
         ...autoModes,
         ...models.filter(
-          (m) => !m.id.startsWith('auto') && (m.modelType === 'search' || m.capabilities.search),
+          (m) =>
+            !m.id.startsWith('auto') &&
+            isTierAllowed(m) &&
+            (m.modelType === 'search' || m.capabilities.search),
         ),
       ];
     case 'docs':
@@ -97,6 +127,7 @@ function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
         ...models.filter(
           (m) =>
             !m.id.startsWith('auto') &&
+            isTierAllowed(m) &&
             (m.modelType === 'chat' || m.modelType === 'reasoning' || m.modelType === 'code'),
         ),
       ];
@@ -105,13 +136,25 @@ function getModelsForCategory(category: TaskCategory): ModelMetadata[] {
         ...autoModes,
         ...models.filter(
           (m) =>
-            !m.id.startsWith('auto') && (m.modelType === 'multimodal' || m.capabilities.vision),
+            !m.id.startsWith('auto') &&
+            isTierAllowed(m) &&
+            (m.modelType === 'multimodal' || m.capabilities.vision),
         ),
       ];
     case 'image':
-      return models.filter((m) => m.modelType === 'image' || m.id.startsWith('auto'));
+      return models.filter(
+        (m) =>
+          m.modelType === 'image' ||
+          m.id === 'auto' ||
+          (m.id.startsWith('auto') && allowedAutoModes.has(m.id)),
+      );
     case 'video':
-      return models.filter((m) => m.modelType === 'video' || m.id.startsWith('auto'));
+      return models.filter(
+        (m) =>
+          m.modelType === 'video' ||
+          m.id === 'auto' ||
+          (m.id.startsWith('auto') && allowedAutoModes.has(m.id)),
+      );
     default:
       return autoModes;
   }
@@ -133,6 +176,29 @@ const DEFAULT_TASK_ROUTING: TaskRouting = {
 export function TaskRoutingSettings() {
   const taskRouting = useSettingsStore(useShallow((state) => state.llmConfig.taskRouting));
   const setTaskRouting = useSettingsStore((state) => state.setTaskRouting);
+  const account = useAccountStore((state) => state.account);
+  const normalizedTier = normalizeSubscriptionTier(account.plan);
+
+  const categories: TaskCategory[] = useMemo(
+    () => ['code', 'chat', 'search', 'docs', 'vision', 'image', 'video'],
+    [],
+  );
+
+  useEffect(() => {
+    for (const category of categories) {
+      const route = taskRouting[category];
+      if (!route) {
+        continue;
+      }
+      const availableModelIds = new Set(
+        getModelsForCategory(category, normalizedTier).map((model) => model.id),
+      );
+      if (availableModelIds.has(route.model)) {
+        continue;
+      }
+      setTaskRouting(category, 'managed_cloud', 'auto');
+    }
+  }, [categories, normalizedTier, setTaskRouting, taskRouting]);
 
   const handleModelChange = useCallback(
     (category: TaskCategory, modelId: string) => {
@@ -146,22 +212,11 @@ export function TaskRoutingSettings() {
   );
 
   const handleResetToDefaults = useCallback(() => {
-    const categories: TaskCategory[] = [
-      'code',
-      'chat',
-      'search',
-      'docs',
-      'vision',
-      'image',
-      'video',
-    ];
     for (const category of categories) {
       const defaultValue = DEFAULT_TASK_ROUTING[category];
       setTaskRouting(category, defaultValue.provider, defaultValue.model);
     }
-  }, [setTaskRouting]);
-
-  const categories: TaskCategory[] = ['code', 'chat', 'search', 'docs', 'vision', 'image', 'video'];
+  }, [categories, setTaskRouting]);
 
   return (
     <div className="space-y-6">
@@ -196,8 +251,11 @@ export function TaskRoutingSettings() {
       <div className="space-y-4">
         {categories.map((category) => {
           const info = TASK_CATEGORY_INFO[category];
-          const availableModels = getModelsForCategory(category);
-          const currentModel = taskRouting[category]?.model ?? 'auto';
+          const availableModels = getModelsForCategory(category, normalizedTier);
+          const availableModelIds = new Set(availableModels.map((model) => model.id));
+          const currentModel = availableModelIds.has(taskRouting[category]?.model ?? '')
+            ? (taskRouting[category]?.model ?? 'auto')
+            : 'auto';
 
           return (
             <div key={category} className="rounded-lg border border-border bg-card p-4">
