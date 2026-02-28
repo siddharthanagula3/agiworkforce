@@ -719,6 +719,7 @@ describe('UnifiedAgenticChat', () => {
   });
 
   it('should clear running action and tool stream state on new chat abort event', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
     await renderChat();
 
     const state = (
@@ -728,15 +729,22 @@ describe('UnifiedAgenticChat', () => {
       clearToolStreams: ReturnType<typeof vi.fn>;
     };
 
+    const abortListener = addEventListenerSpy.mock.calls.find(
+      ([eventName]) => eventName === NEW_CHAT_ABORT_EVENT,
+    )?.[1] as EventListener | undefined;
+
+    expect(abortListener).toBeTypeOf('function');
+
     await act(async () => {
-      window.dispatchEvent(new CustomEvent(NEW_CHAT_ABORT_EVENT));
-      await waitFor(() => {
-        expect(document.body).toBeTruthy();
-      });
+      abortListener?.(new CustomEvent(NEW_CHAT_ABORT_EVENT));
     });
 
-    expect(state.clearActionTrail).toHaveBeenCalledTimes(1);
-    expect(state.clearToolStreams).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(state.clearActionTrail).toHaveBeenCalledTimes(1);
+      expect(state.clearToolStreams).toHaveBeenCalledTimes(1);
+    });
+
+    addEventListenerSpy.mockRestore();
   });
 
   it('does not force agent mode when a concrete model is explicitly selected', async () => {
