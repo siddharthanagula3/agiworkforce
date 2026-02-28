@@ -23,8 +23,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Design scalable system architectures and lead technical decisions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=software-architect&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['System Design', 'Architecture', 'Scalability', 'Cloud Infrastructure'],
@@ -40,8 +38,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Create end-to-end technical solutions for complex business problems',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=solutions-architect&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Solution Design', 'Technical Strategy', 'Integration', 'Best Practices'],
@@ -56,8 +52,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Build robust APIs, databases, and server-side logic',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=backend-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Node.js', 'Python', 'Databases', 'API Design', 'Microservices'],
@@ -72,8 +66,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Create beautiful, responsive user interfaces with modern frameworks',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=frontend-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['React', 'TypeScript', 'CSS', 'UI/UX', 'Performance'],
@@ -88,8 +80,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Build complete applications from frontend to backend',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=full-stack-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['React', 'Node.js', 'Databases', 'DevOps', 'Full Stack'],
@@ -106,8 +96,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Product',
     description: 'Define product strategy, roadmaps, and drive feature development',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=product-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Product Strategy', 'Roadmapping', 'User Research', 'Analytics'],
@@ -123,8 +111,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Product',
     description: 'Bridge technical and business requirements for complex products',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=technical-product-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Technical Requirements', 'API Strategy', 'Developer Experience'],
@@ -141,8 +127,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Analyze data, build ML models, and derive actionable insights',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=data-scientist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Machine Learning', 'Python', 'Statistics', 'Data Visualization'],
@@ -158,8 +142,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Build and deploy AI/ML systems and neural networks',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ai-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Deep Learning', 'PyTorch', 'TensorFlow', 'NLP', 'Computer Vision'],
@@ -174,8 +156,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Transform data into actionable business intelligence',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=bi-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['SQL', 'Tableau', 'Power BI', 'Data Analysis', 'Reporting'],
@@ -192,8 +172,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Automate deployments, manage infrastructure, and ensure reliability',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=devops-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Docker', 'Kubernetes', 'CI/CD', 'AWS', 'Terraform'],
@@ -208,8 +186,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Identify vulnerabilities, monitor threats, and secure systems',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=security-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Security Audits', 'Penetration Testing', 'Compliance', 'Risk Assessment'],
@@ -226,8 +202,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Create compelling content that drives engagement and conversions',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=content-marketing-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Content Strategy', 'Copywriting', 'SEO', 'Social Media'],
@@ -243,8 +217,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Optimize websites for search engines and drive organic traffic',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=seo-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['SEO', 'Keyword Research', 'Technical SEO', 'Link Building'],
@@ -261,8 +233,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Design',
     description: 'Design beautiful, intuitive user experiences',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ui-ux-designer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Figma', 'User Research', 'Wireframing', 'Prototyping', 'Design Systems'],
@@ -278,8 +248,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Plan, script, and conceptualize engaging video content',
     provider: 'gemini',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=video-content-creator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Video Strategy', 'Scripting', 'Storyboarding', 'Content Planning'],
@@ -296,8 +264,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Research',
     description: 'Conduct comprehensive research and competitive analysis',
     provider: 'perplexity',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=research-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Market Research', 'Competitive Analysis', 'Data Gathering', 'Report Writing'],
@@ -314,8 +280,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Provide excellent customer service and resolve issues',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=customer-support-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Customer Service', 'Problem Solving', 'Communication', 'CRM'],
@@ -332,8 +296,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Ensure software quality through comprehensive testing',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=qa-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Test Automation', 'QA Processes', 'Bug Tracking', 'Quality Assurance'],
@@ -350,8 +312,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Documentation',
     description: 'Create clear, comprehensive technical documentation',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=technical-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Technical Writing', 'Documentation', 'API Docs', 'User Guides'],
@@ -368,8 +328,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Executive',
     description: 'Provide strategic leadership and drive organizational vision',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=chief-executive-officer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Strategic Planning', 'Leadership', 'Business Development', 'Decision Making'],
@@ -384,8 +342,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Executive',
     description: 'Lead technology strategy and drive innovation initiatives',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=chief-technology-officer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Technology Strategy', 'Innovation', 'Architecture', 'Team Leadership'],
@@ -400,8 +356,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Executive',
     description: 'Optimize operations and drive operational excellence',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=chief-operating-officer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Operations Management', 'Process Optimization', 'Team Building', 'Performance'],
@@ -416,8 +370,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Executive',
     description: 'Manage financial strategy and ensure fiscal responsibility',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=chief-financial-officer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Financial Planning', 'Budgeting', 'Risk Management', 'Investment Strategy'],
@@ -434,8 +386,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Build native and cross-platform mobile applications',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=mobile-app-developer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['React Native', 'Flutter', 'iOS', 'Android', 'Mobile UX'],
@@ -450,8 +400,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Develop smart contracts and blockchain solutions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=blockchain-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Solidity', 'Web3', 'DeFi', 'Smart Contracts', 'Ethereum'],
@@ -466,8 +414,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Design and implement cloud-native solutions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=cloud-solutions-architect&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['AWS', 'Azure', 'GCP', 'Kubernetes', 'Serverless'],
@@ -482,8 +428,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Build and deploy machine learning systems at scale',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ml-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['MLOps', 'Model Deployment', 'ML Infrastructure', 'A/B Testing'],
@@ -500,8 +444,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Business',
     description: 'Identify opportunities and drive business growth',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=business-development-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Partnership Development', 'Market Analysis', 'Negotiation', 'Strategy'],
@@ -516,8 +458,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Business',
     description: 'Lead sales teams and drive revenue growth',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=sales-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Sales Strategy', 'CRM Management', 'Team Leadership', 'Revenue Growth'],
@@ -532,8 +472,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Business',
     description: 'Manage client relationships and ensure satisfaction',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=account-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Client Relations', 'Account Management', 'Customer Success', 'Retention'],
@@ -550,8 +488,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Analyze financial data and provide strategic insights',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=financial-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Financial Analysis', 'Forecasting', 'Budgeting', 'Excel', 'SQL'],
@@ -566,8 +502,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Manage accounting operations and ensure compliance',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=accounting-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['GAAP', 'Financial Reporting', 'Tax Compliance', 'Audit', 'QuickBooks'],
@@ -584,8 +518,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Manage human resources and employee relations',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=hr-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Recruitment', 'Employee Relations', 'HR Policies', 'Performance Management'],
@@ -600,8 +532,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Source and recruit top talent for the organization',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=talent-acquisition-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Recruiting', 'Sourcing', 'Interviewing', 'Candidate Assessment'],
@@ -618,8 +548,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Legal',
     description: 'Provide legal guidance and ensure compliance',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=legal-counsel&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Contract Law', 'Corporate Law', 'Compliance', 'Risk Management'],
@@ -634,8 +562,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Legal',
     description: 'Ensure regulatory compliance and risk management',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=compliance-officer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Regulatory Compliance', 'Risk Assessment', 'Policy Development', 'Auditing'],
@@ -652,8 +578,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Optimize business operations and improve efficiency',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=operations-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Process Optimization', 'Operations Management', 'Efficiency', 'Team Coordination'],
@@ -668,8 +592,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Lead projects and ensure successful delivery',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=project-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Project Management', 'Agile', 'Scrum', 'Team Leadership', 'Timeline Management'],
@@ -684,8 +606,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Manage complex programs and strategic initiatives',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=program-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -707,8 +627,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Drive user acquisition and growth through data-driven marketing',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=growth-marketing-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Growth Hacking', 'A/B Testing', 'Funnel Optimization', 'User Acquisition'],
@@ -723,8 +641,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Optimize paid advertising campaigns for maximum ROI',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=performance-marketing-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Google Ads', 'Facebook Ads', 'Analytics', 'ROI Optimization', 'Campaign Management'],
@@ -739,8 +655,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Develop and maintain brand identity and positioning',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=brand-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Brand Strategy', 'Brand Identity', 'Market Positioning', 'Brand Guidelines'],
@@ -757,8 +671,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Create compelling visual designs and brand assets',
     provider: 'gemini',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=graphic-designer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Adobe Creative Suite', 'Brand Design', 'Print Design', 'Digital Design'],
@@ -773,8 +685,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Craft compelling copy that converts and engages audiences',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=copywriter&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Copywriting', 'Content Strategy', 'Email Marketing', 'Sales Copy'],
@@ -789,8 +699,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Develop comprehensive brand strategies and positioning',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=brand-strategist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Brand Strategy', 'Market Research', 'Consumer Insights', 'Brand Positioning'],
@@ -807,8 +715,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Build and maintain data infrastructure and pipelines',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=data-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Data Pipelines', 'ETL', 'Big Data', 'Apache Spark', 'Data Warehousing'],
@@ -823,8 +729,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Transform raw data into actionable business insights',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=analytics-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['SQL', 'dbt', 'Data Modeling', 'Analytics', 'Business Intelligence'],
@@ -839,8 +743,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Deploy and maintain machine learning systems in production',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=mlops-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['MLOps', 'Model Deployment', 'Docker', 'Kubernetes', 'ML Infrastructure'],
@@ -857,8 +759,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Ensure customer satisfaction and drive retention',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=customer-success-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Customer Success', 'Account Management', 'Retention', 'Upselling'],
@@ -873,8 +773,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Provide technical support and troubleshooting assistance',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=technical-support-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Technical Support', 'Troubleshooting', 'API Support', 'Documentation'],
@@ -891,8 +789,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Create engaging games and interactive experiences',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=game-developer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Unity', 'Unreal Engine', 'C#', 'Game Design', '3D Graphics'],
@@ -907,8 +803,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Build immersive augmented and virtual reality applications',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ar-vr-developer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Unity', 'ARCore', 'ARKit', 'WebXR', '3D Modeling'],
@@ -923,8 +817,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Design and implement Internet of Things solutions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=iot-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Embedded Systems', 'Arduino', 'Raspberry Pi', 'MQTT', 'Sensor Networks'],
@@ -939,8 +831,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Protect systems and data from cyber threats',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=cybersecurity-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Security Architecture', 'Penetration Testing', 'Incident Response', 'Compliance'],
@@ -957,8 +847,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Analyze healthcare data to improve patient outcomes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=healthcare-data-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Healthcare Analytics', 'HIPAA Compliance', 'Clinical Data', 'Medical Research'],
@@ -973,8 +861,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Develop innovative financial technology solutions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=fintech-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Blockchain', 'Digital Payments', 'Regulatory Compliance', 'Financial APIs'],
@@ -989,8 +875,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Business',
     description: 'Optimize online retail and e-commerce operations',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=e-commerce-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Shopify', 'WooCommerce', 'Conversion Optimization', 'Digital Marketing'],
@@ -1007,8 +891,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Consulting',
     description: 'Provide strategic guidance and business transformation advice',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=strategy-consultant&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Strategic Planning', 'Business Analysis', 'Market Research', 'Change Management'],
@@ -1023,8 +905,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Consulting',
     description: 'Guide organizations through digital transformation initiatives',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=digital-transformation-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1044,8 +924,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Consulting',
     description: 'Drive innovation and foster creative problem-solving',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=innovation-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Innovation Strategy', 'Design Thinking', 'R&D Management', 'Technology Scouting'],
@@ -1062,8 +940,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Manage social media presence and community engagement',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=social-media-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Social Media Strategy', 'Content Creation', 'Community Management', 'Analytics'],
@@ -1078,8 +954,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Manage public relations and brand reputation',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=pr-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Public Relations', 'Media Relations', 'Crisis Management', 'Brand Reputation'],
@@ -1094,8 +968,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Develop comprehensive content strategies and editorial calendars',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=content-strategist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Content Strategy', 'Editorial Planning', 'Content Marketing', 'SEO'],
@@ -1112,8 +984,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Education',
     description: 'Create engaging educational content and learning experiences',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=learning-designer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Instructional Design', 'E-learning', 'Curriculum Development', 'Learning Analytics'],
@@ -1128,8 +998,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Education',
     description: 'Develop and deliver professional training programs',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=training-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Training Development', 'Workshop Design', 'Skills Assessment', 'Learning Management'],
@@ -1144,8 +1012,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Education',
     description: 'Integrate technology into educational environments',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=educational-technology-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1167,8 +1033,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Sustainability',
     description: 'Analyze environmental, social, and governance factors',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=esg-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['ESG Reporting', 'Sustainability Metrics', 'Climate Risk', 'Impact Assessment'],
@@ -1183,8 +1047,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Sustainability',
     description: 'Develop sustainable technology solutions',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=green-tech-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Renewable Energy', 'Carbon Footprint', 'Sustainable Design', 'Clean Technology'],
@@ -1199,8 +1061,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Analyze climate data and environmental patterns',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=climate-data-scientist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1222,8 +1082,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Research and develop quantum computing applications',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=quantum-computing-researcher&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Quantum Algorithms', 'Quantum Machine Learning', 'Qiskit', 'Quantum Cryptography'],
@@ -1238,8 +1096,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Design and develop robotic systems and automation',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=robotics-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['ROS', 'Computer Vision', 'Motion Planning', 'Automation Systems'],
@@ -1254,8 +1110,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Optimize computing at the edge for real-time applications',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=edge-computing-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Edge Computing', 'Real-time Processing', 'Distributed Systems', 'IoT Integration'],
@@ -1272,8 +1126,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Analyze investment opportunities and startup valuations',
     provider: 'claude',
-    price: 20,
-    originalPrice: 40,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=venture-capital-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Investment Analysis', 'Startup Valuation', 'Market Research', 'Due Diligence'],
@@ -1288,8 +1140,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Optimize supply chain operations and logistics',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=supply-chain-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1309,8 +1159,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Identify and mitigate business and financial risks',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=risk-management-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Risk Assessment', 'Financial Modeling', 'Compliance', 'Insurance'],
@@ -1327,8 +1175,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Automation',
     description: 'Accurately input and process data from various sources',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=data-entry-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Data Input', 'Data Validation', 'Excel', 'Database Management', 'OCR'],
@@ -1344,8 +1190,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Create and manage automated email marketing campaigns',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=email-marketing-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Email Campaigns', 'Automation', 'A/B Testing', 'List Management', 'Analytics'],
@@ -1360,8 +1204,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Automate social media posting and content scheduling',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=social-media-scheduler&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Social Media Automation', 'Content Scheduling', 'Platform Management', 'Analytics'],
@@ -1376,8 +1218,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Generate high-quality content for blogs, social media, and marketing',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=content-creator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Content Writing', 'Blog Posts', 'Social Media Content', 'SEO Writing', 'Copywriting'],
@@ -1394,8 +1234,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Automate software testing and quality assurance processes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=qa-tester&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1416,8 +1254,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Handle customer inquiries and support tickets automatically',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=customer-support-bot&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1438,8 +1274,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Documentation',
     description: 'Automatically generate and maintain technical documentation',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=documentation-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1460,8 +1294,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Language',
     description: 'Provide accurate translations across multiple languages',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=translation-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1484,8 +1316,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Generate engaging written content for various platforms and purposes',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=content-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Article Writing', 'Blog Posts', 'Marketing Copy', 'SEO Content', 'Creative Writing'],
@@ -1501,8 +1331,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Research',
     description: 'Conduct comprehensive research and compile findings automatically',
     provider: 'perplexity',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=research-assistant&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1523,8 +1351,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Automatically review code for quality, security, and best practices',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=code-reviewer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1545,8 +1371,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Process and clean large datasets automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=data-processor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1569,8 +1393,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Automation',
     description: 'Design and implement automated business processes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=process-automation-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Workflow Automation', 'RPA', 'Process Mapping', 'Integration', 'Monitoring'],
@@ -1585,8 +1407,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Analyze and optimize existing workflows for maximum efficiency',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=workflow-optimizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1607,8 +1427,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Automation',
     description: 'Automate repetitive tasks and routine operations',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=task-automation-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: ['Task Automation', 'Script Development', 'Scheduling', 'Monitoring', 'Error Handling'],
@@ -1623,8 +1441,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Analytics',
     description: 'Automatically generate reports and analytics dashboards',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=report-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1647,8 +1463,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Automatically respond to emails and manage inbox efficiently',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=email-responder&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1669,8 +1483,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automatically schedule meetings and manage calendars',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=meeting-scheduler&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1691,8 +1503,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Automation',
     description: 'Process and validate form submissions automatically',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=form-processor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1713,8 +1523,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Process invoices and handle billing automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=invoice-processor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1737,8 +1545,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Generate scripts for videos, presentations, and multimedia content',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=video-script-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1759,8 +1565,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Optimize content for search engines and improve rankings',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=seo-content-optimizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1781,8 +1585,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Create engaging newsletters and email campaigns automatically',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=newsletter-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1803,8 +1605,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Generate compelling product descriptions and marketing copy',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=product-description-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1827,8 +1627,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Automate database management and optimization tasks',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=database-administrator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1849,8 +1647,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Monitor system performance and alert on issues automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=system-monitor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1871,8 +1667,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Automate backup processes and disaster recovery procedures',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=backup-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1893,8 +1687,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Automatically scan for security vulnerabilities and threats',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=security-scanner&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1917,8 +1709,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Sales',
     description: 'Automatically qualify and score sales leads',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=lead-qualifier&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1939,8 +1729,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Sales',
     description: 'Automatically schedule sales appointments and follow-ups',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=appointment-setter&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1963,8 +1751,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Research',
     description: 'Design and deploy automated surveys and questionnaires',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=survey-creator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -1985,8 +1771,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automate calendar management and scheduling optimization',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=calendar-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2007,8 +1791,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Automatically track and categorize business expenses',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=expense-tracker&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2029,8 +1811,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automate inventory tracking and stock management',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=inventory-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2053,8 +1833,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Creative',
     description: 'Generate high-quality blog posts and articles automatically',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=blog-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2075,8 +1853,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Automate social media posting and content distribution',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=social-media-poster&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2097,8 +1873,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Generate professional press releases and media announcements',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=press-release-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2119,8 +1893,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Marketing',
     description: 'Create compelling advertising copy for various platforms',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ad-copy-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2143,8 +1915,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Automatically validate and clean data for accuracy',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=data-validator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2165,8 +1935,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Analytics',
     description: 'Automatically analyze reports and extract key insights',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=report-analyzer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2187,8 +1955,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Analytics',
     description: 'Create data visualizations and charts automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=chart-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2209,8 +1975,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Analytics',
     description: 'Identify and analyze trends in data and market patterns',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=trend-analyzer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2233,8 +1997,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Automatically generate and maintain FAQ sections',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=faq-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2255,8 +2017,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Automatically classify and route support tickets',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=ticket-classifier&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2277,8 +2037,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Generate automated responses to common customer inquiries',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=response-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2299,8 +2057,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Support',
     description: 'Automatically conduct customer satisfaction surveys and analysis',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=satisfaction-surveyor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2323,8 +2079,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Automatically parse and analyze resumes for job applications',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=resume-parser&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2345,8 +2099,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Generate comprehensive job descriptions and requirements',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=job-description-writer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2367,8 +2119,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Automate interview scheduling and coordination',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=interview-scheduler&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2389,8 +2139,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Human Resources',
     description: 'Automate employee onboarding processes and documentation',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=onboarding-coordinator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2413,8 +2161,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Automatically generate and send invoices to clients',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=invoice-generator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2435,8 +2181,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Monitor and track budget performance automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=budget-tracker&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2457,8 +2201,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Automate tax preparation and compliance processes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=tax-preparer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2479,8 +2221,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Finance',
     description: 'Automate payroll processing and employee payments',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=payroll-processor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2503,8 +2243,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Optimize delivery routes and logistics automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=route-optimizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2525,8 +2263,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automate order processing and fulfillment workflows',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=order-processor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2547,8 +2283,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automate quality control and inspection processes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=quality-inspector&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2569,8 +2303,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automate equipment maintenance scheduling and tracking',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=maintenance-scheduler&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2593,8 +2325,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Automate machine learning model training and optimization',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=model-trainer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2615,8 +2345,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Automatically engineer features for machine learning models',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=feature-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2637,8 +2365,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Automatically detect anomalies and outliers in data',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=anomaly-detector&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2659,8 +2385,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Generate predictive models and forecasts automatically',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=predictive-analyst&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2683,8 +2407,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automatically transcribe and summarize meeting recordings',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=meeting-transcriber&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2705,8 +2427,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Automatically summarize and prioritize email communications',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=email-summarizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2727,8 +2447,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Documentation',
     description: 'Automatically summarize long documents and reports',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=document-summarizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2749,8 +2467,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Documentation',
     description: 'Automatically maintain and update knowledge bases',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=knowledge-base-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2773,8 +2489,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Legal',
     description: 'Automatically monitor and ensure regulatory compliance',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=compliance-monitor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2795,8 +2509,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Legal',
     description: 'Automatically analyze contracts and legal documents',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=contract-analyzer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2817,8 +2529,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Research',
     description: 'Automatically research patents and intellectual property',
     provider: 'perplexity',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=patent-researcher&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2839,8 +2549,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Research',
     description: 'Automatically conduct market research and competitive analysis',
     provider: 'perplexity',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=market-researcher&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2863,8 +2571,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Automation',
     description: 'Design and optimize automated workflows and processes',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=workflow-designer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2885,8 +2591,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Analytics',
     description: 'Automatically monitor and analyze system and business performance',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=performance-monitor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2907,8 +2611,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Automate system integrations and API connections',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=integration-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2929,8 +2631,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Operations',
     description: 'Continuously optimize business processes for maximum efficiency',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=efficiency-optimizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2953,8 +2653,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Coordinates multi-agent workflows and manages task delegation',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=system-orchestrator&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2976,8 +2674,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Executes code in sandbox environments and validates results',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=code-executor&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -2998,8 +2694,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Manages package dependencies and version compatibility',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=dependency-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3020,8 +2714,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Optimizes code for performance, efficiency, and best practices',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=code-optimizer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3042,8 +2734,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Handles code deployment to various platforms and environments',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=deployment-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3064,8 +2754,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Manages networking, CDN, DNS, and infrastructure connectivity',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=network-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3086,8 +2774,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Ensures applications meet accessibility standards (WCAG)',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=accessibility-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3108,8 +2794,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Language',
     description: 'Manages internationalization and localization of applications',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=localization-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3130,8 +2814,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Documentation',
     description: 'Creates comprehensive API documentation (Swagger/OpenAPI)',
     provider: 'chatgpt',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=api-documentation-specialist&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3152,8 +2834,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Conducts load testing, stress testing, and performance benchmarking',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=performance-testing-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3174,8 +2854,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'IT & Operations',
     description: 'Implements monitoring, logging, and tracing systems',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=observability-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3196,8 +2874,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Manages build processes, bundling, and optimization',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=build-engineer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3218,8 +2894,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Implements error handling, logging, and recovery strategies',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=error-handler&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3240,8 +2914,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'Engineering',
     description: 'Manages application state and data flow architecture',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=state-manager&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [
@@ -3262,8 +2934,6 @@ export const AI_EMPLOYEES: AIEmployee[] = [
     category: 'AI & Data',
     description: 'Designs database schemas and data models',
     provider: 'claude',
-    price: 10,
-    originalPrice: 20,
     avatar:
       'https://api.dicebear.com/7.x/bottts/svg?seed=schema-designer&backgroundColor=EEF2FF%2CE0F2FE%2CF0F9FF&radius=50&size=128',
     skills: [

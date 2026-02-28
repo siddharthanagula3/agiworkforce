@@ -163,7 +163,7 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({ className }) =
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-              AI Agents
+              AI Skills Marketplace
             </h1>
             <p className="text-sm text-muted-foreground md:text-base">
               Browse AI agents and their skills. Click any agent to start a conversation.
