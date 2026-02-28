@@ -18,7 +18,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@features/*": ["./features/*"],
+      "@core/*": ["./core/*"],
+      "@shared/*": ["./shared/*"]
     },
     "allowJs": true
   },

@@ -14,5 +14,5 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
     redirect('/login');
   }
 
-  return <>{children}</>;
+  return <div className="agi-dashboard-theme min-h-screen">{children}</div>;
 }

@@ -1,0 +1,529 @@
+// Updated: Jan 15th 2026 - Added error boundary
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Separator } from '@shared/ui/separator';
+import { useChat } from '../hooks/use-chat-interface';
+import { useChatHistory } from '../hooks/use-conversation-history';
+import { useTools } from '../hooks/use-tool-integration';
+import { useExport } from '../hooks/use-export-conversation';
+import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
+import { useAIPreferences } from '../hooks/use-ai-preferences';
+import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
+import { ChatHeader } from '../components/Main/ChatHeader';
+import { MessageList } from '../components/Main/MessageList';
+import { ChatComposer } from '../components/Composer/ChatComposer';
+import { ModeSelector } from '../components/Tools/ModeSelector';
+import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
+import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
+import { TokenAnalyticsDialog } from '../components/dialogs/TokenAnalyticsDialog';
+import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
+import { BookmarksDialog } from '../components/dialogs/BookmarksDialog';
+import { ToolProgressIndicator } from '../components/workflows/ToolProgressIndicator';
+import type { ChatSession, ChatMessage, ChatMode } from '../types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@shared/ui/dropdown-menu';
+import { Button } from '@shared/ui/button';
+import { FileText, FileJson, FileCode, Download } from 'lucide-react';
+import { cn } from '@shared/lib/utils';
+import { UsageWarningBanner, useUsageMonitoring } from '../components/tokens/UsageWarningBanner';
+import { UsageWarningModal } from '../components/dialogs/UsageWarningModal';
+import { useUsageWarningStore } from '@shared/stores/usage-warning-store';
+import { useUserUsage } from '@shared/stores/user-profile-store';
+import ErrorBoundary from '@shared/components/ErrorBoundary';
+import { useNotificationStore } from '@shared/stores/notification-store';
+
+// Default token limits by plan tier (fallback when user data not loaded)
+const DEFAULT_TOKEN_LIMITS = {
+  free: 10000,
+  pro: 100000,
+  enterprise: 500000,
+} as const;
+
+const FREE_TIER_DEFAULT_LIMIT = DEFAULT_TOKEN_LIMITS.free;
+
+const ChatPage: React.FC = () => {
+  const params = useParams();
+  const sessionId = params?.sessionId as string | undefined;
+  const router = useRouter();
+
+  // Get user's token usage/limits from subscription
+  const userUsage = useUserUsage();
+
+  // Load user AI preferences (applies to LLM service on mount)
+  const aiPreferences = useAIPreferences();
+
+  // Chat state management
+  const {
+    messages: rawMessages,
+    isLoading,
+    error,
+    activeTools,
+    toolProgress,
+    sendMessage,
+    regenerateMessage,
+    editMessage,
+    deleteMessage,
+    clearMessages,
+  } = useChat(sessionId);
+
+  // Defensive: Ensure all message timestamps are valid Date objects
+  const messages = React.useMemo(() => {
+    return rawMessages.map((msg) => {
+      let createdAt: Date;
+
+      if (msg.createdAt instanceof Date) {
+        createdAt = msg.createdAt;
+      } else if (typeof msg.createdAt === 'string' || typeof msg.createdAt === 'number') {
+        createdAt = new Date(msg.createdAt);
+      } else {
+        createdAt = new Date();
+      }
+
+      // Validate date - if invalid, use current date
+      if (isNaN(createdAt.getTime())) {
+        console.warn('Invalid createdAt for message in ChatInterface:', msg.id, msg.createdAt);
+        createdAt = new Date();
+      }
+
+      return {
+        ...msg,
+        createdAt,
+      };
+    });
+  }, [rawMessages]);
+
+  const {
+    sessions,
+    currentSession,
+    isLoading: isLoadingSessions,
+    createSession,
+    renameSession,
+    deleteSession,
+    searchSessions,
+    loadSessions,
+    loadSession,
+    toggleStarSession,
+    togglePinSession,
+    toggleArchiveSession,
+    duplicateSession,
+    shareSession,
+  } = useChatHistory();
+
+  const { availableTools, executeTool, activeTool, toolResults } = useTools();
+
+  const {
+    exportAsMarkdown,
+    exportAsJSON,
+    exportAsHTML,
+    exportAsText,
+    copyToClipboard,
+    generateShareLink,
+    shareLink,
+    isExporting,
+  } = useExport();
+
+  // Local state
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Persist sidebar state in localStorage (SSR-safe)
+    if (typeof window === 'undefined') return true;
+    try {
+      const stored = localStorage.getItem('chat-sidebar-open');
+      return stored !== null ? JSON.parse(stored) : true;
+    } catch {
+      // If localStorage contains invalid JSON, return default value
+      return true;
+    }
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMode, setSelectedMode] = useState<ChatMode>('team');
+  // Models are automatically managed by AI employees - each employee uses their configured model
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [warningModalOpen, setWarningModalOpen] = useState(false);
+  const [warningThreshold, setWarningThreshold] = useState<85 | 95>(85);
+
+  // Filter sessions based on search query
+  const filteredSessions = React.useMemo(() => {
+    if (!searchQuery.trim()) {
+      return sessions;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return sessions.filter((session) => {
+      const titleMatch = session.title.toLowerCase().includes(query);
+      const summaryMatch = session.summary?.toLowerCase().includes(query);
+      const tagsMatch = session.tags?.some((tag) => tag.toLowerCase().includes(query));
+
+      return titleMatch || summaryMatch || tagsMatch;
+    });
+  }, [sessions, searchQuery]);
+
+  // Refs
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  // Persist sidebar state
+  useEffect(() => {
+    localStorage.setItem('chat-sidebar-open', JSON.stringify(sidebarOpen));
+  }, [sidebarOpen]);
+
+  // Load sessions on mount
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
+
+  // Load current session when sessionId changes
+  useEffect(() => {
+    if (sessionId && (!currentSession || currentSession.id !== sessionId)) {
+      loadSession(sessionId);
+    }
+  }, [sessionId, currentSession, loadSession]);
+
+  // Create new session if none exists
+  useEffect(() => {
+    if (!currentSession && !sessionId) {
+      createSession('New Chat')
+        .then((session) => {
+          router.push(`/chat/${session.id}`);
+        })
+        .catch((error) => {
+          console.error('Failed to create session:', error);
+        });
+    }
+  }, [currentSession, sessionId, createSession, router]);
+
+  const handleSendMessage = async (
+    content: string,
+    options?: {
+      attachments?: File[];
+      employees?: string[];
+    },
+  ) => {
+    if (!content.trim()) return;
+
+    try {
+      await sendMessage({
+        content,
+        attachments: options?.attachments,
+        mode: selectedMode,
+        // Model selection removed - AI employees use their configured models
+        tools: availableTools,
+      });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  // Get notification store for user feedback
+  const { showError, showSuccess } = useNotificationStore();
+
+  const handleNewChat = useCallback(() => {
+    createSession('New Chat')
+      .then((session) => {
+        router.push(`/chat/${session.id}`);
+      })
+      .catch((error) => {
+        console.error('Failed to create new chat session:', error);
+        showError('Unable to create a new chat. Please try again.', 'Chat Creation Failed');
+      });
+  }, [createSession, router, showError]);
+
+  const handleSessionSelect = (session: ChatSession) => {
+    router.push(`/chat/${session.id}`);
+  };
+
+  const handleSessionRename = (sessionId: string, newTitle: string) => {
+    renameSession(sessionId, newTitle);
+  };
+
+  const handleSessionDelete = (sessionId: string) => {
+    deleteSession(sessionId);
+    if (currentSession?.id === sessionId) {
+      router.push('/chat');
+    }
+  };
+
+  const handleToolExecute = async (toolId: string, args?: Record<string, unknown>) => {
+    try {
+      await executeTool(toolId, args);
+    } catch (error) {
+      console.error('Tool execution failed:', error);
+    }
+  };
+
+  const handleExport = async (format: 'markdown' | 'json' | 'html' | 'text') => {
+    if (!currentSession) return;
+
+    switch (format) {
+      case 'markdown':
+        await exportAsMarkdown(currentSession, messages);
+        break;
+      case 'json':
+        await exportAsJSON(currentSession, messages);
+        break;
+      case 'html':
+        await exportAsHTML(currentSession, messages);
+        break;
+      case 'text':
+        await exportAsText(currentSession, messages);
+        break;
+    }
+  };
+
+  const handleShare = useCallback(async () => {
+    if (!currentSession) return;
+    try {
+      await shareSession(currentSession.id);
+      showSuccess('Share link generated successfully', 'Session Shared');
+    } catch (error) {
+      console.error('Failed to share session:', error);
+      showError('Unable to generate share link. Please try again.', 'Share Failed');
+    }
+  }, [currentSession, shareSession, showSuccess, showError]);
+
+  const handleCopyToClipboard = useCallback(async () => {
+    if (!currentSession) return;
+    try {
+      await copyToClipboard(currentSession, messages, 'markdown');
+      showSuccess('Conversation copied to clipboard', 'Copied');
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      showError('Unable to copy to clipboard. Please try again.', 'Copy Failed');
+    }
+  }, [currentSession, messages, copyToClipboard, showSuccess, showError]);
+
+  // Monitor token usage for warnings
+  const { usageData } = useUsageMonitoring(
+    ((currentSession as Record<string, unknown> | null)?.userId as string | null) ?? null,
+  );
+
+  // Usage warning system
+  const {
+    updateUsage,
+    shouldShowWarning,
+    markWarningShown,
+    usagePercentage,
+    currentUsage,
+    totalLimit,
+  } = useUsageWarningStore();
+
+  // Check for usage warnings and show modal
+  React.useEffect(() => {
+    if (usageData.length > 0) {
+      const totalUsed = usageData.reduce((sum, d) => sum + d.used, 0);
+      // Use user's subscription token limit, fallback to free tier default
+      const limit = userUsage?.tokensLimit ?? FREE_TIER_DEFAULT_LIMIT;
+
+      updateUsage(totalUsed, limit);
+
+      // Check for 95% warning first (more critical)
+      if (shouldShowWarning(95)) {
+        setWarningThreshold(95);
+        setWarningModalOpen(true);
+        markWarningShown(95);
+      } else if (shouldShowWarning(85)) {
+        setWarningThreshold(85);
+        setWarningModalOpen(true);
+        markWarningShown(85);
+      }
+    }
+  }, [usageData, userUsage?.tokensLimit, updateUsage, shouldShowWarning, markWarningShown]);
+
+  // Keyboard shortcuts - memoized to prevent unnecessary re-renders
+  const handleCopyLastMessage = useCallback(async () => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage) {
+      try {
+        await navigator.clipboard.writeText(lastMessage.content);
+        showSuccess('Message copied to clipboard', 'Copied');
+      } catch (error) {
+        console.error('Failed to copy message:', error);
+        showError('Unable to copy message to clipboard.', 'Copy Failed');
+      }
+    }
+  }, [messages, showSuccess, showError]);
+
+  const handleRegenerateLastMessage = useCallback(() => {
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistantMessage) {
+      regenerateMessage(lastAssistantMessage.id);
+    }
+  }, [messages, regenerateMessage]);
+
+  const handleFocusComposer = useCallback(() => {
+    composerRef.current?.focus();
+  }, []);
+
+  const handleShowSearch = useCallback(() => {
+    // Open the global search dialog for searching across all conversations
+    setGlobalSearchOpen(true);
+  }, []);
+
+  const { shortcuts } = useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onSearch: handleShowSearch,
+    onShowShortcuts: () => setShortcutsDialogOpen(true),
+    onToggleSidebar: () => setSidebarOpen(!sidebarOpen),
+    onFocusComposer: handleFocusComposer,
+    onCopyLastMessage: handleCopyLastMessage,
+    onRegenerateLastMessage: handleRegenerateLastMessage,
+  });
+
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-background p-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold">Chat interface error</h2>
+            <p className="mt-2 text-muted-foreground">
+              Something went wrong with the chat interface. Please refresh the page.
+            </p>
+            <Button onClick={() => window.location.reload()} className="mt-4">
+              Refresh Page
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex h-screen bg-background">
+        {/* Sidebar - Collapsible with smooth transition */}
+        <div
+          className={cn(
+            'border-r border-border bg-card/50 backdrop-blur-sm transition-all duration-300 ease-in-out',
+            sidebarOpen ? 'w-0 sm:w-64 md:w-80' : 'w-0',
+            'overflow-hidden', // Prevent content overflow when collapsed
+          )}
+        >
+          {sidebarOpen && (
+            <ChatSidebar
+              sessions={filteredSessions}
+              currentSession={currentSession}
+              searchQuery={searchQuery}
+              isLoading={isLoadingSessions}
+              onSearchChange={setSearchQuery}
+              onNewChat={handleNewChat}
+              onSessionSelect={handleSessionSelect}
+              onSessionRename={handleSessionRename}
+              onSessionDelete={handleSessionDelete}
+              onSessionStar={toggleStarSession}
+              onSessionPin={togglePinSession}
+              onSessionArchive={toggleArchiveSession}
+              onSessionShare={shareSession}
+              onSessionDuplicate={duplicateSession}
+              onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            />
+          )}
+        </div>
+
+        {/* Main Chat Area - Optimized for full screen usage */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header - Compact and clean */}
+          <ChatHeader
+            session={currentSession}
+            onRename={(title) => currentSession && handleSessionRename(currentSession.id, title)}
+            onShare={handleShare}
+            onExport={() => setExportDialogOpen(true)}
+            onSettings={() => {
+              router.push('/settings');
+            }}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+            onSearch={() => setGlobalSearchOpen(true)}
+            onAnalytics={() => setAnalyticsOpen(true)}
+            onBookmarks={() => setBookmarksOpen(true)}
+          />
+
+          {/* Usage Warning Banner */}
+          {usageData.length > 0 && (
+            <div className="border-b border-border px-4 py-2">
+              <UsageWarningBanner usageData={usageData} />
+            </div>
+          )}
+
+          {/* Message List - Maximum vertical space */}
+          <div className="flex-1 overflow-hidden">
+            <MessageList
+              messages={messages}
+              isLoading={isLoading}
+              onRegenerate={regenerateMessage}
+              onEdit={editMessage}
+              onDelete={deleteMessage}
+              onToolExecute={handleToolExecute}
+              toolResults={toolResults}
+              activeTool={activeTool}
+            />
+
+            {/* Tool Progress Indicator - Shows active tools */}
+            {activeTools && activeTools.length > 0 && (
+              <div className="p-4">
+                <ToolProgressIndicator
+                  activeTools={activeTools}
+                  toolProgress={toolProgress || {}}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Composer - Sticky at bottom with backdrop */}
+          <div className="sticky bottom-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="mx-auto max-w-4xl p-3 sm:p-4">
+              <ChatComposer
+                onSendMessage={handleSendMessage}
+                isLoading={isLoading}
+                availableTools={availableTools}
+                onToolToggle={(toolId) => {
+                  // Tool toggle is handled by the ChatComposer component internally
+                  // This callback can be used for future tool management features
+                }}
+                selectedMode={selectedMode}
+                onModeChange={setSelectedMode}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Keyboard Shortcuts Dialog */}
+        <KeyboardShortcutsDialog
+          open={shortcutsDialogOpen}
+          onOpenChange={setShortcutsDialogOpen}
+          shortcuts={shortcuts}
+        />
+
+        {/* Global Search Dialog */}
+        <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
+
+        {/* Token Analytics Dialog */}
+        <TokenAnalyticsDialog open={analyticsOpen} onOpenChange={setAnalyticsOpen} />
+
+        {/* Enhanced Export Dialog */}
+        <EnhancedExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          session={currentSession}
+          messages={messages}
+        />
+
+        {/* Bookmarks Dialog */}
+        <BookmarksDialog open={bookmarksOpen} onOpenChange={setBookmarksOpen} />
+
+        {/* Usage Warning Modal - Pops up at 85% and 95% */}
+        <UsageWarningModal
+          open={warningModalOpen}
+          onOpenChange={setWarningModalOpen}
+          threshold={warningThreshold}
+          currentUsage={currentUsage}
+          totalLimit={totalLimit}
+          usagePercentage={usagePercentage}
+        />
+      </div>
+    </ErrorBoundary>
+  );
+};
+
+export default ChatPage;
