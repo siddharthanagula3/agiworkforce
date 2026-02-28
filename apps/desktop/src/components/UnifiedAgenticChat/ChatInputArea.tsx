@@ -8,7 +8,7 @@
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { invoke } from '../../lib/tauri-mock';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
 import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
@@ -125,6 +125,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const composerRef = useRef<HTMLDivElement>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const userModifiedContentRef = useRef(false);
+  const pendingAutoSendIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize hooks
   const { isSlashCommandInput } = useSlashCommands();
@@ -151,6 +152,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const cancelEditing = useUnifiedChatStore((state) => state.cancelEditing);
   const pendingMessages = useUnifiedChatStore((state) => state.pendingMessages);
   const addPendingMessage = useUnifiedChatStore((state) => state.addPendingMessage);
+  const activeConversationUuid = useUnifiedChatStore((state) => state.activeConversationId);
 
   const sidecarOpen = useUnifiedChatStore((state) => state.sidecar.isOpen);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
@@ -324,48 +326,133 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     enabled: showModelSelector,
   });
 
-  // Auto-send pending messages
-  useEffect(() => {
-    const handleAutoSendPending = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ content: string; pendingId: string }>;
-      const { content: pendingContent, pendingId } = customEvent.detail;
+  const sendPendingMessage = useCallback(
+    async (pendingMessage: PendingUserMessage): Promise<boolean> => {
+      const activeConversationDbId = activeConversationUuid
+        ? uuidToDbId(activeConversationUuid)
+        : undefined;
+      const targetConversationId = pendingMessage.conversation_id ?? activeConversationDbId;
 
-      console.log(
-        '[ChatInputArea] Auto-sending pending message:',
-        pendingId,
-        pendingContent.slice(0, 50),
-      );
-
-      if (isSending || disabled || isQueueMode) {
-        console.log('[ChatInputArea] Skipping auto-send - busy or disabled');
-        return;
+      if (!targetConversationId || targetConversationId !== activeConversationDbId) {
+        console.log(
+          '[ChatInputArea] Skipping pending auto-send for inactive conversation:',
+          pendingMessage.id,
+          pendingMessage.conversation_id,
+          activeConversationDbId,
+        );
+        return false;
       }
 
+      if (
+        isSending ||
+        disabled ||
+        isQueueMode ||
+        pendingAutoSendIdsRef.current.has(pendingMessage.id)
+      ) {
+        console.log('[ChatInputArea] Skipping auto-send - busy or disabled');
+        return false;
+      }
+
+      pendingAutoSendIdsRef.current.add(pendingMessage.id);
+      setIsSending(true);
+      setSubmitError(null);
+
       try {
-        await onSend(pendingContent, {
+        const accountState = useAccountStore.getState();
+        const plan = accountState.account?.plan?.toLowerCase() || 'free';
+        const isManagedPlan = plan !== 'free' && plan !== 'none';
+        const computedProviderOverride =
+          isManagedPlan && selectedProvider !== 'ollama'
+            ? 'managed_cloud'
+            : selectedProvider || undefined;
+
+        await onSend(pendingMessage.content, {
           attachments: undefined,
           context: activeContext.length > 0 ? activeContext : undefined,
           modelOverride: selectedModel || undefined,
-          providerOverride: selectedProvider || undefined,
-          focusMode: focusMode,
+          providerOverride: computedProviderOverride,
+          focusMode,
         });
-        console.log('[ChatInputArea] Successfully sent pending message:', pendingId);
+
+        if (isTauri) {
+          await invoke<PendingUserMessage | null>('chat_pop_pending_message', {
+            request: { conversation_id: targetConversationId },
+          });
+        } else {
+          useUnifiedChatStore.getState().removePendingMessage(pendingMessage.id);
+        }
+
+        console.log('[ChatInputArea] Successfully sent pending message:', pendingMessage.id);
+        return true;
       } catch (err) {
         console.error('[ChatInputArea] Failed to auto-send pending message:', err);
+        return false;
+      } finally {
+        pendingAutoSendIdsRef.current.delete(pendingMessage.id);
+        setIsSending(false);
       }
+    },
+    [
+      onSend,
+      activeConversationUuid,
+      isSending,
+      disabled,
+      isQueueMode,
+      activeContext,
+      selectedModel,
+      selectedProvider,
+      focusMode,
+    ],
+  );
+
+  // Auto-send pending messages
+  useEffect(() => {
+    const handleAutoSendPending = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ pendingMessage?: PendingUserMessage }>;
+      const pendingMessage = customEvent.detail?.pendingMessage;
+      if (!pendingMessage) {
+        return;
+      }
+
+      console.log(
+        '[ChatInputArea] Auto-sending pending message:',
+        pendingMessage.id,
+        pendingMessage.content.slice(0, 50),
+      );
+
+      await sendPendingMessage(pendingMessage);
     };
 
     window.addEventListener('chat:auto-send-pending', handleAutoSendPending);
     return () => window.removeEventListener('chat:auto-send-pending', handleAutoSendPending);
+  }, [sendPendingMessage]);
+
+  useEffect(() => {
+    if (!activeConversationUuid || isSending || disabled || isQueueMode) {
+      return;
+    }
+
+    const activeConversationDbId = uuidToDbId(activeConversationUuid);
+    const nextPendingMessage = pendingMessages.find((pendingMessage) => {
+      const pendingConversationId = pendingMessage.conversation_id ?? activeConversationDbId;
+      return (
+        pendingConversationId === activeConversationDbId &&
+        !pendingAutoSendIdsRef.current.has(pendingMessage.id)
+      );
+    });
+
+    if (!nextPendingMessage) {
+      return;
+    }
+
+    void sendPendingMessage(nextPendingMessage);
   }, [
-    onSend,
+    activeConversationUuid,
+    pendingMessages,
     isSending,
     disabled,
     isQueueMode,
-    activeContext,
-    selectedModel,
-    selectedProvider,
-    focusMode,
+    sendPendingMessage,
   ]);
 
   // Auto-resize textarea
