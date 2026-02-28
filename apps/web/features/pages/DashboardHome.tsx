@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useAgentMetricsStore } from '@shared/stores/agent-metrics-store';
 import { useWorkforceStore } from '@shared/stores/workforce-store';
+import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -241,21 +242,28 @@ const WorkforcePanel: React.FC<{
                 </Badge>
               </div>
               <div className="space-y-2">
-                {hiredEmployees.slice(0, 5).map((emp) => (
-                  <div
-                    key={emp.id}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-2"
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-                      <Brain className="h-3.5 w-3.5 text-primary" />
+                {hiredEmployees.slice(0, 5).map((emp) => {
+                  const empData = AI_EMPLOYEES.find((e) => e.id === emp.employee_id);
+                  return (
+                    <div
+                      key={emp.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-2"
+                    >
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+                        <Brain className="h-3.5 w-3.5 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">
+                          {empData?.name || emp.employee_name || 'AI Employee'}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {empData?.role || 'AI Specialist'}
+                        </p>
+                      </div>
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium">{emp.name}</p>
-                      <p className="truncate text-[10px] text-muted-foreground">{emp.role}</p>
-                    </div>
-                    {emp.is_active && <div className="h-2 w-2 rounded-full bg-green-500" />}
-                  </div>
-                ))}
+                  );
+                })}
                 {hiredEmployees.length > 5 && (
                   <p className="text-center text-xs text-muted-foreground">
                     +{hiredEmployees.length - 5} more

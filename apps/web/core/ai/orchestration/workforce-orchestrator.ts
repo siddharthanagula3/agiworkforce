@@ -118,22 +118,17 @@ export class WorkforceOrchestratorRefactored {
     if (userId) {
       try {
         const { data: hiredEmployees, error } = await supabase
-          .from('purchased_employees')
-          .select('employee_id, ai_employees(name)')
-          .eq('user_id', userId)
-          .eq('is_active', true);
+          .from('hired_employees')
+          .select('employee_id, employee_name')
+          .eq('user_id', userId);
 
         if (!error && hiredEmployees && hiredEmployees.length > 0) {
-          // Create set of hired employee names for quick lookup
-          const hiredNames = new Set(
-            hiredEmployees
-              .map((e) => (e.ai_employees as { name: string } | null)?.name)
-              .filter((name): name is string => name !== null),
-          );
+          // Create set of hired employee IDs for quick lookup
+          const hiredIds = new Set(hiredEmployees.map((e) => e.employee_id));
 
           // Filter to only employees user has hired (or free employees with price 0)
           availableEmployees = this.employees.filter(
-            (emp) => hiredNames.has(emp.name) || emp.price === 0,
+            (emp) => hiredIds.has(emp.id) || emp.price === 0,
           );
         }
       } catch (error) {
@@ -592,22 +587,17 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
       if (user) {
         try {
           const { data: hiredEmployees, error } = await supabase
-            .from('purchased_employees')
-            .select('employee_id, ai_employees(name)')
-            .eq('user_id', user.id)
-            .eq('is_active', true);
+            .from('hired_employees')
+            .select('employee_id, employee_name')
+            .eq('user_id', user.id);
 
           if (!error && hiredEmployees && hiredEmployees.length > 0) {
-            // Create set of hired employee names for quick lookup
-            const hiredNames = new Set(
-              hiredEmployees
-                .map((e) => (e.ai_employees as { name: string } | null)?.name)
-                .filter((name): name is string => name !== null),
-            );
+            // Create set of hired employee IDs for quick lookup
+            const hiredIds = new Set(hiredEmployees.map((e) => e.employee_id));
 
             // Filter to only employees user has hired (or free employees with price 0)
             availableEmployees = this.employees.filter(
-              (emp) => hiredNames.has(emp.name) || emp.price === 0,
+              (emp) => hiredIds.has(emp.id) || emp.price === 0,
             );
 
             if (availableEmployees.length === 0) {

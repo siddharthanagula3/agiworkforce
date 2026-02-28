@@ -14,6 +14,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useWorkforceStore } from '@shared/stores/workforce-store';
+import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 import { useVibeChatStore } from '../stores/vibe-chat-store';
 import { useVibeViewStore } from '../stores/vibe-view-store';
 import { VibeLayout } from '../layouts/VibeLayout';
@@ -361,7 +362,7 @@ const VibeDashboard: React.FC = () => {
         role:
           actionMetadata.agent_role ||
           prev?.role ||
-          hiredEmployees?.find((emp) => emp.name === action.agent_name)?.role ||
+          AI_EMPLOYEES.find((e) => e.name === action.agent_name)?.role ||
           'AI Agent',
         status: status === 'failed' ? 'error' : status === 'completed' ? 'completed' : 'working',
         currentTask: description,
@@ -397,9 +398,10 @@ const VibeDashboard: React.FC = () => {
 
   useEffect(() => {
     if (hiredEmployees?.length && !activeAgent) {
+      const firstEmp = AI_EMPLOYEES.find((e) => e.id === hiredEmployees[0].employee_id);
       setActiveAgent({
-        name: hiredEmployees[0].name || 'AI Specialist',
-        role: hiredEmployees[0].role || 'Engineer',
+        name: firstEmp?.name || hiredEmployees[0].employee_name || 'AI Specialist',
+        role: firstEmp?.role || 'Engineer',
         status: 'idle',
       });
     }
@@ -536,9 +538,12 @@ const VibeDashboard: React.FC = () => {
             ((orchestratorResponse as unknown as Record<string, unknown>)
               .assignedEmployee as string) ||
             activeAgent?.name ||
-            hiredEmployees?.[0]?.name ||
+            hiredEmployees?.[0]?.employee_name ||
             'AI Assistant',
-          agentRole: activeAgent?.role || hiredEmployees?.[0]?.role || 'Specialist',
+          agentRole:
+            activeAgent?.role ||
+            AI_EMPLOYEES.find((e) => e.id === hiredEmployees?.[0]?.employee_id)?.role ||
+            'Specialist',
           isStreaming: true,
         };
 

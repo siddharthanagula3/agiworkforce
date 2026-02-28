@@ -9,6 +9,7 @@
 
 import React, { useState, useRef, KeyboardEvent, useEffect } from 'react';
 import { useWorkforceStore } from '@shared/stores/workforce-store';
+import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 import { useVibeViewStore, type FileTreeItem } from '../../stores/vibe-view-store';
 import { Button } from '@shared/ui/button';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -165,17 +166,23 @@ export function VibeMessageInput({
       setMentionQuery(query);
       setMentionStartPos(cursorPos - atMatch[0].length);
 
-      // Filter agents
+      // Filter agents - look up employee data from the static catalog
       const agentSuggestions: MentionSuggestion[] = (hiredEmployees || [])
+        .map((emp) => {
+          const empData = AI_EMPLOYEES.find((e) => e.id === emp.employee_id);
+          return { hired: emp, data: empData };
+        })
         .filter(
-          (emp) =>
-            emp.name?.toLowerCase().includes(query) || emp.role?.toLowerCase().includes(query),
+          ({ hired, data }) =>
+            (data?.name?.toLowerCase().includes(query) ?? false) ||
+            (data?.role?.toLowerCase().includes(query) ?? false) ||
+            (hired.employee_name?.toLowerCase().includes(query) ?? false),
         )
-        .map((emp) => ({
-          id: emp.id,
-          name: emp.name || 'Unknown',
+        .map(({ hired, data }) => ({
+          id: hired.id,
+          name: data?.name || hired.employee_name || 'Unknown',
           type: 'agent' as const,
-          role: emp.role,
+          role: data?.role,
         }))
         .slice(0, 5); // Limit to 5 suggestions
 
