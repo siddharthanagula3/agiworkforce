@@ -71,7 +71,7 @@ export class VibeAgentActionService {
 
     const { data, error } = await supabase
       .from('vibe_agent_actions')
-      .insert(action)
+      .insert(action as any)
       .select()
       .single();
 
@@ -90,8 +90,7 @@ export class VibeAgentActionService {
     actionId: string,
     updates: UpdateAgentActionParams,
   ): Promise<VibeAgentAction> {
-    const { data, error } = await supabase
-      .from('vibe_agent_actions')
+    const { data, error } = await (supabase.from('vibe_agent_actions') as any)
       .update(updates)
       .eq('id', actionId)
       .select()

@@ -210,7 +210,7 @@ const ContactSalesPage: React.FC = () => {
           'ai workforce sales',
         ]}
         ogType="website"
-        schema={{
+        structuredData={{
           '@context': 'https://schema.org',
           '@type': 'ContactPage',
           name: 'Contact Sales - AGI Workforce',

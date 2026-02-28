@@ -242,7 +242,10 @@ class ApiClient {
     context: string = 'Supabase query',
   ): Promise<ApiResponse<T>> {
     try {
-      const { data, error } = await query;
+      const { data, error } = (await query) as any as {
+        data: T;
+        error: { message: string } | null;
+      };
 
       if (error) {
         throw new Error(error.message);

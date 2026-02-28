@@ -16,6 +16,10 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
+// RPC functions not yet in generated Database type
+
+const db = supabase as any;
+
 /**
  * Configuration for account lockout policy
  */
@@ -138,17 +142,21 @@ class AccountLockoutService {
 
     try {
       // Try database first
-      const { data, error } = await supabase.rpc('check_account_lockout', {
-        p_email: normalizedEmail,
-      });
+      const { data, error } = await db.rpc(
+        'check_account_lockout' as any,
+        {
+          p_email: normalizedEmail,
+        } as any,
+      );
 
       if (error) {
         logger.warn('Database lockout check failed, using in-memory fallback:', error.message);
         return this.checkLockoutInMemory(normalizedEmail);
       }
 
-      if (data && data.length > 0) {
-        const result = data[0];
+      const rpcData = data as any;
+      if (rpcData && rpcData.length > 0) {
+        const result = rpcData[0];
         const isLocked = result.is_locked === true;
         const lockedUntil = result.locked_until ? new Date(result.locked_until) : null;
 
@@ -185,11 +193,14 @@ class AccountLockoutService {
 
     try {
       // Record in database
-      const { data, error } = await supabase.rpc('record_failed_login', {
-        p_email: normalizedEmail,
-        p_max_attempts: this.config.maxAttempts,
-        p_lockout_duration_minutes: this.config.lockoutDurationMinutes,
-      });
+      const { data, error } = await db.rpc(
+        'record_failed_login' as any,
+        {
+          p_email: normalizedEmail,
+          p_max_attempts: this.config.maxAttempts,
+          p_lockout_duration_minutes: this.config.lockoutDurationMinutes,
+        } as any,
+      );
 
       if (error) {
         logger.warn(
@@ -199,8 +210,9 @@ class AccountLockoutService {
         return this.recordFailedLoginInMemory(normalizedEmail);
       }
 
-      if (data && data.length > 0) {
-        const result = data[0];
+      const rpcData = data as any;
+      if (rpcData && rpcData.length > 0) {
+        const result = rpcData[0];
         const isLocked = result.is_locked === true;
         const justLocked = result.should_lock === true;
         const lockedUntil = result.locked_until ? new Date(result.locked_until) : null;
@@ -274,9 +286,12 @@ class AccountLockoutService {
 
     try {
       // Reset in database
-      const { error } = await supabase.rpc('record_successful_login', {
-        p_email: normalizedEmail,
-      });
+      const { error } = await db.rpc(
+        'record_successful_login' as any,
+        {
+          p_email: normalizedEmail,
+        } as any,
+      );
 
       if (error) {
         logger.warn('Database successful login record failed:', error.message);
@@ -313,9 +328,12 @@ class AccountLockoutService {
     const normalizedEmail = this.normalizeEmail(email);
 
     try {
-      const { data, error } = await supabase.rpc('admin_unlock_account', {
-        p_email: normalizedEmail,
-      });
+      const { data, error } = await db.rpc(
+        'admin_unlock_account' as any,
+        {
+          p_email: normalizedEmail,
+        } as any,
+      );
 
       if (error) {
         logger.error('Admin unlock failed:', error.message);
@@ -359,15 +377,16 @@ class AccountLockoutService {
     avgFailedAttempts: number;
   }> {
     try {
-      const { data, error } = await supabase.rpc('get_lockout_stats');
+      const { data, error } = await db.rpc('get_lockout_stats' as any);
 
       if (error) {
         logger.warn('Failed to get lockout stats:', error.message);
         return this.getInMemoryStats();
       }
 
-      if (data && data.length > 0) {
-        const stats = data[0];
+      const rpcData = data as any;
+      if (rpcData && rpcData.length > 0) {
+        const stats = rpcData[0];
         return {
           totalLockedAccounts: stats.total_locked_accounts || 0,
           totalTrackedAccounts: stats.total_tracked_accounts || 0,
@@ -392,7 +411,7 @@ class AccountLockoutService {
     }
 
     try {
-      const { data, error } = await supabase.rpc('log_security_event', {
+      const { data, error } = await db.rpc('log_security_event', {
         p_event_type: event.eventType,
         p_email: event.email || null,
         p_user_id: event.userId || null,

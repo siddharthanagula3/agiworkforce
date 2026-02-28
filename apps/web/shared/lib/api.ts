@@ -264,7 +264,7 @@ export class APIClient {
       throw new APIException({
         message: data.message || `HTTP ${response.status}: ${response.statusText}`,
         status: response.status,
-        details: data.errors || data,
+        details: (data.errors || data) as any,
       });
     }
 
@@ -462,7 +462,7 @@ export class APIClient {
     }
 
     return {
-      data: null as void,
+      data: null as unknown as void,
       success: true,
     };
   }

@@ -118,7 +118,7 @@ const INITIAL_STATE: AppState = {
   buildNumber: process.env.NEXT_PUBLIC_BUILD_NUMBER || 'dev',
   environment: (process.env.NODE_ENV === 'production'
     ? 'production'
-    : process.env.NODE_ENV === 'staging'
+    : (process.env.NODE_ENV as string) === 'staging'
       ? 'staging'
       : 'development') as AppEnvironment,
 };

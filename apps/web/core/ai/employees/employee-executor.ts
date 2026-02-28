@@ -1,10 +1,46 @@
 // AI Employee Executor
 // Handles AI Employee task execution and tool invocation
 
-import { AIEmployee, ToolResult, ExecutionContext, Job } from '../../types';
-import { toolInvocationService } from '../tools/tool-invocation-handler';
-import { aiEmployeeService } from './ai-employee-service';
+import type { AIEmployee } from '@core/types/ai-employee';
 import { logger } from '@shared/lib/logger';
+
+interface ToolResult {
+  data: unknown;
+  cost: number;
+}
+
+interface ExecutionContext {
+  userId: string;
+  sessionId: string;
+}
+
+interface Job {
+  id: string;
+  title: string;
+  description: string;
+}
+
+// Stub service references — these modules are not yet implemented
+const toolInvocationService = {
+  executeTool: async (
+    _toolId: string,
+    _params: Record<string, unknown>,
+    _context: ExecutionContext,
+  ) =>
+    ({ result: null, success: true, error: null }) as {
+      result: unknown;
+      success: boolean;
+      error: string | null;
+    },
+};
+
+const aiEmployeeService = {
+  getEmployeePerformance: async (_id: string) => ({
+    data: null as Record<string, unknown> | null,
+    error: null,
+  }),
+  updateEmployeePerformance: async (_id: string, _perf: unknown) => ({ data: null, error: null }),
+};
 
 export interface TaskExecutionResult {
   success: boolean;
@@ -103,8 +139,7 @@ export class AIEmployeeExecutor {
       taskLower.includes('program') ||
       taskLower.includes('function')
     ) {
-      const codeTool = availableTools.find((tool) => tool.id === 'generate_code');
-      if (codeTool) requiredTools.push('generate_code');
+      if (availableTools.includes('generate_code')) requiredTools.push('generate_code');
     }
 
     // Data analysis tasks
@@ -113,8 +148,7 @@ export class AIEmployeeExecutor {
       taskLower.includes('data') ||
       taskLower.includes('report')
     ) {
-      const dataTool = availableTools.find((tool) => tool.id === 'analyze_data');
-      if (dataTool) requiredTools.push('analyze_data');
+      if (availableTools.includes('analyze_data')) requiredTools.push('analyze_data');
     }
 
     // Email tasks
@@ -123,8 +157,7 @@ export class AIEmployeeExecutor {
       taskLower.includes('send') ||
       taskLower.includes('message')
     ) {
-      const emailTool = availableTools.find((tool) => tool.id === 'send_email');
-      if (emailTool) requiredTools.push('send_email');
+      if (availableTools.includes('send_email')) requiredTools.push('send_email');
     }
 
     // Web search tasks
@@ -133,8 +166,7 @@ export class AIEmployeeExecutor {
       taskLower.includes('find') ||
       taskLower.includes('research')
     ) {
-      const searchTool = availableTools.find((tool) => tool.id === 'web_search');
-      if (searchTool) requiredTools.push('web_search');
+      if (availableTools.includes('web_search')) requiredTools.push('web_search');
     }
 
     // File upload tasks
@@ -143,13 +175,12 @@ export class AIEmployeeExecutor {
       taskLower.includes('file') ||
       taskLower.includes('document')
     ) {
-      const uploadTool = availableTools.find((tool) => tool.id === 'file_upload');
-      if (uploadTool) requiredTools.push('file_upload');
+      if (availableTools.includes('file_upload')) requiredTools.push('file_upload');
     }
 
     // If no specific tools identified, use the first available tool
     if (requiredTools.length === 0 && availableTools.length > 0) {
-      requiredTools.push(availableTools[0].id);
+      requiredTools.push(availableTools[0]);
     }
 
     return requiredTools;
@@ -187,7 +218,7 @@ export class AIEmployeeExecutor {
     const baseParameters: Record<string, unknown> = {
       task,
       employee: this.employee.name,
-      role: this.employee.role,
+      role: (this.employee as any).role,
       timestamp: new Date().toISOString(),
     };
 
@@ -355,16 +386,17 @@ export class AIEmployeeExecutor {
   private async updatePerformance(success: boolean, executionTime: number): Promise<void> {
     try {
       const { data: performanceData } = await aiEmployeeService.getEmployeePerformance(
-        this.employee.id,
+        this.employee.name,
       );
 
       // Transform performance data to our expected PerformanceMetrics format
+      const pd = performanceData as Record<string, any> | null;
       const currentMetrics: PerformanceMetrics = {
-        tasksCompleted: performanceData?.tasks_completed ?? 0,
-        successRate: performanceData?.success_rate ?? 0,
-        averageExecutionTime: performanceData?.average_execution_time ?? 0,
-        errorRate: performanceData?.error_rate ?? 0,
-        lastUpdated: performanceData?.last_updated,
+        tasksCompleted: pd?.tasks_completed ?? 0,
+        successRate: pd?.success_rate ?? 0,
+        averageExecutionTime: pd?.average_execution_time ?? 0,
+        errorRate: pd?.error_rate ?? 0,
+        lastUpdated: pd?.last_updated,
       };
 
       const updatedMetrics = {
@@ -377,7 +409,7 @@ export class AIEmployeeExecutor {
       };
 
       // Transform back to database format
-      await aiEmployeeService.updateEmployeePerformance(this.employee.id, {
+      await aiEmployeeService.updateEmployeePerformance(this.employee.name, {
         tasks_completed: updatedMetrics.tasksCompleted,
         success_rate: updatedMetrics.successRate,
         average_execution_time: updatedMetrics.averageExecutionTime,

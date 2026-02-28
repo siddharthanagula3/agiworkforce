@@ -82,7 +82,7 @@ describe('Token Enforcement Service', () => {
 
   describe('checkTokenSufficiency', () => {
     const mockUserId = 'user-123';
-    const mockRpc = vi.mocked(supabase.rpc);
+    const mockRpc = vi.mocked(supabase.rpc) as any;
 
     it('should allow request when user has sufficient balance', async () => {
       mockRpc.mockResolvedValueOnce({
@@ -115,8 +115,14 @@ describe('Token Enforcement Service', () => {
     it('should deny request when balance fetch fails', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
-        error: { message: 'Database error', code: '500' },
-      });
+        error: {
+          message: 'Database error',
+          code: '500',
+          details: '',
+          hint: '',
+          name: 'PostgrestError',
+        },
+      } as any);
 
       // Also need to mock the fallback query
       const mockFrom = vi.mocked(supabase.from);
@@ -177,7 +183,7 @@ describe('Token Enforcement Service', () => {
 
   describe('getUserTokenBalance', () => {
     const mockUserId = 'user-123';
-    const mockRpc = vi.mocked(supabase.rpc);
+    const mockRpc = vi.mocked(supabase.rpc) as any;
     const mockFrom = vi.mocked(supabase.from);
 
     it('should return balance from RPC when available', async () => {
@@ -197,7 +203,7 @@ describe('Token Enforcement Service', () => {
     it('should fallback to direct query when RPC fails', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
-        error: { message: 'RPC not available', code: '500' },
+        error: { message: 'RPC not available', code: '500' } as any,
       });
 
       mockFrom.mockReturnValueOnce({
@@ -219,7 +225,7 @@ describe('Token Enforcement Service', () => {
     it('should return default free tier balance when no record exists', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
-        error: { message: 'RPC not available', code: '500' },
+        error: { message: 'RPC not available', code: '500' } as any,
       });
 
       // Balance lookup fails
@@ -254,7 +260,7 @@ describe('Token Enforcement Service', () => {
     it('should return default pro tier balance when user is pro', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
-        error: { message: 'RPC not available', code: '500' },
+        error: { message: 'RPC not available', code: '500' } as any,
       });
 
       // Balance lookup fails
@@ -289,7 +295,7 @@ describe('Token Enforcement Service', () => {
     it('should return null when all lookups fail (fail closed)', async () => {
       mockRpc.mockResolvedValueOnce({
         data: null,
-        error: { message: 'RPC failed', code: '500' },
+        error: { message: 'RPC failed', code: '500' } as any,
       });
 
       mockFrom.mockReturnValueOnce({
@@ -343,7 +349,7 @@ describe('Token Enforcement Service', () => {
       sessionId: 'session-123',
       feature: 'chat',
     };
-    const mockRpc = vi.mocked(supabase.rpc);
+    const mockRpc = vi.mocked(supabase.rpc) as any;
 
     it('should successfully deduct tokens', async () => {
       mockRpc.mockResolvedValueOnce({
@@ -501,7 +507,7 @@ describe('Token Enforcement Service', () => {
   describe('canUserMakeRequest', () => {
     const mockUserId = 'user-123';
     const mockFrom = vi.mocked(supabase.from);
-    const mockRpc = vi.mocked(supabase.rpc);
+    const mockRpc = vi.mocked(supabase.rpc) as any;
 
     it('should allow request when all checks pass', async () => {
       // Monthly allowance check - pro user

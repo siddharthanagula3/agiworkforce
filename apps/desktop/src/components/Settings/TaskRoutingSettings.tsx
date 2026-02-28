@@ -177,7 +177,7 @@ export function TaskRoutingSettings() {
   const taskRouting = useSettingsStore(useShallow((state) => state.llmConfig.taskRouting));
   const setTaskRouting = useSettingsStore((state) => state.setTaskRouting);
   const account = useAccountStore((state) => state.account);
-  const normalizedTier = normalizeSubscriptionTier(account.plan);
+  const normalizedTier = normalizeSubscriptionTier(account?.plan ?? null);
 
   const categories: TaskCategory[] = useMemo(
     () => ['code', 'chat', 'search', 'docs', 'vision', 'image', 'video'],

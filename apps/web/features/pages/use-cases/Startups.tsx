@@ -334,7 +334,7 @@ const StartupsPage: React.FC = () => {
   );
 };
 
-const BenefitCard: React.FC<{ benefit: unknown; index: number }> = ({ benefit, index }) => {
+const BenefitCard: React.FC<{ benefit: any; index: number }> = ({ benefit, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
   const Icon = benefit.icon;
@@ -361,7 +361,7 @@ const BenefitCard: React.FC<{ benefit: unknown; index: number }> = ({ benefit, i
   );
 };
 
-const UseCaseCard: React.FC<{ useCase: unknown; index: number }> = ({ useCase, index }) => {
+const UseCaseCard: React.FC<{ useCase: any; index: number }> = ({ useCase, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 
@@ -387,7 +387,7 @@ const UseCaseCard: React.FC<{ useCase: unknown; index: number }> = ({ useCase, i
   );
 };
 
-const StageCard: React.FC<{ stage: unknown; index: number }> = ({ stage, index }) => {
+const StageCard: React.FC<{ stage: any; index: number }> = ({ stage, index }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 
@@ -413,7 +413,7 @@ const StageCard: React.FC<{ stage: unknown; index: number }> = ({ stage, index }
   );
 };
 
-const TestimonialCard: React.FC<{ testimonial: Testimonial }> = ({ testimonial }) => {
+const TestimonialCard: React.FC<{ testimonial: any }> = ({ testimonial }) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 

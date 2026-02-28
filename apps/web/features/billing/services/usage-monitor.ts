@@ -53,7 +53,7 @@ export class UsageTracker {
       };
 
       // Store in database
-      const { error } = await supabase.from('api_usage').insert({
+      const { error } = await (supabase as any).from('api_usage').insert({
         user_id: call.userId,
         timestamp: call.timestamp.toISOString(),
         agent_type: call.agentType,
@@ -96,7 +96,7 @@ export class UsageTracker {
 
   async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('api_usage')
         .select('*')
         .eq('user_id', userId)
@@ -108,24 +108,24 @@ export class UsageTracker {
         throw error;
       }
 
-      const usage = data || [];
+      const usage = (data || []) as any[];
 
       const summary: UsageSummary = {
         totalCalls: usage.length,
-        totalTokens: usage.reduce((sum, r) => sum + (r.tokens_used || 0), 0),
-        totalCost: usage.reduce((sum, r) => sum + (r.cost || 0), 0),
+        totalTokens: usage.reduce((sum: number, r: any) => sum + (r.tokens_used || 0), 0),
+        totalCost: usage.reduce((sum: number, r: any) => sum + (r.cost || 0), 0),
         byAgent: this.groupByAgent(usage),
         byDay: this.groupByDay(usage),
       };
 
       return summary;
     } catch (error) {
-      throw new Error(`Failed to get usage summary: ${error.message}`);
+      throw new Error(`Failed to get usage summary: ${(error as Error).message}`);
     }
   }
 
   private groupByAgent(
-    usage: unknown[],
+    usage: any[],
   ): Record<string, { calls: number; tokens: number; cost: number }> {
     const grouped: Record<string, { calls: number; tokens: number; cost: number }> = {};
 
@@ -145,7 +145,7 @@ export class UsageTracker {
   }
 
   private groupByDay(
-    usage: unknown[],
+    usage: any[],
   ): Record<string, { calls: number; tokens: number; cost: number }> {
     const grouped: Record<string, { calls: number; tokens: number; cost: number }> = {};
 

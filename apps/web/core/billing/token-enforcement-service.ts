@@ -13,6 +13,10 @@
 
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+
+// RPC/tables not yet in generated Database type
+
+const db = supabase as any;
 import { captureError } from '@shared/lib/sentry';
 
 export interface TokenCheckResult {
@@ -109,7 +113,7 @@ export async function deductTokens(
     const { provider, model, totalTokens } = metadata;
 
     // Try the new credit system RPC first
-    const { error: creditError } = await supabase.rpc('deduct_credits', {
+    const { error: creditError } = await db.rpc('deduct_credits', {
       p_user_id: userId,
       p_amount_cents: totalTokens, // In the new system, this represents cents
       p_description: `${provider}/${model} usage`,
@@ -119,7 +123,7 @@ export async function deductTokens(
 
     if (!creditError) {
       // Fetch new balance
-      const { data: balanceData } = await supabase.rpc('get_credit_balance', {
+      const { data: balanceData } = await db.rpc('get_credit_balance', {
         p_user_id: userId,
       });
 
@@ -140,7 +144,7 @@ export async function deductTokens(
     );
 
     // Fallback: legacy deduct_user_tokens RPC
-    const { data: newBalance, error } = await supabase.rpc('deduct_user_tokens', {
+    const { data: newBalance, error } = await db.rpc('deduct_user_tokens', {
       p_user_id: userId,
       p_tokens: totalTokens,
       p_provider: provider,
@@ -187,7 +191,7 @@ export async function deductTokens(
 export async function getUserTokenBalance(userId: string): Promise<number | null> {
   try {
     // Try get_credit_balance RPC first (shared Supabase billing system)
-    const { data: rpcData, error: rpcError } = await supabase.rpc('get_credit_balance', {
+    const { data: rpcData, error: rpcError } = await db.rpc('get_credit_balance', {
       p_user_id: userId,
     });
 
@@ -202,7 +206,7 @@ export async function getUserTokenBalance(userId: string): Promise<number | null
       logger.warn('[Token Balance] get_credit_balance RPC failed, falling back:', rpcError.message);
     }
 
-    const { data: creditsData, error: creditsError } = await supabase
+    const { data: creditsData, error: creditsError } = await db
       .from('token_credits')
       .select('credits_remaining_cents')
       .eq('user_id', userId)
@@ -267,7 +271,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
     const now = new Date();
     const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    const { data: user, error } = await supabase
+    const { data: user, error } = await db
       .from('users')
       .select('plan')
       .eq('id', userId)
@@ -301,7 +305,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { data: transactions, error: txError } = await supabase
+    const { data: transactions, error: txError } = await db
       .from('token_transactions')
       .select('tokens')
       .eq('user_id', userId)
@@ -318,7 +322,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
       };
     }
 
-    const used = Math.abs(transactions?.reduce((sum, tx) => sum + tx.tokens, 0) || 0);
+    const used = Math.abs(transactions?.reduce((sum: any, tx: any) => sum + tx.tokens, 0) || 0);
     const limit = 1000000; // 1M tokens/month for free tier (matches billing dashboard)
 
     return {

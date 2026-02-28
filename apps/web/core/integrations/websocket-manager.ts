@@ -205,9 +205,9 @@ export class WebSocketManager {
       });
 
     // Subscribe to channel
-    const status = await connection.supabaseChannel.subscribe();
+    const channel = await connection.supabaseChannel.subscribe();
 
-    if (status === 'SUBSCRIBED') {
+    if (channel) {
       connection.state = WebSocketState.CONNECTED;
       connection.metrics.state = WebSocketState.CONNECTED;
       connection.metrics.connectedAt = Date.now();
@@ -569,7 +569,7 @@ export class WebSocketManager {
   private handlePresenceJoin(connection: PooledConnection, payload: unknown): void {
     this.emitEvent(connection.id, 'message', {
       type: MessageType.PRESENCE,
-      payload: { event: 'join', ...payload },
+      payload: { event: 'join', ...(payload as Record<string, unknown>) },
     });
   }
 
@@ -579,7 +579,7 @@ export class WebSocketManager {
   private handlePresenceLeave(connection: PooledConnection, payload: unknown): void {
     this.emitEvent(connection.id, 'message', {
       type: MessageType.PRESENCE,
-      payload: { event: 'leave', ...payload },
+      payload: { event: 'leave', ...(payload as Record<string, unknown>) },
     });
   }
 

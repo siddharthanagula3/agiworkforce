@@ -4,6 +4,10 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+
+// Tables not yet in generated Database type — use untyped client for these
+
+const db = supabase as any;
 import type { ExecutionPlan, Task } from '@core/ai/orchestration/reasoning/task-breakdown';
 import type { AnalysisResult } from '@core/ai/orchestration/reasoning/natural-language-processor';
 
@@ -88,7 +92,7 @@ export async function createExecution(
   plan: ExecutionPlan,
 ): Promise<WorkforceExecution | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workforce_executions')
       .insert({
         user_id: userId,
@@ -137,7 +141,7 @@ export async function updateExecutionStatus(
   },
 ): Promise<boolean> {
   try {
-    const updateData: unknown = {
+    const updateData: Record<string, unknown> = {
       status,
       updated_at: new Date().toISOString(),
     };
@@ -157,7 +161,7 @@ export async function updateExecutionStatus(
       if (updates.errorMessage) updateData.error_message = updates.errorMessage;
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('workforce_executions')
       .update(updateData)
       .eq('id', executionId);
@@ -179,7 +183,7 @@ export async function updateExecutionStatus(
  */
 export async function getExecution(executionId: string): Promise<WorkforceExecution | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workforce_executions')
       .select('*')
       .eq('id', executionId)
@@ -205,7 +209,7 @@ export async function getUserExecutions(
   limit: number = 50,
 ): Promise<WorkforceExecution[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workforce_executions')
       .select('*')
       .eq('user_id', userId)
@@ -229,7 +233,7 @@ export async function getUserExecutions(
  */
 export async function getActiveExecutions(userId: string): Promise<WorkforceExecution[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workforce_executions')
       .select('*')
       .eq('user_id', userId)
@@ -273,7 +277,7 @@ export async function createExecutionTasks(executionId: string, tasks: Task[]): 
       estimated_time: task.estimatedTime,
     }));
 
-    const { error } = await supabase.from('workforce_tasks').insert(taskData);
+    const { error } = await db.from('workforce_tasks').insert(taskData);
 
     if (error) {
       console.error('Error creating execution tasks:', error);
@@ -302,7 +306,7 @@ export async function updateTaskStatus(
   },
 ): Promise<boolean> {
   try {
-    const updateData: unknown = {
+    const updateData: Record<string, unknown> = {
       status,
     };
 
@@ -321,7 +325,7 @@ export async function updateTaskStatus(
       if (updates.actualTime !== undefined) updateData.actual_time = updates.actualTime;
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('workforce_tasks')
       .update(updateData)
       .eq('execution_id', executionId)
@@ -344,7 +348,7 @@ export async function updateTaskStatus(
  */
 export async function getExecutionTasks(executionId: string): Promise<WorkforceTask[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workforce_tasks')
       .select('*')
       .eq('execution_id', executionId)
@@ -380,7 +384,7 @@ export async function trackAPIUsage(
   sessionId?: string,
 ): Promise<boolean> {
   try {
-    const { error } = await supabase.from('api_usage').insert({
+    const { error } = await db.from('api_usage').insert({
       user_id: userId,
       provider,
       model,
@@ -415,7 +419,7 @@ export async function getUserAPIUsage(
   endDate?: Date,
 ): Promise<APIUsage[]> {
   try {
-    let query = supabase.from('api_usage').select('*').eq('user_id', userId);
+    let query = db.from('api_usage').select('*').eq('user_id', userId);
 
     if (startDate) {
       query = query.gte('created_at', startDate.toISOString());
@@ -513,7 +517,7 @@ async function updateSubscriptionUsage(userId: string, tokensUsed: number): Prom
     // Updated: Nov 17th 2025 - Fixed race condition with atomic increment using RPC
     // Migration: 20250116000002_add_increment_token_usage_rpc.sql
     // Use PostgreSQL's atomic increment to prevent race conditions
-    const { error } = await supabase.rpc('increment_token_usage', {
+    const { error } = await db.rpc('increment_token_usage', {
       p_user_id: userId,
       p_tokens_used: tokensUsed,
     });
@@ -524,7 +528,7 @@ async function updateSubscriptionUsage(userId: string, tokensUsed: number): Prom
         'RPC increment_token_usage not found, using non-atomic fallback. Run migration 20250116000002_add_increment_token_usage_rpc.sql',
       );
 
-      const { data: subscription } = await supabase
+      const { data: subscription } = await db
         .from('user_subscriptions')
         .select('*')
         .eq('user_id', userId)
@@ -537,7 +541,7 @@ async function updateSubscriptionUsage(userId: string, tokensUsed: number): Prom
 
       const newUsedTokens = subscription.used_tokens + tokensUsed;
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await db
         .from('user_subscriptions')
         .update({
           used_tokens: newUsedTokens,
@@ -563,7 +567,7 @@ async function updateSubscriptionUsage(userId: string, tokensUsed: number): Prom
  */
 export async function getUserSubscription(userId: string): Promise<unknown> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', userId)
@@ -599,7 +603,7 @@ export async function getDashboardStats(userId: string): Promise<{
 }> {
   try {
     // Get stats from view
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('user_dashboard_stats')
       .select('*')
       .eq('user_id', userId)
@@ -654,7 +658,7 @@ export async function getRecentActivity(
   limit: number = 10,
 ): Promise<RecentActivity[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('user_recent_activity')
       .select('*')
       .eq('user_id', userId)
