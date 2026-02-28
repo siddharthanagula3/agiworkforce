@@ -122,7 +122,7 @@ export class MessageDeliveryService {
   ): Promise<MessageDeliveryRecord> {
     const messageId = message.id;
     const sessionId = message.sessionId || '';
-    const senderId = message.metadata?.userId || '';
+    const senderId = (message.metadata?.userId as string) || '';
 
     // Create delivery record
     const record: MessageDeliveryRecord = {
@@ -438,11 +438,11 @@ export class MessageDeliveryService {
     try {
       const { error } = await supabase.from('web_messages').insert({
         id: message.id,
-        session_id: message.sessionId,
+        conversation_id: message.sessionId || '',
         role: message.role,
         content: message.content,
         created_at: new Date(message.createdAt).toISOString(),
-        metadata: message.metadata,
+        metadata: message.metadata as never,
       });
 
       if (error) throw error;

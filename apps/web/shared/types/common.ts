@@ -206,7 +206,8 @@ export interface MCPToolCallInfo {
  */
 export interface ChatMessageRecord {
   id: string;
-  session_id: string;
+  session_id?: string;
+  conversation_id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   created_at: string;

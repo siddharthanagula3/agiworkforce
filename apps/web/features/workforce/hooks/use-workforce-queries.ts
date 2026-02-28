@@ -358,7 +358,7 @@ export function useWorkforceStats(
 
       // Fetch hired employees count
       const employees = await listPurchasedEmployees(userId);
-      const activeEmployees = employees.filter((e) => e.is_active).length;
+      const activeEmployees = employees.length;
 
       // Fetch token usage (table may not exist in schema yet)
       let totalTokensUsed = 0;
@@ -429,7 +429,7 @@ export function useHireEmployee(): UseMutationResult<PurchasedEmployeeRecord, Er
           queryKey: queryKeys.workforce.stats(),
         });
       }
-      toast.success(`${record.name} has been hired successfully!`);
+      toast.success(`${record.employee_name || 'Employee'} has been hired successfully!`);
     },
     onError: (error: Error): void => {
       logger.error('Failed to hire employee:', error);
@@ -467,11 +467,16 @@ export function useToggleEmployeeStatus(): UseMutationResult<
         throw new Error('You must be logged in');
       }
 
-      const { error } = await supabase
-        .from('purchased_employees')
-        .update({ is_active: isActive })
-        .eq('user_id', user.id)
-        .eq('employee_id', employeeId);
+      // hired_employees table uses delete instead of is_active toggle
+      const { error } = isActive
+        ? await supabase
+            .from('hired_employees')
+            .upsert({ user_id: user.id, employee_id: employeeId })
+        : await supabase
+            .from('hired_employees')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('employee_id', employeeId);
 
       if (error) {
         throw error;

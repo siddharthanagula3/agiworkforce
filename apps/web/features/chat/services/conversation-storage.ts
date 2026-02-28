@@ -5,30 +5,42 @@ import type { ChatSession, ChatMessage } from '../types';
 interface DBChatSession {
   id: string;
   user_id: string;
-  employee_id: string;
-  role: string;
-  provider: string;
+  employee_id: string | null;
+  role: string | null;
+  provider: string | null;
   title: string | null;
   is_active: boolean | null;
   is_starred?: boolean | null;
   is_pinned?: boolean | null;
   is_archived?: boolean | null;
   shared_link?: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: unknown;
   last_message_at: string | null;
-  created_at: string | null;
+  created_at: string;
   updated_at: string | null;
+  folder_id?: string | null;
+  deleted_at?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+  token_count?: number | null;
+  cost_cents?: number | null;
+  [key: string]: unknown;
 }
 
 interface DBChatMessage {
   id: string;
-  session_id: string;
+  conversation_id: string;
   role: string;
   content: string;
   created_at: string | null;
   updated_at?: string | null;
   edited?: boolean | null;
   edit_count?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost_cents?: number | null;
+  model?: string | null;
+  [key: string]: unknown;
 }
 
 /**
@@ -78,7 +90,7 @@ export class ChatPersistenceService {
     if (error) throw new Error(`Failed to create session: ${error.message}`);
     if (!data) throw new Error('Failed to create session: No data returned');
 
-    return this.mapDBSessionToSession(data);
+    return this.mapDBSessionToSession(data as unknown as DBChatSession);
   }
 
   /**
@@ -273,7 +285,7 @@ export class ChatPersistenceService {
     const { data, error } = await supabase
       .from('web_messages')
       .insert({
-        session_id: sessionId,
+        conversation_id: sessionId,
         role,
         content,
       })
@@ -292,7 +304,7 @@ export class ChatPersistenceService {
       })
       .eq('id', sessionId);
 
-    return this.mapDBMessageToMessage(data);
+    return this.mapDBMessageToMessage(data as unknown as DBChatMessage);
   }
 
   /**
@@ -303,7 +315,7 @@ export class ChatPersistenceService {
     const { data, error } = await supabase
       .from('web_messages')
       .select('*')
-      .eq('session_id', sessionId)
+      .eq('conversation_id', sessionId)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -315,7 +327,7 @@ export class ChatPersistenceService {
       throw new Error(`Failed to load messages: ${error.message}`);
     }
 
-    return (data || []).map(this.mapDBMessageToMessage);
+    return (data || []).map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
   }
 
   /**
@@ -333,7 +345,7 @@ export class ChatPersistenceService {
     let query = supabase
       .from('web_messages')
       .select('*', { count: 'exact' })
-      .eq('session_id', sessionId)
+      .eq('conversation_id', sessionId)
       .order('created_at', { ascending: true })
       .limit(fetchLimit);
 
@@ -356,7 +368,9 @@ export class ChatPersistenceService {
     const hasMore = items.length > limit;
     const resultItems = hasMore ? items.slice(0, limit) : items;
 
-    const messages = resultItems.map(this.mapDBMessageToMessage);
+    const messages = resultItems.map((msg) =>
+      this.mapDBMessageToMessage(msg as unknown as DBChatMessage),
+    );
 
     // The next cursor is the created_at of the last item
     const lastItem = resultItems[resultItems.length - 1];
@@ -384,7 +398,7 @@ export class ChatPersistenceService {
     let query = supabase
       .from('web_messages')
       .select('*', { count: 'exact' })
-      .eq('session_id', sessionId)
+      .eq('conversation_id', sessionId)
       .order('created_at', { ascending: false }) // Reverse order for fetching older
       .limit(fetchLimit);
 
@@ -408,7 +422,9 @@ export class ChatPersistenceService {
     const resultItems = hasMore ? items.slice(0, limit) : items;
 
     // Reverse to get chronological order
-    const messages = resultItems.reverse().map(this.mapDBMessageToMessage);
+    const messages = resultItems
+      .reverse()
+      .map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
 
     // The next cursor is the created_at of the first item (oldest in this batch)
     const oldestItem = resultItems[resultItems.length - 1];
@@ -449,7 +465,7 @@ export class ChatPersistenceService {
       throw new Error('Message not found or you do not have permission to edit it');
     }
 
-    return this.mapDBMessageToMessage(data);
+    return this.mapDBMessageToMessage(data as unknown as DBChatMessage);
   }
 
   /**
@@ -509,7 +525,7 @@ export class ChatPersistenceService {
     const { count, error } = await supabase
       .from('web_messages')
       .select('*', { count: 'exact', head: true })
-      .eq('session_id', sessionId);
+      .eq('conversation_id', sessionId);
 
     if (error) throw new Error(`Failed to count messages: ${error.message}`);
 
@@ -530,7 +546,7 @@ export class ChatPersistenceService {
 
     if (error) throw new Error(`Failed to search sessions: ${error.message}`);
 
-    return (data || []).map(this.mapDBSessionToSession);
+    return (data || []).map((s) => this.mapDBSessionToSession(s as unknown as DBChatSession));
   }
 
   /**
@@ -677,7 +693,7 @@ export class ChatPersistenceService {
     if (sourceMessages.length > 0) {
       const { error } = await supabase.from('web_messages').insert(
         sourceMessages.map((msg) => ({
-          session_id: targetSessionId,
+          conversation_id: targetSessionId,
           role: msg.role,
           content: msg.content,
           created_at: new Date(msg.createdAt).toISOString(),
@@ -714,7 +730,12 @@ export class ChatPersistenceService {
     }
 
     // Extract tags from metadata if available
-    const metadataTags = (dbSession.metadata as { tags?: string[] })?.tags || [];
+    const metadataObj = (
+      typeof dbSession.metadata === 'object' && dbSession.metadata !== null
+        ? dbSession.metadata
+        : {}
+    ) as Record<string, unknown>;
+    const metadataTags = (metadataObj.tags as string[]) || [];
 
     return {
       id: dbSession.id,
@@ -738,7 +759,7 @@ export class ChatPersistenceService {
         pinned: dbSession.is_pinned ?? false,
         archived: dbSession.is_archived ?? false,
         tags: metadataTags,
-        ...(dbSession.metadata || {}),
+        ...metadataObj,
       },
     };
   }
@@ -759,7 +780,7 @@ export class ChatPersistenceService {
 
     return {
       id: dbMessage.id,
-      sessionId: dbMessage.session_id,
+      sessionId: dbMessage.conversation_id,
       role: dbMessage.role as 'user' | 'assistant' | 'system',
       content: dbMessage.content,
       createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,

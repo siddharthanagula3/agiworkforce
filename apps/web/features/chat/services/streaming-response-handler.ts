@@ -211,7 +211,12 @@ export class ChatStreamingService {
 
     try {
       // Use the unified LLM service's streaming capability
-      const response = await unifiedLLMService.sendMessage(messages, sessionId, userId, provider);
+      const response = await unifiedLLMService.sendMessage(
+        messages as never,
+        sessionId,
+        userId,
+        provider,
+      );
 
       // Extract token usage from response (CRITICAL FOR BILLING!)
       const tokensUsed = response.usage?.totalTokens || 0;
@@ -352,9 +357,9 @@ export class ChatStreamingService {
         streamId,
         timestamp: Date.now(),
         metadata: {
-          metrics,
+          metrics: metrics as unknown,
           reconnectAttempts,
-        },
+        } as never,
       };
       yield errorUpdate;
       if (onUpdate) onUpdate(errorUpdate);
@@ -434,7 +439,7 @@ export class ChatStreamingService {
         if (update.type === 'content' && update.content) {
           onChunk(update.content, update.agentId);
         } else if (update.type === 'done') {
-          metadata = update.metadata;
+          metadata = update.metadata as typeof metadata;
           onComplete(metadata);
         } else if (update.type === 'error') {
           throw new Error(update.error);
@@ -479,7 +484,11 @@ export class ChatStreamingService {
 
     while (activeGenerators.size > 0) {
       const promises = Array.from(activeGenerators.entries()).map(
-        async ([agentId, { generator }]) => {
+        async ([agentId, { generator }]): Promise<{
+          agentId: string;
+          result?: IteratorResult<MultiAgentStreamingUpdate>;
+          error?: unknown;
+        }> => {
           try {
             const result = await generator.next();
             return { agentId, result };
@@ -489,25 +498,27 @@ export class ChatStreamingService {
         },
       );
 
-      const { agentId, result, error } = await Promise.race(promises);
+      const raceResult = await Promise.race(promises);
 
-      if (error) {
+      if (raceResult.error) {
         yield {
           type: 'error',
-          error: error instanceof Error ? error.message : 'Stream error',
-          agentId,
+          error: raceResult.error instanceof Error ? raceResult.error.message : 'Stream error',
+          agentId: raceResult.agentId,
           timestamp: Date.now(),
         };
-        activeGenerators.delete(agentId);
+        activeGenerators.delete(raceResult.agentId);
         continue;
       }
 
-      if (result.done) {
-        activeGenerators.delete(agentId);
+      if (raceResult.result?.done) {
+        activeGenerators.delete(raceResult.agentId);
         continue;
       }
 
-      yield result.value;
+      if (raceResult.result?.value) {
+        yield raceResult.result.value;
+      }
     }
   }
 

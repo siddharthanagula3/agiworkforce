@@ -184,10 +184,10 @@ class RealtimeServiceImpl implements RealtimeService {
         },
       );
 
-      // Subscribe to agent updates (purchased_employees)
+      // Subscribe to agent updates (hired_employees)
       this.subscribeToTable(
         `agents:${userId}`,
-        'purchased_employees',
+        'hired_employees',
         `user_id=eq.${userId}`,
         (payload) => {
           if (payload.new) {
