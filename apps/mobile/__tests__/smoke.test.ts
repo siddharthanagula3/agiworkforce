@@ -3,8 +3,9 @@ describe('Mobile app smoke test', () => {
     expect(1 + 1).toBe(2);
   });
 
-  it('should have correct app name', async () => {
-    const appJson = await import('../app.json');
+  it('should have correct app name', () => {
+    // Use require instead of dynamic import to avoid --experimental-vm-modules requirement
+    const appJson = require('../app.json');
     expect(appJson.expo.name).toBe('AGI Workforce');
   });
 });
