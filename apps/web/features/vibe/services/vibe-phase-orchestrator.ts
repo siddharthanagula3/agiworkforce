@@ -295,7 +295,7 @@ export const useVibeOrchestrator = create<VibeOrchestratorState>()(
     eventEmitter: new TypedEventEmitter<VibeEvent>(),
 
     initSession: (behaviorType: BehaviorType) => {
-      const sessionId = `vibe-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const sessionId = `vibe-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`;
 
       set((state) => {
         state.session = {
@@ -559,7 +559,7 @@ export const useVibeOrchestrator = create<VibeOrchestratorState>()(
  */
 export function createGenerationPhase(name: string, description: string): GenerationPhase {
   return {
-    id: `phase-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: `phase-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
     name,
     description,
     status: 'pending',
