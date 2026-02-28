@@ -39,9 +39,11 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
 
 // Higher-order component for lazy loading with suspense
 export const withLazyLoading = <P extends object>(Component: ComponentType<P>) => {
-  return (props: P) => (
+  const WrappedComponent = (props: P) => (
     <Suspense fallback={<LazyFallback />}>
       <Component {...props} />
     </Suspense>
   );
+  WrappedComponent.displayName = `withLazyLoading(${Component.displayName || Component.name || 'Component'})`;
+  return WrappedComponent;
 };

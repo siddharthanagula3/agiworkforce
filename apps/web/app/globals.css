@@ -270,10 +270,20 @@
   }
 }
 
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -680,40 +690,59 @@
 /* Animation utilities */
 @layer utilities {
   .animate-fade-in-up {
-    animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fade-in-up 0.4s ease-out;
   }
 
   .animate-slide-in-right {
-    animation: slide-in-right 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: slide-in-right 0.3s ease-out;
   }
 
   .animate-shimmer {
-    animation: shimmer 2s infinite;
+    animation: shimmer 2s infinite linear;
+    background-size: 200% 100%;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s infinite;
+  }
+
+  /* Glassmorphism utility classes */
+  .glass-surface {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.06];
+  }
+
+  .glass-hover {
+    @apply hover:bg-white/[0.06] hover:border-white/[0.10] transition-all duration-200;
+  }
+
+  .glass-input {
+    @apply bg-white/[0.05] backdrop-blur-xl border border-white/[0.08] rounded-lg;
+    @apply focus:border-white/[0.15] focus:ring-1 focus:ring-white/[0.10] transition-all;
   }
 
   /* Stagger animations for lists */
   .stagger-item {
     opacity: 0;
-    animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fade-in-up 0.4s ease-out forwards;
   }
 
   .stagger-item:nth-child(1) {
-    animation-delay: 0.1s;
+    animation-delay: 0.05s;
   }
   .stagger-item:nth-child(2) {
-    animation-delay: 0.2s;
+    animation-delay: 0.1s;
   }
   .stagger-item:nth-child(3) {
-    animation-delay: 0.3s;
+    animation-delay: 0.15s;
   }
   .stagger-item:nth-child(4) {
-    animation-delay: 0.4s;
+    animation-delay: 0.2s;
   }
   .stagger-item:nth-child(5) {
-    animation-delay: 0.5s;
+    animation-delay: 0.25s;
   }
   .stagger-item:nth-child(6) {
-    animation-delay: 0.6s;
+    animation-delay: 0.3s;
   }
 }
 

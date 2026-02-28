@@ -4,7 +4,7 @@ import { Button } from '@shared/ui/button';
 
 // Helper function to create sortable header
 export const createSortableHeader = (label: string) => {
-  return ({
+  const SortableHeader = ({
     column,
   }: {
     column: { toggleSorting: (desc: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
@@ -20,4 +20,6 @@ export const createSortableHeader = (label: string) => {
       </Button>
     );
   };
+  SortableHeader.displayName = `SortableHeader(${label})`;
+  return SortableHeader;
 };

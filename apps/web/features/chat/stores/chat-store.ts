@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
+import { supabase } from '@shared/lib/supabase-client';
 
 // ============================================================================
 // Types
@@ -29,6 +30,7 @@ export interface ChatSession {
   updatedAt: Date;
   preview: string;
   messageCount: number;
+  userId?: string;
 }
 
 interface ChatState {
@@ -37,10 +39,11 @@ interface ChatState {
   activeSessionId: string | null;
   isLoading: boolean;
   sidebarOpen: boolean;
+  dbLoaded: boolean;
 }
 
 interface ChatActions {
-  createSession: () => string;
+  createSession: (userId?: string) => string;
   deleteSession: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => void;
   setActiveSession: (sessionId: string | null) => void;
@@ -56,6 +59,10 @@ interface ChatActions {
   setSidebarOpen: (open: boolean) => void;
   getSessionMessages: (sessionId: string) => ChatMessage[];
   clearSession: (sessionId: string) => void;
+  loadSessionsFromDb: (userId: string) => Promise<void>;
+  loadMessagesFromDb: (sessionId: string) => Promise<void>;
+  saveMessageToDb: (message: ChatMessage, userId: string) => Promise<void>;
+  saveSessionToDb: (session: ChatSession, userId: string) => Promise<void>;
 }
 
 // ============================================================================
@@ -86,23 +93,32 @@ export const useChatStore = create<ChatState & ChatActions>()(
       activeSessionId: null,
       isLoading: false,
       sidebarOpen: true,
+      dbLoaded: false,
 
       // Actions
-      createSession: () => {
+      createSession: (userId?: string) => {
         const id = generateId();
         const now = new Date();
+        const session: ChatSession = {
+          id,
+          title: 'New Chat',
+          createdAt: now,
+          updatedAt: now,
+          preview: '',
+          messageCount: 0,
+          userId,
+        };
         set((state) => {
-          state.sessions.unshift({
-            id,
-            title: 'New Chat',
-            createdAt: now,
-            updatedAt: now,
-            preview: '',
-            messageCount: 0,
-          });
+          state.sessions.unshift(session);
           state.messages[id] = [];
           state.activeSessionId = id;
         });
+        // Fire-and-forget DB save
+        if (userId) {
+          get()
+            .saveSessionToDb(session, userId)
+            .catch(() => {});
+        }
         return id;
       },
 
@@ -232,6 +248,119 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
         });
       },
+
+      // ========================================================================
+      // Supabase Persistence
+      // ========================================================================
+
+      loadSessionsFromDb: async (userId: string) => {
+        try {
+          const { data, error } = await (supabase as any)
+            .from('vibe_sessions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false });
+
+          if (error) {
+            console.error('[ChatStore] Failed to load sessions from DB:', error);
+            return;
+          }
+
+          if (data && data.length > 0) {
+            const dbSessions: ChatSession[] = data.map((row: any) => ({
+              id: row.id,
+              title: row.title || 'Untitled',
+              createdAt: new Date(row.created_at),
+              updatedAt: new Date(row.updated_at),
+              preview: row.preview || '',
+              messageCount: row.message_count || 0,
+              userId: row.user_id,
+            }));
+
+            set((state) => {
+              // Merge: DB sessions take priority, keep any local-only sessions
+              const dbIds = new Set(dbSessions.map((s) => s.id));
+              const localOnly = state.sessions.filter((s) => !dbIds.has(s.id));
+              state.sessions = [...dbSessions, ...localOnly];
+              state.dbLoaded = true;
+            });
+          } else {
+            set((state) => {
+              state.dbLoaded = true;
+            });
+          }
+        } catch (err) {
+          console.error('[ChatStore] DB session load error:', err);
+          set((state) => {
+            state.dbLoaded = true;
+          });
+        }
+      },
+
+      loadMessagesFromDb: async (sessionId: string) => {
+        try {
+          const { data, error } = await (supabase as any)
+            .from('vibe_messages')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('timestamp', { ascending: true });
+
+          if (error) {
+            console.error('[ChatStore] Failed to load messages from DB:', error);
+            return;
+          }
+
+          if (data && data.length > 0) {
+            const dbMessages: ChatMessage[] = data.map((row: any) => ({
+              id: row.id,
+              sessionId: row.session_id,
+              role: row.role as 'user' | 'assistant',
+              content: row.content || '',
+              createdAt: new Date(row.timestamp || row.created_at),
+              isStreaming: false,
+              metadata: row.metadata || undefined,
+            }));
+
+            set((state) => {
+              state.messages[sessionId] = dbMessages;
+            });
+          }
+        } catch (err) {
+          console.error('[ChatStore] DB message load error:', err);
+        }
+      },
+
+      saveMessageToDb: async (message: ChatMessage, userId: string) => {
+        try {
+          await (supabase as any).from('vibe_messages').insert({
+            id: message.id,
+            session_id: message.sessionId,
+            user_id: userId,
+            role: message.role,
+            content: message.content,
+            metadata: message.metadata || {},
+            is_streaming: false,
+          });
+        } catch (err) {
+          console.error('[ChatStore] Failed to save message to DB:', err);
+        }
+      },
+
+      saveSessionToDb: async (session: ChatSession, userId: string) => {
+        try {
+          await (supabase as any).from('vibe_sessions').upsert({
+            id: session.id,
+            user_id: userId,
+            title: session.title,
+            preview: session.preview,
+            message_count: session.messageCount,
+            created_at: session.createdAt.toISOString(),
+            updated_at: session.updatedAt.toISOString(),
+          });
+        } catch (err) {
+          console.error('[ChatStore] Failed to save session to DB:', err);
+        }
+      },
     })),
     {
       name: 'agi-chat-store',
@@ -240,6 +369,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
         sessions: state.sessions,
         messages: state.messages,
         sidebarOpen: state.sidebarOpen,
+        dbLoaded: false, // Always reset on rehydration so we re-fetch
       }),
     },
   ),

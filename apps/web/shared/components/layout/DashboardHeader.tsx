@@ -24,7 +24,9 @@ import {
   Sun,
   ChevronDown,
   Settings,
+  Check,
 } from 'lucide-react';
+import { useModelStore, AVAILABLE_MODELS } from '@shared/stores/model-store';
 
 interface DashboardHeaderProps {
   onMenuClick?: () => void;
@@ -34,7 +36,9 @@ interface DashboardHeaderProps {
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, className }) => {
   const { setTheme, actualTheme } = useThemeContext();
   const { user, logout } = useAuthStore();
+  const { selectedModelId, setSelectedModelId, getSelectedModel } = useModelStore();
   const router = useRouter();
+  const selectedModel = getSelectedModel();
 
   const handleLogout = async () => {
     try {
@@ -69,14 +73,35 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>
 
-          {/* Model Selector Placeholder */}
-          <button
-            className="hidden items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.08] sm:flex"
-            aria-label="Select model"
-          >
-            GPT-4o
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+          {/* Model Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="hidden items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.08] sm:flex"
+                aria-label="Select model"
+              >
+                {selectedModel.name}
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {AVAILABLE_MODELS.map((model) => (
+                <DropdownMenuItem
+                  key={model.id}
+                  onClick={() => setSelectedModelId(model.id)}
+                  className="cursor-pointer justify-between gap-2"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{model.name}</span>
+                    <span className="text-xs text-muted-foreground">{model.provider}</span>
+                  </div>
+                  {selectedModelId === model.id && (
+                    <Check className="h-4 w-4 text-primary" aria-hidden="true" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Right: Theme toggle + User dropdown */}
@@ -121,7 +146,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/settings/profile')}
+                onClick={() => router.push('/dashboard/settings')}
                 className="cursor-pointer gap-2"
               >
                 <UserIcon className="h-4 w-4" aria-hidden="true" />
