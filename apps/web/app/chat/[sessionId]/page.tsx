@@ -202,15 +202,15 @@ export default function ChatSessionPage() {
   );
 
   if (!mounted) {
-    return <div className="flex h-screen items-center justify-center bg-background" />;
+    return <div className="flex h-full items-center justify-center bg-background" />;
   }
 
   const greeting = getGreetingTime();
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
+    <div className="relative flex h-full bg-background">
+      {/* Chat conversation sidebar */}
       <div
         className={cn(
           'border-r border-border/30 bg-card/30 backdrop-blur-sm transition-all duration-300 ease-in-out',
@@ -233,7 +233,7 @@ export default function ChatSessionPage() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed left-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-lg bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
           aria-label="Open sidebar"
         >
           <Menu className="h-4 w-4" />
