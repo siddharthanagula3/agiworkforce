@@ -264,6 +264,7 @@ export class APIClient {
       throw new APIException({
         message: data.message || `HTTP ${response.status}: ${response.statusText}`,
         status: response.status,
+
         details: (data.errors || data) as any,
       });
     }

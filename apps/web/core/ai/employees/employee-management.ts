@@ -1,6 +1,9 @@
 import { supabase } from '@shared/lib/supabase-client';
 
-const db = supabase as any;
+// Use type assertion to access tables not in generated schema
+const db = supabase as unknown as {
+  from: (table: string) => ReturnType<typeof supabase.from>;
+};
 
 // Local type definitions for the employee management service
 type EmployeeCategory = string;
@@ -45,7 +48,7 @@ interface AIEmployeeSystemConfig {
   escalationRules: unknown[];
 }
 
-type AIEmployee = Record<string, any>;
+type AIEmployee = Record<string, unknown>;
 
 class AIEmployeeService {
   private config: AIEmployeeSystemConfig = {
@@ -199,28 +202,27 @@ class AIEmployeeService {
       if (error) throw error;
 
       // Filter by additional requirements
-      let filteredEmployees = (data || []) as any[];
+      let filteredEmployees = (data || []) as AIEmployee[];
 
       if (requirements?.skills && requirements.skills.length > 0) {
-        filteredEmployees = filteredEmployees.filter((emp: any) =>
-          requirements.skills!.some(
+        filteredEmployees = filteredEmployees.filter((emp) => {
+          const caps = emp.capabilities as Record<string, string[]> | undefined;
+          return requirements.skills!.some(
             (skill) =>
-              emp.capabilities?.core_skills?.includes(skill) ||
-              emp.capabilities?.technical_skills?.includes(skill),
-          ),
-        );
+              caps?.core_skills?.includes(skill) || caps?.technical_skills?.includes(skill),
+          );
+        });
       }
 
       if (requirements?.level) {
-        filteredEmployees = filteredEmployees.filter(
-          (emp: any) => emp.level === requirements.level,
-        );
+        filteredEmployees = filteredEmployees.filter((emp) => emp.level === requirements.level);
       }
 
       if (requirements?.maxCost) {
-        filteredEmployees = filteredEmployees.filter(
-          (emp: any) => emp.cost?.hourly_rate <= requirements.maxCost!,
-        );
+        filteredEmployees = filteredEmployees.filter((emp) => {
+          const cost = emp.cost as Record<string, number> | undefined;
+          return (cost?.hourly_rate ?? 0) <= requirements.maxCost!;
+        });
       }
 
       return { data: filteredEmployees, error: null };
@@ -283,7 +285,7 @@ class AIEmployeeService {
         .maybeSingle();
 
       if (error) throw error;
-      return { data: (data as any)?.performance, error: null };
+      return { data: (data as Record<string, unknown> | null)?.performance, error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -335,7 +337,7 @@ class AIEmployeeService {
         .maybeSingle();
 
       if (error) throw error;
-      return { data: (data as any)?.tools || [], error: null };
+      return { data: (data as Record<string, unknown> | null)?.tools || [], error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -376,7 +378,7 @@ class AIEmployeeService {
         .maybeSingle();
 
       if (error) throw error;
-      return { data: (data as any)?.workflows || [], error: null };
+      return { data: (data as Record<string, unknown> | null)?.workflows || [], error: null };
     } catch (error: unknown) {
       // Updated: Jan 15th 2026 - Fixed missing error type check
       const message = error instanceof Error ? error.message : String(error);
@@ -419,15 +421,18 @@ class AIEmployeeService {
       if (error) throw error;
 
       // Filter employees by skills match
-      const matchedEmployees = ((data || []) as any[]).filter((emp: any) => {
+      const matchedEmployees = ((data || []) as AIEmployee[]).filter((emp) => {
+        const caps = emp.capabilities as Record<string, string[]> | undefined;
         const allSkills = [
-          ...(emp.capabilities?.core_skills || []),
-          ...(emp.capabilities?.technical_skills || []),
-          ...(emp.capabilities?.specializations || []),
+          ...(caps?.core_skills || []),
+          ...(caps?.technical_skills || []),
+          ...(caps?.specializations || []),
         ];
 
         return skills.some((skill) =>
-          allSkills.some((empSkill) => empSkill.toLowerCase().includes(skill.toLowerCase())),
+          allSkills.some((empSkill: string) =>
+            empSkill.toLowerCase().includes(skill.toLowerCase()),
+          ),
         );
       });
 
@@ -472,15 +477,15 @@ class AIEmployeeService {
 
       if (assignError) throw assignError;
 
-      const emps = (employees || []) as any[];
-      const assigns = (assignments || []) as any[];
+      const emps = (employees || []) as AIEmployee[];
+      const assigns = (assignments || []) as AIEmployee[];
 
       const stats = {
         totalEmployees: emps.length,
-        availableEmployees: emps.filter((emp: any) => emp.status === 'available').length,
-        workingEmployees: emps.filter((emp: any) => emp.status === 'working').length,
-        activeAssignments: assigns.filter((assign: any) => assign.status === 'in_progress').length,
-        completedAssignments: assigns.filter((assign: any) => assign.status === 'completed').length,
+        availableEmployees: emps.filter((emp) => emp.status === 'available').length,
+        workingEmployees: emps.filter((emp) => emp.status === 'working').length,
+        activeAssignments: assigns.filter((assign) => assign.status === 'in_progress').length,
+        completedAssignments: assigns.filter((assign) => assign.status === 'completed').length,
         categories: this.groupByCategory(employees || []),
         levels: this.groupByLevel(employees || []),
       };
@@ -495,14 +500,16 @@ class AIEmployeeService {
 
   private groupByCategory(employees: AIEmployee[]) {
     return employees.reduce((acc: Record<string, number>, emp: AIEmployee) => {
-      acc[emp.category] = (acc[emp.category] || 0) + 1;
+      const category = String(emp.category ?? 'unknown');
+      acc[category] = (acc[category] || 0) + 1;
       return acc;
     }, {});
   }
 
   private groupByLevel(employees: AIEmployee[]) {
     return employees.reduce((acc: Record<string, number>, emp: AIEmployee) => {
-      acc[emp.level] = (acc[emp.level] || 0) + 1;
+      const level = String(emp.level ?? 'unknown');
+      acc[level] = (acc[level] || 0) + 1;
       return acc;
     }, {});
   }

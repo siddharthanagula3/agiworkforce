@@ -158,6 +158,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
         (s: unknown): s is { url: string } =>
           s !== null && typeof s === 'object' && isValidUrl((s as Record<string, unknown>).url),
       )
+
       .map((s: any) => s.url);
 
     return {
@@ -230,6 +231,7 @@ export async function searchWithGoogle(
           (isValidUrl((item as Record<string, unknown>).link) ||
             isValidUrl((item as Record<string, unknown>).url)),
       )
+
       .map((item: any) => {
         const url = item.link || item.url || '';
         const hostname = safeGetHostname(url);

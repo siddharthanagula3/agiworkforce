@@ -336,6 +336,7 @@ export class WebSocketClient {
   }
 
   // Event handlers
+
   on(event: keyof WebSocketEventHandlers, handler: any): void {
     (this.handlers as Record<string, unknown>)[event] = handler;
   }

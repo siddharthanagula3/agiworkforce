@@ -226,6 +226,7 @@ export const useVibeChatStore = create<VibeChatState>()(
 
         // First-pass duplicate check using fingerprint cache (fast, outside set())
         // This catches most duplicates without needing to enter the Immer transaction
+
         if (isDuplicateMessage((message as any).sender || message.role, message.content)) {
           return; // Skip duplicate
         }

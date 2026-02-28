@@ -130,11 +130,13 @@ export default function SupportPage() {
   ];
 
   return (
-    <div className="animate-fade-in-up space-y-8 p-6">
+    <div className="animate-fade-in-up space-y-6 px-4 py-4 sm:space-y-8 sm:p-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Help & Support</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Help & Support
+          </h1>
           <Badge variant="outline" className="border-blue-500/50 text-blue-400">
             <HelpCircle className="mr-1 h-3 w-3" />
             Support Center

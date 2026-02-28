@@ -218,7 +218,7 @@ declare module 'dompurify' {
   export { Config };
   const DOMPurify: {
     sanitize(html: string, config?: Config): string;
-    addHook(hook: string, cb: (...args: any[]) => void): void;
+    addHook(hook: string, cb: (...args: unknown[]) => void): void;
     removeHook(hook: string): void;
     removeAllHooks(): void;
     isSupported: boolean;
@@ -227,33 +227,57 @@ declare module 'dompurify' {
 }
 
 declare module '@stripe/stripe-js' {
+  export interface StripeElement {
+    mount(domElement: string | HTMLElement): void;
+    unmount(): void;
+    destroy(): void;
+    on(event: string, handler: (event: unknown) => void): void;
+    off(event: string, handler?: (event: unknown) => void): void;
+    update(options?: Record<string, unknown>): void;
+  }
+  export interface StripePaymentResult {
+    error?: { type: string; message: string; code?: string };
+    paymentIntent?: { id: string; status: string; client_secret: string };
+    setupIntent?: { id: string; status: string; client_secret: string };
+  }
   export interface Stripe {
-    elements(options?: any): StripeElements;
-    confirmPayment(options: any): Promise<any>;
-    confirmSetup(options: any): Promise<any>;
-    createPaymentMethod(options: any): Promise<any>;
-    redirectToCheckout(options: any): Promise<any>;
+    elements(options?: StripeElementsOptions): StripeElements;
+    confirmPayment(options: Record<string, unknown>): Promise<StripePaymentResult>;
+    confirmSetup(options: Record<string, unknown>): Promise<StripePaymentResult>;
+    createPaymentMethod(
+      options: Record<string, unknown>,
+    ): Promise<{ error?: { message: string }; paymentMethod?: { id: string; type: string } }>;
+    redirectToCheckout(options: Record<string, unknown>): Promise<{ error?: { message: string } }>;
   }
   export interface StripeElements {
-    create(type: string, options?: any): any;
-    getElement(type: string): any;
-    submit(): Promise<any>;
+    create(type: string, options?: Record<string, unknown>): StripeElement;
+    getElement(type: string): StripeElement | null;
+    submit(): Promise<{ error?: { message: string } }>;
   }
   export interface StripeElementsOptions {
     clientSecret?: string;
-    appearance?: any;
+    appearance?: Record<string, unknown>;
     [key: string]: unknown;
   }
-  export function loadStripe(publishableKey: string, options?: any): Promise<Stripe | null>;
+  export function loadStripe(
+    publishableKey: string,
+    options?: Record<string, unknown>,
+  ): Promise<Stripe | null>;
 }
 
 declare module '@stripe/react-stripe-js' {
   import * as React from 'react';
-  export function useStripe(): any;
-  export function useElements(): any;
-  export const Elements: React.FC<React.PropsWithChildren<{ stripe: any; options?: any }>>;
-  export const PaymentElement: React.FC<any>;
-  export const CardElement: React.FC<any>;
+  import type { Stripe, StripeElements, StripeElementsOptions } from '@stripe/stripe-js';
+  export function useStripe(): Stripe | null;
+  export function useElements(): StripeElements | null;
+  export const Elements: React.FC<
+    React.PropsWithChildren<{
+      stripe: Stripe | Promise<Stripe | null> | null;
+      options?: StripeElementsOptions;
+    }>
+  >;
+  export const PaymentElement: React.FC<Record<string, unknown>>;
+  export const CardElement: React.FC<Record<string, unknown>>;
 }
 
 declare module 'next-themes' {

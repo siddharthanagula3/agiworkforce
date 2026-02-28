@@ -1,6 +1,13 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { captureError } from '@shared/lib/sentry';
 
+interface DBUsageRow {
+  tokens_used: number;
+  cost: number;
+  agent_type: string;
+  timestamp: string;
+}
+
 export interface APICallRecord {
   userId: string;
   agentType: string;
@@ -53,7 +60,8 @@ export class UsageTracker {
       };
 
       // Store in database
-      const { error } = await (supabase as any).from('api_usage').insert({
+
+      const { error } = await (supabase.from('api_usage' as never) as any).insert({
         user_id: call.userId,
         timestamp: call.timestamp.toISOString(),
         agent_type: call.agentType,
@@ -96,8 +104,7 @@ export class UsageTracker {
 
   async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
     try {
-      const { data, error } = await (supabase as any)
-        .from('api_usage')
+      const { data, error } = await (supabase.from('api_usage' as never) as any)
         .select('*')
         .eq('user_id', userId)
         .gte('timestamp', period.start.toISOString())
@@ -108,12 +115,12 @@ export class UsageTracker {
         throw error;
       }
 
-      const usage = (data || []) as any[];
+      const usage = (data || []) as DBUsageRow[];
 
       const summary: UsageSummary = {
         totalCalls: usage.length,
-        totalTokens: usage.reduce((sum: number, r: any) => sum + (r.tokens_used || 0), 0),
-        totalCost: usage.reduce((sum: number, r: any) => sum + (r.cost || 0), 0),
+        totalTokens: usage.reduce((sum: number, r: DBUsageRow) => sum + (r.tokens_used || 0), 0),
+        totalCost: usage.reduce((sum: number, r: DBUsageRow) => sum + (r.cost || 0), 0),
         byAgent: this.groupByAgent(usage),
         byDay: this.groupByDay(usage),
       };
@@ -125,7 +132,7 @@ export class UsageTracker {
   }
 
   private groupByAgent(
-    usage: any[],
+    usage: DBUsageRow[],
   ): Record<string, { calls: number; tokens: number; cost: number }> {
     const grouped: Record<string, { calls: number; tokens: number; cost: number }> = {};
 
@@ -145,7 +152,7 @@ export class UsageTracker {
   }
 
   private groupByDay(
-    usage: any[],
+    usage: DBUsageRow[],
   ): Record<string, { calls: number; tokens: number; cost: number }> {
     const grouped: Record<string, { calls: number; tokens: number; cost: number }> = {};
 

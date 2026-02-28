@@ -111,12 +111,15 @@ export async function addTokensToUserBalance(
     // Use the add_user_tokens RPC function which handles everything atomically
     // This ensures the user_token_balances record exists (via get_or_create_token_balance)
     // and properly logs the transaction
-    const { data: newBalance, error: rpcError } = await (supabase as any).rpc('add_user_tokens', {
-      p_user_id: userId,
-      p_token_count: tokens,
-      p_transaction_type: 'purchase',
-      p_description: `Token pack purchase: ${transactionId}`,
-    });
+    const { data: newBalance, error: rpcError } = await supabase.rpc(
+      'add_user_tokens' as never,
+      {
+        p_user_id: userId,
+        p_token_count: tokens,
+        p_transaction_type: 'purchase',
+        p_description: `Token pack purchase: ${transactionId}`,
+      } as never,
+    );
 
     if (rpcError) {
       console.error('[Add Tokens] RPC error:', rpcError);
@@ -129,8 +132,10 @@ export async function addTokensToUserBalance(
       console.log('[Add Tokens] Attempting fallback direct update...');
 
       // Get current balance from user_token_balances
-      const { data: balanceData, error: fetchError } = await (supabase as any)
-        .from('user_token_balances')
+
+      const { data: balanceData, error: fetchError } = await (
+        supabase.from('user_token_balances' as never) as any
+      )
         .select('current_balance')
         .eq('user_id', userId)
         .maybeSingle();
@@ -149,8 +154,8 @@ export async function addTokensToUserBalance(
 
       if (balanceData) {
         // Update existing record
-        const { error: updateError } = await (supabase as any)
-          .from('user_token_balances')
+
+        const { error: updateError } = await (supabase.from('user_token_balances' as never) as any)
           .update({
             current_balance: updatedBalance,
             updated_at: new Date().toISOString(),
@@ -167,7 +172,10 @@ export async function addTokensToUserBalance(
         }
       } else {
         // Create new record with default monthly allowance
-        const { error: insertError } = await (supabase as any).from('user_token_balances').insert({
+
+        const { error: insertError } = await (
+          supabase.from('user_token_balances' as never) as any
+        ).insert({
           user_id: userId,
           current_balance: tokens,
           monthly_allowance: 1000000, // Default free tier
@@ -186,7 +194,10 @@ export async function addTokensToUserBalance(
       }
 
       // Log transaction
-      const { error: logError } = await (supabase as any).from('token_transactions').insert({
+
+      const { error: logError } = await (
+        supabase.from('token_transactions' as never) as any
+      ).insert({
         user_id: userId,
         tokens,
         transaction_type: 'purchase',
@@ -237,20 +248,20 @@ export async function addTokensToUserBalance(
 export async function getUserTokenBalance(userId: string): Promise<number> {
   try {
     // Try using the get_or_create_token_balance RPC function first
-    const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
-      'get_or_create_token_balance',
+    const { data: rpcData, error: rpcError } = await supabase.rpc(
+      'get_or_create_token_balance' as never,
       {
         p_user_id: userId,
-      },
+      } as never,
     );
 
-    if (!rpcError && rpcData && (rpcData as any[]).length > 0) {
-      return (rpcData as any[])[0].current_balance || 0;
+    if (!rpcError && rpcData && (rpcData as Array<Record<string, unknown>>).length > 0) {
+      return ((rpcData as Array<Record<string, unknown>>)[0].current_balance as number) || 0;
     }
 
     // Fallback: Query user_token_balances table directly
-    const { data, error } = await (supabase as any)
-      .from('user_token_balances')
+
+    const { data, error } = await (supabase.from('user_token_balances' as never) as any)
       .select('current_balance')
       .eq('user_id', userId)
       .maybeSingle();
@@ -265,7 +276,7 @@ export async function getUserTokenBalance(userId: string): Promise<number> {
       return 0;
     }
 
-    return (data as any)?.current_balance || 0;
+    return ((data as Record<string, unknown> | null)?.current_balance as number) || 0;
   } catch (error) {
     console.error('[Get Token Balance] Error:', error);
     captureError(error as Error, {

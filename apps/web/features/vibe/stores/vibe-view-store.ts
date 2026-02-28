@@ -383,6 +383,7 @@ export const useVibeViewStore: any = create<VibeViewStore>()(
         getFileMetadata: (path): FileMetadata | undefined => {
           // Cannot use get() inside immer middleware
           // This function should be called from outside the store
+
           const state: VibeViewStore = (useVibeViewStore as any).getState();
           return state.fileMetadata[path];
         },
