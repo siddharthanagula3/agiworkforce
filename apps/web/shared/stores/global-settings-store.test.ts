@@ -7,7 +7,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAppStore } from './global-settings-store';
-import type { AppSettings, AppState } from './global-settings-store';
 
 // Counter for unique IDs
 let idCounter = 0;

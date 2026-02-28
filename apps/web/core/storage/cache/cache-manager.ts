@@ -109,7 +109,11 @@ class CacheService {
    * Set value in cache
    */
   async set<T = unknown>(key: string, value: T, options: CacheOptions = {}): Promise<void> {
-    const { ttl = this.DEFAULT_TTL, persistent = false, refreshOnAccess = false } = options;
+    const {
+      ttl = this.DEFAULT_TTL,
+      persistent = false,
+      refreshOnAccess: _refreshOnAccess = false,
+    } = options;
 
     const expiresAt = new Date(Date.now() + ttl);
     const entry: CacheEntry<T> = {

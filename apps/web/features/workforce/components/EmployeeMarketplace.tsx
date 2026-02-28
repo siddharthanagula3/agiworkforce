@@ -31,45 +31,21 @@ import {
   Clock,
   DollarSign,
   Users,
-  Brain,
   Code,
   BarChart3,
   MessageSquare,
-  Zap,
-  Globe,
-  Shield,
-  Award,
   Briefcase,
   Target,
-  TrendingUp,
   Heart,
   Eye,
   ShoppingCart,
   CheckCircle,
-  AlertCircle,
   Loader2,
   Sparkles,
-  Bot,
-  Cpu,
-  Database,
   FileText,
-  Image,
-  Music,
-  Video,
-  Mic,
-  Camera,
-  Calculator,
-  PenTool,
   Palette,
   Headphones,
-  BookOpen,
-  GraduationCap,
-  Building,
   MapPin,
-  Calendar,
-  Phone,
-  Mail,
-  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
@@ -223,7 +199,7 @@ export const AIEmployeeMarketplace: React.FC<AIEmployeeMarketplaceProps> = ({
   const [selectedEmployee, setSelectedEmployee] = useState<AIEmployee | null>(null);
   const [showEmployeeDetails, setShowEmployeeDetails] = useState(false);
   const [showHireDialog, setShowHireDialog] = useState(false);
-  const [filters, setFilters] = useState<Partial<EmployeeFilters>>({
+  const [filters, _setFilters] = useState<Partial<EmployeeFilters>>({
     minRating: 0,
     maxHourlyRate: 1000,
     skills: [],
@@ -468,7 +444,7 @@ export const AIEmployeeMarketplace: React.FC<AIEmployeeMarketplaceProps> = ({
     });
   }, []);
 
-  const getStatusColor = (status: AIEmployee['status']) => {
+  const _getStatusColor = (status: AIEmployee['status']) => {
     switch (status) {
       case 'available':
         return 'bg-green-500';
@@ -483,7 +459,7 @@ export const AIEmployeeMarketplace: React.FC<AIEmployeeMarketplaceProps> = ({
     }
   };
 
-  const getStatusText = (status: AIEmployee['status']) => {
+  const _getStatusText = (status: AIEmployee['status']) => {
     switch (status) {
       case 'available':
         return 'Available';
@@ -498,7 +474,7 @@ export const AIEmployeeMarketplace: React.FC<AIEmployeeMarketplaceProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
+  const _formatCurrency = (amount: number, currency: string = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
@@ -1166,12 +1142,7 @@ interface EmployeeDetailsViewProps {
   onClose: () => void;
 }
 
-const EmployeeDetailsView: React.FC<EmployeeDetailsViewProps> = ({
-  employee,
-  isHired,
-  onHire,
-  onClose,
-}) => {
+const EmployeeDetailsView: React.FC<EmployeeDetailsViewProps> = ({ employee, isHired, onHire }) => {
   const getStatusColor = (status: AIEmployee['status']) => {
     switch (status) {
       case 'available':
@@ -1518,7 +1489,7 @@ const HireConfirmationDialog: React.FC<HireConfirmationDialogProps> = ({
       <DialogHeader>
         <DialogTitle className="text-white">Hire {employee.name}</DialogTitle>
         <DialogDescription className="text-slate-400">
-          You're about to hire this AI employee for your workforce
+          You&apos;re about to hire this AI employee for your workforce
         </DialogDescription>
       </DialogHeader>
 

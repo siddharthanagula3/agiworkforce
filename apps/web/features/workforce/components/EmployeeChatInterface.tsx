@@ -38,11 +38,7 @@ interface AIEmployeeChatProps {
   onToolExecution?: (toolId: string, result: ToolResultLocal) => void;
 }
 
-export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({
-  employee,
-  userId,
-  onToolExecution,
-}) => {
+export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({ employee, userId }) => {
   const [messages, setMessages] = useState<ChatMessageLocal[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);

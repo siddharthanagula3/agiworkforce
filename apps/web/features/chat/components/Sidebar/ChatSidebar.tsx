@@ -211,7 +211,7 @@ const ChatSidebarContent = memo(function ChatSidebarContent({
   );
 
   // Memoize session count display
-  const sessionCountText = useMemo(
+  const _sessionCountText = useMemo(
     () => `${sessions.length} chat${sessions.length !== 1 ? 's' : ''}`,
     [sessions.length],
   );

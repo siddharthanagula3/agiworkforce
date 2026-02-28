@@ -28,18 +28,7 @@ import { Label } from '@shared/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
-import {
-  Folder,
-  FolderOpen,
-  Plus,
-  MoreVertical,
-  Edit,
-  Trash2,
-  FolderPlus,
-  ChevronRight,
-  ChevronDown,
-  Loader2,
-} from 'lucide-react';
+import { Folder, FolderOpen, MoreVertical, Edit, Trash2, FolderPlus, Loader2 } from 'lucide-react';
 import { folderManagementService, type ChatFolder } from '../../services/folder-management-service';
 import { useAuthStore } from '@shared/stores/authentication-store';
 
@@ -64,13 +53,12 @@ const FOLDER_COLORS = [
 export function FolderManagement({
   selectedFolderId,
   onFolderSelect,
-  onMoveSession,
   className,
 }: FolderManagementProps) {
   const { user } = useAuthStore();
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [_expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<ChatFolder | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<ChatFolder | null>(null);
@@ -198,7 +186,7 @@ export function FolderManagement({
     }
   };
 
-  const toggleFolderExpand = (folderId: string) => {
+  const _toggleFolderExpand = (folderId: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
@@ -452,11 +440,12 @@ export function FolderManagement({
           <DialogHeader>
             <DialogTitle>Delete Folder</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{deletingFolder?.name}"?
+              Are you sure you want to delete &quot;{deletingFolder?.name}&quot;?
               {deletingFolder?.sessionCount && deletingFolder.sessionCount > 0 ? (
                 <span className="mt-2 block text-yellow-600 dark:text-yellow-500">
                   This folder contains {deletingFolder.sessionCount} chat session
-                  {deletingFolder.sessionCount !== 1 ? 's' : ''}. They will be moved to "All Chats".
+                  {deletingFolder.sessionCount !== 1 ? 's' : ''}. They will be moved to &quot;All
+                  Chats&quot;.
                 </span>
               ) : (
                 <span className="mt-2 block">This folder is empty.</span>

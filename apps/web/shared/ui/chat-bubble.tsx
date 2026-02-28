@@ -15,7 +15,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({
   variant = 'received',
-  layout = 'default',
+  layout: _layout = 'default',
   className,
   children,
 }: ChatBubbleProps) {

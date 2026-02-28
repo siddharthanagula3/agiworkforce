@@ -11,12 +11,9 @@ import {
   Building2,
   Zap,
   Loader2,
-  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Textarea } from '@shared/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { Particles } from '@shared/ui/particles';
 import { submitContactForm } from '@core/integrations/marketing-endpoints';
 import { toast } from 'sonner';
@@ -183,7 +180,7 @@ const ContactSalesPage: React.FC = () => {
             </div>
             <h1 className="mb-4 text-4xl font-bold">Thank You!</h1>
             <p className="mb-8 text-xl text-muted-foreground">
-              We've received your message. Our sales team will contact you within 24 hours.
+              We&apos;ve received your message. Our sales team will contact you within 24 hours.
             </p>
             <Button onClick={() => (window.location.href = '/')} size="lg">
               Return to Home
@@ -239,7 +236,7 @@ const ContactSalesPage: React.FC = () => {
             className="mx-auto max-w-3xl text-center"
           >
             <h1 className="mb-6 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-3xl font-bold text-transparent sm:text-4xl md:text-5xl lg:text-6xl">
-              Let's Talk About Your AI Automation Needs
+              Let&apos;s Talk About Your AI Automation Needs
             </h1>
             <p className="text-xl text-muted-foreground">
               Speak with our sales team to learn how AGI Workforce can transform your business

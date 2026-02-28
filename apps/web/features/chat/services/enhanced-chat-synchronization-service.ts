@@ -14,11 +14,7 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { useMultiAgentChatStore } from '@shared/stores/multi-agent-chat-store';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type {
-  ChatMessage,
-  MultiAgentConversation,
-  SyncConflict,
-} from '@shared/stores/multi-agent-chat-store';
+import type { ChatMessage, MultiAgentConversation } from '@shared/stores/multi-agent-chat-store';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -285,7 +281,7 @@ export class EnhancedChatSynchronizationService {
   /**
    * Handle remote update (message updated on server)
    */
-  private handleRemoteUpdate(remoteData: DatabaseChatMessage, oldData: DatabaseChatMessage): void {
+  private handleRemoteUpdate(remoteData: DatabaseChatMessage, _oldData: DatabaseChatMessage): void {
     const store = useMultiAgentChatStore.getState();
     const conversation = store.conversations[remoteData.conversation_id];
 
@@ -399,7 +395,7 @@ export class EnhancedChatSynchronizationService {
     store.setSyncing(true);
 
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('web_messages')
         .insert(this.transformLocalMessage(message) as any)
         .select()

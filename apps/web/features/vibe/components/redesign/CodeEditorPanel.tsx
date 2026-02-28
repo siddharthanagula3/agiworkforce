@@ -202,7 +202,7 @@ function CodeEditorPanelContent() {
     }
   };
 
-  const handleEditorChange = useCallback(
+  const _handleEditorChange = useCallback(
     (value: string | undefined) => {
       if (value !== undefined && currentFilePath) {
         setOpenFiles((prev) => {
@@ -587,7 +587,7 @@ function CodeEditorPanelContent() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{deleteDialog.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>Delete &quot;{deleteDialog.name}&quot;?</AlertDialogTitle>
             <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

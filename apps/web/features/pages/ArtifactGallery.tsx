@@ -119,7 +119,7 @@ const ArtifactGalleryPage: React.FC = () => {
 
         setArtifacts(mappedArtifacts);
       }
-    } catch (error) {
+    } catch (_error) {
       // FIXED: Show empty state on error, not demo data
       setArtifacts([]);
     } finally {
@@ -326,7 +326,7 @@ const ArtifactGalleryPage: React.FC = () => {
         <div className="mt-12 rounded-lg border border-primary/30 bg-primary/5 p-6 text-center">
           <h3 className="mb-2 text-lg font-semibold">✨ Gallery Coming Soon</h3>
           <p className="text-sm text-muted-foreground">
-            The Artifact Gallery is currently in development. Soon you'll be able to share your
+            The Artifact Gallery is currently in development. Soon you&apos;ll be able to share your
             creations with the community and discover amazing artifacts from other users!
           </p>
         </div>
@@ -336,7 +336,7 @@ const ArtifactGalleryPage: React.FC = () => {
 };
 
 // Demo data for development
-const DEMO_ARTIFACTS: PublicArtifact[] = [
+const _DEMO_ARTIFACTS: PublicArtifact[] = [
   {
     id: '1',
     title: 'Interactive Button Component',

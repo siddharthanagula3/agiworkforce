@@ -27,7 +27,6 @@ interface EmployeeWorkStreamProps {
 }
 
 export function EmployeeWorkStream({
-  employeeId,
   employeeName,
   employeeAvatar,
   employeeColor,

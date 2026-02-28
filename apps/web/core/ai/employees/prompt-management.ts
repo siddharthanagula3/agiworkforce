@@ -339,7 +339,7 @@ export class SystemPromptsService {
   /**
    * Get system prompt for provider and role
    */
-  getPrompt(provider: string, role?: string, model?: string): SystemPrompt {
+  getPrompt(provider: string, role?: string, _model?: string): SystemPrompt {
     const cacheKey = `${provider}-${role || 'general'}`;
 
     // Check cache first

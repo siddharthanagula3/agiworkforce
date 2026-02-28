@@ -365,7 +365,7 @@ export class NLPProcessor {
   private calculateConfidence(
     intent: IntentType,
     domain: DomainType,
-    complexity: ComplexityLevel,
+    _complexity: ComplexityLevel,
   ): number {
     // Base confidence
     let confidence = 0.7;

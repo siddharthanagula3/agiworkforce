@@ -35,9 +35,7 @@ interface DocumentActionsProps {
   content: string;
   title?: string;
   author?: string;
-  onEnhance?: (
-    enhancement: 'proofread' | 'expand' | 'summarize' | 'restructure'
-  ) => void;
+  onEnhance?: (enhancement: 'proofread' | 'expand' | 'summarize' | 'restructure') => void;
   className?: string;
   variant?: 'default' | 'compact';
 }
@@ -59,7 +57,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success('Copied to clipboard');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to copy to clipboard');
     }
   };
@@ -73,12 +71,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
         author,
       };
 
-      await documentExportService.exportDocument(
-        content,
-        format,
-        filename,
-        options
-      );
+      await documentExportService.exportDocument(content, format, filename, options);
 
       toast.success(`Downloaded as ${format.toUpperCase()}`);
     } catch (error) {
@@ -109,12 +102,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
   if (variant === 'compact') {
     return (
       <div className={cn('flex items-center gap-2', className)}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCopyToClipboard}
-          className="h-8 px-2"
-        >
+        <Button variant="ghost" size="sm" onClick={handleCopyToClipboard} className="h-8 px-2">
           {copied ? (
             <>
               <Check className="mr-1 h-3 w-3" />
@@ -130,12 +118,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={exporting}
-              className="h-8 px-2"
-            >
+            <Button variant="ghost" size="sm" disabled={exporting} className="h-8 px-2">
               <Download className="mr-1 h-3 w-3" />
               Download
             </Button>
@@ -165,16 +148,11 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
     <div
       className={cn(
         'flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2',
-        className
+        className,
       )}
     >
       {/* Copy to Clipboard */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleCopyToClipboard}
-        className="h-8"
-      >
+      <Button variant="outline" size="sm" onClick={handleCopyToClipboard} className="h-8">
         {copied ? (
           <>
             <Check className="mr-2 h-4 w-4" />
@@ -191,12 +169,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
       {/* Export Options */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={exporting}
-            className="h-8"
-          >
+          <Button variant="outline" size="sm" disabled={exporting} className="h-8">
             <Download className="mr-2 h-4 w-4" />
             {exporting ? 'Exporting...' : 'Download'}
           </Button>
@@ -215,18 +188,14 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
             <File className="mr-2 h-4 w-4" />
             <div className="flex flex-col">
               <span>PDF</span>
-              <span className="text-xs text-muted-foreground">
-                Portable document
-              </span>
+              <span className="text-xs text-muted-foreground">Portable document</span>
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleExport('docx')}>
             <FileCode className="mr-2 h-4 w-4" />
             <div className="flex flex-col">
               <span>Word Document</span>
-              <span className="text-xs text-muted-foreground">
-                .docx format
-              </span>
+              <span className="text-xs text-muted-foreground">.docx format</span>
             </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -250,36 +219,28 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
                 <Check className="mr-2 h-4 w-4" />
                 <div className="flex flex-col">
                   <span>Proofread</span>
-                  <span className="text-xs text-muted-foreground">
-                    Fix errors
-                  </span>
+                  <span className="text-xs text-muted-foreground">Fix errors</span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEnhance('expand')}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 <div className="flex flex-col">
                   <span>Expand</span>
-                  <span className="text-xs text-muted-foreground">
-                    Add details
-                  </span>
+                  <span className="text-xs text-muted-foreground">Add details</span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEnhance('summarize')}>
                 <FileText className="mr-2 h-4 w-4" />
                 <div className="flex flex-col">
                   <span>Summarize</span>
-                  <span className="text-xs text-muted-foreground">
-                    Make concise
-                  </span>
+                  <span className="text-xs text-muted-foreground">Make concise</span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEnhance('restructure')}>
                 <Edit className="mr-2 h-4 w-4" />
                 <div className="flex flex-col">
                   <span>Restructure</span>
-                  <span className="text-xs text-muted-foreground">
-                    Better flow
-                  </span>
+                  <span className="text-xs text-muted-foreground">Better flow</span>
                 </div>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -291,12 +252,7 @@ export const DocumentActions: React.FC<DocumentActionsProps> = ({
       {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
         <>
           <div className="h-6 w-px bg-border" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleShare}
-            className="h-8"
-          >
+          <Button variant="outline" size="sm" onClick={handleShare} className="h-8">
             <Share2 className="mr-2 h-4 w-4" />
             Share
           </Button>

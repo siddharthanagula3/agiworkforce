@@ -21,11 +21,8 @@ import {
   useInvalidateBillingQueries,
 } from '@features/billing/hooks/use-billing-queries';
 import {
-  CreditCard,
   DollarSign,
-  Calendar,
   Download,
-  Plus,
   CheckCircle,
   AlertTriangle,
   Loader2,
@@ -34,7 +31,6 @@ import {
   Building,
   Star,
   ArrowRight,
-  Clock,
   FileText,
   Brain,
   Code,
@@ -292,12 +288,12 @@ const BillingPage: React.FC = () => {
     try {
       await refetchBilling();
       toast.success('Billing information refreshed');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to refresh billing information. Please try again.');
     }
   };
 
-  const handleDownloadInvoice = (invoiceId: string) => {
+  const handleDownloadInvoice = (_invoiceId: string) => {
     // In a production environment, this would:
     // 1. Call the backend to get a signed download URL
     // 2. Trigger the download
@@ -603,8 +599,8 @@ const BillingPage: React.FC = () => {
                     <span className="font-medium">Free Tier Active</span>
                   </div>
                   <p className="mt-1 text-sm text-green-600 dark:text-green-500">
-                    You're saving {formatCurrency(billing?.usage.totalCost || 0, 'USD')} with the
-                    free plan!
+                    You&apos;re saving {formatCurrency(billing?.usage.totalCost || 0, 'USD')} with
+                    the free plan!
                   </p>
                 </div>
               </div>
@@ -634,7 +630,7 @@ const BillingPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {billing?.usage.llmUsage.map((llm, index) => {
+              {billing?.usage.llmUsage.map((llm, _index) => {
                 const percentage = (llm.tokens / llm.limit) * 100;
                 const isNearLimit = percentage >= 80;
                 const isAtLimit = percentage >= 100;
@@ -796,7 +792,7 @@ const BillingPage: React.FC = () => {
                             : '⚠️ Warning: 85% Usage Reached'}
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          You've used{' '}
+                          You&apos;ve used{' '}
                           {(
                             ((billing?.usage?.totalTokens ?? 0) /
                               (billing?.usage?.totalLimit ?? 1)) *

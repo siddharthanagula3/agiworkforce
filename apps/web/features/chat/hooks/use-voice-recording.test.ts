@@ -9,11 +9,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type {
-  PermissionStatus,
-  VoiceRecordingState,
-  UseVoiceRecordingReturn,
-} from './use-voice-recording';
+import type { PermissionStatus, VoiceRecordingState } from './use-voice-recording';
 
 // Mock MediaRecorder class for testing
 class MockMediaRecorder {
@@ -27,7 +23,7 @@ class MockMediaRecorder {
     public options?: MediaRecorderOptions,
   ) {}
 
-  start(timeslice?: number) {
+  start(_timeslice?: number) {
     this.state = 'recording';
   }
 

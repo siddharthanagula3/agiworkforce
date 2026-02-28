@@ -216,7 +216,7 @@ const SecurityPage: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
-                  We are committed to protecting your data and privacy. Here's what you need to
+                  We are committed to protecting your data and privacy. Here&apos;s what you need to
                   know:
                 </p>
                 <ul className="list-disc space-y-2 pl-6 text-muted-foreground">

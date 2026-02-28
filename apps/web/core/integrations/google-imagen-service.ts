@@ -233,7 +233,7 @@ export class GoogleImagenService {
           mimeType?: string;
           url?: string;
         },
-        index: number,
+        _index: number,
       ) => ({
         url:
           prediction.url ||

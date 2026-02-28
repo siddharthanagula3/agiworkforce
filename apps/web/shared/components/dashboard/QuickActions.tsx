@@ -6,17 +6,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
-import {
-  Plus,
-  Bot,
-  Users,
-  Workflow,
-  BarChart3,
-  Settings,
-  Zap,
-  FileText,
-  Database,
-} from 'lucide-react';
+import { Bot, Users, Workflow, BarChart3, Settings, Zap, FileText, Database } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 interface QuickAction {

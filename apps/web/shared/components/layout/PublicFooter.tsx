@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { Bot, Sparkles, Mail, MessageSquare, Github, Twitter, Linkedin } from 'lucide-react';
+import { Sparkles, Mail, Github, Twitter, Linkedin } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { motion } from 'framer-motion';
