@@ -44,6 +44,8 @@ const MAIN_NAVIGATION: NavigationItem[] = [
     href: '/dashboard',
     icon: LayoutDashboard,
     description: 'Overview and analytics',
+    badge: 'Beta',
+    badgeVariant: 'default',
   },
   {
     name: 'Company',
@@ -52,16 +54,20 @@ const MAIN_NAVIGATION: NavigationItem[] = [
     description: 'Company overview',
   },
   {
-    name: 'Agents',
+    name: 'AI Workforce',
     href: '/dashboard/agents',
     icon: Users,
-    description: 'Manage AI agents',
+    description: 'Manage AI employees',
+    badge: 'Beta',
+    badgeVariant: 'default',
   },
   {
-    name: 'Hire',
+    name: 'Marketplace',
     href: '/dashboard/hire',
     icon: ShoppingBag,
     description: 'Hire AI employees',
+    badge: 'Beta',
+    badgeVariant: 'default',
   },
 ];
 
@@ -71,6 +77,8 @@ const WORK_NAVIGATION: NavigationItem[] = [
     href: '/chat',
     icon: MessageSquare,
     description: 'AI communication hub',
+    badge: 'Beta',
+    badgeVariant: 'default',
   },
   {
     name: 'VIBE',
