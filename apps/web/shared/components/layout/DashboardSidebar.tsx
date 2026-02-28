@@ -1,26 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
-import {
-  LayoutDashboard,
-  Users,
-  MessageSquare,
-  ShoppingBag,
-  Settings,
-  CreditCard,
-  HelpCircle,
-  Sparkles,
-  ChevronRight,
-  Plus,
-  ChevronDown,
-  Search,
-  Zap,
-  Circle,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Users, MessageSquare, Store, Sparkles, Plus, Download, Image } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface DashboardSidebarProps {
   collapsed?: boolean;
@@ -31,139 +15,45 @@ interface NavigationItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  badge?: string | number;
-  badgeVariant?: 'default' | 'secondary' | 'destructive' | 'outline';
-  isNew?: boolean;
-  children?: NavigationItem[];
-  description?: string;
 }
 
-const MAIN_NAVIGATION: NavigationItem[] = [
+const PRODUCT_NAVIGATION: NavigationItem[] = [
   {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-    description: 'Overview and analytics',
-    badge: 'Beta',
-    badgeVariant: 'default',
+    name: 'Chat',
+    href: '/chat',
+    icon: MessageSquare,
   },
   {
-    name: 'Company',
-    href: '/dashboard/company',
-    icon: Users,
-    description: 'Company overview',
+    name: 'VIBE',
+    href: '/dashboard/vibe',
+    icon: Sparkles,
   },
   {
     name: 'AI Workforce',
     href: '/dashboard/agents',
     icon: Users,
-    description: 'Manage AI employees',
-    badge: 'Beta',
-    badgeVariant: 'default',
   },
   {
     name: 'Marketplace',
     href: '/dashboard/hire',
-    icon: ShoppingBag,
-    description: 'Hire AI employees',
-    badge: 'Beta',
-    badgeVariant: 'default',
-  },
-];
-
-const WORK_NAVIGATION: NavigationItem[] = [
-  {
-    name: 'Chat',
-    href: '/chat',
-    icon: MessageSquare,
-    description: 'AI communication hub',
-    badge: 'Beta',
-    badgeVariant: 'default',
+    icon: Store,
   },
   {
-    name: 'VIBE',
-    href: '/dashboard/vibe',
-    icon: Zap,
-    description: 'AI dev workspace',
-    badge: 'New',
-    badgeVariant: 'default',
-    isNew: true,
-  },
-];
-
-const SETTINGS_NAVIGATION: NavigationItem[] = [
-  {
-    name: 'Billing',
-    href: '/dashboard/billing',
-    icon: CreditCard,
-    description: 'Manage subscription',
-  },
-  {
-    name: 'Usage',
-    href: '/dashboard/usage',
-    icon: Zap,
-    description: 'Usage analytics',
-  },
-  {
-    name: 'Settings',
-    href: '/dashboard/settings',
-    icon: Settings,
-    description: 'Account settings',
-  },
-  {
-    name: 'Support',
-    href: '/dashboard/support',
-    icon: HelpCircle,
-    description: 'Get help',
+    name: 'Media Studio',
+    href: '/dashboard/media',
+    icon: Image,
   },
 ];
 
 const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, className }) => {
   const pathname = usePathname();
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState('');
-  const navigation = MAIN_NAVIGATION;
-  const workNavigation = WORK_NAVIGATION;
-  const settingsNavigation = SETTINGS_NAVIGATION;
 
   const isActiveLink = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard' || pathname === '/';
-    }
     return pathname === href || pathname.startsWith(href + '/');
   };
 
-  const toggleGroup = (groupName: string) => {
-    if (collapsed) return;
-    setExpandedGroups((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(groupName)) {
-        newSet.delete(groupName);
-      } else {
-        newSet.add(groupName);
-      }
-      return newSet;
-    });
-  };
-
-  const allNavItems = React.useMemo(
-    () => [...navigation, ...workNavigation, ...settingsNavigation],
-    [navigation, workNavigation, settingsNavigation],
-  );
-
-  const filteredNavigation = React.useMemo(() => {
-    if (!searchQuery) return navigation;
-    return allNavItems.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-  }, [searchQuery, navigation, allNavItems]);
-
-  const renderNavItem = (item: NavigationItem, index: number, section: 'main' | 'settings') => {
+  const renderNavItem = (item: NavigationItem, index: number) => {
     const isActive = isActiveLink(item.href);
-    const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedGroups.has(item.name);
 
     return (
       <motion.div
@@ -172,178 +62,61 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.3, delay: index * 0.05 }}
       >
-        {hasChildren && !collapsed ? (
-          <div className="group relative">
-            <button
-              onClick={() => toggleGroup(item.name)}
-              className={cn(
-                'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
-                'hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10',
-                isActive
-                  ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <div
-                className={cn(
-                  'rounded-lg p-2 transition-all duration-300',
-                  isActive ? 'bg-primary/10' : 'bg-muted/50 group-hover:bg-muted',
-                )}
-              >
-                <item.icon
-                  className={cn('h-4 w-4 transition-all duration-300', isActive && 'text-primary')}
-                />
-              </div>
+        <Link
+          href={item.href}
+          className={cn(
+            'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
+            'hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10',
+            collapsed ? 'justify-center' : '',
+            isActive
+              ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+          title={collapsed ? item.name : undefined}
+        >
+          {/* Active indicator */}
+          {isActive && !collapsed && (
+            <motion.div
+              layoutId="active-indicator"
+              className="absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-primary to-primary/50"
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          )}
 
-              <div className="flex-1 text-left">
-                <div className="font-semibold">{item.name}</div>
-                {item.description && !collapsed && (
-                  <div className="text-[10px] text-muted-foreground">{item.description}</div>
-                )}
-              </div>
-
-              {item.badge && (
-                <Badge variant={item.badgeVariant || 'default'} className="px-2 py-0.5 text-[10px]">
-                  {item.badge}
-                </Badge>
-              )}
-
-              <ChevronDown
-                className={cn(
-                  'h-4 w-4 transition-transform duration-300',
-                  isExpanded && 'rotate-180',
-                )}
-              />
-            </button>
-
-            <AnimatePresence>
-              {isExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="overflow-hidden"
-                >
-                  <div className="ml-12 mt-1 space-y-0.5 border-l-2 border-primary/20 pl-4">
-                    {item.children!.map((child) => {
-                      const childActive = isActiveLink(child.href);
-                      return (
-                        <Link
-                          key={child.name}
-                          href={child.href}
-                          className={cn(
-                            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-300',
-                            'hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent',
-                            childActive
-                              ? 'bg-gradient-to-r from-primary/10 to-transparent font-medium text-primary'
-                              : 'text-muted-foreground hover:text-foreground',
-                          )}
-                        >
-                          <Circle
-                            className={cn(
-                              'h-1.5 w-1.5 fill-current transition-all duration-300',
-                              childActive && 'scale-125',
-                            )}
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium">{child.name}</div>
-                            {child.description && (
-                              <div className="text-[10px] text-muted-foreground">
-                                {child.description}
-                              </div>
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        ) : (
-          <Link
-            href={item.href}
+          {/* Icon with background */}
+          <div
             className={cn(
-              'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
-              'hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10',
-              collapsed ? 'justify-center' : '',
+              'rounded-lg p-2 transition-all duration-300',
               isActive
-                ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'scale-110 bg-primary/10'
+                : 'bg-muted/50 group-hover:scale-105 group-hover:bg-muted',
             )}
-            title={collapsed ? item.name : undefined}
           >
-            {/* Active indicator - Modern left accent */}
-            {isActive && !collapsed && (
-              <motion.div
-                layoutId={`active-indicator-${section}`}
-                className="absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-primary to-primary/50"
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              />
-            )}
+            <item.icon
+              className={cn('h-4 w-4 transition-all duration-300', isActive && 'text-primary')}
+            />
+          </div>
 
-            {/* Icon with background */}
+          {/* Label */}
+          {!collapsed && (
+            <div className="flex-1">
+              <div className="font-semibold">{item.name}</div>
+            </div>
+          )}
+
+          {/* Tooltip for collapsed state */}
+          {collapsed && (
             <div
               className={cn(
-                'rounded-lg p-2 transition-all duration-300',
-                isActive
-                  ? 'scale-110 bg-primary/10'
-                  : 'bg-muted/50 group-hover:scale-105 group-hover:bg-muted',
+                'absolute left-full z-50 ml-3 rounded-lg border bg-popover/95 px-3 py-2 shadow-lg backdrop-blur-sm',
+                'pointer-events-none opacity-0 transition-all duration-300 group-hover:opacity-100',
+                'whitespace-nowrap',
               )}
             >
-              <item.icon
-                className={cn('h-4 w-4 transition-all duration-300', isActive && 'text-primary')}
-              />
+              <p className="text-sm font-medium">{item.name}</p>
             </div>
-
-            {/* Label with description */}
-            {!collapsed && (
-              <div className="flex-1">
-                <div className="font-semibold">{item.name}</div>
-                {item.description && (
-                  <div className="text-[10px] text-muted-foreground">{item.description}</div>
-                )}
-              </div>
-            )}
-
-            {/* Badge */}
-            {!collapsed && item.badge && (
-              <Badge variant={item.badgeVariant || 'default'} className="px-2 py-0.5 text-[10px]">
-                {item.badge}
-              </Badge>
-            )}
-
-            {/* New indicator with pulse animation */}
-            {!collapsed && item.isNew && (
-              <motion.div className="relative h-2 w-2">
-                <motion.div
-                  animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute inset-0 rounded-full bg-primary"
-                />
-                <div className="absolute inset-0 rounded-full bg-primary" />
-              </motion.div>
-            )}
-
-            {/* Tooltip for collapsed state */}
-            {collapsed && (
-              <div
-                className={cn(
-                  'absolute left-full z-50 ml-3 rounded-lg border bg-popover/95 px-3 py-2 shadow-lg backdrop-blur-sm',
-                  'pointer-events-none opacity-0 transition-all duration-300 group-hover:opacity-100',
-                  'whitespace-nowrap',
-                )}
-              >
-                <p className="text-sm font-medium">{item.name}</p>
-                {item.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
-                )}
-              </div>
-            )}
-          </Link>
-        )}
+          )}
+        </Link>
       </motion.div>
     );
   };
@@ -352,11 +125,11 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
     <div
       className={cn(
         'glass-strong flex h-full flex-col border-r border-border/50 backdrop-blur-xl',
-        'overflow-hidden', // Ensure proper overflow handling
+        'overflow-hidden',
         className,
       )}
     >
-      {/* Logo Section with gradient background */}
+      {/* Logo Section */}
       <div
         className={cn(
           'flex items-center gap-3 border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-4 py-5',
@@ -390,31 +163,22 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
         )}
       </div>
 
-      {/* Search Bar - Modern 2025 trend */}
-      {!collapsed && (
-        <div className="border-b border-border/50 px-4 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search navigation..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={cn(
-                'min-h-11 w-full rounded-lg py-2.5 pl-10 pr-3',
-                'bg-muted/50 hover:bg-muted/70 focus:bg-muted',
-                'border border-border/50 focus:border-primary/50',
-                'text-sm placeholder:text-muted-foreground',
-                'outline-none transition-all duration-300',
-              )}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Quick Action Button with modern gradient */}
-      {!collapsed && (
-        <div className="border-b border-border/50 px-4 py-4">
+      {/* New Chat Button */}
+      <div className={cn('border-b border-border/50 px-4 py-4', collapsed && 'px-2')}>
+        {collapsed ? (
+          <Button
+            className={cn(
+              'gradient-primary w-full text-white shadow-lg',
+              'transition-all duration-300 hover:scale-[1.02] hover:shadow-xl',
+              'aspect-square p-0',
+            )}
+            asChild
+          >
+            <Link href="/chat" aria-label="New Chat">
+              <Plus className="h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
           <Button
             className={cn(
               'btn-glow gradient-primary w-full text-white shadow-lg',
@@ -422,17 +186,16 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
             )}
             asChild
           >
-            <Link href="/dashboard/hire">
+            <Link href="/chat">
               <Plus className="mr-2 h-4 w-4" />
-              Hire AI Employee
+              New Chat
             </Link>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Main Navigation with improved spacing */}
-      <div className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent flex-1 space-y-6 overflow-y-auto px-3 py-4">
-        {/* Company Section */}
+      {/* Product Navigation */}
+      <div className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent flex-1 overflow-y-auto px-3 py-4">
         <nav className="space-y-1">
           {!collapsed && (
             <motion.div
@@ -441,75 +204,56 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ collapsed = false, 
               className="mb-3 flex items-center justify-between px-3"
             >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Company
+                Product
               </p>
               <div className="ml-3 h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
             </motion.div>
           )}
-          {(searchQuery ? filteredNavigation : navigation).map((item, index) =>
-            renderNavItem(item, index, 'main'),
-          )}
+          {PRODUCT_NAVIGATION.map((item, index) => renderNavItem(item, index))}
         </nav>
-
-        {/* Divider with gradient */}
-        {!collapsed && !searchQuery && (
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Work Section */}
-        {!searchQuery && (
-          <nav className="space-y-1">
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mb-3 flex items-center justify-between px-3"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Work
-                </p>
-                <div className="ml-3 h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
-              </motion.div>
-            )}
-            {workNavigation.map((item, index) => renderNavItem(item, index, 'main'))}
-          </nav>
-        )}
-
-        {/* Divider with gradient */}
-        {!collapsed && !searchQuery && (
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Account Section */}
-        {!searchQuery && (
-          <nav className="space-y-1">
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mb-3 flex items-center justify-between px-3"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Account
-                </p>
-                <div className="ml-3 h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
-              </motion.div>
-            )}
-            {settingsNavigation.map((item, index) => renderNavItem(item, index, 'settings'))}
-          </nav>
-        )}
       </div>
 
-      {/* Footer with dark mode toggle */}
-      <div className="space-y-3 border-t border-border/50 bg-gradient-to-t from-muted/20 to-transparent p-4"></div>
+      {/* Footer: Download App */}
+      <div className="border-t border-border/50 bg-gradient-to-t from-muted/20 to-transparent p-3">
+        {collapsed ? (
+          <Link
+            href="/download"
+            className={cn(
+              'group relative flex min-h-11 items-center justify-center rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
+              'text-muted-foreground hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-foreground',
+            )}
+            title="Download App"
+          >
+            <div className="rounded-lg bg-muted/50 p-2 transition-all duration-300 group-hover:scale-105 group-hover:bg-muted">
+              <Download className="h-4 w-4" />
+            </div>
+            <div
+              className={cn(
+                'absolute left-full z-50 ml-3 rounded-lg border bg-popover/95 px-3 py-2 shadow-lg backdrop-blur-sm',
+                'pointer-events-none opacity-0 transition-all duration-300 group-hover:opacity-100',
+                'whitespace-nowrap',
+              )}
+            >
+              <p className="text-sm font-medium">Download App</p>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            href="/download"
+            className={cn(
+              'group flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300',
+              'text-muted-foreground hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-foreground',
+            )}
+          >
+            <div className="rounded-lg bg-muted/50 p-2 transition-all duration-300 group-hover:scale-105 group-hover:bg-muted">
+              <Download className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold">Download App</div>
+            </div>
+          </Link>
+        )}
+      </div>
     </div>
   );
 };

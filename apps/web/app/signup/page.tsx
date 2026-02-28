@@ -114,7 +114,7 @@ export default function SignupPage() {
       }
     } else if (data?.session) {
       // User is auto-confirmed or email confirmation is disabled
-      window.location.href = '/dashboard';
+      window.location.href = '/chat';
     } else if (data?.user) {
       if (data.user.identities && data.user.identities.length === 0) {
         setExistingUser(true);

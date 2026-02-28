@@ -238,6 +238,29 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       }
     >
+      {messages.length === 0 && !isLoading && (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="max-w-md space-y-4">
+            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+              <Bot className="h-8 w-8 text-white" aria-hidden="true" />
+            </div>
+            <h2 className="text-2xl font-semibold text-foreground">Welcome to AGI Workforce</h2>
+            <p className="text-muted-foreground">
+              Start a conversation by typing a message below...
+            </p>
+            <div className="space-y-2 text-sm text-left">
+              <p className="font-medium text-foreground">Try asking me to:</p>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                <li>Research any topic in depth</li>
+                <li>Write and review code</li>
+                <li>Generate images and videos</li>
+                <li>Analyze data and documents</li>
+                <li>Help with creative writing</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       <ScrollArea className="flex-1">
         <div className="space-y-0">
           {messages.map((message) => {
