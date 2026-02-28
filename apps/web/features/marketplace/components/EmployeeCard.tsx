@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Employee Card Component
  * Displays an AI employee card with details and hire functionality
@@ -24,7 +26,7 @@ import type { MarketplaceEmployee } from '@shared/types';
  * Extends the shared MarketplaceEmployee type with required card-specific fields
  */
 export interface AIEmployee extends Omit<MarketplaceEmployee, 'provider' | 'avatar'> {
-  provider: 'claude' | 'gpt4' | 'gemini';
+  provider: string;
   avatar: string;
   popular: boolean;
   isHired: boolean;

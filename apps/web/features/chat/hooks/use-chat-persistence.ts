@@ -87,7 +87,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
           'chat',
         createdAt: new Date(sessionData.created_at ?? Date.now()),
         updatedAt: new Date(sessionData.updated_at ?? Date.now()),
-        metadata: (sessionData.metadata as ChatSession['metadata']) ?? {
+        metadata: (sessionData.metadata as unknown as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
@@ -100,7 +100,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
       const { data: messagesData, error: messagesError } = await supabase
         .from('web_messages')
         .select('*')
-        .eq('session_id', sid)
+        .eq('conversation_id', sid)
         .order('created_at', { ascending: true });
 
       if (messagesError) throw messagesError;
@@ -154,7 +154,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
     try {
       // Prepare messages for database
       const messagesToSave = messages.map((msg) => ({
-        session_id: currentSession.id,
+        conversation_id: currentSession.id,
         role: msg.type === 'user' ? 'user' : 'assistant',
         content: msg.content,
         metadata: {
@@ -167,7 +167,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
       // Use upsert to avoid duplicates
       const { error: saveError } = await supabase
         .from('web_messages')
-        .upsert(messagesToSave, { onConflict: 'id' });
+        .upsert(messagesToSave as never[], { onConflict: 'id' });
 
       if (saveError) throw saveError;
 
@@ -255,7 +255,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
           mode: ((data as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
           createdAt: new Date(data.created_at ?? Date.now()),
           updatedAt: new Date(data.updated_at ?? Date.now()),
-          metadata: (data.metadata as ChatSession['metadata']) ?? {
+          metadata: (data.metadata as unknown as ChatSession['metadata']) ?? {
             messageCount: 0,
             agentsInvolved: [],
             lastActivity: new Date(),
@@ -310,7 +310,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
         const { error: messagesError } = await supabase
           .from('web_messages')
           .delete()
-          .eq('session_id', sid);
+          .eq('conversation_id', sid);
 
         if (messagesError) throw messagesError;
 
@@ -362,7 +362,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
           ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
         createdAt: new Date(session.created_at ?? Date.now()),
         updatedAt: new Date(session.updated_at ?? Date.now()),
-        metadata: (session.metadata as ChatSession['metadata']) ?? {
+        metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
@@ -394,7 +394,7 @@ export function useChatPersistence(sessionId?: string, userId?: string): UseChat
           ((session as Record<string, unknown>).mode as string as ChatSession['mode']) || 'chat',
         createdAt: new Date(session.created_at ?? Date.now()),
         updatedAt: new Date(session.updated_at ?? Date.now()),
-        metadata: (session.metadata as ChatSession['metadata']) ?? {
+        metadata: (session.metadata as unknown as ChatSession['metadata']) ?? {
           messageCount: 0,
           agentsInvolved: [],
           lastActivity: new Date(),
