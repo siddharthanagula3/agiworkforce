@@ -166,7 +166,6 @@ const ECONOMY_MODELS = [
   'grok-4-fast-non-reasoning',
   'qwen-flash',
   'gpt-5-nano',
-  'gpt-5.2-codex-low',
   'sonar',
 ] as const;
 
@@ -174,6 +173,7 @@ const ECONOMY_MODELS = [
 // kimi-k2.5: Moonshot flagship at $0.60/$3.00 per M tokens, 262K context, multimodal.
 const PRO_ADDITIONS = [
   'gpt-5.2',
+  'gpt-5.2-codex-low',
   'gpt-5.2-codex-medium',
   'claude-sonnet-4.6',
   'claude-sonnet-4.5',
@@ -220,6 +220,42 @@ export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): 
  */
 export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
   return TIER_ALLOWED_MODELS[tier] ?? TIER_ALLOWED_MODELS.free;
+}
+
+export function normalizeSubscriptionTier(
+  tier: SubscriptionTier | string | null | undefined,
+): SubscriptionTier {
+  switch ((tier ?? '').toLowerCase()) {
+    case 'hobby':
+      return 'hobby';
+    case 'pro':
+      return 'pro';
+    case 'max':
+      return 'max';
+    case 'enterprise':
+      return 'enterprise';
+    default:
+      return 'free';
+  }
+}
+
+export function getAllowedAutoModesForTier(
+  tier: SubscriptionTier | string | null | undefined,
+): string[] {
+  const normalizedTier = normalizeSubscriptionTier(tier);
+
+  if (normalizedTier === 'max' || normalizedTier === 'enterprise') {
+    return ['auto-economy', 'auto-balanced', 'auto-premium'];
+  }
+  if (normalizedTier === 'pro') {
+    return ['auto-economy', 'auto-balanced'];
+  }
+  return ['auto-economy'];
+}
+
+export function getBestAutoModeForTier(tier: SubscriptionTier | string | null | undefined): string {
+  const allowedAutoModes = getAllowedAutoModesForTier(tier);
+  return allowedAutoModes[allowedAutoModes.length - 1] ?? 'auto-economy';
 }
 
 // Provider order for UI display
